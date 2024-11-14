@@ -17,7 +17,7 @@ fn main() {
             e => panic!("{:?}", e),
         },
         |bindings| {
-            bindings.write_to_file("headers/wm_macos.h");
+            bindings.write_to_file("headers/kwm_macos.h");
         },
     );
 }

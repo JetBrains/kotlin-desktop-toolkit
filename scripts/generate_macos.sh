@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+cd "$(dirname "$0")"
+cd .. # project root
+
+jextract \
+--include-dir /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include \
+--dump-includes scripts/filtered_headers/headers.txt \
+native/kwm-macos/headers/kwm_macos.h
+
+grep "wm_macos.h$" scripts/filtered_headers/headers.txt > scripts/filtered_headers/filtered_headers.txt
+
+rm -rf lib/src/main/kotlin/org/jetbrains/kwm/macos/generated/*
+
+jextract \
+  --include-dir /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include \
+  --output lib/src/main/java \
+  --target-package org.jetbrains.kwm.macos.generated \
+  --library kwm_macos \
+  @scripts/filtered_headers/filtered_headers.txt \
+  native/kwm-macos/headers/kwm_macos.h

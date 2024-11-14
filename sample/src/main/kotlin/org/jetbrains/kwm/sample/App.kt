@@ -4,6 +4,8 @@ import org.jetbrains.kwm.Library
 
 
 fun main() {
-    val result = Library().someLibraryMethod()
-    println("Hello from app!! result from library: $result")
+    val a = 4
+    val b = 2
+    val result = Library().someLibraryMethod(a, b)
+    println("Hello from app!! result from library: $a + $b = $result")
 }

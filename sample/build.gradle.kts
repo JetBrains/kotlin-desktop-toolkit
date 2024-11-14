@@ -42,11 +42,10 @@ application {
     applicationDefaultJvmArgs = listOf("--enable-preview",
                                        "--enable-native-access=ALL-UNNAMED",
                                        "-Djextract.trace.downcalls=false")
-
 }
 
 tasks.named<JavaExec>("run") {
-    environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/panama-playground/panama-rs/target/debug")
+    environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/debug")
 }
 
 tasks.named<Test>("test") {

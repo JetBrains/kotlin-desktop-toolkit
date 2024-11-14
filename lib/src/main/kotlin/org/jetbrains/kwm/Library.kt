@@ -3,9 +3,16 @@
  */
 package org.jetbrains.kwm
 
+import org.jetbrains.kwm.macos.generated.kwm_macos_h.add_numbers
+
 class Library {
-    fun someLibraryMethod(): Boolean {
-        return true
+
+    init {
+        println("Library path: ${System.getenv("DYLD_LIBRARY_PATH")}")
+    }
+
+    fun someLibraryMethod(a: Int, b: Int): Int {
+        return add_numbers(a, b)
     }
 }
 

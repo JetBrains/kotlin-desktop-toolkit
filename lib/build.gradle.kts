@@ -11,6 +11,7 @@ plugins {
 
     // Apply the java-library plugin for API and implementation separation.
     `java-library`
+    `maven-publish`
 }
 
 version = "0.1.0"
@@ -40,14 +41,21 @@ dependencies {
     implementation(libs.guava)
 }
 
+tasks.compileJava {
+    options.compilerArgs = listOf("--enable-preview")
+}
+
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
+
 }
 
 tasks.named<Test>("test") {
     // Use JUnit Platform for unit tests.
+    jvmArgs("--enable-preview")
+    environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/debug") // TODO fixme
     useJUnitPlatform()
 }
