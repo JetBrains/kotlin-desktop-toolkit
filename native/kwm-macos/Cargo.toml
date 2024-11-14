@@ -1,0 +1,36 @@
+[package]
+name = "kwm-macos"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+name = "kwm_macos"
+
+[[bin]]
+name = "playground"
+path = "src/playground.rs"
+
+[dependencies]
+
+
+[build-dependencies]
+cbindgen = "0.24.0"
+
+
+[target.'cfg(target_os = "macos")'.dependencies]
+dispatch = { version = "0.2.0" }
+objc2 = { version = "0.5.2" }
+objc2-app-kit = { version = "0.2.2", features = [
+  "NSApplication",
+  "NSWindow",
+  "NSGraphics",
+  "NSScreen",
+  "NSRunningApplication",
+  "NSResponder",
+  "NSView",
+  "NSVisualEffectView",
+  "NSMenu",
+  "NSMenuItem"
+] }
+objc2-foundation = { version = "0.2.2", features = ["NSThread", "dispatch"] }

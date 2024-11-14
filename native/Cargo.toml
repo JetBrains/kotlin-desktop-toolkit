@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["kwm-macos"]
+
+[profile.release]
+lto = true
+strip = "symbols"
+
+[profile.nightly]
+inherits = "release"
+strip = false
+
+[profile.bench]
+inherits = "release"
+strip = false
