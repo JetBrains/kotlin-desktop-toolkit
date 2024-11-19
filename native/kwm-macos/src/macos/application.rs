@@ -97,7 +97,12 @@ fn build_menu(menu_prefix: &str) -> Retained<NSMenu> {
 
     add_item_with_submenu(mtm, &menu_root, "Fleet");
     add_item_with_submenu(mtm, &menu_root, "Strange");
-    add_item_with_submenu(mtm, &menu_root, "Edit");
+    let edit_submenu = add_item_with_submenu(mtm, &menu_root, "Edit1");
+    edit_submenu.addItem(&item_with_name(mtm, &"Edit1"));
+//    edit_submenu.addItem(&item_with_name(mtm, &"Edit2"));
+//    edit_submenu.addItem(&item_with_name(mtm, &"Edit3"));
+//    edit_submenu.addItem(&item_with_name(mtm, &"Edit4"));
+//    edit_submenu.addItem(&item_with_name(mtm, &"Edit5"));
 
     for item_num in 0..4 {
         let menu_item = item_with_name(mtm, &format!("{} Item #{}", menu_prefix, item_num));
@@ -118,6 +123,7 @@ fn build_menu(menu_prefix: &str) -> Retained<NSMenu> {
     unsafe {
         app.setWindowsMenu(Some(&window_menu));
         app.setServicesMenu(Some(&services_menu));
+//        app.setHelpMenu();
     }
 
     add_item_with_submenu(mtm, &menu_root, "Help");

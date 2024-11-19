@@ -9,7 +9,6 @@ use objc2_foundation::{MainThreadMarker, NSString};
 
 use crate::common::{ArraySize, StrPtr};
 
-// todo can submenu be disabled? => let's say no
 // todo add keystrokes
 // todo callbacks
 
@@ -97,17 +96,24 @@ impl<'a> AppMenuItemSafe<'a> {
         }
     }
 
-    fn reconcile_submenu(mtm: MainThreadMarker, item: &NSMenuItem, title: &str, items: &[Self]) {
+    fn reconcile_ns_submenu(mtm: MainThreadMarker, item: &NSMenuItem, title: &str, items: &[Self]) {
+        let ns_title = NSString::from_str(title);
         unsafe {
-            item.setTitle(&NSString::from_str(title));
+            item.setTitle(&ns_title);
         };
         let submenu = if let Some(submenu) = unsafe { item.submenu() } {
             submenu
         } else {
             let submenu = NSMenu::new(mtm);
+            unsafe {
+                submenu.setAutoenablesItems(false);
+            }
             item.setSubmenu(Some(&submenu));
             submenu
         };
+        unsafe {
+            submenu.setTitle(&ns_title);
+        }
         reconcile_menu(mtm, &submenu, items);
     }
 
@@ -120,7 +126,7 @@ impl<'a> AppMenuItemSafe<'a> {
                 assert!(unsafe { item.isSeparatorItem() });
             },
             AppMenuItemSafe::SubMenu { title, items } => {
-                AppMenuItemSafe::reconcile_submenu(mtm, item, title, items);
+                AppMenuItemSafe::reconcile_ns_submenu(mtm, item, title, items);
             },
         }
     }
@@ -137,7 +143,7 @@ impl<'a> AppMenuItemSafe<'a> {
             },
             AppMenuItemSafe::SubMenu { title, items } => {
                 let item = NSMenuItem::new(mtm);
-                AppMenuItemSafe::reconcile_submenu(mtm, &item, title, items);
+                AppMenuItemSafe::reconcile_ns_submenu(mtm, &item, title, items);
                 item
             },
         }
@@ -156,6 +162,9 @@ pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
         app.setMainMenu(Some(&new_menu_root));
         new_menu_root
     };
+    unsafe {
+        menu_root.setAutoenablesItems(false);
+    }
 
     let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
     reconcile_menu(mtm, &menu_root, &updated_menu.items);
