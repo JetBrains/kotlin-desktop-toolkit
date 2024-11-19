@@ -1,16 +1,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
-use std::os::unix::thread;
-use std::sync::atomic::{AtomicI32, Ordering};
+#![allow(unused_imports)]
+#![allow(dead_code)]
 use std::time::Duration;
 
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2::{declare_class, msg_send_id, mutability, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSBackingStoreType, NSMenu, NSMenuItem, NSNormalWindowLevel, NSWindow, NSWindowLevel, NSWindowStyleMask
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSBackingStoreType, NSMenu, NSMenuItem, NSNormalWindowLevel,
+    NSWindow, NSWindowLevel, NSWindowStyleMask,
 };
 use objc2_foundation::{
-    ns_string, run_on_main, CGPoint, CGRect, CGSize, MainThreadMarker, NSCoding, NSCopying, NSNotification, NSObject, NSObjectProtocol,
+    ns_string, CGPoint, CGRect, CGSize, MainThreadMarker, NSCoding, NSCopying, NSNotification, NSObject, NSObjectProtocol,
     NSString,
 };
 
@@ -105,6 +106,7 @@ fn build_menu(menu_prefix: &str) -> Retained<NSMenu> {
         for subitem_num in 0..6 {
             let subitem = item_with_name(mtm, &format!("SubItem #{} from {}", subitem_num, item_num));
             submenu.addItem(&subitem);
+            submenu.addItem(&NSMenuItem::separatorItem(mtm));
         }
         menu_root.addItem(&menu_item);
     }
@@ -128,6 +130,11 @@ fn build_menu(menu_prefix: &str) -> Retained<NSMenu> {
 fn update_menu(menu: &NSMenu, new_title: &str) -> Option<()> {
     let item = unsafe { menu.itemAtIndex(3) }?;
     let submenu = unsafe { item.submenu() }?;
+    unsafe {
+        let new_submenu_title = &NSString::from_str(&format!("R[{}]", new_title));
+        item.setTitle(new_submenu_title);
+        submenu.setTitle(new_submenu_title);
+    }
     let item = unsafe { submenu.itemAtIndex(2) }?;
     unsafe {
         item.setTitle(&NSString::from_str(new_title));
@@ -148,8 +155,8 @@ fn start_background_thread() {
                     update_menu(&menu, &format!("T: {}", x));
                 }
 
-                //                let menu = build_menu(&format!("T: {}", x));
-                //                app.setMainMenu(Some(&menu));
+//                let menu = build_menu(&format!("T: {}", x));
+//                app.setMainMenu(Some(&menu));
             });
             x += 1;
             std::thread::sleep(Duration::from_millis(500));
@@ -181,6 +188,8 @@ fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32) -> Retained
 pub(crate) fn run() {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
 
+    println!("Sperator item title: {:?}", unsafe { NSMenuItem::separatorItem(mtm).title() });
+
     let app = NSApplication::sharedApplication(mtm);
     app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
 
@@ -192,8 +201,8 @@ pub(crate) fn run() {
     app.setMainMenu(Some(&build_menu("Initial")));
     start_background_thread();
 
-    let window1 = create_window(mtm, "First Window 1", 320.0, 240.0);
-    let window2 = create_window(mtm, "First Window 2", 420.0, 240.0);
+    let _window1 = create_window(mtm, "First Window 1", 320.0, 240.0);
+    let _window2 = create_window(mtm, "First Window 2", 420.0, 240.0);
 
     dispatch::Queue::main().exec_async(|| {
         println!("Hello from main thread!");

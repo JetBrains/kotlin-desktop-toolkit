@@ -1,0 +1,375 @@
+use core::slice;
+use std::{ffi::CStr, slice::from_raw_parts};
+
+use anyhow::{anyhow, Result};
+
+use objc2::rc::{autoreleasepool, Retained};
+use objc2_app_kit::{NSApplication, NSMenu, NSMenuItem};
+use objc2_foundation::{MainThreadMarker, NSString};
+
+use crate::common::{ArraySize, StrPtr};
+
+// todo can submenu be disabled? => let's say no
+// todo add keystrokes
+// todo callbacks
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Debug)]
+pub enum AppMenuItem {
+    ActionItem {
+        enabled: bool,
+        title: StrPtr,
+    },
+    SeparatorItem,
+    SubMenuItem {
+        title: StrPtr,
+        items: *const AppMenuItem,
+        items_count: ArraySize,
+    },
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Debug)]
+pub struct AppMenuStructure {
+    items: *const AppMenuItem,
+    items_count: ArraySize,
+}
+
+#[derive(Debug)]
+enum AppMenuItemSafe<'a> {
+    Action { enabled: bool, title: &'a str },
+    Separator,
+    SubMenu { title: &'a str, items: Vec<AppMenuItemSafe<'a>> },
+}
+
+#[derive(Debug)]
+struct AppMenuStructureSafe<'a> {
+    items: Vec<AppMenuItemSafe<'a>>,
+}
+
+impl<'a> AppMenuStructureSafe<'a> {
+    fn from_unsafe(menu: &'a AppMenuStructure) -> Result<AppMenuStructureSafe<'a>> {
+        let items = unsafe {
+            let AppMenuStructure { items, items_count } = *menu;
+            if items.is_null() {
+                return Err(anyhow!("Null found in {:?}", menu));
+            } else {
+                from_raw_parts(items, items_count as usize)
+            }
+        };
+        let safe_items: Result<Vec<_>> = items.iter().map(|unsafe_item| AppMenuItemSafe::from_unsafe(unsafe_item)).collect();
+        Ok(AppMenuStructureSafe { items: safe_items? })
+    }
+}
+
+impl<'a> AppMenuItemSafe<'a> {
+    fn from_unsafe(item: &'a AppMenuItem) -> Result<AppMenuItemSafe<'a>> {
+        let safe_item = match item {
+            AppMenuItem::ActionItem { enabled, title } => AppMenuItemSafe::Action {
+                enabled: *enabled,
+                title: unsafe { CStr::from_ptr(*title) }.to_str()?,
+            },
+            AppMenuItem::SeparatorItem => AppMenuItemSafe::Separator,
+            sub_menu @ AppMenuItem::SubMenuItem { title, items, items_count } => {
+                let items = unsafe {
+                    if !(*items).is_null() {
+                        slice::from_raw_parts(*items, *items_count as usize)
+                    } else {
+                        return Err(anyhow!("Null found in {:?}", sub_menu));
+                    }
+                };
+                let safe_items: Result<Vec<_>> = items.iter().map(|item| AppMenuItemSafe::from_unsafe(item)).collect();
+                AppMenuItemSafe::SubMenu {
+                    title: unsafe { CStr::from_ptr(*title) }.to_str()?,
+                    items: safe_items?,
+                }
+            }
+        };
+        Ok(safe_item)
+    }
+
+    fn reconcile_action(item: &NSMenuItem, enabled: bool, title: &str) {
+        unsafe {
+            item.setTitle(&NSString::from_str(title));
+            item.setEnabled(enabled);
+        }
+    }
+
+    fn reconcile_submenu(mtm: MainThreadMarker, item: &NSMenuItem, title: &str, items: &[Self]) {
+        unsafe {
+            item.setTitle(&NSString::from_str(title));
+        };
+        let submenu = if let Some(submenu) = unsafe { item.submenu() } {
+            submenu
+        } else {
+            let submenu = NSMenu::new(mtm);
+            item.setSubmenu(Some(&submenu));
+            submenu
+        };
+        reconcile_menu(mtm, &submenu, items);
+    }
+
+    fn reconcile_ns_menu_item(&self, mtm: MainThreadMarker, item: &NSMenuItem) {
+        match self {
+            AppMenuItemSafe::Action { enabled, title } => {
+                AppMenuItemSafe::reconcile_action(item, *enabled, title);
+            },
+            AppMenuItemSafe::Separator => {
+                assert!(unsafe { item.isSeparatorItem() });
+            },
+            AppMenuItemSafe::SubMenu { title, items } => {
+                AppMenuItemSafe::reconcile_submenu(mtm, item, title, items);
+            },
+        }
+    }
+
+    fn to_ns_menu_item(&self, mtm: MainThreadMarker) -> Retained<NSMenuItem> {
+        match self {
+            AppMenuItemSafe::Action { enabled, title } => {
+                let item = NSMenuItem::new(mtm);
+                AppMenuItemSafe::reconcile_action(&item, *enabled, title);
+                item
+            },
+            AppMenuItemSafe::Separator => {
+                NSMenuItem::separatorItem(mtm)
+            },
+            AppMenuItemSafe::SubMenu { title, items } => {
+                let item = NSMenuItem::new(mtm);
+                AppMenuItemSafe::reconcile_submenu(mtm, &item, title, items);
+                item
+            },
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
+    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    let app = NSApplication::sharedApplication(mtm);
+
+    let menu_root = if let Some(menu) = unsafe { app.mainMenu() } {
+        menu
+    } else {
+        let new_menu_root = NSMenu::new(mtm);
+        app.setMainMenu(Some(&new_menu_root));
+        new_menu_root
+    };
+
+    let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
+    reconcile_menu(mtm, &menu_root, &updated_menu.items);
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+enum ItemIdentity<'a> {
+    Action { title: &'a str },
+    Separator,
+    SubMenu { title: &'a str },
+}
+
+impl<'a> ItemIdentity<'a> {
+    fn new(item: &AppMenuItemSafe<'a>) -> ItemIdentity<'a> {
+        return match item {
+            AppMenuItemSafe::Action { title, .. } => Self::Action { title },
+            AppMenuItemSafe::Separator => Self::Separator,
+            AppMenuItemSafe::SubMenu { title, .. } => Self::SubMenu { title },
+        };
+    }
+}
+
+// todo handle special submenues
+fn reconcile_menu<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: &[AppMenuItemSafe<'a>]) {
+    autoreleasepool(|pool| {
+        let items_array = unsafe { menu.itemArray() };
+        let menu_titles: Vec<_> = items_array.iter().map(|submenu| unsafe { submenu.title() }).collect();
+        let old_item_ids: Vec<ItemIdentity> = items_array
+            .iter()
+            .zip(menu_titles.iter())
+            .map(|(item, title)| {
+                if unsafe { item.isSeparatorItem() } {
+                    ItemIdentity::Separator
+                } else if unsafe { item.hasSubmenu() } {
+                    ItemIdentity::SubMenu { title: title.as_str(pool) }
+                } else {
+                    ItemIdentity::Action { title: title.as_str(pool) }
+                }
+            })
+            .collect();
+
+        let new_item_ids: Vec<_> = new_items.iter().map(|item| ItemIdentity::new(item)).collect();
+
+        let operations = edit_operations(&old_item_ids, &new_item_ids);
+        for op in operations {
+            match op {
+                Operation::Insert { position, item_idx } => {
+                    let new_ns_menu_item = new_items[item_idx].to_ns_menu_item(mtm);
+                    unsafe {
+                        menu.insertItem_atIndex(&new_ns_menu_item, position.try_into().unwrap());
+                    }
+                }
+                Operation::Reconcile { position, item_idx } => {
+                    let ns_menu_item = unsafe { menu.itemAtIndex(position.try_into().unwrap()).unwrap() };
+                    new_items[item_idx].reconcile_ns_menu_item(mtm, &ns_menu_item);
+                }
+                Operation::Remove { position } => {
+                    unsafe {
+                        menu.removeItemAtIndex(position.try_into().unwrap());
+                    };
+                }
+            }
+        }
+    });
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Operation {
+    Insert { position: usize, item_idx: usize },
+    Reconcile { position: usize, item_idx: usize },
+    Remove { position: usize },
+}
+
+fn edit_operations<T: Eq>(source: &[T], target: &[T]) -> Vec<Operation> {
+    let m = source.len();
+    let n = target.len();
+
+    let mut dp = vec![vec![0; n + 1]; m + 1];
+
+    for i in 1..=m {
+        for j in 1..=n {
+            if source[i - 1] == target[j - 1] {
+                dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+                dp[i][j] = dp[i - 1][j].max(dp[i][j - 1]);
+            }
+        }
+    }
+
+    let mut operations = Vec::new();
+
+    let mut i = m;
+    let mut j = n;
+    while i > 0 && j > 0 {
+        if source[i - 1] == target[j - 1] {
+            operations.push(Operation::Reconcile {
+                position: i - 1,
+                item_idx: j - 1,
+            });
+            i -= 1;
+            j -= 1;
+        } else if dp[i - 1][j] > dp[i][j - 1] {
+            operations.push(Operation::Remove { position: i - 1 });
+            i -= 1;
+        } else {
+            operations.push(Operation::Insert {
+                position: i,
+                item_idx: j - 1,
+            });
+            j -= 1;
+        }
+    }
+
+    while i > 0 {
+        operations.push(Operation::Remove { position: i - 1 });
+        i -= 1;
+    }
+    while j > 0 {
+        operations.push(Operation::Insert {
+            position: i,
+            item_idx: j - 1,
+        });
+        j -= 1;
+    }
+
+    operations.reverse();
+    fix_positions(&mut operations);
+
+    operations
+}
+
+fn fix_positions(operations: &mut [Operation]) {
+    let mut shift: isize = 0;
+    for operation in operations {
+        match operation {
+            Operation::Insert {
+                ref mut position,
+                item_idx,
+            } => {
+                *position = (*position as isize + shift).try_into().unwrap();
+                shift += 1;
+            }
+            Operation::Reconcile { position, item_idx } => {
+                *position = (*position as isize + shift).try_into().unwrap();
+            }
+            Operation::Remove { position } => {
+                *position = (*position as isize + shift).try_into().unwrap();
+                shift -= 1;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{char, fmt::Debug};
+
+    use quickcheck_macros::quickcheck;
+
+    use super::*;
+
+    fn chs(s: &str) -> Vec<char> {
+        s.chars().collect()
+    }
+
+    fn apply_operations<T: Debug + Clone + Copy + Eq>(source: &[T], target: &[T], operations: &[Operation]) -> Result<Vec<T>> {
+        let mut v = source.to_vec();
+        for op in operations {
+            match *op {
+                Operation::Insert { position, item_idx } => {
+                    v.insert(position, target[item_idx]);
+                }
+                Operation::Reconcile { position, item_idx } => {
+                    if v[position] != target[item_idx] {
+                        return Err(anyhow!("{:?} != {:?}", v[position], target[item_idx]));
+                    }
+                }
+                Operation::Remove { position } => {
+                    v.remove(position);
+                }
+            }
+        }
+        return Ok(v);
+    }
+
+    fn test_with(source: &str, target: &str) {
+        let source = chs(source);
+        let target = chs(target);
+        let operations = edit_operations(&source, &target);
+        eprintln!("src: {source:?}, dst: {target:?}");
+        eprintln!("{operations:?}");
+        let result = apply_operations(&source, &target, &operations).unwrap();
+        assert_eq!(result, target);
+    }
+
+    #[test]
+    fn test_edit_operations_smoke() {
+        test_with("", "");
+        test_with("x", "x");
+        test_with("", "abcde");
+        test_with("abcde", "");
+        test_with("abc", "cba");
+        test_with("xxxxxxxx", "yy");
+        test_with("ab", "ba");
+        test_with("xxabcde", "abcde");
+        test_with("abcde", "xxabcde");
+        test_with("abcdexx", "abcde");
+        test_with("abcde", "abcdexx");
+    }
+
+    #[quickcheck]
+    fn operations_turns_source_into_target(source: Vec<u32>, target: Vec<u32>) -> bool {
+        let operations = edit_operations(&source, &target);
+        let result = apply_operations(&source, &target, &operations).unwrap();
+        target == result
+    }
+}

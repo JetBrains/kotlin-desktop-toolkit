@@ -1,5 +1,6 @@
 #[cfg(target_os = "macos")]
 mod macos;
+mod common;
 
 #[cfg(target_os = "macos")]
 fn main() {

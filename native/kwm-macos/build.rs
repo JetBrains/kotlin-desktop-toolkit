@@ -11,13 +11,15 @@ fn main() {
       .with_crate(crate_dir)
       .with_language(Language::C)
       .generate()
-      .map_or_else(
-        |error| match error {
-            e@cbindgen::Error::ParseSyntaxError { .. } => { eprintln!("Parse error: {:?}", e) }
-            e => panic!("{:?}", e),
-        },
-        |bindings| {
-            bindings.write_to_file("headers/kwm_macos.h");
-        },
-    );
+      .expect("Unable to generate bindings")
+      .write_to_file("headers/kwm_macos.h");
+//      .map_or_else(
+//        |error| match error {
+//            e@cbindgen::Error::ParseSyntaxError { .. } => { eprintln!("Parse error: {:?}", e) }
+//            e => panic!("{:?}", e),
+//        },
+//        |bindings| {
+//            bindings.write_to_file("headers/kwm_macos.h");
+//        },
+//    );
 }
