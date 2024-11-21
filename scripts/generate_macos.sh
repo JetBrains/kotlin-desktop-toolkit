@@ -8,7 +8,7 @@ cargo build
 cd ..
 
 jextract \
---include-dir /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include \
+--include-dir /Library/Developer/CommandLineTools/usr/lib/clang/16.0.0/include \
 --dump-includes scripts/filtered_headers/headers.txt \
 native/kwm-macos/headers/kwm_macos.h
 
@@ -17,7 +17,7 @@ grep "wm_macos.h$" scripts/filtered_headers/headers.txt > scripts/filtered_heade
 rm -rf lib/src/main/java/org/jetbrains/kwm/macos/generated/*
 
 jextract \
-  --include-dir /Library/Developer/CommandLineTools/usr/lib/clang/15.0.0/include \
+  --include-dir /Library/Developer/CommandLineTools/usr/lib/clang/16.0.0/include \
   --output lib/src/main/java \
   --target-package org.jetbrains.kwm.macos.generated \
   --library kwm_macos \

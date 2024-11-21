@@ -281,6 +281,116 @@ public class kwm_macos_h {
         }
     }
 
+    private static class application_init {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("application_init");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void application_init()
+     * }
+     */
+    public static FunctionDescriptor application_init$descriptor() {
+        return application_init.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void application_init()
+     * }
+     */
+    public static MethodHandle application_init$handle() {
+        return application_init.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void application_init()
+     * }
+     */
+    public static MemorySegment application_init$address() {
+        return application_init.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void application_init()
+     * }
+     */
+    public static void application_init() {
+        var mh$ = application_init.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("application_init");
+            }
+            mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class application_run_event_loop {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("application_run_event_loop");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void application_run_event_loop()
+     * }
+     */
+    public static FunctionDescriptor application_run_event_loop$descriptor() {
+        return application_run_event_loop.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void application_run_event_loop()
+     * }
+     */
+    public static MethodHandle application_run_event_loop$handle() {
+        return application_run_event_loop.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void application_run_event_loop()
+     * }
+     */
+    public static MemorySegment application_run_event_loop$address() {
+        return application_run_event_loop.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void application_run_event_loop()
+     * }
+     */
+    public static void application_run_event_loop() {
+        var mh$ = application_run_event_loop.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("application_run_event_loop");
+            }
+            mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class main_menu_update {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             AppMenuStructure.layout()

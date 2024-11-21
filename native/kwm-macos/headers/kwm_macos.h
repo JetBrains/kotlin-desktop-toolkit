@@ -43,4 +43,8 @@ void dispatcher_main_exec_async(void (*f)(void));
 
 int32_t add_numbers(int32_t x, int32_t y);
 
+void application_init(void);
+
+void application_run_event_loop(void);
+
 void main_menu_update(struct AppMenuStructure menu);

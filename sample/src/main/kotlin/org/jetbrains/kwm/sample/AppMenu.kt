@@ -1,22 +1,18 @@
 package org.jetbrains.kwm.sample
 
-import org.jetbrains.kwm.macos.AppMenuItem
-import org.jetbrains.kwm.macos.AppMenuManager
-import org.jetbrains.kwm.macos.AppMenuStructure
-import org.jetbrains.kwm.macos.GrandCentralDispatch
-import java.awt.Dimension
-import java.awt.Point
+import org.jetbrains.kwm.macos.*
 import java.time.LocalDate
-import javax.swing.JFrame
 
 fun buildAppMenu(): AppMenuStructure {
     /**
      * Constraints:
-     * 1. Only submenues area allowed on the top level.
-     * 2. The first element of root menu has always an application name
+     * 1. Only submenues are allowed on the top level
+     * 2. The first element of the root menu has always an application name
      * 3. We can register Windows, Help and Services menues, and OS will add some additional items there
      * 4. Menu with name Help will have search field as a first item
      * 5. Edit submenu *sometimes* have `AutoFill`, `Start Dictation` and Emoji & Symbols items
+     * 6. `Edit` submenu needs some careful threatment
+     * 7. `Edit` submenu items might be removed when reconciled with empty list
      *
      * see: https://stackoverflow.com/questions/21369736/remove-start-dictation-and-special-characters-from-menu
      *      https://stackoverflow.com/questions/6391053/qt-mac-remove-special-characters-action-in-edit-menu
@@ -55,8 +51,8 @@ fun buildAppMenu(): AppMenuStructure {
         ),
         AppMenuItem.Separator,
         AppMenuItem.SubMenu(
-            title = "Time: ${System.currentTimeMillis() % 100}",
-            AppMenuItem.Action("Foo", true),
+            title = "Time",
+            AppMenuItem.Action("Foo ${System.currentTimeMillis() % 100}", true),
             AppMenuItem.Separator,
             AppMenuItem.Action("Bar", false),
             AppMenuItem.SubMenu(title = "Empty Submenu")
@@ -77,18 +73,4 @@ fun buildAppMenu(): AppMenuStructure {
                             AppMenuItem.Action("Help2", true),
                             AppMenuItem.Action("Help3", true))
     )
-}
-
-fun main() {
-    JFrame().apply {
-        size = Dimension(800, 600)
-        location = Point(200, 200)
-        isVisible = true
-    }
-    while (true) {
-        GrandCentralDispatch.dispatchOnMain {
-            AppMenuManager.setMainMenu(buildAppMenu())
-        }
-        Thread.sleep(1000)
-    }
 }

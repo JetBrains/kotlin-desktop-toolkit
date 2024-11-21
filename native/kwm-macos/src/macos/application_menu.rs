@@ -36,6 +36,27 @@ pub struct AppMenuStructure {
     items_count: ArraySize,
 }
 
+#[no_mangle]
+pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
+    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    let app = NSApplication::sharedApplication(mtm);
+
+    let menu_root = if let Some(menu) = unsafe { app.mainMenu() } {
+        menu
+    } else {
+        let new_menu_root = NSMenu::new(mtm);
+        app.setMainMenu(Some(&new_menu_root));
+        new_menu_root
+    };
+    unsafe {
+        menu_root.setAutoenablesItems(false);
+    }
+
+    let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
+
+    reconcile_menu(mtm, &menu_root, &updated_menu.items);
+}
+
 #[derive(Debug)]
 enum AppMenuItemSafe<'a> {
     Action { enabled: bool, title: &'a str },
@@ -148,26 +169,6 @@ impl<'a> AppMenuItemSafe<'a> {
             },
         }
     }
-}
-
-#[no_mangle]
-pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = NSApplication::sharedApplication(mtm);
-
-    let menu_root = if let Some(menu) = unsafe { app.mainMenu() } {
-        menu
-    } else {
-        let new_menu_root = NSMenu::new(mtm);
-        app.setMainMenu(Some(&new_menu_root));
-        new_menu_root
-    };
-    unsafe {
-        menu_root.setAutoenablesItems(false);
-    }
-
-    let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
-    reconcile_menu(mtm, &menu_root, &updated_menu.items);
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]

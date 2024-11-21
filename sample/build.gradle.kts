@@ -37,14 +37,30 @@ tasks.compileJava {
 }
 
 application {
-    // Define the main class for the application.
-    mainClass = "org.jetbrains.kwm.sample.AppKt"
+    mainClass = "org.jetbrains.kwm.sample.ApplicationSampleKt"
     applicationDefaultJvmArgs = listOf("--enable-preview",
+                                       "-XstartOnFirstThread",
                                        "--enable-native-access=ALL-UNNAMED",
                                        "-Djextract.trace.downcalls=false")
 }
 
 tasks.named<JavaExec>("run") {
+    environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/debug")
+}
+
+tasks.register<JavaExec>("runAppMenuAwtSample") {
+    group = "application"
+    description = "Runs the secondary main class"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.kwm.sample.AppMenuAwtSampleKt")
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    })
+    jvmArgs = listOf(
+        "--enable-preview",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false"
+    )
     environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/debug")
 }
 

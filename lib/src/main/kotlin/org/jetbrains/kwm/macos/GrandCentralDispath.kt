@@ -7,7 +7,6 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.locks.ReentrantLock
 
 object GrandCentralDispatch: IGrandCentralDispatch {
     private val queue = ConcurrentLinkedQueue<() -> Unit>()
