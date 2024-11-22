@@ -83,9 +83,6 @@ fun buildAppMenu(): AppMenuStructure {
         ),
         AppMenuItem.SubMenu(
             title = "MyWindow",
-            AppMenuItem.Action("Window1", true),
-            AppMenuItem.Action("Window2", true),
-            AppMenuItem.Action("Window3", true),
             specialTag = "Window"),
         AppMenuItem.SubMenu(title = "Help",
                             AppMenuItem.Action("Help1", true),

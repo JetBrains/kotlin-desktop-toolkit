@@ -11,17 +11,27 @@ fun main() {
     printRuntimeInfo()
     /// Toolkit initialization will instansiate NSApplication
     val toolkit = Toolkit.getDefaultToolkit()
+    GrandCentralDispatch.dispatchOnMainSync {
+        AppMenuManager.setMainMenu(buildAppMenu())
+    }
+    JFrame().apply {
+        title = "Window1"
+        size = Dimension(800, 600)
+        location = Point(200, 200)
+        isVisible = true
+    }
+    JFrame().apply {
+        title = "Window2"
+        size = Dimension(800, 600)
+        location = Point(300, 300)
+        isVisible = true
+    }
     thread {
         while (true) {
-            GrandCentralDispatch.dispatchOnMain {
+            GrandCentralDispatch.dispatchOnMainSync {
                 AppMenuManager.setMainMenu(buildAppMenu())
             }
             Thread.sleep(1000)
         }
-    }
-    JFrame().apply {
-        size = Dimension(800, 600)
-        location = Point(200, 200)
-        isVisible = true
     }
 }
