@@ -10,6 +10,8 @@ fun main() {
     printRuntimeInfo()
     Application.init()
     AppMenuManager.setMainMenu(buildAppMenu())
+    Application.createWindow("Window1", 100f, 200f)
+    Application.createWindow("Window2", 100f, 300f)
     thread {
         while (true) {
             GrandCentralDispatch.dispatchOnMain {

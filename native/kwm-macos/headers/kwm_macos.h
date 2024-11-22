@@ -48,4 +48,6 @@ void application_init(void);
 
 void application_run_event_loop(void);
 
+void application_create_window(StrPtr title, float x, float y);
+
 void main_menu_update(struct AppMenuStructure menu);

@@ -47,10 +47,11 @@ fun buildAppMenu(): AppMenuStructure {
         ),
         AppMenuItem.SubMenu(
             title = "View",
-            AppMenuItem.Action("Foo", false),
-            AppMenuItem.Separator,
-            AppMenuItem.Action("Bar", true),
+//            AppMenuItem.Action("Foo", false),
+//            AppMenuItem.Separator,
+//            AppMenuItem.Action("Bar", true),
 //            AppMenuItem.SubMenu(title = "Empty Submenu")
+            specialTag = "View",
         ),
         AppMenuItem.Action("Top level action", true),
         AppMenuItem.SubMenu(

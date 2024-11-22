@@ -391,6 +391,65 @@ public class kwm_macos_h {
         }
     }
 
+    private static class application_create_window {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER,
+            kwm_macos_h.C_FLOAT,
+            kwm_macos_h.C_FLOAT
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("application_create_window");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void application_create_window(StrPtr title, float x, float y)
+     * }
+     */
+    public static FunctionDescriptor application_create_window$descriptor() {
+        return application_create_window.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void application_create_window(StrPtr title, float x, float y)
+     * }
+     */
+    public static MethodHandle application_create_window$handle() {
+        return application_create_window.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void application_create_window(StrPtr title, float x, float y)
+     * }
+     */
+    public static MemorySegment application_create_window$address() {
+        return application_create_window.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void application_create_window(StrPtr title, float x, float y)
+     * }
+     */
+    public static void application_create_window(MemorySegment title, float x, float y) {
+        var mh$ = application_create_window.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("application_create_window", title, x, y);
+            }
+            mh$.invokeExact(title, x, y);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class main_menu_update {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             AppMenuStructure.layout()
