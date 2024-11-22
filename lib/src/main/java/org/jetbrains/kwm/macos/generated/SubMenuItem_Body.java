@@ -16,6 +16,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * {@snippet lang=c :
  * struct SubMenuItem_Body {
  *     StrPtr title;
+ *     StrPtr special_tag;
  *     const struct AppMenuItem *items;
  *     ArraySize items_count;
  * }
@@ -29,6 +30,7 @@ public class SubMenuItem_Body {
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_POINTER.withName("title"),
+        kwm_macos_h.C_POINTER.withName("special_tag"),
         kwm_macos_h.C_POINTER.withName("items"),
         kwm_macos_h.C_LONG_LONG.withName("items_count")
     ).withName("SubMenuItem_Body");
@@ -84,6 +86,50 @@ public class SubMenuItem_Body {
         struct.set(title$LAYOUT, title$OFFSET, fieldValue);
     }
 
+    private static final AddressLayout special_tag$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("special_tag"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * StrPtr special_tag
+     * }
+     */
+    public static final AddressLayout special_tag$layout() {
+        return special_tag$LAYOUT;
+    }
+
+    private static final long special_tag$OFFSET = 8;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * StrPtr special_tag
+     * }
+     */
+    public static final long special_tag$offset() {
+        return special_tag$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * StrPtr special_tag
+     * }
+     */
+    public static MemorySegment special_tag(MemorySegment struct) {
+        return struct.get(special_tag$LAYOUT, special_tag$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * StrPtr special_tag
+     * }
+     */
+    public static void special_tag(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(special_tag$LAYOUT, special_tag$OFFSET, fieldValue);
+    }
+
     private static final AddressLayout items$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("items"));
 
     /**
@@ -96,7 +142,7 @@ public class SubMenuItem_Body {
         return items$LAYOUT;
     }
 
-    private static final long items$OFFSET = 8;
+    private static final long items$OFFSET = 16;
 
     /**
      * Offset for field:
@@ -140,7 +186,7 @@ public class SubMenuItem_Body {
         return items_count$LAYOUT;
     }
 
-    private static final long items_count$OFFSET = 16;
+    private static final long items_count$OFFSET = 24;
 
     /**
      * Offset for field:

@@ -20,6 +20,7 @@ typedef struct ActionItem_Body {
 
 typedef struct SubMenuItem_Body {
   StrPtr title;
+  StrPtr special_tag;
   const struct AppMenuItem *items;
   ArraySize items_count;
 } SubMenuItem_Body;

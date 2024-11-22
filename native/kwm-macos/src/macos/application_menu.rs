@@ -23,6 +23,7 @@ pub enum AppMenuItem {
     SeparatorItem,
     SubMenuItem {
         title: StrPtr,
+        special_tag: StrPtr,
         items: *const AppMenuItem,
         items_count: ArraySize,
     },
@@ -54,14 +55,14 @@ pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
 
     let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
 
-    reconcile_menu(mtm, &menu_root, &updated_menu.items);
+    reconcile_ns_menu_items(mtm, &menu_root, &updated_menu.items);
 }
 
 #[derive(Debug)]
 enum AppMenuItemSafe<'a> {
     Action { enabled: bool, title: &'a str },
     Separator,
-    SubMenu { title: &'a str, items: Vec<AppMenuItemSafe<'a>> },
+    SubMenu { title: &'a str, special_tag: Option<&'a str>, items: Vec<AppMenuItemSafe<'a>> },
 }
 
 #[derive(Debug)]
@@ -92,7 +93,7 @@ impl<'a> AppMenuItemSafe<'a> {
                 title: unsafe { CStr::from_ptr(*title) }.to_str()?,
             },
             AppMenuItem::SeparatorItem => AppMenuItemSafe::Separator,
-            sub_menu @ AppMenuItem::SubMenuItem { title, items, items_count } => {
+            sub_menu @ AppMenuItem::SubMenuItem { title, special_tag, items, items_count } => {
                 let items = unsafe {
                     if !(*items).is_null() {
                         slice::from_raw_parts(*items, *items_count as usize)
@@ -101,8 +102,14 @@ impl<'a> AppMenuItemSafe<'a> {
                     }
                 };
                 let safe_items: Result<Vec<_>> = items.iter().map(|item| AppMenuItemSafe::from_unsafe(item)).collect();
+                let special_tag = if !special_tag.is_null() {
+                    Some(unsafe { CStr::from_ptr(*special_tag) }.to_str()?)
+                } else {
+                    None
+                };
                 AppMenuItemSafe::SubMenu {
                     title: unsafe { CStr::from_ptr(*title) }.to_str()?,
+                    special_tag: special_tag,
                     items: safe_items?,
                 }
             }
@@ -117,25 +124,19 @@ impl<'a> AppMenuItemSafe<'a> {
         }
     }
 
-    fn reconcile_ns_submenu(mtm: MainThreadMarker, item: &NSMenuItem, title: &str, items: &[Self]) {
+    fn reconcile_ns_submenu(mtm: MainThreadMarker, item: &NSMenuItem, title: &str, special_tag: Option<&str>, items: &[Self]) {
         let ns_title = NSString::from_str(title);
         unsafe {
             item.setTitle(&ns_title);
         };
-        let submenu = if let Some(submenu) = unsafe { item.submenu() } {
-            submenu
-        } else {
-            let submenu = NSMenu::new(mtm);
-            unsafe {
-                submenu.setAutoenablesItems(false);
-            }
-            item.setSubmenu(Some(&submenu));
-            submenu
-        };
+        let submenu = unsafe { item.submenu() }.unwrap();
         unsafe {
             submenu.setTitle(&ns_title);
         }
-        reconcile_menu(mtm, &submenu, items);
+        // If we don't provide any items for macOS filled submenus we don't want to make it empty
+        if !(special_tag.is_some() && items.is_empty()) {
+            reconcile_ns_menu_items(mtm, &submenu, items);
+        }
     }
 
     fn reconcile_ns_menu_item(&self, mtm: MainThreadMarker, item: &NSMenuItem) {
@@ -146,8 +147,8 @@ impl<'a> AppMenuItemSafe<'a> {
             AppMenuItemSafe::Separator => {
                 assert!(unsafe { item.isSeparatorItem() });
             },
-            AppMenuItemSafe::SubMenu { title, items } => {
-                AppMenuItemSafe::reconcile_ns_submenu(mtm, item, title, items);
+            AppMenuItemSafe::SubMenu { title, special_tag, items } => {
+                AppMenuItemSafe::reconcile_ns_submenu(mtm, item, title, *special_tag, items);
             },
         }
     }
@@ -162,9 +163,25 @@ impl<'a> AppMenuItemSafe<'a> {
             AppMenuItemSafe::Separator => {
                 NSMenuItem::separatorItem(mtm)
             },
-            AppMenuItemSafe::SubMenu { title, items } => {
+            AppMenuItemSafe::SubMenu { title, special_tag, items } => {
                 let item = NSMenuItem::new(mtm);
-                AppMenuItemSafe::reconcile_ns_submenu(mtm, &item, title, items);
+                let submenu = NSMenu::new(mtm);
+                unsafe {
+                    submenu.setAutoenablesItems(false);
+                }
+                item.setSubmenu(Some(&submenu));
+                match *special_tag {
+                    Some("Window") => {
+                        let app = NSApplication::sharedApplication(mtm);
+                        unsafe { app.setWindowsMenu(Some(&submenu)); }
+                    }
+                    Some("Services") => {
+                        let app = NSApplication::sharedApplication(mtm);
+                        unsafe { app.setServicesMenu(Some(&submenu)); }
+                    }
+                    _ => {}
+                };
+                AppMenuItemSafe::reconcile_ns_submenu(mtm, &item, title, *special_tag, items);
                 item
             },
         }
@@ -188,8 +205,8 @@ impl<'a> ItemIdentity<'a> {
     }
 }
 
-// todo handle special submenues
-fn reconcile_menu<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: &[AppMenuItemSafe<'a>]) {
+// todo handle special submenus
+fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: &[AppMenuItemSafe<'a>]) {
     autoreleasepool(|pool| {
         let items_array = unsafe { menu.itemArray() };
         let menu_titles: Vec<_> = items_array.iter().map(|submenu| unsafe { submenu.title() }).collect();

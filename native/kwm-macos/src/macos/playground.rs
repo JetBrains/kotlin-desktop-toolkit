@@ -95,14 +95,35 @@ fn build_menu(menu_prefix: &str) -> Retained<NSMenu> {
     let mtm = MainThreadMarker::new().unwrap();
     let menu_root = NSMenu::new(mtm);
 
-    add_item_with_submenu(mtm, &menu_root, "Fleet");
-    add_item_with_submenu(mtm, &menu_root, "Strange");
+    let first_submenu = add_item_with_submenu(mtm, &menu_root, "Fleet");
+    first_submenu.addItem(&item_with_name(mtm, &"Important item1"));
+    first_submenu.addItem(&item_with_name(mtm, &"Important item2"));
+    first_submenu.addItem(&NSMenuItem::separatorItem(mtm));
+    first_submenu.addItem(&item_with_name(mtm, &"Important item3"));
+
+    let view_submenu = add_item_with_submenu(mtm, &menu_root, "View");
+    view_submenu.addItem(&item_with_name(mtm, &"View1"));
+
+
+    let strange_submenu = add_item_with_submenu(mtm, &menu_root, "Strange");
+    strange_submenu.addItem(&item_with_name(mtm, &"Strange1"));
+    strange_submenu.addItem(&NSMenuItem::separatorItem(mtm));
+    strange_submenu.addItem(&NSMenuItem::separatorItem(mtm));
+    strange_submenu.addItem(&NSMenuItem::separatorItem(mtm));
+    strange_submenu.addItem(&item_with_name(mtm, &"Strange2"));
+
     let edit_submenu = add_item_with_submenu(mtm, &menu_root, "Edit");
-    edit_submenu.addItem(&item_with_name(mtm, &"Edit1"));
-    edit_submenu.addItem(&item_with_name(mtm, &"Edit2"));
-    edit_submenu.addItem(&item_with_name(mtm, &"Edit3"));
-    edit_submenu.addItem(&item_with_name(mtm, &"Edit4"));
-    edit_submenu.addItem(&item_with_name(mtm, &"Edit5"));
+    edit_submenu.addItem(&NSMenuItem::separatorItem(mtm));
+    edit_submenu.addItem(&NSMenuItem::separatorItem(mtm));
+    edit_submenu.addItem(&NSMenuItem::separatorItem(mtm));
+
+//    edit_submenu.addItem(&item_with_name(mtm, &"Edit1"));
+//    edit_submenu.addItem(&item_with_name(mtm, &"Edit2"));
+//    edit_submenu.addItem(&item_with_name(mtm, &"Edit3"));
+//    edit_submenu.addItem(&item_with_name(mtm, &"Edit4"));
+//    edit_submenu.addItem(&item_with_name(mtm, &"Edit5"));
+
+    menu_root.addItem(&item_with_name(mtm, &"Lonely Item"));
 
     for item_num in 0..4 {
         let menu_item = item_with_name(mtm, &format!("{} Item #{}", menu_prefix, item_num));
@@ -158,14 +179,24 @@ fn start_background_thread() {
                 let app = NSApplication::sharedApplication(mtm);
 
                 if let Some(menu) = unsafe { app.mainMenu() } {
-                    update_menu(&menu, &format!("T: {}", x));
+                    println!("menu: {menu:?}");
+
+                    let item1 = unsafe { menu.itemAtIndex(1) }.unwrap();
+                    let submenu1 = unsafe { item1.submenu() };
+                    println!("item1: {item1:?} item1 submenu: {submenu1:?}");
+
+                    let item2 = unsafe { menu.itemAtIndex(2) }.unwrap();
+                    let submenu2 = unsafe { item2.submenu() };
+                    println!("item2: {item2:?} item2 submenu: {submenu2:?}");
+
+                    // update_menu(&menu, &format!("T: {}", x));
                 }
 
 //                let menu = build_menu(&format!("T: {}", x));
 //                app.setMainMenu(Some(&menu));
             });
             x += 1;
-            std::thread::sleep(Duration::from_millis(500));
+            std::thread::sleep(Duration::from_millis(2000));
         }
     });
 }
@@ -199,6 +230,7 @@ pub(crate) fn run() {
     let app = NSApplication::sharedApplication(mtm);
     app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
 
+
     // configure the application delegate
 //    let delegate = AppDelegate::new(42, true, mtm);
 //    let object = ProtocolObject::from_ref(&*delegate);
@@ -206,8 +238,9 @@ pub(crate) fn run() {
 
 //    start_background_thread();
 
-//    let _window1 = create_window(mtm, "First Window 1", 320.0, 240.0);
-//    let _window2 = create_window(mtm, "First Window 2", 420.0, 240.0);
+    let _window1 = create_window(mtm, "First Window 1", 320.0, 240.0);
+    let _window2 = create_window(mtm, "First Window 2", 420.0, 240.0);
+    start_background_thread();
 
     dispatch::Queue::main().exec_async(|| {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();

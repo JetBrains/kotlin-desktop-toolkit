@@ -12,8 +12,10 @@ sealed class AppMenuItem {
     data class Action(val title : String,
                       val isEnabled: Boolean): AppMenuItem()
     data object Separator: AppMenuItem()
-    class SubMenu(val title: String, val items: List<AppMenuItem>): AppMenuItem() {
-        constructor(title: String, vararg items: AppMenuItem) : this(title, items.toList())
+    class SubMenu(val title: String,
+                  val items: List<AppMenuItem>,
+                  val specialTag: String? = null): AppMenuItem() {
+        constructor(title: String, vararg items: AppMenuItem, specialTag: String? = null) : this(title, items.toList(), specialTag)
     }
 }
 
@@ -56,6 +58,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
 
             val subMenuItemBody = SubMenuItem_Body.allocate(arena)
             SubMenuItem_Body.title(subMenuItemBody, arena.allocateUtf8String(menuItem.title))
+            SubMenuItem_Body.special_tag(subMenuItemBody, menuItem.specialTag?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
             SubMenuItem_Body.items_count(subMenuItemBody, menuItem.items.size.toLong())
             SubMenuItem_Body.items(subMenuItemBody, itemsArray)
 
