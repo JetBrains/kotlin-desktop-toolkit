@@ -9,13 +9,13 @@ use crate::common::StrPtr;
 #[no_mangle]
 pub extern "C" fn application_init() {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-//    unsafe { NSUserDefaults::resetStandardUserDefaults() };
-//    let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
-//    unsafe {
-//        user_defaults.setBool_forKey(false, &NSString::from_str("NSDisabledDictationMenuItem"));
-//        user_defaults.setBool_forKey(false, &NSString::from_str("NSDisabledCharacterPaletteMenuItem"));
-//    };
-//    eprintln!("User defaults: {:?}", user_defaults);
+    unsafe { NSUserDefaults::resetStandardUserDefaults() };
+    let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
+    unsafe {
+        user_defaults.setBool_forKey(false, &NSString::from_str("NSDisabledDictationMenuItem"));
+        user_defaults.setBool_forKey(false, &NSString::from_str("NSDisabledCharacterPaletteMenuItem"));
+    };
+    eprintln!("User defaults: {:?}", user_defaults);
     let app = NSApplication::sharedApplication(mtm);
     app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
 }

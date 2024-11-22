@@ -17,6 +17,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * struct ActionItem_Body {
  *     bool enabled;
  *     StrPtr title;
+ *     bool macos_provided;
  * }
  * }
  */
@@ -29,7 +30,9 @@ public class ActionItem_Body {
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_BOOL.withName("enabled"),
         MemoryLayout.paddingLayout(7),
-        kwm_macos_h.C_POINTER.withName("title")
+        kwm_macos_h.C_POINTER.withName("title"),
+        kwm_macos_h.C_BOOL.withName("macos_provided"),
+        MemoryLayout.paddingLayout(7)
     ).withName("ActionItem_Body");
 
     /**
@@ -125,6 +128,50 @@ public class ActionItem_Body {
      */
     public static void title(MemorySegment struct, MemorySegment fieldValue) {
         struct.set(title$LAYOUT, title$OFFSET, fieldValue);
+    }
+
+    private static final OfBoolean macos_provided$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("macos_provided"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * bool macos_provided
+     * }
+     */
+    public static final OfBoolean macos_provided$layout() {
+        return macos_provided$LAYOUT;
+    }
+
+    private static final long macos_provided$OFFSET = 16;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * bool macos_provided
+     * }
+     */
+    public static final long macos_provided$offset() {
+        return macos_provided$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * bool macos_provided
+     * }
+     */
+    public static boolean macos_provided(MemorySegment struct) {
+        return struct.get(macos_provided$LAYOUT, macos_provided$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * bool macos_provided
+     * }
+     */
+    public static void macos_provided(MemorySegment struct, boolean fieldValue) {
+        struct.set(macos_provided$LAYOUT, macos_provided$OFFSET, fieldValue);
     }
 
     /**

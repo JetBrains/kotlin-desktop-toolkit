@@ -16,6 +16,7 @@ typedef enum AppMenuItem_Tag {
 typedef struct ActionItem_Body {
   bool enabled;
   StrPtr title;
+  bool macos_provided;
 } ActionItem_Body;
 
 typedef struct SubMenuItem_Body {

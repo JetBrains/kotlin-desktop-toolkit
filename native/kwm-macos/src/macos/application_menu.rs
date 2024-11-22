@@ -19,6 +19,7 @@ pub enum AppMenuItem {
     ActionItem {
         enabled: bool,
         title: StrPtr,
+        macos_provided: bool,
     },
     SeparatorItem,
     SubMenuItem {
@@ -60,9 +61,17 @@ pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
 
 #[derive(Debug)]
 enum AppMenuItemSafe<'a> {
-    Action { enabled: bool, title: &'a str },
+    Action {
+        enabled: bool,
+        macos_provided: bool,
+        title: &'a str,
+    },
     Separator,
-    SubMenu { title: &'a str, special_tag: Option<&'a str>, items: Vec<AppMenuItemSafe<'a>> },
+    SubMenu {
+        title: &'a str,
+        special_tag: Option<&'a str>,
+        items: Vec<AppMenuItemSafe<'a>>,
+    },
 }
 
 #[derive(Debug)]
@@ -88,12 +97,22 @@ impl<'a> AppMenuStructureSafe<'a> {
 impl<'a> AppMenuItemSafe<'a> {
     fn from_unsafe(item: &'a AppMenuItem) -> Result<AppMenuItemSafe<'a>> {
         let safe_item = match item {
-            AppMenuItem::ActionItem { enabled, title } => AppMenuItemSafe::Action {
+            AppMenuItem::ActionItem {
+                enabled,
+                title,
+                macos_provided,
+            } => AppMenuItemSafe::Action {
                 enabled: *enabled,
+                macos_provided: *macos_provided,
                 title: unsafe { CStr::from_ptr(*title) }.to_str()?,
             },
             AppMenuItem::SeparatorItem => AppMenuItemSafe::Separator,
-            sub_menu @ AppMenuItem::SubMenuItem { title, special_tag, items, items_count } => {
+            sub_menu @ AppMenuItem::SubMenuItem {
+                title,
+                special_tag,
+                items,
+                items_count,
+            } => {
                 let items = unsafe {
                     if !(*items).is_null() {
                         slice::from_raw_parts(*items, *items_count as usize)
@@ -117,10 +136,13 @@ impl<'a> AppMenuItemSafe<'a> {
         Ok(safe_item)
     }
 
-    fn reconcile_action(item: &NSMenuItem, enabled: bool, title: &str) {
+    fn reconcile_action(item: &NSMenuItem, enabled: bool, macos_provided: bool, title: &str) {
         unsafe {
             item.setTitle(&NSString::from_str(title));
             item.setEnabled(enabled);
+            if macos_provided {
+                item.setHidden(false);
+            }
         }
     }
 
@@ -141,28 +163,38 @@ impl<'a> AppMenuItemSafe<'a> {
 
     fn reconcile_ns_menu_item(&self, mtm: MainThreadMarker, item: &NSMenuItem) {
         match self {
-            AppMenuItemSafe::Action { enabled, title } => {
-                AppMenuItemSafe::reconcile_action(item, *enabled, title);
-            },
+            AppMenuItemSafe::Action {
+                enabled,
+                title,
+                macos_provided,
+            } => {
+                AppMenuItemSafe::reconcile_action(item, *enabled, *macos_provided, title);
+            }
             AppMenuItemSafe::Separator => {
                 assert!(unsafe { item.isSeparatorItem() });
-            },
+            }
             AppMenuItemSafe::SubMenu { title, special_tag, items } => {
                 AppMenuItemSafe::reconcile_ns_submenu(mtm, item, title, *special_tag, items);
-            },
+            }
         }
     }
 
-    fn to_ns_menu_item(&self, mtm: MainThreadMarker) -> Retained<NSMenuItem> {
+    fn to_ns_menu_item(&self, mtm: MainThreadMarker) -> Option<Retained<NSMenuItem>> {
         match self {
-            AppMenuItemSafe::Action { enabled, title } => {
-                let item = NSMenuItem::new(mtm);
-                AppMenuItemSafe::reconcile_action(&item, *enabled, title);
-                item
-            },
-            AppMenuItemSafe::Separator => {
-                NSMenuItem::separatorItem(mtm)
-            },
+            AppMenuItemSafe::Action {
+                enabled,
+                title,
+                macos_provided,
+            } => {
+                if !macos_provided {
+                    let item = NSMenuItem::new(mtm);
+                    AppMenuItemSafe::reconcile_action(&item, *enabled, *macos_provided, title);
+                    Some(item)
+                } else {
+                    None
+                }
+            }
+            AppMenuItemSafe::Separator => Some(NSMenuItem::separatorItem(mtm)),
             AppMenuItemSafe::SubMenu { title, special_tag, items } => {
                 let item = NSMenuItem::new(mtm);
                 let submenu = NSMenu::new(mtm);
@@ -173,17 +205,21 @@ impl<'a> AppMenuItemSafe<'a> {
                 match *special_tag {
                     Some("Window") => {
                         let app = NSApplication::sharedApplication(mtm);
-                        unsafe { app.setWindowsMenu(Some(&submenu)); }
+                        unsafe {
+                            app.setWindowsMenu(Some(&submenu));
+                        }
                     }
                     Some("Services") => {
                         let app = NSApplication::sharedApplication(mtm);
-                        unsafe { app.setServicesMenu(Some(&submenu)); }
+                        unsafe {
+                            app.setServicesMenu(Some(&submenu));
+                        }
                     }
                     _ => {}
                 };
                 AppMenuItemSafe::reconcile_ns_submenu(mtm, &item, title, *special_tag, items);
-                item
-            },
+                Some(item)
+            }
         }
     }
 }
@@ -205,7 +241,7 @@ impl<'a> ItemIdentity<'a> {
     }
 }
 
-// todo handle special submenus
+
 fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: &[AppMenuItemSafe<'a>]) {
     autoreleasepool(|pool| {
         let items_array = unsafe { menu.itemArray() };
@@ -227,22 +263,26 @@ fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: 
         let new_item_ids: Vec<_> = new_items.iter().map(|item| ItemIdentity::new(item)).collect();
 
         let operations = edit_operations(&old_item_ids, &new_item_ids);
+        let mut position_shift: isize = 0;
         for op in operations {
             match op {
                 Operation::Insert { position, item_idx } => {
-                    let new_ns_menu_item = new_items[item_idx].to_ns_menu_item(mtm);
-                    unsafe {
-                        menu.insertItem_atIndex(&new_ns_menu_item, position.try_into().unwrap());
+                    if let Some(new_ns_menu_item) = new_items[item_idx].to_ns_menu_item(mtm) {
+                        unsafe {
+                            menu.insertItem_atIndex(&new_ns_menu_item, (position as isize + position_shift).try_into().unwrap());
+                        }
+                        position_shift += 1;
                     }
                 }
                 Operation::Reconcile { position, item_idx } => {
-                    let ns_menu_item = unsafe { menu.itemAtIndex(position.try_into().unwrap()).unwrap() };
+                    let ns_menu_item = unsafe { menu.itemAtIndex((position as isize + position_shift).try_into().unwrap()).unwrap() };
                     new_items[item_idx].reconcile_ns_menu_item(mtm, &ns_menu_item);
                 }
                 Operation::Remove { position } => {
                     unsafe {
-                        menu.removeItemAtIndex(position.try_into().unwrap());
+                        menu.removeItemAtIndex((position as isize + position_shift).try_into().unwrap());
                     };
+                    position_shift -= 1;
                 }
             }
         }
@@ -309,31 +349,8 @@ fn edit_operations<T: Eq>(source: &[T], target: &[T]) -> Vec<Operation> {
     }
 
     operations.reverse();
-    fix_positions(&mut operations);
 
     operations
-}
-
-fn fix_positions(operations: &mut [Operation]) {
-    let mut shift: isize = 0;
-    for operation in operations {
-        match operation {
-            Operation::Insert {
-                ref mut position,
-                item_idx,
-            } => {
-                *position = (*position as isize + shift).try_into().unwrap();
-                shift += 1;
-            }
-            Operation::Reconcile { position, item_idx } => {
-                *position = (*position as isize + shift).try_into().unwrap();
-            }
-            Operation::Remove { position } => {
-                *position = (*position as isize + shift).try_into().unwrap();
-                shift -= 1;
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -368,10 +385,33 @@ mod tests {
         return Ok(v);
     }
 
+    fn fix_positions(operations: &mut [Operation]) {
+        let mut shift: isize = 0;
+        for operation in operations {
+            match operation {
+                Operation::Insert {
+                    ref mut position,
+                    item_idx,
+                } => {
+                    *position = (*position as isize + shift).try_into().unwrap();
+                    shift += 1;
+                }
+                Operation::Reconcile { position, item_idx } => {
+                    *position = (*position as isize + shift).try_into().unwrap();
+                }
+                Operation::Remove { position } => {
+                    *position = (*position as isize + shift).try_into().unwrap();
+                    shift -= 1;
+                }
+            }
+        }
+    }
+
     fn test_with(source: &str, target: &str) {
         let source = chs(source);
         let target = chs(target);
-        let operations = edit_operations(&source, &target);
+        let mut operations = edit_operations(&source, &target);
+        fix_positions(&mut operations);
         eprintln!("src: {source:?}, dst: {target:?}");
         eprintln!("{operations:?}");
         let result = apply_operations(&source, &target, &operations).unwrap();
@@ -395,7 +435,8 @@ mod tests {
 
     #[quickcheck]
     fn operations_turns_source_into_target(source: Vec<u32>, target: Vec<u32>) -> bool {
-        let operations = edit_operations(&source, &target);
+        let mut operations = edit_operations(&source, &target);
+        fix_positions(&mut operations);
         let result = apply_operations(&source, &target, &operations).unwrap();
         target == result
     }

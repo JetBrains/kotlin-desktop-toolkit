@@ -1,8 +1,6 @@
 package org.jetbrains.kwm.sample
 
-import org.jetbrains.kwm.macos.AppMenuManager
-import org.jetbrains.kwm.macos.Application
-import org.jetbrains.kwm.macos.GrandCentralDispatch
+import org.jetbrains.kwm.macos.*
 import kotlin.concurrent.thread
 
 

@@ -10,7 +10,8 @@ import java.lang.foreign.MemorySegment
 
 sealed class AppMenuItem {
     data class Action(val title : String,
-                      val isEnabled: Boolean): AppMenuItem()
+                      val isEnabled: Boolean = true,
+                      val isMacOSProvided: Boolean = false): AppMenuItem()
     data object Separator: AppMenuItem()
     class SubMenu(val title: String,
                   val items: List<AppMenuItem>,
@@ -39,6 +40,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             val actionItemBody = ActionItem_Body.allocate(arena)
             ActionItem_Body.enabled(actionItemBody, menuItem.isEnabled)
             ActionItem_Body.title(actionItemBody, arena.allocateUtf8String(menuItem.title))
+            ActionItem_Body.macos_provided(actionItemBody, menuItem.isMacOSProvided)
 
             NativeAppMenuItem.action_item(nativeItem, actionItemBody)
         }
