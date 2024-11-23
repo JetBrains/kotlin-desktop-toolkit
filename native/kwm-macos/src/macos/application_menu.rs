@@ -1,11 +1,13 @@
 use core::slice;
-use std::{ffi::CStr, slice::from_raw_parts};
+use std::{ffi::CStr, fmt::format, slice::from_raw_parts};
 
 use anyhow::{anyhow, Result};
 
-use objc2::rc::{autoreleasepool, Retained};
-use objc2_app_kit::{NSApplication, NSMenu, NSMenuItem};
-use objc2_foundation::{MainThreadMarker, NSString};
+use objc2::{
+    declare_class, msg_send_id, mutability, rc::{autoreleasepool, Retained}, runtime::{AnyObject, Ivar}, sel, ClassType, DeclaredClass
+};
+use objc2_app_kit::{NSApplication, NSControlStateValueOn, NSMenu, NSMenuItem};
+use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
 
 use crate::common::{ArraySize, StrPtr};
 
@@ -30,7 +32,6 @@ pub enum AppMenuItem {
     },
 }
 
-#[allow(dead_code)]
 #[repr(C)]
 #[derive(Debug)]
 pub struct AppMenuStructure {
@@ -156,6 +157,7 @@ impl<'a> AppMenuItemSafe<'a> {
             submenu.setTitle(&ns_title);
         }
         // If we don't provide any items for macOS filled submenus we don't want to make it empty
+        // todo this check can be removed as far we already reconcile only our items
         if !(special_tag.is_some() && items.is_empty()) {
             reconcile_ns_menu_items(mtm, &submenu, items);
         }
@@ -179,7 +181,7 @@ impl<'a> AppMenuItemSafe<'a> {
         }
     }
 
-    fn to_ns_menu_item(&self, mtm: MainThreadMarker) -> Option<Retained<NSMenuItem>> {
+    fn create_ns_menu_item(&self, mtm: MainThreadMarker) -> Option<Retained<NSMenuItem>> {
         match self {
             AppMenuItemSafe::Action {
                 enabled,
@@ -188,15 +190,28 @@ impl<'a> AppMenuItemSafe<'a> {
             } => {
                 if !macos_provided {
                     let item = NSMenuItem::new(mtm);
+                    unsafe {
+                        item.setRepresentedObject(Some(&MenuItemRepresenter::new()))
+                    };
                     AppMenuItemSafe::reconcile_action(&item, *enabled, *macos_provided, title);
                     Some(item)
                 } else {
                     None
                 }
             }
-            AppMenuItemSafe::Separator => Some(NSMenuItem::separatorItem(mtm)),
+            AppMenuItemSafe::Separator => {
+                let item = NSMenuItem::separatorItem(mtm);
+                unsafe {
+                    item.setRepresentedObject(Some(&MenuItemRepresenter::new()))
+                };
+                Some(item)
+            },
             AppMenuItemSafe::SubMenu { title, special_tag, items } => {
                 let item = NSMenuItem::new(mtm);
+                // todo fixme use some meaningful object!
+                unsafe {
+                    item.setRepresentedObject(Some(&MenuItemRepresenter::new()))
+                };
                 let submenu = NSMenu::new(mtm);
                 unsafe {
                     submenu.setAutoenablesItems(false);
@@ -224,11 +239,54 @@ impl<'a> AppMenuItemSafe<'a> {
     }
 }
 
+
+#[derive(Clone)]
+struct MenuItemRepresenterIvars {
+}
+
+declare_class!(
+    struct MenuItemRepresenter;
+
+    unsafe impl ClassType for MenuItemRepresenter {
+        type Super = NSObject;
+        type Mutability = mutability::InteriorMutable;
+        const NAME: &'static str = "MenuItemRepresenter";
+    }
+
+    impl DeclaredClass for MenuItemRepresenter {
+        type Ivars = MenuItemRepresenterIvars;
+    }
+    unsafe impl NSObjectProtocol for MenuItemRepresenter {}
+);
+
+impl MenuItemRepresenter {
+    fn new() -> Retained<Self> {
+        let obj = Self::alloc().set_ivars(MenuItemRepresenterIvars {});
+        unsafe { msg_send_id![super(obj), init] }
+    }
+
+    fn from_any_object(obj: Retained<AnyObject>) -> Option<Retained<Self>> {
+        if obj.class().responds_to(sel!(isKindOfClass:)) {
+            unsafe {
+                let obj = Retained::cast::<NSObject>(obj);
+                if obj.is_kind_of::<Self>() {
+                    Some(Retained::cast::<Self>(obj))
+                } else {
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 enum ItemIdentity<'a> {
     Action { title: &'a str },
     Separator,
     SubMenu { title: &'a str },
+    MacOSProvided
 }
 
 impl<'a> ItemIdentity<'a> {
@@ -241,33 +299,42 @@ impl<'a> ItemIdentity<'a> {
     }
 }
 
-
 fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: &[AppMenuItemSafe<'a>]) {
     autoreleasepool(|pool| {
         let items_array = unsafe { menu.itemArray() };
         let menu_titles: Vec<_> = items_array.iter().map(|submenu| unsafe { submenu.title() }).collect();
+
+        // sometimes macos can surround our items with new ones
+        // but usually it just add items to the end
         let old_item_ids: Vec<ItemIdentity> = items_array
             .iter()
             .zip(menu_titles.iter())
             .map(|(item, title)| {
-                if unsafe { item.isSeparatorItem() } {
-                    ItemIdentity::Separator
-                } else if unsafe { item.hasSubmenu() } {
-                    ItemIdentity::SubMenu { title: title.as_str(pool) }
-                } else {
-                    ItemIdentity::Action { title: title.as_str(pool) }
-                }
+                unsafe { item.representedObject() }.map(|it| MenuItemRepresenter::from_any_object(it)).map(|rep_obj| {
+                    let item_id = if unsafe { item.isSeparatorItem() } {
+                        ItemIdentity::Separator
+                    } else if unsafe { item.hasSubmenu() } {
+                        ItemIdentity::SubMenu { title: title.as_str(pool) }
+                    } else {
+                        ItemIdentity::Action { title: title.as_str(pool) }
+                    };
+                    item_id
+                }).unwrap_or(ItemIdentity::MacOSProvided)
             })
             .collect();
+        // todo
+        // set position_shift to the first item of ours
+        // check that our items goes in a continuous segment
 
         let new_item_ids: Vec<_> = new_items.iter().map(|item| ItemIdentity::new(item)).collect();
 
         let operations = edit_operations(&old_item_ids, &new_item_ids);
+
         let mut position_shift: isize = 0;
         for op in operations {
             match op {
                 Operation::Insert { position, item_idx } => {
-                    if let Some(new_ns_menu_item) = new_items[item_idx].to_ns_menu_item(mtm) {
+                    if let Some(new_ns_menu_item) = new_items[item_idx].create_ns_menu_item(mtm) {
                         unsafe {
                             menu.insertItem_atIndex(&new_ns_menu_item, (position as isize + position_shift).try_into().unwrap());
                         }

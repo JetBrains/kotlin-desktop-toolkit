@@ -62,7 +62,7 @@ fun buildAppMenu(): AppMenuStructure {
             AppMenuItem.Separator,
             AppMenuItem.Separator,
             AppMenuItem.Separator,
-            AppMenuItem.Action("Foo", true),
+            AppMenuItem.Action("Foo", isEnabled = (System.currentTimeMillis() / 2000L) % 2 == 0L),
             AppMenuItem.Separator,
             AppMenuItem.Action("Bar", false),
             AppMenuItem.SubMenu(title = "Empty Submenu")
@@ -87,6 +87,9 @@ fun buildAppMenu(): AppMenuStructure {
         ),
         AppMenuItem.SubMenu(
             title = "MyWindow",
+            AppMenuItem.Action("My Window Item1", true),
+            AppMenuItem.Action("My Window Item2", true),
+            AppMenuItem.Action("My Window Item3", true),
             specialTag = "Window"),
         AppMenuItem.SubMenu(title = "Help",
                             AppMenuItem.Action("Help1", true),
