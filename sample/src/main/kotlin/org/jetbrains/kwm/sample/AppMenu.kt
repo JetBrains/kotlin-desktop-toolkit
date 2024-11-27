@@ -39,22 +39,25 @@ fun buildAppMenu(): AppMenuStructure {
         ),
         AppMenuItem.SubMenu(
             title = "Edit",
-            AppMenuItem.Action("Foo", false),
-            AppMenuItem.Separator,
-            AppMenuItem.Action("Bar", true),
-            AppMenuItem.SubMenu(title = "Empty Submenu"),
-            AppMenuItem.Action("Emoji & Symbols", isMacOSProvided = true),
-            specialTag = "Edit",
+            items = buildList {
+                if ((System.currentTimeMillis() / 2000L) % 2 == 0L) {
+                    add(AppMenuItem.Action("Flickering Item1", true))
+                }
+                add(AppMenuItem.Action("Foo", false))
+                add(AppMenuItem.Separator)
+                add(AppMenuItem.Action("Bar", true))
+                add(AppMenuItem.SubMenu(title = "Empty Submenu"))
+                if ((System.currentTimeMillis() / 3000L) % 2 == 0L) {
+                    add(AppMenuItem.Action("Flickering Item2", true))
+                }
+            },
         ),
         AppMenuItem.SubMenu(
             title = "View",
-//            AppMenuItem.Action("View1", false),
-//            AppMenuItem.Separator,
-//            AppMenuItem.Action("View2", true),
-//            AppMenuItem.SubMenu(title = "Empty Submenu"),
-//            AppMenuItem.Action("Enter Full Screen", isMacOSProvided = true),
-//            AppMenuItem.Action("Exit Full Screen", isMacOSProvided = true),
-            specialTag = "View",
+            AppMenuItem.Action("View1", false),
+            AppMenuItem.Separator,
+            AppMenuItem.Action("View2", true),
+            AppMenuItem.SubMenu(title = "Empty Submenu"),
         ),
         AppMenuItem.Action("Top level action", true),
         AppMenuItem.SubMenu(
@@ -87,9 +90,17 @@ fun buildAppMenu(): AppMenuStructure {
         ),
         AppMenuItem.SubMenu(
             title = "MyWindow",
-            AppMenuItem.Action("My Window Item1", true),
-            AppMenuItem.Action("My Window Item2", true),
-            AppMenuItem.Action("My Window Item3", true),
+            items = buildList {
+                if ((System.currentTimeMillis() / 2000L) % 2 == 0L) {
+                    add(AppMenuItem.Action("First Flickering Item", true))
+                }
+                add(AppMenuItem.Action("My Window Item1", true))
+                add(AppMenuItem.Action("My Window Item2", true))
+                add(AppMenuItem.Action("My Window Item3", true))
+                if ((System.currentTimeMillis() / 2000L) % 2 == 0L) {
+                    add(AppMenuItem.Action("Last Flickering Item", true))
+                }
+            },
             specialTag = "Window"),
         AppMenuItem.SubMenu(title = "Help",
                             AppMenuItem.Action("Help1", true),

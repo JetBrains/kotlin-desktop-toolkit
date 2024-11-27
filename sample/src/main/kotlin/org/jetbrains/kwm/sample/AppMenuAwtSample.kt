@@ -12,6 +12,7 @@ fun main() {
     /// Toolkit initialization will instansiate NSApplication
     val toolkit = Toolkit.getDefaultToolkit()
     GrandCentralDispatch.dispatchOnMainSync {
+        AppMenuManager.disableMainMenu()
         AppMenuManager.setMainMenu(buildAppMenu())
     }
     JFrame().apply {

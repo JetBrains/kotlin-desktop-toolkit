@@ -6,7 +6,7 @@ use anyhow::{anyhow, Result};
 use objc2::{
     declare_class, msg_send_id, mutability, rc::{autoreleasepool, Retained}, runtime::{AnyObject, Ivar}, sel, ClassType, DeclaredClass
 };
-use objc2_app_kit::{NSApplication, NSControlStateValueOn, NSMenu, NSMenuItem};
+use objc2_app_kit::{NSApplication, NSControlStateValueOn, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
 
 use crate::common::{ArraySize, StrPtr};
@@ -58,6 +58,13 @@ pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
     let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
 
     reconcile_ns_menu_items(mtm, &menu_root, &updated_menu.items);
+}
+
+#[no_mangle]
+pub extern "C" fn main_menu_set_none() {
+    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    let app = NSApplication::sharedApplication(mtm);
+    app.setMainMenu(None);
 }
 
 #[derive(Debug)]
@@ -140,6 +147,8 @@ impl<'a> AppMenuItemSafe<'a> {
     fn reconcile_action(item: &NSMenuItem, enabled: bool, macos_provided: bool, title: &str) {
         unsafe {
             item.setTitle(&NSString::from_str(title));
+            item.setKeyEquivalent(&NSString::from_str("x"));
+            item.setKeyEquivalentModifierMask(NSEventModifierFlags::NSEventModifierFlagCommand);
             item.setEnabled(enabled);
             if macos_provided {
                 item.setHidden(false);
@@ -322,15 +331,24 @@ fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: 
                 }).unwrap_or(ItemIdentity::MacOSProvided)
             })
             .collect();
-        // todo
-        // set position_shift to the first item of ours
-        // check that our items goes in a continuous segment
 
         let new_item_ids: Vec<_> = new_items.iter().map(|item| ItemIdentity::new(item)).collect();
 
-        let operations = edit_operations(&old_item_ids, &new_item_ids);
+        let first_item = old_item_ids.iter().position(|it| *it != ItemIdentity::MacOSProvided);
+        let last_item = old_item_ids.iter().rposition(|it| *it != ItemIdentity::MacOSProvided);
+        let (old_item_ids, base_position) = match (first_item, last_item) {
+            (Some(first_item), Some(last_item)) => {
+                (&old_item_ids[first_item..=last_item], first_item)
+            },
+            // All items in menu are macOS provided
+            // Our items will be placed before them
+            _ => {
+                ([].as_slice(), 0)
+            }
+        };
 
-        let mut position_shift: isize = 0;
+        let operations = edit_operations(&old_item_ids, &new_item_ids);
+        let mut position_shift: isize = base_position as isize;
         for op in operations {
             match op {
                 Operation::Insert { position, item_idx } => {
@@ -346,10 +364,15 @@ fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: 
                     new_items[item_idx].reconcile_ns_menu_item(mtm, &ns_menu_item);
                 }
                 Operation::Remove { position } => {
-                    unsafe {
-                        menu.removeItemAtIndex((position as isize + position_shift).try_into().unwrap());
-                    };
-                    position_shift -= 1;
+                    let ns_menu_item = unsafe { menu.itemAtIndex((position as isize + position_shift).try_into().unwrap()).unwrap() };
+                    let rep_obj = unsafe { ns_menu_item.representedObject() }.map(|it| MenuItemRepresenter::from_any_object(it));
+                    // Just skip remove commands for macOS provided items
+                    if rep_obj.is_some() {
+                        unsafe {
+                            menu.removeItemAtIndex((position as isize + position_shift).try_into().unwrap());
+                        };
+                        position_shift -= 1;
+                    }
                 }
             }
         }

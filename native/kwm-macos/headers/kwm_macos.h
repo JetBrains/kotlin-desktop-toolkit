@@ -3,6 +3,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct ApplicationConfig {
+  bool disable_dictation_menu_item;
+  bool disable_character_palette_menu_item;
+} ApplicationConfig;
+
 typedef const char *StrPtr;
 
 typedef int64_t ArraySize;
@@ -45,10 +50,12 @@ void dispatcher_main_exec_async(void (*f)(void));
 
 int32_t add_numbers(int32_t x, int32_t y);
 
-void application_init(void);
+void application_init(const struct ApplicationConfig *config);
 
 void application_run_event_loop(void);
 
 void application_create_window(StrPtr title, float x, float y);
 
 void main_menu_update(struct AppMenuStructure menu);
+
+void main_menu_set_none(void);

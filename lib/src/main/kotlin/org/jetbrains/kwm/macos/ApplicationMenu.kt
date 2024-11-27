@@ -30,6 +30,10 @@ object AppMenuManager {
             kwm_macos_h.main_menu_update(menu.toNative(arena))
         }
     }
+
+    fun disableMainMenu() {
+        kwm_macos_h.main_menu_set_none()
+    }
 }
 
 private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit = let { menuItem ->

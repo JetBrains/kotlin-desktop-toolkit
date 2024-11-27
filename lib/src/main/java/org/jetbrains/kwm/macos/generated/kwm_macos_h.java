@@ -282,7 +282,9 @@ public class kwm_macos_h {
     }
 
     private static class application_init {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
 
         public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("application_init");
 
@@ -292,7 +294,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void application_init()
+     * void application_init(const struct ApplicationConfig *config)
      * }
      */
     public static FunctionDescriptor application_init$descriptor() {
@@ -302,7 +304,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void application_init()
+     * void application_init(const struct ApplicationConfig *config)
      * }
      */
     public static MethodHandle application_init$handle() {
@@ -312,7 +314,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void application_init()
+     * void application_init(const struct ApplicationConfig *config)
      * }
      */
     public static MemorySegment application_init$address() {
@@ -321,16 +323,16 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * void application_init()
+     * void application_init(const struct ApplicationConfig *config)
      * }
      */
-    public static void application_init() {
+    public static void application_init(MemorySegment config) {
         var mh$ = application_init.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("application_init");
+                traceDowncall("application_init", config);
             }
-            mh$.invokeExact();
+            mh$.invokeExact(config);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -502,6 +504,61 @@ public class kwm_macos_h {
                 traceDowncall("main_menu_update", menu);
             }
             mh$.invokeExact(menu);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class main_menu_set_none {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("main_menu_set_none");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void main_menu_set_none()
+     * }
+     */
+    public static FunctionDescriptor main_menu_set_none$descriptor() {
+        return main_menu_set_none.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void main_menu_set_none()
+     * }
+     */
+    public static MethodHandle main_menu_set_none$handle() {
+        return main_menu_set_none.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void main_menu_set_none()
+     * }
+     */
+    public static MemorySegment main_menu_set_none$address() {
+        return main_menu_set_none.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void main_menu_set_none()
+     * }
+     */
+    public static void main_menu_set_none() {
+        var mh$ = main_menu_set_none.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("main_menu_set_none");
+            }
+            mh$.invokeExact();
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

@@ -6,16 +6,22 @@ use objc2_foundation::{MainThreadMarker, NSString, NSUserDefaults, CGRect, CGPoi
 
 use crate::common::StrPtr;
 
+#[repr(C)]
+#[derive(Debug)]
+struct ApplicationConfig {
+    disable_dictation_menu_item: bool,
+    disable_character_palette_menu_item: bool,
+}
+
 #[no_mangle]
-pub extern "C" fn application_init() {
+pub extern "C" fn application_init(config: &ApplicationConfig) {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     unsafe { NSUserDefaults::resetStandardUserDefaults() };
     let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
     unsafe {
-        user_defaults.setBool_forKey(false, &NSString::from_str("NSDisabledDictationMenuItem"));
-        user_defaults.setBool_forKey(false, &NSString::from_str("NSDisabledCharacterPaletteMenuItem"));
+        user_defaults.setBool_forKey(config.disable_dictation_menu_item, &NSString::from_str("NSDisabledDictationMenuItem"));
+        user_defaults.setBool_forKey(config.disable_character_palette_menu_item, &NSString::from_str("NSDisabledCharacterPaletteMenuItem"));
     };
-    eprintln!("User defaults: {:?}", user_defaults);
     let app = NSApplication::sharedApplication(mtm);
     app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
 }
