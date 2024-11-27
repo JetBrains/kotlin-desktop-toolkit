@@ -31,7 +31,7 @@ object AppMenuManager {
         }
     }
 
-    fun disableMainMenu() {
+    fun setMainMenuToNone() {
         kwm_macos_h.main_menu_set_none()
     }
 }

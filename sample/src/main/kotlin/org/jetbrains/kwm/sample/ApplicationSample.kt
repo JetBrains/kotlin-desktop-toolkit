@@ -12,7 +12,7 @@ fun main() {
     ))
     AppMenuManager.setMainMenu(buildAppMenu())
     Application.createWindow("Window1", 100f, 200f)
-    Application.createWindow("Window2", 100f, 300f)
+    Application.createWindow("Window2", 200f, 300f)
     thread {
         while (true) {
             GrandCentralDispatch.dispatchOnMain {

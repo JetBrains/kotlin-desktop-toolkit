@@ -12,7 +12,7 @@ fun main() {
     /// Toolkit initialization will instansiate NSApplication
     val toolkit = Toolkit.getDefaultToolkit()
     GrandCentralDispatch.dispatchOnMainSync {
-        AppMenuManager.disableMainMenu()
+        AppMenuManager.setMainMenuToNone()
         AppMenuManager.setMainMenu(buildAppMenu())
     }
     JFrame().apply {
@@ -27,9 +27,13 @@ fun main() {
         location = Point(300, 300)
         isVisible = true
     }
+    GrandCentralDispatch.dispatchOnMainSync {
+        AppMenuManager.setMainMenuToNone()
+    }
     thread {
         while (true) {
             GrandCentralDispatch.dispatchOnMainSync {
+                AppMenuManager.setMainMenuToNone()
                 AppMenuManager.setMainMenu(buildAppMenu())
             }
             Thread.sleep(1000)
