@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use objc2_app_kit::NSApplication;
+use objc2_app_kit::{NSApplication, NSEventModifierFlags};
 use objc2_foundation::MainThreadMarker;
 
 use crate::common::{ArraySize, StrPtr};
@@ -13,7 +13,8 @@ use super::application_menu::main_menu_update_impl;
 
 bitflags! {
     #[repr(transparent)]
-    #[derive(Debug)]
+    #[derive(Debug, Clone, Copy)]
+    // same valus as in NSEventModifierFlags
     pub struct AppMenuKeyModifiers: u32 {
         const ModifierFlagCapsLock = 1<<16;
         const ModifierFlagShift = 1<<17;
@@ -30,8 +31,9 @@ bitflags! {
 #[repr(C)]
 #[derive(Debug)]
 pub struct AppMenuKeystroke {
-    key: StrPtr,
-    modifiers: AppMenuKeyModifiers
+    // TODO Function keys, enter, arrows, etc
+    pub key: StrPtr,
+    pub modifiers: AppMenuKeyModifiers
 }
 
 #[allow(dead_code)]
@@ -42,6 +44,7 @@ pub enum AppMenuItem {
         enabled: bool,
         title: StrPtr,
         macos_provided: bool,
+        keystroke: *const AppMenuKeystroke,
     },
     SeparatorItem,
     SubMenuItem {
@@ -75,12 +78,14 @@ pub extern "C" fn main_menu_set_none() {
 
 #[no_mangle]
 pub extern "C" fn add_numbers(x: i32, y: i32, s: SomeStruct) -> i32 {
+    println!("s: {s:?}");
     return x + y
 }
 
 
 bitflags! {
     #[repr(transparent)]
+    #[derive(Debug)]
     pub struct SomeStruct: u32 {
         const A = 1;
         const B = 2;

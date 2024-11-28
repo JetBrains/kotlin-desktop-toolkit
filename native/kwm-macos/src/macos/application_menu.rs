@@ -1,17 +1,16 @@
 use core::slice;
-use std::{ffi::CStr, fmt::format, slice::from_raw_parts};
+use std::{ffi::CStr, slice::from_raw_parts};
 
 use anyhow::{anyhow, Result};
 
+use bitflags::Flags;
 use objc2::{
-    declare_class, msg_send_id, mutability, rc::{autoreleasepool, Retained}, runtime::{AnyObject, Ivar}, sel, ClassType, DeclaredClass
+    declare_class, msg_send_id, mutability, rc::{autoreleasepool, Retained}, runtime::{AnyObject}, sel, ClassType, DeclaredClass
 };
-use objc2_app_kit::{NSApplication, NSControlStateValueOn, NSEventModifierFlags, NSMenu, NSMenuItem};
+use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
 
-use crate::common::{ArraySize, StrPtr};
-
-use super::api::{AppMenuItem, AppMenuStructure};
+use super::api::{AppMenuItem, AppMenuKeyModifiers, AppMenuStructure};
 
 // todo add keystrokes
 // todo callbacks
@@ -35,11 +34,18 @@ pub fn main_menu_update_impl(menu: AppMenuStructure) {
 }
 
 #[derive(Debug)]
+struct AppMenuKeystrokeSafe<'a> {
+    key: &'a str,
+    modifiers: AppMenuKeyModifiers,
+}
+
+#[derive(Debug)]
 enum AppMenuItemSafe<'a> {
     Action {
         enabled: bool,
         macos_provided: bool,
         title: &'a str,
+        keystroke: Option<AppMenuKeystrokeSafe<'a>>
     },
     Separator,
     SubMenu {
@@ -72,37 +78,50 @@ impl<'a> AppMenuStructureSafe<'a> {
 impl<'a> AppMenuItemSafe<'a> {
     fn from_unsafe(item: &'a AppMenuItem) -> Result<AppMenuItemSafe<'a>> {
         let safe_item = match item {
-            AppMenuItem::ActionItem {
+            &AppMenuItem::ActionItem {
                 enabled,
                 title,
                 macos_provided,
-            } => AppMenuItemSafe::Action {
-                enabled: *enabled,
-                macos_provided: *macos_provided,
-                title: unsafe { CStr::from_ptr(*title) }.to_str()?,
+                keystroke,
+            } => {
+                let keystroke = if !keystroke.is_null() {
+                    let keystroke = unsafe { &*keystroke };
+                    Some(AppMenuKeystrokeSafe {
+                        key: unsafe { CStr::from_ptr(keystroke.key) }.to_str()?,
+                        modifiers: keystroke.modifiers,
+                    })
+                } else {
+                    None
+                };
+                AppMenuItemSafe::Action {
+                    enabled: enabled,
+                    macos_provided: macos_provided,
+                    title: unsafe { CStr::from_ptr(title) }.to_str()?,
+                    keystroke
+                }
             },
             AppMenuItem::SeparatorItem => AppMenuItemSafe::Separator,
-            sub_menu @ AppMenuItem::SubMenuItem {
+            sub_menu @ &AppMenuItem::SubMenuItem {
                 title,
                 special_tag,
                 items,
                 items_count,
             } => {
                 let items = unsafe {
-                    if !(*items).is_null() {
-                        slice::from_raw_parts(*items, *items_count as usize)
+                    if !items.is_null() {
+                        slice::from_raw_parts(items, items_count as usize)
                     } else {
                         return Err(anyhow!("Null found in {:?}", sub_menu));
                     }
                 };
                 let safe_items: Result<Vec<_>> = items.iter().map(|item| AppMenuItemSafe::from_unsafe(item)).collect();
                 let special_tag = if !special_tag.is_null() {
-                    Some(unsafe { CStr::from_ptr(*special_tag) }.to_str()?)
+                    Some(unsafe { CStr::from_ptr(special_tag) }.to_str()?)
                 } else {
                     None
                 };
                 AppMenuItemSafe::SubMenu {
-                    title: unsafe { CStr::from_ptr(*title) }.to_str()?,
+                    title: unsafe { CStr::from_ptr(title) }.to_str()?,
                     special_tag: special_tag,
                     items: safe_items?,
                 }
@@ -111,20 +130,22 @@ impl<'a> AppMenuItemSafe<'a> {
         Ok(safe_item)
     }
 
-    fn reconcile_action(item: &NSMenuItem, enabled: bool, macos_provided: bool, title: &str) {
+    fn reconcile_action(item: &NSMenuItem, enabled: bool, macos_provided: bool, title: &str, keystroke: &Option<AppMenuKeystrokeSafe<'a>>) {
         unsafe {
             item.setTitle(&NSString::from_str(title));
-            // multiple keys in one keystroke isn't allowed except modifiers
-            // though you can use non ascii letters like й
-            item.setKeyEquivalent(&NSString::from_str("y"));
-            item.setKeyEquivalentModifierMask(NSEventModifierFlags::NSEventModifierFlagOption);
             item.setEnabled(enabled);
             if macos_provided {
                 item.setHidden(false);
             }
+            if let Some(keystroke) = keystroke {
+                item.setKeyEquivalent(&NSString::from_str(keystroke.key));
+                item.setKeyEquivalentModifierMask(keystroke.modifiers.into());
+            } else {
+                item.setKeyEquivalent(&NSString::new());
+                item.setKeyEquivalentModifierMask(NSEventModifierFlags::empty());
+            }
         }
     }
-
 
 
     fn reconcile_ns_submenu(mtm: MainThreadMarker, item: &NSMenuItem, title: &str, special_tag: Option<&str>, items: &[Self]) {
@@ -145,12 +166,13 @@ impl<'a> AppMenuItemSafe<'a> {
 
     fn reconcile_ns_menu_item(&self, mtm: MainThreadMarker, item: &NSMenuItem) {
         match self {
-            AppMenuItemSafe::Action {
+            &AppMenuItemSafe::Action {
                 enabled,
                 title,
                 macos_provided,
+                ref keystroke,
             } => {
-                AppMenuItemSafe::reconcile_action(item, *enabled, *macos_provided, title);
+                AppMenuItemSafe::reconcile_action(item, enabled, macos_provided, title, keystroke);
             }
             AppMenuItemSafe::Separator => {
                 assert!(unsafe { item.isSeparatorItem() });
@@ -167,13 +189,14 @@ impl<'a> AppMenuItemSafe<'a> {
                 enabled,
                 title,
                 macos_provided,
+                keystroke,
             } => {
                 if !macos_provided {
                     let item = NSMenuItem::new(mtm);
                     unsafe {
                         item.setRepresentedObject(Some(&MenuItemRepresenter::new()))
                     };
-                    AppMenuItemSafe::reconcile_action(&item, *enabled, *macos_provided, title);
+                    AppMenuItemSafe::reconcile_action(&item, *enabled, *macos_provided, title, keystroke);
                     Some(item)
                 } else {
                     None
@@ -219,6 +242,11 @@ impl<'a> AppMenuItemSafe<'a> {
     }
 }
 
+impl From<AppMenuKeyModifiers> for NSEventModifierFlags {
+    fn from(value: AppMenuKeyModifiers) -> Self {
+        return Self::from_bits(value.bits().try_into().unwrap()).expect("Unexpected bits found")
+    }
+}
 
 #[derive(Clone)]
 struct MenuItemRepresenterIvars {
@@ -290,7 +318,7 @@ fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: 
             .iter()
             .zip(menu_titles.iter())
             .map(|(item, title)| {
-                unsafe { item.representedObject() }.map(|it| MenuItemRepresenter::from_any_object(it)).map(|rep_obj| {
+                unsafe { item.representedObject() }.map(|it| MenuItemRepresenter::from_any_object(it)).map(|_rep_obj| {
                     let item_id = if unsafe { item.isSeparatorItem() } {
                         ItemIdentity::Separator
                     } else if unsafe { item.hasSubmenu() } {

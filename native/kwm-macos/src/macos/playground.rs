@@ -1,6 +1,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(unused_imports)]
 #![allow(dead_code)]
+#![allow(unused_variables)]
 use std::time::Duration;
 
 use bitflags::Flags;

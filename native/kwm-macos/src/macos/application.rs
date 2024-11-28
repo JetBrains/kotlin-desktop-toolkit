@@ -8,9 +8,9 @@ use crate::common::StrPtr;
 
 #[repr(C)]
 #[derive(Debug)]
-struct ApplicationConfig {
-    disable_dictation_menu_item: bool,
-    disable_character_palette_menu_item: bool,
+pub struct ApplicationConfig {
+    pub disable_dictation_menu_item: bool,
+    pub disable_character_palette_menu_item: bool,
 }
 
 #[no_mangle]

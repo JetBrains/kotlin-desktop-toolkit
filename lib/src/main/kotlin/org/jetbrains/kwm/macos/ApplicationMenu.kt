@@ -5,12 +5,29 @@ import org.jetbrains.kwm.macos.generated.SubMenuItem_Body
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
 import org.jetbrains.kwm.macos.generated.AppMenuItem as NativeAppMenuItem
 import org.jetbrains.kwm.macos.generated.AppMenuStructure as NativeAppMenuStructure
+import org.jetbrains.kwm.macos.generated.AppMenuKeystroke as NativeAppMenuKeystroke
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+
+data class Modifiers(
+    val capsLock: Boolean = false,
+    val shift: Boolean = false,
+    val control: Boolean = false,
+    val option: Boolean = false,
+    val command: Boolean = false,
+    val numericPad: Boolean = false,
+    val help: Boolean = false,
+    val function: Boolean = false)
+
+/**
+ * Be aware capital letter turns shift modifier on
+ */
+data class Keystroke(val key: String, val modifiers: Modifiers)
 
 sealed class AppMenuItem {
     data class Action(val title : String,
                       val isEnabled: Boolean = true,
+                      val keystroke: Keystroke? = null,
                       val isMacOSProvided: Boolean = false): AppMenuItem()
     data object Separator: AppMenuItem()
     class SubMenu(val title: String,
@@ -36,6 +53,42 @@ object AppMenuManager {
     }
 }
 
+private fun Modifiers.toNative(): Int = let { modifier ->
+    var result = 0
+    if (modifier.capsLock) {
+        result = result or kwm_macos_h.AppMenuKeyModifiers_ModifierFlagCapsLock()
+    }
+    if (modifier.shift) {
+        result = result or kwm_macos_h.AppMenuKeyModifiers_ModifierFlagShift()
+    }
+    if (modifier.control) {
+        result = result or kwm_macos_h.AppMenuKeyModifiers_ModifierFlagControl()
+    }
+    if (modifier.option) {
+        result = result or kwm_macos_h.AppMenuKeyModifiers_ModifierFlagOption()
+    }
+    if (modifier.command) {
+        result = result or kwm_macos_h.AppMenuKeyModifiers_ModifierFlagCommand()
+    }
+    if (modifier.numericPad) {
+        result = result or kwm_macos_h.AppMenuKeyModifiers_ModifierFlagNumericPad()
+    }
+    if (modifier.help) {
+        result = result or kwm_macos_h.AppMenuKeyModifiers_ModifierFlagHelp()
+    }
+    if (modifier.function) {
+        result = result or kwm_macos_h.AppMenuKeyModifiers_ModifierFlagFunction()
+    }
+    result
+}
+
+private fun Keystroke.toNative(arena: Arena): MemorySegment = let { keystroke ->
+    val result = NativeAppMenuKeystroke.allocate(arena)
+    NativeAppMenuKeystroke.key(result, arena.allocateUtf8String(keystroke.key))
+    NativeAppMenuKeystroke.modifiers(result, keystroke.modifiers.toNative())
+    result
+}
+
 private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit = let { menuItem ->
     when (menuItem) {
         is AppMenuItem.Action -> {
@@ -45,6 +98,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             ActionItem_Body.enabled(actionItemBody, menuItem.isEnabled)
             ActionItem_Body.title(actionItemBody, arena.allocateUtf8String(menuItem.title))
             ActionItem_Body.macos_provided(actionItemBody, menuItem.isMacOSProvided)
+            ActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)
 
             NativeAppMenuItem.action_item(nativeItem, actionItemBody)
         }

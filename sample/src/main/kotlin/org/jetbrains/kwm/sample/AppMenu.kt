@@ -3,6 +3,10 @@ package org.jetbrains.kwm.sample
 import org.jetbrains.kwm.macos.*
 import java.time.LocalDate
 
+private fun imLucky(): Boolean {
+    return (System.currentTimeMillis() / 2000L) % 2 == 0L
+}
+
 fun buildAppMenu(): AppMenuStructure {
     /**
      * Constraints:
@@ -32,9 +36,14 @@ fun buildAppMenu(): AppMenuStructure {
         ),
         AppMenuItem.SubMenu(
             title = "File",
-            AppMenuItem.Action("Foo", false),
+            AppMenuItem.Action("Foo", isEnabled = false),
             AppMenuItem.Separator,
-            AppMenuItem.Action("Bar", true),
+            AppMenuItem.Action("Bar",
+                               isEnabled = true,
+                               keystroke = Keystroke(
+                                   key = "x",
+                                   modifiers = Modifiers(control = true)
+                               )),
             AppMenuItem.SubMenu(title = "Empty Submenu")
         ),
         AppMenuItem.SubMenu(
@@ -58,6 +67,14 @@ fun buildAppMenu(): AppMenuStructure {
             AppMenuItem.Separator,
             AppMenuItem.Action("View2", true),
             AppMenuItem.SubMenu(title = "Empty Submenu"),
+        ),
+        AppMenuItem.SubMenu(
+            title = "Keystrokes",
+            AppMenuItem.Action("Item1", keystroke = Keystroke(key = "xy", modifiers = Modifiers())), // second letter is ignored
+            AppMenuItem.Action("Item2", keystroke = Keystroke(key = "X", modifiers = Modifiers())), // shift modifier added because letter is capital
+            AppMenuItem.Action("Item3", keystroke = Keystroke(key = "й", modifiers = Modifiers(option = true))),
+            AppMenuItem.Action("Item4", keystroke = Keystroke(key = "\u000d", modifiers = Modifiers(command = true))), // it's enter
+            AppMenuItem.Action("Item5", keystroke = if (imLucky()) Keystroke(key = "k", modifiers = Modifiers(shift = true)) else null )
         ),
         AppMenuItem.Action("Top level action", true),
         AppMenuItem.SubMenu(

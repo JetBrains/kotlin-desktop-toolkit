@@ -18,6 +18,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     bool enabled;
  *     StrPtr title;
  *     bool macos_provided;
+ *     const struct AppMenuKeystroke *keystroke;
  * }
  * }
  */
@@ -32,7 +33,8 @@ public class ActionItem_Body {
         MemoryLayout.paddingLayout(7),
         kwm_macos_h.C_POINTER.withName("title"),
         kwm_macos_h.C_BOOL.withName("macos_provided"),
-        MemoryLayout.paddingLayout(7)
+        MemoryLayout.paddingLayout(7),
+        kwm_macos_h.C_POINTER.withName("keystroke")
     ).withName("ActionItem_Body");
 
     /**
@@ -172,6 +174,50 @@ public class ActionItem_Body {
      */
     public static void macos_provided(MemorySegment struct, boolean fieldValue) {
         struct.set(macos_provided$LAYOUT, macos_provided$OFFSET, fieldValue);
+    }
+
+    private static final AddressLayout keystroke$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("keystroke"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * const struct AppMenuKeystroke *keystroke
+     * }
+     */
+    public static final AddressLayout keystroke$layout() {
+        return keystroke$LAYOUT;
+    }
+
+    private static final long keystroke$OFFSET = 24;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * const struct AppMenuKeystroke *keystroke
+     * }
+     */
+    public static final long keystroke$offset() {
+        return keystroke$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * const struct AppMenuKeystroke *keystroke
+     * }
+     */
+    public static MemorySegment keystroke(MemorySegment struct) {
+        return struct.get(keystroke$LAYOUT, keystroke$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * const struct AppMenuKeystroke *keystroke
+     * }
+     */
+    public static void keystroke(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(keystroke$LAYOUT, keystroke$OFFSET, fieldValue);
     }
 
     /**
