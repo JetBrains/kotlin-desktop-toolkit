@@ -11,49 +11,13 @@ use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
 
 use crate::common::{ArraySize, StrPtr};
 
+use super::api::{AppMenuItem, AppMenuStructure};
+
 // todo add keystrokes
 // todo callbacks
 
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct AppMenuKeystroke {
-    key: StrPtr,
-//    modifiers: NSEventModifierFlags
-}
-
-#[no_mangle]
-pub extern "C" fn print_keystroke(k: &AppMenuKeystroke) {
-    println!("k: {k:?}");
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Debug)]
-pub enum AppMenuItem {
-    ActionItem {
-        enabled: bool,
-        title: StrPtr,
-        macos_provided: bool,
-    },
-    SeparatorItem,
-    SubMenuItem {
-        title: StrPtr,
-        special_tag: StrPtr,
-        items: *const AppMenuItem,
-        items_count: ArraySize,
-    },
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct AppMenuStructure {
-    items: *const AppMenuItem,
-    items_count: ArraySize,
-}
-
-#[no_mangle]
-pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
+pub fn main_menu_update_impl(menu: AppMenuStructure) {
+    let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let app = NSApplication::sharedApplication(mtm);
 
@@ -67,17 +31,7 @@ pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
     unsafe {
         menu_root.setAutoenablesItems(false);
     }
-
-    let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
-
     reconcile_ns_menu_items(mtm, &menu_root, &updated_menu.items);
-}
-
-#[no_mangle]
-pub extern "C" fn main_menu_set_none() {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = NSApplication::sharedApplication(mtm);
-    app.setMainMenu(None);
 }
 
 #[derive(Debug)]

@@ -71,12 +71,6 @@ public class kwm_macos_h {
     public static final ValueLayout.OfLong C_LONG = ValueLayout.JAVA_LONG;
     /**
      * {@snippet lang=c :
-     * typedef uint32_t SomeStruct
-     * }
-     */
-    public static final OfInt SomeStruct = kwm_macos_h.C_INT;
-    /**
-     * {@snippet lang=c :
      * typedef const char *StrPtr
      * }
      */
@@ -114,6 +108,12 @@ public class kwm_macos_h {
     public static int SubMenuItem() {
         return SubMenuItem;
     }
+    /**
+     * {@snippet lang=c :
+     * typedef uint32_t SomeStruct
+     * }
+     */
+    public static final OfInt SomeStruct = kwm_macos_h.C_INT;
 
     private static class dispatcher_is_main_thread {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
@@ -223,6 +223,118 @@ public class kwm_macos_h {
                 traceDowncall("dispatcher_main_exec_async", f);
             }
             mh$.invokeExact(f);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class main_menu_update {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            AppMenuStructure.layout()
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("main_menu_update");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void main_menu_update(struct AppMenuStructure menu)
+     * }
+     */
+    public static FunctionDescriptor main_menu_update$descriptor() {
+        return main_menu_update.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void main_menu_update(struct AppMenuStructure menu)
+     * }
+     */
+    public static MethodHandle main_menu_update$handle() {
+        return main_menu_update.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void main_menu_update(struct AppMenuStructure menu)
+     * }
+     */
+    public static MemorySegment main_menu_update$address() {
+        return main_menu_update.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void main_menu_update(struct AppMenuStructure menu)
+     * }
+     */
+    public static void main_menu_update(MemorySegment menu) {
+        var mh$ = main_menu_update.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("main_menu_update", menu);
+            }
+            mh$.invokeExact(menu);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class main_menu_set_none {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("main_menu_set_none");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void main_menu_set_none()
+     * }
+     */
+    public static FunctionDescriptor main_menu_set_none$descriptor() {
+        return main_menu_set_none.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void main_menu_set_none()
+     * }
+     */
+    public static MethodHandle main_menu_set_none$handle() {
+        return main_menu_set_none.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void main_menu_set_none()
+     * }
+     */
+    public static MemorySegment main_menu_set_none$address() {
+        return main_menu_set_none.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void main_menu_set_none()
+     * }
+     */
+    public static void main_menu_set_none() {
+        var mh$ = main_menu_set_none.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("main_menu_set_none");
+            }
+            mh$.invokeExact();
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -454,175 +566,6 @@ public class kwm_macos_h {
                 traceDowncall("application_create_window", title, x, y);
             }
             mh$.invokeExact(title, x, y);
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
-    private static class print_keystroke {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
-            kwm_macos_h.C_POINTER
-        );
-
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("print_keystroke");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * void print_keystroke(const struct AppMenuKeystroke *k)
-     * }
-     */
-    public static FunctionDescriptor print_keystroke$descriptor() {
-        return print_keystroke.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * void print_keystroke(const struct AppMenuKeystroke *k)
-     * }
-     */
-    public static MethodHandle print_keystroke$handle() {
-        return print_keystroke.HANDLE;
-    }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void print_keystroke(const struct AppMenuKeystroke *k)
-     * }
-     */
-    public static MemorySegment print_keystroke$address() {
-        return print_keystroke.ADDR;
-    }
-
-    /**
-     * {@snippet lang=c :
-     * void print_keystroke(const struct AppMenuKeystroke *k)
-     * }
-     */
-    public static void print_keystroke(MemorySegment k) {
-        var mh$ = print_keystroke.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("print_keystroke", k);
-            }
-            mh$.invokeExact(k);
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
-    private static class main_menu_update {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
-            AppMenuStructure.layout()
-        );
-
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("main_menu_update");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * void main_menu_update(struct AppMenuStructure menu)
-     * }
-     */
-    public static FunctionDescriptor main_menu_update$descriptor() {
-        return main_menu_update.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * void main_menu_update(struct AppMenuStructure menu)
-     * }
-     */
-    public static MethodHandle main_menu_update$handle() {
-        return main_menu_update.HANDLE;
-    }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void main_menu_update(struct AppMenuStructure menu)
-     * }
-     */
-    public static MemorySegment main_menu_update$address() {
-        return main_menu_update.ADDR;
-    }
-
-    /**
-     * {@snippet lang=c :
-     * void main_menu_update(struct AppMenuStructure menu)
-     * }
-     */
-    public static void main_menu_update(MemorySegment menu) {
-        var mh$ = main_menu_update.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("main_menu_update", menu);
-            }
-            mh$.invokeExact(menu);
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
-    private static class main_menu_set_none {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
-
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("main_menu_set_none");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * void main_menu_set_none()
-     * }
-     */
-    public static FunctionDescriptor main_menu_set_none$descriptor() {
-        return main_menu_set_none.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * void main_menu_set_none()
-     * }
-     */
-    public static MethodHandle main_menu_set_none$handle() {
-        return main_menu_set_none.HANDLE;
-    }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void main_menu_set_none()
-     * }
-     */
-    public static MemorySegment main_menu_set_none$address() {
-        return main_menu_set_none.ADDR;
-    }
-
-    /**
-     * {@snippet lang=c :
-     * void main_menu_set_none()
-     * }
-     */
-    public static void main_menu_set_none() {
-        var mh$ = main_menu_set_none.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("main_menu_set_none");
-            }
-            mh$.invokeExact();
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
