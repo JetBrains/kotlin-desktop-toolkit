@@ -1,7 +1,13 @@
+/* This header is generated please don't edit it manually. */
+
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+typedef uint32_t SomeStruct;
+#define SomeStruct_A (uint32_t)1
+#define SomeStruct_B (uint32_t)2
 
 typedef struct ApplicationConfig {
   bool disable_dictation_menu_item;
@@ -9,6 +15,10 @@ typedef struct ApplicationConfig {
 } ApplicationConfig;
 
 typedef const char *StrPtr;
+
+typedef struct AppMenuKeystroke {
+  StrPtr key;
+} AppMenuKeystroke;
 
 typedef int64_t ArraySize;
 
@@ -48,13 +58,15 @@ bool dispatcher_is_main_thread(void);
 
 void dispatcher_main_exec_async(void (*f)(void));
 
-int32_t add_numbers(int32_t x, int32_t y);
+int32_t add_numbers(int32_t x, int32_t y, SomeStruct s);
 
 void application_init(const struct ApplicationConfig *config);
 
 void application_run_event_loop(void);
 
 void application_create_window(StrPtr title, float x, float y);
+
+void print_keystroke(const struct AppMenuKeystroke *k);
 
 void main_menu_update(struct AppMenuStructure menu);
 

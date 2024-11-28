@@ -13,6 +13,7 @@ path = "src/playground.rs"
 
 [dependencies]
 anyhow = "1.0.93"
+bitflags = "2.6.0"
 
 [build-dependencies]
 cbindgen = "0.24.0"
@@ -36,6 +37,7 @@ objc2-app-kit = { version = "0.2.2", features = [
   "NSMenu",
   "NSMenuItem",
   "NSCell",
-  "NSEvent"
+  "NSEvent",
+  "NSText"
 ] }
 objc2-foundation = { version = "0.2.2", features = ["NSThread", "NSArray", "NSEnumerator", "dispatch", "NSUserDefaults"] }

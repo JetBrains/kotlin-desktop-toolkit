@@ -3,7 +3,7 @@
  */
 package org.jetbrains.kwm
 
-import org.jetbrains.kwm.macos.generated.kwm_macos_h.add_numbers
+import org.jetbrains.kwm.macos.generated.kwm_macos_h.*
 
 class Library {
 
@@ -12,7 +12,7 @@ class Library {
     }
 
     fun someLibraryMethod(a: Int, b: Int): Int {
-        return add_numbers(a, b)
+        return add_numbers(a, b, SomeStruct_A() or SomeStruct_B())
     }
 }
 

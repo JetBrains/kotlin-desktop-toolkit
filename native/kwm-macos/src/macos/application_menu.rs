@@ -14,6 +14,19 @@ use crate::common::{ArraySize, StrPtr};
 // todo add keystrokes
 // todo callbacks
 
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct AppMenuKeystroke {
+    key: StrPtr,
+//    modifiers: NSEventModifierFlags
+}
+
+#[no_mangle]
+pub extern "C" fn print_keystroke(k: &AppMenuKeystroke) {
+    println!("k: {k:?}");
+}
+
 #[allow(dead_code)]
 #[repr(C)]
 #[derive(Debug)]
@@ -147,14 +160,18 @@ impl<'a> AppMenuItemSafe<'a> {
     fn reconcile_action(item: &NSMenuItem, enabled: bool, macos_provided: bool, title: &str) {
         unsafe {
             item.setTitle(&NSString::from_str(title));
-            item.setKeyEquivalent(&NSString::from_str("x"));
-            item.setKeyEquivalentModifierMask(NSEventModifierFlags::NSEventModifierFlagCommand);
+            // multiple keys in one keystroke isn't allowed except modifiers
+            // though you can use non ascii letters like й
+            item.setKeyEquivalent(&NSString::from_str("y"));
+            item.setKeyEquivalentModifierMask(NSEventModifierFlags::NSEventModifierFlagOption);
             item.setEnabled(enabled);
             if macos_provided {
                 item.setHidden(false);
             }
         }
     }
+
+
 
     fn reconcile_ns_submenu(mtm: MainThreadMarker, item: &NSMenuItem, title: &str, special_tag: Option<&str>, items: &[Self]) {
         let ns_title = NSString::from_str(title);

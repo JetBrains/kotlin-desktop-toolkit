@@ -71,6 +71,12 @@ public class kwm_macos_h {
     public static final ValueLayout.OfLong C_LONG = ValueLayout.JAVA_LONG;
     /**
      * {@snippet lang=c :
+     * typedef uint32_t SomeStruct
+     * }
+     */
+    public static final OfInt SomeStruct = kwm_macos_h.C_INT;
+    /**
+     * {@snippet lang=c :
      * typedef const char *StrPtr
      * }
      */
@@ -226,6 +232,7 @@ public class kwm_macos_h {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             kwm_macos_h.C_INT,
             kwm_macos_h.C_INT,
+            kwm_macos_h.C_INT,
             kwm_macos_h.C_INT
         );
 
@@ -237,7 +244,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * int32_t add_numbers(int32_t x, int32_t y)
+     * int32_t add_numbers(int32_t x, int32_t y, SomeStruct s)
      * }
      */
     public static FunctionDescriptor add_numbers$descriptor() {
@@ -247,7 +254,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * int32_t add_numbers(int32_t x, int32_t y)
+     * int32_t add_numbers(int32_t x, int32_t y, SomeStruct s)
      * }
      */
     public static MethodHandle add_numbers$handle() {
@@ -257,7 +264,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * int32_t add_numbers(int32_t x, int32_t y)
+     * int32_t add_numbers(int32_t x, int32_t y, SomeStruct s)
      * }
      */
     public static MemorySegment add_numbers$address() {
@@ -266,16 +273,16 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * int32_t add_numbers(int32_t x, int32_t y)
+     * int32_t add_numbers(int32_t x, int32_t y, SomeStruct s)
      * }
      */
-    public static int add_numbers(int x, int y) {
+    public static int add_numbers(int x, int y, int s) {
         var mh$ = add_numbers.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("add_numbers", x, y);
+                traceDowncall("add_numbers", x, y, s);
             }
-            return (int)mh$.invokeExact(x, y);
+            return (int)mh$.invokeExact(x, y, s);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -452,6 +459,63 @@ public class kwm_macos_h {
         }
     }
 
+    private static class print_keystroke {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("print_keystroke");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void print_keystroke(const struct AppMenuKeystroke *k)
+     * }
+     */
+    public static FunctionDescriptor print_keystroke$descriptor() {
+        return print_keystroke.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void print_keystroke(const struct AppMenuKeystroke *k)
+     * }
+     */
+    public static MethodHandle print_keystroke$handle() {
+        return print_keystroke.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void print_keystroke(const struct AppMenuKeystroke *k)
+     * }
+     */
+    public static MemorySegment print_keystroke$address() {
+        return print_keystroke.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void print_keystroke(const struct AppMenuKeystroke *k)
+     * }
+     */
+    public static void print_keystroke(MemorySegment k) {
+        var mh$ = print_keystroke.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("print_keystroke", k);
+            }
+            mh$.invokeExact(k);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class main_menu_update {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             AppMenuStructure.layout()
@@ -562,6 +626,24 @@ public class kwm_macos_h {
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
+    }
+    private static final int SomeStruct_A = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * #define SomeStruct_A 1
+     * }
+     */
+    public static int SomeStruct_A() {
+        return SomeStruct_A;
+    }
+    private static final int SomeStruct_B = (int)2L;
+    /**
+     * {@snippet lang=c :
+     * #define SomeStruct_B 2
+     * }
+     */
+    public static int SomeStruct_B() {
+        return SomeStruct_B;
     }
 }
 

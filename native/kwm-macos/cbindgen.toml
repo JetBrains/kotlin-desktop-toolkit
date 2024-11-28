@@ -1,2 +1,12 @@
 language = "C"
 header = "/* This header is generated please don't edit it manually. */"
+
+[macro_expansion]
+# Whether bindings should be generated for instances of the bitflags! macro.
+# default: false
+bitflags = true
+
+#[parse]
+## Whether to parse dependent crates and include their types in the output
+## default: false
+#parse_deps = true

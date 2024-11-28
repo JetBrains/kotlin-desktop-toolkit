@@ -3,12 +3,13 @@
 #![allow(dead_code)]
 use std::time::Duration;
 
+use bitflags::Flags;
+use objc2::ffi::SEL;
 use objc2::rc::Retained;
-use objc2::runtime::ProtocolObject;
-use objc2::{declare_class, msg_send_id, mutability, ClassType, DeclaredClass};
+use objc2::runtime::{AnyObject, ProtocolObject};
+use objc2::{declare_class, msg_send_id, mutability, sel, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSBackingStoreType, NSMenu, NSMenuItem, NSNormalWindowLevel,
-    NSWindow, NSWindowLevel, NSWindowStyleMask,
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSBackingStoreType, NSEventModifierFlags, NSF1FunctionKey, NSF3FunctionKey, NSMenu, NSMenuItem, NSNormalWindowLevel, NSWindow, NSWindowLevel, NSWindowStyleMask
 };
 use objc2_foundation::{
     ns_string, CGPoint, CGRect, CGSize, MainThreadMarker, NSCoding, NSCopying, NSNotification, NSObject, NSObjectProtocol,
@@ -41,6 +42,13 @@ declare_class!(
 
     impl DeclaredClass for AppDelegate {
         type Ivars = Ivars;
+    }
+
+    unsafe impl AppDelegate {
+        #[method(handleAppMenu:)]
+        fn handle_app_menu_bar(&self, sender: &NSMenuItem) {
+            println!("handleAppMenu is called with: {sender:?}");
+        }
     }
 
     unsafe impl NSObjectProtocol for AppDelegate {}
@@ -83,9 +91,28 @@ fn item_with_name(mtm: MainThreadMarker, name: &str) -> Retained<NSMenuItem> {
     return menu_item;
 }
 
+fn item_with_keystroke(mtm: MainThreadMarker, name: &str, key: &str, modifiers: NSEventModifierFlags) -> Retained<NSMenuItem> {
+    let menu_item = NSMenuItem::new(mtm);
+    let app = NSApplication::sharedApplication(mtm);
+    unsafe {
+        menu_item.setTitle(&NSString::from_str(name));
+        menu_item.setEnabled(true);
+        menu_item.setKeyEquivalent(&NSString::from_str(key));
+        menu_item.setKeyEquivalentModifierMask(modifiers);
+        if let Some(delegate) = app.delegate().map(|it| Retained::cast::<AnyObject>(it)) {
+            menu_item.setTarget(Some(&*delegate));
+        }
+        menu_item.setAction(Some(sel!(handleAppMenu:)));
+    }
+    return menu_item;
+}
+
 fn add_item_with_submenu(mtm: MainThreadMarker, root: &NSMenu, title: &str) -> Retained<NSMenu> {
     let item = item_with_name(mtm, title);
     let submenu = unsafe { NSMenu::initWithTitle(mtm.alloc(), &NSString::from_str(title)) };
+    unsafe {
+        submenu.setAutoenablesItems(false);
+    };
     item.setSubmenu(Some(&submenu));
     root.addItem(&item);
     return submenu;
@@ -94,6 +121,9 @@ fn add_item_with_submenu(mtm: MainThreadMarker, root: &NSMenu, title: &str) -> R
 fn build_menu(menu_prefix: &str) -> Retained<NSMenu> {
     let mtm = MainThreadMarker::new().unwrap();
     let menu_root = NSMenu::new(mtm);
+    unsafe {
+        menu_root.setAutoenablesItems(false);
+    };
 
     let first_submenu = add_item_with_submenu(mtm, &menu_root, "Fleet");
     first_submenu.addItem(&item_with_name(mtm, &"Important item1"));
@@ -107,6 +137,13 @@ fn build_menu(menu_prefix: &str) -> Retained<NSMenu> {
 
     let strange_submenu = add_item_with_submenu(mtm, &menu_root, "Strange");
     strange_submenu.addItem(&item_with_name(mtm, &"Strange1"));
+    strange_submenu.addItem(&item_with_keystroke(mtm, "Keyed Item1", "r", NSEventModifierFlags::NSEventModifierFlagControl | NSEventModifierFlags::NSEventModifierFlagOption));
+    strange_submenu.addItem(&item_with_keystroke(mtm, "Keyed Item2", "r", NSEventModifierFlags::empty()));
+    strange_submenu.addItem(&item_with_keystroke(mtm, "Keyed Item3", "rt", NSEventModifierFlags::empty()));
+    strange_submenu.addItem(&item_with_keystroke(mtm, "Keyed Item4", "й", NSEventModifierFlags::empty()));
+    strange_submenu.addItem(&item_with_keystroke(mtm, "Keyed Item5", "²", NSEventModifierFlags::empty()));
+    strange_submenu.addItem(&item_with_keystroke(mtm, "Keyed Item5", &String::from_utf16(&[NSF3FunctionKey.try_into().unwrap()]).unwrap(), NSEventModifierFlags::empty()));
+
     strange_submenu.addItem(&NSMenuItem::separatorItem(mtm));
     strange_submenu.addItem(&NSMenuItem::separatorItem(mtm));
     strange_submenu.addItem(&NSMenuItem::separatorItem(mtm));
@@ -178,20 +215,6 @@ fn start_background_thread() {
 
                 let app = NSApplication::sharedApplication(mtm);
 
-                if let Some(menu) = unsafe { app.mainMenu() } {
-                    println!("menu: {menu:?}");
-
-                    let item1 = unsafe { menu.itemAtIndex(1) }.unwrap();
-                    let submenu1 = unsafe { item1.submenu() };
-                    println!("item1: {item1:?} item1 submenu: {submenu1:?}");
-
-                    let item2 = unsafe { menu.itemAtIndex(2) }.unwrap();
-                    let submenu2 = unsafe { item2.submenu() };
-                    println!("item2: {item2:?} item2 submenu: {submenu2:?}");
-
-                    // update_menu(&menu, &format!("T: {}", x));
-                }
-
 //                let menu = build_menu(&format!("T: {}", x));
 //                app.setMainMenu(Some(&menu));
             });
@@ -232,9 +255,9 @@ pub(crate) fn run() {
 
 
     // configure the application delegate
-//    let delegate = AppDelegate::new(42, true, mtm);
-//    let object = ProtocolObject::from_ref(&*delegate);
-//    app.setDelegate(Some(object));
+    let delegate = AppDelegate::new(42, true, mtm);
+    let object = ProtocolObject::from_ref(&*delegate);
+    app.setDelegate(Some(object));
 
 //    start_background_thread();
 
