@@ -45,6 +45,7 @@ pub enum AppMenuItem {
         title: StrPtr,
         macos_provided: bool,
         keystroke: *const AppMenuKeystroke,
+        perform: extern "C" fn()
     },
     SeparatorItem,
     SubMenuItem {

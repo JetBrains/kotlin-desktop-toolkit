@@ -28,7 +28,8 @@ sealed class AppMenuItem {
     data class Action(val title : String,
                       val isEnabled: Boolean = true,
                       val keystroke: Keystroke? = null,
-                      val isMacOSProvided: Boolean = false): AppMenuItem()
+                      val isMacOSProvided: Boolean = false,
+                      val perform: () -> Unit = {}): AppMenuItem()
     data object Separator: AppMenuItem()
     class SubMenu(val title: String,
                   val items: List<AppMenuItem>,
@@ -42,10 +43,15 @@ data class AppMenuStructure(val items: List<AppMenuItem>) {
 }
 
 object AppMenuManager {
+    internal var callbacksArena: Arena? = null
+
     fun setMainMenu(menu: AppMenuStructure) {
+        val previousCallbackArena = callbacksArena
+        callbacksArena = Arena.ofConfined()
         Arena.ofConfined().use { arena ->
             kwm_macos_h.main_menu_update(menu.toNative(arena))
         }
+        previousCallbackArena?.close()
     }
 
     fun setMainMenuToNone() {
@@ -99,7 +105,8 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             ActionItem_Body.title(actionItemBody, arena.allocateUtf8String(menuItem.title))
             ActionItem_Body.macos_provided(actionItemBody, menuItem.isMacOSProvided)
             ActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)
-
+            ActionItem_Body.perform(actionItemBody, ActionItem_Body.perform.allocate(menuItem.perform,
+                                                                                     AppMenuManager.callbacksArena))
             NativeAppMenuItem.action_item(nativeItem, actionItemBody)
         }
 

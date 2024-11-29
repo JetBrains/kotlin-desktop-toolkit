@@ -4,7 +4,7 @@ import org.jetbrains.kwm.macos.*
 import java.time.LocalDate
 
 private fun imLucky(): Boolean {
-    return (System.currentTimeMillis() / 2000L) % 2 == 0L
+    return (System.currentTimeMillis() / 1000L) % 3 == 0L
 }
 
 fun buildAppMenu(): AppMenuStructure {
@@ -43,7 +43,8 @@ fun buildAppMenu(): AppMenuStructure {
                                keystroke = Keystroke(
                                    key = "x",
                                    modifiers = Modifiers(control = true)
-                               )),
+                               ),
+                               perform = { println("First callback from Kotlin!") }),
             AppMenuItem.SubMenu(title = "Empty Submenu")
         ),
         AppMenuItem.SubMenu(
@@ -70,7 +71,14 @@ fun buildAppMenu(): AppMenuStructure {
         ),
         AppMenuItem.SubMenu(
             title = "Keystrokes",
-            AppMenuItem.Action("Item1", keystroke = Keystroke(key = "xy", modifiers = Modifiers())), // second letter is ignored
+            AppMenuItem.Action("Item1", keystroke = Keystroke(key = "xy", modifiers = Modifiers()),  // second letter is ignored
+                perform = if (imLucky()) {
+                    val f = { println("Odd") }
+                    f
+                } else {
+                    val f = { println("Even") }
+                    f
+                }),
             AppMenuItem.Action("Item2", keystroke = Keystroke(key = "X", modifiers = Modifiers())), // shift modifier added because letter is capital
             AppMenuItem.Action("Item3", keystroke = Keystroke(key = "й", modifiers = Modifiers(option = true))),
             AppMenuItem.Action("Item4", keystroke = Keystroke(key = "\u000d", modifiers = Modifiers(command = true))), // it's enter

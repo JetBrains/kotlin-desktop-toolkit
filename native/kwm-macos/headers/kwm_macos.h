@@ -36,6 +36,7 @@ typedef struct ActionItem_Body {
   StrPtr title;
   bool macos_provided;
   const struct AppMenuKeystroke *keystroke;
+  void (*perform)(void);
 } ActionItem_Body;
 
 typedef struct SubMenuItem_Body {

@@ -19,6 +19,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     StrPtr title;
  *     bool macos_provided;
  *     const struct AppMenuKeystroke *keystroke;
+ *     void (*perform)(void);
  * }
  * }
  */
@@ -34,7 +35,8 @@ public class ActionItem_Body {
         kwm_macos_h.C_POINTER.withName("title"),
         kwm_macos_h.C_BOOL.withName("macos_provided"),
         MemoryLayout.paddingLayout(7),
-        kwm_macos_h.C_POINTER.withName("keystroke")
+        kwm_macos_h.C_POINTER.withName("keystroke"),
+        kwm_macos_h.C_POINTER.withName("perform")
     ).withName("ActionItem_Body");
 
     /**
@@ -218,6 +220,101 @@ public class ActionItem_Body {
      */
     public static void keystroke(MemorySegment struct, MemorySegment fieldValue) {
         struct.set(keystroke$LAYOUT, keystroke$OFFSET, fieldValue);
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void (*perform)(void)
+     * }
+     */
+    public static class perform {
+
+        perform() {
+            // Should not be called directly
+        }
+
+        /**
+         * The function pointer signature, expressed as a functional interface
+         */
+        public interface Function {
+            void apply();
+        }
+
+        private static final FunctionDescriptor $DESC = FunctionDescriptor.ofVoid();
+
+        /**
+         * The descriptor of this function pointer
+         */
+        public static FunctionDescriptor descriptor() {
+            return $DESC;
+        }
+
+        private static final MethodHandle UP$MH = kwm_macos_h.upcallHandle(perform.Function.class, "apply", $DESC);
+
+        /**
+         * Allocates a new upcall stub, whose implementation is defined by {@code fi}.
+         * The lifetime of the returned segment is managed by {@code arena}
+         */
+        public static MemorySegment allocate(perform.Function fi, Arena arena) {
+            return Linker.nativeLinker().upcallStub(UP$MH.bindTo(fi), $DESC, arena);
+        }
+
+        private static final MethodHandle DOWN$MH = Linker.nativeLinker().downcallHandle($DESC);
+
+        /**
+         * Invoke the upcall stub {@code funcPtr}, with given parameters
+         */
+        public static void invoke(MemorySegment funcPtr) {
+            try {
+                 DOWN$MH.invokeExact(funcPtr);
+            } catch (Throwable ex$) {
+                throw new AssertionError("should not reach here", ex$);
+            }
+        }
+    }
+
+    private static final AddressLayout perform$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("perform"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * void (*perform)(void)
+     * }
+     */
+    public static final AddressLayout perform$layout() {
+        return perform$LAYOUT;
+    }
+
+    private static final long perform$OFFSET = 32;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * void (*perform)(void)
+     * }
+     */
+    public static final long perform$offset() {
+        return perform$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * void (*perform)(void)
+     * }
+     */
+    public static MemorySegment perform(MemorySegment struct) {
+        return struct.get(perform$LAYOUT, perform$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * void (*perform)(void)
+     * }
+     */
+    public static void perform(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(perform$LAYOUT, perform$OFFSET, fieldValue);
     }
 
     /**
