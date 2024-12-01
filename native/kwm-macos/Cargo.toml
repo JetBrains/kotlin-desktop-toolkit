@@ -25,6 +25,7 @@ quickcheck_macros = "1"
 [target.'cfg(target_os = "macos")'.dependencies]
 dispatch = { version = "0.2.0" }
 objc2 = { version = "0.5.2" }
+objc2-foundation = { version = "0.2.2", features = ["all"] }
 objc2-app-kit = { version = "0.2.2", features = [
   "NSApplication",
   "NSWindow",
@@ -40,4 +41,6 @@ objc2-app-kit = { version = "0.2.2", features = [
   "NSEvent",
   "NSText"
 ] }
-objc2-foundation = { version = "0.2.2", features = ["NSThread", "NSArray", "NSEnumerator", "dispatch", "NSUserDefaults"] }
+objc2-quartz-core = { version = "0.2.2", features = ["all"] }
+objc2-metal = { version = "0.2.2", features = ["all"] }
+objc2-metal-kit = { version = "0.2.2", features = ["all"] }
