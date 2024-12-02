@@ -2,7 +2,7 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 #![allow(unused_variables)]
-use std::cell::OnceCell;
+use std::cell::{Cell, OnceCell};
 use std::ptr::NonNull;
 use std::time::Duration;
 
@@ -71,8 +71,6 @@ declare_class!(
             println!("Did finish launching!");
             // Do something with the notification
             dbg!(notification);
-            let window1 = create_window(mtm, "First Window 1", 320.0, 240.0);
-            create_mtk_view(&window1);
         }
 
         #[method(applicationWillTerminate:)]
@@ -233,16 +231,24 @@ fn start_background_thread() {
     std::thread::spawn(|| {
         let mut x = 0;
         loop {
-            dispatch::Queue::main().exec_sync(move || {
+            dispatch::Queue::main().exec_async(move || {
                 let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-
                 let app = NSApplication::sharedApplication(mtm);
-
+//                for window in app.windows(){
+//                    if let Some(view) = window.contentView() {
+//                        let title = window.title();
+//                        println!("setNeedsDisplay: {title:?}");
+//                        unsafe {
+////                            view.display();
+//                            view.setNeedsDisplay(true);
+//                        }
+//                    }
+//                }
                 //                let menu = build_menu(&format!("T: {}", x));
                 //                app.setMainMenu(Some(&menu));
             });
             x += 1;
-            std::thread::sleep(Duration::from_millis(2000));
+            std::thread::sleep(Duration::from_millis(3));
         }
     });
 }
@@ -251,7 +257,7 @@ fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32) -> Retained
     let window = unsafe {
         let rect = CGRect::new(CGPoint::new(x.into(), y.into()), CGSize::new(320.0, 240.0));
         let style =
-            NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::Miniaturizable | NSWindowStyleMask::Resizable;
+            NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::Resizable;
         let window = NSWindow::initWithContentRect_styleMask_backing_defer(
             mtm.alloc(),
             rect,
@@ -287,7 +293,7 @@ macro_rules! idcell {
     };
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(C)]
 struct SceneProperties {
     time: f32,
@@ -304,6 +310,8 @@ struct DelegateIvars {
     start_date: Retained<NSDate>,
     command_queue: OnceCell<Retained<ProtocolObject<dyn MTLCommandQueue>>>,
     pipeline_state: OnceCell<Retained<ProtocolObject<dyn MTLRenderPipelineState>>>,
+    window: OnceCell<Retained<NSWindow>>,
+    last_rendered: Cell<f32>
 }
 
 declare_class!(
@@ -324,9 +332,9 @@ declare_class!(
         #[method(drawInMTKView:)]
         #[allow(non_snake_case)]
         unsafe fn drawInMTKView(&self, mtk_view: &MTKView) {
-            println!("Draw!");
             idcell!(command_queue <= self);
             idcell!(pipeline_state <= self);
+            idcell!(window <= self);
 
             // prepare for drawing
             let Some(current_drawable) = (unsafe { mtk_view.currentDrawable() }) else {
@@ -343,10 +351,16 @@ declare_class!(
                 return;
             };
 
+            let current_time = unsafe { self.ivars().start_date.timeIntervalSinceNow() } as f32;
             // compute the scene properties
             let scene_properties_data = &SceneProperties {
-                time: unsafe { self.ivars().start_date.timeIntervalSinceNow() } as f32,
+                time: current_time,
             };
+            let last_rendered = self.ivars().last_rendered.get();
+            let dt = (current_time - last_rendered) * 1000f32;
+            self.ivars().last_rendered.set(current_time);
+            println!("Draw: {dt:?}");
+
             // write the scene properties to the vertex shader argument buffer at index 0
             let scene_properties_bytes = NonNull::from(scene_properties_data);
             unsafe {
@@ -416,6 +430,9 @@ declare_class!(
             // schedule the command buffer for display and commit
             command_buffer.presentDrawable(ProtocolObject::from_ref(&*current_drawable));
             command_buffer.commit();
+            unsafe {
+                mtk_view.setNeedsDisplay(true);
+            }
         }
 
         #[method(mtkView:drawableSizeWillChange:)]
@@ -434,13 +451,14 @@ impl Delegate {
             start_date: unsafe { NSDate::now() },
             command_queue: OnceCell::default(),
             pipeline_state: OnceCell::default(),
+            window: OnceCell::default(),
+            last_rendered: Cell::new(0f32),
         });
         unsafe { msg_send_id![super(this), init] }
     }
 }
 
-fn create_mtk_view(window: &NSWindow) {
-    println!("before mtk view initialized");
+fn create_mtk_view(window: Retained<NSWindow>, delegate: &Delegate) -> Retained<MTKView> {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let device = {
         let ptr = unsafe { MTLCreateSystemDefaultDevice() };
@@ -483,17 +501,24 @@ fn create_mtk_view(window: &NSWindow) {
         .expect("Failed to create a pipeline state.");
 
     // configure the metal view delegate
-    let delegate = Delegate::new(mtm);
+    idcell!(command_queue => delegate);
+    idcell!(pipeline_state => delegate);
     unsafe {
         let object = ProtocolObject::from_ref(&*delegate);
         mtk_view.setDelegate(Some(object));
     }
     unsafe {
-        mtk_view.setPaused(false);
+//        mtk_view.setPaused(false);
+//        mtk_view.setPreferredFramesPerSecond(15); // it's working when `setPause(false)`
+        mtk_view.setEnableSetNeedsDisplay(true);
     }
     // configure the window
     window.setContentView(Some(&mtk_view));
-    println!("mtk view initialized");
+    idcell!(window => delegate);
+    unsafe {
+        mtk_view.draw();
+    }
+    return mtk_view;
 }
 
 pub(crate) fn run() {
@@ -509,10 +534,15 @@ pub(crate) fn run() {
     let object = ProtocolObject::from_ref(&*delegate);
     app.setDelegate(Some(object));
 
-    //    start_background_thread();
+    let window1 = create_window(mtm, "First Window 1", 320.0, 240.0);
+    let delegate1 = Delegate::new(mtm);
+    let mtk_view1 = create_mtk_view(window1, &delegate1);
 
-    let _window2 = create_window(mtm, "First Window 2", 420.0, 240.0);
-    start_background_thread();
+//    let window2 = create_window(mtm, "First Window 2", 640.0, 640.0);
+//    let delegate2 = Delegate::new(mtm);
+//    let mtk_view2 = create_mtk_view(window2, &delegate2);
+
+//    start_background_thread();
 
     dispatch::Queue::main().exec_async(|| {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();

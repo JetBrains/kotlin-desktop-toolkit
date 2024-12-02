@@ -5,7 +5,7 @@ mod common;
 #[cfg(target_os = "macos")]
 fn main() {
     use macos::playground::run;
-
+    
     run();
 }
 
