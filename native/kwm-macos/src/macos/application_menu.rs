@@ -1,5 +1,5 @@
 use core::slice;
-use std::{cell::Cell, ffi::CStr, slice::from_raw_parts};
+use std::{ffi::CStr, slice::from_raw_parts};
 
 use anyhow::{anyhow, Result};
 
@@ -10,8 +10,6 @@ use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
 
 use super::api::{AppMenuItem, AppMenuKeyModifiers, AppMenuStructure};
-
-// todo callbacks
 
 pub fn main_menu_update_impl(menu: AppMenuStructure) {
     let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility

@@ -6,7 +6,17 @@ header = "/* This header is generated please don't edit it manually. */"
 # default: false
 bitflags = true
 
-#[parse]
+[parse]
 ## Whether to parse dependent crates and include their types in the output
 ## default: false
-#parse_deps = true
+#parse_deps = false
+#include = ["kwm-macos"]
+clean = true
+
+[parse.expand]
+# A list of crate names that should be run through `cargo expand` before
+# parsing to expand any macros. Note that if a crate is named here, it
+# will always be parsed, even if the blacklist/whitelist says it shouldn't be.
+#
+# default: []
+crates = ["kwm-macos"]

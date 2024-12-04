@@ -5,6 +5,10 @@ use std::env;
 fn main() {
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
+    unsafe {
+        // see: https://github.com/mozilla/cbindgen/issues/1015
+        env::set_var("RUSTC_BOOTSTRAP", "1");
+    }
     cbindgen::generate(crate_dir)
 //      .expect("Unable to generate bindings")
 //      .write_to_file("headers/kwm_macos.h");
@@ -17,4 +21,7 @@ fn main() {
             bindings.write_to_file("headers/kwm_macos.h");
         },
     );
+    unsafe {
+        env::set_var("RUSTC_BOOTSTRAP", "0");
+    }
 }

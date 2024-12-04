@@ -7,16 +7,7 @@
 
 typedef const char *StrPtr;
 
-typedef uint32_t AppMenuKeyModifiers;
-#define AppMenuKeyModifiers_ModifierFlagCapsLock (uint32_t)(1 << 16)
-#define AppMenuKeyModifiers_ModifierFlagShift (uint32_t)(1 << 17)
-#define AppMenuKeyModifiers_ModifierFlagControl (uint32_t)(1 << 18)
-#define AppMenuKeyModifiers_ModifierFlagOption (uint32_t)(1 << 19)
-#define AppMenuKeyModifiers_ModifierFlagCommand (uint32_t)(1 << 20)
-#define AppMenuKeyModifiers_ModifierFlagNumericPad (uint32_t)(1 << 21)
-#define AppMenuKeyModifiers_ModifierFlagHelp (uint32_t)(1 << 22)
-#define AppMenuKeyModifiers_ModifierFlagFunction (uint32_t)(1 << 23)
-#define AppMenuKeyModifiers_ModifierFlagDeviceIndependentFlagsMask (uint32_t)4294901760
+typedef Internal AppMenuKeyModifiers;
 
 typedef struct AppMenuKeystroke {
   StrPtr key;
@@ -59,14 +50,16 @@ typedef struct AppMenuStructure {
   ArraySize items_count;
 } AppMenuStructure;
 
-typedef uint32_t SomeStruct;
-#define SomeStruct_A (uint32_t)1
-#define SomeStruct_B (uint32_t)2
-
 typedef struct ApplicationConfig {
   bool disable_dictation_menu_item;
   bool disable_character_palette_menu_item;
 } ApplicationConfig;
+
+typedef int32_t WindowId;
+
+typedef void *MetalDeviceRef;
+
+typedef void *MetalQueueRef;
 
 bool dispatcher_is_main_thread(void);
 
@@ -76,10 +69,20 @@ void main_menu_update(struct AppMenuStructure menu);
 
 void main_menu_set_none(void);
 
-int32_t add_numbers(int32_t x, int32_t y, SomeStruct s);
-
 void application_init(const struct ApplicationConfig *config);
 
 void application_run_event_loop(void);
 
-void application_create_window(StrPtr title, float x, float y);
+WindowId application_create_window(StrPtr title, float x, float y);
+
+MetalDeviceRef metal_create_device(void);
+
+void metal_deref_device(MetalDeviceRef device_ref);
+
+MetalQueueRef metal_create_command_queue(MetalDeviceRef device_ref);
+
+void metal_deref_command_queue(MetalQueueRef queue_ref);
+
+void metal_create_layer(void);
+
+void metal_layer_attach_to_window(void);

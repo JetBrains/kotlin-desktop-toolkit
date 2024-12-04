@@ -74,21 +74,3 @@ pub extern "C" fn main_menu_set_none() {
     let app = NSApplication::sharedApplication(mtm);
     app.setMainMenu(None);
 }
-
-// api playground:
-
-#[no_mangle]
-pub extern "C" fn add_numbers(x: i32, y: i32, s: SomeStruct) -> i32 {
-    println!("s: {s:?}");
-    return x + y
-}
-
-
-bitflags! {
-    #[repr(transparent)]
-    #[derive(Debug)]
-    pub struct SomeStruct: u32 {
-        const A = 1;
-        const B = 2;
-    }
-}

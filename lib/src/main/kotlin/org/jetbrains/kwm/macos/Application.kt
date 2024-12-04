@@ -31,10 +31,11 @@ object Application: IApplication {
         kwm_macos_h.application_run_event_loop()
     }
 
-    fun createWindow(title: String, x: Float, y: Float) {
-        Arena.ofConfined().use { arena ->
+    fun createWindow(title: String, x: Float, y: Float): Window {
+        return Arena.ofConfined().use { arena ->
             val title = arena.allocateUtf8String(title)
-            kwm_macos_h.application_create_window(title, x, y)
+            val windowId = kwm_macos_h.application_create_window(title, x, y)
+            Window(windowId)
         }
     }
 }

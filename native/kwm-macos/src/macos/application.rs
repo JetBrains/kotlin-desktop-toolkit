@@ -33,11 +33,14 @@ pub extern "C" fn application_run_event_loop() {
     unsafe { app.run() };
 }
 
+pub type WindowId = i32;
+
 #[no_mangle]
-pub extern "C" fn application_create_window(title: StrPtr, x: f32, y: f32) {
+pub extern "C" fn application_create_window(title: StrPtr, x: f32, y: f32) -> WindowId {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let title = unsafe { CStr::from_ptr(title) }.to_str().unwrap();
-    create_window(mtm, title, x, y);
+    let window = create_window(mtm, title, x, y);
+    return unsafe { window.windowNumber().try_into().unwrap() };
 }
 
 fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32) -> Retained<NSWindow> {
