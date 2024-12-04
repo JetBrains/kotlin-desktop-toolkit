@@ -14,8 +14,8 @@ fun main() {
 //        disableCharacterPaletteMenuItem = true
     ))
     AppMenuManager.setMainMenu(buildAppMenu())
-    Application.createWindow("Window1", 100f, 200f)
-    Application.createWindow("Window2", 200f, 300f)
+    val window1 = Window.create("Window1", 100f, 200f)
+    val window2 = Window.create("Window2", 200f, 300f)
 
     // First option: [SkSurface.WrapBackendRenderTarget]
 //    val renderTarget = BackendRenderTarget.makeMetal(width, height, texturePtr)

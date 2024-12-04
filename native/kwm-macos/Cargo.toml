@@ -6,10 +6,10 @@ edition = "2021"
 [lib]
 crate-type = ["rlib", "cdylib"]
 name = "kwm_macos"
-#
-#[[bin]]
-#name = "playground"
-#path = "src/playground.rs"
+
+[[bin]]
+name = "playground"
+path = "src/playground.rs"
 
 [dependencies]
 anyhow = "1.0.93"

@@ -5,9 +5,31 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct ApplicationConfig {
+  bool disable_dictation_menu_item;
+  bool disable_character_palette_menu_item;
+} ApplicationConfig;
+
+typedef void *MetalDeviceRef;
+
+typedef void *MetalCommandQueueRef;
+
+typedef void *MetalViewRef;
+
+typedef void *WindowRef;
+
 typedef const char *StrPtr;
 
-typedef Internal AppMenuKeyModifiers;
+typedef uint32_t AppMenuKeyModifiers;
+#define AppMenuKeyModifiers_ModifierFlagCapsLock (uint32_t)(1 << 16)
+#define AppMenuKeyModifiers_ModifierFlagShift (uint32_t)(1 << 17)
+#define AppMenuKeyModifiers_ModifierFlagControl (uint32_t)(1 << 18)
+#define AppMenuKeyModifiers_ModifierFlagOption (uint32_t)(1 << 19)
+#define AppMenuKeyModifiers_ModifierFlagCommand (uint32_t)(1 << 20)
+#define AppMenuKeyModifiers_ModifierFlagNumericPad (uint32_t)(1 << 21)
+#define AppMenuKeyModifiers_ModifierFlagHelp (uint32_t)(1 << 22)
+#define AppMenuKeyModifiers_ModifierFlagFunction (uint32_t)(1 << 23)
+#define AppMenuKeyModifiers_ModifierFlagDeviceIndependentFlagsMask (uint32_t)4294901760
 
 typedef struct AppMenuKeystroke {
   StrPtr key;
@@ -50,39 +72,32 @@ typedef struct AppMenuStructure {
   ArraySize items_count;
 } AppMenuStructure;
 
-typedef struct ApplicationConfig {
-  bool disable_dictation_menu_item;
-  bool disable_character_palette_menu_item;
-} ApplicationConfig;
-
-typedef int32_t WindowId;
-
-typedef void *MetalDeviceRef;
-
-typedef void *MetalQueueRef;
-
 bool dispatcher_is_main_thread(void);
 
 void dispatcher_main_exec_async(void (*f)(void));
-
-void main_menu_update(struct AppMenuStructure menu);
-
-void main_menu_set_none(void);
 
 void application_init(const struct ApplicationConfig *config);
 
 void application_run_event_loop(void);
 
-WindowId application_create_window(StrPtr title, float x, float y);
-
 MetalDeviceRef metal_create_device(void);
 
-void metal_deref_device(MetalDeviceRef device_ref);
+void metal_deref_device(MetalDeviceRef device);
 
-MetalQueueRef metal_create_command_queue(MetalDeviceRef device_ref);
+MetalCommandQueueRef metal_create_command_queue(MetalDeviceRef device);
 
-void metal_deref_command_queue(MetalQueueRef queue_ref);
+void metal_deref_command_queue(MetalCommandQueueRef queue);
 
-void metal_create_layer(void);
+MetalViewRef metal_create_view(MetalDeviceRef device);
 
-void metal_layer_attach_to_window(void);
+void metal_deref_view(MetalViewRef view);
+
+void metal_view_attach_to_window(MetalViewRef view, WindowRef window);
+
+WindowRef window_create(StrPtr title, float x, float y);
+
+void window_deref(WindowRef window);
+
+void main_menu_update(struct AppMenuStructure menu);
+
+void main_menu_set_none(void);

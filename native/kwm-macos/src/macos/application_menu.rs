@@ -9,7 +9,7 @@ use objc2::{
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
 
-use super::api::{AppMenuItem, AppMenuKeyModifiers, AppMenuStructure};
+use super::application_menu_api::{AppMenuItem, AppMenuKeyModifiers, AppMenuStructure};
 
 pub fn main_menu_update_impl(menu: AppMenuStructure) {
     let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility

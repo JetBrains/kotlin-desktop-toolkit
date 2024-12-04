@@ -30,12 +30,4 @@ object Application: IApplication {
     override fun runEventLoop() {
         kwm_macos_h.application_run_event_loop()
     }
-
-    fun createWindow(title: String, x: Float, y: Float): Window {
-        return Arena.ofConfined().use { arena ->
-            val title = arena.allocateUtf8String(title)
-            val windowId = kwm_macos_h.application_create_window(title, x, y)
-            Window(windowId)
-        }
-    }
 }

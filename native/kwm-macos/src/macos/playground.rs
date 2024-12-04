@@ -468,7 +468,8 @@ fn create_mtk_view(window: Retained<NSWindow>, delegate: &Delegate) -> Retained<
     let command_queue = device.newCommandQueue().expect("Failed to create a command queue.");
 
     let mtk_view = {
-        let frame_rect = window.frame();
+//        let frame_rect = window.frame();
+        let frame_rect = CGRect::new(CGPoint::ZERO, CGSize::ZERO);
         unsafe { MTKView::initWithFrame_device(mtm.alloc(), frame_rect, Some(&device)) }
     };
 
