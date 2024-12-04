@@ -23,12 +23,14 @@ object GrandCentralDispatch: IGrandCentralDispatch {
         kwm_macos_h.dispatcher_main_exec_async(callback)
     }
 
-    fun dispatchOnMainSync(f: () -> Unit) {
+    fun <T> dispatchOnMainSync(f: () -> T): T {
         val latch = CountDownLatch(1)
+        var result: T? = null
         dispatchOnMain {
-            f()
+            result = f()
             latch.countDown()
         }
         latch.await()
+        return result!!
     }
 }
