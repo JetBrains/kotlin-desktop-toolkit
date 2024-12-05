@@ -535,6 +535,64 @@ public class kwm_macos_h {
         }
     }
 
+    private static class metal_command_queue_present {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_command_queue_present");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void metal_command_queue_present(MetalCommandQueueRef queue, MetalViewRef view)
+     * }
+     */
+    public static FunctionDescriptor metal_command_queue_present$descriptor() {
+        return metal_command_queue_present.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void metal_command_queue_present(MetalCommandQueueRef queue, MetalViewRef view)
+     * }
+     */
+    public static MethodHandle metal_command_queue_present$handle() {
+        return metal_command_queue_present.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void metal_command_queue_present(MetalCommandQueueRef queue, MetalViewRef view)
+     * }
+     */
+    public static MemorySegment metal_command_queue_present$address() {
+        return metal_command_queue_present.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void metal_command_queue_present(MetalCommandQueueRef queue, MetalViewRef view)
+     * }
+     */
+    public static void metal_command_queue_present(MemorySegment queue, MemorySegment view) {
+        var mh$ = metal_command_queue_present.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("metal_command_queue_present", queue, view);
+            }
+            mh$.invokeExact(queue, view);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class metal_deref_command_queue {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             kwm_macos_h.C_POINTER
@@ -595,6 +653,7 @@ public class kwm_macos_h {
     private static class metal_create_view {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             kwm_macos_h.C_POINTER,
+            kwm_macos_h.C_POINTER,
             kwm_macos_h.C_POINTER
         );
 
@@ -606,7 +665,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * MetalViewRef metal_create_view(MetalDeviceRef device)
+     * MetalViewRef metal_create_view(MetalDeviceRef device, MetalViewDrawCallback on_draw)
      * }
      */
     public static FunctionDescriptor metal_create_view$descriptor() {
@@ -616,7 +675,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * MetalViewRef metal_create_view(MetalDeviceRef device)
+     * MetalViewRef metal_create_view(MetalDeviceRef device, MetalViewDrawCallback on_draw)
      * }
      */
     public static MethodHandle metal_create_view$handle() {
@@ -626,7 +685,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * MetalViewRef metal_create_view(MetalDeviceRef device)
+     * MetalViewRef metal_create_view(MetalDeviceRef device, MetalViewDrawCallback on_draw)
      * }
      */
     public static MemorySegment metal_create_view$address() {
@@ -635,16 +694,16 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * MetalViewRef metal_create_view(MetalDeviceRef device)
+     * MetalViewRef metal_create_view(MetalDeviceRef device, MetalViewDrawCallback on_draw)
      * }
      */
-    public static MemorySegment metal_create_view(MemorySegment device) {
+    public static MemorySegment metal_create_view(MemorySegment device, MemorySegment on_draw) {
         var mh$ = metal_create_view.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("metal_create_view", device);
+                traceDowncall("metal_create_view", device, on_draw);
             }
-            return (MemorySegment)mh$.invokeExact(device);
+            return (MemorySegment)mh$.invokeExact(device, on_draw);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

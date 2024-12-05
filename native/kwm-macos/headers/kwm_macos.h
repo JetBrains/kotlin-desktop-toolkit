@@ -16,6 +16,8 @@ typedef void *MetalCommandQueueRef;
 
 typedef void *MetalViewRef;
 
+typedef void (*MetalViewDrawCallback)(void);
+
 typedef void *WindowRef;
 
 typedef const char *StrPtr;
@@ -86,9 +88,11 @@ void metal_deref_device(MetalDeviceRef device);
 
 MetalCommandQueueRef metal_create_command_queue(MetalDeviceRef device);
 
+void metal_command_queue_present(MetalCommandQueueRef queue, MetalViewRef view);
+
 void metal_deref_command_queue(MetalCommandQueueRef queue);
 
-MetalViewRef metal_create_view(MetalDeviceRef device);
+MetalViewRef metal_create_view(MetalDeviceRef device, MetalViewDrawCallback on_draw);
 
 void metal_deref_view(MetalViewRef view);
 

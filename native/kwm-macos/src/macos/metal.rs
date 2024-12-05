@@ -1,83 +1,51 @@
-use std::ffi::c_void;
+use objc2::{declare_class, msg_send_id, mutability::{self, MainThreadOnly}, rc::Retained, sel, ClassType, DeclaredClass};
+use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSSize};
+use objc2_metal_kit::{MTKView, MTKViewDelegate};
 
-use objc2::{rc::Retained, runtime::ProtocolObject};
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker};
-use objc2_metal::{MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice};
-use objc2_metal_kit::MTKView;
+use super::metal_api::MetalViewDrawCallback;
 
-use crate::define_ref;
-
-use super::window::WindowRef;
-
-#[repr(transparent)]
-pub struct MetalDeviceRef { ptr: *mut c_void }
-define_ref!(MetalDeviceRef, ProtocolObject<dyn MTLDevice>);
-
-#[no_mangle]
-pub extern "C" fn metal_create_device() -> MetalDeviceRef {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let device = {
-        let ptr = unsafe { MTLCreateSystemDefaultDevice() };
-        unsafe { Retained::retain(ptr) }.expect("Failed to get default system device.")
-    };
-    return MetalDeviceRef::new(device);
+pub(crate) struct MetalViewDelegateIvars {
+    pub(crate) on_draw: MetalViewDrawCallback
 }
 
-#[no_mangle]
-pub extern "C" fn metal_deref_device(device: MetalDeviceRef) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    unsafe { device.consume() };
+declare_class!(
+    pub(crate) struct MetalViewDelegate;
+    unsafe impl ClassType for MetalViewDelegate {
+        type Super = NSObject;
+        type Mutability = MainThreadOnly;
+        const NAME: &'static str = "MetalViewDelegate";
+    }
+
+    impl DeclaredClass for MetalViewDelegate {
+        type Ivars = MetalViewDelegateIvars;
+    }
+
+    unsafe impl NSObjectProtocol for MetalViewDelegate {}
+
+    unsafe impl MTKViewDelegate for MetalViewDelegate {
+        #[method(drawInMTKView:)]
+        #[allow(non_snake_case)]
+        unsafe fn drawInMTKView(&self, mtk_view: &MTKView) {
+            (self.ivars().on_draw)();
+            // todo
+            // command_buffer.presentDrawable(ProtocolObject::from_ref(&*current_drawable));
+            // command_buffer.commit();
+        }
+
+        #[method(mtkView:drawableSizeWillChange:)]
+        #[allow(non_snake_case)]
+        unsafe fn mtkView_drawableSizeWillChange(&self, mtk_view: &MTKView, size: NSSize) {
+            println!("Resize: {mtk_view:?} size: {size:?}");
+        }
+    }
+);
+
+impl MetalViewDelegate {
+    pub(crate) fn new(mtm: MainThreadMarker, on_draw: MetalViewDrawCallback) -> Retained<Self> {
+        let this = mtm.alloc();
+        let this = this.set_ivars(MetalViewDelegateIvars {
+            on_draw,
+        });
+        unsafe { msg_send_id![super(this), init] }
+    }
 }
-
-#[repr(transparent)]
-pub struct MetalCommandQueueRef { ptr: *mut c_void }
-define_ref!(MetalCommandQueueRef, ProtocolObject<dyn MTLCommandQueue>);
-
-#[no_mangle]
-pub extern "C" fn metal_create_command_queue(device: MetalDeviceRef) -> MetalCommandQueueRef {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let device = unsafe { device.retain() };
-    let queue = device.newCommandQueue().unwrap();
-    return MetalCommandQueueRef::new(queue);
-}
-
-#[no_mangle]
-pub extern "C" fn metal_deref_command_queue(queue: MetalCommandQueueRef) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    unsafe { queue.consume() };
-}
-
-#[repr(transparent)]
-pub struct MetalViewRef { ptr: *mut c_void }
-define_ref!(MetalViewRef, MTKView);
-
-#[no_mangle]
-pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> MetalViewRef {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let device = unsafe { device.retain() };
-    // it will be resized when attached to the window
-    let frame_rect = CGRect::new(CGPoint::ZERO, CGSize::ZERO);
-    let view = unsafe { MTKView::initWithFrame_device(mtm.alloc(), frame_rect, Some(&device)) };
-    return MetalViewRef::new(view);
-}
-
-#[no_mangle]
-pub extern "C" fn metal_deref_view(view: MetalViewRef) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    unsafe { view.consume() };
-}
-
-#[no_mangle]
-pub extern "C" fn metal_view_attach_to_window(view: MetalViewRef, window: WindowRef) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let view = unsafe { view.retain() };
-    let window = unsafe { window.retain() };
-    window.setContentView(Some(&view));
-}
-
-
-// Provide a callback which will be called when drawing performed
-
-//    val context = DirectContext.makeMetal(devicePtr, queuePtr)
-//    val mtkViewPtr = ...
-//    Surface.makeFromMTKView(context, mtkViewPtr, ...)

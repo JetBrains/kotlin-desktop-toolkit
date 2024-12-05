@@ -4,7 +4,7 @@ import java.lang.foreign.MemorySegment
 
 open class Managed(private var ptr: MemorySegment,
                    private val deref: (MemorySegment) -> Unit): AutoCloseable {
-    internal val pointer: MemorySegment get() {
+    val pointer: MemorySegment get() {
         return if (ptr != MemorySegment.NULL) {
             ptr
         } else {

@@ -69,7 +69,7 @@ tasks.named<JavaExec>("run") {
 
 tasks.register<JavaExec>("runAppMenuAwtSample") {
     group = "application"
-    description = "Runs the secondary main class"
+    description = "Runs sample app based on AWT"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("org.jetbrains.kwm.sample.AppMenuAwtSampleKt")
     javaLauncher.set(javaToolchains.launcherFor {
@@ -77,6 +77,23 @@ tasks.register<JavaExec>("runAppMenuAwtSample") {
     })
     jvmArgs = listOf(
         "--enable-preview",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false"
+    )
+    environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/debug")
+}
+
+tasks.register<JavaExec>("runSkikoSample") {
+    group = "application"
+    description = "Runs example of integration with Skiko"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.kwm.sample.SkikoSampleKt")
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    })
+    jvmArgs = listOf(
+        "--enable-preview",
+        "-XstartOnFirstThread",
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false"
     )
