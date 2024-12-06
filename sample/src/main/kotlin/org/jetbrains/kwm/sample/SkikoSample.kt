@@ -2,39 +2,55 @@ package org.jetbrains.kwm.sample
 
 import org.jetbrains.kwm.macos.*
 import org.jetbrains.skia.*
+import java.lang.Thread.sleep
+import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.time.TimeSource
 
 class SkiaWindow(device: MetalDevice,
-                 queue: MetalCommandQueue,
+                 val queue: MetalCommandQueue,
                  title: String,
                  x: Float, y: Float) {
-    val window = Window.create(title, x, y)
+    val window = Window.create(title, x, y, onResize = {
+        draw()
+    })
     val directContext = DirectContext.makeMetal(device.pointer.address(), queue.pointer.address())
-    var view: MetalView? = null
+    var view: MetalView = MetalView.create(device)
     val creationTime = TimeSource.Monotonic.markNow()
 
     init {
-        view = MetalView.create(device, onDraw = {
-            val surface = Surface.makeFromMTKView(
-                context = directContext,
-                mtkViewPtr = view!!.pointer.address(),
-                origin = SurfaceOrigin.TOP_LEFT,
-                sampleCount = 1,
-                colorFormat = SurfaceColorFormat.BGRA_8888,
-                colorSpace = null,
-                surfaceProps = null
-            )
+        view.attachToWindow(window)
+//        thread {
+//            while (true) {
+//                GrandCentralDispatch.dispatchOnMainSync {
+//                    draw()
+//                }
+//            }
+//        }
+    }
 
-            val time = creationTime.elapsedNow().inWholeMilliseconds
-            surface.canvas.paint(surface.width, surface.height, time)
-
-            surface.flushAndSubmit()
-            queue.present(view!!)
-        })
-        view!!.attachToWindow(window)
+    fun draw() {
+        val size = view.size()
+        view.nextTexture().use { texture ->
+            BackendRenderTarget.makeMetal(size.width.toInt(), size.height.toInt(), texture.pointer.address()).use { renderTarget ->
+                Surface.makeFromBackendRenderTarget(
+                    context = directContext,
+                    origin = SurfaceOrigin.TOP_LEFT,
+                    colorFormat = SurfaceColorFormat.BGRA_8888,
+                    colorSpace = null,
+                    surfaceProps = null,
+                    rt = renderTarget
+                )!!.use { surface ->
+                    val time = creationTime.elapsedNow().inWholeMilliseconds
+                    surface.canvas.paint(surface.width, surface.height, time)
+                    surface.flushAndSubmit()
+                }
+            }
+            queue.commit()
+            view.present()
+        }
     }
 
     fun Canvas.drawSpiningCircle(width: Int, height: Int, t: Long) = let { canvas ->

@@ -1,6 +1,6 @@
 package org.jetbrains.kwm.macos
 
-import org.jetbrains.kwm.macos.generated.MetalViewDrawCallback
+import Size
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -20,26 +20,35 @@ class MetalCommandQueue internal constructor(ptr: MemorySegment): Managed(ptr, k
         }
     }
 
-    fun present(view: MetalView) {
-        kwm_macos_h.metal_command_queue_present(pointer, view.pointer)
+    fun commit() {
+        kwm_macos_h.metal_command_queue_commit(pointer)
     }
 }
 
-class MetalView internal constructor(ptr: MemorySegment, val arena: Arena): Managed(ptr, kwm_macos_h::metal_deref_view) {
+class MetalView internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h::metal_drop_view) {
     companion object {
-        fun create(device: MetalDevice, onDraw: () -> Unit): MetalView {
-            val arena = Arena.ofConfined()
-            val onDraw = MetalViewDrawCallback.allocate(onDraw, arena)
-            return MetalView(kwm_macos_h.metal_create_view(device.pointer, onDraw), arena)
+        fun create(device: MetalDevice): MetalView {
+            return MetalView(kwm_macos_h.metal_create_view(device.pointer))
+        }
+    }
+
+    fun nextTexture(): MetalTexture {
+        return MetalTexture(kwm_macos_h.metal_view_next_texture(pointer))
+    }
+
+    fun present() {
+        kwm_macos_h.metal_view_present(pointer)
+    }
+
+    fun size(): Size {
+        return Arena.ofConfined().use { arena ->
+            Size.fromNative(kwm_macos_h.metal_view_get_texture_size(arena, pointer))
         }
     }
 
     fun attachToWindow(window: Window) {
         kwm_macos_h.metal_view_attach_to_window(pointer, window.pointer)
     }
-
-    override fun close() {
-        super.close()
-        arena.close()
-    }
 }
+
+class MetalTexture internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h::metal_deref_texture)

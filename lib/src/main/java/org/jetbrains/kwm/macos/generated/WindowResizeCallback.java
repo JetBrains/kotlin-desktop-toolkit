@@ -14,12 +14,12 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * typedef void (*MetalViewDrawCallback)(void)
+ * typedef void (*WindowResizeCallback)(void)
  * }
  */
-public class MetalViewDrawCallback {
+public class WindowResizeCallback {
 
-    MetalViewDrawCallback() {
+    WindowResizeCallback() {
         // Should not be called directly
     }
 
@@ -39,13 +39,13 @@ public class MetalViewDrawCallback {
         return $DESC;
     }
 
-    private static final MethodHandle UP$MH = kwm_macos_h.upcallHandle(MetalViewDrawCallback.Function.class, "apply", $DESC);
+    private static final MethodHandle UP$MH = kwm_macos_h.upcallHandle(WindowResizeCallback.Function.class, "apply", $DESC);
 
     /**
      * Allocates a new upcall stub, whose implementation is defined by {@code fi}.
      * The lifetime of the returned segment is managed by {@code arena}
      */
-    public static MemorySegment allocate(MetalViewDrawCallback.Function fi, Arena arena) {
+    public static MemorySegment allocate(WindowResizeCallback.Function fi, Arena arena) {
         return Linker.nativeLinker().upcallStub(UP$MH.bindTo(fi), $DESC, arena);
     }
 

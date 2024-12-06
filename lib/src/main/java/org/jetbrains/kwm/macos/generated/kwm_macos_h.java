@@ -83,10 +83,10 @@ public class kwm_macos_h {
     public static final AddressLayout MetalCommandQueueRef = kwm_macos_h.C_POINTER;
     /**
      * {@snippet lang=c :
-     * typedef void *MetalViewRef
+     * typedef void *MetalTextureRef
      * }
      */
-    public static final AddressLayout MetalViewRef = kwm_macos_h.C_POINTER;
+    public static final AddressLayout MetalTextureRef = kwm_macos_h.C_POINTER;
     /**
      * {@snippet lang=c :
      * typedef void *WindowRef
@@ -535,13 +535,12 @@ public class kwm_macos_h {
         }
     }
 
-    private static class metal_command_queue_present {
+    private static class metal_command_queue_commit {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
-            kwm_macos_h.C_POINTER,
             kwm_macos_h.C_POINTER
         );
 
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_command_queue_present");
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_command_queue_commit");
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -549,45 +548,45 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void metal_command_queue_present(MetalCommandQueueRef queue, MetalViewRef view)
+     * void metal_command_queue_commit(MetalCommandQueueRef queue)
      * }
      */
-    public static FunctionDescriptor metal_command_queue_present$descriptor() {
-        return metal_command_queue_present.DESC;
+    public static FunctionDescriptor metal_command_queue_commit$descriptor() {
+        return metal_command_queue_commit.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void metal_command_queue_present(MetalCommandQueueRef queue, MetalViewRef view)
+     * void metal_command_queue_commit(MetalCommandQueueRef queue)
      * }
      */
-    public static MethodHandle metal_command_queue_present$handle() {
-        return metal_command_queue_present.HANDLE;
+    public static MethodHandle metal_command_queue_commit$handle() {
+        return metal_command_queue_commit.HANDLE;
     }
 
     /**
      * Address for:
      * {@snippet lang=c :
-     * void metal_command_queue_present(MetalCommandQueueRef queue, MetalViewRef view)
+     * void metal_command_queue_commit(MetalCommandQueueRef queue)
      * }
      */
-    public static MemorySegment metal_command_queue_present$address() {
-        return metal_command_queue_present.ADDR;
+    public static MemorySegment metal_command_queue_commit$address() {
+        return metal_command_queue_commit.ADDR;
     }
 
     /**
      * {@snippet lang=c :
-     * void metal_command_queue_present(MetalCommandQueueRef queue, MetalViewRef view)
+     * void metal_command_queue_commit(MetalCommandQueueRef queue)
      * }
      */
-    public static void metal_command_queue_present(MemorySegment queue, MemorySegment view) {
-        var mh$ = metal_command_queue_present.HANDLE;
+    public static void metal_command_queue_commit(MemorySegment queue) {
+        var mh$ = metal_command_queue_commit.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("metal_command_queue_present", queue, view);
+                traceDowncall("metal_command_queue_commit", queue);
             }
-            mh$.invokeExact(queue, view);
+            mh$.invokeExact(queue);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -653,7 +652,6 @@ public class kwm_macos_h {
     private static class metal_create_view {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             kwm_macos_h.C_POINTER,
-            kwm_macos_h.C_POINTER,
             kwm_macos_h.C_POINTER
         );
 
@@ -665,7 +663,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * MetalViewRef metal_create_view(MetalDeviceRef device, MetalViewDrawCallback on_draw)
+     * struct MetalView *metal_create_view(MetalDeviceRef device)
      * }
      */
     public static FunctionDescriptor metal_create_view$descriptor() {
@@ -675,7 +673,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * MetalViewRef metal_create_view(MetalDeviceRef device, MetalViewDrawCallback on_draw)
+     * struct MetalView *metal_create_view(MetalDeviceRef device)
      * }
      */
     public static MethodHandle metal_create_view$handle() {
@@ -685,7 +683,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * MetalViewRef metal_create_view(MetalDeviceRef device, MetalViewDrawCallback on_draw)
+     * struct MetalView *metal_create_view(MetalDeviceRef device)
      * }
      */
     public static MemorySegment metal_create_view$address() {
@@ -694,27 +692,27 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * MetalViewRef metal_create_view(MetalDeviceRef device, MetalViewDrawCallback on_draw)
+     * struct MetalView *metal_create_view(MetalDeviceRef device)
      * }
      */
-    public static MemorySegment metal_create_view(MemorySegment device, MemorySegment on_draw) {
+    public static MemorySegment metal_create_view(MemorySegment device) {
         var mh$ = metal_create_view.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("metal_create_view", device, on_draw);
+                traceDowncall("metal_create_view", device);
             }
-            return (MemorySegment)mh$.invokeExact(device, on_draw);
+            return (MemorySegment)mh$.invokeExact(device);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
     }
 
-    private static class metal_deref_view {
+    private static class metal_drop_view {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             kwm_macos_h.C_POINTER
         );
 
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_deref_view");
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_drop_view");
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -722,45 +720,275 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void metal_deref_view(MetalViewRef view)
+     * void metal_drop_view(struct MetalView *view)
      * }
      */
-    public static FunctionDescriptor metal_deref_view$descriptor() {
-        return metal_deref_view.DESC;
+    public static FunctionDescriptor metal_drop_view$descriptor() {
+        return metal_drop_view.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void metal_deref_view(MetalViewRef view)
+     * void metal_drop_view(struct MetalView *view)
      * }
      */
-    public static MethodHandle metal_deref_view$handle() {
-        return metal_deref_view.HANDLE;
+    public static MethodHandle metal_drop_view$handle() {
+        return metal_drop_view.HANDLE;
     }
 
     /**
      * Address for:
      * {@snippet lang=c :
-     * void metal_deref_view(MetalViewRef view)
+     * void metal_drop_view(struct MetalView *view)
      * }
      */
-    public static MemorySegment metal_deref_view$address() {
-        return metal_deref_view.ADDR;
+    public static MemorySegment metal_drop_view$address() {
+        return metal_drop_view.ADDR;
     }
 
     /**
      * {@snippet lang=c :
-     * void metal_deref_view(MetalViewRef view)
+     * void metal_drop_view(struct MetalView *view)
      * }
      */
-    public static void metal_deref_view(MemorySegment view) {
-        var mh$ = metal_deref_view.HANDLE;
+    public static void metal_drop_view(MemorySegment view) {
+        var mh$ = metal_drop_view.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("metal_deref_view", view);
+                traceDowncall("metal_drop_view", view);
             }
             mh$.invokeExact(view);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class metal_view_present {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_view_present");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void metal_view_present(const struct MetalView *view)
+     * }
+     */
+    public static FunctionDescriptor metal_view_present$descriptor() {
+        return metal_view_present.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void metal_view_present(const struct MetalView *view)
+     * }
+     */
+    public static MethodHandle metal_view_present$handle() {
+        return metal_view_present.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void metal_view_present(const struct MetalView *view)
+     * }
+     */
+    public static MemorySegment metal_view_present$address() {
+        return metal_view_present.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void metal_view_present(const struct MetalView *view)
+     * }
+     */
+    public static void metal_view_present(MemorySegment view) {
+        var mh$ = metal_view_present.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("metal_view_present", view);
+            }
+            mh$.invokeExact(view);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class metal_view_get_texture_size {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            Size.layout(),
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_view_get_texture_size");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * struct Size metal_view_get_texture_size(const struct MetalView *view)
+     * }
+     */
+    public static FunctionDescriptor metal_view_get_texture_size$descriptor() {
+        return metal_view_get_texture_size.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * struct Size metal_view_get_texture_size(const struct MetalView *view)
+     * }
+     */
+    public static MethodHandle metal_view_get_texture_size$handle() {
+        return metal_view_get_texture_size.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * struct Size metal_view_get_texture_size(const struct MetalView *view)
+     * }
+     */
+    public static MemorySegment metal_view_get_texture_size$address() {
+        return metal_view_get_texture_size.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * struct Size metal_view_get_texture_size(const struct MetalView *view)
+     * }
+     */
+    public static MemorySegment metal_view_get_texture_size(SegmentAllocator allocator, MemorySegment view) {
+        var mh$ = metal_view_get_texture_size.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("metal_view_get_texture_size", allocator, view);
+            }
+            return (MemorySegment)mh$.invokeExact(allocator, view);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class metal_view_next_texture {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            kwm_macos_h.C_POINTER,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_view_next_texture");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * MetalTextureRef metal_view_next_texture(const struct MetalView *view)
+     * }
+     */
+    public static FunctionDescriptor metal_view_next_texture$descriptor() {
+        return metal_view_next_texture.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * MetalTextureRef metal_view_next_texture(const struct MetalView *view)
+     * }
+     */
+    public static MethodHandle metal_view_next_texture$handle() {
+        return metal_view_next_texture.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * MetalTextureRef metal_view_next_texture(const struct MetalView *view)
+     * }
+     */
+    public static MemorySegment metal_view_next_texture$address() {
+        return metal_view_next_texture.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * MetalTextureRef metal_view_next_texture(const struct MetalView *view)
+     * }
+     */
+    public static MemorySegment metal_view_next_texture(MemorySegment view) {
+        var mh$ = metal_view_next_texture.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("metal_view_next_texture", view);
+            }
+            return (MemorySegment)mh$.invokeExact(view);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class metal_deref_texture {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_deref_texture");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void metal_deref_texture(MetalTextureRef texture)
+     * }
+     */
+    public static FunctionDescriptor metal_deref_texture$descriptor() {
+        return metal_deref_texture.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void metal_deref_texture(MetalTextureRef texture)
+     * }
+     */
+    public static MethodHandle metal_deref_texture$handle() {
+        return metal_deref_texture.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void metal_deref_texture(MetalTextureRef texture)
+     * }
+     */
+    public static MemorySegment metal_deref_texture$address() {
+        return metal_deref_texture.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void metal_deref_texture(MetalTextureRef texture)
+     * }
+     */
+    public static void metal_deref_texture(MemorySegment texture) {
+        var mh$ = metal_deref_texture.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("metal_deref_texture", texture);
+            }
+            mh$.invokeExact(texture);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -780,7 +1008,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void metal_view_attach_to_window(MetalViewRef view, WindowRef window)
+     * void metal_view_attach_to_window(const struct MetalView *view, WindowRef window)
      * }
      */
     public static FunctionDescriptor metal_view_attach_to_window$descriptor() {
@@ -790,7 +1018,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void metal_view_attach_to_window(MetalViewRef view, WindowRef window)
+     * void metal_view_attach_to_window(const struct MetalView *view, WindowRef window)
      * }
      */
     public static MethodHandle metal_view_attach_to_window$handle() {
@@ -800,7 +1028,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void metal_view_attach_to_window(MetalViewRef view, WindowRef window)
+     * void metal_view_attach_to_window(const struct MetalView *view, WindowRef window)
      * }
      */
     public static MemorySegment metal_view_attach_to_window$address() {
@@ -809,7 +1037,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * void metal_view_attach_to_window(MetalViewRef view, WindowRef window)
+     * void metal_view_attach_to_window(const struct MetalView *view, WindowRef window)
      * }
      */
     public static void metal_view_attach_to_window(MemorySegment view, MemorySegment window) {
@@ -824,12 +1052,70 @@ public class kwm_macos_h {
         }
     }
 
+    private static class create_display_link {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("create_display_link");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void create_display_link(WindowRef window)
+     * }
+     */
+    public static FunctionDescriptor create_display_link$descriptor() {
+        return create_display_link.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void create_display_link(WindowRef window)
+     * }
+     */
+    public static MethodHandle create_display_link$handle() {
+        return create_display_link.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void create_display_link(WindowRef window)
+     * }
+     */
+    public static MemorySegment create_display_link$address() {
+        return create_display_link.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void create_display_link(WindowRef window)
+     * }
+     */
+    public static void create_display_link(MemorySegment window) {
+        var mh$ = create_display_link.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("create_display_link", window);
+            }
+            mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class window_create {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             kwm_macos_h.C_POINTER,
             kwm_macos_h.C_POINTER,
             kwm_macos_h.C_FLOAT,
-            kwm_macos_h.C_FLOAT
+            kwm_macos_h.C_FLOAT,
+            kwm_macos_h.C_POINTER
         );
 
         public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_create");
@@ -840,7 +1126,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y)
+     * WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize)
      * }
      */
     public static FunctionDescriptor window_create$descriptor() {
@@ -850,7 +1136,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y)
+     * WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize)
      * }
      */
     public static MethodHandle window_create$handle() {
@@ -860,7 +1146,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y)
+     * WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize)
      * }
      */
     public static MemorySegment window_create$address() {
@@ -869,16 +1155,16 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y)
+     * WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize)
      * }
      */
-    public static MemorySegment window_create(MemorySegment title, float x, float y) {
+    public static MemorySegment window_create(MemorySegment title, float x, float y, MemorySegment on_resize) {
         var mh$ = window_create.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("window_create", title, x, y);
+                traceDowncall("window_create", title, x, y, on_resize);
             }
-            return (MemorySegment)mh$.invokeExact(title, x, y);
+            return (MemorySegment)mh$.invokeExact(title, x, y, on_resize);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

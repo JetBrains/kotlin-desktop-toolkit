@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct MetalView MetalView;
+
 typedef struct ApplicationConfig {
   bool disable_dictation_menu_item;
   bool disable_character_palette_menu_item;
@@ -14,13 +16,18 @@ typedef void *MetalDeviceRef;
 
 typedef void *MetalCommandQueueRef;
 
-typedef void *MetalViewRef;
+typedef struct Size {
+  double width;
+  double height;
+} Size;
 
-typedef void (*MetalViewDrawCallback)(void);
+typedef void *MetalTextureRef;
 
 typedef void *WindowRef;
 
 typedef const char *StrPtr;
+
+typedef void (*WindowResizeCallback)(void);
 
 typedef uint32_t AppMenuKeyModifiers;
 #define AppMenuKeyModifiers_ModifierFlagCapsLock (uint32_t)(1 << 16)
@@ -88,17 +95,27 @@ void metal_deref_device(MetalDeviceRef device);
 
 MetalCommandQueueRef metal_create_command_queue(MetalDeviceRef device);
 
-void metal_command_queue_present(MetalCommandQueueRef queue, MetalViewRef view);
+void metal_command_queue_commit(MetalCommandQueueRef queue);
 
 void metal_deref_command_queue(MetalCommandQueueRef queue);
 
-MetalViewRef metal_create_view(MetalDeviceRef device, MetalViewDrawCallback on_draw);
+struct MetalView *metal_create_view(MetalDeviceRef device);
 
-void metal_deref_view(MetalViewRef view);
+void metal_drop_view(struct MetalView *view);
 
-void metal_view_attach_to_window(MetalViewRef view, WindowRef window);
+void metal_view_present(const struct MetalView *view);
 
-WindowRef window_create(StrPtr title, float x, float y);
+struct Size metal_view_get_texture_size(const struct MetalView *view);
+
+MetalTextureRef metal_view_next_texture(const struct MetalView *view);
+
+void metal_deref_texture(MetalTextureRef texture);
+
+void metal_view_attach_to_window(const struct MetalView *view, WindowRef window);
+
+void create_display_link(WindowRef window);
+
+WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize);
 
 void window_deref(WindowRef window);
 

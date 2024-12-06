@@ -44,7 +44,7 @@ pub enum AppMenuItem {
         enabled: bool,
         title: StrPtr,
         macos_provided: bool,
-        keystroke: *const AppMenuKeystroke,
+        keystroke: *const AppMenuKeystroke, // todo replace nullable pointers with Option<&AppMenuKeystroke> here?
         perform: extern "C" fn()
     },
     SeparatorItem,

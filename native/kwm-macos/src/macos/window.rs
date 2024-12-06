@@ -1,20 +1,22 @@
 use std::ffi::{c_void, CStr};
 
-use objc2::rc::Retained;
-use objc2_app_kit::{NSBackingStoreType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask};
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSString};
+use objc2::{declare_class, msg_send_id, mutability::{self, MainThreadOnly}, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass};
+use objc2_app_kit::{NSBackingStoreType, NSNormalWindowLevel, NSWindow, NSWindowDelegate, NSWindowStyleMask};
+use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSString};
 
-use crate::{common::StrPtr, define_ref};
+use crate::{common::{Size, StrPtr}, define_objc_ref};
 
 #[repr(transparent)]
 pub struct WindowRef { ptr: *mut c_void }
-define_ref!(WindowRef, NSWindow);
+define_objc_ref!(WindowRef, NSWindow);
+
+type WindowResizeCallback = fn();
 
 #[no_mangle]
-pub extern "C" fn window_create(title: StrPtr, x: f32, y: f32) -> WindowRef {
+pub extern "C" fn window_create(title: StrPtr, x: f32, y: f32, on_resize: WindowResizeCallback) -> WindowRef {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let title = unsafe { CStr::from_ptr(title) }.to_str().unwrap();
-    let window = create_window(mtm, title, x, y);
+    let window = create_window(mtm, title, x, y, on_resize);
     return WindowRef::new(window);
 }
 
@@ -25,7 +27,7 @@ pub extern "C" fn window_deref(window: WindowRef) {
     }
 }
 
-fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32) -> Retained<NSWindow> {
+fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32, on_resize: WindowResizeCallback) -> Retained<NSWindow> {
     let window = unsafe {
         let rect = CGRect::new(CGPoint::new(x.into(), y.into()), CGSize::new(320.0, 240.0));
         let style =
@@ -41,7 +43,48 @@ fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32) -> Retained
         window.setReleasedWhenClosed(false);
         window.makeKeyAndOrderFront(None);
         window.setLevel(NSNormalWindowLevel);
+        let delegate = WindowDelegate::new(mtm, on_resize);
+        window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
+        Retained::into_raw(delegate); // todo fixme!
         window
     };
     return window;
+}
+
+pub(crate) struct WindowDelegateIvars {
+    pub(crate) on_resize: WindowResizeCallback
+}
+
+
+declare_class!(
+    pub(crate) struct WindowDelegate;
+
+    unsafe impl ClassType for WindowDelegate {
+        type Super = NSObject;
+        type Mutability = MainThreadOnly;
+        const NAME: &'static str = "WindowDelegate";
+    }
+
+    impl DeclaredClass for WindowDelegate {
+        type Ivars = WindowDelegateIvars;
+    }
+
+    unsafe impl NSObjectProtocol for WindowDelegate {}
+
+    unsafe impl NSWindowDelegate for WindowDelegate {
+        #[method(windowDidResize:)]
+        unsafe fn windowDidResize(&self, notification: &NSNotification) {
+            (self.ivars().on_resize)()
+        }
+    }
+);
+
+impl WindowDelegate {
+    pub(crate) fn new(mtm: MainThreadMarker, on_resize: WindowResizeCallback) -> Retained<Self> {
+        let this = mtm.alloc();
+        let this = this.set_ivars(WindowDelegateIvars {
+            on_resize,
+        });
+        unsafe { msg_send_id![super(this), init] }
+    }
 }
