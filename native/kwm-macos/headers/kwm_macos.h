@@ -14,6 +14,11 @@ typedef struct ApplicationConfig {
   bool disable_character_palette_menu_item;
 } ApplicationConfig;
 
+typedef struct ApplicationCallbacks {
+  bool (*on_should_terminate)(void);
+  void (*on_will_terminate)(void);
+} ApplicationCallbacks;
+
 typedef void *MetalDeviceRef;
 
 typedef void *MetalCommandQueueRef;
@@ -89,9 +94,12 @@ bool dispatcher_is_main_thread(void);
 
 void dispatcher_main_exec_async(void (*f)(void));
 
-void application_init(const struct ApplicationConfig *config);
+void application_init(const struct ApplicationConfig *config,
+                      struct ApplicationCallbacks callbacks);
 
 void application_run_event_loop(void);
+
+void application_request_termination(void);
 
 MetalDeviceRef metal_create_device(void);
 

@@ -7,6 +7,7 @@ import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
+import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -111,6 +112,21 @@ class ApplicationState {
                     "Run",
                     keystroke = Keystroke(key = "r", modifiers = Modifiers(command = true)),
                     perform = { setPaused(false) }
+                ),
+                AppMenuItem.Action(
+                    "Quit1",
+                    keystroke = Keystroke(key = "q", modifiers = Modifiers(command = true)),
+                    perform = { Application.requestTermination() }
+                ),
+                AppMenuItem.Action(
+                    "Quit2",
+                    keystroke = Keystroke(key = "w", modifiers = Modifiers(command = true)),
+                    perform = {
+                        thread {
+                            // we shouldn't call this function on main thread because it block it
+                            Runtime.getRuntime().exit(0)
+                        }
+                    }
                 ),
             ),
             AppMenuItem.SubMenu(

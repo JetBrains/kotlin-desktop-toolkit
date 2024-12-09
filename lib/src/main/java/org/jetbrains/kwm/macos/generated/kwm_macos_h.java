@@ -254,7 +254,8 @@ public class kwm_macos_h {
 
     private static class application_init {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
-            kwm_macos_h.C_POINTER
+            kwm_macos_h.C_POINTER,
+            ApplicationCallbacks.layout()
         );
 
         public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("application_init");
@@ -265,7 +266,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void application_init(const struct ApplicationConfig *config)
+     * void application_init(const struct ApplicationConfig *config, struct ApplicationCallbacks callbacks)
      * }
      */
     public static FunctionDescriptor application_init$descriptor() {
@@ -275,7 +276,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void application_init(const struct ApplicationConfig *config)
+     * void application_init(const struct ApplicationConfig *config, struct ApplicationCallbacks callbacks)
      * }
      */
     public static MethodHandle application_init$handle() {
@@ -285,7 +286,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void application_init(const struct ApplicationConfig *config)
+     * void application_init(const struct ApplicationConfig *config, struct ApplicationCallbacks callbacks)
      * }
      */
     public static MemorySegment application_init$address() {
@@ -294,16 +295,16 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * void application_init(const struct ApplicationConfig *config)
+     * void application_init(const struct ApplicationConfig *config, struct ApplicationCallbacks callbacks)
      * }
      */
-    public static void application_init(MemorySegment config) {
+    public static void application_init(MemorySegment config, MemorySegment callbacks) {
         var mh$ = application_init.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("application_init", config);
+                traceDowncall("application_init", config, callbacks);
             }
-            mh$.invokeExact(config);
+            mh$.invokeExact(config, callbacks);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -357,6 +358,61 @@ public class kwm_macos_h {
         try {
             if (TRACE_DOWNCALLS) {
                 traceDowncall("application_run_event_loop");
+            }
+            mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class application_request_termination {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("application_request_termination");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void application_request_termination()
+     * }
+     */
+    public static FunctionDescriptor application_request_termination$descriptor() {
+        return application_request_termination.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void application_request_termination()
+     * }
+     */
+    public static MethodHandle application_request_termination$handle() {
+        return application_request_termination.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void application_request_termination()
+     * }
+     */
+    public static MemorySegment application_request_termination$address() {
+        return application_request_termination.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void application_request_termination()
+     * }
+     */
+    public static void application_request_termination() {
+        var mh$ = application_request_termination.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("application_request_termination");
             }
             mh$.invokeExact();
         } catch (Throwable ex$) {
