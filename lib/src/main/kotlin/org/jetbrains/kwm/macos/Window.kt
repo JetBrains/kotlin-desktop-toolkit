@@ -1,5 +1,6 @@
 package org.jetbrains.kwm.macos
 
+import org.jetbrains.kwm.macos.generated.DisplayLinkCallback
 import org.jetbrains.kwm.macos.generated.WindowResizeCallback
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
 import java.lang.foreign.Arena
@@ -14,5 +15,24 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
                 Window(kwm_macos_h.window_create(title, x, y, callback))
             }
         }
+    }
+}
+
+class DisplayLink internal constructor(ptr: MemorySegment, val arena: Arena): Managed(ptr, kwm_macos_h::display_link_drop) {
+    companion object {
+        fun createForWindow(window: Window, onNextFrame: () -> Unit): DisplayLink {
+            val arena = Arena.ofConfined()
+            val callback = DisplayLinkCallback.allocate(onNextFrame, arena)
+            return DisplayLink(kwm_macos_h.display_link_create(window.pointer, callback), arena)
+        }
+    }
+
+    fun setPaused(value: Boolean) {
+        kwm_macos_h.display_link_set_paused(pointer, value);
+    }
+
+    override fun close() {
+        super.close()
+        arena.close()
     }
 }

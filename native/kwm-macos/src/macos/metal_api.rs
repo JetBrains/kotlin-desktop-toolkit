@@ -5,7 +5,7 @@ use objc2_app_kit::{NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRed
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSString};
 use objc2_metal::{MTLClearColor, MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};
 use objc2_metal_kit::MTKView;
-use objc2_quartz_core::{CAAutoresizingMask, CAMetalDrawable, CAMetalLayer};
+use objc2_quartz_core::{kCAGravityTopLeft, CAAutoresizingMask, CAMetalDrawable, CAMetalLayer};
 
 use crate::{common::Size, define_objc_ref};
 
@@ -84,17 +84,17 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
 
         // this are marked crucial for correct resize
         layer.setAutoresizingMask(CAAutoresizingMask::kCALayerHeightSizable | CAAutoresizingMask::kCALayerWidthSizable);
-        layer.setNeedsDisplayOnBoundsChange(true); // not sure that we need to call ::draw when it's resized
+        // layer.setNeedsDisplayOnBoundsChange(true); // not sure that we need to call ::draw when it's resized
         layer.setPresentsWithTransaction(true);
 
-//        fMetalLayer.contentsGravity = kCAGravityTopLeft; // from JWM
+        layer.setContentsGravity(kCAGravityTopLeft); // from JWM
 //        fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
     }
 
     unsafe {
         ns_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
-//        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
-        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
+        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
+//        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
         ns_view.setLayer(Some(&layer));
         ns_view.setWantsLayer(true);
     }
@@ -122,8 +122,9 @@ pub extern "C" fn metal_view_present(view: &MetalView) {
 #[no_mangle]
 pub extern "C" fn metal_view_get_texture_size(view: &MetalView) -> Size {
     let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let drawable_size = unsafe { view.layer.drawableSize() };
-    let view_size = view.ns_view.bounds().size;
+    let view_size = unsafe {
+        view.ns_view.convertSizeToBacking(view.ns_view.bounds().size)
+    };
     view_size.into()
 }
 
@@ -136,11 +137,12 @@ pub extern "C" fn metal_view_next_texture(view: &MetalView) -> MetalTextureRef {
     unsafe {
         let view_size = view.ns_view.bounds().size;
         let drawable_size = view.layer.drawableSize();
-        if view_size != drawable_size {
-            view.layer.setDrawableSize(view_size);
-            view.layer.setContentsScale(2f64); // todo fixme!!!
+        let new_drawable_size = view.ns_view.convertSizeToBacking(view_size);
+        let scale = new_drawable_size.width / view_size.width;
+        if new_drawable_size != drawable_size || view.layer.contentsScale() != scale {
+            view.layer.setDrawableSize(new_drawable_size);
+            view.layer.setContentsScale(scale);
         }
-        view.layer.setDrawableSize(view.ns_view.bounds().size);
     }
     let drawable = unsafe {
         view.layer.nextDrawable().unwrap()

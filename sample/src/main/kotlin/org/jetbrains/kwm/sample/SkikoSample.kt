@@ -16,24 +16,21 @@ class SkiaWindow(device: MetalDevice,
     val window = Window.create(title, x, y, onResize = {
         draw()
     })
+    val displayLink = DisplayLink.createForWindow(window, onNextFrame = {
+        draw()
+    })
     val directContext = DirectContext.makeMetal(device.pointer.address(), queue.pointer.address())
     var view: MetalView = MetalView.create(device)
     val creationTime = TimeSource.Monotonic.markNow()
 
     init {
         view.attachToWindow(window)
-//        thread {
-//            while (true) {
-//                GrandCentralDispatch.dispatchOnMainSync {
-//                    draw()
-//                }
-//            }
-//        }
     }
 
     fun draw() {
         val size = view.size()
         view.nextTexture().use { texture ->
+//             sleep(100) // uncomment this to check window resize quality
             BackendRenderTarget.makeMetal(size.width.toInt(), size.height.toInt(), texture.pointer.address()).use { renderTarget ->
                 Surface.makeFromBackendRenderTarget(
                     context = directContext,
@@ -65,7 +62,7 @@ class SkiaWindow(device: MetalDevice,
     }
 
     fun Canvas.drawWindowBorders(width: Int, height: Int, t: Long) = let { canvas ->
-        val scale = 2f
+        val scale = 2f // todo fixme!
         Paint().use { paint ->
 
             val barSize = 3 * scale
@@ -118,6 +115,12 @@ class ApplicationState {
         windows.add(SkiaWindow(device, queue, "Window ${windows.count()}", 200f, 200f))
     }
 
+    fun setPaused(value: Boolean) {
+        windows.forEach {
+            it.displayLink.setPaused(value)
+        }
+    }
+
     fun buildMenu(): AppMenuStructure {
         return AppMenuStructure(
             AppMenuItem.SubMenu(
@@ -125,7 +128,18 @@ class ApplicationState {
                 AppMenuItem.Action(
                     "New Window",
                     keystroke = Keystroke(key = "n", modifiers = Modifiers(command = true)),
-                    perform = { createWindow() })
+                    perform = { createWindow() }
+                ),
+                AppMenuItem.Action(
+                    "Pause",
+                    keystroke = Keystroke(key = "p", modifiers = Modifiers(command = true)),
+                    perform = { setPaused(true) }
+                ),
+                AppMenuItem.Action(
+                    "Run",
+                    keystroke = Keystroke(key = "r", modifiers = Modifiers(command = true)),
+                    perform = { setPaused(false) }
+                ),
             ),
             AppMenuItem.SubMenu(
                 title = "Window",

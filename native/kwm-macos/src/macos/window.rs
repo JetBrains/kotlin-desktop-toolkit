@@ -10,7 +10,7 @@ use crate::{common::{Size, StrPtr}, define_objc_ref};
 pub struct WindowRef { ptr: *mut c_void }
 define_objc_ref!(WindowRef, NSWindow);
 
-type WindowResizeCallback = fn();
+type WindowResizeCallback = extern "C" fn();
 
 #[no_mangle]
 pub extern "C" fn window_create(title: StrPtr, x: f32, y: f32, on_resize: WindowResizeCallback) -> WindowRef {

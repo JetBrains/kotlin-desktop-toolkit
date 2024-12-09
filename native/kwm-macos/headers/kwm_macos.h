@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct DisplayLink DisplayLink;
+
 typedef struct MetalView MetalView;
 
 typedef struct ApplicationConfig {
@@ -24,6 +26,8 @@ typedef struct Size {
 typedef void *MetalTextureRef;
 
 typedef void *WindowRef;
+
+typedef void (*DisplayLinkCallback)(void);
 
 typedef const char *StrPtr;
 
@@ -113,7 +117,11 @@ void metal_deref_texture(MetalTextureRef texture);
 
 void metal_view_attach_to_window(const struct MetalView *view, WindowRef window);
 
-void create_display_link(WindowRef window);
+struct DisplayLink *display_link_create(WindowRef window, DisplayLinkCallback on_next_frame);
+
+void display_link_set_paused(const struct DisplayLink *display_link, bool value);
+
+void display_link_drop(struct DisplayLink *display_link);
 
 WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize);
 
