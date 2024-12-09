@@ -79,12 +79,11 @@ declare_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[method(applicationDidFinishLaunching:)]
         fn did_finish_launching(&self, _notification: &NSNotification) {
-            println!("Did finish launching!");
+            
         }
 
         #[method(applicationShouldTerminate:)]
         fn should_terminate(&self, _sender: &NSApplication) -> NSApplicationTerminateReply {
-            println!("Rust: Should terminate!");
             let result = (self.ivars().callbacks.on_should_terminate)();
             return if result {
                 NSApplicationTerminateReply::NSTerminateNow
@@ -95,7 +94,6 @@ declare_class!(
 
         #[method(applicationWillTerminate:)]
         fn will_terminate(&self, _notification: &NSNotification) {
-            println!("Rust: Will terminate!");
             (self.ivars().callbacks.on_will_terminate)();
         }
     }

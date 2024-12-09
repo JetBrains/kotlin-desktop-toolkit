@@ -7,6 +7,7 @@ import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
+import java.lang.AutoCloseable
 import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.cos
@@ -73,7 +74,7 @@ class RotatingBallWindow(device: MetalDevice,
     }
 }
 
-class ApplicationState {
+class ApplicationState: AutoCloseable {
     val windows = mutableListOf<RotatingBallWindow>()
 
     val device: MetalDevice by lazy {
@@ -135,13 +136,24 @@ class ApplicationState {
             )
         )
     }
+
+    override fun close() {
+        windows.forEach {
+            it.close()
+        }
+        queue.close()
+        device.close()
+    }
 }
 
 fun main() {
     printRuntimeInfo()
-    Application.initWithConfig(Application.Config())
+    Application.init(Application.Config())
     val state = ApplicationState()
     AppMenuManager.setMainMenu(state.buildMenu())
-    Window.create("First", 200f, 200f)
-    Application.runEventLoop()
+    val firstWindow = Window.create("First", 200f, 200f)
+    Application.runEventLoop() {
+        state.close()
+        firstWindow.close()
+    }
 }

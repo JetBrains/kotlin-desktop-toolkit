@@ -9,28 +9,13 @@ import kotlin.concurrent.thread
 
 fun main() {
     printRuntimeInfo()
-    Application.initWithConfig(Application.Config(
+    Application.init(Application.Config(
 //        disableDictationMenuItem = true,
 //        disableCharacterPaletteMenuItem = true
     ))
     AppMenuManager.setMainMenu(buildAppMenu())
     val window1 = Window.create("Window1", 100f, 200f)
     val window2 = Window.create("Window2", 200f, 300f)
-
-    // First option: [SkSurface.WrapBackendRenderTarget]
-//    val renderTarget = BackendRenderTarget.makeMetal(width, height, texturePtr)
-//    val context = DirectContext.makeMetal(devicePtr, queuePtr)
-//    val surface = Surface.makeFromBackendRenderTarget(context, renderTarget, ...)
-//    val canvas = surface.canvas
-
-    // Second option
-//    val context = DirectContext.makeMetal(devicePtr, queuePtr)
-//    val mtkViewPtr = ...
-//    Surface.makeFromMTKView(context, mtkViewPtr, ...)
-
-    // Third option [Not available in Skiko yet]
-//    Surface.WrapCAMetalLayer()
-
 
     thread {
         while (true) {
@@ -40,5 +25,8 @@ fun main() {
             Thread.sleep(1000)
         }
     }
-    Application.runEventLoop()
+    Application.runEventLoop() {
+        window1.close()
+        window2.close()
+    }
 }

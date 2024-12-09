@@ -1,19 +1,12 @@
 package org.jetbrains.kwm.macos
 
-import org.jetbrains.kwm.IApplication
 import org.jetbrains.kwm.macos.generated.ApplicationCallbacks
 import org.jetbrains.kwm.macos.generated.ApplicationConfig
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
-import java.util.concurrent.CountDownLatch
-import kotlin.concurrent.thread
 
-object Application: IApplication {
-    override fun init() {
-        initWithConfig(Config())
-    }
-
+object Application {
     data class Config(val disableDictationMenuItem: Boolean = false,
                       val disableCharacterPaletteMenuItem: Boolean = false) {
         internal fun toNative(arena: Arena): MemorySegment? {
@@ -24,28 +17,19 @@ object Application: IApplication {
         }
     }
 
-    fun initWithConfig(config: Config) {
+    fun init(config: Config = Config()) {
         Arena.ofConfined().use { arena ->
             kwm_macos_h.application_init(config.toNative(arena), applicationCallbacks())
         }
-        Runtime.getRuntime().addShutdownHook(Thread {
-            var x = 0
-            while (true) {
-                x += 1
-                println("x: $x")
-                Thread.sleep(500)
-            }
-        })
-        Runtime.getRuntime().addShutdownHook(Thread({
-            GrandCentralDispatch.dispatchOnMainSync {
-                isReadyForTermination = true
-                requestTermination()
-            }
-        }, "NSApplication shutdown"))
     }
 
     // This method never returns
-    override fun runEventLoop() {
+    fun runEventLoop(cont: () -> Unit = {}) {
+        Runtime.getRuntime().addShutdownHook(Thread({
+            GrandCentralDispatch.dispatchOnMainSync {
+                cont()
+            }
+        }, "NSApplication shutdown"))
         kwm_macos_h.application_run_event_loop()
     }
 
@@ -53,17 +37,15 @@ object Application: IApplication {
         kwm_macos_h.application_request_termination()
     }
 
-    @Volatile
-    private var isReadyForTermination = false
-
     private fun onShouldTerminate(): Boolean {
-        println("Should terminate?")
-        return isReadyForTermination
+        // todo send event to request user interaction?
+        return false
     }
 
     private fun onWillTerminate() {
-        println("Will terminate!")
-        Thread.sleep(5  * 1000)
+        // This method will never be executed because
+        // the application halt is performed immediately after that
+        // which means that JVM shutdown hooks might be interupted
     }
 
     private fun applicationCallbacks(): MemorySegment {
