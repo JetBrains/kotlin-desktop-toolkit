@@ -1,6 +1,6 @@
 package org.jetbrains.kwm.macos
 
-import Size
+import org.jetbrains.kwm.Size
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment

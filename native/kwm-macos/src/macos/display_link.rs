@@ -9,6 +9,7 @@ use super::window::WindowRef;
 
 struct DisplayLink {
     link: Retained<CADisplayLink>,
+    #[allow(dead_code)] // we keep it here to retain a reference 
     delegate: Retained<DisplayLinkDelegate>
 }
 
@@ -68,7 +69,7 @@ declare_class!(
 
     unsafe impl DisplayLinkDelegate {
         #[method(onNextFrame:)]
-        fn on_next_frame(&self, display_link: &CADisplayLink) {
+        fn on_next_frame(&self, _display_link: &CADisplayLink) {
             (self.ivars().on_next_frame)();
         }
     }

@@ -1,6 +1,6 @@
 package org.jetbrains.kwm.macos
 
-import Size
+import org.jetbrains.kwm.Size
 import java.lang.foreign.MemorySegment
 import org.jetbrains.kwm.macos.generated.Size as NativeSize
 

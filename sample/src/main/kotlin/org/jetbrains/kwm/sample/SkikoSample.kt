@@ -1,56 +1,24 @@
 package org.jetbrains.kwm.sample
 
+import org.jetbrains.kwm.Point
+import org.jetbrains.kwm.Size
 import org.jetbrains.kwm.macos.*
-import org.jetbrains.skia.*
-import java.lang.Thread.sleep
-import kotlin.concurrent.thread
+import org.jetbrains.skia.Canvas
+import org.jetbrains.skia.Color
+import org.jetbrains.skia.Paint
+import org.jetbrains.skia.Rect
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlin.time.TimeSource
 
-class SkiaWindow(device: MetalDevice,
-                 val queue: MetalCommandQueue,
-                 title: String,
-                 x: Float, y: Float) {
-    val window = Window.create(title, x, y, onResize = {
-        draw()
-    })
-    val displayLink = DisplayLink.createForWindow(window, onNextFrame = {
-        draw()
-    })
-    val directContext = DirectContext.makeMetal(device.pointer.address(), queue.pointer.address())
-    var view: MetalView = MetalView.create(device)
-    val creationTime = TimeSource.Monotonic.markNow()
+class RotatingBallWindow(device: MetalDevice,
+                         queue: MetalCommandQueue,
+                         title: String,
+                         position: Point): SkikoWindow(device, queue, title, position) {
 
-    init {
-        view.attachToWindow(window)
-    }
-
-    fun draw() {
-        val size = view.size()
-        view.nextTexture().use { texture ->
-//             sleep(100) // uncomment this to check window resize quality
-            BackendRenderTarget.makeMetal(size.width.toInt(), size.height.toInt(), texture.pointer.address()).use { renderTarget ->
-                Surface.makeFromBackendRenderTarget(
-                    context = directContext,
-                    origin = SurfaceOrigin.TOP_LEFT,
-                    colorFormat = SurfaceColorFormat.BGRA_8888,
-                    colorSpace = null,
-                    surfaceProps = null,
-                    rt = renderTarget
-                )!!.use { surface ->
-                    val time = creationTime.elapsedNow().inWholeMilliseconds
-                    surface.canvas.paint(surface.width, surface.height, time)
-                    surface.flushAndSubmit()
-                }
-            }
-            queue.commit()
-            view.present()
-        }
-    }
-
-    fun Canvas.drawSpiningCircle(width: Int, height: Int, t: Long) = let { canvas ->
+    fun Canvas.drawSpiningCircle(size: Size, t: Long) = let { canvas ->
+        val width = size.width.toFloat()
+        val height = size.height.toFloat()
         val angle = (t / 2000f) * 2f * PI
         val r = width / 4
         val x = r * sin(angle).toFloat() + width / 2f
@@ -61,7 +29,10 @@ class SkiaWindow(device: MetalDevice,
         }
     }
 
-    fun Canvas.drawWindowBorders(width: Int, height: Int, t: Long) = let { canvas ->
+    fun Canvas.drawWindowBorders(size: Size, t: Long) {
+        val canvas = this
+        val width = size.width.toFloat()
+        val height = size.height.toFloat()
         val scale = 2f // todo fixme!
         Paint().use { paint ->
 
@@ -93,15 +64,16 @@ class SkiaWindow(device: MetalDevice,
         }
     }
 
-    fun Canvas.paint(width: Int, height: Int, t: Long) = let { canvas ->
+    override fun Canvas.draw(size: Size, t: Long) {
+        val canvas = this
         canvas.clear(0xFF264653.toInt());
-        drawSpiningCircle(width, height, t)
-        drawWindowBorders(width, height, t)
+        drawSpiningCircle(size, t)
+        drawWindowBorders(size, t)
     }
 }
 
 class ApplicationState {
-    val windows = mutableListOf<SkiaWindow>()
+    val windows = mutableListOf<RotatingBallWindow>()
 
     val device: MetalDevice by lazy {
         MetalDevice.create()
@@ -112,7 +84,7 @@ class ApplicationState {
     }
 
     fun createWindow() {
-        windows.add(SkiaWindow(device, queue, "Window ${windows.count()}", 200f, 200f))
+        windows.add(RotatingBallWindow(device, queue, "Window ${windows.count()}", Point(200.0, 200.0)))
     }
 
     fun setPaused(value: Boolean) {

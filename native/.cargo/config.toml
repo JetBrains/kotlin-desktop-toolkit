@@ -1,0 +1,3 @@
+
+[build]
+rustflags = "-Aunused_imports"

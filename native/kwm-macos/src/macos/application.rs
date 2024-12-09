@@ -1,6 +1,3 @@
-use std::ffi::CStr;
-
-use objc2::rc::Retained;
 use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSBackingStoreType, NSWindow, NSWindowStyleMask, NSNormalWindowLevel};
 use objc2_foundation::{MainThreadMarker, NSString, NSUserDefaults, CGRect, CGPoint, CGSize};
 

@@ -73,7 +73,8 @@ declare_class!(
 
     unsafe impl NSWindowDelegate for WindowDelegate {
         #[method(windowDidResize:)]
-        unsafe fn windowDidResize(&self, notification: &NSNotification) {
+        #[allow(non_snake_case)]
+        unsafe fn windowDidResize(&self, _notification: &NSNotification) {
             (self.ivars().on_resize)()
         }
     }

@@ -3,11 +3,11 @@ use std::{ffi::c_void, marker::PhantomData, rc::Rc, sync::Arc};
 pub(crate) type StrPtr = *const std::ffi::c_char;
 pub (crate) type ArraySize = i64;
 
-#[repr(C)]
-pub struct Array {
-    arr: *const c_void,
-    len: ArraySize,
-}
+//#[repr(C)]
+//pub struct Array {
+//    arr: *const c_void,
+//    len: ArraySize,
+//}
 
 #[repr(C)]
 pub struct Size {
@@ -18,6 +18,7 @@ pub struct Size {
 #[macro_export]
 macro_rules! define_objc_ref {
     ($name:ident, $otype:ty) => {
+        #[allow(dead_code)]
         impl $name {
             pub(crate) fn new(obj: Retained<$otype>) -> Self {
                 return Self {
