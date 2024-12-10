@@ -23,14 +23,12 @@ object Application {
         }
     }
 
-    // This method never returns
-    fun runEventLoop(cont: () -> Unit = {}) {
-        Runtime.getRuntime().addShutdownHook(Thread({
-            GrandCentralDispatch.dispatchOnMainSync {
-                cont()
-            }
-        }, "NSApplication shutdown"))
+    fun runEventLoop() {
         kwm_macos_h.application_run_event_loop()
+    }
+
+    fun stopEventLoop() {
+        kwm_macos_h.application_stop_event_loop()
     }
 
     fun requestTermination() {

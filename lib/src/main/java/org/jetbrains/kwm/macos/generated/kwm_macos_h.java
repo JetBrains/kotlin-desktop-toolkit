@@ -420,6 +420,61 @@ public class kwm_macos_h {
         }
     }
 
+    private static class application_stop_event_loop {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("application_stop_event_loop");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void application_stop_event_loop()
+     * }
+     */
+    public static FunctionDescriptor application_stop_event_loop$descriptor() {
+        return application_stop_event_loop.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void application_stop_event_loop()
+     * }
+     */
+    public static MethodHandle application_stop_event_loop$handle() {
+        return application_stop_event_loop.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void application_stop_event_loop()
+     * }
+     */
+    public static MemorySegment application_stop_event_loop$address() {
+        return application_stop_event_loop.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void application_stop_event_loop()
+     * }
+     */
+    public static void application_stop_event_loop() {
+        var mh$ = application_stop_event_loop.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("application_stop_event_loop");
+            }
+            mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class metal_create_device {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             kwm_macos_h.C_POINTER    );

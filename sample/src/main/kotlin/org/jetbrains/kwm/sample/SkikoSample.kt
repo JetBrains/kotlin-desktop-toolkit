@@ -117,7 +117,7 @@ class ApplicationState: AutoCloseable {
                 AppMenuItem.Action(
                     "Quit1",
                     keystroke = Keystroke(key = "q", modifiers = Modifiers(command = true)),
-                    perform = { Application.requestTermination() }
+                    perform = { Application.stopEventLoop() }
                 ),
                 AppMenuItem.Action(
                     "Quit2",
@@ -149,11 +149,10 @@ class ApplicationState: AutoCloseable {
 fun main() {
     printRuntimeInfo()
     Application.init(Application.Config())
-    val state = ApplicationState()
-    AppMenuManager.setMainMenu(state.buildMenu())
-    val firstWindow = Window.create("First", 200f, 200f)
-    Application.runEventLoop() {
-        state.close()
-        firstWindow.close()
+    ApplicationState().use { state ->
+        Window.create("First", 200f, 200f).use {
+            AppMenuManager.setMainMenu(state.buildMenu())
+            Application.runEventLoop()
+        }
     }
 }

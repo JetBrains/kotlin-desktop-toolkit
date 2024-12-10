@@ -25,8 +25,7 @@ fun main() {
             Thread.sleep(1000)
         }
     }
-    Application.runEventLoop() {
-        window1.close()
-        window2.close()
-    }
+    Application.runEventLoop()
+    window1.close()
+    window2.close()
 }

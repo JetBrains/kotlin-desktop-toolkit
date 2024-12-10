@@ -41,7 +41,6 @@ pub extern "C" fn application_run_event_loop() {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let app = NSApplication::sharedApplication(mtm);
     unsafe { app.run() };
-    println!("Event loop finished");
 }
 
 #[no_mangle]
@@ -51,6 +50,13 @@ pub extern "C" fn application_request_termination() {
     unsafe {
         app.terminate(None);
     }
+}
+
+#[no_mangle]
+pub extern "C" fn application_stop_event_loop() {
+    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    let app = NSApplication::sharedApplication(mtm);
+    app.stop(None);
 }
 
 struct AppDelegateIvars {

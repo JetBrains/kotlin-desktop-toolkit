@@ -101,6 +101,8 @@ void application_run_event_loop(void);
 
 void application_request_termination(void);
 
+void application_stop_event_loop(void);
+
 MetalDeviceRef metal_create_device(void);
 
 void metal_deref_device(MetalDeviceRef device);
