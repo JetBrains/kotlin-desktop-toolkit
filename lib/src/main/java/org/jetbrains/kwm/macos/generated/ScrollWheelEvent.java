@@ -14,29 +14,24 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct AppMenuItem {
- *     AppMenuItem_Tag tag;
- *     union {
- *         ActionItem_Body action_item;
- *         SubMenuItem_Body sub_menu_item;
- *     };
+ * struct ScrollWheelEvent {
+ *     WindowId window_id;
+ *     double dx;
+ *     double dy;
  * }
  * }
  */
-public class AppMenuItem {
+public class ScrollWheelEvent {
 
-    AppMenuItem() {
+    ScrollWheelEvent() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
-        kwm_macos_h.C_INT.withName("tag"),
-        MemoryLayout.paddingLayout(4),
-        MemoryLayout.unionLayout(
-            ActionItem_Body.layout().withName("action_item"),
-            SubMenuItem_Body.layout().withName("sub_menu_item")
-        ).withName("$anon$120:3")
-    ).withName("AppMenuItem");
+        kwm_macos_h.C_LONG_LONG.withName("window_id"),
+        kwm_macos_h.C_DOUBLE.withName("dx"),
+        kwm_macos_h.C_DOUBLE.withName("dy")
+    ).withName("ScrollWheelEvent");
 
     /**
      * The layout of this struct
@@ -45,136 +40,136 @@ public class AppMenuItem {
         return $LAYOUT;
     }
 
-    private static final OfInt tag$LAYOUT = (OfInt)$LAYOUT.select(groupElement("tag"));
+    private static final OfLong window_id$LAYOUT = (OfLong)$LAYOUT.select(groupElement("window_id"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowId window_id
      * }
      */
-    public static final OfInt tag$layout() {
-        return tag$LAYOUT;
+    public static final OfLong window_id$layout() {
+        return window_id$LAYOUT;
     }
 
-    private static final long tag$OFFSET = 0;
+    private static final long window_id$OFFSET = 0;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowId window_id
      * }
      */
-    public static final long tag$offset() {
-        return tag$OFFSET;
+    public static final long window_id$offset() {
+        return window_id$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowId window_id
      * }
      */
-    public static int tag(MemorySegment struct) {
-        return struct.get(tag$LAYOUT, tag$OFFSET);
+    public static long window_id(MemorySegment struct) {
+        return struct.get(window_id$LAYOUT, window_id$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowId window_id
      * }
      */
-    public static void tag(MemorySegment struct, int fieldValue) {
-        struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
+    public static void window_id(MemorySegment struct, long fieldValue) {
+        struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout action_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$120:3"), groupElement("action_item"));
+    private static final OfDouble dx$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("dx"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * double dx
      * }
      */
-    public static final GroupLayout action_item$layout() {
-        return action_item$LAYOUT;
+    public static final OfDouble dx$layout() {
+        return dx$LAYOUT;
     }
 
-    private static final long action_item$OFFSET = 8;
+    private static final long dx$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * double dx
      * }
      */
-    public static final long action_item$offset() {
-        return action_item$OFFSET;
+    public static final long dx$offset() {
+        return dx$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * double dx
      * }
      */
-    public static MemorySegment action_item(MemorySegment struct) {
-        return struct.asSlice(action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static double dx(MemorySegment struct) {
+        return struct.get(dx$LAYOUT, dx$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * double dx
      * }
      */
-    public static void action_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static void dx(MemorySegment struct, double fieldValue) {
+        struct.set(dx$LAYOUT, dx$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout sub_menu_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$120:3"), groupElement("sub_menu_item"));
+    private static final OfDouble dy$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("dy"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * double dy
      * }
      */
-    public static final GroupLayout sub_menu_item$layout() {
-        return sub_menu_item$LAYOUT;
+    public static final OfDouble dy$layout() {
+        return dy$LAYOUT;
     }
 
-    private static final long sub_menu_item$OFFSET = 8;
+    private static final long dy$OFFSET = 16;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * double dy
      * }
      */
-    public static final long sub_menu_item$offset() {
-        return sub_menu_item$OFFSET;
+    public static final long dy$offset() {
+        return dy$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * double dy
      * }
      */
-    public static MemorySegment sub_menu_item(MemorySegment struct) {
-        return struct.asSlice(sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static double dy(MemorySegment struct) {
+        return struct.get(dy$LAYOUT, dy$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * double dy
      * }
      */
-    public static void sub_menu_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static void dy(MemorySegment struct, double fieldValue) {
+        struct.set(dy$LAYOUT, dy$OFFSET, fieldValue);
     }
 
     /**

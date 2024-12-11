@@ -14,18 +14,22 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct AppMenuItem {
- *     AppMenuItem_Tag tag;
+ * struct Event {
+ *     Event_Tag tag;
  *     union {
- *         ActionItem_Body action_item;
- *         SubMenuItem_Body sub_menu_item;
+ *         struct {
+ *             struct MouseMovedEvent mouse_moved;
+ *         };
+ *         struct {
+ *             struct ScrollWheelEvent scroll_wheel;
+ *         };
  *     };
  * }
  * }
  */
-public class AppMenuItem {
+public class Event {
 
-    AppMenuItem() {
+    Event() {
         // Should not be called directly
     }
 
@@ -33,10 +37,14 @@ public class AppMenuItem {
         kwm_macos_h.C_INT.withName("tag"),
         MemoryLayout.paddingLayout(4),
         MemoryLayout.unionLayout(
-            ActionItem_Body.layout().withName("action_item"),
-            SubMenuItem_Body.layout().withName("sub_menu_item")
-        ).withName("$anon$120:3")
-    ).withName("AppMenuItem");
+            MemoryLayout.structLayout(
+                MouseMovedEvent.layout().withName("mouse_moved")
+            ).withName("$anon$43:5"),
+            MemoryLayout.structLayout(
+                ScrollWheelEvent.layout().withName("scroll_wheel")
+            ).withName("$anon$46:5")
+        ).withName("$anon$42:3")
+    ).withName("Event");
 
     /**
      * The layout of this struct
@@ -50,7 +58,7 @@ public class AppMenuItem {
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * Event_Tag tag
      * }
      */
     public static final OfInt tag$layout() {
@@ -62,7 +70,7 @@ public class AppMenuItem {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * Event_Tag tag
      * }
      */
     public static final long tag$offset() {
@@ -72,7 +80,7 @@ public class AppMenuItem {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * Event_Tag tag
      * }
      */
     public static int tag(MemorySegment struct) {
@@ -82,99 +90,99 @@ public class AppMenuItem {
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * Event_Tag tag
      * }
      */
     public static void tag(MemorySegment struct, int fieldValue) {
         struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout action_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$120:3"), groupElement("action_item"));
+    private static final GroupLayout mouse_moved$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$42:3"), groupElement("$anon$43:5"), groupElement("mouse_moved"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct MouseMovedEvent mouse_moved
      * }
      */
-    public static final GroupLayout action_item$layout() {
-        return action_item$LAYOUT;
+    public static final GroupLayout mouse_moved$layout() {
+        return mouse_moved$LAYOUT;
     }
 
-    private static final long action_item$OFFSET = 8;
+    private static final long mouse_moved$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct MouseMovedEvent mouse_moved
      * }
      */
-    public static final long action_item$offset() {
-        return action_item$OFFSET;
+    public static final long mouse_moved$offset() {
+        return mouse_moved$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct MouseMovedEvent mouse_moved
      * }
      */
-    public static MemorySegment action_item(MemorySegment struct) {
-        return struct.asSlice(action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static MemorySegment mouse_moved(MemorySegment struct) {
+        return struct.asSlice(mouse_moved$OFFSET, mouse_moved$LAYOUT.byteSize());
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct MouseMovedEvent mouse_moved
      * }
      */
-    public static void action_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static void mouse_moved(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, mouse_moved$OFFSET, mouse_moved$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout sub_menu_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$120:3"), groupElement("sub_menu_item"));
+    private static final GroupLayout scroll_wheel$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$42:3"), groupElement("$anon$46:5"), groupElement("scroll_wheel"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * struct ScrollWheelEvent scroll_wheel
      * }
      */
-    public static final GroupLayout sub_menu_item$layout() {
-        return sub_menu_item$LAYOUT;
+    public static final GroupLayout scroll_wheel$layout() {
+        return scroll_wheel$LAYOUT;
     }
 
-    private static final long sub_menu_item$OFFSET = 8;
+    private static final long scroll_wheel$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * struct ScrollWheelEvent scroll_wheel
      * }
      */
-    public static final long sub_menu_item$offset() {
-        return sub_menu_item$OFFSET;
+    public static final long scroll_wheel$offset() {
+        return scroll_wheel$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * struct ScrollWheelEvent scroll_wheel
      * }
      */
-    public static MemorySegment sub_menu_item(MemorySegment struct) {
-        return struct.asSlice(sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static MemorySegment scroll_wheel(MemorySegment struct) {
+        return struct.asSlice(scroll_wheel$OFFSET, scroll_wheel$LAYOUT.byteSize());
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * struct ScrollWheelEvent scroll_wheel
      * }
      */
-    public static void sub_menu_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static void scroll_wheel(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, scroll_wheel$OFFSET, scroll_wheel$LAYOUT.byteSize());
     }
 
     /**

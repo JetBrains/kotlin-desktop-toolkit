@@ -95,6 +95,15 @@ class ApplicationState: AutoCloseable {
         }
     }
 
+    fun handleEvent(event: Event): EventHandlerResult {
+        val eventWindowId = event.windowId()
+        val window = windows.find {
+            it.window.windowId() == eventWindowId
+        }
+        println("Application got event: $event window: $window")
+        return EventHandlerResult.Skipped
+    }
+
     fun buildMenu(): AppMenuStructure {
         return AppMenuStructure(
             AppMenuItem.SubMenu(
@@ -150,9 +159,14 @@ fun main() {
     printRuntimeInfo()
     Application.init(Application.Config())
     ApplicationState().use { state ->
-        Window.create("First", 200f, 200f).use {
+        Window.create("First", 200f, 200f).use { firstWindow ->
             AppMenuManager.setMainMenu(state.buildMenu())
-            Application.runEventLoop()
+
+            println("first window id: ${firstWindow.windowId()}")
+
+            Application.runEventLoop { event ->
+                state.handleEvent(event)
+            }
         }
     }
 }

@@ -71,6 +71,30 @@ public class kwm_macos_h {
     public static final ValueLayout.OfLong C_LONG = ValueLayout.JAVA_LONG;
     /**
      * {@snippet lang=c :
+     * typedef int64_t WindowId
+     * }
+     */
+    public static final OfLong WindowId = kwm_macos_h.C_LONG_LONG;
+    private static final int MouseMoved = (int)0L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.MouseMoved = 0
+     * }
+     */
+    public static int MouseMoved() {
+        return MouseMoved;
+    }
+    private static final int ScrollWheel = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.ScrollWheel = 1
+     * }
+     */
+    public static int ScrollWheel() {
+        return ScrollWheel;
+    }
+    /**
+     * {@snippet lang=c :
      * typedef void *MetalDeviceRef
      * }
      */
@@ -310,6 +334,61 @@ public class kwm_macos_h {
         }
     }
 
+    private static class application_shutdown {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("application_shutdown");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void application_shutdown()
+     * }
+     */
+    public static FunctionDescriptor application_shutdown$descriptor() {
+        return application_shutdown.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void application_shutdown()
+     * }
+     */
+    public static MethodHandle application_shutdown$handle() {
+        return application_shutdown.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void application_shutdown()
+     * }
+     */
+    public static MemorySegment application_shutdown$address() {
+        return application_shutdown.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void application_shutdown()
+     * }
+     */
+    public static void application_shutdown() {
+        var mh$ = application_shutdown.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("application_shutdown");
+            }
+            mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class application_run_event_loop {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
 
@@ -365,61 +444,6 @@ public class kwm_macos_h {
         }
     }
 
-    private static class application_request_termination {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
-
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("application_request_termination");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * void application_request_termination()
-     * }
-     */
-    public static FunctionDescriptor application_request_termination$descriptor() {
-        return application_request_termination.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * void application_request_termination()
-     * }
-     */
-    public static MethodHandle application_request_termination$handle() {
-        return application_request_termination.HANDLE;
-    }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void application_request_termination()
-     * }
-     */
-    public static MemorySegment application_request_termination$address() {
-        return application_request_termination.ADDR;
-    }
-
-    /**
-     * {@snippet lang=c :
-     * void application_request_termination()
-     * }
-     */
-    public static void application_request_termination() {
-        var mh$ = application_request_termination.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("application_request_termination");
-            }
-            mh$.invokeExact();
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
     private static class application_stop_event_loop {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
 
@@ -468,6 +492,61 @@ public class kwm_macos_h {
         try {
             if (TRACE_DOWNCALLS) {
                 traceDowncall("application_stop_event_loop");
+            }
+            mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class application_request_termination {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("application_request_termination");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void application_request_termination()
+     * }
+     */
+    public static FunctionDescriptor application_request_termination$descriptor() {
+        return application_request_termination.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void application_request_termination()
+     * }
+     */
+    public static MethodHandle application_request_termination$handle() {
+        return application_request_termination.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void application_request_termination()
+     * }
+     */
+    public static MemorySegment application_request_termination$address() {
+        return application_request_termination.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void application_request_termination()
+     * }
+     */
+    public static void application_request_termination() {
+        var mh$ = application_request_termination.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("application_request_termination");
             }
             mh$.invokeExact();
         } catch (Throwable ex$) {
@@ -1450,6 +1529,64 @@ public class kwm_macos_h {
                 traceDowncall("window_deref", window);
             }
             mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_get_window_id {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            kwm_macos_h.C_LONG_LONG,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_get_window_id");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * WindowId window_get_window_id(WindowRef window)
+     * }
+     */
+    public static FunctionDescriptor window_get_window_id$descriptor() {
+        return window_get_window_id.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * WindowId window_get_window_id(WindowRef window)
+     * }
+     */
+    public static MethodHandle window_get_window_id$handle() {
+        return window_get_window_id.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * WindowId window_get_window_id(WindowRef window)
+     * }
+     */
+    public static MemorySegment window_get_window_id$address() {
+        return window_get_window_id.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * WindowId window_get_window_id(WindowRef window)
+     * }
+     */
+    public static long window_get_window_id(MemorySegment window) {
+        var mh$ = window_get_window_id.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_get_window_id", window);
+            }
+            return (long)mh$.invokeExact(window);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

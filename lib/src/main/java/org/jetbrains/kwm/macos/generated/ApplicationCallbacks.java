@@ -17,6 +17,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * struct ApplicationCallbacks {
  *     bool (*on_should_terminate)(void);
  *     void (*on_will_terminate)(void);
+ *     EventHandler event_handler;
  * }
  * }
  */
@@ -28,7 +29,8 @@ public class ApplicationCallbacks {
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_POINTER.withName("on_should_terminate"),
-        kwm_macos_h.C_POINTER.withName("on_will_terminate")
+        kwm_macos_h.C_POINTER.withName("on_will_terminate"),
+        kwm_macos_h.C_POINTER.withName("event_handler")
     ).withName("ApplicationCallbacks");
 
     /**
@@ -227,6 +229,50 @@ public class ApplicationCallbacks {
      */
     public static void on_will_terminate(MemorySegment struct, MemorySegment fieldValue) {
         struct.set(on_will_terminate$LAYOUT, on_will_terminate$OFFSET, fieldValue);
+    }
+
+    private static final AddressLayout event_handler$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("event_handler"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * EventHandler event_handler
+     * }
+     */
+    public static final AddressLayout event_handler$layout() {
+        return event_handler$LAYOUT;
+    }
+
+    private static final long event_handler$OFFSET = 16;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * EventHandler event_handler
+     * }
+     */
+    public static final long event_handler$offset() {
+        return event_handler$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * EventHandler event_handler
+     * }
+     */
+    public static MemorySegment event_handler(MemorySegment struct) {
+        return struct.get(event_handler$LAYOUT, event_handler$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * EventHandler event_handler
+     * }
+     */
+    public static void event_handler(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(event_handler$LAYOUT, event_handler$OFFSET, fieldValue);
     }
 
     /**

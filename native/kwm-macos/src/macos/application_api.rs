@@ -1,8 +1,36 @@
+use std::cell::{Cell, OnceCell};
+
 use objc2::{declare_class, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, ClassType, DeclaredClass};
-use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSBackingStoreType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask};
+use objc2_app_kit::{
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSBackingStoreType,
+    NSNormalWindowLevel, NSWindow, NSWindowStyleMask,
+};
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
 
 use crate::common::StrPtr;
+
+use super::events::{Event, EventHandler};
+
+thread_local! {
+    pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
+}
+
+#[derive(Debug)]
+pub(crate) struct AppState {
+    pub(crate) app: Retained<NSApplication>,
+    app_delegate: Retained<AppDelegate>,
+    pub(crate) event_handler: EventHandler,
+    pub(crate) mtm: MainThreadMarker,
+}
+
+impl AppState {
+    pub(crate) fn with<T, F>(f: F) -> T where F: FnOnce(&AppState) -> T {
+        APP_STATE.with(|app_state| {
+            let app_state = app_state.get().expect("Can't access app state before initialization!"); // todo handle error
+            f(app_state)
+        })
+    }
+}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -11,6 +39,7 @@ pub struct ApplicationCallbacks {
     // oterwise termination will be caneled
     on_should_terminate: extern "C" fn() -> bool,
     on_will_terminate: extern "C" fn(),
+    event_handler: EventHandler,
 }
 
 #[repr(C)]
@@ -26,14 +55,32 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
     unsafe { NSUserDefaults::resetStandardUserDefaults() };
     let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
     unsafe {
-        user_defaults.setBool_forKey(config.disable_dictation_menu_item, &NSString::from_str("NSDisabledDictationMenuItem"));
-        user_defaults.setBool_forKey(config.disable_character_palette_menu_item, &NSString::from_str("NSDisabledCharacterPaletteMenuItem"));
+        user_defaults.setBool_forKey(
+            config.disable_dictation_menu_item,
+            &NSString::from_str("NSDisabledDictationMenuItem"),
+        );
+        user_defaults.setBool_forKey(
+            config.disable_character_palette_menu_item,
+            &NSString::from_str("NSDisabledCharacterPaletteMenuItem"),
+        );
     };
     let app = NSApplication::sharedApplication(mtm);
     app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
+    let event_handler = callbacks.event_handler;
     let app_delegate = AppDelegate::new(mtm, callbacks);
     app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
-    Retained::into_raw(app_delegate); // todo fixme
+    APP_STATE.with(|app_state| {
+        app_state.set(AppState {
+            app,
+            app_delegate,
+            event_handler,
+            mtm
+        }).expect("Can't initialize second time!");
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn application_shutdown() {
 }
 
 #[no_mangle]
@@ -41,6 +88,13 @@ pub extern "C" fn application_run_event_loop() {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let app = NSApplication::sharedApplication(mtm);
     unsafe { app.run() };
+}
+
+#[no_mangle]
+pub extern "C" fn application_stop_event_loop() {
+    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    let app = NSApplication::sharedApplication(mtm);
+    app.stop(None);
 }
 
 #[no_mangle]
@@ -52,18 +106,12 @@ pub extern "C" fn application_request_termination() {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn application_stop_event_loop() {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = NSApplication::sharedApplication(mtm);
-    app.stop(None);
-}
-
 struct AppDelegateIvars {
-    callbacks: ApplicationCallbacks
+    callbacks: ApplicationCallbacks,
 }
 
 declare_class!(
+    #[derive(Debug)]
     struct AppDelegate;
 
     // SAFETY:
@@ -85,7 +133,7 @@ declare_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[method(applicationDidFinishLaunching:)]
         fn did_finish_launching(&self, _notification: &NSNotification) {
-            
+
         }
 
         #[method(applicationShouldTerminate:)]
@@ -108,9 +156,7 @@ declare_class!(
 impl AppDelegate {
     fn new(mtm: MainThreadMarker, callbacks: ApplicationCallbacks) -> Retained<Self> {
         let this = mtm.alloc();
-        let this = this.set_ivars(AppDelegateIvars {
-            callbacks
-        });
+        let this = this.set_ivars(AppDelegateIvars { callbacks });
         unsafe { msg_send_id![super(this), init] }
     }
 }

@@ -10,9 +10,17 @@ pub (crate) type ArraySize = i64;
 //}
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct Size {
     pub width: f64,
     pub height: f64
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct Point {
+    pub x: f64,
+    pub y: f64
 }
 
 #[macro_export]

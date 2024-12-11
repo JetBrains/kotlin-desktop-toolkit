@@ -29,6 +29,7 @@ objc2-foundation = { version = "0.2.2", features = ["all"] }
 objc2-app-kit = { version = "0.2.2", features = [
   "NSApplication",
   "NSWindow",
+  "NSWindowRestoration",
   "NSGraphics",
   "NSScreen",
   "NSRunningApplication",

@@ -14,9 +14,47 @@ typedef struct ApplicationConfig {
   bool disable_character_palette_menu_item;
 } ApplicationConfig;
 
+typedef int64_t WindowId;
+
+typedef struct Point {
+  double x;
+  double y;
+} Point;
+
+typedef struct MouseMovedEvent {
+  WindowId window_id;
+  struct Point point;
+} MouseMovedEvent;
+
+typedef struct ScrollWheelEvent {
+  WindowId window_id;
+  double dx;
+  double dy;
+} ScrollWheelEvent;
+
+typedef enum Event_Tag {
+  MouseMoved,
+  ScrollWheel,
+} Event_Tag;
+
+typedef struct Event {
+  Event_Tag tag;
+  union {
+    struct {
+      struct MouseMovedEvent mouse_moved;
+    };
+    struct {
+      struct ScrollWheelEvent scroll_wheel;
+    };
+  };
+} Event;
+
+typedef bool (*EventHandler)(const struct Event*);
+
 typedef struct ApplicationCallbacks {
   bool (*on_should_terminate)(void);
   void (*on_will_terminate)(void);
+  EventHandler event_handler;
 } ApplicationCallbacks;
 
 typedef void *MetalDeviceRef;
@@ -97,11 +135,13 @@ void dispatcher_main_exec_async(void (*f)(void));
 void application_init(const struct ApplicationConfig *config,
                       struct ApplicationCallbacks callbacks);
 
+void application_shutdown(void);
+
 void application_run_event_loop(void);
 
-void application_request_termination(void);
-
 void application_stop_event_loop(void);
+
+void application_request_termination(void);
 
 MetalDeviceRef metal_create_device(void);
 
@@ -136,6 +176,8 @@ void display_link_drop(struct DisplayLink *display_link);
 WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize);
 
 void window_deref(WindowRef window);
+
+WindowId window_get_window_id(WindowRef window);
 
 void main_menu_update(struct AppMenuStructure menu);
 
