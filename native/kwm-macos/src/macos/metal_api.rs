@@ -1,8 +1,8 @@
 use std::{cell::Cell, ffi::c_void};
 
 use objc2::{rc::Retained, runtime::ProtocolObject, ClassType};
-use objc2_app_kit::{NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSString};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
+use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSRect, NSSize, NSString};
 use objc2_metal::{MTLClearColor, MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};
 use objc2_metal_kit::MTKView;
 use objc2_quartz_core::{kCAGravityTopLeft, CAAutoresizingMask, CAMetalDrawable, CAMetalLayer};
@@ -60,12 +60,10 @@ pub extern "C" fn metal_deref_command_queue(queue: MetalCommandQueueRef) {
     unsafe { queue.consume() };
 }
 
-//pub(crate) type MetalViewDrawCallback = extern "C" fn();
-
 pub struct MetalView {
-    ns_view: Retained<NSView>,
-    layer: Retained<CAMetalLayer>,
-    drawable: Cell<Option<Retained<ProtocolObject<dyn CAMetalDrawable>>>>
+    pub(crate) ns_view: Retained<NSView>,
+    pub(crate) layer: Retained<CAMetalLayer>,
+    pub(crate) drawable: Cell<Option<Retained<ProtocolObject<dyn CAMetalDrawable>>>>
 }
 
 #[no_mangle]
@@ -92,6 +90,9 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
     }
 
     unsafe {
+        ns_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+//        ns_view.setTranslatesAutoresizingMaskIntoConstraints(false);
+
         ns_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
         ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
 //        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
@@ -145,7 +146,7 @@ pub extern "C" fn metal_view_next_texture(view: &MetalView) -> MetalTextureRef {
         }
     }
     let drawable = unsafe {
-        view.layer.nextDrawable().unwrap()
+        view.layer.nextDrawable().expect("No drawable")
     };
     let texture = unsafe { drawable.texture() };
     view.drawable.set(Some(drawable));
@@ -155,11 +156,4 @@ pub extern "C" fn metal_view_next_texture(view: &MetalView) -> MetalTextureRef {
 #[no_mangle]
 pub extern "C" fn metal_deref_texture(texture: MetalTextureRef) {
     unsafe { texture.consume() };
-}
-
-#[no_mangle]
-pub extern "C" fn metal_view_attach_to_window(view: &MetalView, window: WindowRef) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let window = unsafe { window.retain() };
-    window.setContentView(Some(&view.ns_view));
 }

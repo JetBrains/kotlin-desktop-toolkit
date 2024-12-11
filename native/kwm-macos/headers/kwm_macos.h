@@ -165,8 +165,6 @@ MetalTextureRef metal_view_next_texture(const struct MetalView *view);
 
 void metal_deref_texture(MetalTextureRef texture);
 
-void metal_view_attach_to_window(const struct MetalView *view, WindowRef window);
-
 struct DisplayLink *display_link_create(WindowRef window, DisplayLinkCallback on_next_frame);
 
 void display_link_set_paused(const struct DisplayLink *display_link, bool value);
@@ -178,6 +176,8 @@ WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_
 void window_deref(WindowRef window);
 
 WindowId window_get_window_id(WindowRef window);
+
+void window_attach_layer(WindowRef window, const struct MetalView *layer);
 
 void main_menu_update(struct AppMenuStructure menu);
 

@@ -45,10 +45,6 @@ class MetalView internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos
             Size.fromNative(kwm_macos_h.metal_view_get_texture_size(arena, pointer))
         }
     }
-
-    fun attachToWindow(window: Window) {
-        kwm_macos_h.metal_view_attach_to_window(pointer, window.pointer)
-    }
 }
 
 class MetalTexture internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h::metal_deref_texture)

@@ -22,6 +22,10 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
     fun windowId(): WindowId {
         return kwm_macos_h.window_get_window_id(pointer)
     }
+
+    fun attachView(layer: MetalView) {
+        kwm_macos_h.window_attach_layer(pointer, layer.pointer)
+    }
 }
 
 class DisplayLink internal constructor(ptr: MemorySegment, val arena: Arena): Managed(ptr, kwm_macos_h::display_link_drop) {

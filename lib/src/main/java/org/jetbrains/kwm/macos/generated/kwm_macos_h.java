@@ -1184,64 +1184,6 @@ public class kwm_macos_h {
         }
     }
 
-    private static class metal_view_attach_to_window {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
-            kwm_macos_h.C_POINTER,
-            kwm_macos_h.C_POINTER
-        );
-
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_view_attach_to_window");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * void metal_view_attach_to_window(const struct MetalView *view, WindowRef window)
-     * }
-     */
-    public static FunctionDescriptor metal_view_attach_to_window$descriptor() {
-        return metal_view_attach_to_window.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * void metal_view_attach_to_window(const struct MetalView *view, WindowRef window)
-     * }
-     */
-    public static MethodHandle metal_view_attach_to_window$handle() {
-        return metal_view_attach_to_window.HANDLE;
-    }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void metal_view_attach_to_window(const struct MetalView *view, WindowRef window)
-     * }
-     */
-    public static MemorySegment metal_view_attach_to_window$address() {
-        return metal_view_attach_to_window.ADDR;
-    }
-
-    /**
-     * {@snippet lang=c :
-     * void metal_view_attach_to_window(const struct MetalView *view, WindowRef window)
-     * }
-     */
-    public static void metal_view_attach_to_window(MemorySegment view, MemorySegment window) {
-        var mh$ = metal_view_attach_to_window.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("metal_view_attach_to_window", view, window);
-            }
-            mh$.invokeExact(view, window);
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
     private static class display_link_create {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             kwm_macos_h.C_POINTER,
@@ -1587,6 +1529,64 @@ public class kwm_macos_h {
                 traceDowncall("window_get_window_id", window);
             }
             return (long)mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_attach_layer {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_attach_layer");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_attach_layer(WindowRef window, const struct MetalView *layer)
+     * }
+     */
+    public static FunctionDescriptor window_attach_layer$descriptor() {
+        return window_attach_layer.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_attach_layer(WindowRef window, const struct MetalView *layer)
+     * }
+     */
+    public static MethodHandle window_attach_layer$handle() {
+        return window_attach_layer.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_attach_layer(WindowRef window, const struct MetalView *layer)
+     * }
+     */
+    public static MemorySegment window_attach_layer$address() {
+        return window_attach_layer.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_attach_layer(WindowRef window, const struct MetalView *layer)
+     * }
+     */
+    public static void window_attach_layer(MemorySegment window, MemorySegment layer) {
+        var mh$ = window_attach_layer.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_attach_layer", window, layer);
+            }
+            mh$.invokeExact(window, layer);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

@@ -25,7 +25,7 @@ abstract class SkikoWindow(device: MetalDevice,
     val creationTime = TimeSource.Monotonic.markNow()
 
     init {
-        view.attachToWindow(window)
+        window.attachView(view)
         performDrawing()
     }
 

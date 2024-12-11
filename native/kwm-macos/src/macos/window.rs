@@ -7,7 +7,7 @@ use objc2::{
     runtime::{AnyObject, ProtocolObject},
     sel, ClassType, DeclaredClass,
 };
-use objc2_app_kit::{NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSView, NSWindow, NSWindowDelegate, NSWindowStyleMask};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSView, NSWindow, NSWindowDelegate, NSWindowStyleMask};
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSString};
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
     macos::{application_api::AppState, events::handle_mouse_moved},
 };
 
-use super::events::{Event, MouseMovedEvent};
+use super::{events::{Event, MouseMovedEvent}, metal_api::MetalView};
 
 #[repr(transparent)]
 pub struct WindowRef {
@@ -32,11 +32,6 @@ pub extern "C" fn window_create(title: StrPtr, x: f32, y: f32, on_resize: Window
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let title = unsafe { CStr::from_ptr(title) }.to_str().unwrap();
     let window = create_window(mtm, title, x, y, on_resize);
-    let root_view = RootView::new(mtm);
-    window.setAcceptsMouseMovedEvents(true);
-    window.setContentView(Some(&*root_view));
-    assert!(window.makeFirstResponder(Some(&*root_view)) == true); // todo remove assert
-    Retained::into_raw(root_view); // todo fixme!
     return WindowRef::new(window);
 }
 
@@ -52,6 +47,17 @@ pub extern "C" fn window_get_window_id(window: WindowRef) -> WindowId {
     let window = unsafe { window.retain() };
     return unsafe {
         window.windowNumber() as i64
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn window_attach_layer(window: WindowRef, layer: &MetalView) {
+    let window = unsafe { window.retain() };
+    let content_view = window.contentView().unwrap();
+    let layer_view = &layer.ns_view;
+    unsafe {
+        layer_view.setFrameSize(content_view.frame().size);
+        content_view.addSubview(&*layer.ns_view);
     }
 }
 
@@ -75,6 +81,12 @@ fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32, on_resize: 
         let delegate = WindowDelegate::new(mtm, on_resize);
         window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
         Retained::into_raw(delegate); // todo fixme!
+
+        let root_view = RootView::new(mtm);
+        window.setAcceptsMouseMovedEvents(true);
+        window.setContentView(Some(&*root_view));
+        assert!(window.makeFirstResponder(Some(&*root_view)) == true); // todo remove assert
+        Retained::into_raw(root_view); // todo fixme!
         window
     };
     return window;
@@ -149,6 +161,11 @@ impl RootView {
     pub(crate) fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars {});
-        unsafe { msg_send_id![super(this), init] }
+        let root_view: Retained<Self> = unsafe { msg_send_id![super(this), init] };
+        unsafe {
+            root_view.setAutoresizesSubviews(true);
+            root_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+        }
+        root_view
     }
 }
