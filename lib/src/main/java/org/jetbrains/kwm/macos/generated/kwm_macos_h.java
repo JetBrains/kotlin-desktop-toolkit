@@ -113,6 +113,12 @@ public class kwm_macos_h {
     public static final AddressLayout MetalTextureRef = kwm_macos_h.C_POINTER;
     /**
      * {@snippet lang=c :
+     * typedef uint32_t ScreenId
+     * }
+     */
+    public static final OfInt ScreenId = kwm_macos_h.C_INT;
+    /**
+     * {@snippet lang=c :
      * typedef void *WindowRef
      * }
      */
@@ -1187,7 +1193,7 @@ public class kwm_macos_h {
     private static class display_link_create {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             kwm_macos_h.C_POINTER,
-            kwm_macos_h.C_POINTER,
+            kwm_macos_h.C_INT,
             kwm_macos_h.C_POINTER
         );
 
@@ -1199,7 +1205,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * struct DisplayLink *display_link_create(WindowRef window, DisplayLinkCallback on_next_frame)
+     * struct DisplayLinkBox *display_link_create(ScreenId screen_id, DisplayLinkCallback on_next_frame)
      * }
      */
     public static FunctionDescriptor display_link_create$descriptor() {
@@ -1209,7 +1215,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * struct DisplayLink *display_link_create(WindowRef window, DisplayLinkCallback on_next_frame)
+     * struct DisplayLinkBox *display_link_create(ScreenId screen_id, DisplayLinkCallback on_next_frame)
      * }
      */
     public static MethodHandle display_link_create$handle() {
@@ -1219,7 +1225,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * struct DisplayLink *display_link_create(WindowRef window, DisplayLinkCallback on_next_frame)
+     * struct DisplayLinkBox *display_link_create(ScreenId screen_id, DisplayLinkCallback on_next_frame)
      * }
      */
     public static MemorySegment display_link_create$address() {
@@ -1228,16 +1234,16 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * struct DisplayLink *display_link_create(WindowRef window, DisplayLinkCallback on_next_frame)
+     * struct DisplayLinkBox *display_link_create(ScreenId screen_id, DisplayLinkCallback on_next_frame)
      * }
      */
-    public static MemorySegment display_link_create(MemorySegment window, MemorySegment on_next_frame) {
+    public static MemorySegment display_link_create(int screen_id, MemorySegment on_next_frame) {
         var mh$ = display_link_create.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("display_link_create", window, on_next_frame);
+                traceDowncall("display_link_create", screen_id, on_next_frame);
             }
-            return (MemorySegment)mh$.invokeExact(window, on_next_frame);
+            return (MemorySegment)mh$.invokeExact(screen_id, on_next_frame);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -1257,7 +1263,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void display_link_set_paused(const struct DisplayLink *display_link, bool value)
+     * void display_link_set_paused(struct DisplayLink *display_link, bool value)
      * }
      */
     public static FunctionDescriptor display_link_set_paused$descriptor() {
@@ -1267,7 +1273,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void display_link_set_paused(const struct DisplayLink *display_link, bool value)
+     * void display_link_set_paused(struct DisplayLink *display_link, bool value)
      * }
      */
     public static MethodHandle display_link_set_paused$handle() {
@@ -1277,7 +1283,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void display_link_set_paused(const struct DisplayLink *display_link, bool value)
+     * void display_link_set_paused(struct DisplayLink *display_link, bool value)
      * }
      */
     public static MemorySegment display_link_set_paused$address() {
@@ -1286,7 +1292,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * void display_link_set_paused(const struct DisplayLink *display_link, bool value)
+     * void display_link_set_paused(struct DisplayLink *display_link, bool value)
      * }
      */
     public static void display_link_set_paused(MemorySegment display_link, boolean value) {
@@ -1529,6 +1535,64 @@ public class kwm_macos_h {
                 traceDowncall("window_get_window_id", window);
             }
             return (long)mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_get_screen_id {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            kwm_macos_h.C_INT,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_get_screen_id");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * ScreenId window_get_screen_id(WindowRef window)
+     * }
+     */
+    public static FunctionDescriptor window_get_screen_id$descriptor() {
+        return window_get_screen_id.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * ScreenId window_get_screen_id(WindowRef window)
+     * }
+     */
+    public static MethodHandle window_get_screen_id$handle() {
+        return window_get_screen_id.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * ScreenId window_get_screen_id(WindowRef window)
+     * }
+     */
+    public static MemorySegment window_get_screen_id$address() {
+        return window_get_screen_id.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * ScreenId window_get_screen_id(WindowRef window)
+     * }
+     */
+    public static int window_get_screen_id(MemorySegment window) {
+        var mh$ = window_get_screen_id.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_get_screen_id", window);
+            }
+            return (int)mh$.invokeExact(window);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

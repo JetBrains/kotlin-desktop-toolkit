@@ -8,7 +8,7 @@ use objc2::{
     sel, ClassType, DeclaredClass,
 };
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSView, NSWindow, NSWindowDelegate, NSWindowStyleMask};
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSString};
+use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNumber, NSObject, NSObjectProtocol, NSString};
 
 use crate::{
     common::{Size, StrPtr},
@@ -25,6 +25,7 @@ pub struct WindowRef {
 define_objc_ref!(WindowRef, NSWindow);
 
 pub type WindowId = i64;
+pub type ScreenId = u32;
 pub type WindowResizeCallback = extern "C" fn();
 
 #[no_mangle]
@@ -48,6 +49,16 @@ pub extern "C" fn window_get_window_id(window: WindowRef) -> WindowId {
     return unsafe {
         window.windowNumber() as i64
     }
+}
+
+#[no_mangle]
+pub extern "C" fn window_get_screen_id(window: WindowRef) -> ScreenId {
+    let window = unsafe {
+        window.retain()
+    };
+    let screen_id = unsafe { window.screen().unwrap().deviceDescription().objectForKey(&*NSString::from_str("NSScreenNumber")) }.unwrap();
+    let screen_id: Retained<NSNumber> = unsafe { Retained::cast(screen_id) };
+    return screen_id.unsignedIntValue();
 }
 
 #[no_mangle]
@@ -116,6 +127,12 @@ declare_class!(
         #[allow(non_snake_case)]
         unsafe fn windowDidResize(&self, _notification: &NSNotification) {
             (self.ivars().on_resize)()
+        }
+
+        #[method(windowDidChangeScreen:)]
+        #[allow(non_snake_case)]
+        unsafe fn windowDidChangeScreen(&self, _notification: &NSNotification) {
+            // todo send event
         }
     }
 );

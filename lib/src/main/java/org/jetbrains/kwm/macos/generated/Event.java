@@ -39,11 +39,11 @@ public class Event {
         MemoryLayout.unionLayout(
             MemoryLayout.structLayout(
                 MouseMovedEvent.layout().withName("mouse_moved")
-            ).withName("$anon$43:5"),
+            ).withName("$anon$45:5"),
             MemoryLayout.structLayout(
                 ScrollWheelEvent.layout().withName("scroll_wheel")
-            ).withName("$anon$46:5")
-        ).withName("$anon$42:3")
+            ).withName("$anon$48:5")
+        ).withName("$anon$44:3")
     ).withName("Event");
 
     /**
@@ -97,7 +97,7 @@ public class Event {
         struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout mouse_moved$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$42:3"), groupElement("$anon$43:5"), groupElement("mouse_moved"));
+    private static final GroupLayout mouse_moved$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$44:3"), groupElement("$anon$45:5"), groupElement("mouse_moved"));
 
     /**
      * Layout for field:
@@ -141,7 +141,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, mouse_moved$OFFSET, mouse_moved$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout scroll_wheel$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$42:3"), groupElement("$anon$46:5"), groupElement("scroll_wheel"));
+    private static final GroupLayout scroll_wheel$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$44:3"), groupElement("$anon$48:5"), groupElement("scroll_wheel"));
 
     /**
      * Layout for field:

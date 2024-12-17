@@ -7,6 +7,8 @@
 
 typedef struct DisplayLink DisplayLink;
 
+typedef struct DisplayLinkBox DisplayLinkBox;
+
 typedef struct MetalView MetalView;
 
 typedef struct ApplicationConfig {
@@ -68,9 +70,11 @@ typedef struct Size {
 
 typedef void *MetalTextureRef;
 
-typedef void *WindowRef;
+typedef uint32_t ScreenId;
 
 typedef void (*DisplayLinkCallback)(void);
+
+typedef void *WindowRef;
 
 typedef const char *StrPtr;
 
@@ -165,9 +169,9 @@ MetalTextureRef metal_view_next_texture(const struct MetalView *view);
 
 void metal_deref_texture(MetalTextureRef texture);
 
-struct DisplayLink *display_link_create(WindowRef window, DisplayLinkCallback on_next_frame);
+struct DisplayLinkBox *display_link_create(ScreenId screen_id, DisplayLinkCallback on_next_frame);
 
-void display_link_set_paused(const struct DisplayLink *display_link, bool value);
+void display_link_set_paused(struct DisplayLink *display_link, bool value);
 
 void display_link_drop(struct DisplayLink *display_link);
 
@@ -176,6 +180,8 @@ WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_
 void window_deref(WindowRef window);
 
 WindowId window_get_window_id(WindowRef window);
+
+ScreenId window_get_screen_id(WindowRef window);
 
 void window_attach_layer(WindowRef window, const struct MetalView *layer);
 

@@ -98,6 +98,25 @@ tasks.register<JavaExec>("runSkikoSample") {
         "-Djextract.trace.downcalls=false"
     )
     environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/debug")
+//    environment("MallocStackLogging", "1")
+}
+
+tasks.register<JavaExec>("runSkikoSampleRelease") {
+    group = "application"
+    description = "Runs example of integration with Skiko with release binary"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.kwm.sample.SkikoSampleKt")
+    javaLauncher.set(javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    })
+    jvmArgs = listOf(
+        "--enable-preview",
+        "-XstartOnFirstThread",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false"
+    )
+    environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/release")
+//    environment("MallocStackLogging", "1")
 }
 
 tasks.named<Test>("test") {

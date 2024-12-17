@@ -17,7 +17,7 @@ abstract class SkikoWindow(device: MetalDevice,
                                onResize = {
                                    performDrawing()
                                })
-    val displayLink = DisplayLink.createForWindow(window, onNextFrame = {
+    val displayLink = DisplayLink.create(window.screenId(), onNextFrame = {
         performDrawing()
     })
     val directContext = DirectContext.makeMetal(device.pointer.address(), queue.pointer.address())

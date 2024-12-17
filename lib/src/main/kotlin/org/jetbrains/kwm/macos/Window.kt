@@ -23,26 +23,11 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
         return kwm_macos_h.window_get_window_id(pointer)
     }
 
+    fun screenId(): ScreenId {
+        return kwm_macos_h.window_get_screen_id(pointer)
+    }
+
     fun attachView(layer: MetalView) {
         kwm_macos_h.window_attach_layer(pointer, layer.pointer)
-    }
-}
-
-class DisplayLink internal constructor(ptr: MemorySegment, val arena: Arena): Managed(ptr, kwm_macos_h::display_link_drop) {
-    companion object {
-        fun createForWindow(window: Window, onNextFrame: () -> Unit): DisplayLink {
-            val arena = Arena.ofConfined()
-            val callback = DisplayLinkCallback.allocate(onNextFrame, arena)
-            return DisplayLink(kwm_macos_h.display_link_create(window.pointer, callback), arena)
-        }
-    }
-
-    fun setPaused(value: Boolean) {
-        kwm_macos_h.display_link_set_paused(pointer, value);
-    }
-
-    override fun close() {
-        super.close()
-        arena.close()
     }
 }

@@ -32,7 +32,6 @@ pub enum Event {
 
 pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
-        println!("event: {event:?}");
         let point = unsafe {
             event.locationInWindow()
         };
@@ -40,9 +39,10 @@ pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
             event.windowNumber() as i64
         };
         let window = unsafe {
-            event.window(state.mtm).expect(&format!("No window for event: {event:?}"))
+            event.window(state.mtm).expect("No window for event")
         };
-        let frame = window.frame();
+        // position relative to top left corner of the root view
+        let frame = window.contentView().unwrap().frame();
 
         let event = Event::MouseMoved(MouseMovedEvent {
             window_id,

@@ -6,10 +6,6 @@ members = ["kwm-macos"]
 lto = true
 strip = "symbols"
 
-[profile.nightly]
-inherits = "release"
-strip = false
-
 [profile.bench]
 inherits = "release"
 strip = false

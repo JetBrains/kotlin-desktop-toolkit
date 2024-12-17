@@ -8,6 +8,7 @@ import org.jetbrains.skia.Color
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import java.lang.AutoCloseable
+import java.lang.Thread.sleep
 import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.cos
@@ -18,7 +19,21 @@ class RotatingBallWindow(device: MetalDevice,
                          title: String,
                          position: Point): SkikoWindow(device, queue, title, position) {
 
-    fun Canvas.drawSpiningCircle(size: Size, t: Long) = let { canvas ->
+    private var cursorPosition: Point? = null
+
+    fun handleEvent(event: Event) {
+        when (event) {
+            is Event.MouseMoved -> {
+                cursorPosition = event.point
+            }
+
+            is Event.ScrollWheel -> {}
+        }
+//        performDrawing()
+//        displayLink.setPaused(false)
+    }
+
+    private fun Canvas.drawSpiningCircle(size: Size, t: Long) = let { canvas ->
         val width = size.width.toFloat()
         val height = size.height.toFloat()
         val angle = (t / 2000f) * 2f * PI
@@ -31,7 +46,7 @@ class RotatingBallWindow(device: MetalDevice,
         }
     }
 
-    fun Canvas.drawWindowBorders(size: Size, t: Long) {
+    private fun Canvas.drawWindowBorders(size: Size, t: Long) {
         val canvas = this
         val width = size.width.toFloat()
         val height = size.height.toFloat()
@@ -66,11 +81,34 @@ class RotatingBallWindow(device: MetalDevice,
         }
     }
 
+    private fun Canvas.drawCursor(size: Size, t: Long) {
+        val canvas = this
+//        println("cursor position: $cursorPosition")
+        val scale = 2f
+        cursorPosition?.let { curs ->
+            val positive = curs.x > 0 && curs.y > 0
+            val inBox = curs.x < size.width && curs.y < size.height
+            if (positive && inBox) {
+                val x = curs.x.toFloat()
+                val y = curs.y.toFloat()
+                val width = size.width.toFloat()
+                val height = size.height.toFloat()
+
+                Paint().use { paint ->
+                    paint.color = 0x40FFFFFF
+                    canvas.drawRect(Rect.makeXYWH(0f, y * scale, width, 2 * scale), paint)
+                    canvas.drawRect(Rect.makeXYWH(x * scale, 0f, 2 * scale, height), paint)
+                }
+            }
+        }
+    }
+
     override fun Canvas.draw(size: Size, t: Long) {
         val canvas = this
         canvas.clear(0xFF264653.toInt());
         drawSpiningCircle(size, t)
         drawWindowBorders(size, t)
+        drawCursor(size, t)
     }
 }
 
@@ -100,8 +138,10 @@ class ApplicationState: AutoCloseable {
         val window = windows.find {
             it.window.windowId() == eventWindowId
         }
-        println("Application got event: $event window: $window")
-        return EventHandlerResult.Skipped
+        return window?.let {
+            window.handleEvent(event)
+            EventHandlerResult.Handled
+        } ?: EventHandlerResult.Skipped
     }
 
     fun buildMenu(): AppMenuStructure {
