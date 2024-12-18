@@ -12,9 +12,7 @@ abstract class SkikoWindow(device: MetalDevice,
                            title: String,
                            position: LogicalPoint): AutoCloseable {
 
-    val window = Window.create(title,
-                               position.x.toFloat(),
-                               position.y.toFloat())
+    val window = Window.create(origin = position, title = title)
     var displayLink = DisplayLink.create(window.screenId(), onNextFrame = {
         performDrawing()
     })
@@ -38,6 +36,7 @@ abstract class SkikoWindow(device: MetalDevice,
     }
 
     open fun handleEvent(event: Event): EventHandlerResult {
+        println("$event")
         return when (event) {
             is Event.WindowResize -> {
                 performDrawing()

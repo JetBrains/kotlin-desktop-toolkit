@@ -126,7 +126,7 @@ class ApplicationState: AutoCloseable {
     }
 
     fun createWindow() {
-        windows.add(RotatingBallWindow(device, queue, "Window ${windows.count()}", LogicalPoint(200.0, 200.0)))
+        windows.add(RotatingBallWindow(device, queue, "Window ${windows.count()}", LogicalPoint(0.0, 0.0)))
     }
 
     fun setPaused(value: Boolean) {
@@ -137,12 +137,28 @@ class ApplicationState: AutoCloseable {
 
     fun handleEvent(event: Event): EventHandlerResult {
         val eventWindowId = event.windowId()
-        val window = windows.find {
-            it.window.windowId() == eventWindowId
+
+        return when (event) {
+            is Event.WindowCloseRequest -> {
+                windows.find {
+                    it.window.windowId() == eventWindowId
+                }?.let { window ->
+                    windows.remove(window)
+                    window.close()
+                } ?: run {
+                    println("Can't find window for $event")
+                }
+                EventHandlerResult.Stop
+            }
+            else -> {
+                val window = windows.find {
+                    it.window.windowId() == eventWindowId
+                }
+                window?.let {
+                    window.handleEvent(event)
+                } ?: EventHandlerResult.Continue
+            }
         }
-        return window?.let {
-            window.handleEvent(event)
-        } ?: EventHandlerResult.Continue
     }
 
     fun buildMenu(): AppMenuStructure {

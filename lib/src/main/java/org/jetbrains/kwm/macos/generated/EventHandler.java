@@ -29,6 +29,15 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *         struct {
  *             struct WindowResizeEvent window_resize;
  *         };
+ *         struct {
+ *             struct WindowMoveEvent window_move;
+ *         };
+ *         struct {
+ *             struct WindowFocusChangeEvent window_focus_change;
+ *         };
+ *         struct {
+ *             struct WindowCloseRequestEvent window_close_request;
+ *         };
  *     };
  * } *)
  * }

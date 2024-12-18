@@ -1,5 +1,6 @@
 package org.jetbrains.kwm.sample
 
+import org.jetbrains.kwm.LogicalPoint
 import org.jetbrains.kwm.macos.*
 import org.jetbrains.skia.BackendRenderTarget
 import org.jetbrains.skia.Surface
@@ -14,8 +15,8 @@ fun main() {
 //        disableCharacterPaletteMenuItem = true
     ))
     AppMenuManager.setMainMenu(buildAppMenu())
-    val window1 = Window.create("Window1", 100f, 200f)
-    val window2 = Window.create("Window2", 200f, 300f)
+    val window1 = Window.create(origin = LogicalPoint(100.0, 200.0), title = "Window1")
+    val window2 = Window.create(origin = LogicalPoint(200.0, 300.0), title = "Window2")
 
     thread {
         while (true) {

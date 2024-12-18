@@ -14,29 +14,24 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct AppMenuItem {
- *     AppMenuItem_Tag tag;
- *     union {
- *         ActionItem_Body action_item;
- *         SubMenuItem_Body sub_menu_item;
- *     };
+ * struct WindowParams {
+ *     struct LogicalPoint origin;
+ *     struct LogicalSize size;
+ *     StrPtr title;
  * }
  * }
  */
-public class AppMenuItem {
+public class WindowParams {
 
-    AppMenuItem() {
+    WindowParams() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
-        kwm_macos_h.C_INT.withName("tag"),
-        MemoryLayout.paddingLayout(4),
-        MemoryLayout.unionLayout(
-            ActionItem_Body.layout().withName("action_item"),
-            SubMenuItem_Body.layout().withName("sub_menu_item")
-        ).withName("$anon$182:3")
-    ).withName("AppMenuItem");
+        LogicalPoint.layout().withName("origin"),
+        LogicalSize.layout().withName("size"),
+        kwm_macos_h.C_POINTER.withName("title")
+    ).withName("WindowParams");
 
     /**
      * The layout of this struct
@@ -45,136 +40,136 @@ public class AppMenuItem {
         return $LAYOUT;
     }
 
-    private static final OfInt tag$LAYOUT = (OfInt)$LAYOUT.select(groupElement("tag"));
+    private static final GroupLayout origin$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("origin"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * struct LogicalPoint origin
      * }
      */
-    public static final OfInt tag$layout() {
-        return tag$LAYOUT;
+    public static final GroupLayout origin$layout() {
+        return origin$LAYOUT;
     }
 
-    private static final long tag$OFFSET = 0;
+    private static final long origin$OFFSET = 0;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * struct LogicalPoint origin
      * }
      */
-    public static final long tag$offset() {
-        return tag$OFFSET;
+    public static final long origin$offset() {
+        return origin$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * struct LogicalPoint origin
      * }
      */
-    public static int tag(MemorySegment struct) {
-        return struct.get(tag$LAYOUT, tag$OFFSET);
+    public static MemorySegment origin(MemorySegment struct) {
+        return struct.asSlice(origin$OFFSET, origin$LAYOUT.byteSize());
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * struct LogicalPoint origin
      * }
      */
-    public static void tag(MemorySegment struct, int fieldValue) {
-        struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
+    public static void origin(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, origin$OFFSET, origin$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout action_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$182:3"), groupElement("action_item"));
+    private static final GroupLayout size$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("size"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct LogicalSize size
      * }
      */
-    public static final GroupLayout action_item$layout() {
-        return action_item$LAYOUT;
+    public static final GroupLayout size$layout() {
+        return size$LAYOUT;
     }
 
-    private static final long action_item$OFFSET = 8;
+    private static final long size$OFFSET = 16;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct LogicalSize size
      * }
      */
-    public static final long action_item$offset() {
-        return action_item$OFFSET;
+    public static final long size$offset() {
+        return size$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct LogicalSize size
      * }
      */
-    public static MemorySegment action_item(MemorySegment struct) {
-        return struct.asSlice(action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static MemorySegment size(MemorySegment struct) {
+        return struct.asSlice(size$OFFSET, size$LAYOUT.byteSize());
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct LogicalSize size
      * }
      */
-    public static void action_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static void size(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, size$OFFSET, size$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout sub_menu_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$182:3"), groupElement("sub_menu_item"));
+    private static final AddressLayout title$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("title"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * StrPtr title
      * }
      */
-    public static final GroupLayout sub_menu_item$layout() {
-        return sub_menu_item$LAYOUT;
+    public static final AddressLayout title$layout() {
+        return title$LAYOUT;
     }
 
-    private static final long sub_menu_item$OFFSET = 8;
+    private static final long title$OFFSET = 32;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * StrPtr title
      * }
      */
-    public static final long sub_menu_item$offset() {
-        return sub_menu_item$OFFSET;
+    public static final long title$offset() {
+        return title$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * StrPtr title
      * }
      */
-    public static MemorySegment sub_menu_item(MemorySegment struct) {
-        return struct.asSlice(sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static MemorySegment title(MemorySegment struct) {
+        return struct.get(title$LAYOUT, title$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * StrPtr title
      * }
      */
-    public static void sub_menu_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static void title(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(title$LAYOUT, title$OFFSET, fieldValue);
     }
 
     /**

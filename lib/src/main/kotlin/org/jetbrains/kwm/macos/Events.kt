@@ -5,6 +5,9 @@ import org.jetbrains.kwm.LogicalPoint
 import org.jetbrains.kwm.LogicalSize
 import org.jetbrains.kwm.macos.generated.MouseMovedEvent
 import org.jetbrains.kwm.macos.generated.ScrollWheelEvent
+import org.jetbrains.kwm.macos.generated.WindowCloseRequestEvent
+import org.jetbrains.kwm.macos.generated.WindowFocusChangeEvent
+import org.jetbrains.kwm.macos.generated.WindowMoveEvent
 import org.jetbrains.kwm.macos.generated.WindowResizeEvent
 import org.jetbrains.kwm.macos.generated.WindowScreenChangeEvent
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
@@ -35,12 +38,31 @@ sealed class Event {
         val size: LogicalSize
     ): Event()
 
+    data class WindowMove(
+        val windowId: WindowId,
+        // bottom left corner of window
+        val origin: LogicalPoint
+    ): Event()
+
+    data class WindowFocusChange(
+        val windowId: WindowId,
+        val isKeyWindow: Boolean,
+        val isMainWindow: Boolean
+    ): Event()
+
+    data class WindowCloseRequest(
+        val windowId: WindowId,
+    ): Event()
+
     fun windowId(): WindowId? {
         return when (this) {
             is MouseMoved -> windowId
             is ScrollWheel -> windowId
             is WindowScreenChange -> windowId
             is WindowResize -> windowId
+            is WindowMove -> windowId
+            is WindowFocusChange -> windowId
+            is WindowCloseRequest -> windowId
             else -> null
         }
     }
@@ -75,6 +97,27 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.WindowResize(
                 windowId = WindowResizeEvent.window_id(nativeEvent),
                 size = LogicalSize.fromNative(WindowResizeEvent.size(nativeEvent))
+            )
+        }
+        kwm_macos_h.WindowMove() -> {
+            val nativeEvent = NativeEvent.window_move(s)
+            Event.WindowMove(
+                windowId = WindowMoveEvent.window_id(nativeEvent),
+                origin = LogicalPoint.fromNative(WindowMoveEvent.origin(nativeEvent))
+            )
+        }
+        kwm_macos_h.WindowFocusChange() -> {
+            val nativeEvent = NativeEvent.window_focus_change(s)
+            Event.WindowFocusChange(
+                windowId = WindowFocusChangeEvent.window_id(nativeEvent),
+                isKeyWindow = WindowFocusChangeEvent.is_key(nativeEvent),
+                isMainWindow = WindowFocusChangeEvent.is_main(nativeEvent)
+            )
+        }
+        kwm_macos_h.WindowCloseRequest() -> {
+            val nativeEvent = NativeEvent.window_close_request(s)
+            Event.WindowCloseRequest(
+                windowId = WindowCloseRequestEvent.window_id(nativeEvent)
             )
         }
         else -> {

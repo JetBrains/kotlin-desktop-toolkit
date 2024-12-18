@@ -29,6 +29,15 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *         struct {
  *             struct WindowResizeEvent window_resize;
  *         };
+ *         struct {
+ *             struct WindowMoveEvent window_move;
+ *         };
+ *         struct {
+ *             struct WindowFocusChangeEvent window_focus_change;
+ *         };
+ *         struct {
+ *             struct WindowCloseRequestEvent window_close_request;
+ *         };
  *     };
  * }
  * }
@@ -45,17 +54,26 @@ public class Event {
         MemoryLayout.unionLayout(
             MemoryLayout.structLayout(
                 MouseMovedEvent.layout().withName("mouse_moved")
-            ).withName("$anon$68:5"),
+            ).withName("$anon$86:5"),
             MemoryLayout.structLayout(
                 ScrollWheelEvent.layout().withName("scroll_wheel")
-            ).withName("$anon$71:5"),
+            ).withName("$anon$89:5"),
             MemoryLayout.structLayout(
                 WindowScreenChangeEvent.layout().withName("window_screen_change")
-            ).withName("$anon$74:5"),
+            ).withName("$anon$92:5"),
             MemoryLayout.structLayout(
                 WindowResizeEvent.layout().withName("window_resize")
-            ).withName("$anon$77:5")
-        ).withName("$anon$67:3")
+            ).withName("$anon$95:5"),
+            MemoryLayout.structLayout(
+                WindowMoveEvent.layout().withName("window_move")
+            ).withName("$anon$98:5"),
+            MemoryLayout.structLayout(
+                WindowFocusChangeEvent.layout().withName("window_focus_change")
+            ).withName("$anon$101:5"),
+            MemoryLayout.structLayout(
+                WindowCloseRequestEvent.layout().withName("window_close_request")
+            ).withName("$anon$104:5")
+        ).withName("$anon$85:3")
     ).withName("Event");
 
     /**
@@ -109,7 +127,7 @@ public class Event {
         struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout mouse_moved$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$67:3"), groupElement("$anon$68:5"), groupElement("mouse_moved"));
+    private static final GroupLayout mouse_moved$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$85:3"), groupElement("$anon$86:5"), groupElement("mouse_moved"));
 
     /**
      * Layout for field:
@@ -153,7 +171,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, mouse_moved$OFFSET, mouse_moved$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout scroll_wheel$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$67:3"), groupElement("$anon$71:5"), groupElement("scroll_wheel"));
+    private static final GroupLayout scroll_wheel$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$85:3"), groupElement("$anon$89:5"), groupElement("scroll_wheel"));
 
     /**
      * Layout for field:
@@ -197,7 +215,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, scroll_wheel$OFFSET, scroll_wheel$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_screen_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$67:3"), groupElement("$anon$74:5"), groupElement("window_screen_change"));
+    private static final GroupLayout window_screen_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$85:3"), groupElement("$anon$92:5"), groupElement("window_screen_change"));
 
     /**
      * Layout for field:
@@ -241,7 +259,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, window_screen_change$OFFSET, window_screen_change$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_resize$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$67:3"), groupElement("$anon$77:5"), groupElement("window_resize"));
+    private static final GroupLayout window_resize$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$85:3"), groupElement("$anon$95:5"), groupElement("window_resize"));
 
     /**
      * Layout for field:
@@ -283,6 +301,138 @@ public class Event {
      */
     public static void window_resize(MemorySegment struct, MemorySegment fieldValue) {
         MemorySegment.copy(fieldValue, 0L, struct, window_resize$OFFSET, window_resize$LAYOUT.byteSize());
+    }
+
+    private static final GroupLayout window_move$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$85:3"), groupElement("$anon$98:5"), groupElement("window_move"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * struct WindowMoveEvent window_move
+     * }
+     */
+    public static final GroupLayout window_move$layout() {
+        return window_move$LAYOUT;
+    }
+
+    private static final long window_move$OFFSET = 8;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * struct WindowMoveEvent window_move
+     * }
+     */
+    public static final long window_move$offset() {
+        return window_move$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * struct WindowMoveEvent window_move
+     * }
+     */
+    public static MemorySegment window_move(MemorySegment struct) {
+        return struct.asSlice(window_move$OFFSET, window_move$LAYOUT.byteSize());
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * struct WindowMoveEvent window_move
+     * }
+     */
+    public static void window_move(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, window_move$OFFSET, window_move$LAYOUT.byteSize());
+    }
+
+    private static final GroupLayout window_focus_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$85:3"), groupElement("$anon$101:5"), groupElement("window_focus_change"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * struct WindowFocusChangeEvent window_focus_change
+     * }
+     */
+    public static final GroupLayout window_focus_change$layout() {
+        return window_focus_change$LAYOUT;
+    }
+
+    private static final long window_focus_change$OFFSET = 8;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * struct WindowFocusChangeEvent window_focus_change
+     * }
+     */
+    public static final long window_focus_change$offset() {
+        return window_focus_change$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * struct WindowFocusChangeEvent window_focus_change
+     * }
+     */
+    public static MemorySegment window_focus_change(MemorySegment struct) {
+        return struct.asSlice(window_focus_change$OFFSET, window_focus_change$LAYOUT.byteSize());
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * struct WindowFocusChangeEvent window_focus_change
+     * }
+     */
+    public static void window_focus_change(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, window_focus_change$OFFSET, window_focus_change$LAYOUT.byteSize());
+    }
+
+    private static final GroupLayout window_close_request$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$85:3"), groupElement("$anon$104:5"), groupElement("window_close_request"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * struct WindowCloseRequestEvent window_close_request
+     * }
+     */
+    public static final GroupLayout window_close_request$layout() {
+        return window_close_request$LAYOUT;
+    }
+
+    private static final long window_close_request$OFFSET = 8;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * struct WindowCloseRequestEvent window_close_request
+     * }
+     */
+    public static final long window_close_request$offset() {
+        return window_close_request$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * struct WindowCloseRequestEvent window_close_request
+     * }
+     */
+    public static MemorySegment window_close_request(MemorySegment struct) {
+        return struct.asSlice(window_close_request$OFFSET, window_close_request$LAYOUT.byteSize());
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * struct WindowCloseRequestEvent window_close_request
+     * }
+     */
+    public static void window_close_request(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, window_close_request$OFFSET, window_close_request$LAYOUT.byteSize());
     }
 
     /**

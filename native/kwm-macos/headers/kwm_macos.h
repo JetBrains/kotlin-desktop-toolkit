@@ -55,11 +55,29 @@ typedef struct WindowResizeEvent {
   struct LogicalSize size;
 } WindowResizeEvent;
 
+typedef struct WindowMoveEvent {
+  WindowId window_id;
+  struct LogicalPoint origin;
+} WindowMoveEvent;
+
+typedef struct WindowFocusChangeEvent {
+  WindowId window_id;
+  bool is_key;
+  bool is_main;
+} WindowFocusChangeEvent;
+
+typedef struct WindowCloseRequestEvent {
+  WindowId window_id;
+} WindowCloseRequestEvent;
+
 typedef enum Event_Tag {
   MouseMoved,
   ScrollWheel,
   WindowScreenChange,
   WindowResize,
+  WindowMove,
+  WindowFocusChange,
+  WindowCloseRequest,
 } Event_Tag;
 
 typedef struct Event {
@@ -76,6 +94,15 @@ typedef struct Event {
     };
     struct {
       struct WindowResizeEvent window_resize;
+    };
+    struct {
+      struct WindowMoveEvent window_move;
+    };
+    struct {
+      struct WindowFocusChangeEvent window_focus_change;
+    };
+    struct {
+      struct WindowCloseRequestEvent window_close_request;
     };
   };
 } Event;
@@ -104,6 +131,12 @@ typedef void *MetalTextureRef;
 typedef void (*DisplayLinkCallback)(void);
 
 typedef const char *StrPtr;
+
+typedef struct WindowParams {
+  struct LogicalPoint origin;
+  struct LogicalSize size;
+  StrPtr title;
+} WindowParams;
 
 typedef uint32_t AppMenuKeyModifiers;
 #define AppMenuKeyModifiers_ModifierFlagCapsLock (uint32_t)(1 << 16)
@@ -202,9 +235,9 @@ bool display_link_is_running(struct DisplayLink *display_link);
 
 void display_link_drop(struct DisplayLink *display_link);
 
-struct Window *window_create(StrPtr title, float x, float y);
+struct Window *window_create(struct WindowParams params);
 
-void window_deref(struct Window *window);
+void window_drop(struct Window *window);
 
 WindowId window_get_window_id(const struct Window *window);
 

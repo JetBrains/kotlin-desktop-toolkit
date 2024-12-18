@@ -3,6 +3,7 @@ package org.jetbrains.kwm.macos
 import org.jetbrains.kwm.LogicalPoint
 import org.jetbrains.kwm.LogicalSize
 import org.jetbrains.kwm.PhysicalSize
+import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import org.jetbrains.kwm.macos.generated.LogicalSize as NativeLogicalSize
 import org.jetbrains.kwm.macos.generated.LogicalPoint as NativeLogicalPoint
@@ -11,17 +12,38 @@ import org.jetbrains.kwm.macos.generated.PhysicalSize as NativePhysicalSize
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment): LogicalSize {
     return LogicalSize(width = NativeLogicalSize.width(s),
-                height = NativeLogicalSize.height(s))
+                       height = NativeLogicalSize.height(s))
+}
+
+internal fun LogicalSize.toNative(arena: Arena): MemorySegment {
+    val result = NativeLogicalSize.allocate(arena)
+    NativeLogicalSize.width(result, width)
+    NativeLogicalSize.height(result, height)
+    return result
 }
 
 internal fun LogicalPoint.Companion.fromNative(s: MemorySegment): LogicalPoint {
     return LogicalPoint(x = NativeLogicalPoint.x(s),
-                 y = NativeLogicalPoint.y(s))
+                        y = NativeLogicalPoint.y(s))
+}
+
+internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
+    val result = NativeLogicalPoint.allocate(arena)
+    NativeLogicalPoint.x(result, x)
+    NativeLogicalPoint.y(result, y)
+    return result
 }
 
 internal fun PhysicalSize.Companion.fromNative(s: MemorySegment): PhysicalSize {
     return PhysicalSize(width = NativePhysicalSize.width(s),
-                height = NativePhysicalSize.height(s))
+                        height = NativePhysicalSize.height(s))
+}
+
+internal fun PhysicalSize.toNative(arena: Arena): MemorySegment {
+    val result = NativePhysicalSize.allocate(arena)
+    NativePhysicalSize.width(result, width)
+    NativePhysicalSize.height(result, height)
+    return result
 }
 
 //internal fun PhysicalPoint.Companion.fromNative(s: MemorySegment): PhysicalPoint {

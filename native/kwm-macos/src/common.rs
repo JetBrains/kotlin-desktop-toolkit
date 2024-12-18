@@ -13,28 +13,28 @@ pub type PhysicalPixels = f64;
 pub type LogicalPixels = f64;
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct PhysicalSize {
     pub width: PhysicalPixels,
     pub height: PhysicalPixels
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct PhysicalPoint {
     pub x: PhysicalPixels,
     pub y: PhysicalPixels
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct LogicalSize {
     pub width: LogicalPixels,
     pub height: LogicalPixels
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct LogicalPoint {
     pub x: LogicalPixels,
     pub y: LogicalPixels

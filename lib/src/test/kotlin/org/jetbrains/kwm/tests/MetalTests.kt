@@ -1,5 +1,6 @@
 package org.jetbrains.kwm.tests
 
+import org.jetbrains.kwm.LogicalPoint
 import org.jetbrains.kwm.macos.*
 import org.junit.jupiter.api.Test
 
@@ -15,7 +16,8 @@ class MetalTests {
             MetalView.create(device)
         }
         val window = GrandCentralDispatch.dispatchOnMainSync {
-            val window = Window.create("Hello", 100f, 100f)
+            val window = Window.create(origin = LogicalPoint(100.0, 100.0),
+                                       title = "Hello")
             window.attachView(view)
             window
         }

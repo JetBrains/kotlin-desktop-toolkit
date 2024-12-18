@@ -39,11 +39,35 @@ pub struct WindowResizeEvent {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct WindowMoveEvent {
+    window_id: WindowId,
+    origin: LogicalPoint
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowFocusChangeEvent {
+    window_id: WindowId,
+    is_key: bool,
+    is_main: bool
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowCloseRequestEvent {
+    window_id: WindowId
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub enum Event {
     MouseMoved(MouseMovedEvent),
     ScrollWheel(ScrollWheelEvent),
     WindowScreenChange(WindowScreenChangeEvent),
-    WindowResize(WindowResizeEvent)
+    WindowResize(WindowResizeEvent),
+    WindowMove(WindowMoveEvent),
+    WindowFocusChange(WindowFocusChangeEvent),
+    WindowCloseRequest(WindowCloseRequestEvent)
 }
 
 pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
@@ -86,7 +110,37 @@ pub (crate) fn handle_window_resize(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowResize(WindowResizeEvent {
             window_id: window.window_id(),
-            size: window.logical_size()
+            size: window.size()
+        });
+        (state.event_handler)(&event)
+    });
+}
+
+pub (crate) fn handle_window_move(window: &NSWindow) {
+    let _handled = AppState::with(|state| {
+        let event = Event::WindowMove(WindowMoveEvent {
+            window_id: window.window_id(),
+            origin: window.origin()
+        });
+        (state.event_handler)(&event)
+    });
+}
+
+pub (crate) fn handle_window_close_request(window: &NSWindow) {
+    let _handled = AppState::with(|state| {
+        let event = Event::WindowCloseRequest(WindowCloseRequestEvent {
+            window_id: window.window_id()
+        });
+        (state.event_handler)(&event)
+    });
+}
+
+pub (crate) fn handle_window_focus_change(window: &NSWindow) {
+    let _handled = AppState::with(|state| {
+        let event = Event::WindowFocusChange(WindowFocusChangeEvent {
+            window_id: window.window_id(),
+            is_key: window.isKeyWindow(),
+            is_main: unsafe { window.isMainWindow() }
         });
         (state.event_handler)(&event)
     });

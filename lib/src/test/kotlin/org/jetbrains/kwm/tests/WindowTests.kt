@@ -1,5 +1,6 @@
 package org.jetbrains.kwm.tests
 
+import org.jetbrains.kwm.LogicalPoint
 import org.jetbrains.kwm.macos.GrandCentralDispatch
 import org.jetbrains.kwm.macos.Window
 import org.junit.jupiter.api.Test
@@ -8,10 +9,10 @@ class WindowTests {
     @Test
     fun smokeTest() {
         val window1 = GrandCentralDispatch.dispatchOnMainSync {
-            Window.create("Hello1", 100f, 200f)
+            Window.create(origin = LogicalPoint(100.0, 200.0), title = "Hello1")
         }
         val window2 = GrandCentralDispatch.dispatchOnMainSync {
-            Window.create("Hello2", 200f, 300f)
+            Window.create(origin = LogicalPoint(200.0, 300.0), title = "Hello2")
         }
         GrandCentralDispatch.dispatchOnMainSync {
             window1.close()

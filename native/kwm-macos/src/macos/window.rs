@@ -11,9 +11,9 @@ use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSEvent, NSNo
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNumber, NSObject, NSObjectProtocol, NSString};
 
 use crate::{
-    common::{LogicalSize, StrPtr},
+    common::{LogicalPoint, LogicalSize, StrPtr},
     define_objc_ref,
-    macos::{application_api::AppState, events::{handle_mouse_moved, handle_window_screen_change, handle_window_resize}},
+    macos::{application_api::AppState, events::{handle_mouse_moved, handle_window_close_request, handle_window_focus_change, handle_window_move, handle_window_resize, handle_window_screen_change}},
 };
 
 use super::{events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}};
@@ -32,17 +32,30 @@ pub struct Window {
 
 pub type WindowId = i64;
 
+#[repr(C)]
+struct WindowParams {
+    origin: LogicalPoint,
+    size: LogicalSize,
+    title: StrPtr
+}
+
+impl WindowParams {
+    fn title(&self) -> &str {
+        unsafe { CStr::from_ptr(self.title) }.to_str().unwrap()
+    }
+}
+
 #[no_mangle]
-pub extern "C" fn window_create(title: StrPtr, x: f32, y: f32) -> Box<Window> {
+pub extern "C" fn window_create(params: WindowParams) -> Box<Window> {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let title = unsafe { CStr::from_ptr(title) }.to_str().unwrap();
-    let window = create_window(mtm, title, x, y);
+    let window = create_window(mtm, &params);
     return Box::new(window)
 }
 
 #[no_mangle]
-pub extern "C" fn window_deref(window: Box<Window>) {
+pub extern "C" fn window_drop(window: Box<Window>) {
     let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    window.ns_window.close();
     std::mem::drop(window);
 }
 
@@ -73,7 +86,8 @@ pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
 
 pub(crate) trait NSWindowExts {
     fn window_id(&self) -> WindowId;
-    fn logical_size(&self) -> LogicalSize;
+    fn size(&self) -> LogicalSize;
+    fn origin(&self) -> LogicalPoint;
 }
 
 impl NSWindowExts for NSWindow {
@@ -83,24 +97,35 @@ impl NSWindowExts for NSWindow {
         }
     }
 
-    fn logical_size(&self) -> LogicalSize {
+    fn size(&self) -> LogicalSize {
         self.frame().size.into()
+    }
+
+    fn origin(&self) -> LogicalPoint {
+        self.frame().origin.into()
     }
 }
 
-fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32) -> Window {
-    let rect = CGRect::new(CGPoint::new(x.into(), y.into()), CGSize::new(320.0, 240.0));
-    let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::Miniaturizable | NSWindowStyleMask::Resizable;
+fn create_window(mtm: MainThreadMarker, params: &WindowParams) -> Window {
+    let rect = CGRect::new(params.origin.into(), params.size.into());
+    let style = NSWindowStyleMask::Titled
+                | NSWindowStyleMask::Closable
+                | NSWindowStyleMask::Miniaturizable
+                | NSWindowStyleMask::Resizable;
     let ns_window = unsafe {
-        NSWindow::initWithContentRect_styleMask_backing_defer(
+        NSWindow::initWithContentRect_styleMask_backing_defer_screen(
             mtm.alloc(),
             rect,
             style,
+            // the only non depricated NSBackingStoreType
             NSBackingStoreType::NSBackingStoreBuffered,
+            // When true, the window server defers creating the window device until the window is moved onscreen.
             false,
+            // Screen
+            None
         )
     };
-    ns_window.setTitle(&NSString::from_str(title));
+    ns_window.setTitle(&NSString::from_str(params.title()));
     unsafe {
         ns_window.setReleasedWhenClosed(false);
     }
@@ -109,12 +134,15 @@ fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32) -> Window {
     unsafe {
         ns_window.setRestorable(false);
     }
+
     let delegate = WindowDelegate::new(mtm, ns_window.clone());
     ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
+
     let root_view = RootView::new(mtm);
     ns_window.setAcceptsMouseMovedEvents(true);
     ns_window.setContentView(Some(&*root_view));
     assert!(ns_window.makeFirstResponder(Some(&*root_view)) == true); // todo remove assert
+
     return Window {
         ns_window,
         delegate,
@@ -152,6 +180,43 @@ declare_class!(
         #[allow(non_snake_case)]
         unsafe fn windowDidChangeScreen(&self, _notification: &NSNotification) {
             handle_window_screen_change(&*self.ivars().ns_window);
+        }
+
+        #[method(windowDidMove:)]
+        #[allow(non_snake_case)]
+        unsafe fn windowDidMove(&self, _notification: &NSNotification) {
+            handle_window_move(&*self.ivars().ns_window);
+        }
+
+        #[method(windowDidBecomeKey:)]
+        #[allow(non_snake_case)]
+        unsafe fn windowDidBecomeKey(&self, _notification: &NSNotification) {
+            handle_window_focus_change(&*self.ivars().ns_window);
+        }
+
+        #[method(windowDidResignKey:)]
+        #[allow(non_snake_case)]
+        unsafe fn windowDidResignKey(&self, _notification: &NSNotification) {
+            handle_window_focus_change(&*self.ivars().ns_window);
+        }
+
+        #[method(windowDidBecomeMain:)]
+        #[allow(non_snake_case)]
+        unsafe fn windowDidBecomeMain(&self, _notification: &NSNotification) {
+            handle_window_focus_change(&*self.ivars().ns_window);
+        }
+
+        #[method(windowDidResignMain:)]
+        #[allow(non_snake_case)]
+        unsafe fn windowDidResignMain(&self, _notification: &NSNotification) {
+            handle_window_focus_change(&*self.ivars().ns_window);
+        }
+
+        #[method(windowShouldClose:)]
+        #[allow(non_snake_case)]
+        unsafe fn windowShouldClose(&self, _notification: &NSNotification) -> bool {
+            handle_window_close_request(&*self.ivars().ns_window);
+            false
         }
     }
 );

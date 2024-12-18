@@ -123,6 +123,33 @@ public class kwm_macos_h {
     public static int WindowResize() {
         return WindowResize;
     }
+    private static final int WindowMove = (int)4L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.WindowMove = 4
+     * }
+     */
+    public static int WindowMove() {
+        return WindowMove;
+    }
+    private static final int WindowFocusChange = (int)5L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.WindowFocusChange = 5
+     * }
+     */
+    public static int WindowFocusChange() {
+        return WindowFocusChange;
+    }
+    private static final int WindowCloseRequest = (int)6L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.WindowCloseRequest = 6
+     * }
+     */
+    public static int WindowCloseRequest() {
+        return WindowCloseRequest;
+    }
     /**
      * {@snippet lang=c :
      * typedef void *MetalDeviceRef
@@ -1449,9 +1476,7 @@ public class kwm_macos_h {
     private static class window_create {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             kwm_macos_h.C_POINTER,
-            kwm_macos_h.C_POINTER,
-            kwm_macos_h.C_FLOAT,
-            kwm_macos_h.C_FLOAT
+            WindowParams.layout()
         );
 
         public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_create");
@@ -1462,7 +1487,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * struct Window *window_create(StrPtr title, float x, float y)
+     * struct Window *window_create(struct WindowParams params)
      * }
      */
     public static FunctionDescriptor window_create$descriptor() {
@@ -1472,7 +1497,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * struct Window *window_create(StrPtr title, float x, float y)
+     * struct Window *window_create(struct WindowParams params)
      * }
      */
     public static MethodHandle window_create$handle() {
@@ -1482,7 +1507,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * struct Window *window_create(StrPtr title, float x, float y)
+     * struct Window *window_create(struct WindowParams params)
      * }
      */
     public static MemorySegment window_create$address() {
@@ -1491,27 +1516,27 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * struct Window *window_create(StrPtr title, float x, float y)
+     * struct Window *window_create(struct WindowParams params)
      * }
      */
-    public static MemorySegment window_create(MemorySegment title, float x, float y) {
+    public static MemorySegment window_create(MemorySegment params) {
         var mh$ = window_create.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("window_create", title, x, y);
+                traceDowncall("window_create", params);
             }
-            return (MemorySegment)mh$.invokeExact(title, x, y);
+            return (MemorySegment)mh$.invokeExact(params);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
     }
 
-    private static class window_deref {
+    private static class window_drop {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             kwm_macos_h.C_POINTER
         );
 
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_deref");
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_drop");
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1519,43 +1544,43 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void window_deref(struct Window *window)
+     * void window_drop(struct Window *window)
      * }
      */
-    public static FunctionDescriptor window_deref$descriptor() {
-        return window_deref.DESC;
+    public static FunctionDescriptor window_drop$descriptor() {
+        return window_drop.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void window_deref(struct Window *window)
+     * void window_drop(struct Window *window)
      * }
      */
-    public static MethodHandle window_deref$handle() {
-        return window_deref.HANDLE;
+    public static MethodHandle window_drop$handle() {
+        return window_drop.HANDLE;
     }
 
     /**
      * Address for:
      * {@snippet lang=c :
-     * void window_deref(struct Window *window)
+     * void window_drop(struct Window *window)
      * }
      */
-    public static MemorySegment window_deref$address() {
-        return window_deref.ADDR;
+    public static MemorySegment window_drop$address() {
+        return window_drop.ADDR;
     }
 
     /**
      * {@snippet lang=c :
-     * void window_deref(struct Window *window)
+     * void window_drop(struct Window *window)
      * }
      */
-    public static void window_deref(MemorySegment window) {
-        var mh$ = window_deref.HANDLE;
+    public static void window_drop(MemorySegment window) {
+        var mh$ = window_drop.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("window_deref", window);
+                traceDowncall("window_drop", window);
             }
             mh$.invokeExact(window);
         } catch (Throwable ex$) {

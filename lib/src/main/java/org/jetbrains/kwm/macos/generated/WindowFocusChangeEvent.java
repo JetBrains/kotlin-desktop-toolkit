@@ -14,29 +14,25 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct AppMenuItem {
- *     AppMenuItem_Tag tag;
- *     union {
- *         ActionItem_Body action_item;
- *         SubMenuItem_Body sub_menu_item;
- *     };
+ * struct WindowFocusChangeEvent {
+ *     WindowId window_id;
+ *     bool is_key;
+ *     bool is_main;
  * }
  * }
  */
-public class AppMenuItem {
+public class WindowFocusChangeEvent {
 
-    AppMenuItem() {
+    WindowFocusChangeEvent() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
-        kwm_macos_h.C_INT.withName("tag"),
-        MemoryLayout.paddingLayout(4),
-        MemoryLayout.unionLayout(
-            ActionItem_Body.layout().withName("action_item"),
-            SubMenuItem_Body.layout().withName("sub_menu_item")
-        ).withName("$anon$182:3")
-    ).withName("AppMenuItem");
+        kwm_macos_h.C_LONG_LONG.withName("window_id"),
+        kwm_macos_h.C_BOOL.withName("is_key"),
+        kwm_macos_h.C_BOOL.withName("is_main"),
+        MemoryLayout.paddingLayout(6)
+    ).withName("WindowFocusChangeEvent");
 
     /**
      * The layout of this struct
@@ -45,136 +41,136 @@ public class AppMenuItem {
         return $LAYOUT;
     }
 
-    private static final OfInt tag$LAYOUT = (OfInt)$LAYOUT.select(groupElement("tag"));
+    private static final OfLong window_id$LAYOUT = (OfLong)$LAYOUT.select(groupElement("window_id"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowId window_id
      * }
      */
-    public static final OfInt tag$layout() {
-        return tag$LAYOUT;
+    public static final OfLong window_id$layout() {
+        return window_id$LAYOUT;
     }
 
-    private static final long tag$OFFSET = 0;
+    private static final long window_id$OFFSET = 0;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowId window_id
      * }
      */
-    public static final long tag$offset() {
-        return tag$OFFSET;
+    public static final long window_id$offset() {
+        return window_id$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowId window_id
      * }
      */
-    public static int tag(MemorySegment struct) {
-        return struct.get(tag$LAYOUT, tag$OFFSET);
+    public static long window_id(MemorySegment struct) {
+        return struct.get(window_id$LAYOUT, window_id$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowId window_id
      * }
      */
-    public static void tag(MemorySegment struct, int fieldValue) {
-        struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
+    public static void window_id(MemorySegment struct, long fieldValue) {
+        struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout action_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$182:3"), groupElement("action_item"));
+    private static final OfBoolean is_key$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("is_key"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * bool is_key
      * }
      */
-    public static final GroupLayout action_item$layout() {
-        return action_item$LAYOUT;
+    public static final OfBoolean is_key$layout() {
+        return is_key$LAYOUT;
     }
 
-    private static final long action_item$OFFSET = 8;
+    private static final long is_key$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * bool is_key
      * }
      */
-    public static final long action_item$offset() {
-        return action_item$OFFSET;
+    public static final long is_key$offset() {
+        return is_key$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * bool is_key
      * }
      */
-    public static MemorySegment action_item(MemorySegment struct) {
-        return struct.asSlice(action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static boolean is_key(MemorySegment struct) {
+        return struct.get(is_key$LAYOUT, is_key$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * bool is_key
      * }
      */
-    public static void action_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static void is_key(MemorySegment struct, boolean fieldValue) {
+        struct.set(is_key$LAYOUT, is_key$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout sub_menu_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$182:3"), groupElement("sub_menu_item"));
+    private static final OfBoolean is_main$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("is_main"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * bool is_main
      * }
      */
-    public static final GroupLayout sub_menu_item$layout() {
-        return sub_menu_item$LAYOUT;
+    public static final OfBoolean is_main$layout() {
+        return is_main$LAYOUT;
     }
 
-    private static final long sub_menu_item$OFFSET = 8;
+    private static final long is_main$OFFSET = 9;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * bool is_main
      * }
      */
-    public static final long sub_menu_item$offset() {
-        return sub_menu_item$OFFSET;
+    public static final long is_main$offset() {
+        return is_main$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * bool is_main
      * }
      */
-    public static MemorySegment sub_menu_item(MemorySegment struct) {
-        return struct.asSlice(sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static boolean is_main(MemorySegment struct) {
+        return struct.get(is_main$LAYOUT, is_main$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * bool is_main
      * }
      */
-    public static void sub_menu_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static void is_main(MemorySegment struct, boolean fieldValue) {
+        struct.set(is_main$LAYOUT, is_main$OFFSET, fieldValue);
     }
 
     /**
