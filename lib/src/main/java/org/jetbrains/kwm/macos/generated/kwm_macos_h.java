@@ -75,6 +75,18 @@ public class kwm_macos_h {
      * }
      */
     public static final OfLong WindowId = kwm_macos_h.C_LONG_LONG;
+    /**
+     * {@snippet lang=c :
+     * typedef double LogicalPixels
+     * }
+     */
+    public static final OfDouble LogicalPixels = kwm_macos_h.C_DOUBLE;
+    /**
+     * {@snippet lang=c :
+     * typedef uint32_t ScreenId
+     * }
+     */
+    public static final OfInt ScreenId = kwm_macos_h.C_INT;
     private static final int MouseMoved = (int)0L;
     /**
      * {@snippet lang=c :
@@ -93,6 +105,24 @@ public class kwm_macos_h {
     public static int ScrollWheel() {
         return ScrollWheel;
     }
+    private static final int WindowScreenChange = (int)2L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.WindowScreenChange = 2
+     * }
+     */
+    public static int WindowScreenChange() {
+        return WindowScreenChange;
+    }
+    private static final int WindowResize = (int)3L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.WindowResize = 3
+     * }
+     */
+    public static int WindowResize() {
+        return WindowResize;
+    }
     /**
      * {@snippet lang=c :
      * typedef void *MetalDeviceRef
@@ -107,16 +137,16 @@ public class kwm_macos_h {
     public static final AddressLayout MetalCommandQueueRef = kwm_macos_h.C_POINTER;
     /**
      * {@snippet lang=c :
+     * typedef double PhysicalPixels
+     * }
+     */
+    public static final OfDouble PhysicalPixels = kwm_macos_h.C_DOUBLE;
+    /**
+     * {@snippet lang=c :
      * typedef void *MetalTextureRef
      * }
      */
     public static final AddressLayout MetalTextureRef = kwm_macos_h.C_POINTER;
-    /**
-     * {@snippet lang=c :
-     * typedef uint32_t ScreenId
-     * }
-     */
-    public static final OfInt ScreenId = kwm_macos_h.C_INT;
     /**
      * {@snippet lang=c :
      * typedef void *WindowRef
@@ -1019,7 +1049,7 @@ public class kwm_macos_h {
 
     private static class metal_view_get_texture_size {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
-            Size.layout(),
+            PhysicalSize.layout(),
             kwm_macos_h.C_POINTER
         );
 
@@ -1031,7 +1061,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * struct Size metal_view_get_texture_size(const struct MetalView *view)
+     * struct PhysicalSize metal_view_get_texture_size(const struct MetalView *view)
      * }
      */
     public static FunctionDescriptor metal_view_get_texture_size$descriptor() {
@@ -1041,7 +1071,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * struct Size metal_view_get_texture_size(const struct MetalView *view)
+     * struct PhysicalSize metal_view_get_texture_size(const struct MetalView *view)
      * }
      */
     public static MethodHandle metal_view_get_texture_size$handle() {
@@ -1051,7 +1081,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * struct Size metal_view_get_texture_size(const struct MetalView *view)
+     * struct PhysicalSize metal_view_get_texture_size(const struct MetalView *view)
      * }
      */
     public static MemorySegment metal_view_get_texture_size$address() {
@@ -1060,7 +1090,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * struct Size metal_view_get_texture_size(const struct MetalView *view)
+     * struct PhysicalSize metal_view_get_texture_size(const struct MetalView *view)
      * }
      */
     public static MemorySegment metal_view_get_texture_size(SegmentAllocator allocator, MemorySegment view) {
@@ -1249,13 +1279,13 @@ public class kwm_macos_h {
         }
     }
 
-    private static class display_link_set_paused {
+    private static class display_link_set_running {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             kwm_macos_h.C_POINTER,
             kwm_macos_h.C_BOOL
         );
 
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("display_link_set_paused");
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("display_link_set_running");
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1263,45 +1293,103 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void display_link_set_paused(struct DisplayLink *display_link, bool value)
+     * void display_link_set_running(struct DisplayLink *display_link, bool value)
      * }
      */
-    public static FunctionDescriptor display_link_set_paused$descriptor() {
-        return display_link_set_paused.DESC;
+    public static FunctionDescriptor display_link_set_running$descriptor() {
+        return display_link_set_running.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void display_link_set_paused(struct DisplayLink *display_link, bool value)
+     * void display_link_set_running(struct DisplayLink *display_link, bool value)
      * }
      */
-    public static MethodHandle display_link_set_paused$handle() {
-        return display_link_set_paused.HANDLE;
+    public static MethodHandle display_link_set_running$handle() {
+        return display_link_set_running.HANDLE;
     }
 
     /**
      * Address for:
      * {@snippet lang=c :
-     * void display_link_set_paused(struct DisplayLink *display_link, bool value)
+     * void display_link_set_running(struct DisplayLink *display_link, bool value)
      * }
      */
-    public static MemorySegment display_link_set_paused$address() {
-        return display_link_set_paused.ADDR;
+    public static MemorySegment display_link_set_running$address() {
+        return display_link_set_running.ADDR;
     }
 
     /**
      * {@snippet lang=c :
-     * void display_link_set_paused(struct DisplayLink *display_link, bool value)
+     * void display_link_set_running(struct DisplayLink *display_link, bool value)
      * }
      */
-    public static void display_link_set_paused(MemorySegment display_link, boolean value) {
-        var mh$ = display_link_set_paused.HANDLE;
+    public static void display_link_set_running(MemorySegment display_link, boolean value) {
+        var mh$ = display_link_set_running.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("display_link_set_paused", display_link, value);
+                traceDowncall("display_link_set_running", display_link, value);
             }
             mh$.invokeExact(display_link, value);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class display_link_is_running {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            kwm_macos_h.C_BOOL,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("display_link_is_running");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * bool display_link_is_running(struct DisplayLink *display_link)
+     * }
+     */
+    public static FunctionDescriptor display_link_is_running$descriptor() {
+        return display_link_is_running.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * bool display_link_is_running(struct DisplayLink *display_link)
+     * }
+     */
+    public static MethodHandle display_link_is_running$handle() {
+        return display_link_is_running.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * bool display_link_is_running(struct DisplayLink *display_link)
+     * }
+     */
+    public static MemorySegment display_link_is_running$address() {
+        return display_link_is_running.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * bool display_link_is_running(struct DisplayLink *display_link)
+     * }
+     */
+    public static boolean display_link_is_running(MemorySegment display_link) {
+        var mh$ = display_link_is_running.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("display_link_is_running", display_link);
+            }
+            return (boolean)mh$.invokeExact(display_link);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -1369,8 +1457,7 @@ public class kwm_macos_h {
             kwm_macos_h.C_POINTER,
             kwm_macos_h.C_POINTER,
             kwm_macos_h.C_FLOAT,
-            kwm_macos_h.C_FLOAT,
-            kwm_macos_h.C_POINTER
+            kwm_macos_h.C_FLOAT
         );
 
         public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_create");
@@ -1381,7 +1468,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize)
+     * WindowRef window_create(StrPtr title, float x, float y)
      * }
      */
     public static FunctionDescriptor window_create$descriptor() {
@@ -1391,7 +1478,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize)
+     * WindowRef window_create(StrPtr title, float x, float y)
      * }
      */
     public static MethodHandle window_create$handle() {
@@ -1401,7 +1488,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize)
+     * WindowRef window_create(StrPtr title, float x, float y)
      * }
      */
     public static MemorySegment window_create$address() {
@@ -1410,16 +1497,16 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize)
+     * WindowRef window_create(StrPtr title, float x, float y)
      * }
      */
-    public static MemorySegment window_create(MemorySegment title, float x, float y, MemorySegment on_resize) {
+    public static MemorySegment window_create(MemorySegment title, float x, float y) {
         var mh$ = window_create.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("window_create", title, x, y, on_resize);
+                traceDowncall("window_create", title, x, y);
             }
-            return (MemorySegment)mh$.invokeExact(title, x, y, on_resize);
+            return (MemorySegment)mh$.invokeExact(title, x, y);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -1593,6 +1680,64 @@ public class kwm_macos_h {
                 traceDowncall("window_get_screen_id", window);
             }
             return (int)mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_scale_factor {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            kwm_macos_h.C_DOUBLE,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_scale_factor");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * double window_scale_factor(WindowRef window)
+     * }
+     */
+    public static FunctionDescriptor window_scale_factor$descriptor() {
+        return window_scale_factor.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * double window_scale_factor(WindowRef window)
+     * }
+     */
+    public static MethodHandle window_scale_factor$handle() {
+        return window_scale_factor.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * double window_scale_factor(WindowRef window)
+     * }
+     */
+    public static MemorySegment window_scale_factor$address() {
+        return window_scale_factor.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * double window_scale_factor(WindowRef window)
+     * }
+     */
+    public static double window_scale_factor(MemorySegment window) {
+        var mh$ = window_scale_factor.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_scale_factor", window);
+            }
+            return (double)mh$.invokeExact(window);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

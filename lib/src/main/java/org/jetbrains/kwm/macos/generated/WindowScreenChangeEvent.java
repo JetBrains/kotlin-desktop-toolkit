@@ -14,24 +14,23 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct ScrollWheelEvent {
+ * struct WindowScreenChangeEvent {
  *     WindowId window_id;
- *     LogicalPixels dx;
- *     LogicalPixels dy;
+ *     ScreenId new_screen_id;
  * }
  * }
  */
-public class ScrollWheelEvent {
+public class WindowScreenChangeEvent {
 
-    ScrollWheelEvent() {
+    WindowScreenChangeEvent() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_LONG_LONG.withName("window_id"),
-        kwm_macos_h.C_DOUBLE.withName("dx"),
-        kwm_macos_h.C_DOUBLE.withName("dy")
-    ).withName("ScrollWheelEvent");
+        kwm_macos_h.C_INT.withName("new_screen_id"),
+        MemoryLayout.paddingLayout(4)
+    ).withName("WindowScreenChangeEvent");
 
     /**
      * The layout of this struct
@@ -84,92 +83,48 @@ public class ScrollWheelEvent {
         struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
-    private static final OfDouble dx$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("dx"));
+    private static final OfInt new_screen_id$LAYOUT = (OfInt)$LAYOUT.select(groupElement("new_screen_id"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * ScreenId new_screen_id
      * }
      */
-    public static final OfDouble dx$layout() {
-        return dx$LAYOUT;
+    public static final OfInt new_screen_id$layout() {
+        return new_screen_id$LAYOUT;
     }
 
-    private static final long dx$OFFSET = 8;
+    private static final long new_screen_id$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * ScreenId new_screen_id
      * }
      */
-    public static final long dx$offset() {
-        return dx$OFFSET;
+    public static final long new_screen_id$offset() {
+        return new_screen_id$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * ScreenId new_screen_id
      * }
      */
-    public static double dx(MemorySegment struct) {
-        return struct.get(dx$LAYOUT, dx$OFFSET);
+    public static int new_screen_id(MemorySegment struct) {
+        return struct.get(new_screen_id$LAYOUT, new_screen_id$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * ScreenId new_screen_id
      * }
      */
-    public static void dx(MemorySegment struct, double fieldValue) {
-        struct.set(dx$LAYOUT, dx$OFFSET, fieldValue);
-    }
-
-    private static final OfDouble dy$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("dy"));
-
-    /**
-     * Layout for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static final OfDouble dy$layout() {
-        return dy$LAYOUT;
-    }
-
-    private static final long dy$OFFSET = 16;
-
-    /**
-     * Offset for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static final long dy$offset() {
-        return dy$OFFSET;
-    }
-
-    /**
-     * Getter for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static double dy(MemorySegment struct) {
-        return struct.get(dy$LAYOUT, dy$OFFSET);
-    }
-
-    /**
-     * Setter for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static void dy(MemorySegment struct, double fieldValue) {
-        struct.set(dy$LAYOUT, dy$OFFSET, fieldValue);
+    public static void new_screen_id(MemorySegment struct, int fieldValue) {
+        struct.set(new_screen_id$LAYOUT, new_screen_id$OFFSET, fieldValue);
     }
 
     /**

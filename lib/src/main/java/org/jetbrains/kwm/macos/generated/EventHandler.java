@@ -23,6 +23,12 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *         struct {
  *             struct ScrollWheelEvent scroll_wheel;
  *         };
+ *         struct {
+ *             struct WindowScreenChangeEvent window_screen_change;
+ *         };
+ *         struct {
+ *             struct WindowResizeEvent window_resize;
+ *         };
  *     };
  * } *)
  * }

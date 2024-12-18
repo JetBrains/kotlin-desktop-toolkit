@@ -8,8 +8,8 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
 enum class EventHandlerResult {
-    Skipped,
-    Handled
+    Continue,
+    Stop
 }
 
 typealias EventHandler = (Event) -> EventHandlerResult
@@ -33,7 +33,7 @@ object Application {
         }
     }
 
-    fun runEventLoop(eventHandler: EventHandler = { EventHandlerResult.Skipped }) {
+    fun runEventLoop(eventHandler: EventHandler = { EventHandlerResult.Continue }) {
         this.eventHandler = eventHandler
         kwm_macos_h.application_run_event_loop()
     }
@@ -64,8 +64,8 @@ object Application {
         val event = Event.fromNative(nativeEvent)
         return eventHandler?.let { eventHandler ->
             when (eventHandler(event)) {
-                EventHandlerResult.Skipped -> false
-                EventHandlerResult.Handled -> true
+                EventHandlerResult.Continue -> false
+                EventHandlerResult.Stop -> true
             }
         } ?: run {
             // todo remove with proper logging

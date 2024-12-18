@@ -14,24 +14,22 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct ScrollWheelEvent {
+ * struct WindowResizeEvent {
  *     WindowId window_id;
- *     LogicalPixels dx;
- *     LogicalPixels dy;
+ *     struct LogicalSize size;
  * }
  * }
  */
-public class ScrollWheelEvent {
+public class WindowResizeEvent {
 
-    ScrollWheelEvent() {
+    WindowResizeEvent() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_LONG_LONG.withName("window_id"),
-        kwm_macos_h.C_DOUBLE.withName("dx"),
-        kwm_macos_h.C_DOUBLE.withName("dy")
-    ).withName("ScrollWheelEvent");
+        LogicalSize.layout().withName("size")
+    ).withName("WindowResizeEvent");
 
     /**
      * The layout of this struct
@@ -84,92 +82,48 @@ public class ScrollWheelEvent {
         struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
-    private static final OfDouble dx$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("dx"));
+    private static final GroupLayout size$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("size"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * struct LogicalSize size
      * }
      */
-    public static final OfDouble dx$layout() {
-        return dx$LAYOUT;
+    public static final GroupLayout size$layout() {
+        return size$LAYOUT;
     }
 
-    private static final long dx$OFFSET = 8;
+    private static final long size$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * struct LogicalSize size
      * }
      */
-    public static final long dx$offset() {
-        return dx$OFFSET;
+    public static final long size$offset() {
+        return size$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * struct LogicalSize size
      * }
      */
-    public static double dx(MemorySegment struct) {
-        return struct.get(dx$LAYOUT, dx$OFFSET);
+    public static MemorySegment size(MemorySegment struct) {
+        return struct.asSlice(size$OFFSET, size$LAYOUT.byteSize());
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * struct LogicalSize size
      * }
      */
-    public static void dx(MemorySegment struct, double fieldValue) {
-        struct.set(dx$LAYOUT, dx$OFFSET, fieldValue);
-    }
-
-    private static final OfDouble dy$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("dy"));
-
-    /**
-     * Layout for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static final OfDouble dy$layout() {
-        return dy$LAYOUT;
-    }
-
-    private static final long dy$OFFSET = 16;
-
-    /**
-     * Offset for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static final long dy$offset() {
-        return dy$OFFSET;
-    }
-
-    /**
-     * Getter for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static double dy(MemorySegment struct) {
-        return struct.get(dy$LAYOUT, dy$OFFSET);
-    }
-
-    /**
-     * Setter for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static void dy(MemorySegment struct, double fieldValue) {
-        struct.set(dy$LAYOUT, dy$OFFSET, fieldValue);
+    public static void size(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, size$OFFSET, size$LAYOUT.byteSize());
     }
 
     /**

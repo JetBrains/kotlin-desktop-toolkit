@@ -16,8 +16,12 @@ class DisplayLink internal constructor(ptr: MemorySegment, val arena: Arena): Ma
         }
     }
 
-    fun setPaused(value: Boolean) {
-        kwm_macos_h.display_link_set_paused(pointer, value);
+    fun setRunning(value: Boolean) {
+        kwm_macos_h.display_link_set_running(pointer, value);
+    }
+
+    fun isRunning(): Boolean {
+        return kwm_macos_h.display_link_is_running(pointer)
     }
 
     override fun close() {

@@ -1,6 +1,7 @@
 package org.jetbrains.kwm.macos
 
-import org.jetbrains.kwm.Size
+import org.jetbrains.kwm.LogicalSize
+import org.jetbrains.kwm.PhysicalSize
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -40,9 +41,9 @@ class MetalView internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos
         kwm_macos_h.metal_view_present(pointer)
     }
 
-    fun size(): Size {
+    fun size(): PhysicalSize {
         return Arena.ofConfined().use { arena ->
-            Size.fromNative(kwm_macos_h.metal_view_get_texture_size(arena, pointer))
+            PhysicalSize.fromNative(kwm_macos_h.metal_view_get_texture_size(arena, pointer))
         }
     }
 }

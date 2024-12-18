@@ -1,17 +1,30 @@
 package org.jetbrains.kwm.macos
 
-import org.jetbrains.kwm.Point
-import org.jetbrains.kwm.Size
+import org.jetbrains.kwm.LogicalPoint
+import org.jetbrains.kwm.LogicalSize
+import org.jetbrains.kwm.PhysicalSize
 import java.lang.foreign.MemorySegment
-import org.jetbrains.kwm.macos.generated.Size as NativeSize
-import org.jetbrains.kwm.macos.generated.Point as NativePoint
+import org.jetbrains.kwm.macos.generated.LogicalSize as NativeLogicalSize
+import org.jetbrains.kwm.macos.generated.LogicalPoint as NativeLogicalPoint
+import org.jetbrains.kwm.macos.generated.PhysicalSize as NativePhysicalSize
+//import org.jetbrains.kwm.macos.generated.PhysicalPoint as NativePhysicalPoint
 
-internal fun Size.Companion.fromNative(s: MemorySegment): Size {
-    return Size(width = NativeSize.width(s),
-                height = NativeSize.height(s))
+internal fun LogicalSize.Companion.fromNative(s: MemorySegment): LogicalSize {
+    return LogicalSize(width = NativeLogicalSize.width(s),
+                height = NativeLogicalSize.height(s))
 }
 
-internal fun Point.Companion.fromNative(s: MemorySegment): Point {
-    return Point(x = NativePoint.x(s),
-                 y = NativePoint.y(s))
+internal fun LogicalPoint.Companion.fromNative(s: MemorySegment): LogicalPoint {
+    return LogicalPoint(x = NativeLogicalPoint.x(s),
+                 y = NativeLogicalPoint.y(s))
 }
+
+internal fun PhysicalSize.Companion.fromNative(s: MemorySegment): PhysicalSize {
+    return PhysicalSize(width = NativePhysicalSize.width(s),
+                height = NativePhysicalSize.height(s))
+}
+
+//internal fun PhysicalPoint.Companion.fromNative(s: MemorySegment): PhysicalPoint {
+//    return PhysicalPoint(x = NativePhysicalPoint.x(s),
+//                 y = NativePhysicalPoint.y(s))
+//}

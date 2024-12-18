@@ -9,18 +9,35 @@ pub (crate) type ArraySize = i64;
 //    len: ArraySize,
 //}
 
+pub type PhysicalPixels = f64;
+pub type LogicalPixels = f64;
+
 #[repr(C)]
 #[derive(Debug)]
-pub struct Size {
-    pub width: f64,
-    pub height: f64
+pub struct PhysicalSize {
+    pub width: PhysicalPixels,
+    pub height: PhysicalPixels
 }
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct Point {
-    pub x: f64,
-    pub y: f64
+pub struct PhysicalPoint {
+    pub x: PhysicalPixels,
+    pub y: PhysicalPixels
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct LogicalSize {
+    pub width: LogicalPixels,
+    pub height: LogicalPixels
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct LogicalPoint {
+    pub x: LogicalPixels,
+    pub y: LogicalPixels
 }
 
 #[macro_export]

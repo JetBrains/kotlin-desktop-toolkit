@@ -1,7 +1,8 @@
 package org.jetbrains.kwm.sample
 
-import org.jetbrains.kwm.Point
-import org.jetbrains.kwm.Size
+import org.jetbrains.kwm.LogicalPoint
+import org.jetbrains.kwm.LogicalSize
+import org.jetbrains.kwm.PhysicalSize
 import org.jetbrains.kwm.macos.*
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
@@ -17,23 +18,25 @@ import kotlin.math.sin
 class RotatingBallWindow(device: MetalDevice,
                          queue: MetalCommandQueue,
                          title: String,
-                         position: Point): SkikoWindow(device, queue, title, position) {
+                         position: LogicalPoint): SkikoWindow(device, queue, title, position) {
 
-    private var cursorPosition: Point? = null
+    private var cursorPosition: LogicalPoint? = null
 
-    fun handleEvent(event: Event) {
-        when (event) {
-            is Event.MouseMoved -> {
-                cursorPosition = event.point
+    override fun handleEvent(event: Event): EventHandlerResult {
+        return if (super.handleEvent(event) == EventHandlerResult.Continue) {
+            when (event) {
+                is Event.MouseMoved -> {
+                    cursorPosition = event.point
+                    EventHandlerResult.Stop
+                }
+                else -> EventHandlerResult.Continue
             }
-
-            is Event.ScrollWheel -> {}
+        } else {
+            EventHandlerResult.Stop
         }
-//        performDrawing()
-//        displayLink.setPaused(false)
     }
 
-    private fun Canvas.drawSpiningCircle(size: Size, t: Long) = let { canvas ->
+    private fun Canvas.drawSpiningCircle(size: PhysicalSize, t: Long) = let { canvas ->
         val width = size.width.toFloat()
         val height = size.height.toFloat()
         val angle = (t / 2000f) * 2f * PI
@@ -46,11 +49,11 @@ class RotatingBallWindow(device: MetalDevice,
         }
     }
 
-    private fun Canvas.drawWindowBorders(size: Size, t: Long) {
+    private fun Canvas.drawWindowBorders(size: PhysicalSize, t: Long) {
         val canvas = this
         val width = size.width.toFloat()
         val height = size.height.toFloat()
-        val scale = 2f // todo fixme!
+        val scale = scale()
         Paint().use { paint ->
 
             val barSize = 3 * scale
@@ -81,10 +84,9 @@ class RotatingBallWindow(device: MetalDevice,
         }
     }
 
-    private fun Canvas.drawCursor(size: Size, t: Long) {
+    private fun Canvas.drawCursor(size: PhysicalSize, t: Long) {
         val canvas = this
-//        println("cursor position: $cursorPosition")
-        val scale = 2f
+        val scale = scale()
         cursorPosition?.let { curs ->
             val positive = curs.x > 0 && curs.y > 0
             val inBox = curs.x < size.width && curs.y < size.height
@@ -103,7 +105,7 @@ class RotatingBallWindow(device: MetalDevice,
         }
     }
 
-    override fun Canvas.draw(size: Size, t: Long) {
+    override fun Canvas.draw(size: PhysicalSize, t: Long) {
         val canvas = this
         canvas.clear(0xFF264653.toInt());
         drawSpiningCircle(size, t)
@@ -124,12 +126,12 @@ class ApplicationState: AutoCloseable {
     }
 
     fun createWindow() {
-        windows.add(RotatingBallWindow(device, queue, "Window ${windows.count()}", Point(200.0, 200.0)))
+        windows.add(RotatingBallWindow(device, queue, "Window ${windows.count()}", LogicalPoint(200.0, 200.0)))
     }
 
     fun setPaused(value: Boolean) {
         windows.forEach {
-            it.displayLink.setPaused(value)
+            it.displayLink.setRunning(!value)
         }
     }
 
@@ -140,8 +142,7 @@ class ApplicationState: AutoCloseable {
         }
         return window?.let {
             window.handleEvent(event)
-            EventHandlerResult.Handled
-        } ?: EventHandlerResult.Skipped
+        } ?: EventHandlerResult.Continue
     }
 
     fun buildMenu(): AppMenuStructure {

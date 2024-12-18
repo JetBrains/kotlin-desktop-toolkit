@@ -11,12 +11,12 @@ use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSEvent, NSNo
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNumber, NSObject, NSObjectProtocol, NSString};
 
 use crate::{
-    common::{Size, StrPtr},
+    common::{LogicalSize, StrPtr},
     define_objc_ref,
-    macos::{application_api::AppState, events::handle_mouse_moved},
+    macos::{application_api::AppState, events::{handle_mouse_moved, handle_window_screen_change, handle_window_resize}},
 };
 
-use super::{events::{Event, MouseMovedEvent}, metal_api::MetalView};
+use super::{events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}};
 
 #[repr(transparent)]
 pub struct WindowRef {
@@ -25,14 +25,12 @@ pub struct WindowRef {
 define_objc_ref!(WindowRef, NSWindow);
 
 pub type WindowId = i64;
-pub type ScreenId = u32;
-pub type WindowResizeCallback = extern "C" fn();
 
 #[no_mangle]
-pub extern "C" fn window_create(title: StrPtr, x: f32, y: f32, on_resize: WindowResizeCallback) -> WindowRef {
+pub extern "C" fn window_create(title: StrPtr, x: f32, y: f32) -> WindowRef {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let title = unsafe { CStr::from_ptr(title) }.to_str().unwrap();
-    let window = create_window(mtm, title, x, y, on_resize);
+    let window = create_window(mtm, title, x, y);
     return WindowRef::new(window);
 }
 
@@ -46,9 +44,7 @@ pub extern "C" fn window_deref(window: WindowRef) {
 #[no_mangle]
 pub extern "C" fn window_get_window_id(window: WindowRef) -> WindowId {
     let window = unsafe { window.retain() };
-    return unsafe {
-        window.windowNumber() as i64
-    }
+    return window.window_id();
 }
 
 #[no_mangle]
@@ -56,9 +52,15 @@ pub extern "C" fn window_get_screen_id(window: WindowRef) -> ScreenId {
     let window = unsafe {
         window.retain()
     };
-    let screen_id = unsafe { window.screen().unwrap().deviceDescription().objectForKey(&*NSString::from_str("NSScreenNumber")) }.unwrap();
-    let screen_id: Retained<NSNumber> = unsafe { Retained::cast(screen_id) };
-    return screen_id.unsignedIntValue();
+    return window.screen().unwrap().screen_id();
+}
+
+#[no_mangle]
+pub extern "C" fn window_scale_factor(window: WindowRef) -> f64 {
+    let window = unsafe {
+        window.retain()
+    };
+    return window.backingScaleFactor();
 }
 
 #[no_mangle]
@@ -72,7 +74,24 @@ pub extern "C" fn window_attach_layer(window: WindowRef, layer: &MetalView) {
     }
 }
 
-fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32, on_resize: WindowResizeCallback) -> Retained<NSWindow> {
+pub(crate) trait NSWindowExts {
+    fn window_id(&self) -> WindowId;
+    fn logical_size(&self) -> LogicalSize;
+}
+
+impl NSWindowExts for NSWindow {
+    fn window_id(&self) -> WindowId {
+        unsafe {
+            self.windowNumber() as WindowId
+        }
+    }
+
+    fn logical_size(&self) -> LogicalSize {
+        self.frame().size.into()
+    }
+}
+
+fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32) -> Retained<NSWindow> {
     let window = unsafe {
         let rect = CGRect::new(CGPoint::new(x.into(), y.into()), CGSize::new(320.0, 240.0));
         let style =
@@ -89,7 +108,7 @@ fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32, on_resize: 
         window.makeKeyAndOrderFront(None);
         window.setLevel(NSNormalWindowLevel);
         window.setRestorable(false);
-        let delegate = WindowDelegate::new(mtm, on_resize);
+        let delegate = WindowDelegate::new(mtm, window.clone());
         window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
         Retained::into_raw(delegate); // todo fixme!
 
@@ -104,7 +123,7 @@ fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32, on_resize: 
 }
 
 pub(crate) struct WindowDelegateIvars {
-    pub(crate) on_resize: WindowResizeCallback,
+    ns_window: Retained<NSWindow>
 }
 
 declare_class!(
@@ -126,21 +145,21 @@ declare_class!(
         #[method(windowDidResize:)]
         #[allow(non_snake_case)]
         unsafe fn windowDidResize(&self, _notification: &NSNotification) {
-            (self.ivars().on_resize)()
+            handle_window_resize(&*self.ivars().ns_window);
         }
 
         #[method(windowDidChangeScreen:)]
         #[allow(non_snake_case)]
         unsafe fn windowDidChangeScreen(&self, _notification: &NSNotification) {
-            // todo send event
+            handle_window_screen_change(&*self.ivars().ns_window);
         }
     }
 );
 
 impl WindowDelegate {
-    pub(crate) fn new(mtm: MainThreadMarker, on_resize: WindowResizeCallback) -> Retained<Self> {
+    pub(crate) fn new(mtm: MainThreadMarker, ns_window: Retained<NSWindow>) -> Retained<Self> {
         let this = mtm.alloc();
-        let this = this.set_ivars(WindowDelegateIvars { on_resize });
+        let this = this.set_ivars(WindowDelegateIvars { ns_window });
         unsafe { msg_send_id![super(this), init] }
     }
 }
@@ -165,7 +184,7 @@ declare_class!(
     unsafe impl RootView {
         #[method(mouseMoved:)]
         fn mouse_moved(&self, event: &NSEvent) {
-            handle_mouse_moved(event);
+            handle_mouse_moved(event); // todo pass to next responder if it's not handled
         }
         #[method(mouseDown:)]
         fn mouse_down(&self, event: &NSEvent) {

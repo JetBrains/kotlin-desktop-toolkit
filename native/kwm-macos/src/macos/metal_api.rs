@@ -7,9 +7,7 @@ use objc2_metal::{MTLClearColor, MTLCommandBuffer, MTLCommandQueue, MTLCreateSys
 use objc2_metal_kit::MTKView;
 use objc2_quartz_core::{kCAGravityTopLeft, CAAutoresizingMask, CAMetalDrawable, CAMetalLayer};
 
-use crate::{common::Size, define_objc_ref};
-
-use super::{window::WindowRef};
+use crate::{common::{LogicalSize, PhysicalSize}, define_objc_ref};
 
 #[repr(transparent)]
 pub struct MetalDeviceRef { ptr: *mut c_void }
@@ -121,7 +119,7 @@ pub extern "C" fn metal_view_present(view: &MetalView) {
 }
 
 #[no_mangle]
-pub extern "C" fn metal_view_get_texture_size(view: &MetalView) -> Size {
+pub extern "C" fn metal_view_get_texture_size(view: &MetalView) -> PhysicalSize {
     let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let view_size = unsafe {
         view.ns_view.convertSizeToBacking(view.ns_view.bounds().size)

@@ -35,7 +35,7 @@ public class AppMenuItem {
         MemoryLayout.unionLayout(
             ActionItem_Body.layout().withName("action_item"),
             SubMenuItem_Body.layout().withName("sub_menu_item")
-        ).withName("$anon$124:3")
+        ).withName("$anon$149:3")
     ).withName("AppMenuItem");
 
     /**
@@ -89,7 +89,7 @@ public class AppMenuItem {
         struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout action_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$124:3"), groupElement("action_item"));
+    private static final GroupLayout action_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$149:3"), groupElement("action_item"));
 
     /**
      * Layout for field:
@@ -133,7 +133,7 @@ public class AppMenuItem {
         MemorySegment.copy(fieldValue, 0L, struct, action_item$OFFSET, action_item$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout sub_menu_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$124:3"), groupElement("sub_menu_item"));
+    private static final GroupLayout sub_menu_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$149:3"), groupElement("sub_menu_item"));
 
     /**
      * Layout for field:

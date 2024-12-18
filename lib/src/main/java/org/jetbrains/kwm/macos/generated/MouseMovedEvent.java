@@ -16,7 +16,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * {@snippet lang=c :
  * struct MouseMovedEvent {
  *     WindowId window_id;
- *     struct Point point;
+ *     struct LogicalPoint point;
  * }
  * }
  */
@@ -28,7 +28,7 @@ public class MouseMovedEvent {
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_LONG_LONG.withName("window_id"),
-        Point.layout().withName("point")
+        LogicalPoint.layout().withName("point")
     ).withName("MouseMovedEvent");
 
     /**
@@ -87,7 +87,7 @@ public class MouseMovedEvent {
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * struct Point point
+     * struct LogicalPoint point
      * }
      */
     public static final GroupLayout point$layout() {
@@ -99,7 +99,7 @@ public class MouseMovedEvent {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * struct Point point
+     * struct LogicalPoint point
      * }
      */
     public static final long point$offset() {
@@ -109,7 +109,7 @@ public class MouseMovedEvent {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * struct Point point
+     * struct LogicalPoint point
      * }
      */
     public static MemorySegment point(MemorySegment struct) {
@@ -119,7 +119,7 @@ public class MouseMovedEvent {
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * struct Point point
+     * struct LogicalPoint point
      * }
      */
     public static void point(MemorySegment struct, MemorySegment fieldValue) {

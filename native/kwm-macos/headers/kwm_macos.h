@@ -18,25 +18,46 @@ typedef struct ApplicationConfig {
 
 typedef int64_t WindowId;
 
-typedef struct Point {
-  double x;
-  double y;
-} Point;
+typedef double LogicalPixels;
+
+typedef struct LogicalPoint {
+  LogicalPixels x;
+  LogicalPixels y;
+} LogicalPoint;
 
 typedef struct MouseMovedEvent {
   WindowId window_id;
-  struct Point point;
+  struct LogicalPoint point;
 } MouseMovedEvent;
 
 typedef struct ScrollWheelEvent {
   WindowId window_id;
-  double dx;
-  double dy;
+  LogicalPixels dx;
+  LogicalPixels dy;
 } ScrollWheelEvent;
+
+typedef uint32_t ScreenId;
+
+typedef struct WindowScreenChangeEvent {
+  WindowId window_id;
+  ScreenId new_screen_id;
+} WindowScreenChangeEvent;
+
+typedef struct LogicalSize {
+  LogicalPixels width;
+  LogicalPixels height;
+} LogicalSize;
+
+typedef struct WindowResizeEvent {
+  WindowId window_id;
+  struct LogicalSize size;
+} WindowResizeEvent;
 
 typedef enum Event_Tag {
   MouseMoved,
   ScrollWheel,
+  WindowScreenChange,
+  WindowResize,
 } Event_Tag;
 
 typedef struct Event {
@@ -47,6 +68,12 @@ typedef struct Event {
     };
     struct {
       struct ScrollWheelEvent scroll_wheel;
+    };
+    struct {
+      struct WindowScreenChangeEvent window_screen_change;
+    };
+    struct {
+      struct WindowResizeEvent window_resize;
     };
   };
 } Event;
@@ -63,22 +90,20 @@ typedef void *MetalDeviceRef;
 
 typedef void *MetalCommandQueueRef;
 
-typedef struct Size {
-  double width;
-  double height;
-} Size;
+typedef double PhysicalPixels;
+
+typedef struct PhysicalSize {
+  PhysicalPixels width;
+  PhysicalPixels height;
+} PhysicalSize;
 
 typedef void *MetalTextureRef;
-
-typedef uint32_t ScreenId;
 
 typedef void (*DisplayLinkCallback)(void);
 
 typedef void *WindowRef;
 
 typedef const char *StrPtr;
-
-typedef void (*WindowResizeCallback)(void);
 
 typedef uint32_t AppMenuKeyModifiers;
 #define AppMenuKeyModifiers_ModifierFlagCapsLock (uint32_t)(1 << 16)
@@ -163,7 +188,7 @@ void metal_drop_view(struct MetalView *view);
 
 void metal_view_present(const struct MetalView *view);
 
-struct Size metal_view_get_texture_size(const struct MetalView *view);
+struct PhysicalSize metal_view_get_texture_size(const struct MetalView *view);
 
 MetalTextureRef metal_view_next_texture(const struct MetalView *view);
 
@@ -171,17 +196,21 @@ void metal_deref_texture(MetalTextureRef texture);
 
 struct DisplayLinkBox *display_link_create(ScreenId screen_id, DisplayLinkCallback on_next_frame);
 
-void display_link_set_paused(struct DisplayLink *display_link, bool value);
+void display_link_set_running(struct DisplayLink *display_link, bool value);
+
+bool display_link_is_running(struct DisplayLink *display_link);
 
 void display_link_drop(struct DisplayLink *display_link);
 
-WindowRef window_create(StrPtr title, float x, float y, WindowResizeCallback on_resize);
+WindowRef window_create(StrPtr title, float x, float y);
 
 void window_deref(WindowRef window);
 
 WindowId window_get_window_id(WindowRef window);
 
 ScreenId window_get_screen_id(WindowRef window);
+
+double window_scale_factor(WindowRef window);
 
 void window_attach_layer(WindowRef window, const struct MetalView *layer);
 

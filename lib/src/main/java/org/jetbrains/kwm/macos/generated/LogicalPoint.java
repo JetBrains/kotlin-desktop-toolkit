@@ -14,22 +14,22 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct Point {
- *     double x;
- *     double y;
+ * struct LogicalPoint {
+ *     LogicalPixels x;
+ *     LogicalPixels y;
  * }
  * }
  */
-public class Point {
+public class LogicalPoint {
 
-    Point() {
+    LogicalPoint() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_DOUBLE.withName("x"),
         kwm_macos_h.C_DOUBLE.withName("y")
-    ).withName("Point");
+    ).withName("LogicalPoint");
 
     /**
      * The layout of this struct
@@ -43,7 +43,7 @@ public class Point {
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * double x
+     * LogicalPixels x
      * }
      */
     public static final OfDouble x$layout() {
@@ -55,7 +55,7 @@ public class Point {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * double x
+     * LogicalPixels x
      * }
      */
     public static final long x$offset() {
@@ -65,7 +65,7 @@ public class Point {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * double x
+     * LogicalPixels x
      * }
      */
     public static double x(MemorySegment struct) {
@@ -75,7 +75,7 @@ public class Point {
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * double x
+     * LogicalPixels x
      * }
      */
     public static void x(MemorySegment struct, double fieldValue) {
@@ -87,7 +87,7 @@ public class Point {
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * double y
+     * LogicalPixels y
      * }
      */
     public static final OfDouble y$layout() {
@@ -99,7 +99,7 @@ public class Point {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * double y
+     * LogicalPixels y
      * }
      */
     public static final long y$offset() {
@@ -109,7 +109,7 @@ public class Point {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * double y
+     * LogicalPixels y
      * }
      */
     public static double y(MemorySegment struct) {
@@ -119,7 +119,7 @@ public class Point {
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * double y
+     * LogicalPixels y
      * }
      */
     public static void y(MemorySegment struct, double fieldValue) {

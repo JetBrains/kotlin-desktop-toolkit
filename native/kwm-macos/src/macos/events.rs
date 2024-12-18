@@ -1,9 +1,9 @@
-use objc2_app_kit::NSEvent;
+use objc2_app_kit::{NSEvent, NSWindow};
 
-use crate::{common::Point, macos::window};
+use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize}, macos::window};
 use anyhow::{anyhow, Result};
 
-use super::{application_api::AppState, window::WindowId};
+use super::{application_api::AppState, screen::{NSScreenExts, ScreenId}, window::{NSWindowExts, WindowId}};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
@@ -12,22 +12,38 @@ pub type EventHandler = extern "C" fn(&Event) -> bool;
 #[derive(Debug)]
 pub struct MouseMovedEvent {
     window_id: WindowId,
-    point: Point
+    point: LogicalPoint
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct ScrollWheelEvent {
     window_id: WindowId,
-    dx: f64,
-    dy: f64
+    dx: LogicalPixels,
+    dy: LogicalPixels
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowScreenChangeEvent {
+    window_id: WindowId,
+    new_screen_id: ScreenId
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowResizeEvent {
+    window_id: WindowId,
+    size: LogicalSize
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub enum Event {
     MouseMoved(MouseMovedEvent),
-    ScrollWheel(ScrollWheelEvent)
+    ScrollWheel(ScrollWheelEvent),
+    WindowScreenChange(WindowScreenChangeEvent),
+    WindowResize(WindowResizeEvent)
 }
 
 pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
@@ -36,7 +52,7 @@ pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
             event.locationInWindow()
         };
         let window_id = unsafe {
-            event.windowNumber() as i64
+            event.windowNumber() as WindowId
         };
         let window = unsafe {
             event.window(state.mtm).expect("No window for event")
@@ -46,7 +62,7 @@ pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
 
         let event = Event::MouseMoved(MouseMovedEvent {
             window_id,
-            point: Point {
+            point: LogicalPoint {
                 x: point.x,
                 y: frame.size.height - point.y,
             },
@@ -54,4 +70,24 @@ pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
         (state.event_handler)(&event)
     });
     handled
+}
+
+pub(crate) fn handle_window_screen_change(window: &NSWindow) {
+    let _handled = AppState::with(|state| {
+        let event = Event::WindowScreenChange(WindowScreenChangeEvent {
+            window_id: window.window_id(),
+            new_screen_id: window.screen().unwrap().screen_id()
+        });
+        (state.event_handler)(&event)
+    });
+}
+
+pub (crate) fn handle_window_resize(window: &NSWindow) {
+    let _handled = AppState::with(|state| {
+        let event = Event::WindowResize(WindowResizeEvent {
+            window_id: window.window_id(),
+            size: window.logical_size()
+        });
+        (state.event_handler)(&event)
+    });
 }

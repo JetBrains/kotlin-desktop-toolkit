@@ -14,24 +14,22 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct ScrollWheelEvent {
- *     WindowId window_id;
- *     LogicalPixels dx;
- *     LogicalPixels dy;
+ * struct PhysicalSize {
+ *     PhysicalPixels width;
+ *     PhysicalPixels height;
  * }
  * }
  */
-public class ScrollWheelEvent {
+public class PhysicalSize {
 
-    ScrollWheelEvent() {
+    PhysicalSize() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
-        kwm_macos_h.C_LONG_LONG.withName("window_id"),
-        kwm_macos_h.C_DOUBLE.withName("dx"),
-        kwm_macos_h.C_DOUBLE.withName("dy")
-    ).withName("ScrollWheelEvent");
+        kwm_macos_h.C_DOUBLE.withName("width"),
+        kwm_macos_h.C_DOUBLE.withName("height")
+    ).withName("PhysicalSize");
 
     /**
      * The layout of this struct
@@ -40,136 +38,92 @@ public class ScrollWheelEvent {
         return $LAYOUT;
     }
 
-    private static final OfLong window_id$LAYOUT = (OfLong)$LAYOUT.select(groupElement("window_id"));
+    private static final OfDouble width$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("width"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * WindowId window_id
+     * PhysicalPixels width
      * }
      */
-    public static final OfLong window_id$layout() {
-        return window_id$LAYOUT;
+    public static final OfDouble width$layout() {
+        return width$LAYOUT;
     }
 
-    private static final long window_id$OFFSET = 0;
+    private static final long width$OFFSET = 0;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * WindowId window_id
+     * PhysicalPixels width
      * }
      */
-    public static final long window_id$offset() {
-        return window_id$OFFSET;
+    public static final long width$offset() {
+        return width$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * WindowId window_id
+     * PhysicalPixels width
      * }
      */
-    public static long window_id(MemorySegment struct) {
-        return struct.get(window_id$LAYOUT, window_id$OFFSET);
+    public static double width(MemorySegment struct) {
+        return struct.get(width$LAYOUT, width$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * WindowId window_id
+     * PhysicalPixels width
      * }
      */
-    public static void window_id(MemorySegment struct, long fieldValue) {
-        struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
+    public static void width(MemorySegment struct, double fieldValue) {
+        struct.set(width$LAYOUT, width$OFFSET, fieldValue);
     }
 
-    private static final OfDouble dx$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("dx"));
+    private static final OfDouble height$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("height"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * PhysicalPixels height
      * }
      */
-    public static final OfDouble dx$layout() {
-        return dx$LAYOUT;
+    public static final OfDouble height$layout() {
+        return height$LAYOUT;
     }
 
-    private static final long dx$OFFSET = 8;
+    private static final long height$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * PhysicalPixels height
      * }
      */
-    public static final long dx$offset() {
-        return dx$OFFSET;
+    public static final long height$offset() {
+        return height$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * PhysicalPixels height
      * }
      */
-    public static double dx(MemorySegment struct) {
-        return struct.get(dx$LAYOUT, dx$OFFSET);
+    public static double height(MemorySegment struct) {
+        return struct.get(height$LAYOUT, height$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * PhysicalPixels height
      * }
      */
-    public static void dx(MemorySegment struct, double fieldValue) {
-        struct.set(dx$LAYOUT, dx$OFFSET, fieldValue);
-    }
-
-    private static final OfDouble dy$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("dy"));
-
-    /**
-     * Layout for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static final OfDouble dy$layout() {
-        return dy$LAYOUT;
-    }
-
-    private static final long dy$OFFSET = 16;
-
-    /**
-     * Offset for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static final long dy$offset() {
-        return dy$OFFSET;
-    }
-
-    /**
-     * Getter for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static double dy(MemorySegment struct) {
-        return struct.get(dy$LAYOUT, dy$OFFSET);
-    }
-
-    /**
-     * Setter for field:
-     * {@snippet lang=c :
-     * LogicalPixels dy
-     * }
-     */
-    public static void dy(MemorySegment struct, double fieldValue) {
-        struct.set(dy$LAYOUT, dy$OFFSET, fieldValue);
+    public static void height(MemorySegment struct, double fieldValue) {
+        struct.set(height$LAYOUT, height$OFFSET, fieldValue);
     }
 
     /**

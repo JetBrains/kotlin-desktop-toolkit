@@ -14,22 +14,22 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct Size {
- *     double width;
- *     double height;
+ * struct LogicalSize {
+ *     LogicalPixels width;
+ *     LogicalPixels height;
  * }
  * }
  */
-public class Size {
+public class LogicalSize {
 
-    Size() {
+    LogicalSize() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_DOUBLE.withName("width"),
         kwm_macos_h.C_DOUBLE.withName("height")
-    ).withName("Size");
+    ).withName("LogicalSize");
 
     /**
      * The layout of this struct
@@ -43,7 +43,7 @@ public class Size {
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * double width
+     * LogicalPixels width
      * }
      */
     public static final OfDouble width$layout() {
@@ -55,7 +55,7 @@ public class Size {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * double width
+     * LogicalPixels width
      * }
      */
     public static final long width$offset() {
@@ -65,7 +65,7 @@ public class Size {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * double width
+     * LogicalPixels width
      * }
      */
     public static double width(MemorySegment struct) {
@@ -75,7 +75,7 @@ public class Size {
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * double width
+     * LogicalPixels width
      * }
      */
     public static void width(MemorySegment struct, double fieldValue) {
@@ -87,7 +87,7 @@ public class Size {
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * double height
+     * LogicalPixels height
      * }
      */
     public static final OfDouble height$layout() {
@@ -99,7 +99,7 @@ public class Size {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * double height
+     * LogicalPixels height
      * }
      */
     public static final long height$offset() {
@@ -109,7 +109,7 @@ public class Size {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * double height
+     * LogicalPixels height
      * }
      */
     public static double height(MemorySegment struct) {
@@ -119,7 +119,7 @@ public class Size {
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * double height
+     * LogicalPixels height
      * }
      */
     public static void height(MemorySegment struct, double fieldValue) {
