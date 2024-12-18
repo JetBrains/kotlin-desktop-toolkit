@@ -11,6 +11,8 @@ typedef struct DisplayLinkBox DisplayLinkBox;
 
 typedef struct MetalView MetalView;
 
+typedef struct Window Window;
+
 typedef struct ApplicationConfig {
   bool disable_dictation_menu_item;
   bool disable_character_palette_menu_item;
@@ -100,8 +102,6 @@ typedef struct PhysicalSize {
 typedef void *MetalTextureRef;
 
 typedef void (*DisplayLinkCallback)(void);
-
-typedef void *WindowRef;
 
 typedef const char *StrPtr;
 
@@ -202,17 +202,17 @@ bool display_link_is_running(struct DisplayLink *display_link);
 
 void display_link_drop(struct DisplayLink *display_link);
 
-WindowRef window_create(StrPtr title, float x, float y);
+struct Window *window_create(StrPtr title, float x, float y);
 
-void window_deref(WindowRef window);
+void window_deref(struct Window *window);
 
-WindowId window_get_window_id(WindowRef window);
+WindowId window_get_window_id(const struct Window *window);
 
-ScreenId window_get_screen_id(WindowRef window);
+ScreenId window_get_screen_id(const struct Window *window);
 
-double window_scale_factor(WindowRef window);
+double window_scale_factor(const struct Window *window);
 
-void window_attach_layer(WindowRef window, const struct MetalView *layer);
+void window_attach_layer(const struct Window *window, const struct MetalView *layer);
 
 void main_menu_update(struct AppMenuStructure menu);
 

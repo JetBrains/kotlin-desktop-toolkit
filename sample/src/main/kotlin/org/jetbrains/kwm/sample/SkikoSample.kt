@@ -200,14 +200,10 @@ fun main() {
     printRuntimeInfo()
     Application.init(Application.Config())
     ApplicationState().use { state ->
-        Window.create("First", 200f, 200f).use { firstWindow ->
-            AppMenuManager.setMainMenu(state.buildMenu())
-
-            println("first window id: ${firstWindow.windowId()}")
-
-            Application.runEventLoop { event ->
-                state.handleEvent(event)
-            }
+        state.createWindow()
+        AppMenuManager.setMainMenu(state.buildMenu())
+        Application.runEventLoop { event ->
+            state.handleEvent(event)
         }
     }
 }

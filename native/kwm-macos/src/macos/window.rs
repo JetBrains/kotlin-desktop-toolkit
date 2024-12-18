@@ -24,49 +24,46 @@ pub struct WindowRef {
 }
 define_objc_ref!(WindowRef, NSWindow);
 
+pub struct Window {
+    ns_window: Retained<NSWindow>,
+    delegate: Retained<WindowDelegate>,
+    root_view: Retained<RootView>
+}
+
 pub type WindowId = i64;
 
 #[no_mangle]
-pub extern "C" fn window_create(title: StrPtr, x: f32, y: f32) -> WindowRef {
+pub extern "C" fn window_create(title: StrPtr, x: f32, y: f32) -> Box<Window> {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let title = unsafe { CStr::from_ptr(title) }.to_str().unwrap();
     let window = create_window(mtm, title, x, y);
-    return WindowRef::new(window);
+    return Box::new(window)
 }
 
 #[no_mangle]
-pub extern "C" fn window_deref(window: WindowRef) {
-    unsafe {
-        window.consume();
-    }
+pub extern "C" fn window_deref(window: Box<Window>) {
+    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    std::mem::drop(window);
 }
 
 #[no_mangle]
-pub extern "C" fn window_get_window_id(window: WindowRef) -> WindowId {
-    let window = unsafe { window.retain() };
-    return window.window_id();
+pub extern "C" fn window_get_window_id(window: &Window) -> WindowId {
+    return window.ns_window.window_id();
 }
 
 #[no_mangle]
-pub extern "C" fn window_get_screen_id(window: WindowRef) -> ScreenId {
-    let window = unsafe {
-        window.retain()
-    };
-    return window.screen().unwrap().screen_id();
+pub extern "C" fn window_get_screen_id(window: &Window) -> ScreenId {
+    return window.ns_window.screen().unwrap().screen_id();
 }
 
 #[no_mangle]
-pub extern "C" fn window_scale_factor(window: WindowRef) -> f64 {
-    let window = unsafe {
-        window.retain()
-    };
-    return window.backingScaleFactor();
+pub extern "C" fn window_scale_factor(window: &Window) -> f64 {
+    return window.ns_window.backingScaleFactor();
 }
 
 #[no_mangle]
-pub extern "C" fn window_attach_layer(window: WindowRef, layer: &MetalView) {
-    let window = unsafe { window.retain() };
-    let content_view = window.contentView().unwrap();
+pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
+    let content_view = window.ns_window.contentView().unwrap();
     let layer_view = &layer.ns_view;
     unsafe {
         layer_view.setFrameSize(content_view.frame().size);
@@ -91,35 +88,38 @@ impl NSWindowExts for NSWindow {
     }
 }
 
-fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32) -> Retained<NSWindow> {
-    let window = unsafe {
-        let rect = CGRect::new(CGPoint::new(x.into(), y.into()), CGSize::new(320.0, 240.0));
-        let style =
-            NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::Miniaturizable | NSWindowStyleMask::Resizable;
-        let window = NSWindow::initWithContentRect_styleMask_backing_defer(
+fn create_window(mtm: MainThreadMarker, title: &str, x: f32, y: f32) -> Window {
+    let rect = CGRect::new(CGPoint::new(x.into(), y.into()), CGSize::new(320.0, 240.0));
+    let style = NSWindowStyleMask::Titled | NSWindowStyleMask::Closable | NSWindowStyleMask::Miniaturizable | NSWindowStyleMask::Resizable;
+    let ns_window = unsafe {
+        NSWindow::initWithContentRect_styleMask_backing_defer(
             mtm.alloc(),
             rect,
             style,
             NSBackingStoreType::NSBackingStoreBuffered,
             false,
-        );
-        window.setTitle(&NSString::from_str(title));
-        window.setReleasedWhenClosed(false);
-        window.makeKeyAndOrderFront(None);
-        window.setLevel(NSNormalWindowLevel);
-        window.setRestorable(false);
-        let delegate = WindowDelegate::new(mtm, window.clone());
-        window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
-        Retained::into_raw(delegate); // todo fixme!
-
-        let root_view = RootView::new(mtm);
-        window.setAcceptsMouseMovedEvents(true);
-        window.setContentView(Some(&*root_view));
-        assert!(window.makeFirstResponder(Some(&*root_view)) == true); // todo remove assert
-        Retained::into_raw(root_view); // todo fixme!
-        window
+        )
     };
-    return window;
+    ns_window.setTitle(&NSString::from_str(title));
+    unsafe {
+        ns_window.setReleasedWhenClosed(false);
+    }
+    ns_window.makeKeyAndOrderFront(None);
+    ns_window.setLevel(NSNormalWindowLevel);
+    unsafe {
+        ns_window.setRestorable(false);
+    }
+    let delegate = WindowDelegate::new(mtm, ns_window.clone());
+    ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
+    let root_view = RootView::new(mtm);
+    ns_window.setAcceptsMouseMovedEvents(true);
+    ns_window.setContentView(Some(&*root_view));
+    assert!(ns_window.makeFirstResponder(Some(&*root_view)) == true); // todo remove assert
+    return Window {
+        ns_window,
+        delegate,
+        root_view
+    };
 }
 
 pub(crate) struct WindowDelegateIvars {

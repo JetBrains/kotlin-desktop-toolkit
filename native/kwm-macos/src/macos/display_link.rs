@@ -43,7 +43,7 @@ extern "C" fn display_link_is_running(display_link: &mut DisplayLink) -> bool {
 
 #[no_mangle]
 extern "C" fn display_link_drop(display_link: Box<DisplayLink>) {
-    drop(display_link);
+    std::mem::drop(display_link);
 }
 
 // derived from https://github.com/zed-industries/zed/blob/7425d242bc91d054df3c05f2b88307cfb3e9132f/crates/gpui/src/platform/mac/display_link.rs#L25

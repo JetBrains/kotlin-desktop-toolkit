@@ -107,7 +107,7 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
 #[no_mangle]
 pub extern "C" fn metal_drop_view(view: Box<MetalView>) {
     let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    drop(view);
+    std::mem::drop(view);
 }
 
 #[no_mangle]

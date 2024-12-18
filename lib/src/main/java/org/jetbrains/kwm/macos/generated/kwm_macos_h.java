@@ -149,12 +149,6 @@ public class kwm_macos_h {
     public static final AddressLayout MetalTextureRef = kwm_macos_h.C_POINTER;
     /**
      * {@snippet lang=c :
-     * typedef void *WindowRef
-     * }
-     */
-    public static final AddressLayout WindowRef = kwm_macos_h.C_POINTER;
-    /**
-     * {@snippet lang=c :
      * typedef const char *StrPtr
      * }
      */
@@ -1468,7 +1462,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y)
+     * struct Window *window_create(StrPtr title, float x, float y)
      * }
      */
     public static FunctionDescriptor window_create$descriptor() {
@@ -1478,7 +1472,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y)
+     * struct Window *window_create(StrPtr title, float x, float y)
      * }
      */
     public static MethodHandle window_create$handle() {
@@ -1488,7 +1482,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y)
+     * struct Window *window_create(StrPtr title, float x, float y)
      * }
      */
     public static MemorySegment window_create$address() {
@@ -1497,7 +1491,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * WindowRef window_create(StrPtr title, float x, float y)
+     * struct Window *window_create(StrPtr title, float x, float y)
      * }
      */
     public static MemorySegment window_create(MemorySegment title, float x, float y) {
@@ -1525,7 +1519,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void window_deref(WindowRef window)
+     * void window_deref(struct Window *window)
      * }
      */
     public static FunctionDescriptor window_deref$descriptor() {
@@ -1535,7 +1529,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void window_deref(WindowRef window)
+     * void window_deref(struct Window *window)
      * }
      */
     public static MethodHandle window_deref$handle() {
@@ -1545,7 +1539,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void window_deref(WindowRef window)
+     * void window_deref(struct Window *window)
      * }
      */
     public static MemorySegment window_deref$address() {
@@ -1554,7 +1548,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * void window_deref(WindowRef window)
+     * void window_deref(struct Window *window)
      * }
      */
     public static void window_deref(MemorySegment window) {
@@ -1583,7 +1577,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * WindowId window_get_window_id(WindowRef window)
+     * WindowId window_get_window_id(const struct Window *window)
      * }
      */
     public static FunctionDescriptor window_get_window_id$descriptor() {
@@ -1593,7 +1587,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * WindowId window_get_window_id(WindowRef window)
+     * WindowId window_get_window_id(const struct Window *window)
      * }
      */
     public static MethodHandle window_get_window_id$handle() {
@@ -1603,7 +1597,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * WindowId window_get_window_id(WindowRef window)
+     * WindowId window_get_window_id(const struct Window *window)
      * }
      */
     public static MemorySegment window_get_window_id$address() {
@@ -1612,7 +1606,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * WindowId window_get_window_id(WindowRef window)
+     * WindowId window_get_window_id(const struct Window *window)
      * }
      */
     public static long window_get_window_id(MemorySegment window) {
@@ -1641,7 +1635,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * ScreenId window_get_screen_id(WindowRef window)
+     * ScreenId window_get_screen_id(const struct Window *window)
      * }
      */
     public static FunctionDescriptor window_get_screen_id$descriptor() {
@@ -1651,7 +1645,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * ScreenId window_get_screen_id(WindowRef window)
+     * ScreenId window_get_screen_id(const struct Window *window)
      * }
      */
     public static MethodHandle window_get_screen_id$handle() {
@@ -1661,7 +1655,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * ScreenId window_get_screen_id(WindowRef window)
+     * ScreenId window_get_screen_id(const struct Window *window)
      * }
      */
     public static MemorySegment window_get_screen_id$address() {
@@ -1670,7 +1664,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * ScreenId window_get_screen_id(WindowRef window)
+     * ScreenId window_get_screen_id(const struct Window *window)
      * }
      */
     public static int window_get_screen_id(MemorySegment window) {
@@ -1699,7 +1693,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * double window_scale_factor(WindowRef window)
+     * double window_scale_factor(const struct Window *window)
      * }
      */
     public static FunctionDescriptor window_scale_factor$descriptor() {
@@ -1709,7 +1703,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * double window_scale_factor(WindowRef window)
+     * double window_scale_factor(const struct Window *window)
      * }
      */
     public static MethodHandle window_scale_factor$handle() {
@@ -1719,7 +1713,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * double window_scale_factor(WindowRef window)
+     * double window_scale_factor(const struct Window *window)
      * }
      */
     public static MemorySegment window_scale_factor$address() {
@@ -1728,7 +1722,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * double window_scale_factor(WindowRef window)
+     * double window_scale_factor(const struct Window *window)
      * }
      */
     public static double window_scale_factor(MemorySegment window) {
@@ -1757,7 +1751,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void window_attach_layer(WindowRef window, const struct MetalView *layer)
+     * void window_attach_layer(const struct Window *window, const struct MetalView *layer)
      * }
      */
     public static FunctionDescriptor window_attach_layer$descriptor() {
@@ -1767,7 +1761,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void window_attach_layer(WindowRef window, const struct MetalView *layer)
+     * void window_attach_layer(const struct Window *window, const struct MetalView *layer)
      * }
      */
     public static MethodHandle window_attach_layer$handle() {
@@ -1777,7 +1771,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void window_attach_layer(WindowRef window, const struct MetalView *layer)
+     * void window_attach_layer(const struct Window *window, const struct MetalView *layer)
      * }
      */
     public static MemorySegment window_attach_layer$address() {
@@ -1786,7 +1780,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * void window_attach_layer(WindowRef window, const struct MetalView *layer)
+     * void window_attach_layer(const struct Window *window, const struct MetalView *layer)
      * }
      */
     public static void window_attach_layer(MemorySegment window, MemorySegment layer) {
