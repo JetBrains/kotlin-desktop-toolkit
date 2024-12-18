@@ -197,6 +197,10 @@ class ApplicationState: AutoCloseable {
                 ),
             ),
             AppMenuItem.SubMenu(
+                title = "View",
+                specialTag = "View"
+            ),
+            AppMenuItem.SubMenu(
                 title = "Window",
                 specialTag = "Window"
             )

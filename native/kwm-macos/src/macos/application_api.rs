@@ -2,8 +2,7 @@ use std::cell::{Cell, OnceCell};
 
 use objc2::{declare_class, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSBackingStoreType,
-    NSNormalWindowLevel, NSWindow, NSWindowStyleMask,
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
 };
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
 
@@ -65,9 +64,11 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         );
     };
     let app = NSApplication::sharedApplication(mtm);
+//    let default_presentation_options = app.presentationOptions();
+//    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
     app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
     let event_handler = callbacks.event_handler;
-    let app_delegate = AppDelegate::new(mtm, callbacks);
+    let app_delegate = AppDelegate::new(mtm, app.clone(), callbacks);
     app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
     APP_STATE.with(|app_state| {
         app_state.set(AppState {
@@ -107,6 +108,7 @@ pub extern "C" fn application_request_termination() {
 }
 
 struct AppDelegateIvars {
+    ns_application: Retained<NSApplication>,
     callbacks: ApplicationCallbacks,
 }
 
@@ -133,7 +135,10 @@ declare_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[method(applicationDidFinishLaunching:)]
         fn did_finish_launching(&self, _notification: &NSNotification) {
-
+            unsafe {
+                // todo probably it's wrong figure out it later
+                self.ivars().ns_application.activateIgnoringOtherApps(true);
+            }
         }
 
         #[method(applicationShouldTerminate:)]
@@ -154,9 +159,9 @@ declare_class!(
 );
 
 impl AppDelegate {
-    fn new(mtm: MainThreadMarker, callbacks: ApplicationCallbacks) -> Retained<Self> {
+    fn new(mtm: MainThreadMarker, ns_application: Retained<NSApplication>, callbacks: ApplicationCallbacks) -> Retained<Self> {
         let this = mtm.alloc();
-        let this = this.set_ivars(AppDelegateIvars { callbacks });
+        let this = this.set_ivars(AppDelegateIvars { callbacks, ns_application });
         unsafe { msg_send_id![super(this), init] }
     }
 }

@@ -7,7 +7,7 @@ use objc2::{
     runtime::{AnyObject, ProtocolObject},
     sel, ClassType, DeclaredClass,
 };
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSView, NSWindow, NSWindowDelegate, NSWindowStyleMask};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask};
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNumber, NSObject, NSObjectProtocol, NSString};
 
 use crate::{
@@ -33,10 +33,10 @@ pub struct Window {
 pub type WindowId = i64;
 
 #[repr(C)]
-struct WindowParams {
-    origin: LogicalPoint,
-    size: LogicalSize,
-    title: StrPtr
+pub struct WindowParams {
+    pub origin: LogicalPoint,
+    pub size: LogicalSize,
+    pub title: StrPtr
 }
 
 impl WindowParams {
@@ -125,6 +125,11 @@ fn create_window(mtm: MainThreadMarker, params: &WindowParams) -> Window {
             None
         )
     };
+    unsafe {
+        // todo
+        // https://developer.apple.com/library/archive/documentation/General/Conceptual/MOSXAppProgrammingGuide/FullScreenApp/FullScreenApp.html#:~:text=Full%2Dscreen%20support%20in%20NSApplication,is%20also%20key%2Dvalue%20observable.
+        ns_window.setCollectionBehavior(NSWindowCollectionBehavior::FullScreenPrimary);
+    }
     ns_window.setTitle(&NSString::from_str(params.title()));
     unsafe {
         ns_window.setReleasedWhenClosed(false);
