@@ -1839,7 +1839,8 @@ public class kwm_macos_h {
     }
 
     private static class window_get_origin {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            LogicalPoint.layout(),
             kwm_macos_h.C_POINTER
         );
 
@@ -1851,7 +1852,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void window_get_origin(const struct Window *window)
+     * struct LogicalPoint window_get_origin(const struct Window *window)
      * }
      */
     public static FunctionDescriptor window_get_origin$descriptor() {
@@ -1861,7 +1862,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void window_get_origin(const struct Window *window)
+     * struct LogicalPoint window_get_origin(const struct Window *window)
      * }
      */
     public static MethodHandle window_get_origin$handle() {
@@ -1871,7 +1872,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void window_get_origin(const struct Window *window)
+     * struct LogicalPoint window_get_origin(const struct Window *window)
      * }
      */
     public static MemorySegment window_get_origin$address() {
@@ -1880,28 +1881,28 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * void window_get_origin(const struct Window *window)
+     * struct LogicalPoint window_get_origin(const struct Window *window)
      * }
      */
-    public static void window_get_origin(MemorySegment window) {
+    public static MemorySegment window_get_origin(SegmentAllocator allocator, MemorySegment window) {
         var mh$ = window_get_origin.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("window_get_origin", window);
+                traceDowncall("window_get_origin", allocator, window);
             }
-            mh$.invokeExact(window);
+            return (MemorySegment)mh$.invokeExact(allocator, window);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
     }
 
-    private static class window_set_size {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
-            kwm_macos_h.C_POINTER,
-            LogicalSize.layout()
+    private static class window_get_size {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            LogicalSize.layout(),
+            kwm_macos_h.C_POINTER
         );
 
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_set_size");
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_get_size");
 
         public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
     }
@@ -1909,43 +1910,451 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void window_set_size(const struct Window *window, struct LogicalSize size)
+     * struct LogicalSize window_get_size(const struct Window *window)
      * }
      */
-    public static FunctionDescriptor window_set_size$descriptor() {
-        return window_set_size.DESC;
+    public static FunctionDescriptor window_get_size$descriptor() {
+        return window_get_size.DESC;
     }
 
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void window_set_size(const struct Window *window, struct LogicalSize size)
+     * struct LogicalSize window_get_size(const struct Window *window)
      * }
      */
-    public static MethodHandle window_set_size$handle() {
-        return window_set_size.HANDLE;
+    public static MethodHandle window_get_size$handle() {
+        return window_get_size.HANDLE;
     }
 
     /**
      * Address for:
      * {@snippet lang=c :
-     * void window_set_size(const struct Window *window, struct LogicalSize size)
+     * struct LogicalSize window_get_size(const struct Window *window)
      * }
      */
-    public static MemorySegment window_set_size$address() {
-        return window_set_size.ADDR;
+    public static MemorySegment window_get_size$address() {
+        return window_get_size.ADDR;
     }
 
     /**
      * {@snippet lang=c :
-     * void window_set_size(const struct Window *window, struct LogicalSize size)
+     * struct LogicalSize window_get_size(const struct Window *window)
      * }
      */
-    public static void window_set_size(MemorySegment window, MemorySegment size) {
-        var mh$ = window_set_size.HANDLE;
+    public static MemorySegment window_get_size(SegmentAllocator allocator, MemorySegment window) {
+        var mh$ = window_get_size.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("window_set_size", window, size);
+                traceDowncall("window_get_size", allocator, window);
+            }
+            return (MemorySegment)mh$.invokeExact(allocator, window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_set_rect {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER,
+            LogicalPoint.layout(),
+            LogicalSize.layout(),
+            kwm_macos_h.C_BOOL
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_set_rect");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_set_rect(const struct Window *window, struct LogicalPoint origin, struct LogicalSize size, bool animate)
+     * }
+     */
+    public static FunctionDescriptor window_set_rect$descriptor() {
+        return window_set_rect.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_set_rect(const struct Window *window, struct LogicalPoint origin, struct LogicalSize size, bool animate)
+     * }
+     */
+    public static MethodHandle window_set_rect$handle() {
+        return window_set_rect.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_set_rect(const struct Window *window, struct LogicalPoint origin, struct LogicalSize size, bool animate)
+     * }
+     */
+    public static MemorySegment window_set_rect$address() {
+        return window_set_rect.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_set_rect(const struct Window *window, struct LogicalPoint origin, struct LogicalSize size, bool animate)
+     * }
+     */
+    public static void window_set_rect(MemorySegment window, MemorySegment origin, MemorySegment size, boolean animate) {
+        var mh$ = window_set_rect.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_set_rect", window, origin, size, animate);
+            }
+            mh$.invokeExact(window, origin, size, animate);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_is_key {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            kwm_macos_h.C_BOOL,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_is_key");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * bool window_is_key(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_is_key$descriptor() {
+        return window_is_key.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * bool window_is_key(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_is_key$handle() {
+        return window_is_key.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * bool window_is_key(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_is_key$address() {
+        return window_is_key.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * bool window_is_key(const struct Window *window)
+     * }
+     */
+    public static boolean window_is_key(MemorySegment window) {
+        var mh$ = window_is_key.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_is_key", window);
+            }
+            return (boolean)mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_is_main {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            kwm_macos_h.C_BOOL,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_is_main");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * bool window_is_main(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_is_main$descriptor() {
+        return window_is_main.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * bool window_is_main(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_is_main$handle() {
+        return window_is_main.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * bool window_is_main(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_is_main$address() {
+        return window_is_main.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * bool window_is_main(const struct Window *window)
+     * }
+     */
+    public static boolean window_is_main(MemorySegment window) {
+        var mh$ = window_is_main.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_is_main", window);
+            }
+            return (boolean)mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_get_max_size {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            LogicalSize.layout(),
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_get_max_size");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_max_size(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_get_max_size$descriptor() {
+        return window_get_max_size.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_max_size(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_get_max_size$handle() {
+        return window_get_max_size.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_max_size(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_get_max_size$address() {
+        return window_get_max_size.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_max_size(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_get_max_size(SegmentAllocator allocator, MemorySegment window) {
+        var mh$ = window_get_max_size.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_get_max_size", allocator, window);
+            }
+            return (MemorySegment)mh$.invokeExact(allocator, window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_set_max_size {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER,
+            LogicalSize.layout()
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_set_max_size");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_set_max_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static FunctionDescriptor window_set_max_size$descriptor() {
+        return window_set_max_size.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_set_max_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static MethodHandle window_set_max_size$handle() {
+        return window_set_max_size.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_set_max_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static MemorySegment window_set_max_size$address() {
+        return window_set_max_size.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_set_max_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static void window_set_max_size(MemorySegment window, MemorySegment size) {
+        var mh$ = window_set_max_size.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_set_max_size", window, size);
+            }
+            mh$.invokeExact(window, size);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_get_min_size {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            LogicalSize.layout(),
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_get_min_size");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_min_size(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_get_min_size$descriptor() {
+        return window_get_min_size.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_min_size(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_get_min_size$handle() {
+        return window_get_min_size.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_min_size(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_get_min_size$address() {
+        return window_get_min_size.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_min_size(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_get_min_size(SegmentAllocator allocator, MemorySegment window) {
+        var mh$ = window_get_min_size.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_get_min_size", allocator, window);
+            }
+            return (MemorySegment)mh$.invokeExact(allocator, window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_set_min_size {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER,
+            LogicalSize.layout()
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_set_min_size");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_set_min_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static FunctionDescriptor window_set_min_size$descriptor() {
+        return window_set_min_size.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_set_min_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static MethodHandle window_set_min_size$handle() {
+        return window_set_min_size.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_set_min_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static MemorySegment window_set_min_size$address() {
+        return window_set_min_size.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_set_min_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static void window_set_min_size(MemorySegment window, MemorySegment size) {
+        var mh$ = window_set_min_size.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_set_min_size", window, size);
             }
             mh$.invokeExact(window, size);
         } catch (Throwable ex$) {

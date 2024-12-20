@@ -263,9 +263,26 @@ double window_scale_factor(const struct Window *window);
 
 void window_attach_layer(const struct Window *window, const struct MetalView *layer);
 
-void window_get_origin(const struct Window *window);
+struct LogicalPoint window_get_origin(const struct Window *window);
 
-void window_set_size(const struct Window *window, struct LogicalSize size);
+struct LogicalSize window_get_size(const struct Window *window);
+
+void window_set_rect(const struct Window *window,
+                     struct LogicalPoint origin,
+                     struct LogicalSize size,
+                     bool animate);
+
+bool window_is_key(const struct Window *window);
+
+bool window_is_main(const struct Window *window);
+
+struct LogicalSize window_get_max_size(const struct Window *window);
+
+void window_set_max_size(const struct Window *window, struct LogicalSize size);
+
+struct LogicalSize window_get_min_size(const struct Window *window);
+
+void window_set_min_size(const struct Window *window, struct LogicalSize size);
 
 struct ScreenInfoArray screen_list(void);
 

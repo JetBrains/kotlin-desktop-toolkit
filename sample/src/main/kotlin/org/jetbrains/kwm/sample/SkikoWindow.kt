@@ -22,6 +22,8 @@ abstract class SkikoWindow(device: MetalDevice,
     val creationTime = TimeSource.Monotonic.markNow()
 
     init {
+        window.minSize = LogicalSize(320.0, 240.0)
+        window.maxSize = LogicalSize(1280.0, 960.0)
         window.attachView(view)
         performDrawing()
     }

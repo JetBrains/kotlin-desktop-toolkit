@@ -17,7 +17,7 @@ pub struct ScreenInfo {
     pub screen_id: ScreenId,
     pub is_primary: bool,
     pub name: StrPtr,
-    // relative to main screen
+    // relative to primary screen
     pub origin: LogicalPoint,
     pub size: LogicalSize,
     pub scale: f64,

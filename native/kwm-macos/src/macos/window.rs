@@ -4,7 +4,7 @@ use objc2::{
     declare_class, msg_send_id,
     mutability::{self, MainThreadOnly},
     rc::Retained,
-    runtime::{AnyObject, ProtocolObject},
+    runtime::{AnyObject, Bool, ProtocolObject},
     sel, ClassType, DeclaredClass,
 };
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask};
@@ -36,7 +36,10 @@ pub type WindowId = i64;
 pub struct WindowParams {
     pub origin: LogicalPoint,
     pub size: LogicalSize,
-    pub title: StrPtr
+    pub title: StrPtr,
+    // resizeable not resizable
+    // min max size
+    // allow full screen or not?
 }
 
 impl WindowParams {
@@ -85,20 +88,62 @@ pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
 }
 
 #[no_mangle]
-pub extern "C" fn window_get_origin(window: &Window) {
-
+pub extern "C" fn window_get_origin(window: &Window) -> LogicalPoint {
+    return window.ns_window.get_origin()
 }
 
 #[no_mangle]
-pub extern "C" fn window_set_size(window: &Window, size: LogicalSize) {
-//    window.ns_window.set_size(size);
+pub extern "C" fn window_get_size(window: &Window) -> LogicalSize {
+    return window.ns_window.get_size()
+}
+
+#[no_mangle]
+pub extern "C" fn window_set_rect(window: &Window, origin: LogicalPoint, size: LogicalSize, animate: bool) {
+    window.ns_window.set_rect(origin.into(), size.into(), animate);
+}
+
+#[no_mangle]
+pub extern "C" fn window_is_key(window: &Window) -> bool {
+    return window.ns_window.isKeyWindow();
+}
+
+#[no_mangle]
+pub extern "C" fn window_is_main(window: &Window) -> bool {
+    return unsafe {
+        window.ns_window.isMainWindow()
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn window_get_max_size(window: &Window) -> LogicalSize {
+    return window.ns_window.get_max_size();
+}
+
+#[no_mangle]
+pub extern "C" fn window_set_max_size(window: &Window, size: LogicalSize) {
+    window.ns_window.set_max_size(size);
+}
+
+#[no_mangle]
+pub extern "C" fn window_get_min_size(window: &Window) -> LogicalSize {
+    return window.ns_window.get_min_size();
+}
+
+#[no_mangle]
+pub extern "C" fn window_set_min_size(window: &Window, size: LogicalSize) {
+    window.ns_window.set_min_size(size);
 }
 
 pub(crate) trait NSWindowExts {
     fn window_id(&self) -> WindowId;
     fn get_size(&self) -> LogicalSize;
     fn get_origin(&self) -> LogicalPoint;
-    fn set_frame(&self, origin: LogicalPoint, size: LogicalSize);
+    fn set_rect(&self, origin: LogicalPoint, size: LogicalSize, animate: bool);
+
+    fn set_max_size(&self, size: LogicalSize);
+    fn set_min_size(&self, size: LogicalSize);
+    fn get_max_size(&self) -> LogicalSize;
+    fn get_min_size(&self) -> LogicalSize;
 }
 
 impl NSWindowExts for NSWindow {
@@ -116,8 +161,30 @@ impl NSWindowExts for NSWindow {
         self.frame().origin.into()
     }
 
-    fn set_frame(&self, origin: LogicalPoint, size: LogicalSize) {
-//        self.setFrame()
+    fn set_rect(&self, origin: LogicalPoint, size: LogicalSize, animate: bool) {
+        unsafe {
+            self.setFrame_display_animate(CGRect::new(origin.into(), size.into()), true, animate);
+        }
+    }
+
+    fn set_max_size(&self, size: LogicalSize) {
+        self.setMaxSize(size.into());
+    }
+
+    fn set_min_size(&self, size: LogicalSize) {
+        self.setMinSize(size.into());
+    }
+
+    fn get_max_size(&self) -> LogicalSize {
+        return unsafe {
+            self.maxSize().into()
+        };
+    }
+
+    fn get_min_size(&self) -> LogicalSize {
+        return unsafe {
+            self.minSize().into()
+        };
     }
 }
 
@@ -137,6 +204,8 @@ fn create_window(mtm: MainThreadMarker, params: &WindowParams) -> Window {
             // When true, the window server defers creating the window device until the window is moved onscreen.
             false,
             // Screen
+            // When sceen is specified the rect considered to be in its coordinate system
+            // By default it's relative to primary screen
             None
         )
     };

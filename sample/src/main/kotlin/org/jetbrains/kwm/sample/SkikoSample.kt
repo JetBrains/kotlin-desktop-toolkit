@@ -1,5 +1,6 @@
 package org.jetbrains.kwm.sample
 
+import org.jetbrains.kwm.LogicalPixels
 import org.jetbrains.kwm.LogicalPoint
 import org.jetbrains.kwm.LogicalSize
 import org.jetbrains.kwm.PhysicalSize
@@ -135,6 +136,27 @@ class ApplicationState: AutoCloseable {
         }
     }
 
+    private fun mainWindow(): RotatingBallWindow? {
+        return windows.find { window ->
+            window.window.isMain
+        }
+    }
+
+    private fun changeCurrentWindowSize(delta: LogicalPixels) {
+        mainWindow()?.let { window ->
+            val currentOrigin = window.window.origin
+            val currentSize = window.window.size
+            // todo check display bounds
+            // todo check min and max size
+            window.window.setRect(
+                origin = LogicalPoint(currentOrigin.x - delta / 2.0,
+                                      currentOrigin.y - delta / 2.0),
+                size = LogicalSize(currentSize.width + delta,
+                                   currentSize.height + delta),
+                animateTransition = true)
+        }
+    }
+
     fun handleEvent(event: Event): EventHandlerResult {
         val eventWindowId = event.windowId()
 
@@ -171,21 +193,6 @@ class ApplicationState: AutoCloseable {
                     perform = { createWindow() }
                 ),
                 AppMenuItem.Action(
-                    "Pause",
-                    keystroke = Keystroke(key = "p", modifiers = Modifiers(command = true)),
-                    perform = { setPaused(true) }
-                ),
-                AppMenuItem.Action(
-                    "Run",
-                    keystroke = Keystroke(key = "r", modifiers = Modifiers(command = true)),
-                    perform = { setPaused(false) }
-                ),
-                AppMenuItem.Action(
-                    "List Displays",
-                    keystroke = Keystroke(key = "d", modifiers = Modifiers(command = true)),
-                    perform = { Screen.allScreens() }
-                ),
-                AppMenuItem.Action(
                     "Quit1",
                     keystroke = Keystroke(key = "q", modifiers = Modifiers(command = true)),
                     perform = { Application.stopEventLoop() }
@@ -206,7 +213,38 @@ class ApplicationState: AutoCloseable {
                 specialTag = "View"
             ),
             AppMenuItem.SubMenu(
+                title = "Animation",
+                AppMenuItem.Action(
+                    title = "Pause",
+                    keystroke = Keystroke(key = "p", modifiers = Modifiers(command = true)),
+                    perform = { setPaused(true) }
+                ),
+                AppMenuItem.Action(
+                    title = "Run",
+                    keystroke = Keystroke(key = "r", modifiers = Modifiers(command = true)),
+                    perform = { setPaused(false) }
+                ),
+            ),
+            AppMenuItem.SubMenu(
+                title = "Displays",
+                AppMenuItem.Action(
+                    title = "List Displays",
+                    keystroke = Keystroke(key = "d", modifiers = Modifiers(command = true)),
+                    perform = { println(Screen.allScreens()) }
+                ),
+            ),
+            AppMenuItem.SubMenu(
                 title = "Window",
+                AppMenuItem.Action(
+                    title = "Increase Size",
+                    keystroke = Keystroke(key = "+", modifiers = Modifiers(command = true)),
+                    perform = { changeCurrentWindowSize(50.0) }
+                ),
+                AppMenuItem.Action(
+                    title = "Drecrease Size",
+                    keystroke = Keystroke(key = "-", modifiers = Modifiers(command = true)),
+                    perform = { changeCurrentWindowSize(-50.0) }
+                ),
                 specialTag = "Window"
             )
         )
