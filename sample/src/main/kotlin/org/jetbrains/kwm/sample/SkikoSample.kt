@@ -131,9 +131,7 @@ class ApplicationState: AutoCloseable {
     }
 
     fun setPaused(value: Boolean) {
-        windows.forEach {
-            it.displayLink.setRunning(!value)
-        }
+        mainWindow()?.displayLink?.setRunning(!value)
     }
 
     private fun mainWindow(): RotatingBallWindow? {
