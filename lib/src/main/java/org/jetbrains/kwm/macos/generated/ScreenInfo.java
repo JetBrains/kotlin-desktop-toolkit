@@ -16,7 +16,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * {@snippet lang=c :
  * struct ScreenInfo {
  *     ScreenId screen_id;
- *     bool is_main;
+ *     bool is_primary;
  *     StrPtr name;
  *     struct LogicalPoint origin;
  *     struct LogicalSize size;
@@ -32,7 +32,7 @@ public class ScreenInfo {
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_INT.withName("screen_id"),
-        kwm_macos_h.C_BOOL.withName("is_main"),
+        kwm_macos_h.C_BOOL.withName("is_primary"),
         MemoryLayout.paddingLayout(3),
         kwm_macos_h.C_POINTER.withName("name"),
         LogicalPoint.layout().withName("origin"),
@@ -91,48 +91,48 @@ public class ScreenInfo {
         struct.set(screen_id$LAYOUT, screen_id$OFFSET, fieldValue);
     }
 
-    private static final OfBoolean is_main$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("is_main"));
+    private static final OfBoolean is_primary$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("is_primary"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * bool is_main
+     * bool is_primary
      * }
      */
-    public static final OfBoolean is_main$layout() {
-        return is_main$LAYOUT;
+    public static final OfBoolean is_primary$layout() {
+        return is_primary$LAYOUT;
     }
 
-    private static final long is_main$OFFSET = 4;
+    private static final long is_primary$OFFSET = 4;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * bool is_main
+     * bool is_primary
      * }
      */
-    public static final long is_main$offset() {
-        return is_main$OFFSET;
+    public static final long is_primary$offset() {
+        return is_primary$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * bool is_main
+     * bool is_primary
      * }
      */
-    public static boolean is_main(MemorySegment struct) {
-        return struct.get(is_main$LAYOUT, is_main$OFFSET);
+    public static boolean is_primary(MemorySegment struct) {
+        return struct.get(is_primary$LAYOUT, is_primary$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * bool is_main
+     * bool is_primary
      * }
      */
-    public static void is_main(MemorySegment struct, boolean fieldValue) {
-        struct.set(is_main$LAYOUT, is_main$OFFSET, fieldValue);
+    public static void is_primary(MemorySegment struct, boolean fieldValue) {
+        struct.set(is_primary$LAYOUT, is_primary$OFFSET, fieldValue);
     }
 
     private static final AddressLayout name$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("name"));

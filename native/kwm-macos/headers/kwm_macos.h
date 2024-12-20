@@ -142,7 +142,7 @@ typedef struct WindowParams {
 
 typedef struct ScreenInfo {
   ScreenId screen_id;
-  bool is_main;
+  bool is_primary;
   StrPtr name;
   struct LogicalPoint origin;
   struct LogicalSize size;
@@ -262,6 +262,8 @@ ScreenId window_get_screen_id(const struct Window *window);
 double window_scale_factor(const struct Window *window);
 
 void window_attach_layer(const struct Window *window, const struct MetalView *layer);
+
+void window_get_origin(const struct Window *window);
 
 void window_set_size(const struct Window *window, struct LogicalSize size);
 

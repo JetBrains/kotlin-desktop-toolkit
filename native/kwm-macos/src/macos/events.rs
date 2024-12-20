@@ -122,7 +122,7 @@ pub (crate) fn handle_window_move(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowMove(WindowMoveEvent {
             window_id: window.window_id(),
-            origin: window.origin()
+            origin: window.get_origin()
         });
         (state.event_handler)(&event)
     });

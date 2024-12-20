@@ -38,7 +38,7 @@ class DisplayLink internal constructor(ptr: MemorySegment, val arena: Arena): Ma
 
 data class Screen(
     val screenId: ScreenId,
-    val isMain: Boolean,
+    val isPrimary: Boolean,
     val name: String,
     val origin: LogicalPoint,
     val size: LogicalSize,
@@ -47,7 +47,7 @@ data class Screen(
         internal fun fromNative(s: MemorySegment): Screen {
             return Screen(
                 screenId = ScreenInfo.screen_id(s),
-                isMain = ScreenInfo.is_main(s),
+                isPrimary = ScreenInfo.is_primary(s),
                 name = ScreenInfo.name(s).getUtf8String(0),
                 origin = LogicalPoint.fromNative(ScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(ScreenInfo.size(s)),

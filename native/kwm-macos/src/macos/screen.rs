@@ -15,7 +15,7 @@ pub type ScreenId = u32;
 #[repr(C)]
 pub struct ScreenInfo {
     pub screen_id: ScreenId,
-    pub is_main: bool,
+    pub is_primary: bool,
     pub name: StrPtr,
     // relative to main screen
     pub origin: LogicalPoint,
@@ -72,7 +72,8 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
                 let name = CString::new(name.as_str(pool)).unwrap();
                 ScreenInfo {
                     screen_id: screen.screen_id(),
-                    is_main: num == 0,
+                    // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
+                    is_primary: num == 0,
                     name: name.into_raw(),
                     origin: screen.frame().origin.into(),
                     size: screen.frame().size.into(),

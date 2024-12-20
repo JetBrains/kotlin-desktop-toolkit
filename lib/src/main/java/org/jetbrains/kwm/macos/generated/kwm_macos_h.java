@@ -1838,6 +1838,63 @@ public class kwm_macos_h {
         }
     }
 
+    private static class window_get_origin {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_get_origin");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_get_origin(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_get_origin$descriptor() {
+        return window_get_origin.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_get_origin(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_get_origin$handle() {
+        return window_get_origin.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_get_origin(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_get_origin$address() {
+        return window_get_origin.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_get_origin(const struct Window *window)
+     * }
+     */
+    public static void window_get_origin(MemorySegment window) {
+        var mh$ = window_get_origin.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_get_origin", window);
+            }
+            mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class window_set_size {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             kwm_macos_h.C_POINTER,
