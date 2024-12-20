@@ -66,7 +66,7 @@ impl<'a> AppMenuStructureSafe<'a> {
             if items.is_null() {
                 return Err(anyhow!("Null found in {:?}", menu));
             } else {
-                from_raw_parts(items, items_count as usize)
+                slice::from_raw_parts(items, items_count as usize)
             }
         };
         let safe_items: Result<Vec<_>> = items.iter().map(|unsafe_item| AppMenuItemSafe::from_unsafe(unsafe_item)).collect();

@@ -150,6 +150,15 @@ public class kwm_macos_h {
     public static int WindowCloseRequest() {
         return WindowCloseRequest;
     }
+    private static final int DisplayConfigurationChange = (int)7L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.DisplayConfigurationChange = 7
+     * }
+     */
+    public static int DisplayConfigurationChange() {
+        return DisplayConfigurationChange;
+    }
     /**
      * {@snippet lang=c :
      * typedef void *MetalDeviceRef
@@ -176,22 +185,22 @@ public class kwm_macos_h {
     public static final AddressLayout MetalTextureRef = kwm_macos_h.C_POINTER;
     /**
      * {@snippet lang=c :
-     * typedef const char *StrPtr
+     * typedef char *StrPtr
      * }
      */
     public static final AddressLayout StrPtr = kwm_macos_h.C_POINTER;
-    /**
-     * {@snippet lang=c :
-     * typedef uint32_t AppMenuKeyModifiers
-     * }
-     */
-    public static final OfInt AppMenuKeyModifiers = kwm_macos_h.C_INT;
     /**
      * {@snippet lang=c :
      * typedef int64_t ArraySize
      * }
      */
     public static final OfLong ArraySize = kwm_macos_h.C_LONG_LONG;
+    /**
+     * {@snippet lang=c :
+     * typedef uint32_t AppMenuKeyModifiers
+     * }
+     */
+    public static final OfInt AppMenuKeyModifiers = kwm_macos_h.C_INT;
     private static final int ActionItem = (int)0L;
     /**
      * {@snippet lang=c :
@@ -1815,6 +1824,177 @@ public class kwm_macos_h {
                 traceDowncall("window_attach_layer", window, layer);
             }
             mh$.invokeExact(window, layer);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_set_size {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER,
+            LogicalSize.layout()
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_set_size");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_set_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static FunctionDescriptor window_set_size$descriptor() {
+        return window_set_size.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_set_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static MethodHandle window_set_size$handle() {
+        return window_set_size.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_set_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static MemorySegment window_set_size$address() {
+        return window_set_size.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_set_size(const struct Window *window, struct LogicalSize size)
+     * }
+     */
+    public static void window_set_size(MemorySegment window, MemorySegment size) {
+        var mh$ = window_set_size.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_set_size", window, size);
+            }
+            mh$.invokeExact(window, size);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class screen_list {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            ScreenInfoArray.layout()    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("screen_list");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * struct ScreenInfoArray screen_list()
+     * }
+     */
+    public static FunctionDescriptor screen_list$descriptor() {
+        return screen_list.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * struct ScreenInfoArray screen_list()
+     * }
+     */
+    public static MethodHandle screen_list$handle() {
+        return screen_list.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * struct ScreenInfoArray screen_list()
+     * }
+     */
+    public static MemorySegment screen_list$address() {
+        return screen_list.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * struct ScreenInfoArray screen_list()
+     * }
+     */
+    public static MemorySegment screen_list(SegmentAllocator allocator) {
+        var mh$ = screen_list.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("screen_list", allocator);
+            }
+            return (MemorySegment)mh$.invokeExact(allocator);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class screen_list_drop {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            ScreenInfoArray.layout()
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("screen_list_drop");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void screen_list_drop(struct ScreenInfoArray arr)
+     * }
+     */
+    public static FunctionDescriptor screen_list_drop$descriptor() {
+        return screen_list_drop.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void screen_list_drop(struct ScreenInfoArray arr)
+     * }
+     */
+    public static MethodHandle screen_list_drop$handle() {
+        return screen_list_drop.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void screen_list_drop(struct ScreenInfoArray arr)
+     * }
+     */
+    public static MemorySegment screen_list_drop$address() {
+        return screen_list_drop.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void screen_list_drop(struct ScreenInfoArray arr)
+     * }
+     */
+    public static void screen_list_drop(MemorySegment arr) {
+        var mh$ = screen_list_drop.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("screen_list_drop", arr);
+            }
+            mh$.invokeExact(arr);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

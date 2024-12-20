@@ -84,9 +84,15 @@ pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
     }
 }
 
+#[no_mangle]
+pub extern "C" fn window_set_size(window: &Window, size: LogicalSize) {
+    window.ns_window.set_size(size);
+}
+
 pub(crate) trait NSWindowExts {
     fn window_id(&self) -> WindowId;
-    fn size(&self) -> LogicalSize;
+    fn get_size(&self) -> LogicalSize;
+    fn set_size(&self, size: LogicalSize);
     fn origin(&self) -> LogicalPoint;
 }
 
@@ -97,13 +103,23 @@ impl NSWindowExts for NSWindow {
         }
     }
 
-    fn size(&self) -> LogicalSize {
+    fn get_size(&self) -> LogicalSize {
         self.frame().size.into()
+    }
+
+    fn set_size(&self, size: LogicalSize) {
+        todo!()
+//        self.setFrameSize(size.into())
     }
 
     fn origin(&self) -> LogicalPoint {
         self.frame().origin.into()
     }
+
+//    fn set_origin(&self, origin: LogicalSize) {
+//        todo!()
+////        self.setOrigin
+//    }
 }
 
 fn create_window(mtm: MainThreadMarker, params: &WindowParams) -> Window {

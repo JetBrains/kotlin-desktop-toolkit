@@ -67,7 +67,8 @@ pub enum Event {
     WindowResize(WindowResizeEvent),
     WindowMove(WindowMoveEvent),
     WindowFocusChange(WindowFocusChangeEvent),
-    WindowCloseRequest(WindowCloseRequestEvent)
+    WindowCloseRequest(WindowCloseRequestEvent),
+    DisplayConfigurationChange
 }
 
 pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
@@ -110,7 +111,7 @@ pub (crate) fn handle_window_resize(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowResize(WindowResizeEvent {
             window_id: window.window_id(),
-            size: window.size()
+            size: window.get_size()
         });
         (state.event_handler)(&event)
     });
@@ -142,6 +143,13 @@ pub (crate) fn handle_window_focus_change(window: &NSWindow) {
             is_key: window.isKeyWindow(),
             is_main: unsafe { window.isMainWindow() }
         });
+        (state.event_handler)(&event)
+    });
+}
+
+pub (crate) fn handle_display_configuration_change() {
+    let _handled = AppState::with(|state| {
+        let event = Event::DisplayConfigurationChange;
         (state.event_handler)(&event)
     });
 }

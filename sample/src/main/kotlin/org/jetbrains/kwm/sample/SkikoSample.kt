@@ -181,6 +181,11 @@ class ApplicationState: AutoCloseable {
                     perform = { setPaused(false) }
                 ),
                 AppMenuItem.Action(
+                    "List Displays",
+                    keystroke = Keystroke(key = "d", modifiers = Modifiers(command = true)),
+                    perform = { Screen.allScreens() }
+                ),
+                AppMenuItem.Action(
                     "Quit1",
                     keystroke = Keystroke(key = "q", modifiers = Modifiers(command = true)),
                     perform = { Application.stopEventLoop() }

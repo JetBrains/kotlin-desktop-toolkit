@@ -50,6 +50,8 @@ sealed class Event {
         val isMainWindow: Boolean
     ): Event()
 
+    data object DisplayConfigurationChange: Event()
+
     data class WindowCloseRequest(
         val windowId: WindowId,
     ): Event()
@@ -119,6 +121,9 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.WindowCloseRequest(
                 windowId = WindowCloseRequestEvent.window_id(nativeEvent)
             )
+        }
+        kwm_macos_h.DisplayConfigurationChange() -> {
+            Event.DisplayConfigurationChange
         }
         else -> {
             error("Unexpected Event tag")

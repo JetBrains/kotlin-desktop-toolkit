@@ -1,12 +1,13 @@
 use std::{ffi::c_void, marker::PhantomData, rc::Rc, sync::Arc};
 
-pub(crate) type StrPtr = *const std::ffi::c_char;
+pub(crate) type StrPtr = *mut std::ffi::c_char;
 pub (crate) type ArraySize = i64;
 
+// ffi ready analog of &[T]
 //#[repr(C)]
-//pub struct Array {
-//    arr: *const c_void,
-//    len: ArraySize,
+//pub struct Array<T> {
+//    pub arr: *mut T,
+//    pub len: ArraySize,
 //}
 
 pub type PhysicalPixels = f64;

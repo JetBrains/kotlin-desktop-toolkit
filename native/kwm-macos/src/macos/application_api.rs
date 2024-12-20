@@ -1,12 +1,12 @@
 use std::cell::{Cell, OnceCell};
 
-use objc2::{declare_class, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, ClassType, DeclaredClass};
+use objc2::{declare_class, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
 };
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
+use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
 
-use crate::common::StrPtr;
+use crate::{common::StrPtr, macos::events::handle_display_configuration_change};
 
 use super::events::{Event, EventHandler};
 
@@ -51,7 +51,7 @@ pub struct ApplicationConfig {
 #[no_mangle]
 pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: ApplicationCallbacks) {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    unsafe { NSUserDefaults::resetStandardUserDefaults() };
+//    unsafe { NSUserDefaults::resetStandardUserDefaults() };
     let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
     unsafe {
         user_defaults.setBool_forKey(
@@ -133,9 +133,19 @@ declare_class!(
     unsafe impl NSObjectProtocol for AppDelegate {}
 
     unsafe impl NSApplicationDelegate for AppDelegate {
+        #[method(displayConfigurationChanged:)]
+        fn display_configuration_changed(&self, _notification: & NSNotification) {
+            handle_display_configuration_change();
+        }
+
         #[method(applicationDidFinishLaunching:)]
         fn did_finish_launching(&self, _notification: &NSNotification) {
             unsafe {
+                NSNotificationCenter::defaultCenter()
+                    .addObserver_selector_name_object(self,
+                                                      sel!(displayConfigurationChanged:),
+                                                      Some(NSApplicationDidChangeScreenParametersNotification),
+                                                      None);
                 // todo probably it's wrong figure out it later
                 self.ivars().ns_application.activateIgnoringOtherApps(true);
             }

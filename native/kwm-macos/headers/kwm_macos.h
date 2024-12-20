@@ -78,6 +78,7 @@ typedef enum Event_Tag {
   WindowMove,
   WindowFocusChange,
   WindowCloseRequest,
+  DisplayConfigurationChange,
 } Event_Tag;
 
 typedef struct Event {
@@ -130,13 +131,29 @@ typedef void *MetalTextureRef;
 
 typedef void (*DisplayLinkCallback)(void);
 
-typedef const char *StrPtr;
+typedef char *StrPtr;
 
 typedef struct WindowParams {
   struct LogicalPoint origin;
   struct LogicalSize size;
   StrPtr title;
 } WindowParams;
+
+typedef struct ScreenInfo {
+  ScreenId screen_id;
+  bool is_main;
+  StrPtr name;
+  struct LogicalPoint origin;
+  struct LogicalSize size;
+  double scale;
+} ScreenInfo;
+
+typedef int64_t ArraySize;
+
+typedef struct ScreenInfoArray {
+  struct ScreenInfo *ptr;
+  ArraySize len;
+} ScreenInfoArray;
 
 typedef uint32_t AppMenuKeyModifiers;
 #define AppMenuKeyModifiers_ModifierFlagCapsLock (uint32_t)(1 << 16)
@@ -153,8 +170,6 @@ typedef struct AppMenuKeystroke {
   StrPtr key;
   AppMenuKeyModifiers modifiers;
 } AppMenuKeystroke;
-
-typedef int64_t ArraySize;
 
 typedef enum AppMenuItem_Tag {
   ActionItem,
@@ -246,6 +261,12 @@ ScreenId window_get_screen_id(const struct Window *window);
 double window_scale_factor(const struct Window *window);
 
 void window_attach_layer(const struct Window *window, const struct MetalView *layer);
+
+void window_set_size(const struct Window *window, struct LogicalSize size);
+
+struct ScreenInfoArray screen_list(void);
+
+void screen_list_drop(struct ScreenInfoArray arr);
 
 void main_menu_update(struct AppMenuStructure menu);
 

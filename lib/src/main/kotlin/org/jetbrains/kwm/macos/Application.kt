@@ -25,7 +25,7 @@ object Application {
         }
     }
 
-    var eventHandler: EventHandler? = null
+    private var eventHandler: EventHandler? = null
 
     fun init(config: Config = Config()) {
         Arena.ofConfined().use { arena ->
@@ -59,19 +59,31 @@ object Application {
         // which means that JVM shutdown hooks might be interupted
     }
 
-    // called from native
-    private fun onEvent(nativeEvent: MemorySegment): Boolean {
-        val event = Event.fromNative(nativeEvent)
+    private fun runEventHandler(event: Event): EventHandlerResult {
         return eventHandler?.let { eventHandler ->
-            when (eventHandler(event)) {
-                EventHandlerResult.Continue -> false
-                EventHandlerResult.Stop -> true
-            }
+            eventHandler(event)
         } ?: run {
             // todo remove with proper logging
             println("eventHandler is null event: $event was ignored!")
-            false
+            EventHandlerResult.Continue
         }
+    }
+
+    // called from native
+    private fun onEvent(nativeEvent: MemorySegment): Boolean {
+        val event = Event.fromNative(nativeEvent)
+        when (event) {
+            is Event.DisplayConfigurationChange -> {
+                println("DisplayConfigurationChange: ${Screen.allScreens()}")
+            }
+            else -> {}
+        }
+        val result = runEventHandler(event)
+        return when (result) {
+            EventHandlerResult.Continue -> false
+            EventHandlerResult.Stop -> true
+        }
+
     }
 
     private fun applicationCallbacks(): MemorySegment {

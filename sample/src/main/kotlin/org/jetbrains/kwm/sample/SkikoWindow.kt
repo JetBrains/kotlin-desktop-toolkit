@@ -36,7 +36,6 @@ abstract class SkikoWindow(device: MetalDevice,
     }
 
     open fun handleEvent(event: Event): EventHandlerResult {
-        println("$event")
         return when (event) {
             is Event.WindowResize -> {
                 performDrawing()
