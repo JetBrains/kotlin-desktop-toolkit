@@ -159,6 +159,15 @@ public class kwm_macos_h {
     public static int DisplayConfigurationChange() {
         return DisplayConfigurationChange;
     }
+    private static final int ApplicationDidFinishLaunching = (int)8L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.ApplicationDidFinishLaunching = 8
+     * }
+     */
+    public static int ApplicationDidFinishLaunching() {
+        return ApplicationDidFinishLaunching;
+    }
     /**
      * {@snippet lang=c :
      * typedef void *MetalDeviceRef

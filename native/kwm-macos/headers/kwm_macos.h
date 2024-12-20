@@ -79,6 +79,7 @@ typedef enum Event_Tag {
   WindowFocusChange,
   WindowCloseRequest,
   DisplayConfigurationChange,
+  ApplicationDidFinishLaunching,
 } Event_Tag;
 
 typedef struct Event {

@@ -6,7 +6,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
 
-use crate::{common::StrPtr, macos::events::handle_display_configuration_change};
+use crate::{common::StrPtr, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}};
 
 use super::events::{Event, EventHandler};
 
@@ -133,22 +133,16 @@ declare_class!(
     unsafe impl NSObjectProtocol for AppDelegate {}
 
     unsafe impl NSApplicationDelegate for AppDelegate {
-        #[method(displayConfigurationChanged:)]
-        fn display_configuration_changed(&self, _notification: & NSNotification) {
+        #[method(applicationDidChangeScreenParameters:)]
+        fn did_change_screen_parameters(&self, _notification: &NSNotification) {
             handle_display_configuration_change();
         }
 
         #[method(applicationDidFinishLaunching:)]
         fn did_finish_launching(&self, _notification: &NSNotification) {
-            unsafe {
-                NSNotificationCenter::defaultCenter()
-                    .addObserver_selector_name_object(self,
-                                                      sel!(displayConfigurationChanged:),
-                                                      Some(NSApplicationDidChangeScreenParametersNotification),
-                                                      None);
-                // todo probably it's wrong figure out it later
-                self.ivars().ns_application.activateIgnoringOtherApps(true);
-            }
+            // todo probably it's wrong figure out it later
+            handle_application_did_finish_launching();
+            self.ivars().ns_application.activateIgnoringOtherApps(true);
         }
 
         #[method(applicationShouldTerminate:)]

@@ -26,6 +26,7 @@ object Application {
     }
 
     private var eventHandler: EventHandler? = null
+    lateinit var screens: List<Screen>
 
     fun init(config: Config = Config()) {
         Arena.ofConfined().use { arena ->
@@ -73,8 +74,11 @@ object Application {
     private fun onEvent(nativeEvent: MemorySegment): Boolean {
         val event = Event.fromNative(nativeEvent)
         when (event) {
+            is Event.ApplicationDidFinishLaunching -> {
+                screens = Screen.allScreens()
+            }
             is Event.DisplayConfigurationChange -> {
-                println("DisplayConfigurationChange: ${Screen.allScreens()}")
+                screens = Screen.allScreens()
             }
             else -> {}
         }
@@ -83,7 +87,6 @@ object Application {
             EventHandlerResult.Continue -> false
             EventHandlerResult.Stop -> true
         }
-
     }
 
     private fun applicationCallbacks(): MemorySegment {

@@ -68,7 +68,8 @@ pub enum Event {
     WindowMove(WindowMoveEvent),
     WindowFocusChange(WindowFocusChangeEvent),
     WindowCloseRequest(WindowCloseRequestEvent),
-    DisplayConfigurationChange
+    DisplayConfigurationChange,
+    ApplicationDidFinishLaunching
 }
 
 pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
@@ -150,6 +151,13 @@ pub (crate) fn handle_window_focus_change(window: &NSWindow) {
 pub (crate) fn handle_display_configuration_change() {
     let _handled = AppState::with(|state| {
         let event = Event::DisplayConfigurationChange;
+        (state.event_handler)(&event)
+    });
+}
+
+pub (crate) fn handle_application_did_finish_launching() {
+    let _handled = AppState::with(|state| {
+        let event = Event::ApplicationDidFinishLaunching;
         (state.event_handler)(&event)
     });
 }

@@ -54,26 +54,26 @@ public class Event {
         MemoryLayout.unionLayout(
             MemoryLayout.structLayout(
                 MouseMovedEvent.layout().withName("mouse_moved")
-            ).withName("$anon$87:5"),
+            ).withName("$anon$88:5"),
             MemoryLayout.structLayout(
                 ScrollWheelEvent.layout().withName("scroll_wheel")
-            ).withName("$anon$90:5"),
+            ).withName("$anon$91:5"),
             MemoryLayout.structLayout(
                 WindowScreenChangeEvent.layout().withName("window_screen_change")
-            ).withName("$anon$93:5"),
+            ).withName("$anon$94:5"),
             MemoryLayout.structLayout(
                 WindowResizeEvent.layout().withName("window_resize")
-            ).withName("$anon$96:5"),
+            ).withName("$anon$97:5"),
             MemoryLayout.structLayout(
                 WindowMoveEvent.layout().withName("window_move")
-            ).withName("$anon$99:5"),
+            ).withName("$anon$100:5"),
             MemoryLayout.structLayout(
                 WindowFocusChangeEvent.layout().withName("window_focus_change")
-            ).withName("$anon$102:5"),
+            ).withName("$anon$103:5"),
             MemoryLayout.structLayout(
                 WindowCloseRequestEvent.layout().withName("window_close_request")
-            ).withName("$anon$105:5")
-        ).withName("$anon$86:3")
+            ).withName("$anon$106:5")
+        ).withName("$anon$87:3")
     ).withName("Event");
 
     /**
@@ -127,7 +127,7 @@ public class Event {
         struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout mouse_moved$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$86:3"), groupElement("$anon$87:5"), groupElement("mouse_moved"));
+    private static final GroupLayout mouse_moved$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$87:3"), groupElement("$anon$88:5"), groupElement("mouse_moved"));
 
     /**
      * Layout for field:
@@ -171,7 +171,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, mouse_moved$OFFSET, mouse_moved$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout scroll_wheel$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$86:3"), groupElement("$anon$90:5"), groupElement("scroll_wheel"));
+    private static final GroupLayout scroll_wheel$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$87:3"), groupElement("$anon$91:5"), groupElement("scroll_wheel"));
 
     /**
      * Layout for field:
@@ -215,7 +215,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, scroll_wheel$OFFSET, scroll_wheel$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_screen_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$86:3"), groupElement("$anon$93:5"), groupElement("window_screen_change"));
+    private static final GroupLayout window_screen_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$87:3"), groupElement("$anon$94:5"), groupElement("window_screen_change"));
 
     /**
      * Layout for field:
@@ -259,7 +259,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, window_screen_change$OFFSET, window_screen_change$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_resize$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$86:3"), groupElement("$anon$96:5"), groupElement("window_resize"));
+    private static final GroupLayout window_resize$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$87:3"), groupElement("$anon$97:5"), groupElement("window_resize"));
 
     /**
      * Layout for field:
@@ -303,7 +303,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, window_resize$OFFSET, window_resize$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_move$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$86:3"), groupElement("$anon$99:5"), groupElement("window_move"));
+    private static final GroupLayout window_move$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$87:3"), groupElement("$anon$100:5"), groupElement("window_move"));
 
     /**
      * Layout for field:
@@ -347,7 +347,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, window_move$OFFSET, window_move$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_focus_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$86:3"), groupElement("$anon$102:5"), groupElement("window_focus_change"));
+    private static final GroupLayout window_focus_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$87:3"), groupElement("$anon$103:5"), groupElement("window_focus_change"));
 
     /**
      * Layout for field:
@@ -391,7 +391,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, window_focus_change$OFFSET, window_focus_change$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_close_request$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$86:3"), groupElement("$anon$105:5"), groupElement("window_close_request"));
+    private static final GroupLayout window_close_request$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$87:3"), groupElement("$anon$106:5"), groupElement("window_close_request"));
 
     /**
      * Layout for field:
