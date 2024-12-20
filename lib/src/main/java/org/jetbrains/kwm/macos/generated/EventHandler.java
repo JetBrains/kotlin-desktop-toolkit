@@ -38,6 +38,9 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *         struct {
  *             struct WindowCloseRequestEvent window_close_request;
  *         };
+ *         struct {
+ *             struct WindowFullScreenToggleEvent window_full_screen_toggle;
+ *         };
  *     };
  * } *)
  * }

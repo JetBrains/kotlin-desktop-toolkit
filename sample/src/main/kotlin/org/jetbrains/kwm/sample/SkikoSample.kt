@@ -210,6 +210,11 @@ class ApplicationState: AutoCloseable {
             ),
             AppMenuItem.SubMenu(
                 title = "View",
+                AppMenuItem.Action(
+                    title = "Toggle Full Screen",
+                    keystroke = Keystroke(key = "f", modifiers = Modifiers(command = true, control = true)),
+                    perform = { mainWindow()?.window?.toggleFullScreen() }
+                ),
                 specialTag = "View"
             ),
             AppMenuItem.SubMenu(

@@ -60,6 +60,13 @@ pub struct WindowCloseRequestEvent {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct WindowFullScreenToggleEvent {
+    window_id: WindowId,
+    is_full_screen: bool
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub enum Event {
     MouseMoved(MouseMovedEvent),
     ScrollWheel(ScrollWheelEvent),
@@ -68,6 +75,7 @@ pub enum Event {
     WindowMove(WindowMoveEvent),
     WindowFocusChange(WindowFocusChangeEvent),
     WindowCloseRequest(WindowCloseRequestEvent),
+    WindowFullScreenToggle(WindowFullScreenToggleEvent),
     DisplayConfigurationChange,
     ApplicationDidFinishLaunching
 }
@@ -143,6 +151,16 @@ pub (crate) fn handle_window_focus_change(window: &NSWindow) {
             window_id: window.window_id(),
             is_key: window.isKeyWindow(),
             is_main: unsafe { window.isMainWindow() }
+        });
+        (state.event_handler)(&event)
+    });
+}
+
+pub (crate) fn handle_window_full_screen_toggle(window: &NSWindow) {
+    let _handled = AppState::with(|state| {
+        let event = Event::WindowFullScreenToggle(WindowFullScreenToggleEvent {
+            window_id: window.window_id(),
+            is_full_screen: window.is_full_screen()
         });
         (state.event_handler)(&event)
     });

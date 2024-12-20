@@ -86,6 +86,15 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
             }
         }
 
+    val isFullScreen: Boolean
+        get() {
+            return kwm_macos_h.window_is_full_screen(pointer)
+        }
+
+    fun toggleFullScreen() {
+        kwm_macos_h.window_toggle_full_screen(pointer)
+    }
+
     val isKey: Boolean
         get() {
             return kwm_macos_h.window_is_key(pointer)

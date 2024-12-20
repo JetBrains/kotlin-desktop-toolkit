@@ -150,19 +150,28 @@ public class kwm_macos_h {
     public static int WindowCloseRequest() {
         return WindowCloseRequest;
     }
-    private static final int DisplayConfigurationChange = (int)7L;
+    private static final int WindowFullScreenToggle = (int)7L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.DisplayConfigurationChange = 7
+     * enum Event_Tag.WindowFullScreenToggle = 7
+     * }
+     */
+    public static int WindowFullScreenToggle() {
+        return WindowFullScreenToggle;
+    }
+    private static final int DisplayConfigurationChange = (int)8L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.DisplayConfigurationChange = 8
      * }
      */
     public static int DisplayConfigurationChange() {
         return DisplayConfigurationChange;
     }
-    private static final int ApplicationDidFinishLaunching = (int)8L;
+    private static final int ApplicationDidFinishLaunching = (int)9L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.ApplicationDidFinishLaunching = 8
+     * enum Event_Tag.ApplicationDidFinishLaunching = 9
      * }
      */
     public static int ApplicationDidFinishLaunching() {
@@ -2357,6 +2366,121 @@ public class kwm_macos_h {
                 traceDowncall("window_set_min_size", window, size);
             }
             mh$.invokeExact(window, size);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_toggle_full_screen {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_toggle_full_screen");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_toggle_full_screen(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_toggle_full_screen$descriptor() {
+        return window_toggle_full_screen.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_toggle_full_screen(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_toggle_full_screen$handle() {
+        return window_toggle_full_screen.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_toggle_full_screen(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_toggle_full_screen$address() {
+        return window_toggle_full_screen.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_toggle_full_screen(const struct Window *window)
+     * }
+     */
+    public static void window_toggle_full_screen(MemorySegment window) {
+        var mh$ = window_toggle_full_screen.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_toggle_full_screen", window);
+            }
+            mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_is_full_screen {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            kwm_macos_h.C_BOOL,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_is_full_screen");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * bool window_is_full_screen(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_is_full_screen$descriptor() {
+        return window_is_full_screen.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * bool window_is_full_screen(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_is_full_screen$handle() {
+        return window_is_full_screen.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * bool window_is_full_screen(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_is_full_screen$address() {
+        return window_is_full_screen.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * bool window_is_full_screen(const struct Window *window)
+     * }
+     */
+    public static boolean window_is_full_screen(MemorySegment window) {
+        var mh$ = window_is_full_screen.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_is_full_screen", window);
+            }
+            return (boolean)mh$.invokeExact(window);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

@@ -70,6 +70,11 @@ typedef struct WindowCloseRequestEvent {
   WindowId window_id;
 } WindowCloseRequestEvent;
 
+typedef struct WindowFullScreenToggleEvent {
+  WindowId window_id;
+  bool is_full_screen;
+} WindowFullScreenToggleEvent;
+
 typedef enum Event_Tag {
   MouseMoved,
   ScrollWheel,
@@ -78,6 +83,7 @@ typedef enum Event_Tag {
   WindowMove,
   WindowFocusChange,
   WindowCloseRequest,
+  WindowFullScreenToggle,
   DisplayConfigurationChange,
   ApplicationDidFinishLaunching,
 } Event_Tag;
@@ -105,6 +111,9 @@ typedef struct Event {
     };
     struct {
       struct WindowCloseRequestEvent window_close_request;
+    };
+    struct {
+      struct WindowFullScreenToggleEvent window_full_screen_toggle;
     };
   };
 } Event;
@@ -283,6 +292,10 @@ void window_set_max_size(const struct Window *window, struct LogicalSize size);
 struct LogicalSize window_get_min_size(const struct Window *window);
 
 void window_set_min_size(const struct Window *window, struct LogicalSize size);
+
+void window_toggle_full_screen(const struct Window *window);
+
+bool window_is_full_screen(const struct Window *window);
 
 struct ScreenInfoArray screen_list(void);
 

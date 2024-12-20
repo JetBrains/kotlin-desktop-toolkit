@@ -3,14 +3,7 @@ package org.jetbrains.kwm.macos
 import org.jetbrains.kwm.LogicalPixels
 import org.jetbrains.kwm.LogicalPoint
 import org.jetbrains.kwm.LogicalSize
-import org.jetbrains.kwm.macos.generated.MouseMovedEvent
-import org.jetbrains.kwm.macos.generated.ScrollWheelEvent
-import org.jetbrains.kwm.macos.generated.WindowCloseRequestEvent
-import org.jetbrains.kwm.macos.generated.WindowFocusChangeEvent
-import org.jetbrains.kwm.macos.generated.WindowMoveEvent
-import org.jetbrains.kwm.macos.generated.WindowResizeEvent
-import org.jetbrains.kwm.macos.generated.WindowScreenChangeEvent
-import org.jetbrains.kwm.macos.generated.kwm_macos_h
+import org.jetbrains.kwm.macos.generated.*
 import org.jetbrains.kwm.macos.generated.Event as NativeEvent
 import java.lang.foreign.MemorySegment
 
@@ -50,6 +43,11 @@ sealed class Event {
         val isMainWindow: Boolean
     ): Event()
 
+    data class WindowFullScreenToggle(
+        val windowId: WindowId,
+        val isFullScreen: Boolean
+    ): Event()
+
     data object DisplayConfigurationChange: Event()
 
     data object ApplicationDidFinishLaunching: Event()
@@ -67,6 +65,7 @@ sealed class Event {
             is WindowMove -> windowId
             is WindowFocusChange -> windowId
             is WindowCloseRequest -> windowId
+            is WindowFullScreenToggle -> windowId
             else -> null
         }
     }
@@ -129,6 +128,13 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         kwm_macos_h.ApplicationDidFinishLaunching() -> {
             Event.ApplicationDidFinishLaunching
+        }
+        kwm_macos_h.WindowFullScreenToggle() -> {
+            val nativeEvent = NativeEvent.window_full_screen_toggle(s)
+            Event.WindowFullScreenToggle(
+                windowId = WindowFullScreenToggleEvent.window_id(nativeEvent),
+                isFullScreen = WindowFullScreenToggleEvent.is_full_screen(nativeEvent)
+            )
         }
         else -> {
             error("Unexpected Event tag")

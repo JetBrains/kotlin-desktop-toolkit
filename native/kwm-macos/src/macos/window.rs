@@ -13,7 +13,7 @@ use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification
 use crate::{
     common::{LogicalPoint, LogicalSize, StrPtr},
     define_objc_ref,
-    macos::{application_api::AppState, events::{handle_mouse_moved, handle_window_close_request, handle_window_focus_change, handle_window_move, handle_window_resize, handle_window_screen_change}},
+    macos::{application_api::AppState, events::{handle_mouse_moved, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}},
 };
 
 use super::{events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}};
@@ -37,8 +37,9 @@ pub struct WindowParams {
     pub origin: LogicalPoint,
     pub size: LogicalSize,
     pub title: StrPtr,
+
+
     // resizeable not resizable
-    // min max size
     // allow full screen or not?
 }
 
@@ -134,8 +135,19 @@ pub extern "C" fn window_set_min_size(window: &Window, size: LogicalSize) {
     window.ns_window.set_min_size(size);
 }
 
+#[no_mangle]
+pub extern "C" fn window_toggle_full_screen(window: &Window) {
+    window.ns_window.toggleFullScreen(None);
+}
+
+#[no_mangle]
+pub extern "C" fn window_is_full_screen(window: &Window) -> bool {
+    return window.ns_window.is_full_screen();
+}
+
 pub(crate) trait NSWindowExts {
     fn window_id(&self) -> WindowId;
+
     fn get_size(&self) -> LogicalSize;
     fn get_origin(&self) -> LogicalPoint;
     fn set_rect(&self, origin: LogicalPoint, size: LogicalSize, animate: bool);
@@ -144,6 +156,8 @@ pub(crate) trait NSWindowExts {
     fn set_min_size(&self, size: LogicalSize);
     fn get_max_size(&self) -> LogicalSize;
     fn get_min_size(&self) -> LogicalSize;
+
+    fn is_full_screen(&self) -> bool;
 }
 
 impl NSWindowExts for NSWindow {
@@ -185,6 +199,10 @@ impl NSWindowExts for NSWindow {
         return unsafe {
             self.minSize().into()
         };
+    }
+
+    fn is_full_screen(&self) -> bool {
+        return self.styleMask().contains(NSWindowStyleMask::FullScreen);
     }
 }
 
@@ -275,6 +293,18 @@ declare_class!(
         #[allow(non_snake_case)]
         unsafe fn windowDidMove(&self, _notification: &NSNotification) {
             handle_window_move(&*self.ivars().ns_window);
+        }
+
+        #[method(windowDidEnterFullScreen:)]
+        #[allow(non_snake_case)]
+        unsafe fn windowDidEnterFullScreen(&self, _notification: &NSNotification) {
+            handle_window_full_screen_toggle(&*self.ivars().ns_window);
+        }
+
+        #[method(windowDidExitFullScreen:)]
+        #[allow(non_snake_case)]
+        unsafe fn windowDidExitFullScreen(&self, _notification: &NSNotification) {
+            handle_window_full_screen_toggle(&*self.ivars().ns_window);
         }
 
         #[method(windowDidBecomeKey:)]
