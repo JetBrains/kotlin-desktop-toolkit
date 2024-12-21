@@ -155,6 +155,11 @@ class ApplicationState: AutoCloseable {
         }
     }
 
+    private fun killWindow(window: RotatingBallWindow) {
+        windows.remove(window)
+        window.close()
+    }
+
     fun handleEvent(event: Event): EventHandlerResult {
         val eventWindowId = event.windowId()
 
@@ -163,8 +168,7 @@ class ApplicationState: AutoCloseable {
                 windows.find {
                     it.window.windowId() == eventWindowId
                 }?.let { window ->
-                    windows.remove(window)
-                    window.close()
+                    killWindow(window)
                 } ?: run {
                     println("Can't find window for $event")
                 }
@@ -247,6 +251,15 @@ class ApplicationState: AutoCloseable {
                     title = "Drecrease Size",
                     keystroke = Keystroke(key = "-", modifiers = Modifiers(command = true)),
                     perform = { changeCurrentWindowSize(-50.0) }
+                ),
+                AppMenuItem.Action(
+                    title = "Kill",
+                    keystroke = Keystroke(key = "w", modifiers = Modifiers(command = true)),
+                    perform = {
+                        mainWindow()?.let {
+                            killWindow(it)
+                        }
+                    }
                 ),
                 specialTag = "Window"
             )

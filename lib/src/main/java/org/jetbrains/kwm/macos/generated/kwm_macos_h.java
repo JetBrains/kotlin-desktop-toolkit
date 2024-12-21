@@ -1503,7 +1503,7 @@ public class kwm_macos_h {
     private static class window_create {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             kwm_macos_h.C_POINTER,
-            WindowParams.layout()
+            kwm_macos_h.C_POINTER
         );
 
         public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_create");
@@ -1514,7 +1514,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * struct Window *window_create(struct WindowParams params)
+     * struct Window *window_create(const struct WindowParams *params)
      * }
      */
     public static FunctionDescriptor window_create$descriptor() {
@@ -1524,7 +1524,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * struct Window *window_create(struct WindowParams params)
+     * struct Window *window_create(const struct WindowParams *params)
      * }
      */
     public static MethodHandle window_create$handle() {
@@ -1534,7 +1534,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * struct Window *window_create(struct WindowParams params)
+     * struct Window *window_create(const struct WindowParams *params)
      * }
      */
     public static MemorySegment window_create$address() {
@@ -1543,7 +1543,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * struct Window *window_create(struct WindowParams params)
+     * struct Window *window_create(const struct WindowParams *params)
      * }
      */
     public static MemorySegment window_create(MemorySegment params) {

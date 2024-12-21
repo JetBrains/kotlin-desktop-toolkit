@@ -1,5 +1,6 @@
 use std::ffi::{c_void, CStr};
 
+use bitflags::Flags;
 use objc2::{
     declare_class, msg_send_id,
     mutability::{self, MainThreadOnly},
@@ -38,9 +39,11 @@ pub struct WindowParams {
     pub size: LogicalSize,
     pub title: StrPtr,
 
+    pub is_resizable: bool,
+    pub is_closable: bool,
+    pub is_miniaturizable: bool,
 
-    // resizeable not resizable
-    // allow full screen or not?
+    pub is_full_screen_allowed: bool,
 }
 
 impl WindowParams {
@@ -50,9 +53,9 @@ impl WindowParams {
 }
 
 #[no_mangle]
-pub extern "C" fn window_create(params: WindowParams) -> Box<Window> {
+pub extern "C" fn window_create(params: &WindowParams) -> Box<Window> {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let window = create_window(mtm, &params);
+    let window = create_window(mtm, params);
     return Box::new(window)
 }
 
@@ -208,10 +211,33 @@ impl NSWindowExts for NSWindow {
 
 fn create_window(mtm: MainThreadMarker, params: &WindowParams) -> Window {
     let rect = CGRect::new(params.origin.into(), params.size.into());
-    let style = NSWindowStyleMask::Titled
-                | NSWindowStyleMask::Closable
-                | NSWindowStyleMask::Miniaturizable
-                | NSWindowStyleMask::Resizable;
+
+    /*
+    see doc: https://developer.apple.com/documentation/appkit/nswindow/stylemask-swift.struct/resizable?language=objc
+
+    NSWindowStyleMask::Titled and NSWindowStyleMask::Borderless
+    This two are both represented by the same bit.
+    Whem window is borderles it can't become key or main, and there is no decorations
+
+    NSWindowStyleMask::Closable
+    NSWindowStyleMask::Miniaturizable
+    if one is presented then buttons showed but only one is active
+    if none is presented then buttons isn't shown
+
+    NSWindowStyleMask::FullScreen is basically a read-only marker, if you need to change it use ns_window.toggleFullScreen
+    */
+    let mut style = NSWindowStyleMask::Titled;
+
+    if params.is_closable {
+        style |= NSWindowStyleMask::Closable;
+    }
+    if params.is_miniaturizable {
+        style |= NSWindowStyleMask::Miniaturizable;
+    }
+    if params.is_resizable {
+        style |= NSWindowStyleMask::Resizable;
+    }
+
     let ns_window = unsafe {
         NSWindow::initWithContentRect_styleMask_backing_defer_screen(
             mtm.alloc(),
@@ -227,10 +253,16 @@ fn create_window(mtm: MainThreadMarker, params: &WindowParams) -> Window {
             None
         )
     };
+    let mut collection_behaviour: NSWindowCollectionBehavior = unsafe { ns_window.collectionBehavior() };
+    if params.is_full_screen_allowed {
+        collection_behaviour |= NSWindowCollectionBehavior::FullScreenPrimary;
+    } else {
+        collection_behaviour |= NSWindowCollectionBehavior::FullScreenNone;
+    }
     unsafe {
-        // todo
+        // allow full screen for this window
         // https://developer.apple.com/library/archive/documentation/General/Conceptual/MOSXAppProgrammingGuide/FullScreenApp/FullScreenApp.html#:~:text=Full%2Dscreen%20support%20in%20NSApplication,is%20also%20key%2Dvalue%20observable.
-        ns_window.setCollectionBehavior(NSWindowCollectionBehavior::FullScreenPrimary);
+        ns_window.setCollectionBehavior(collection_behaviour);
     }
     ns_window.setTitle(&NSString::from_str(params.title()));
     unsafe {

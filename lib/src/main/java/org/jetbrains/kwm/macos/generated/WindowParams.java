@@ -18,6 +18,10 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     struct LogicalPoint origin;
  *     struct LogicalSize size;
  *     StrPtr title;
+ *     bool is_resizable;
+ *     bool is_closable;
+ *     bool is_miniaturizable;
+ *     bool is_full_screen_allowed;
  * }
  * }
  */
@@ -30,7 +34,12 @@ public class WindowParams {
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         LogicalPoint.layout().withName("origin"),
         LogicalSize.layout().withName("size"),
-        kwm_macos_h.C_POINTER.withName("title")
+        kwm_macos_h.C_POINTER.withName("title"),
+        kwm_macos_h.C_BOOL.withName("is_resizable"),
+        kwm_macos_h.C_BOOL.withName("is_closable"),
+        kwm_macos_h.C_BOOL.withName("is_miniaturizable"),
+        kwm_macos_h.C_BOOL.withName("is_full_screen_allowed"),
+        MemoryLayout.paddingLayout(4)
     ).withName("WindowParams");
 
     /**
@@ -170,6 +179,182 @@ public class WindowParams {
      */
     public static void title(MemorySegment struct, MemorySegment fieldValue) {
         struct.set(title$LAYOUT, title$OFFSET, fieldValue);
+    }
+
+    private static final OfBoolean is_resizable$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("is_resizable"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * bool is_resizable
+     * }
+     */
+    public static final OfBoolean is_resizable$layout() {
+        return is_resizable$LAYOUT;
+    }
+
+    private static final long is_resizable$OFFSET = 40;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * bool is_resizable
+     * }
+     */
+    public static final long is_resizable$offset() {
+        return is_resizable$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * bool is_resizable
+     * }
+     */
+    public static boolean is_resizable(MemorySegment struct) {
+        return struct.get(is_resizable$LAYOUT, is_resizable$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * bool is_resizable
+     * }
+     */
+    public static void is_resizable(MemorySegment struct, boolean fieldValue) {
+        struct.set(is_resizable$LAYOUT, is_resizable$OFFSET, fieldValue);
+    }
+
+    private static final OfBoolean is_closable$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("is_closable"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * bool is_closable
+     * }
+     */
+    public static final OfBoolean is_closable$layout() {
+        return is_closable$LAYOUT;
+    }
+
+    private static final long is_closable$OFFSET = 41;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * bool is_closable
+     * }
+     */
+    public static final long is_closable$offset() {
+        return is_closable$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * bool is_closable
+     * }
+     */
+    public static boolean is_closable(MemorySegment struct) {
+        return struct.get(is_closable$LAYOUT, is_closable$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * bool is_closable
+     * }
+     */
+    public static void is_closable(MemorySegment struct, boolean fieldValue) {
+        struct.set(is_closable$LAYOUT, is_closable$OFFSET, fieldValue);
+    }
+
+    private static final OfBoolean is_miniaturizable$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("is_miniaturizable"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * bool is_miniaturizable
+     * }
+     */
+    public static final OfBoolean is_miniaturizable$layout() {
+        return is_miniaturizable$LAYOUT;
+    }
+
+    private static final long is_miniaturizable$OFFSET = 42;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * bool is_miniaturizable
+     * }
+     */
+    public static final long is_miniaturizable$offset() {
+        return is_miniaturizable$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * bool is_miniaturizable
+     * }
+     */
+    public static boolean is_miniaturizable(MemorySegment struct) {
+        return struct.get(is_miniaturizable$LAYOUT, is_miniaturizable$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * bool is_miniaturizable
+     * }
+     */
+    public static void is_miniaturizable(MemorySegment struct, boolean fieldValue) {
+        struct.set(is_miniaturizable$LAYOUT, is_miniaturizable$OFFSET, fieldValue);
+    }
+
+    private static final OfBoolean is_full_screen_allowed$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("is_full_screen_allowed"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * bool is_full_screen_allowed
+     * }
+     */
+    public static final OfBoolean is_full_screen_allowed$layout() {
+        return is_full_screen_allowed$LAYOUT;
+    }
+
+    private static final long is_full_screen_allowed$OFFSET = 43;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * bool is_full_screen_allowed
+     * }
+     */
+    public static final long is_full_screen_allowed$offset() {
+        return is_full_screen_allowed$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * bool is_full_screen_allowed
+     * }
+     */
+    public static boolean is_full_screen_allowed(MemorySegment struct) {
+        return struct.get(is_full_screen_allowed$LAYOUT, is_full_screen_allowed$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * bool is_full_screen_allowed
+     * }
+     */
+    public static void is_full_screen_allowed(MemorySegment struct, boolean fieldValue) {
+        struct.set(is_full_screen_allowed$LAYOUT, is_full_screen_allowed$OFFSET, fieldValue);
     }
 
     /**

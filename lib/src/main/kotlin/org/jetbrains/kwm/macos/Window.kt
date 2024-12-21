@@ -6,18 +6,30 @@ import org.jetbrains.kwm.macos.generated.WindowParams as NativeWindowParams
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import java.time.temporal.IsoFields
 
 typealias WindowId = Long;
 
 class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h::window_drop) {
-    data class WindowParams(val origin: LogicalPoint,
-                            val size: LogicalSize,
-                            val title: String) {
+    data class WindowParams(
+        val origin: LogicalPoint,
+        val size: LogicalSize,
+        val title: String,
+        val isResizable: Boolean = true,
+        val isClosable: Boolean = true,
+        val isMiniaturizable: Boolean = true,
+        val isFullScreenAllowed: Boolean = true,
+    ) {
         internal fun toNative(arena: Arena): MemorySegment {
             val nativeWindowParams = NativeWindowParams.allocate(arena)
             NativeWindowParams.origin(nativeWindowParams, origin.toNative(arena))
             NativeWindowParams.size(nativeWindowParams, size.toNative(arena))
             NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
+
+            NativeWindowParams.is_resizable(nativeWindowParams, isResizable)
+            NativeWindowParams.is_closable(nativeWindowParams, isClosable)
+            NativeWindowParams.is_miniaturizable(nativeWindowParams, isMiniaturizable)
+            NativeWindowParams.is_full_screen_allowed(nativeWindowParams, isFullScreenAllowed)
             return nativeWindowParams
         }
     }
@@ -31,8 +43,22 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
 
         fun create(origin: LogicalPoint = LogicalPoint(0.0, 0.0),
                    size: LogicalSize = LogicalSize(640.0, 480.0),
-                   title: String = "Window"): Window {
-            return create(WindowParams(origin, size, title))
+                   title: String = "Window",
+                   isResizable: Boolean = true,
+                   isClosable: Boolean = true,
+                   isMiniaturizable: Boolean = true,
+                   isFullScreenAllowed: Boolean = true): Window {
+            return create(
+                WindowParams(
+                    origin,
+                    size,
+                    title,
+                    isResizable,
+                    isClosable,
+                    isMiniaturizable,
+                    isFullScreenAllowed
+                )
+            )
         }
     }
 

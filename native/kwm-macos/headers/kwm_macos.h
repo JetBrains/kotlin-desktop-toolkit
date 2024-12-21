@@ -147,6 +147,10 @@ typedef struct WindowParams {
   struct LogicalPoint origin;
   struct LogicalSize size;
   StrPtr title;
+  bool is_resizable;
+  bool is_closable;
+  bool is_miniaturizable;
+  bool is_full_screen_allowed;
 } WindowParams;
 
 typedef struct ScreenInfo {
@@ -260,7 +264,7 @@ bool display_link_is_running(struct DisplayLink *display_link);
 
 void display_link_drop(struct DisplayLink *display_link);
 
-struct Window *window_create(struct WindowParams params);
+struct Window *window_create(const struct WindowParams *params);
 
 void window_drop(struct Window *window);
 
