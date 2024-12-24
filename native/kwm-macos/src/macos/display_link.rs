@@ -10,7 +10,7 @@ use objc2::rc::Retained;
 use objc2_foundation::{MainThreadMarker, NSNumber, NSString};
 use display_link_sys::CGDirectDisplayID;
 
-use super::{screen::ScreenId, window::WindowRef};
+use super::screen::ScreenId;
 
 pub type DisplayLinkCallback = extern "C" fn();
 

@@ -19,12 +19,6 @@ use crate::{
 
 use super::{events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}};
 
-#[repr(transparent)]
-pub struct WindowRef {
-    ptr: *mut c_void,
-}
-define_objc_ref!(WindowRef, NSWindow);
-
 pub struct Window {
     ns_window: Retained<NSWindow>,
     delegate: Retained<WindowDelegate>,
@@ -55,7 +49,7 @@ impl WindowParams {
 #[no_mangle]
 pub extern "C" fn window_create(params: &WindowParams) -> Box<Window> {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let window = create_window(mtm, params);
+    let window = Window::new(mtm, params);
     return Box::new(window)
 }
 
@@ -209,84 +203,86 @@ impl NSWindowExts for NSWindow {
     }
 }
 
-fn create_window(mtm: MainThreadMarker, params: &WindowParams) -> Window {
-    let rect = CGRect::new(params.origin.into(), params.size.into());
+impl Window {
+    fn new(mtm: MainThreadMarker, params: &WindowParams) -> Window {
+        let rect = CGRect::new(params.origin.into(), params.size.into());
 
-    /*
-    see doc: https://developer.apple.com/documentation/appkit/nswindow/stylemask-swift.struct/resizable?language=objc
+        /*
+        see doc: https://developer.apple.com/documentation/appkit/nswindow/stylemask-swift.struct/resizable?language=objc
 
-    NSWindowStyleMask::Titled and NSWindowStyleMask::Borderless
-    This two are both represented by the same bit.
-    Whem window is borderles it can't become key or main, and there is no decorations
+        NSWindowStyleMask::Titled and NSWindowStyleMask::Borderless
+        This two are both represented by the same bit.
+        Whem window is borderles it can't become key or main, and there is no decorations
 
-    NSWindowStyleMask::Closable
-    NSWindowStyleMask::Miniaturizable
-    if one is presented then buttons showed but only one is active
-    if none is presented then buttons isn't shown
+        NSWindowStyleMask::Closable
+        NSWindowStyleMask::Miniaturizable
+        if one is presented then buttons showed but only one is active
+        if none is presented then buttons isn't shown
 
-    NSWindowStyleMask::FullScreen is basically a read-only marker, if you need to change it use ns_window.toggleFullScreen
-    */
-    let mut style = NSWindowStyleMask::Titled;
+        NSWindowStyleMask::FullScreen is basically a read-only marker, if you need to change it use ns_window.toggleFullScreen
+        */
+        let mut style = NSWindowStyleMask::Titled;
 
-    if params.is_closable {
-        style |= NSWindowStyleMask::Closable;
+        if params.is_closable {
+            style |= NSWindowStyleMask::Closable;
+        }
+        if params.is_miniaturizable {
+            style |= NSWindowStyleMask::Miniaturizable;
+        }
+        if params.is_resizable {
+            style |= NSWindowStyleMask::Resizable;
+        }
+
+        let ns_window = unsafe {
+            NSWindow::initWithContentRect_styleMask_backing_defer_screen(
+                mtm.alloc(),
+                rect,
+                style,
+                // the only non depricated NSBackingStoreType
+                NSBackingStoreType::NSBackingStoreBuffered,
+                // When true, the window server defers creating the window device until the window is moved onscreen.
+                false,
+                // Screen
+                // When sceen is specified the rect considered to be in its coordinate system
+                // By default it's relative to primary screen
+                None
+            )
+        };
+        let mut collection_behaviour: NSWindowCollectionBehavior = unsafe { ns_window.collectionBehavior() };
+        if params.is_full_screen_allowed {
+            collection_behaviour |= NSWindowCollectionBehavior::FullScreenPrimary;
+        } else {
+            collection_behaviour |= NSWindowCollectionBehavior::FullScreenNone;
+        }
+        unsafe {
+            // allow full screen for this window
+            // https://developer.apple.com/library/archive/documentation/General/Conceptual/MOSXAppProgrammingGuide/FullScreenApp/FullScreenApp.html#:~:text=Full%2Dscreen%20support%20in%20NSApplication,is%20also%20key%2Dvalue%20observable.
+            ns_window.setCollectionBehavior(collection_behaviour);
+        }
+        ns_window.setTitle(&NSString::from_str(params.title()));
+        unsafe {
+            ns_window.setReleasedWhenClosed(false);
+        }
+        ns_window.makeKeyAndOrderFront(None);
+        ns_window.setLevel(NSNormalWindowLevel);
+        unsafe {
+            ns_window.setRestorable(false);
+        }
+
+        let delegate = WindowDelegate::new(mtm, ns_window.clone());
+        ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
+
+        let root_view = RootView::new(mtm);
+        ns_window.setAcceptsMouseMovedEvents(true);
+        ns_window.setContentView(Some(&*root_view));
+        assert!(ns_window.makeFirstResponder(Some(&*root_view)) == true); // todo remove assert
+
+        return Window {
+            ns_window,
+            delegate,
+            root_view
+        };
     }
-    if params.is_miniaturizable {
-        style |= NSWindowStyleMask::Miniaturizable;
-    }
-    if params.is_resizable {
-        style |= NSWindowStyleMask::Resizable;
-    }
-
-    let ns_window = unsafe {
-        NSWindow::initWithContentRect_styleMask_backing_defer_screen(
-            mtm.alloc(),
-            rect,
-            style,
-            // the only non depricated NSBackingStoreType
-            NSBackingStoreType::NSBackingStoreBuffered,
-            // When true, the window server defers creating the window device until the window is moved onscreen.
-            false,
-            // Screen
-            // When sceen is specified the rect considered to be in its coordinate system
-            // By default it's relative to primary screen
-            None
-        )
-    };
-    let mut collection_behaviour: NSWindowCollectionBehavior = unsafe { ns_window.collectionBehavior() };
-    if params.is_full_screen_allowed {
-        collection_behaviour |= NSWindowCollectionBehavior::FullScreenPrimary;
-    } else {
-        collection_behaviour |= NSWindowCollectionBehavior::FullScreenNone;
-    }
-    unsafe {
-        // allow full screen for this window
-        // https://developer.apple.com/library/archive/documentation/General/Conceptual/MOSXAppProgrammingGuide/FullScreenApp/FullScreenApp.html#:~:text=Full%2Dscreen%20support%20in%20NSApplication,is%20also%20key%2Dvalue%20observable.
-        ns_window.setCollectionBehavior(collection_behaviour);
-    }
-    ns_window.setTitle(&NSString::from_str(params.title()));
-    unsafe {
-        ns_window.setReleasedWhenClosed(false);
-    }
-    ns_window.makeKeyAndOrderFront(None);
-    ns_window.setLevel(NSNormalWindowLevel);
-    unsafe {
-        ns_window.setRestorable(false);
-    }
-
-    let delegate = WindowDelegate::new(mtm, ns_window.clone());
-    ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
-
-    let root_view = RootView::new(mtm);
-    ns_window.setAcceptsMouseMovedEvents(true);
-    ns_window.setContentView(Some(&*root_view));
-    assert!(ns_window.makeFirstResponder(Some(&*root_view)) == true); // todo remove assert
-
-    return Window {
-        ns_window,
-        delegate,
-        root_view
-    };
 }
 
 pub(crate) struct WindowDelegateIvars {

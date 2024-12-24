@@ -88,8 +88,8 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
     }
 
     unsafe {
+        // ns_view.setTranslatesAutoresizingMaskIntoConstraints(false); // it actually changes nothing
         ns_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
-//        ns_view.setTranslatesAutoresizingMaskIntoConstraints(false);
 
         ns_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
         ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
