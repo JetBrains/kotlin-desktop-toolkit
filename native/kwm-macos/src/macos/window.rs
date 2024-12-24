@@ -8,7 +8,7 @@ use objc2::{
     runtime::{AnyObject, Bool, ProtocolObject},
     sel, ClassType, DeclaredClass,
 };
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask, NSWindowTitleVisibility};
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNumber, NSObject, NSObjectProtocol, NSString};
 
 use crate::{
@@ -38,6 +38,7 @@ pub struct WindowParams {
     pub is_miniaturizable: bool,
 
     pub is_full_screen_allowed: bool,
+    pub use_custom_titlebar: bool,
 }
 
 impl WindowParams {
@@ -233,6 +234,10 @@ impl Window {
             style |= NSWindowStyleMask::Resizable;
         }
 
+        if params.use_custom_titlebar {
+            style |= NSWindowStyleMask::FullSizeContentView;
+        }
+
         let ns_window = unsafe {
             NSWindow::initWithContentRect_styleMask_backing_defer_screen(
                 mtm.alloc(),
@@ -248,6 +253,16 @@ impl Window {
                 None
             )
         };
+
+        if params.use_custom_titlebar {
+            ns_window.setTitlebarAppearsTransparent(true);
+            ns_window.setTitleVisibility(NSWindowTitleVisibility::NSWindowTitleHidden);
+            // todo titlebar height
+            // todo masking dragable area
+            // todo trafic light offset
+            // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
+        }
+
         let mut collection_behaviour: NSWindowCollectionBehavior = unsafe { ns_window.collectionBehavior() };
         if params.is_full_screen_allowed {
             collection_behaviour |= NSWindowCollectionBehavior::FullScreenPrimary;

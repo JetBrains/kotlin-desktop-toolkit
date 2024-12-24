@@ -19,7 +19,13 @@ import kotlin.math.sin
 class RotatingBallWindow(device: MetalDevice,
                          queue: MetalCommandQueue,
                          title: String,
-                         position: LogicalPoint): SkikoWindow(device, queue, title, position) {
+                         origin: LogicalPoint,
+                         useCustomTitlebar: Boolean): SkikoWindow(
+                             device,
+                             queue,
+                             windowParams = Window.WindowParams(title = title,
+                                                                origin = origin,
+                                                                useCustomTitlebar = useCustomTitlebar)) {
 
     private var cursorPosition: LogicalPoint? = null
 
@@ -126,8 +132,8 @@ class ApplicationState: AutoCloseable {
         MetalCommandQueue.create(device)
     }
 
-    fun createWindow() {
-        windows.add(RotatingBallWindow(device, queue, "Window ${windows.count()}", LogicalPoint(0.0, 0.0)))
+    fun createWindow(useCustomTitlebar: Boolean) {
+        windows.add(RotatingBallWindow(device, queue, "Window ${windows.count()}", LogicalPoint(0.0, 0.0), useCustomTitlebar))
     }
 
     fun setPaused(value: Boolean) {
@@ -192,7 +198,12 @@ class ApplicationState: AutoCloseable {
                 AppMenuItem.Action(
                     "New Window",
                     keystroke = Keystroke(key = "n", modifiers = Modifiers(command = true)),
-                    perform = { createWindow() }
+                    perform = { createWindow(useCustomTitlebar = true) }
+                ),
+                AppMenuItem.Action(
+                    "New Titled Window",
+                    keystroke = Keystroke(key = "n", modifiers = Modifiers(command = true, shift = true)),
+                    perform = { createWindow(useCustomTitlebar = false) }
                 ),
                 AppMenuItem.Action(
                     "Quit1",
@@ -279,7 +290,7 @@ fun main() {
     printRuntimeInfo()
     Application.init(Application.Config())
     ApplicationState().use { state ->
-        state.createWindow()
+        state.createWindow(useCustomTitlebar = true)
         AppMenuManager.setMainMenu(state.buildMenu())
         Application.runEventLoop { event ->
             state.handleEvent(event)

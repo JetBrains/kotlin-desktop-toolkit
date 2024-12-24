@@ -22,6 +22,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     bool is_closable;
  *     bool is_miniaturizable;
  *     bool is_full_screen_allowed;
+ *     bool use_custom_titlebar;
  * }
  * }
  */
@@ -39,7 +40,8 @@ public class WindowParams {
         kwm_macos_h.C_BOOL.withName("is_closable"),
         kwm_macos_h.C_BOOL.withName("is_miniaturizable"),
         kwm_macos_h.C_BOOL.withName("is_full_screen_allowed"),
-        MemoryLayout.paddingLayout(4)
+        kwm_macos_h.C_BOOL.withName("use_custom_titlebar"),
+        MemoryLayout.paddingLayout(3)
     ).withName("WindowParams");
 
     /**
@@ -355,6 +357,50 @@ public class WindowParams {
      */
     public static void is_full_screen_allowed(MemorySegment struct, boolean fieldValue) {
         struct.set(is_full_screen_allowed$LAYOUT, is_full_screen_allowed$OFFSET, fieldValue);
+    }
+
+    private static final OfBoolean use_custom_titlebar$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("use_custom_titlebar"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * bool use_custom_titlebar
+     * }
+     */
+    public static final OfBoolean use_custom_titlebar$layout() {
+        return use_custom_titlebar$LAYOUT;
+    }
+
+    private static final long use_custom_titlebar$OFFSET = 44;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * bool use_custom_titlebar
+     * }
+     */
+    public static final long use_custom_titlebar$offset() {
+        return use_custom_titlebar$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * bool use_custom_titlebar
+     * }
+     */
+    public static boolean use_custom_titlebar(MemorySegment struct) {
+        return struct.get(use_custom_titlebar$LAYOUT, use_custom_titlebar$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * bool use_custom_titlebar
+     * }
+     */
+    public static void use_custom_titlebar(MemorySegment struct, boolean fieldValue) {
+        struct.set(use_custom_titlebar$LAYOUT, use_custom_titlebar$OFFSET, fieldValue);
     }
 
     /**

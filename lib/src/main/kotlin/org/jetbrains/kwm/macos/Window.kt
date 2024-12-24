@@ -6,19 +6,19 @@ import org.jetbrains.kwm.macos.generated.WindowParams as NativeWindowParams
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
-import java.time.temporal.IsoFields
 
 typealias WindowId = Long;
 
 class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h::window_drop) {
     data class WindowParams(
-        val origin: LogicalPoint,
-        val size: LogicalSize,
-        val title: String,
+        val origin: LogicalPoint = LogicalPoint(0.0, 0.0),
+        val size: LogicalSize = LogicalSize(640.0, 480.0),
+        val title: String = "Window",
         val isResizable: Boolean = true,
         val isClosable: Boolean = true,
         val isMiniaturizable: Boolean = true,
         val isFullScreenAllowed: Boolean = true,
+        val useCustomTitlebar: Boolean = false,
     ) {
         internal fun toNative(arena: Arena): MemorySegment {
             val nativeWindowParams = NativeWindowParams.allocate(arena)
@@ -30,6 +30,7 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
             NativeWindowParams.is_closable(nativeWindowParams, isClosable)
             NativeWindowParams.is_miniaturizable(nativeWindowParams, isMiniaturizable)
             NativeWindowParams.is_full_screen_allowed(nativeWindowParams, isFullScreenAllowed)
+            NativeWindowParams.use_custom_titlebar(nativeWindowParams, useCustomTitlebar)
             return nativeWindowParams
         }
     }
@@ -47,7 +48,8 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
                    isResizable: Boolean = true,
                    isClosable: Boolean = true,
                    isMiniaturizable: Boolean = true,
-                   isFullScreenAllowed: Boolean = true): Window {
+                   isFullScreenAllowed: Boolean = true,
+                   useCustomTitlebar: Boolean = false): Window {
             return create(
                 WindowParams(
                     origin,
@@ -56,7 +58,8 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
                     isResizable,
                     isClosable,
                     isMiniaturizable,
-                    isFullScreenAllowed
+                    isFullScreenAllowed,
+                    useCustomTitlebar
                 )
             )
         }
@@ -134,8 +137,8 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
     fun setRect(origin: LogicalPoint, size: LogicalSize, animateTransition: Boolean = true) {
         Arena.ofConfined().use { arena ->
             kwm_macos_h.window_set_rect(pointer,
-                                        origin.toNative(Arena.ofConfined()),
-                                        size.toNative(Arena.ofConfined()),
+                                        origin.toNative(arena),
+                                        size.toNative(arena),
                                         animateTransition)
         }
     }

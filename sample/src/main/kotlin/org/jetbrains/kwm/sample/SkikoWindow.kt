@@ -9,10 +9,9 @@ import kotlin.time.TimeSource
 
 abstract class SkikoWindow(device: MetalDevice,
                            val queue: MetalCommandQueue,
-                           title: String,
-                           position: LogicalPoint): AutoCloseable {
+                           windowParams: Window.WindowParams): AutoCloseable {
 
-    val window = Window.create(origin = position, title = title)
+    val window = Window.create(windowParams)
     var displayLink = DisplayLink.create(window.screenId(), onNextFrame = {
         performDrawing()
     })

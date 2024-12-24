@@ -151,6 +151,7 @@ typedef struct WindowParams {
   bool is_closable;
   bool is_miniaturizable;
   bool is_full_screen_allowed;
+  bool use_custom_titlebar;
 } WindowParams;
 
 typedef struct ScreenInfo {
