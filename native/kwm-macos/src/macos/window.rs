@@ -1,5 +1,6 @@
-use std::ffi::{c_void, CStr};
+use std::{borrow::{Borrow, BorrowMut}, cell::RefCell, ffi::{c_void, CStr}, rc::Rc};
 
+use anyhow::{ensure, Context, Ok};
 use bitflags::Flags;
 use objc2::{
     declare_class, msg_send_id,
@@ -8,21 +9,25 @@ use objc2::{
     runtime::{AnyObject, Bool, ProtocolObject},
     sel, ClassType, DeclaredClass,
 };
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask, NSWindowTitleVisibility};
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNumber, NSObject, NSObjectProtocol, NSString};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSEvent, NSLayoutConstraint, NSNormalWindowLevel, NSView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask, NSWindowTitleVisibility};
+use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSString};
 
 use crate::{
-    common::{LogicalPoint, LogicalSize, StrPtr},
+    common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
     define_objc_ref,
     macos::{application_api::AppState, events::{handle_mouse_moved, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}},
 };
 
 use super::{events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}};
 
+
+type CustomTitlebarCell = Rc<RefCell<CustomTitlebar>>;
+
 pub struct Window {
     ns_window: Retained<NSWindow>,
     delegate: Retained<WindowDelegate>,
-    root_view: Retained<RootView>
+    root_view: Retained<RootView>,
+    custom_titlebar: Option<CustomTitlebarCell>,
 }
 
 pub type WindowId = i64;
@@ -254,14 +259,20 @@ impl Window {
             )
         };
 
-        if params.use_custom_titlebar {
+        let custom_titlebar = if params.use_custom_titlebar {
             ns_window.setTitlebarAppearsTransparent(true);
             ns_window.setTitleVisibility(NSWindowTitleVisibility::NSWindowTitleHidden);
-            // todo titlebar height
-            // todo masking dragable area
-            // todo trafic light offset
             // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
-        }
+            let titlebar = Rc::new(RefCell::new(unsafe { CustomTitlebar::init_custom_titlebar(&*ns_window, 100.0) }.unwrap()));
+            unsafe {
+                // we assume the window isn't full screen
+                (*titlebar).borrow_mut().activate(&ns_window).unwrap();
+            }
+            Some(titlebar)
+        } else {
+            None
+        };
+
 
         let mut collection_behaviour: NSWindowCollectionBehavior = unsafe { ns_window.collectionBehavior() };
         if params.is_full_screen_allowed {
@@ -284,7 +295,7 @@ impl Window {
             ns_window.setRestorable(false);
         }
 
-        let delegate = WindowDelegate::new(mtm, ns_window.clone());
+        let delegate = WindowDelegate::new(mtm, ns_window.clone(), custom_titlebar.clone());
         ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
 
         let root_view = RootView::new(mtm);
@@ -295,13 +306,191 @@ impl Window {
         return Window {
             ns_window,
             delegate,
-            root_view
+            root_view,
+            custom_titlebar
         };
     }
 }
 
+struct CustomTitlebar {
+    constraints: Option<Retained<NSArray<NSLayoutConstraint>>>,
+    height: LogicalPixels
+}
+
+struct TitlebarViews {
+    close_button: Retained<NSButton>,
+    miniaturize_button: Retained<NSButton>,
+    zoom_button: Retained<NSButton>,
+    titlebar: Retained<NSView>,
+    titlebar_container: Retained<NSView>,
+    theme_frame: Retained<NSView>
+}
+
+impl TitlebarViews {
+    unsafe fn retireve_from_window(ns_window: &NSWindow) -> anyhow::Result<TitlebarViews> {
+        // The view hierarchy normally looks as follows:
+        // NSThemeFrame
+        // ├─NSView (content view)
+        // └─NSTitlebarContainerView
+        //   ├─_NSTitlebarDecorationView (only on Mojave 10.14 and newer)
+        //   └─NSTitlebarView
+        //     ├─NSVisualEffectView (only on Big Sur 11 and newer)
+        //     ├─NSView (only on Big Sur and newer)
+        //     ├─_NSThemeCloseWidget - Close
+        //     ├─_NSThemeZoomWidget - Full Screen
+        //     ├─_NSThemeWidget - Minimize (note the different order compared to their layout)
+        //     └─AWTWindowDragView (we will create this)
+        //
+        // But the order and presence of decorations and effects has been unstable across different macOS versions,
+        // even patch upgrades, which is why the code below uses scans instead of indexed access
+        //
+        let close_button = ns_window.standardWindowButton(NSWindowButton::NSWindowCloseButton).context("No Close Button")?;
+        let miniaturize_button = ns_window.standardWindowButton(NSWindowButton::NSWindowMiniaturizeButton).context("No Miniaturize Button")?;
+        let zoom_button = ns_window.standardWindowButton(NSWindowButton::NSWindowZoomButton).context("No Zoom Button")?;
+
+        let titlebar = close_button.superview().context("No titlebar view")?;
+        let titlebar_container = titlebar.superview().context("No titlebar container")?;
+        let theme_frame = titlebar_container.superview().context("No theme frame")?;
+        return Ok(Self {
+            close_button,
+            miniaturize_button,
+            zoom_button,
+            titlebar,
+            titlebar_container,
+            theme_frame,
+        })
+    }
+
+    unsafe fn setTranslatesAutoresizingMaskIntoConstraints(&self, value: bool) {
+        self.titlebar_container.setTranslatesAutoresizingMaskIntoConstraints(value);
+        self.titlebar.setTranslatesAutoresizingMaskIntoConstraints(value);
+
+        self.close_button.setTranslatesAutoresizingMaskIntoConstraints(value);
+        self.miniaturize_button.setTranslatesAutoresizingMaskIntoConstraints(value);
+        self.zoom_button.setTranslatesAutoresizingMaskIntoConstraints(value);
+
+        // theme frame should keep folowing autoresizing mask to match window constraints
+        // self.theme_frame.setTranslatesAutoresizingMaskIntoConstraints(value);
+    }
+
+    fn horizontal_button_offset(titlebar_height: LogicalPixels) -> LogicalPixels {
+        let minimum_height_without_shrinking = 28.0; // This is the smallest macOS title bar availabe with public APIs as of Monterey
+        let shrinking_factor = f64::min(titlebar_height / minimum_height_without_shrinking, 1.0);
+
+        let default_horizontal_buttons_offset = 20.0;
+        return shrinking_factor * default_horizontal_buttons_offset;
+    }
+
+    unsafe fn build_constraints(&self, titlebar_height: LogicalPixels) -> Retained<NSArray<NSLayoutConstraint>> {
+
+        let mut constraints_array = Vec::new();
+
+        constraints_array.push(self.titlebar_container.leftAnchor().constraintEqualToAnchor(&self.theme_frame.leftAnchor()));
+        constraints_array.push(self.titlebar_container.widthAnchor().constraintEqualToAnchor(&self.theme_frame.widthAnchor()));
+        constraints_array.push(self.titlebar_container.topAnchor().constraintEqualToAnchor(&self.theme_frame.topAnchor()));
+        let height_constraint = self.titlebar_container.heightAnchor().constraintEqualToConstant(titlebar_height);
+        constraints_array.push(height_constraint);
+
+        // todo
+//        [self.nsWindow setIgnoreMove:YES];
+//
+//        self.zoomButtonMouseResponder = [[AWTWindowZoomButtonMouseResponder alloc] initWithWindow:self.nsWindow];
+//        [self.zoomButtonMouseResponder release]; // property retains the object
+//
+//        AWTWindowDragView* windowDragView = [[AWTWindowDragView alloc] initWithPlatformWindow:self.javaPlatformWindow];
+//        [titlebar addSubview:windowDragView positioned:NSWindowBelow relativeTo:closeButtonView];
+
+        // todo add dragable area here
+        for view in [&self.titlebar] {
+            constraints_array.push(view.leftAnchor().constraintEqualToAnchor(&self.titlebar_container.leftAnchor()));
+            constraints_array.push(view.rightAnchor().constraintEqualToAnchor(&self.titlebar_container.rightAnchor()));
+            constraints_array.push(view.topAnchor().constraintEqualToAnchor(&self.titlebar_container.topAnchor()));
+            constraints_array.push(view.bottomAnchor().constraintEqualToAnchor(&self.titlebar_container.bottomAnchor()));
+        }
+
+        let horizontal_button_offset = Self::horizontal_button_offset(titlebar_height);
+
+        for (index, button) in [&self.close_button, &self.miniaturize_button, &self.zoom_button].iter().enumerate() {
+            let button_center_horizontal_shift = titlebar_height / 2f64 + (index as f64 * horizontal_button_offset);
+
+
+            constraints_array.push(button.widthAnchor().constraintLessThanOrEqualToAnchor_multiplier(&self.titlebar_container.heightAnchor(), 0.5));
+            // Those corrections are required to keep the icons perfectly round because macOS adds a constant 2 px in resulting height to their frame
+            constraints_array.push(button.heightAnchor()
+                                         .constraintEqualToAnchor_multiplier_constant(&button.widthAnchor(), 14.0/12.0, -2.0));
+            constraints_array.push(button.centerXAnchor()
+                                         .constraintEqualToAnchor_constant(&self.titlebar_container.leftAnchor(),
+                                                                           button_center_horizontal_shift));
+            constraints_array.push(button.centerYAnchor()
+                                         .constraintEqualToAnchor(&self.titlebar_container.centerYAnchor()));
+
+        }
+
+        return NSArray::from_vec(constraints_array);
+    }
+}
+
+impl CustomTitlebar {
+    unsafe fn init_custom_titlebar(ns_window: &NSWindow, titlebar_height: LogicalPixels) -> anyhow::Result<CustomTitlebar> {
+        let titlebar_views = TitlebarViews::retireve_from_window(ns_window)?;
+
+        return Ok(CustomTitlebar {
+            constraints: None,
+            height: titlebar_height
+        })
+    }
+
+    unsafe fn activate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
+        ensure!(self.constraints.is_none());
+
+        let titlebar_views = TitlebarViews::retireve_from_window(ns_window)?;
+        titlebar_views.setTranslatesAutoresizingMaskIntoConstraints(false);
+        let constraints = titlebar_views.build_constraints(self.height);
+
+        NSLayoutConstraint::activateConstraints(&constraints);
+
+        self.constraints = Some(constraints);
+
+        return Ok(());
+    }
+
+    unsafe fn deactivate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
+        let titlebar_views = TitlebarViews::retireve_from_window(ns_window)?;
+
+        titlebar_views.setTranslatesAutoresizingMaskIntoConstraints(true);
+        if let Some(constraints) = self.constraints.take() {
+            NSLayoutConstraint::deactivateConstraints(&constraints);
+        }
+
+        return Ok(());
+    }
+
+    fn set_titlebar_height(&mut self) {
+
+    }
+
+    fn before_enter_fullscreen(titlebar: &Option<CustomTitlebarCell>, ns_window: &NSWindow) {
+        if let Some(titlebar) = titlebar {
+            let mut titlebar = (**titlebar).borrow_mut();
+            unsafe {
+                titlebar.deactivate(ns_window).unwrap();
+            }
+        }
+    }
+
+    fn after_exit_fullscreen(titlebar: &Option<CustomTitlebarCell>, ns_window: &NSWindow) {
+        if let Some(titlebar) = titlebar {
+            let mut titlebar = (**titlebar).borrow_mut();
+            unsafe {
+                titlebar.activate(ns_window).unwrap();
+            }
+        }
+    }
+}
+
 pub(crate) struct WindowDelegateIvars {
-    ns_window: Retained<NSWindow>
+    ns_window: Retained<NSWindow>,
+    custom_titlebar: Option<CustomTitlebarCell>
 }
 
 declare_class!(
@@ -338,6 +527,12 @@ declare_class!(
             handle_window_move(&*self.ivars().ns_window);
         }
 
+        #[method(windowWillEnterFullScreen:)]
+        unsafe fn windowWillEnterFullScreen(&self, _notification: &NSNotification) {
+            let ivars = self.ivars();
+            CustomTitlebar::before_enter_fullscreen(&ivars.custom_titlebar, &ivars.ns_window);
+        }
+
         #[method(windowDidEnterFullScreen:)]
         #[allow(non_snake_case)]
         unsafe fn windowDidEnterFullScreen(&self, _notification: &NSNotification) {
@@ -347,6 +542,8 @@ declare_class!(
         #[method(windowDidExitFullScreen:)]
         #[allow(non_snake_case)]
         unsafe fn windowDidExitFullScreen(&self, _notification: &NSNotification) {
+            let ivars = self.ivars();
+            CustomTitlebar::after_exit_fullscreen(&ivars.custom_titlebar, &ivars.ns_window);
             handle_window_full_screen_toggle(&*self.ivars().ns_window);
         }
 
@@ -384,9 +581,11 @@ declare_class!(
 );
 
 impl WindowDelegate {
-    pub(crate) fn new(mtm: MainThreadMarker, ns_window: Retained<NSWindow>) -> Retained<Self> {
+    fn new(mtm: MainThreadMarker,
+           ns_window: Retained<NSWindow>,
+           custom_titlebar: Option<CustomTitlebarCell>) -> Retained<Self> {
         let this = mtm.alloc();
-        let this = this.set_ivars(WindowDelegateIvars { ns_window });
+        let this = this.set_ivars(WindowDelegateIvars { ns_window, custom_titlebar });
         unsafe { msg_send_id![super(this), init] }
     }
 }
