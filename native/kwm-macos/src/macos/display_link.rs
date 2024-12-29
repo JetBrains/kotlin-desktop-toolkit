@@ -14,8 +14,9 @@ use super::screen::ScreenId;
 
 pub type DisplayLinkCallback = extern "C" fn();
 
+#[allow(dead_code)]
 struct DisplayLinkBox {
-    display_link: DisplayLink,
+    display_link: DisplayLink, // we need it for drop 
 }
 
 #[no_mangle]

@@ -16,7 +16,9 @@ thread_local! {
 
 #[derive(Debug)]
 pub(crate) struct AppState {
+    #[allow(dead_code)]
     pub(crate) app: Retained<MyNSApplication>,
+    #[allow(dead_code)]
     app_delegate: Retained<AppDelegate>,
     pub(crate) event_handler: EventHandler,
     pub(crate) mtm: MainThreadMarker,
@@ -171,8 +173,9 @@ declare_class!(
 
         #[method(applicationDidFinishLaunching:)]
         fn did_finish_launching(&self, _notification: &NSNotification) {
-            // todo probably it's wrong figure out it later
             handle_application_did_finish_launching();
+            // todo probably it's wrong figure out it later
+            #[allow(deprecated)]
             self.ivars().ns_application.activateIgnoringOtherApps(true);
         }
 

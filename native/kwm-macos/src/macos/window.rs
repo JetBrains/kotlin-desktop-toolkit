@@ -19,6 +19,7 @@ use super::{events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSS
 
 type CustomTitlebarCell = Rc<RefCell<CustomTitlebar>>;
 
+#[allow(dead_code)]
 pub struct Window {
     ns_window: Retained<MyNSWindow>,
     delegate: Retained<WindowDelegate>,
@@ -235,16 +236,13 @@ impl Window {
             style |= NSWindowStyleMask::FullSizeContentView;
         }
 
-        let ns_window = unsafe {
-            MyNSWindow::new(mtm, rect, style)
-        };
+        let ns_window = MyNSWindow::new(mtm, rect, style);
 
         let custom_titlebar = if params.use_custom_titlebar {
             ns_window.setTitlebarAppearsTransparent(true);
             ns_window.setTitleVisibility(NSWindowTitleVisibility::NSWindowTitleHidden);
-            // ns_window.setMovable(false); // disable regular header drag area
             // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
-            let titlebar = Rc::new(RefCell::new(unsafe { CustomTitlebar::init_custom_titlebar(&*ns_window, 100.0) }.unwrap()));
+            let titlebar = Rc::new(RefCell::new(unsafe { CustomTitlebar::init_custom_titlebar(100.0) }.unwrap()));
             unsafe {
                 // we assume the window isn't full screen
                 (*titlebar).borrow_mut().activate(&ns_window).unwrap();
@@ -342,6 +340,7 @@ impl TitlebarViews {
         })
     }
 
+    #[allow(non_snake_case)]
     unsafe fn setTranslatesAutoresizingMaskIntoConstraints(&self, value: bool) {
         self.titlebar_container.setTranslatesAutoresizingMaskIntoConstraints(value);
         self.titlebar.setTranslatesAutoresizingMaskIntoConstraints(value);
@@ -402,9 +401,7 @@ impl TitlebarViews {
 }
 
 impl CustomTitlebar {
-    unsafe fn init_custom_titlebar(ns_window: &NSWindow, titlebar_height: LogicalPixels) -> anyhow::Result<CustomTitlebar> {
-        let titlebar_views = TitlebarViews::retireve_from_window(ns_window)?;
-
+    unsafe fn init_custom_titlebar(titlebar_height: LogicalPixels) -> anyhow::Result<CustomTitlebar> {
         return Ok(CustomTitlebar {
             constraints: None,
             height: titlebar_height
@@ -502,6 +499,7 @@ declare_class!(
         }
 
         #[method(windowWillEnterFullScreen:)]
+        #[allow(non_snake_case)]
         unsafe fn windowWillEnterFullScreen(&self, _notification: &NSNotification) {
             let ivars = self.ivars();
             CustomTitlebar::before_enter_fullscreen(&ivars.custom_titlebar, &ivars.ns_window);
@@ -628,12 +626,12 @@ declare_class!(
             handle_mouse_moved(event); // todo pass to next responder if it's not handled
         }
         #[method(mouseDown:)]
-        fn mouse_down(&self, event: &NSEvent) {
+        fn mouse_down(&self, _event: &NSEvent) {
 //            println!("Down Event: {event:?}");
         }
 
         #[method(mouseDragged:)]
-        fn mouse_dragged(&self, event: &NSEvent) {
+        fn mouse_dragged(&self, _event: &NSEvent) {
 //            println!("Drag Event: {event:?}");
         }
 
@@ -644,7 +642,7 @@ declare_class!(
         // including the case when you click inactive window title bar and starting to drag it
         #[allow(non_snake_case)]
         #[method(acceptsFirstMouse:)]
-        fn acceptsFirstMouse(&self, event: Option<&NSEvent>) -> bool {
+        fn acceptsFirstMouse(&self, _event: Option<&NSEvent>) -> bool {
             return true.into();
         }
 

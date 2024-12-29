@@ -67,6 +67,7 @@ pub struct WindowFullScreenToggleEvent {
 
 #[repr(C)]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Event {
     MouseMoved(MouseMovedEvent),
     ScrollWheel(ScrollWheelEvent),

@@ -88,7 +88,7 @@ impl MetalView {
 
 #[no_mangle]
 pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let device = unsafe { device.retain() };
     let layer = unsafe { CAMetalLayer::new() };
     unsafe {
