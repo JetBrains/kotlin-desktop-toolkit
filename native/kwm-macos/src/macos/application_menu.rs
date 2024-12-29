@@ -9,12 +9,12 @@ use objc2::{
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
 
-use super::application_menu_api::{AppMenuItem, AppMenuKeyModifiers, AppMenuStructure};
+use super::{application_api::MyNSApplication, application_menu_api::{AppMenuItem, AppMenuKeyModifiers, AppMenuStructure}};
 
 pub fn main_menu_update_impl(menu: AppMenuStructure) {
     let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = NSApplication::sharedApplication(mtm);
+    let app = MyNSApplication::sharedApplication(mtm);
 
     let menu_root = if let Some(menu) = unsafe { app.mainMenu() } {
         menu
@@ -231,13 +231,13 @@ impl<'a> AppMenuItemSafe<'a> {
                 item.setSubmenu(Some(&submenu));
                 match *special_tag {
                     Some("Window") => {
-                        let app = NSApplication::sharedApplication(mtm);
+                        let app = MyNSApplication::sharedApplication(mtm);
                         unsafe {
                             app.setWindowsMenu(Some(&submenu));
                         }
                     }
                     Some("Services") => {
-                        let app = NSApplication::sharedApplication(mtm);
+                        let app = MyNSApplication::sharedApplication(mtm);
                         unsafe {
                             app.setServicesMenu(Some(&submenu));
                         }

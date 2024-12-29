@@ -1,8 +1,9 @@
-use std::{cell::Cell, ffi::c_void};
+use std::{cell::{Cell, OnceCell}, ffi::c_void};
 
-use objc2::{rc::Retained, runtime::ProtocolObject, ClassType};
+use anyhow::Context;
+use objc2::{declare_class, msg_send_id, mutability::MainThreadOnly, rc::Retained, runtime::ProtocolObject, ClassType, DeclaredClass};
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSRect, NSSize, NSString};
+use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSObjectProtocol, NSRect, NSSize, NSString};
 use objc2_metal::{MTLClearColor, MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};
 use objc2_metal_kit::MTKView;
 use objc2_quartz_core::{kCAGravityTopLeft, CAAutoresizingMask, CAMetalDrawable, CAMetalLayer};
@@ -59,16 +60,36 @@ pub extern "C" fn metal_deref_command_queue(queue: MetalCommandQueueRef) {
 }
 
 pub struct MetalView {
-    pub(crate) ns_view: Retained<NSView>,
+    pub(crate) ns_view: OnceCell<Retained<NSView>>,
     pub(crate) layer: Retained<CAMetalLayer>,
     pub(crate) drawable: Cell<Option<Retained<ProtocolObject<dyn CAMetalDrawable>>>>
+}
+
+impl MetalView {
+    pub (crate) fn ns_view(&self) -> anyhow::Result<&NSView> {
+        return self.ns_view.get().map(|ns_view| &**ns_view).context("Layer isn't attached yet")
+    }
+
+    pub (crate) fn attach_to_view(&self, ns_view: Retained<NSView>) -> anyhow::Result<()> {
+        unsafe {
+            // ns_view.setTranslatesAutoresizingMaskIntoConstraints(false); // it actually changes nothing
+//            ns_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+
+            ns_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
+            ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
+    //        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
+            ns_view.setLayer(Some(&self.layer));
+            ns_view.setWantsLayer(true);
+        }
+        self.ns_view.set(ns_view).ok().context("Can't attach the layer second time")?;
+        return Ok(());
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let device = unsafe { device.retain() };
-    let ns_view = unsafe { NSView::new(mtm) };
     let layer = unsafe { CAMetalLayer::new() };
     unsafe {
         layer.setDevice(Some(ProtocolObject::from_ref(&*device)));
@@ -87,18 +108,8 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
 //        fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
     }
 
-    unsafe {
-        // ns_view.setTranslatesAutoresizingMaskIntoConstraints(false); // it actually changes nothing
-        ns_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
-
-        ns_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
-        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
-//        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
-        ns_view.setLayer(Some(&layer));
-        ns_view.setWantsLayer(true);
-    }
     Box::new(MetalView {
-        ns_view,
+        ns_view: OnceCell::new(),
         layer,
         drawable: Cell::new(None)
     })
@@ -121,8 +132,9 @@ pub extern "C" fn metal_view_present(view: &MetalView) {
 #[no_mangle]
 pub extern "C" fn metal_view_get_texture_size(view: &MetalView) -> PhysicalSize {
     let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    let ns_view = view.ns_view().unwrap();
     let view_size = unsafe {
-        view.ns_view.convertSizeToBacking(view.ns_view.bounds().size)
+        ns_view.convertSizeToBacking(ns_view.bounds().size)
     };
     view_size.into()
 }
@@ -134,9 +146,10 @@ define_objc_ref!(MetalTextureRef, ProtocolObject<dyn MTLTexture>);
 #[no_mangle]
 pub extern "C" fn metal_view_next_texture(view: &MetalView) -> MetalTextureRef {
     unsafe {
-        let view_size = view.ns_view.bounds().size;
+        let ns_view = view.ns_view().unwrap();
+        let view_size = ns_view.bounds().size;
         let drawable_size = view.layer.drawableSize();
-        let new_drawable_size = view.ns_view.convertSizeToBacking(view_size);
+        let new_drawable_size = ns_view.convertSizeToBacking(view_size);
         let scale = new_drawable_size.width / view_size.width;
         if new_drawable_size != drawable_size || view.layer.contentsScale() != scale {
             view.layer.setDrawableSize(new_drawable_size);

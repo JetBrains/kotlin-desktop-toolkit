@@ -1,8 +1,8 @@
 use std::cell::{Cell, OnceCell};
 
-use objc2::{declare_class, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass};
+use objc2::{declare_class, msg_send, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
 };
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
 
@@ -16,7 +16,7 @@ thread_local! {
 
 #[derive(Debug)]
 pub(crate) struct AppState {
-    pub(crate) app: Retained<NSApplication>,
+    pub(crate) app: Retained<MyNSApplication>,
     app_delegate: Retained<AppDelegate>,
     pub(crate) event_handler: EventHandler,
     pub(crate) mtm: MainThreadMarker,
@@ -63,7 +63,7 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
             &NSString::from_str("NSDisabledCharacterPaletteMenuItem"),
         );
     };
-    let app = NSApplication::sharedApplication(mtm);
+    let app = MyNSApplication::sharedApplication(mtm);
 //    let default_presentation_options = app.presentationOptions();
 //    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
     app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
@@ -87,28 +87,59 @@ pub extern "C" fn application_shutdown() {
 #[no_mangle]
 pub extern "C" fn application_run_event_loop() {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = NSApplication::sharedApplication(mtm);
+    let app = MyNSApplication::sharedApplication(mtm);
     unsafe { app.run() };
 }
 
 #[no_mangle]
 pub extern "C" fn application_stop_event_loop() {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = NSApplication::sharedApplication(mtm);
+    let app = MyNSApplication::sharedApplication(mtm);
     app.stop(None);
 }
 
 #[no_mangle]
 pub extern "C" fn application_request_termination() {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = NSApplication::sharedApplication(mtm);
+    let app = MyNSApplication::sharedApplication(mtm);
     unsafe {
         app.terminate(None);
     }
 }
 
+pub(crate) struct MyNSApplicationIvars {}
+
+declare_class!(
+    #[derive(Debug)]
+    pub(crate) struct MyNSApplication;
+
+    unsafe impl ClassType for MyNSApplication {
+        type Super = NSApplication;
+        type Mutability = mutability::MainThreadOnly;
+        const NAME: &'static str = "MyNSApplication";
+    }
+
+    impl DeclaredClass for MyNSApplication {
+        type Ivars = MyNSApplicationIvars;
+    }
+
+    unsafe impl NSObjectProtocol for MyNSApplication {}
+
+    unsafe impl MyNSApplication {
+    }
+);
+
+impl MyNSApplication {
+    #[allow(non_snake_case)]
+    pub(crate) fn sharedApplication(_mtm: MainThreadMarker) -> Retained<MyNSApplication> {
+        return unsafe {
+            msg_send_id!(MyNSApplication::class(), sharedApplication)
+        };
+    }
+}
+
 struct AppDelegateIvars {
-    ns_application: Retained<NSApplication>,
+    ns_application: Retained<MyNSApplication>,
     callbacks: ApplicationCallbacks,
 }
 
@@ -123,7 +154,7 @@ declare_class!(
     unsafe impl ClassType for AppDelegate {
         type Super = NSObject;
         type Mutability = mutability::MainThreadOnly;
-        const NAME: &'static str = "MyAppDelegate";
+        const NAME: &'static str = "AppDelegate";
     }
 
     impl DeclaredClass for AppDelegate {
@@ -163,7 +194,7 @@ declare_class!(
 );
 
 impl AppDelegate {
-    fn new(mtm: MainThreadMarker, ns_application: Retained<NSApplication>, callbacks: ApplicationCallbacks) -> Retained<Self> {
+    fn new(mtm: MainThreadMarker, ns_application: Retained<MyNSApplication>, callbacks: ApplicationCallbacks) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(AppDelegateIvars { callbacks, ns_application });
         unsafe { msg_send_id![super(this), init] }

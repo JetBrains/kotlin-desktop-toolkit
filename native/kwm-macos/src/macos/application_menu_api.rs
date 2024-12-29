@@ -4,7 +4,7 @@ use objc2_foundation::MainThreadMarker;
 
 use crate::common::{ArraySize, StrPtr};
 
-use super::application_menu::main_menu_update_impl;
+use super::{application_api::MyNSApplication, application_menu::main_menu_update_impl};
 
 // This file contains C API of the library
 // The symbols listed here will be exported into .h file
@@ -71,6 +71,6 @@ pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
 #[no_mangle]
 pub extern "C" fn main_menu_set_none() {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = NSApplication::sharedApplication(mtm);
+    let app = MyNSApplication::sharedApplication(mtm);
     app.setMainMenu(None);
 }

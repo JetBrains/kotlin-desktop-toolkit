@@ -3,14 +3,10 @@ use std::{borrow::{Borrow, BorrowMut}, cell::RefCell, ffi::{c_void, CStr}, rc::R
 use anyhow::{ensure, Context, Ok};
 use bitflags::Flags;
 use objc2::{
-    declare_class, msg_send_id,
-    mutability::{self, MainThreadOnly},
-    rc::Retained,
-    runtime::{AnyObject, Bool, ProtocolObject},
-    sel, ClassType, DeclaredClass,
+    declare_class, msg_send, msg_send_id, mutability::{self, MainThreadOnly}, rc::Retained, runtime::{AnyObject, Bool, ProtocolObject}, sel, ClassType, DeclaredClass
 };
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSEvent, NSLayoutConstraint, NSNormalWindowLevel, NSView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask, NSWindowTitleVisibility};
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSString};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSEvent, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask, NSWindowTitleVisibility};
+use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
     common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
@@ -24,7 +20,7 @@ use super::{events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSS
 type CustomTitlebarCell = Rc<RefCell<CustomTitlebar>>;
 
 pub struct Window {
-    ns_window: Retained<NSWindow>,
+    ns_window: Retained<MyNSWindow>,
     delegate: Retained<WindowDelegate>,
     root_view: Retained<RootView>,
     custom_titlebar: Option<CustomTitlebarCell>,
@@ -84,11 +80,7 @@ pub extern "C" fn window_scale_factor(window: &Window) -> f64 {
 #[no_mangle]
 pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
     let content_view = window.ns_window.contentView().unwrap();
-    let layer_view = &layer.ns_view;
-    unsafe {
-        layer_view.setFrameSize(content_view.frame().size);
-        content_view.addSubview(&*layer.ns_view);
-    }
+    layer.attach_to_view(content_view).unwrap();
 }
 
 #[no_mangle]
@@ -244,24 +236,13 @@ impl Window {
         }
 
         let ns_window = unsafe {
-            NSWindow::initWithContentRect_styleMask_backing_defer_screen(
-                mtm.alloc(),
-                rect,
-                style,
-                // the only non depricated NSBackingStoreType
-                NSBackingStoreType::NSBackingStoreBuffered,
-                // When true, the window server defers creating the window device until the window is moved onscreen.
-                false,
-                // Screen
-                // When sceen is specified the rect considered to be in its coordinate system
-                // By default it's relative to primary screen
-                None
-            )
+            MyNSWindow::new(mtm, rect, style)
         };
 
         let custom_titlebar = if params.use_custom_titlebar {
             ns_window.setTitlebarAppearsTransparent(true);
             ns_window.setTitleVisibility(NSWindowTitleVisibility::NSWindowTitleHidden);
+            // ns_window.setMovable(false); // disable regular header drag area
             // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
             let titlebar = Rc::new(RefCell::new(unsafe { CustomTitlebar::init_custom_titlebar(&*ns_window, 100.0) }.unwrap()));
             unsafe {
@@ -369,7 +350,7 @@ impl TitlebarViews {
         self.miniaturize_button.setTranslatesAutoresizingMaskIntoConstraints(value);
         self.zoom_button.setTranslatesAutoresizingMaskIntoConstraints(value);
 
-        // theme frame should keep folowing autoresizing mask to match window constraints
+        // theme frame should keep folow autoresizing mask to match window constraints
         // self.theme_frame.setTranslatesAutoresizingMaskIntoConstraints(value);
     }
 
@@ -391,16 +372,6 @@ impl TitlebarViews {
         let height_constraint = self.titlebar_container.heightAnchor().constraintEqualToConstant(titlebar_height);
         constraints_array.push(height_constraint);
 
-        // todo
-//        [self.nsWindow setIgnoreMove:YES];
-//
-//        self.zoomButtonMouseResponder = [[AWTWindowZoomButtonMouseResponder alloc] initWithWindow:self.nsWindow];
-//        [self.zoomButtonMouseResponder release]; // property retains the object
-//
-//        AWTWindowDragView* windowDragView = [[AWTWindowDragView alloc] initWithPlatformWindow:self.javaPlatformWindow];
-//        [titlebar addSubview:windowDragView positioned:NSWindowBelow relativeTo:closeButtonView];
-
-        // todo add dragable area here
         for view in [&self.titlebar] {
             constraints_array.push(view.leftAnchor().constraintEqualToAnchor(&self.titlebar_container.leftAnchor()));
             constraints_array.push(view.rightAnchor().constraintEqualToAnchor(&self.titlebar_container.rightAnchor()));
@@ -441,6 +412,9 @@ impl CustomTitlebar {
     }
 
     unsafe fn activate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
+        let frame = ns_window.frame();
+        let content = ns_window.contentRectForFrameRect(frame);
+        println!("Frame: {frame:?} content: {content:?}");
         ensure!(self.constraints.is_none());
 
         let titlebar_views = TitlebarViews::retireve_from_window(ns_window)?;
@@ -489,7 +463,7 @@ impl CustomTitlebar {
 }
 
 pub(crate) struct WindowDelegateIvars {
-    ns_window: Retained<NSWindow>,
+    ns_window: Retained<MyNSWindow>,
     custom_titlebar: Option<CustomTitlebarCell>
 }
 
@@ -582,11 +556,52 @@ declare_class!(
 
 impl WindowDelegate {
     fn new(mtm: MainThreadMarker,
-           ns_window: Retained<NSWindow>,
+           ns_window: Retained<MyNSWindow>,
            custom_titlebar: Option<CustomTitlebarCell>) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(WindowDelegateIvars { ns_window, custom_titlebar });
         unsafe { msg_send_id![super(this), init] }
+    }
+}
+
+pub(crate) struct MyNSWindowIvars {}
+
+declare_class!(
+    pub(crate) struct MyNSWindow;
+
+    unsafe impl ClassType for MyNSWindow {
+        type Super = NSWindow;
+        type Mutability = MainThreadOnly;
+        const NAME: &'static str = "MyNSWindow";
+    }
+
+    impl DeclaredClass for MyNSWindow {
+        type Ivars = MyNSWindowIvars;
+    }
+
+    unsafe impl NSObjectProtocol for MyNSWindow {}
+
+    unsafe impl MyNSWindow {
+    }
+);
+
+impl MyNSWindow {
+    pub(crate) fn new(mtm: MainThreadMarker, rect: NSRect, style: NSWindowStyleMask) -> Retained<Self> {
+        let this = mtm.alloc();
+        let this = this.set_ivars(MyNSWindowIvars {});
+        let ns_window: Retained<Self> = unsafe {
+            msg_send_id![super(this), initWithContentRect: rect,
+                                                styleMask: style,
+                                                 // the only non depricated NSBackingStoreType
+                                                  backing: NSBackingStoreType::NSBackingStoreBuffered,
+                                                 // When true, the window server defers creating the window device until the window is moved onscreen.
+                                                    defer: false,
+                                                 // Screen
+                                                 // When sceen is specified the rect considered to be in its coordinate system
+                                                 // By default it's relative to primary screen
+                                                   screen: Option::<&NSScreen>::None]
+        };
+        ns_window
     }
 }
 
@@ -614,7 +629,36 @@ declare_class!(
         }
         #[method(mouseDown:)]
         fn mouse_down(&self, event: &NSEvent) {
-            println!("Down Event: {event:?}");
+//            println!("Down Event: {event:?}");
+        }
+
+        #[method(mouseDragged:)]
+        fn mouse_dragged(&self, event: &NSEvent) {
+//            println!("Drag Event: {event:?}");
+        }
+
+        // we need those three methods to prevent transparent titlbar from being draggable
+        // acceptsFirstMouse, acceptsFirstResponder, opaqueRectForWindowMoveWhenInTitlebar
+        // the last one is undocumented in macos
+        // please check that titlbar works as expected if you want to change some of them
+        // including the case when you click inactive window title bar and starting to drag it
+        #[allow(non_snake_case)]
+        #[method(acceptsFirstMouse:)]
+        fn acceptsFirstMouse(&self, event: Option<&NSEvent>) -> bool {
+            return true.into();
+        }
+
+        #[allow(non_snake_case)]
+        #[method(acceptsFirstResponder)]
+        fn acceptsFirstResponder(&self) -> bool {
+            return true.into();
+        }
+
+        #[allow(non_snake_case)]
+        #[method(_opaqueRectForWindowMoveWhenInTitlebar)]
+        fn opaqueRectForWindowMoveWhenInTitlebar(&self) -> NSRect {
+            // for windows with non transparent tiile bar this methods doesn't have any effect
+            return self.bounds();
         }
     }
 );
