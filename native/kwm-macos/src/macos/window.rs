@@ -5,7 +5,7 @@ use bitflags::Flags;
 use objc2::{
     declare_class, msg_send, msg_send_id, mutability::{self, MainThreadOnly}, rc::Retained, runtime::{AnyObject, Bool, ProtocolObject}, sel, ClassType, DeclaredClass
 };
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask, NSWindowTitleVisibility};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask, NSWindowTitleVisibility};
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
@@ -81,8 +81,13 @@ pub extern "C" fn window_scale_factor(window: &Window) -> f64 {
 
 #[no_mangle]
 pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
+    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let content_view = window.ns_window.contentView().unwrap();
-    layer.attach_to_view(content_view).unwrap();
+
+    unsafe {
+        layer.ns_view.setFrameSize(content_view.frame().size);
+        content_view.addSubview(&layer.ns_view);
+    }
 }
 
 #[no_mangle]
@@ -255,9 +260,9 @@ impl Window {
         }
 
         let ns_window = MyNSWindow::new(mtm, rect, style);
-        ns_window.setOpaque(false);
-        let background_color = unsafe { NSColor::clearColor() };
-        ns_window.setBackgroundColor(Some(&background_color));
+//        ns_window.setOpaque(false);
+//        let background_color = unsafe { NSColor::clearColor() };
+//        ns_window.setBackgroundColor(Some(&background_color));
 
         let custom_titlebar = if params.use_custom_titlebar {
             ns_window.setTitlebarAppearsTransparent(true);
@@ -622,7 +627,7 @@ declare_class!(
     pub(crate) struct RootView;
 
     unsafe impl ClassType for RootView {
-        type Super = NSView;
+        type Super = NSVisualEffectView;
         type Mutability = MainThreadOnly;
         const NAME: &'static str = "RootView";
     }
@@ -688,6 +693,9 @@ impl RootView {
         unsafe {
             root_view.setAutoresizesSubviews(true);
             root_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+            root_view.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
+            root_view.setMaterial(NSVisualEffectMaterial::HUDWindow);
+            root_view.setState(NSVisualEffectState::Active);
         }
         root_view
     }

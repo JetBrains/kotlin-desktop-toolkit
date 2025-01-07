@@ -75,35 +75,20 @@ pub extern "C" fn metal_deref_command_queue(queue: MetalCommandQueueRef) {
 }
 
 pub struct MetalView {
-    pub(crate) ns_view: OnceCell<Retained<NSView>>,
+    pub(crate) ns_view: Retained<NSView>,
     pub(crate) layer: Retained<CAMetalLayer>,
     pub(crate) drawable: Cell<Option<Retained<ProtocolObject<dyn CAMetalDrawable>>>>,
 }
 
 impl MetalView {
     pub(crate) fn ns_view(&self) -> anyhow::Result<&NSView> {
-        return self.ns_view.get().map(|ns_view| &**ns_view).context("Layer isn't attached yet");
-    }
-
-    pub(crate) fn attach_to_view(&self, ns_view: Retained<NSView>) -> anyhow::Result<()> {
-        unsafe {
-            // ns_view.setTranslatesAutoresizingMaskIntoConstraints(false); // it actually changes nothing
-            //            ns_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
-
-            ns_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
-            ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
-                                                                                                     //        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
-            ns_view.setLayer(Some(&self.layer));
-            ns_view.setWantsLayer(true);
-        }
-        self.ns_view.set(ns_view).ok().context("Can't attach the layer second time")?;
-        return Ok(());
+        return Ok(&self.ns_view);
     }
 }
 
 #[no_mangle]
 pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let device = unsafe { device.retain() };
     let layer = unsafe { CAMetalLayer::new() };
     unsafe {
@@ -126,8 +111,21 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
         // fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
     }
 
+    let layer_view = unsafe { NSView::new(mtm) };
+    unsafe {
+        layer_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+
+        layer_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
+        layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
+        // layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
+        layer_view.setLayer(Some(&layer));
+    }
+
+
+    layer_view.setWantsLayer(true);
+
     Box::new(MetalView {
-        ns_view: OnceCell::new(),
+        ns_view: layer_view,
         layer,
         drawable: Cell::new(None),
     })
