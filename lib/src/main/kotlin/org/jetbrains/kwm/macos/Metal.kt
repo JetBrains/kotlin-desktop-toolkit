@@ -46,6 +46,10 @@ class MetalView internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos
             PhysicalSize.fromNative(kwm_macos_h.metal_view_get_texture_size(arena, pointer))
         }
     }
+
+    var isOpaque: Boolean
+        get() = kwm_macos_h.metal_view_get_is_opaque(pointer)
+        set(value) = kwm_macos_h.metal_view_set_is_opaque(pointer, value)
 }
 
 class MetalTexture internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h::metal_deref_texture)

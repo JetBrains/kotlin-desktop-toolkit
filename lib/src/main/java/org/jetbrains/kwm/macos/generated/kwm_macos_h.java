@@ -1056,6 +1056,122 @@ public class kwm_macos_h {
         }
     }
 
+    private static class metal_view_set_is_opaque {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER,
+            kwm_macos_h.C_BOOL
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_view_set_is_opaque");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void metal_view_set_is_opaque(const struct MetalView *view, bool value)
+     * }
+     */
+    public static FunctionDescriptor metal_view_set_is_opaque$descriptor() {
+        return metal_view_set_is_opaque.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void metal_view_set_is_opaque(const struct MetalView *view, bool value)
+     * }
+     */
+    public static MethodHandle metal_view_set_is_opaque$handle() {
+        return metal_view_set_is_opaque.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void metal_view_set_is_opaque(const struct MetalView *view, bool value)
+     * }
+     */
+    public static MemorySegment metal_view_set_is_opaque$address() {
+        return metal_view_set_is_opaque.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void metal_view_set_is_opaque(const struct MetalView *view, bool value)
+     * }
+     */
+    public static void metal_view_set_is_opaque(MemorySegment view, boolean value) {
+        var mh$ = metal_view_set_is_opaque.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("metal_view_set_is_opaque", view, value);
+            }
+            mh$.invokeExact(view, value);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class metal_view_get_is_opaque {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            kwm_macos_h.C_BOOL,
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("metal_view_get_is_opaque");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * bool metal_view_get_is_opaque(const struct MetalView *view)
+     * }
+     */
+    public static FunctionDescriptor metal_view_get_is_opaque$descriptor() {
+        return metal_view_get_is_opaque.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * bool metal_view_get_is_opaque(const struct MetalView *view)
+     * }
+     */
+    public static MethodHandle metal_view_get_is_opaque$handle() {
+        return metal_view_get_is_opaque.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * bool metal_view_get_is_opaque(const struct MetalView *view)
+     * }
+     */
+    public static MemorySegment metal_view_get_is_opaque$address() {
+        return metal_view_get_is_opaque.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * bool metal_view_get_is_opaque(const struct MetalView *view)
+     * }
+     */
+    public static boolean metal_view_get_is_opaque(MemorySegment view) {
+        var mh$ = metal_view_get_is_opaque.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("metal_view_get_is_opaque", view);
+            }
+            return (boolean)mh$.invokeExact(view);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class metal_view_present {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             kwm_macos_h.C_POINTER

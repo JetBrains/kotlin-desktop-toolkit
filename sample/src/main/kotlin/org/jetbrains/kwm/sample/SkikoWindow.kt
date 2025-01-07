@@ -22,6 +22,7 @@ abstract class SkikoWindow(device: MetalDevice,
 
     init {
         window.minSize = LogicalSize(320.0, 240.0)
+        view.isOpaque = false
         window.attachView(view)
     }
 

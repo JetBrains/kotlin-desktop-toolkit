@@ -95,8 +95,6 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
         layer.setDevice(Some(ProtocolObject::from_ref(&*device)));
         layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
 
-        layer.setOpaque(false);
-
         //        layer.setFramebufferOnly(false); // missing in zed
 
         layer.setAllowsNextDrawableTimeout(false);
@@ -135,6 +133,16 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
 pub extern "C" fn metal_drop_view(view: Box<MetalView>) {
     let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     std::mem::drop(view);
+}
+
+#[no_mangle]
+pub extern "C" fn metal_view_set_is_opaque(view: &MetalView, value: bool) {
+    view.layer.setOpaque(value);
+}
+
+#[no_mangle]
+pub extern "C" fn metal_view_get_is_opaque(view: &MetalView) -> bool {
+    return view.layer.isOpaque();
 }
 
 #[no_mangle]

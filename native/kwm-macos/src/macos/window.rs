@@ -1,11 +1,11 @@
-use std::{borrow::{Borrow, BorrowMut}, cell::RefCell, ffi::{c_void, CStr}, rc::Rc};
+use std::{borrow::{Borrow, BorrowMut}, cell::{Cell, RefCell}, ffi::{c_void, CStr}, rc::Rc};
 
 use anyhow::{ensure, Context, Ok};
 use bitflags::Flags;
 use objc2::{
     declare_class, msg_send, msg_send_id, mutability::{self, MainThreadOnly}, rc::Retained, runtime::{AnyObject, Bool, ProtocolObject}, sel, ClassType, DeclaredClass
 };
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask, NSWindowTitleVisibility};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility};
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
@@ -20,11 +20,16 @@ use super::{application_api::MyNSApplication, events::{Event, MouseMovedEvent}, 
 type CustomTitlebarCell = Rc<RefCell<CustomTitlebar>>;
 
 #[allow(dead_code)]
-pub struct Window {
+pub(crate) struct Window {
     ns_window: Retained<MyNSWindow>,
     delegate: Retained<WindowDelegate>,
     root_view: Retained<RootView>,
+//    window_background: Cell<>,
     custom_titlebar: Option<CustomTitlebarCell>,
+}
+
+pub(crate) enum WindowBackground {
+
 }
 
 pub type WindowId = i64;
@@ -260,9 +265,6 @@ impl Window {
         }
 
         let ns_window = MyNSWindow::new(mtm, rect, style);
-//        ns_window.setOpaque(false);
-//        let background_color = unsafe { NSColor::clearColor() };
-//        ns_window.setBackgroundColor(Some(&background_color));
 
         let custom_titlebar = if params.use_custom_titlebar {
             ns_window.setTitlebarAppearsTransparent(true);
@@ -305,8 +307,34 @@ impl Window {
 
         let root_view = RootView::new(mtm);
         ns_window.setAcceptsMouseMovedEvents(true);
-        ns_window.setContentView(Some(&*root_view));
-        assert!(ns_window.makeFirstResponder(Some(&*root_view)) == true); // todo remove assert
+
+
+        let substrate = unsafe {
+            NSVisualEffectView::new(mtm)
+        };
+
+        unsafe {
+            substrate.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
+            substrate.setMaterial(NSVisualEffectMaterial::HUDWindow);
+            substrate.setState(NSVisualEffectState::Active);
+
+            substrate.setFrameSize(ns_window.frame().size);
+            substrate.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+        }
+
+        let container = unsafe { NSView::new(mtm) };
+        unsafe {
+            container.setAutoresizesSubviews(true);
+            container.addSubview_positioned_relativeTo(&root_view, NSWindowOrderingMode::NSWindowAbove, None);
+
+            container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::NSWindowBelow, Some(&root_view));
+        }
+
+        ns_window.setOpaque(false);
+        ns_window.setBackgroundColor(Some(unsafe { &NSColor::clearColor() }));
+
+        ns_window.setContentView(Some(&container));
+        assert!(ns_window.makeFirstResponder(Some(&root_view)) == true); // todo remove assert
 
         return Window {
             ns_window,
@@ -627,7 +655,7 @@ declare_class!(
     pub(crate) struct RootView;
 
     unsafe impl ClassType for RootView {
-        type Super = NSVisualEffectView;
+        type Super = NSView;
         type Mutability = MainThreadOnly;
         const NAME: &'static str = "RootView";
     }
@@ -693,9 +721,6 @@ impl RootView {
         unsafe {
             root_view.setAutoresizesSubviews(true);
             root_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
-            root_view.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-            root_view.setMaterial(NSVisualEffectMaterial::HUDWindow);
-            root_view.setState(NSVisualEffectState::Active);
         }
         root_view
     }

@@ -268,6 +268,10 @@ struct MetalView *metal_create_view(MetalDeviceRef device);
 
 void metal_drop_view(struct MetalView *view);
 
+void metal_view_set_is_opaque(const struct MetalView *view, bool value);
+
+bool metal_view_get_is_opaque(const struct MetalView *view);
+
 void metal_view_present(const struct MetalView *view);
 
 struct PhysicalSize metal_view_get_texture_size(const struct MetalView *view);
