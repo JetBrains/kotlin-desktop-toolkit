@@ -53,17 +53,19 @@ abstract class SkikoWindow(device: MetalDevice,
                     context = directContext,
                     origin = SurfaceOrigin.TOP_LEFT,
                     colorFormat = SurfaceColorFormat.BGRA_8888,
-                    colorSpace = null,
+                    colorSpace = ColorSpace.sRGB,
                     surfaceProps = null,
                     rt = renderTarget
                 )!!.use { surface ->
                     val time = creationTime.elapsedNow().inWholeMilliseconds
+                    surface.canvas.clear(Color.TRANSPARENT)
                     surface.canvas.draw(PhysicalSize(surface.width.toDouble(), surface.height.toDouble()), time)
                     surface.flushAndSubmit()
                 }
             }
             queue.commit()
             view.present()
+            window.invalidateShadow()
         }
     }
 

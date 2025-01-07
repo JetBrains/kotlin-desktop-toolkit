@@ -5,7 +5,7 @@ use bitflags::Flags;
 use objc2::{
     declare_class, msg_send, msg_send_id, mutability::{self, MainThreadOnly}, rc::Retained, runtime::{AnyObject, Bool, ProtocolObject}, sel, ClassType, DeclaredClass
 };
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSEvent, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask, NSWindowTitleVisibility};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowStyleMask, NSWindowTitleVisibility};
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
@@ -151,6 +151,14 @@ pub extern "C" fn window_start_drag(window: &Window) {
     }
 }
 
+#[no_mangle]
+pub extern "C" fn window_invalidate_shadow(window: &Window) {
+    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    unsafe {
+        window.ns_window.invalidateShadow();
+    }
+}
+
 pub(crate) trait NSWindowExts {
     fn window_id(&self) -> WindowId;
 
@@ -247,6 +255,9 @@ impl Window {
         }
 
         let ns_window = MyNSWindow::new(mtm, rect, style);
+        ns_window.setOpaque(false);
+        let background_color = unsafe { NSColor::clearColor() };
+        ns_window.setBackgroundColor(Some(&background_color));
 
         let custom_titlebar = if params.use_custom_titlebar {
             ns_window.setTitlebarAppearsTransparent(true);
@@ -418,7 +429,6 @@ impl CustomTitlebar {
     }
 
     unsafe fn activate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
-        let frame = ns_window.frame();
         ensure!(self.constraints.is_none());
 
         let titlebar_views = TitlebarViews::retireve_from_window(ns_window)?;

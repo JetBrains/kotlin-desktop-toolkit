@@ -554,3 +554,33 @@ pub(crate) fn run() {
     println!("Before starting an app!");
     unsafe { app.run() };
 }
+
+
+
+/// cbindgen:ignore
+mod cgcolor_sys {
+    use objc2::RefEncode;
+    use objc2_foundation::CGFloat;
+    use std::ffi::c_void;
+
+    /// [Apple's documentation](https://developer.apple.com/documentation/coregraphics/cgcolorref?language=objc)
+    #[repr(C)]
+    #[derive(Debug)]
+    pub struct CGColorRef {
+        inner: [u8; 0],
+    }
+
+    unsafe impl RefEncode for CGColorRef {
+        const ENCODING_REF: objc2::Encoding = objc2::Encoding::Pointer(&objc2::Encoding::Struct("CGColor", &[]));
+    }
+
+
+    extern "C" {
+        fn CGColorCreateSRGB(red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) -> *mut CGColorRef;
+        pub fn CGColorRelease(cg_color: *mut CGColorRef);
+    }
+
+    pub(crate) fn cg_transparent_color() -> *mut CGColorRef {
+        unsafe { CGColorCreateSRGB(0f64, 1f64, 0f64, 1f64) }
+    }
+}

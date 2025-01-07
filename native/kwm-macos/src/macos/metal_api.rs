@@ -1,17 +1,30 @@
-use std::{cell::{Cell, OnceCell}, ffi::c_void};
+use std::{
+    cell::{Cell, OnceCell},
+    ffi::c_void,
+};
 
 use anyhow::Context;
-use objc2::{declare_class, msg_send_id, mutability::MainThreadOnly, rc::Retained, runtime::ProtocolObject, ClassType, DeclaredClass};
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
+use objc2::{
+    class, declare_class, msg_send, msg_send_id, mutability::MainThreadOnly, rc::Retained, runtime::ProtocolObject, ClassType,
+    DeclaredClass,
+};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSColor, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSObjectProtocol, NSRect, NSSize, NSString};
-use objc2_metal::{MTLClearColor, MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};
+use objc2_metal::{
+    MTLClearColor, MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture,
+};
 use objc2_metal_kit::MTKView;
 use objc2_quartz_core::{kCAGravityTopLeft, CAAutoresizingMask, CAMetalDrawable, CAMetalLayer};
 
-use crate::{common::{LogicalSize, PhysicalSize}, define_objc_ref};
+use crate::{
+    common::{LogicalSize, PhysicalSize},
+    define_objc_ref,
+};
 
 #[repr(transparent)]
-pub struct MetalDeviceRef { ptr: *mut c_void }
+pub struct MetalDeviceRef {
+    ptr: *mut c_void,
+}
 define_objc_ref!(MetalDeviceRef, ProtocolObject<dyn MTLDevice>);
 
 #[no_mangle]
@@ -31,7 +44,9 @@ pub extern "C" fn metal_deref_device(device: MetalDeviceRef) {
 }
 
 #[repr(transparent)]
-pub struct MetalCommandQueueRef { ptr: *mut c_void }
+pub struct MetalCommandQueueRef {
+    ptr: *mut c_void,
+}
 define_objc_ref!(MetalCommandQueueRef, ProtocolObject<dyn MTLCommandQueue>);
 
 #[no_mangle]
@@ -62,22 +77,22 @@ pub extern "C" fn metal_deref_command_queue(queue: MetalCommandQueueRef) {
 pub struct MetalView {
     pub(crate) ns_view: OnceCell<Retained<NSView>>,
     pub(crate) layer: Retained<CAMetalLayer>,
-    pub(crate) drawable: Cell<Option<Retained<ProtocolObject<dyn CAMetalDrawable>>>>
+    pub(crate) drawable: Cell<Option<Retained<ProtocolObject<dyn CAMetalDrawable>>>>,
 }
 
 impl MetalView {
-    pub (crate) fn ns_view(&self) -> anyhow::Result<&NSView> {
-        return self.ns_view.get().map(|ns_view| &**ns_view).context("Layer isn't attached yet")
+    pub(crate) fn ns_view(&self) -> anyhow::Result<&NSView> {
+        return self.ns_view.get().map(|ns_view| &**ns_view).context("Layer isn't attached yet");
     }
 
-    pub (crate) fn attach_to_view(&self, ns_view: Retained<NSView>) -> anyhow::Result<()> {
+    pub(crate) fn attach_to_view(&self, ns_view: Retained<NSView>) -> anyhow::Result<()> {
         unsafe {
             // ns_view.setTranslatesAutoresizingMaskIntoConstraints(false); // it actually changes nothing
-//            ns_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+            //            ns_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
 
             ns_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
             ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
-    //        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
+                                                                                                     //        ns_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
             ns_view.setLayer(Some(&self.layer));
             ns_view.setWantsLayer(true);
         }
@@ -94,7 +109,10 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
     unsafe {
         layer.setDevice(Some(ProtocolObject::from_ref(&*device)));
         layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
-//        layer.setFramebufferOnly(false); // missing in zed
+
+        layer.setOpaque(false);
+
+        //        layer.setFramebufferOnly(false); // missing in zed
 
         layer.setAllowsNextDrawableTimeout(false);
         // layer.setDisplaySyncEnabled(false); JWM but why ignore vsync?
@@ -105,13 +123,13 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
         layer.setPresentsWithTransaction(true);
 
         layer.setContentsGravity(kCAGravityTopLeft); // from JWM
-//        fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
+        // fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
     }
 
     Box::new(MetalView {
         ns_view: OnceCell::new(),
         layer,
-        drawable: Cell::new(None)
+        drawable: Cell::new(None),
     })
 }
 
@@ -133,14 +151,14 @@ pub extern "C" fn metal_view_present(view: &MetalView) {
 pub extern "C" fn metal_view_get_texture_size(view: &MetalView) -> PhysicalSize {
     let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let ns_view = view.ns_view().unwrap();
-    let view_size = unsafe {
-        ns_view.convertSizeToBacking(ns_view.bounds().size)
-    };
+    let view_size = unsafe { ns_view.convertSizeToBacking(ns_view.bounds().size) };
     view_size.into()
 }
 
 #[repr(transparent)]
-pub struct MetalTextureRef { ptr: *mut c_void }
+pub struct MetalTextureRef {
+    ptr: *mut c_void,
+}
 define_objc_ref!(MetalTextureRef, ProtocolObject<dyn MTLTexture>);
 
 #[no_mangle]
@@ -156,9 +174,7 @@ pub extern "C" fn metal_view_next_texture(view: &MetalView) -> MetalTextureRef {
             view.layer.setContentsScale(scale);
         }
     }
-    let drawable = unsafe {
-        view.layer.nextDrawable().expect("No drawable")
-    };
+    let drawable = unsafe { view.layer.nextDrawable().expect("No drawable") };
     let texture = unsafe { drawable.texture() };
     view.drawable.set(Some(drawable));
     return MetalTextureRef::new(texture);

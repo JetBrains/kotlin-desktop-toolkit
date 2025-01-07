@@ -323,6 +323,8 @@ bool window_is_full_screen(const struct Window *window);
 
 void window_start_drag(const struct Window *window);
 
+void window_invalidate_shadow(const struct Window *window);
+
 struct ScreenInfoArray screen_list(void);
 
 void screen_list_drop(struct ScreenInfoArray arr);

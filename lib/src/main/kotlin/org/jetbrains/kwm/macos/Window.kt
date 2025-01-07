@@ -150,6 +150,10 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
         kwm_macos_h.window_start_drag(pointer)
     }
 
+    fun invalidateShadow() {
+        kwm_macos_h.window_invalidate_shadow(pointer)
+    }
+
     fun attachView(layer: MetalView) {
         kwm_macos_h.window_attach_layer(pointer, layer.pointer)
     }

@@ -2561,6 +2561,63 @@ public class kwm_macos_h {
         }
     }
 
+    private static class window_invalidate_shadow {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_invalidate_shadow");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_invalidate_shadow(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_invalidate_shadow$descriptor() {
+        return window_invalidate_shadow.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_invalidate_shadow(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_invalidate_shadow$handle() {
+        return window_invalidate_shadow.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_invalidate_shadow(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_invalidate_shadow$address() {
+        return window_invalidate_shadow.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_invalidate_shadow(const struct Window *window)
+     * }
+     */
+    public static void window_invalidate_shadow(MemorySegment window) {
+        var mh$ = window_invalidate_shadow.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_invalidate_shadow", window);
+            }
+            mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class screen_list {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             ScreenInfoArray.layout()    );

@@ -20,7 +20,7 @@ class CustomTitlebar(var origin: LogicalPoint, var size: LogicalSize, var startW
     fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
             is Event.MouseDown -> {
-                if (event.point.x > origin.x && event.point.x < origin.x + size.width &&
+                if (event.point.x > origin.x && event.point.x < origin.x + size.width * 0.75 &&
                     event.point.y > origin.y && event.point.y < origin.y + size.height) {
                     startWindowDrag?.invoke()
                     EventHandlerResult.Stop
@@ -42,6 +42,10 @@ class CustomTitlebar(var origin: LogicalPoint, var size: LogicalSize, var startW
         Paint().use { paint ->
             paint.color = 0xFF404040.toInt()
             canvas.drawRect(Rect.makeXYWH(x, y, width, height), paint)
+        }
+        Paint().use { paint ->
+            paint.color = 0xFFAAAAAA.toInt()
+            canvas.drawRect(Rect.makeXYWH(width * 0.75f, y, width * 0.25f, height), paint)
         }
     }
 }
@@ -66,11 +70,11 @@ class ContentArea(var origin: LogicalPoint, var size: LogicalSize) {
         val contentOrigin = origin.toPhysical(scale)
         val contentSize = size.toPhysical(scale)
 
-        Paint().use { paint ->
-            paint.color = 0xFF264653.toInt()
-            canvas.drawRect(Rect.makeXYWH(contentOrigin.x.toFloat(), contentOrigin.y.toFloat(),
-                                          contentSize.width.toFloat(), contentSize.height.toFloat()), paint)
-        }
+//        Paint().use { paint ->
+//            paint.color = 0xFF264653.toInt()
+//            canvas.drawRect(Rect.makeXYWH(contentOrigin.x.toFloat(), contentOrigin.y.toFloat(),
+//                                          contentSize.width.toFloat(), contentSize.height.toFloat()), paint)
+//        }
         canvas.drawSpiningCircle(contentOrigin, contentSize, time, scale.toFloat())
         canvas.drawWindowBorders(contentOrigin, contentSize, time, scale.toFloat())
         canvas.drawCursor(contentOrigin, contentSize, time, scale.toFloat())
@@ -236,7 +240,7 @@ class RotatingBallWindow(device: MetalDevice,
 
     override fun Canvas.draw(size: PhysicalSize, t: Long) {
         val canvas = this
-        canvas.clear(Color.RED)
+//        canvas.clear(Color.TRANSPARENT) // use RED to debug
         windowContainer.draw(canvas, t, window.scaleFactor())
     }
 }
