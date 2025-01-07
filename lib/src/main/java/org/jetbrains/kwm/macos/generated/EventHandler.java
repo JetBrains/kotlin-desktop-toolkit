@@ -21,6 +21,12 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *             struct MouseMovedEvent mouse_moved;
  *         };
  *         struct {
+ *             struct MouseDownEvent mouse_down;
+ *         };
+ *         struct {
+ *             struct MouseUpEvent mouse_up;
+ *         };
+ *         struct {
  *             struct ScrollWheelEvent scroll_wheel;
  *         };
  *         struct {

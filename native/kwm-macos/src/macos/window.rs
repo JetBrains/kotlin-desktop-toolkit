@@ -11,10 +11,10 @@ use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMut
 use crate::{
     common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
     define_objc_ref,
-    macos::{application_api::AppState, events::{handle_mouse_moved, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}},
+    macos::{application_api::AppState, events::{handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}},
 };
 
-use super::{events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}};
+use super::{application_api::MyNSApplication, events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}};
 
 
 type CustomTitlebarCell = Rc<RefCell<CustomTitlebar>>;
@@ -41,6 +41,7 @@ pub struct WindowParams {
 
     pub is_full_screen_allowed: bool,
     pub use_custom_titlebar: bool,
+    pub titlebar_height: LogicalPixels
 }
 
 impl WindowParams {
@@ -139,6 +140,15 @@ pub extern "C" fn window_toggle_full_screen(window: &Window) {
 #[no_mangle]
 pub extern "C" fn window_is_full_screen(window: &Window) -> bool {
     return window.ns_window.is_full_screen();
+}
+
+#[no_mangle]
+pub extern "C" fn window_start_drag(window: &Window) {
+    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    let app = MyNSApplication::sharedApplication(mtm);
+    if let Some(event) = app.currentEvent() {
+        window.ns_window.performWindowDragWithEvent(&event);
+    }
 }
 
 pub(crate) trait NSWindowExts {
@@ -242,7 +252,7 @@ impl Window {
             ns_window.setTitlebarAppearsTransparent(true);
             ns_window.setTitleVisibility(NSWindowTitleVisibility::NSWindowTitleHidden);
             // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
-            let titlebar = Rc::new(RefCell::new(unsafe { CustomTitlebar::init_custom_titlebar(100.0) }.unwrap()));
+            let titlebar = Rc::new(RefCell::new(unsafe { CustomTitlebar::init_custom_titlebar(params.titlebar_height) }.unwrap()));
             unsafe {
                 // we assume the window isn't full screen
                 (*titlebar).borrow_mut().activate(&ns_window).unwrap();
@@ -362,7 +372,6 @@ impl TitlebarViews {
     }
 
     unsafe fn build_constraints(&self, titlebar_height: LogicalPixels) -> Retained<NSArray<NSLayoutConstraint>> {
-
         let mut constraints_array = Vec::new();
 
         constraints_array.push(self.titlebar_container.leftAnchor().constraintEqualToAnchor(&self.theme_frame.leftAnchor()));
@@ -411,7 +420,6 @@ impl CustomTitlebar {
     unsafe fn activate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
         let frame = ns_window.frame();
         let content = ns_window.contentRectForFrameRect(frame);
-        println!("Frame: {frame:?} content: {content:?}");
         ensure!(self.constraints.is_none());
 
         let titlebar_views = TitlebarViews::retireve_from_window(ns_window)?;
@@ -434,10 +442,6 @@ impl CustomTitlebar {
         }
 
         return Ok(());
-    }
-
-    fn set_titlebar_height(&mut self) {
-
     }
 
     fn before_enter_fullscreen(titlebar: &Option<CustomTitlebarCell>, ns_window: &NSWindow) {
@@ -623,16 +627,22 @@ declare_class!(
     unsafe impl RootView {
         #[method(mouseMoved:)]
         fn mouse_moved(&self, event: &NSEvent) {
-            handle_mouse_moved(event); // todo pass to next responder if it's not handled
-        }
-        #[method(mouseDown:)]
-        fn mouse_down(&self, _event: &NSEvent) {
-//            println!("Down Event: {event:?}");
+            handle_mouse_move(event); // todo pass to next responder if it's not handled
         }
 
         #[method(mouseDragged:)]
-        fn mouse_dragged(&self, _event: &NSEvent) {
-//            println!("Drag Event: {event:?}");
+        fn mouse_dragged(&self, event: &NSEvent) {
+            handle_mouse_move(event);
+        }
+
+        #[method(mouseDown:)]
+        fn mouse_down(&self, event: &NSEvent) {
+            handle_mouse_down(event);
+        }
+
+        #[method(mouseUp:)]
+        fn mouse_up(&self, event: &NSEvent) {
+            handle_mouse_up(event);
         }
 
         // we need those three methods to prevent transparent titlbar from being draggable

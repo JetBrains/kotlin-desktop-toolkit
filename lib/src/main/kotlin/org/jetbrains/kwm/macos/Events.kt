@@ -15,6 +15,16 @@ sealed class Event {
         val point: LogicalPoint
     ): Event()
 
+    data class MouseUp(
+        val windowId: WindowId,
+        val point: LogicalPoint
+    ): Event()
+
+    data class MouseDown(
+        val windowId: WindowId,
+        val point: LogicalPoint
+    ): Event()
+
     data class ScrollWheel(
         val windowId: WindowId,
         val dx: LogicalPixels,
@@ -59,6 +69,8 @@ sealed class Event {
     fun windowId(): WindowId? {
         return when (this) {
             is MouseMoved -> windowId
+            is MouseUp -> windowId
+            is MouseDown -> windowId
             is ScrollWheel -> windowId
             is WindowScreenChange -> windowId
             is WindowResize -> windowId
@@ -78,6 +90,20 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.MouseMoved(
                 windowId = MouseMovedEvent.window_id(nativeEvent),
                 point = LogicalPoint.fromNative(MouseMovedEvent.point(nativeEvent))
+            )
+        }
+        kwm_macos_h.MouseUp() -> {
+            val nativeEvent = NativeEvent.mouse_up(s)
+            Event.MouseUp(
+                windowId = MouseUpEvent.window_id(nativeEvent),
+                point = LogicalPoint.fromNative(MouseUpEvent.point(nativeEvent))
+            )
+        }
+        kwm_macos_h.MouseDown() -> {
+            val nativeEvent = NativeEvent.mouse_down(s)
+            Event.MouseDown(
+                windowId = MouseDownEvent.window_id(nativeEvent),
+                point = LogicalPoint.fromNative(MouseDownEvent.point(nativeEvent))
             )
         }
         kwm_macos_h.ScrollWheel() -> {

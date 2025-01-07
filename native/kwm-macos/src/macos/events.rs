@@ -1,4 +1,5 @@
 use objc2_app_kit::{NSEvent, NSWindow};
+use objc2_foundation::MainThreadMarker;
 
 use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize}, macos::window};
 use anyhow::{anyhow, Result};
@@ -11,6 +12,20 @@ pub type EventHandler = extern "C" fn(&Event) -> bool;
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseMovedEvent {
+    window_id: WindowId,
+    point: LogicalPoint
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct MouseDownEvent {
+    window_id: WindowId,
+    point: LogicalPoint
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct MouseUpEvent {
     window_id: WindowId,
     point: LogicalPoint
 }
@@ -70,6 +85,9 @@ pub struct WindowFullScreenToggleEvent {
 #[allow(dead_code)]
 pub enum Event {
     MouseMoved(MouseMovedEvent),
+    MouseDown(MouseDownEvent),
+    MouseUp(MouseUpEvent),
+    // todo mouse enter and exit
     ScrollWheel(ScrollWheelEvent),
     WindowScreenChange(WindowScreenChangeEvent),
     WindowResize(WindowResizeEvent),
@@ -81,7 +99,7 @@ pub enum Event {
     ApplicationDidFinishLaunching
 }
 
-pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
+pub(crate) fn handle_mouse_move(event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let point = unsafe {
             event.locationInWindow()
@@ -101,6 +119,57 @@ pub(crate) fn handle_mouse_moved(event: &NSEvent) -> bool {
                 x: point.x,
                 y: frame.size.height - point.y,
             },
+        });
+        (state.event_handler)(&event)
+    });
+    handled
+}
+
+trait NSEventExt {
+    fn logical_point(&self, mtm: MainThreadMarker) -> LogicalPoint;
+    fn window_id(&self) -> WindowId;
+}
+
+impl NSEventExt for NSEvent {
+    fn logical_point(&self, mtm: MainThreadMarker) -> LogicalPoint {
+        let point = unsafe {
+            self.locationInWindow()
+        };
+        let window = unsafe {
+            self.window(mtm).expect("No window for event")
+        };
+        // position relative to top left corner of the root view
+        let frame = window.contentView().unwrap().frame();
+
+        LogicalPoint {
+            x: point.x,
+            y: frame.size.height - point.y,
+        }
+    }
+
+    fn window_id(&self) -> WindowId {
+        unsafe {
+            self.windowNumber() as WindowId
+        }
+    }
+}
+
+pub(crate) fn handle_mouse_down(event: &NSEvent) -> bool {
+    let handled = AppState::with(|state| {
+        let event = Event::MouseDown(MouseDownEvent {
+            window_id: event.window_id(),
+            point: event.logical_point(state.mtm),
+        });
+        (state.event_handler)(&event)
+    });
+    handled
+}
+
+pub(crate) fn handle_mouse_up(event: &NSEvent) -> bool {
+    let handled = AppState::with(|state| {
+        let event = Event::MouseUp(MouseUpEvent {
+            window_id: event.window_id(),
+            point: event.logical_point(state.mtm),
         });
         (state.event_handler)(&event)
     });

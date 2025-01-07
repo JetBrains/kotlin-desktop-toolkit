@@ -32,6 +32,16 @@ typedef struct MouseMovedEvent {
   struct LogicalPoint point;
 } MouseMovedEvent;
 
+typedef struct MouseDownEvent {
+  WindowId window_id;
+  struct LogicalPoint point;
+} MouseDownEvent;
+
+typedef struct MouseUpEvent {
+  WindowId window_id;
+  struct LogicalPoint point;
+} MouseUpEvent;
+
 typedef struct ScrollWheelEvent {
   WindowId window_id;
   LogicalPixels dx;
@@ -77,6 +87,8 @@ typedef struct WindowFullScreenToggleEvent {
 
 typedef enum Event_Tag {
   MouseMoved,
+  MouseDown,
+  MouseUp,
   ScrollWheel,
   WindowScreenChange,
   WindowResize,
@@ -93,6 +105,12 @@ typedef struct Event {
   union {
     struct {
       struct MouseMovedEvent mouse_moved;
+    };
+    struct {
+      struct MouseDownEvent mouse_down;
+    };
+    struct {
+      struct MouseUpEvent mouse_up;
     };
     struct {
       struct ScrollWheelEvent scroll_wheel;
@@ -152,6 +170,7 @@ typedef struct WindowParams {
   bool is_miniaturizable;
   bool is_full_screen_allowed;
   bool use_custom_titlebar;
+  LogicalPixels titlebar_height;
 } WindowParams;
 
 typedef struct ScreenInfo {
@@ -301,6 +320,8 @@ void window_set_min_size(const struct Window *window, struct LogicalSize size);
 void window_toggle_full_screen(const struct Window *window);
 
 bool window_is_full_screen(const struct Window *window);
+
+void window_start_drag(const struct Window *window);
 
 struct ScreenInfoArray screen_list(void);
 

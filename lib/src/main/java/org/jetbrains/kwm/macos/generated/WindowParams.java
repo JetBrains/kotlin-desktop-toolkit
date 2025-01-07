@@ -23,6 +23,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     bool is_miniaturizable;
  *     bool is_full_screen_allowed;
  *     bool use_custom_titlebar;
+ *     LogicalPixels titlebar_height;
  * }
  * }
  */
@@ -41,7 +42,8 @@ public class WindowParams {
         kwm_macos_h.C_BOOL.withName("is_miniaturizable"),
         kwm_macos_h.C_BOOL.withName("is_full_screen_allowed"),
         kwm_macos_h.C_BOOL.withName("use_custom_titlebar"),
-        MemoryLayout.paddingLayout(3)
+        MemoryLayout.paddingLayout(3),
+        kwm_macos_h.C_DOUBLE.withName("titlebar_height")
     ).withName("WindowParams");
 
     /**
@@ -401,6 +403,50 @@ public class WindowParams {
      */
     public static void use_custom_titlebar(MemorySegment struct, boolean fieldValue) {
         struct.set(use_custom_titlebar$LAYOUT, use_custom_titlebar$OFFSET, fieldValue);
+    }
+
+    private static final OfDouble titlebar_height$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("titlebar_height"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * LogicalPixels titlebar_height
+     * }
+     */
+    public static final OfDouble titlebar_height$layout() {
+        return titlebar_height$LAYOUT;
+    }
+
+    private static final long titlebar_height$OFFSET = 48;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * LogicalPixels titlebar_height
+     * }
+     */
+    public static final long titlebar_height$offset() {
+        return titlebar_height$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * LogicalPixels titlebar_height
+     * }
+     */
+    public static double titlebar_height(MemorySegment struct) {
+        return struct.get(titlebar_height$LAYOUT, titlebar_height$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * LogicalPixels titlebar_height
+     * }
+     */
+    public static void titlebar_height(MemorySegment struct, double fieldValue) {
+        struct.set(titlebar_height$LAYOUT, titlebar_height$OFFSET, fieldValue);
     }
 
     /**

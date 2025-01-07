@@ -22,9 +22,7 @@ abstract class SkikoWindow(device: MetalDevice,
 
     init {
         window.minSize = LogicalSize(320.0, 240.0)
-        window.maxSize = LogicalSize(1280.0, 960.0)
         window.attachView(view)
-        performDrawing()
     }
 
     private fun updateDisplayLink(screenId: ScreenId) {
@@ -71,10 +69,6 @@ abstract class SkikoWindow(device: MetalDevice,
             queue.commit()
             view.present()
         }
-    }
-
-    fun scale(): Float {
-        return window.scaleFactor().toFloat()
     }
 
     abstract fun Canvas.draw(size: PhysicalSize, time: Long)

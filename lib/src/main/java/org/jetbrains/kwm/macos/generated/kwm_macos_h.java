@@ -96,82 +96,100 @@ public class kwm_macos_h {
     public static int MouseMoved() {
         return MouseMoved;
     }
-    private static final int ScrollWheel = (int)1L;
+    private static final int MouseDown = (int)1L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.ScrollWheel = 1
+     * enum Event_Tag.MouseDown = 1
+     * }
+     */
+    public static int MouseDown() {
+        return MouseDown;
+    }
+    private static final int MouseUp = (int)2L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.MouseUp = 2
+     * }
+     */
+    public static int MouseUp() {
+        return MouseUp;
+    }
+    private static final int ScrollWheel = (int)3L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.ScrollWheel = 3
      * }
      */
     public static int ScrollWheel() {
         return ScrollWheel;
     }
-    private static final int WindowScreenChange = (int)2L;
+    private static final int WindowScreenChange = (int)4L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowScreenChange = 2
+     * enum Event_Tag.WindowScreenChange = 4
      * }
      */
     public static int WindowScreenChange() {
         return WindowScreenChange;
     }
-    private static final int WindowResize = (int)3L;
+    private static final int WindowResize = (int)5L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowResize = 3
+     * enum Event_Tag.WindowResize = 5
      * }
      */
     public static int WindowResize() {
         return WindowResize;
     }
-    private static final int WindowMove = (int)4L;
+    private static final int WindowMove = (int)6L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowMove = 4
+     * enum Event_Tag.WindowMove = 6
      * }
      */
     public static int WindowMove() {
         return WindowMove;
     }
-    private static final int WindowFocusChange = (int)5L;
+    private static final int WindowFocusChange = (int)7L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowFocusChange = 5
+     * enum Event_Tag.WindowFocusChange = 7
      * }
      */
     public static int WindowFocusChange() {
         return WindowFocusChange;
     }
-    private static final int WindowCloseRequest = (int)6L;
+    private static final int WindowCloseRequest = (int)8L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowCloseRequest = 6
+     * enum Event_Tag.WindowCloseRequest = 8
      * }
      */
     public static int WindowCloseRequest() {
         return WindowCloseRequest;
     }
-    private static final int WindowFullScreenToggle = (int)7L;
+    private static final int WindowFullScreenToggle = (int)9L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowFullScreenToggle = 7
+     * enum Event_Tag.WindowFullScreenToggle = 9
      * }
      */
     public static int WindowFullScreenToggle() {
         return WindowFullScreenToggle;
     }
-    private static final int DisplayConfigurationChange = (int)8L;
+    private static final int DisplayConfigurationChange = (int)10L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.DisplayConfigurationChange = 8
+     * enum Event_Tag.DisplayConfigurationChange = 10
      * }
      */
     public static int DisplayConfigurationChange() {
         return DisplayConfigurationChange;
     }
-    private static final int ApplicationDidFinishLaunching = (int)9L;
+    private static final int ApplicationDidFinishLaunching = (int)11L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.ApplicationDidFinishLaunching = 9
+     * enum Event_Tag.ApplicationDidFinishLaunching = 11
      * }
      */
     public static int ApplicationDidFinishLaunching() {
@@ -2481,6 +2499,63 @@ public class kwm_macos_h {
                 traceDowncall("window_is_full_screen", window);
             }
             return (boolean)mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_start_drag {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_start_drag");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_start_drag(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_start_drag$descriptor() {
+        return window_start_drag.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_start_drag(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_start_drag$handle() {
+        return window_start_drag.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_start_drag(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_start_drag$address() {
+        return window_start_drag.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_start_drag(const struct Window *window)
+     * }
+     */
+    public static void window_start_drag(MemorySegment window) {
+        var mh$ = window_start_drag.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_start_drag", window);
+            }
+            mh$.invokeExact(window);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

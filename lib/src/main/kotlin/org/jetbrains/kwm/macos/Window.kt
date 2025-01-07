@@ -1,5 +1,6 @@
 package org.jetbrains.kwm.macos
 
+import org.jetbrains.kwm.LogicalPixels
 import org.jetbrains.kwm.LogicalSize
 import org.jetbrains.kwm.LogicalPoint
 import org.jetbrains.kwm.macos.generated.WindowParams as NativeWindowParams
@@ -19,6 +20,7 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
         val isMiniaturizable: Boolean = true,
         val isFullScreenAllowed: Boolean = true,
         val useCustomTitlebar: Boolean = false,
+        val titlebarHeight: LogicalPixels = 28.0
     ) {
         internal fun toNative(arena: Arena): MemorySegment {
             val nativeWindowParams = NativeWindowParams.allocate(arena)
@@ -31,6 +33,7 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
             NativeWindowParams.is_miniaturizable(nativeWindowParams, isMiniaturizable)
             NativeWindowParams.is_full_screen_allowed(nativeWindowParams, isFullScreenAllowed)
             NativeWindowParams.use_custom_titlebar(nativeWindowParams, useCustomTitlebar)
+            NativeWindowParams.titlebar_height(nativeWindowParams, titlebarHeight)
             return nativeWindowParams
         }
     }
@@ -141,6 +144,10 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
                                         size.toNative(arena),
                                         animateTransition)
         }
+    }
+
+    fun startDrag() {
+        kwm_macos_h.window_start_drag(pointer)
     }
 
     fun attachView(layer: MetalView) {
