@@ -36,10 +36,6 @@ abstract class SkikoWindow(device: MetalDevice,
 
     open fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
-            is Event.WindowResize -> {
-                performDrawing()
-                EventHandlerResult.Continue
-            }
             is Event.WindowScreenChange -> {
                 updateDisplayLink(screenId = event.newScreenId)
                 EventHandlerResult.Continue

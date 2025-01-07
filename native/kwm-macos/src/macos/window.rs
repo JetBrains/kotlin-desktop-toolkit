@@ -419,7 +419,6 @@ impl CustomTitlebar {
 
     unsafe fn activate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
         let frame = ns_window.frame();
-        let content = ns_window.contentRectForFrameRect(frame);
         ensure!(self.constraints.is_none());
 
         let titlebar_views = TitlebarViews::retireve_from_window(ns_window)?;

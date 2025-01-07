@@ -170,10 +170,6 @@ class WindowContainer(val customTitlebar: CustomTitlebar?, val contentArea: Cont
 
     fun handleEvent(event: Event): EventHandlerResult {
         return when  {
-            event is Event.WindowResize -> {
-                resize(event.size)
-                EventHandlerResult.Stop
-            }
             customTitlebar?.handleEvent(event) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             contentArea.handleEvent(event) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             else -> EventHandlerResult.Continue
@@ -222,6 +218,13 @@ class RotatingBallWindow(device: MetalDevice,
 
     override fun handleEvent(event: Event): EventHandlerResult {
         return if (super.handleEvent(event) == EventHandlerResult.Continue) {
+            when {
+                event is Event.WindowResize -> {
+                    windowContainer.resize(event.size)
+                    performDrawing()
+                    EventHandlerResult.Stop
+                }
+            }
             windowContainer.customTitlebar?.startWindowDrag = {
                 window.startDrag()
             }
