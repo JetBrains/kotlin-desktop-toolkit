@@ -4,7 +4,7 @@ use objc2_foundation::MainThreadMarker;
 use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize}, macos::window};
 use anyhow::{anyhow, Result};
 
-use super::{application_api::AppState, screen::{NSScreenExts, ScreenId}, window::{NSWindowExts, WindowId}};
+use super::{application_api::AppState, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;

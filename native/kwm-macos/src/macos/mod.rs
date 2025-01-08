@@ -3,6 +3,8 @@ pub mod application_api;
 pub mod metal_api;
 pub mod display_link;
 pub mod window;
+pub mod window_api;
+pub mod custom_titlebar;
 pub mod screen;
 pub mod events;
 pub mod application_menu;

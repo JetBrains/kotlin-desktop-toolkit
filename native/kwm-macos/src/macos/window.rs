@@ -11,21 +11,18 @@ use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMut
 use crate::{
     common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
     define_objc_ref,
-    macos::{application_api::AppState, events::{handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}},
+    macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}},
 };
 
-use super::{application_api::MyNSApplication, events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}};
-
-
-type CustomTitlebarCell = Rc<RefCell<CustomTitlebar>>;
+use super::{application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}};
 
 #[allow(dead_code)]
 pub(crate) struct Window {
-    ns_window: Retained<MyNSWindow>,
-    delegate: Retained<WindowDelegate>,
-    root_view: Retained<RootView>,
-    background_state: RefCell<WindowBackgroundState>,
-    custom_titlebar: Option<CustomTitlebarCell>,
+    pub(crate) ns_window: Retained<MyNSWindow>,
+    pub(crate) delegate: Retained<WindowDelegate>,
+    pub(crate) root_view: Retained<RootView>,
+    pub(crate) background_state: RefCell<WindowBackgroundState>,
+    pub(crate) custom_titlebar: Option<CustomTitlebarCell>,
 }
 
 pub(crate) struct WindowBackgroundState {
@@ -33,155 +30,10 @@ pub(crate) struct WindowBackgroundState {
     substrate: Option<Retained<NSVisualEffectView>>
 }
 
-pub type WindowId = i64;
-
-#[repr(C)]
-pub struct WindowParams {
-    pub origin: LogicalPoint,
-    pub size: LogicalSize,
-    pub title: StrPtr,
-
-    pub is_resizable: bool,
-    pub is_closable: bool,
-    pub is_miniaturizable: bool,
-
-    pub is_full_screen_allowed: bool,
-    pub use_custom_titlebar: bool,
-    pub titlebar_height: LogicalPixels
-}
-
 impl WindowParams {
     fn title(&self) -> &str {
         unsafe { CStr::from_ptr(self.title) }.to_str().unwrap()
     }
-}
-
-#[no_mangle]
-pub extern "C" fn window_create(params: &WindowParams) -> Box<Window> {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let window = Window::new(mtm, params);
-    return Box::new(window)
-}
-
-#[no_mangle]
-pub extern "C" fn window_drop(window: Box<Window>) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    window.ns_window.close();
-    std::mem::drop(window);
-}
-
-#[no_mangle]
-pub extern "C" fn window_get_window_id(window: &Window) -> WindowId {
-    return window.ns_window.window_id();
-}
-
-#[no_mangle]
-pub extern "C" fn window_get_screen_id(window: &Window) -> ScreenId {
-    return window.ns_window.screen().unwrap().screen_id();
-}
-
-#[no_mangle]
-pub extern "C" fn window_scale_factor(window: &Window) -> f64 {
-    return window.ns_window.backingScaleFactor();
-}
-
-#[no_mangle]
-pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    window.attach_layer(layer);
-}
-
-#[no_mangle]
-pub extern "C" fn window_get_origin(window: &Window) -> LogicalPoint {
-    return window.ns_window.get_origin()
-}
-
-#[no_mangle]
-pub extern "C" fn window_get_size(window: &Window) -> LogicalSize {
-    return window.ns_window.get_size()
-}
-
-#[no_mangle]
-pub extern "C" fn window_set_rect(window: &Window, origin: LogicalPoint, size: LogicalSize, animate: bool) {
-    window.ns_window.set_rect(origin.into(), size.into(), animate);
-}
-
-#[no_mangle]
-pub extern "C" fn window_is_key(window: &Window) -> bool {
-    return window.ns_window.isKeyWindow();
-}
-
-#[no_mangle]
-pub extern "C" fn window_is_main(window: &Window) -> bool {
-    return unsafe {
-        window.ns_window.isMainWindow()
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn window_get_max_size(window: &Window) -> LogicalSize {
-    return window.ns_window.get_max_size();
-}
-
-#[no_mangle]
-pub extern "C" fn window_set_max_size(window: &Window, size: LogicalSize) {
-    window.ns_window.set_max_size(size);
-}
-
-#[no_mangle]
-pub extern "C" fn window_get_min_size(window: &Window) -> LogicalSize {
-    return window.ns_window.get_min_size();
-}
-
-#[no_mangle]
-pub extern "C" fn window_set_min_size(window: &Window, size: LogicalSize) {
-    window.ns_window.set_min_size(size);
-}
-
-#[no_mangle]
-pub extern "C" fn window_toggle_full_screen(window: &Window) {
-    window.ns_window.toggleFullScreen(None);
-}
-
-#[no_mangle]
-pub extern "C" fn window_is_full_screen(window: &Window) -> bool {
-    return window.ns_window.is_full_screen();
-}
-
-#[no_mangle]
-pub extern "C" fn window_start_drag(window: &Window) {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = MyNSApplication::sharedApplication(mtm);
-    if let Some(event) = app.currentEvent() {
-        window.ns_window.performWindowDragWithEvent(&event);
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn window_invalidate_shadow(window: &Window) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    unsafe {
-        window.ns_window.invalidateShadow();
-    }
-}
-
-#[derive(Debug)]
-#[repr(C)]
-pub enum WindowVisualEffect {
-    TitlebarEffect,
-    SelectionEffect,
-    MenuEffect,
-    PopoverEffect,
-    SidebarEffect,
-    HeaderViewEffect,
-    SheetEffect,
-    WindowBackgroundEffect,
-    HUDWindowEffect,
-    FullScreenUIEffect,
-    ToolTipEffect,
-    ContentBackgroundEffect,
-    UnderWindowBackgroundEffect,
-    UnderPageBackgroundEffect,
 }
 
 impl From<WindowVisualEffect> for NSVisualEffectMaterial {
@@ -203,20 +55,6 @@ impl From<WindowVisualEffect> for NSVisualEffectMaterial {
             WindowVisualEffect::UnderPageBackgroundEffect => NSVisualEffectMaterial::UnderPageBackground,
         }
     }
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-pub enum WindowBackground {
-    Transparent,
-    SolidColor(Color),
-    VisualEffect(WindowVisualEffect)
-}
-
-#[no_mangle]
-pub extern "C" fn window_set_background(window: &Window, background: WindowBackground) {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    window.set_background(mtm, background).unwrap();
 }
 
 pub(crate) trait NSWindowExts {
@@ -281,7 +119,7 @@ impl NSWindowExts for NSWindow {
 }
 
 impl Window {
-    fn new(mtm: MainThreadMarker, params: &WindowParams) -> Window {
+    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams) -> Window {
         let rect = CGRect::new(params.origin.into(), params.size.into());
 
         /*
@@ -382,7 +220,7 @@ impl Window {
         };
     }
 
-    fn set_background(&self, mtm: MainThreadMarker, background: WindowBackground) -> anyhow::Result<()> {
+    pub(crate) fn set_background(&self, mtm: MainThreadMarker, background: WindowBackground) -> anyhow::Result<()> {
         let mut background_state = self.background_state.borrow_mut();
         match background {
             WindowBackground::Transparent => {
@@ -436,172 +274,12 @@ impl Window {
         Ok(())
     }
 
-    fn attach_layer(&self, layer: &MetalView) {
+    pub(crate) fn attach_layer(&self, layer: &MetalView) {
         let content_view = self.ns_window.contentView().unwrap();
 
         unsafe {
             layer.ns_view.setFrameSize(content_view.frame().size);
             content_view.addSubview_positioned_relativeTo(&layer.ns_view, NSWindowOrderingMode::NSWindowBelow, Some(&self.root_view));
-        }
-    }
-}
-
-struct CustomTitlebar {
-    constraints: Option<Retained<NSArray<NSLayoutConstraint>>>,
-    height: LogicalPixels
-}
-
-struct TitlebarViews {
-    close_button: Retained<NSButton>,
-    miniaturize_button: Retained<NSButton>,
-    zoom_button: Retained<NSButton>,
-    titlebar: Retained<NSView>,
-    titlebar_container: Retained<NSView>,
-    theme_frame: Retained<NSView>
-}
-
-impl TitlebarViews {
-    unsafe fn retireve_from_window(ns_window: &NSWindow) -> anyhow::Result<TitlebarViews> {
-        // The view hierarchy normally looks as follows:
-        // NSThemeFrame
-        // ├─NSView (content view)
-        // └─NSTitlebarContainerView
-        //   ├─_NSTitlebarDecorationView (only on Mojave 10.14 and newer)
-        //   └─NSTitlebarView
-        //     ├─NSVisualEffectView (only on Big Sur 11 and newer)
-        //     ├─NSView (only on Big Sur and newer)
-        //     ├─_NSThemeCloseWidget - Close
-        //     ├─_NSThemeZoomWidget - Full Screen
-        //     ├─_NSThemeWidget - Minimize (note the different order compared to their layout)
-        //     └─AWTWindowDragView (we will create this)
-        //
-        // But the order and presence of decorations and effects has been unstable across different macOS versions,
-        // even patch upgrades, which is why the code below uses scans instead of indexed access
-        //
-        let close_button = ns_window.standardWindowButton(NSWindowButton::NSWindowCloseButton).context("No Close Button")?;
-        let miniaturize_button = ns_window.standardWindowButton(NSWindowButton::NSWindowMiniaturizeButton).context("No Miniaturize Button")?;
-        let zoom_button = ns_window.standardWindowButton(NSWindowButton::NSWindowZoomButton).context("No Zoom Button")?;
-
-        let titlebar = close_button.superview().context("No titlebar view")?;
-        let titlebar_container = titlebar.superview().context("No titlebar container")?;
-        let theme_frame = titlebar_container.superview().context("No theme frame")?;
-        return Ok(Self {
-            close_button,
-            miniaturize_button,
-            zoom_button,
-            titlebar,
-            titlebar_container,
-            theme_frame,
-        })
-    }
-
-    #[allow(non_snake_case)]
-    unsafe fn setTranslatesAutoresizingMaskIntoConstraints(&self, value: bool) {
-        self.titlebar_container.setTranslatesAutoresizingMaskIntoConstraints(value);
-        self.titlebar.setTranslatesAutoresizingMaskIntoConstraints(value);
-
-        self.close_button.setTranslatesAutoresizingMaskIntoConstraints(value);
-        self.miniaturize_button.setTranslatesAutoresizingMaskIntoConstraints(value);
-        self.zoom_button.setTranslatesAutoresizingMaskIntoConstraints(value);
-
-        // theme frame should keep folow autoresizing mask to match window constraints
-        // self.theme_frame.setTranslatesAutoresizingMaskIntoConstraints(value);
-    }
-
-    fn horizontal_button_offset(titlebar_height: LogicalPixels) -> LogicalPixels {
-        let minimum_height_without_shrinking = 28.0; // This is the smallest macOS title bar availabe with public APIs as of Monterey
-        let shrinking_factor = f64::min(titlebar_height / minimum_height_without_shrinking, 1.0);
-
-        let default_horizontal_buttons_offset = 20.0;
-        return shrinking_factor * default_horizontal_buttons_offset;
-    }
-
-    unsafe fn build_constraints(&self, titlebar_height: LogicalPixels) -> Retained<NSArray<NSLayoutConstraint>> {
-        let mut constraints_array = Vec::new();
-
-        constraints_array.push(self.titlebar_container.leftAnchor().constraintEqualToAnchor(&self.theme_frame.leftAnchor()));
-        constraints_array.push(self.titlebar_container.widthAnchor().constraintEqualToAnchor(&self.theme_frame.widthAnchor()));
-        constraints_array.push(self.titlebar_container.topAnchor().constraintEqualToAnchor(&self.theme_frame.topAnchor()));
-        let height_constraint = self.titlebar_container.heightAnchor().constraintEqualToConstant(titlebar_height);
-        constraints_array.push(height_constraint);
-
-        for view in [&self.titlebar] {
-            constraints_array.push(view.leftAnchor().constraintEqualToAnchor(&self.titlebar_container.leftAnchor()));
-            constraints_array.push(view.rightAnchor().constraintEqualToAnchor(&self.titlebar_container.rightAnchor()));
-            constraints_array.push(view.topAnchor().constraintEqualToAnchor(&self.titlebar_container.topAnchor()));
-            constraints_array.push(view.bottomAnchor().constraintEqualToAnchor(&self.titlebar_container.bottomAnchor()));
-        }
-
-        let horizontal_button_offset = Self::horizontal_button_offset(titlebar_height);
-
-        for (index, button) in [&self.close_button, &self.miniaturize_button, &self.zoom_button].iter().enumerate() {
-            let button_center_horizontal_shift = titlebar_height / 2f64 + (index as f64 * horizontal_button_offset);
-
-
-            constraints_array.push(button.widthAnchor().constraintLessThanOrEqualToAnchor_multiplier(&self.titlebar_container.heightAnchor(), 0.5));
-            // Those corrections are required to keep the icons perfectly round because macOS adds a constant 2 px in resulting height to their frame
-            constraints_array.push(button.heightAnchor()
-                                         .constraintEqualToAnchor_multiplier_constant(&button.widthAnchor(), 14.0/12.0, -2.0));
-            constraints_array.push(button.centerXAnchor()
-                                         .constraintEqualToAnchor_constant(&self.titlebar_container.leftAnchor(),
-                                                                           button_center_horizontal_shift));
-            constraints_array.push(button.centerYAnchor()
-                                         .constraintEqualToAnchor(&self.titlebar_container.centerYAnchor()));
-
-        }
-
-        return NSArray::from_vec(constraints_array);
-    }
-}
-
-impl CustomTitlebar {
-    unsafe fn init_custom_titlebar(titlebar_height: LogicalPixels) -> anyhow::Result<CustomTitlebar> {
-        return Ok(CustomTitlebar {
-            constraints: None,
-            height: titlebar_height
-        })
-    }
-
-    unsafe fn activate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
-        ensure!(self.constraints.is_none());
-
-        let titlebar_views = TitlebarViews::retireve_from_window(ns_window)?;
-        titlebar_views.setTranslatesAutoresizingMaskIntoConstraints(false);
-        let constraints = titlebar_views.build_constraints(self.height);
-
-        NSLayoutConstraint::activateConstraints(&constraints);
-
-        self.constraints = Some(constraints);
-
-        return Ok(());
-    }
-
-    unsafe fn deactivate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
-        let titlebar_views = TitlebarViews::retireve_from_window(ns_window)?;
-
-        titlebar_views.setTranslatesAutoresizingMaskIntoConstraints(true);
-        if let Some(constraints) = self.constraints.take() {
-            NSLayoutConstraint::deactivateConstraints(&constraints);
-        }
-
-        return Ok(());
-    }
-
-    fn before_enter_fullscreen(titlebar: &Option<CustomTitlebarCell>, ns_window: &NSWindow) {
-        if let Some(titlebar) = titlebar {
-            let mut titlebar = (**titlebar).borrow_mut();
-            unsafe {
-                titlebar.deactivate(ns_window).unwrap();
-            }
-        }
-    }
-
-    fn after_exit_fullscreen(titlebar: &Option<CustomTitlebarCell>, ns_window: &NSWindow) {
-        if let Some(titlebar) = titlebar {
-            let mut titlebar = (**titlebar).borrow_mut();
-            unsafe {
-                titlebar.activate(ns_window).unwrap();
-            }
         }
     }
 }
