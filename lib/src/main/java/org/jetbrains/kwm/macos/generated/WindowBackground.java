@@ -14,18 +14,22 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct AppMenuItem {
- *     AppMenuItem_Tag tag;
+ * struct WindowBackground {
+ *     WindowBackground_Tag tag;
  *     union {
- *         ActionItem_Body action_item;
- *         SubMenuItem_Body sub_menu_item;
+ *         struct {
+ *             struct Color solid_color;
+ *         };
+ *         struct {
+ *             enum WindowVisualEffect visual_effect;
+ *         };
  *     };
  * }
  * }
  */
-public class AppMenuItem {
+public class WindowBackground {
 
-    AppMenuItem() {
+    WindowBackground() {
         // Should not be called directly
     }
 
@@ -33,10 +37,14 @@ public class AppMenuItem {
         kwm_macos_h.C_INT.withName("tag"),
         MemoryLayout.paddingLayout(4),
         MemoryLayout.unionLayout(
-            ActionItem_Body.layout().withName("action_item"),
-            SubMenuItem_Body.layout().withName("sub_menu_item")
-        ).withName("$anon$273:3")
-    ).withName("AppMenuItem");
+            MemoryLayout.structLayout(
+                Color.layout().withName("solid_color")
+            ).withName("$anon$209:5"),
+            MemoryLayout.structLayout(
+                kwm_macos_h.C_INT.withName("visual_effect")
+            ).withName("$anon$212:5")
+        ).withName("$anon$208:3")
+    ).withName("WindowBackground");
 
     /**
      * The layout of this struct
@@ -50,7 +58,7 @@ public class AppMenuItem {
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowBackground_Tag tag
      * }
      */
     public static final OfInt tag$layout() {
@@ -62,7 +70,7 @@ public class AppMenuItem {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowBackground_Tag tag
      * }
      */
     public static final long tag$offset() {
@@ -72,7 +80,7 @@ public class AppMenuItem {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowBackground_Tag tag
      * }
      */
     public static int tag(MemorySegment struct) {
@@ -82,99 +90,99 @@ public class AppMenuItem {
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * WindowBackground_Tag tag
      * }
      */
     public static void tag(MemorySegment struct, int fieldValue) {
         struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout action_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$273:3"), groupElement("action_item"));
+    private static final GroupLayout solid_color$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$208:3"), groupElement("$anon$209:5"), groupElement("solid_color"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct Color solid_color
      * }
      */
-    public static final GroupLayout action_item$layout() {
-        return action_item$LAYOUT;
+    public static final GroupLayout solid_color$layout() {
+        return solid_color$LAYOUT;
     }
 
-    private static final long action_item$OFFSET = 8;
+    private static final long solid_color$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct Color solid_color
      * }
      */
-    public static final long action_item$offset() {
-        return action_item$OFFSET;
+    public static final long solid_color$offset() {
+        return solid_color$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct Color solid_color
      * }
      */
-    public static MemorySegment action_item(MemorySegment struct) {
-        return struct.asSlice(action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static MemorySegment solid_color(MemorySegment struct) {
+        return struct.asSlice(solid_color$OFFSET, solid_color$LAYOUT.byteSize());
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * struct Color solid_color
      * }
      */
-    public static void action_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static void solid_color(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, solid_color$OFFSET, solid_color$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout sub_menu_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$273:3"), groupElement("sub_menu_item"));
+    private static final OfInt visual_effect$LAYOUT = (OfInt)$LAYOUT.select(groupElement("$anon$208:3"), groupElement("$anon$212:5"), groupElement("visual_effect"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * enum WindowVisualEffect visual_effect
      * }
      */
-    public static final GroupLayout sub_menu_item$layout() {
-        return sub_menu_item$LAYOUT;
+    public static final OfInt visual_effect$layout() {
+        return visual_effect$LAYOUT;
     }
 
-    private static final long sub_menu_item$OFFSET = 8;
+    private static final long visual_effect$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * enum WindowVisualEffect visual_effect
      * }
      */
-    public static final long sub_menu_item$offset() {
-        return sub_menu_item$OFFSET;
+    public static final long visual_effect$offset() {
+        return visual_effect$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * enum WindowVisualEffect visual_effect
      * }
      */
-    public static MemorySegment sub_menu_item(MemorySegment struct) {
-        return struct.asSlice(sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static int visual_effect(MemorySegment struct) {
+        return struct.get(visual_effect$LAYOUT, visual_effect$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * enum WindowVisualEffect visual_effect
      * }
      */
-    public static void sub_menu_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static void visual_effect(MemorySegment struct, int fieldValue) {
+        struct.set(visual_effect$LAYOUT, visual_effect$OFFSET, fieldValue);
     }
 
     /**

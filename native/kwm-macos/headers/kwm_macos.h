@@ -5,6 +5,23 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef enum WindowVisualEffect {
+  TitlebarEffect,
+  SelectionEffect,
+  MenuEffect,
+  PopoverEffect,
+  SidebarEffect,
+  HeaderViewEffect,
+  SheetEffect,
+  WindowBackgroundEffect,
+  HUDWindowEffect,
+  FullScreenUIEffect,
+  ToolTipEffect,
+  ContentBackgroundEffect,
+  UnderWindowBackgroundEffect,
+  UnderPageBackgroundEffect,
+} WindowVisualEffect;
+
 typedef struct DisplayLink DisplayLink;
 
 typedef struct DisplayLinkBox DisplayLinkBox;
@@ -173,6 +190,31 @@ typedef struct WindowParams {
   LogicalPixels titlebar_height;
 } WindowParams;
 
+typedef struct Color {
+  double red;
+  double green;
+  double blue;
+  double alpha;
+} Color;
+
+typedef enum WindowBackground_Tag {
+  Transparent,
+  SolidColor,
+  VisualEffect,
+} WindowBackground_Tag;
+
+typedef struct WindowBackground {
+  WindowBackground_Tag tag;
+  union {
+    struct {
+      struct Color solid_color;
+    };
+    struct {
+      enum WindowVisualEffect visual_effect;
+    };
+  };
+} WindowBackground;
+
 typedef struct ScreenInfo {
   ScreenId screen_id;
   bool is_primary;
@@ -328,6 +370,8 @@ bool window_is_full_screen(const struct Window *window);
 void window_start_drag(const struct Window *window);
 
 void window_invalidate_shadow(const struct Window *window);
+
+void window_set_background(const struct Window *window, struct WindowBackground background);
 
 struct ScreenInfoArray screen_list(void);
 

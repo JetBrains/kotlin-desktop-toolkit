@@ -8,6 +8,7 @@ import java.lang.foreign.MemorySegment
 import org.jetbrains.kwm.macos.generated.LogicalSize as NativeLogicalSize
 import org.jetbrains.kwm.macos.generated.LogicalPoint as NativeLogicalPoint
 import org.jetbrains.kwm.macos.generated.PhysicalSize as NativePhysicalSize
+import org.jetbrains.kwm.macos.generated.Color as NativeColor
 //import org.jetbrains.kwm.macos.generated.PhysicalPoint as NativePhysicalPoint
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment): LogicalSize {
@@ -50,3 +51,13 @@ internal fun PhysicalSize.toNative(arena: Arena): MemorySegment {
 //    return PhysicalPoint(x = NativePhysicalPoint.x(s),
 //                 y = NativePhysicalPoint.y(s))
 //}
+
+
+internal fun Color.toNative(arena: Arena): MemorySegment {
+    val result = NativeColor.allocate(arena)
+    NativeColor.red(result, red)
+    NativeColor.green(result, green)
+    NativeColor.blue(result, blue)
+    NativeColor.alpha(result, alpha)
+    return result
+}

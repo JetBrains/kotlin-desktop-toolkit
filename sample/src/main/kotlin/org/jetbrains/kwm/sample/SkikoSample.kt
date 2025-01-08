@@ -285,6 +285,26 @@ class ApplicationState: AutoCloseable {
         }
     }
 
+    private fun makeWindowTransparent() {
+        mainWindow()?.let { window ->
+            window.window.setBackground(WindowBackground.Transparent)
+        }
+    }
+
+    private fun makeWindowOpaque() {
+        mainWindow()?.let { window ->
+            window.window.setBackground(WindowBackground.SolidColor(Color(1.0, 1.0, 1.0, 1.0)))
+        }
+    }
+
+    var effect = generateSequence { WindowVisualEffect.entries.asSequence() }.flatten().iterator()
+
+    private fun cycleWindowEffects() {
+        mainWindow()?.let { window ->
+            window.window.setBackground(WindowBackground.VisualEffect(effect.next()))
+        }
+    }
+
     private fun killWindow(window: RotatingBallWindow) {
         windows.remove(window)
         window.close()
@@ -386,6 +406,21 @@ class ApplicationState: AutoCloseable {
                     title = "Drecrease Size",
                     keystroke = Keystroke(key = "-", modifiers = Modifiers(command = true)),
                     perform = { changeCurrentWindowSize(-50.0) }
+                ),
+                AppMenuItem.Action(
+                    title = "Make Window Transparent",
+                    keystroke = Keystroke(key = "t", modifiers = Modifiers(command = true)),
+                    perform = { makeWindowTransparent() }
+                ),
+                AppMenuItem.Action(
+                    title = "Make Window Opaque",
+                    keystroke = Keystroke(key = "o", modifiers = Modifiers(command = true)),
+                    perform = { makeWindowOpaque() }
+                ),
+                AppMenuItem.Action(
+                    title = "Cycle Window Effects",
+                    keystroke = Keystroke(key = "e", modifiers = Modifiers(command = true)),
+                    perform = { cycleWindowEffects() }
                 ),
                 AppMenuItem.Action(
                     title = "Kill",

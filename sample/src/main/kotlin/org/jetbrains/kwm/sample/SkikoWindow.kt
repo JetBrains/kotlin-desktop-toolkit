@@ -1,10 +1,10 @@
 package org.jetbrains.kwm.sample
 
-import org.jetbrains.kwm.LogicalPoint
 import org.jetbrains.kwm.LogicalSize
 import org.jetbrains.kwm.PhysicalSize
 import org.jetbrains.kwm.macos.*
 import org.jetbrains.skia.*
+import org.jetbrains.skia.Color
 import kotlin.time.TimeSource
 
 abstract class SkikoWindow(device: MetalDevice,

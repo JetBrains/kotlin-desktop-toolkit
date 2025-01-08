@@ -69,6 +69,132 @@ public class kwm_macos_h {
     public static final AddressLayout C_POINTER = ValueLayout.ADDRESS
             .withTargetLayout(MemoryLayout.sequenceLayout(java.lang.Long.MAX_VALUE, JAVA_BYTE));
     public static final ValueLayout.OfLong C_LONG = ValueLayout.JAVA_LONG;
+    private static final int TitlebarEffect = (int)0L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.TitlebarEffect = 0
+     * }
+     */
+    public static int TitlebarEffect() {
+        return TitlebarEffect;
+    }
+    private static final int SelectionEffect = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.SelectionEffect = 1
+     * }
+     */
+    public static int SelectionEffect() {
+        return SelectionEffect;
+    }
+    private static final int MenuEffect = (int)2L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.MenuEffect = 2
+     * }
+     */
+    public static int MenuEffect() {
+        return MenuEffect;
+    }
+    private static final int PopoverEffect = (int)3L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.PopoverEffect = 3
+     * }
+     */
+    public static int PopoverEffect() {
+        return PopoverEffect;
+    }
+    private static final int SidebarEffect = (int)4L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.SidebarEffect = 4
+     * }
+     */
+    public static int SidebarEffect() {
+        return SidebarEffect;
+    }
+    private static final int HeaderViewEffect = (int)5L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.HeaderViewEffect = 5
+     * }
+     */
+    public static int HeaderViewEffect() {
+        return HeaderViewEffect;
+    }
+    private static final int SheetEffect = (int)6L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.SheetEffect = 6
+     * }
+     */
+    public static int SheetEffect() {
+        return SheetEffect;
+    }
+    private static final int WindowBackgroundEffect = (int)7L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.WindowBackgroundEffect = 7
+     * }
+     */
+    public static int WindowBackgroundEffect() {
+        return WindowBackgroundEffect;
+    }
+    private static final int HUDWindowEffect = (int)8L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.HUDWindowEffect = 8
+     * }
+     */
+    public static int HUDWindowEffect() {
+        return HUDWindowEffect;
+    }
+    private static final int FullScreenUIEffect = (int)9L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.FullScreenUIEffect = 9
+     * }
+     */
+    public static int FullScreenUIEffect() {
+        return FullScreenUIEffect;
+    }
+    private static final int ToolTipEffect = (int)10L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.ToolTipEffect = 10
+     * }
+     */
+    public static int ToolTipEffect() {
+        return ToolTipEffect;
+    }
+    private static final int ContentBackgroundEffect = (int)11L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.ContentBackgroundEffect = 11
+     * }
+     */
+    public static int ContentBackgroundEffect() {
+        return ContentBackgroundEffect;
+    }
+    private static final int UnderWindowBackgroundEffect = (int)12L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.UnderWindowBackgroundEffect = 12
+     * }
+     */
+    public static int UnderWindowBackgroundEffect() {
+        return UnderWindowBackgroundEffect;
+    }
+    private static final int UnderPageBackgroundEffect = (int)13L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowVisualEffect.UnderPageBackgroundEffect = 13
+     * }
+     */
+    public static int UnderPageBackgroundEffect() {
+        return UnderPageBackgroundEffect;
+    }
     /**
      * {@snippet lang=c :
      * typedef int64_t WindowId
@@ -225,6 +351,33 @@ public class kwm_macos_h {
      * }
      */
     public static final AddressLayout StrPtr = kwm_macos_h.C_POINTER;
+    private static final int Transparent = (int)0L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowBackground_Tag.Transparent = 0
+     * }
+     */
+    public static int Transparent() {
+        return Transparent;
+    }
+    private static final int SolidColor = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowBackground_Tag.SolidColor = 1
+     * }
+     */
+    public static int SolidColor() {
+        return SolidColor;
+    }
+    private static final int VisualEffect = (int)2L;
+    /**
+     * {@snippet lang=c :
+     * enum WindowBackground_Tag.VisualEffect = 2
+     * }
+     */
+    public static int VisualEffect() {
+        return VisualEffect;
+    }
     /**
      * {@snippet lang=c :
      * typedef int64_t ArraySize
@@ -2729,6 +2882,64 @@ public class kwm_macos_h {
                 traceDowncall("window_invalidate_shadow", window);
             }
             mh$.invokeExact(window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_set_background {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER,
+            WindowBackground.layout()
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("window_set_background");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_set_background(const struct Window *window, struct WindowBackground background)
+     * }
+     */
+    public static FunctionDescriptor window_set_background$descriptor() {
+        return window_set_background.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_set_background(const struct Window *window, struct WindowBackground background)
+     * }
+     */
+    public static MethodHandle window_set_background$handle() {
+        return window_set_background.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_set_background(const struct Window *window, struct WindowBackground background)
+     * }
+     */
+    public static MemorySegment window_set_background$address() {
+        return window_set_background.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_set_background(const struct Window *window, struct WindowBackground background)
+     * }
+     */
+    public static void window_set_background(MemorySegment window, MemorySegment background) {
+        var mh$ = window_set_background.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_set_background", window, background);
+            }
+            mh$.invokeExact(window, background);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

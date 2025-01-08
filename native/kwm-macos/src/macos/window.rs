@@ -9,7 +9,7 @@ use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSC
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
-    common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
+    common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
     define_objc_ref,
     macos::{application_api::AppState, events::{handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}},
 };
@@ -24,12 +24,13 @@ pub(crate) struct Window {
     ns_window: Retained<MyNSWindow>,
     delegate: Retained<WindowDelegate>,
     root_view: Retained<RootView>,
-//    window_background: Cell<>,
+    background_state: RefCell<WindowBackgroundState>,
     custom_titlebar: Option<CustomTitlebarCell>,
 }
 
-pub(crate) enum WindowBackground {
-
+pub(crate) struct WindowBackgroundState {
+    is_transparent: bool,
+    substrate: Option<Retained<NSVisualEffectView>>
 }
 
 pub type WindowId = i64;
@@ -167,6 +168,59 @@ pub extern "C" fn window_invalidate_shadow(window: &Window) {
     unsafe {
         window.ns_window.invalidateShadow();
     }
+}
+
+#[repr(C)]
+pub enum WindowVisualEffect {
+    TitlebarEffect,
+    SelectionEffect,
+    MenuEffect,
+    PopoverEffect,
+    SidebarEffect,
+    HeaderViewEffect,
+    SheetEffect,
+    WindowBackgroundEffect,
+    HUDWindowEffect,
+    FullScreenUIEffect,
+    ToolTipEffect,
+    ContentBackgroundEffect,
+    UnderWindowBackgroundEffect,
+    UnderPageBackgroundEffect,
+}
+
+impl From<WindowVisualEffect> for NSVisualEffectMaterial {
+    fn from(value: WindowVisualEffect) -> Self {
+        match value {
+            WindowVisualEffect::TitlebarEffect => NSVisualEffectMaterial::Titlebar,
+            WindowVisualEffect::SelectionEffect => NSVisualEffectMaterial::Selection,
+            WindowVisualEffect::MenuEffect => NSVisualEffectMaterial::Menu,
+            WindowVisualEffect::PopoverEffect => NSVisualEffectMaterial::Popover,
+            WindowVisualEffect::SidebarEffect => NSVisualEffectMaterial::Sidebar,
+            WindowVisualEffect::HeaderViewEffect => NSVisualEffectMaterial::HeaderView,
+            WindowVisualEffect::SheetEffect => NSVisualEffectMaterial::Sheet,
+            WindowVisualEffect::WindowBackgroundEffect => NSVisualEffectMaterial::WindowBackground,
+            WindowVisualEffect::HUDWindowEffect => NSVisualEffectMaterial::HUDWindow,
+            WindowVisualEffect::FullScreenUIEffect => NSVisualEffectMaterial::FullScreenUI,
+            WindowVisualEffect::ToolTipEffect => NSVisualEffectMaterial::ToolTip,
+            WindowVisualEffect::ContentBackgroundEffect => NSVisualEffectMaterial::ContentBackground,
+            WindowVisualEffect::UnderWindowBackgroundEffect => NSVisualEffectMaterial::UnderWindowBackground,
+            WindowVisualEffect::UnderPageBackgroundEffect => NSVisualEffectMaterial::UnderPageBackground,
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[repr(C)]
+pub enum WindowBackground {
+    Transparent,
+    SolidColor(Color),
+    VisualEffect(WindowVisualEffect)
+}
+
+#[no_mangle]
+pub extern "C" fn window_set_background(window: &Window, background: WindowBackground) {
+    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    window.set_background(mtm, background).unwrap();
 }
 
 pub(crate) trait NSWindowExts {
@@ -309,39 +363,81 @@ impl Window {
         ns_window.setAcceptsMouseMovedEvents(true);
 
 
-        let substrate = unsafe {
-            NSVisualEffectView::new(mtm)
-        };
-
-        unsafe {
-            substrate.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-            substrate.setMaterial(NSVisualEffectMaterial::HUDWindow);
-            substrate.setState(NSVisualEffectState::Active);
-
-            substrate.setFrameSize(ns_window.frame().size);
-            substrate.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
-        }
-
         let container = unsafe { NSView::new(mtm) };
         unsafe {
             container.setAutoresizesSubviews(true);
             container.addSubview_positioned_relativeTo(&root_view, NSWindowOrderingMode::NSWindowAbove, None);
-
-            container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::NSWindowBelow, Some(&root_view));
         }
-
-        ns_window.setOpaque(false);
-        ns_window.setBackgroundColor(Some(unsafe { &NSColor::clearColor() }));
 
         ns_window.setContentView(Some(&container));
         assert!(ns_window.makeFirstResponder(Some(&root_view)) == true); // todo remove assert
+
+        let window_background = RefCell::new(WindowBackgroundState {
+            is_transparent: false,
+            substrate: None,
+        });
 
         return Window {
             ns_window,
             delegate,
             root_view,
-            custom_titlebar
+            custom_titlebar,
+            background_state: window_background
         };
+    }
+
+    fn set_background(&self, mtm: MainThreadMarker, background: WindowBackground) -> anyhow::Result<()> {
+        let mut background_state = self.background_state.borrow_mut();
+        match background {
+            WindowBackground::Transparent => {
+                if let Some(substrate) = background_state.substrate.take() {
+                    unsafe {
+                        substrate.removeFromSuperview();
+                    }
+                }
+                self.ns_window.setOpaque(false);
+                self.ns_window.setBackgroundColor(Some(unsafe { &NSColor::clearColor() }));
+                background_state.is_transparent = true;
+            },
+            WindowBackground::SolidColor(color) => {
+                if let Some(substrate) = background_state.substrate.take() {
+                    unsafe {
+                        substrate.removeFromSuperview();
+                    }
+                }
+                self.ns_window.setOpaque(true);
+                let ns_color: Retained<NSColor> = From::<Color>::from(color);
+                self.ns_window.setBackgroundColor(Some(&ns_color));
+                background_state.is_transparent = false;
+            },
+            WindowBackground::VisualEffect(window_visual_effect) => {
+                let substrate = if let Some(substrate) = background_state.substrate.take() {
+                    substrate
+                } else {
+                    let substrate = unsafe {
+                        NSVisualEffectView::new(mtm)
+                    };
+                    unsafe {
+                        substrate.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
+                        substrate.setState(NSVisualEffectState::Active);
+                        substrate.setFrameSize(self.ns_window.frame().size);
+                        substrate.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+                    }
+                    let container = self.ns_window.contentView().context("No container")?;
+                    unsafe {
+                        container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::NSWindowBelow, Some(&self.root_view));
+                    }
+                    substrate
+                };
+                unsafe {
+                    substrate.setMaterial(window_visual_effect.into());
+                }
+                self.ns_window.setOpaque(true);
+                background_state.is_transparent = false;
+                background_state.substrate = Some(substrate);
+            },
+        }
+        Ok(())
     }
 }
 

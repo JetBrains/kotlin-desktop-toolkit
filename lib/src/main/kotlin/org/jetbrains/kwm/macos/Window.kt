@@ -4,6 +4,7 @@ import org.jetbrains.kwm.LogicalPixels
 import org.jetbrains.kwm.LogicalSize
 import org.jetbrains.kwm.LogicalPoint
 import org.jetbrains.kwm.macos.generated.WindowParams as NativeWindowParams
+import org.jetbrains.kwm.macos.generated.WindowBackground as NativeWindowBackground
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -156,5 +157,71 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
 
     fun attachView(layer: MetalView) {
         kwm_macos_h.window_attach_layer(pointer, layer.pointer)
+    }
+
+    fun setBackground(background: WindowBackground) {
+        Arena.ofConfined().use { arena ->
+            kwm_macos_h.window_set_background(pointer, background.toNative(arena))
+        }
+    }
+}
+
+sealed class WindowBackground {
+    data object Transparent: WindowBackground()
+    data class SolidColor(val color: Color): WindowBackground()
+
+    data class VisualEffect(val effect: WindowVisualEffect): WindowBackground()
+
+    internal fun toNative(arena: Arena): MemorySegment {
+        val result = NativeWindowBackground.allocate(arena)
+        when (this) {
+            is Transparent -> {
+                NativeWindowBackground.tag(result, kwm_macos_h.Transparent())
+            }
+            is SolidColor -> {
+                NativeWindowBackground.tag(result, kwm_macos_h.SolidColor())
+                NativeWindowBackground.solid_color(result, color.toNative(arena))
+            }
+            is VisualEffect -> {
+                NativeWindowBackground.tag(result, kwm_macos_h.VisualEffect())
+                NativeWindowBackground.visual_effect(result, effect.toNative())
+            }
+        }
+        return result
+    }
+}
+enum class WindowVisualEffect {
+    TitlebarEffect,
+    SelectionEffect,
+    MenuEffect,
+    PopoverEffect,
+    SidebarEffect,
+    HeaderViewEffect,
+    SheetEffect,
+    WindowBackgroundEffect,
+    HUDWindowEffect,
+    FullScreenUIEffect,
+    ToolTipEffect,
+    ContentBackgroundEffect,
+    UnderWindowBackgroundEffect,
+    UnderPageBackgroundEffect;
+
+    internal fun toNative(): Int {
+        return when (this) {
+            TitlebarEffect -> kwm_macos_h.TitlebarEffect()
+            SelectionEffect -> kwm_macos_h.SelectionEffect()
+            MenuEffect -> kwm_macos_h.MenuEffect()
+            PopoverEffect -> kwm_macos_h.PopoverEffect()
+            SidebarEffect -> kwm_macos_h.SidebarEffect()
+            HeaderViewEffect -> kwm_macos_h.HeaderViewEffect()
+            SheetEffect -> kwm_macos_h.SheetEffect()
+            WindowBackgroundEffect -> kwm_macos_h.WindowBackgroundEffect()
+            HUDWindowEffect -> kwm_macos_h.HUDWindowEffect()
+            FullScreenUIEffect -> kwm_macos_h.FullScreenUIEffect()
+            ToolTipEffect -> kwm_macos_h.ToolTipEffect()
+            ContentBackgroundEffect -> kwm_macos_h.ContentBackgroundEffect()
+            UnderWindowBackgroundEffect -> kwm_macos_h.UnderWindowBackgroundEffect()
+            UnderPageBackgroundEffect -> kwm_macos_h.UnderPageBackgroundEffect()
+        }
     }
 }

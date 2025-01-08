@@ -1,6 +1,8 @@
+use objc2::rc::Retained;
+use objc2_app_kit::NSColor;
 use objc2_foundation::{CGPoint, CGSize};
 
-use crate::common::{LogicalPoint, LogicalSize, PhysicalPoint, PhysicalSize};
+use crate::common::{Color, LogicalPoint, LogicalSize, PhysicalPoint, PhysicalSize};
 
 
 impl From<CGSize> for LogicalSize {
@@ -71,6 +73,14 @@ impl From<PhysicalSize> for CGSize {
         CGSize {
             width: value.width,
             height: value.height
+        }
+    }
+}
+
+impl From<Color> for Retained<NSColor> {
+    fn from(value: Color) -> Self {
+        unsafe {
+            NSColor::colorWithSRGBRed_green_blue_alpha(value.red, value.green, value.blue, value.alpha)
         }
     }
 }
