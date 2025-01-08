@@ -88,12 +88,7 @@ pub extern "C" fn window_scale_factor(window: &Window) -> f64 {
 #[no_mangle]
 pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
     let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let content_view = window.ns_window.contentView().unwrap();
-
-    unsafe {
-        layer.ns_view.setFrameSize(content_view.frame().size);
-        content_view.addSubview(&layer.ns_view);
-    }
+    window.attach_layer(layer);
 }
 
 #[no_mangle]
@@ -170,6 +165,7 @@ pub extern "C" fn window_invalidate_shadow(window: &Window) {
     }
 }
 
+#[derive(Debug)]
 #[repr(C)]
 pub enum WindowVisualEffect {
     TitlebarEffect,
@@ -425,7 +421,7 @@ impl Window {
                     }
                     let container = self.ns_window.contentView().context("No container")?;
                     unsafe {
-                        container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::NSWindowBelow, Some(&self.root_view));
+                        container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::NSWindowBelow, None); // None means below all views
                     }
                     substrate
                 };
@@ -438,6 +434,15 @@ impl Window {
             },
         }
         Ok(())
+    }
+
+    fn attach_layer(&self, layer: &MetalView) {
+        let content_view = self.ns_window.contentView().unwrap();
+
+        unsafe {
+            layer.ns_view.setFrameSize(content_view.frame().size);
+            content_view.addSubview_positioned_relativeTo(&layer.ns_view, NSWindowOrderingMode::NSWindowBelow, Some(&self.root_view));
+        }
     }
 }
 
