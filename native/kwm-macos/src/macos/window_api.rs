@@ -1,6 +1,10 @@
-use objc2_foundation::MainThreadMarker;
+use core::{panic};
+use std::panic::{AssertUnwindSafe, UnwindSafe};
 
-use crate::common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr};
+use objc2::{exception::{self, Exception}, rc::Retained};
+use objc2_foundation::{MainThreadMarker, NSException, NSString};
+
+use crate::{common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
 
 use super::{application_api::MyNSApplication, metal_api::MetalView, screen::{NSScreenExts, ScreenId}, window::{NSWindowExts, Window}};
 
@@ -21,23 +25,37 @@ pub struct WindowParams {
     pub titlebar_height: LogicalPixels
 }
 
-#[no_mangle]
-pub extern "C" fn window_create(params: &WindowParams) -> Box<Window> {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let window = Window::new(mtm, params);
-    return Box::new(window)
+impl PanicDefault for *mut Window {
+    fn default() -> Self {
+        std::ptr::null_mut()
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn window_drop(window: Box<Window>) {
+pub extern "C" fn window_create(params: &WindowParams) -> *mut Window {
+    return ffi_boundary("window_create", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let window = Window::new(mtm, params);
+        Ok(Box::into_raw(Box::new(window)))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn window_drop(window: *mut Window) {
     let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+    let window: Box<Window> = unsafe {
+        assert!(!window.is_null());
+        Box::from_raw(window)
+    };
     window.ns_window.close();
     std::mem::drop(window);
 }
 
 #[no_mangle]
 pub extern "C" fn window_get_window_id(window: &Window) -> WindowId {
-    return window.ns_window.window_id();
+    return std::panic::catch_unwind(AssertUnwindSafe(|| {
+        window.ns_window.window_id()
+    })).unwrap();
 }
 
 #[no_mangle]

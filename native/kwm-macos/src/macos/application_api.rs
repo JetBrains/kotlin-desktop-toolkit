@@ -1,8 +1,8 @@
-use std::cell::{Cell, OnceCell};
+use std::{cell::{Cell, OnceCell}, os::unix::thread};
 
 use objc2::{declare_class, msg_send, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
+    NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
 };
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
 
@@ -66,6 +66,12 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         );
     };
     let app = MyNSApplication::sharedApplication(mtm);
+//    unsafe {
+//        if let Some(apperance) = NSAppearance::appearanceNamed(NSAppearanceNameDarkAqua) {
+//            app.setAppearance(Some(&apperance));
+//        }
+//    }
+
 //    let default_presentation_options = app.presentationOptions();
 //    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
     app.setActivationPolicy(NSApplicationActivationPolicy::Regular);

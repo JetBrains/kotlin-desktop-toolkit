@@ -5,6 +5,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef enum LogLevel {
+  Error,
+  Warn,
+  Info,
+  Debug,
+  Trace,
+} LogLevel;
+
 typedef enum WindowVisualEffect {
   TitlebarEffect,
   SelectionEffect,
@@ -281,6 +289,16 @@ typedef struct AppMenuStructure {
   ArraySize items_count;
 } AppMenuStructure;
 
+typedef struct ExceptionsArray {
+  StrPtr *items;
+  ArraySize count;
+} ExceptionsArray;
+
+typedef struct LoggerConfiguration {
+  StrPtr file_path;
+  enum LogLevel level;
+} LoggerConfiguration;
+
 bool dispatcher_is_main_thread(void);
 
 void dispatcher_main_exec_async(void (*f)(void));
@@ -380,3 +398,9 @@ void screen_list_drop(struct ScreenInfoArray arr);
 void main_menu_update(struct AppMenuStructure menu);
 
 void main_menu_set_none(void);
+
+struct ExceptionsArray logger_check_exceptions(void);
+
+void logger_clear_exceptions(void);
+
+void logger_init(const struct LoggerConfiguration *logger_configuration);
