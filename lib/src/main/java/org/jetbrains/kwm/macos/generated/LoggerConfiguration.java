@@ -14,29 +14,24 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct AppMenuItem {
- *     AppMenuItem_Tag tag;
- *     union {
- *         ActionItem_Body action_item;
- *         SubMenuItem_Body sub_menu_item;
- *     };
+ * struct LoggerConfiguration {
+ *     StrPtr file_path;
+ *     enum LogLevel console_level;
+ *     enum LogLevel file_level;
  * }
  * }
  */
-public class AppMenuItem {
+public class LoggerConfiguration {
 
-    AppMenuItem() {
+    LoggerConfiguration() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
-        kwm_macos_h.C_INT.withName("tag"),
-        MemoryLayout.paddingLayout(4),
-        MemoryLayout.unionLayout(
-            ActionItem_Body.layout().withName("action_item"),
-            SubMenuItem_Body.layout().withName("sub_menu_item")
-        ).withName("$anon$280:3")
-    ).withName("AppMenuItem");
+        kwm_macos_h.C_POINTER.withName("file_path"),
+        kwm_macos_h.C_INT.withName("console_level"),
+        kwm_macos_h.C_INT.withName("file_level")
+    ).withName("LoggerConfiguration");
 
     /**
      * The layout of this struct
@@ -45,136 +40,136 @@ public class AppMenuItem {
         return $LAYOUT;
     }
 
-    private static final OfInt tag$LAYOUT = (OfInt)$LAYOUT.select(groupElement("tag"));
+    private static final AddressLayout file_path$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("file_path"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * StrPtr file_path
      * }
      */
-    public static final OfInt tag$layout() {
-        return tag$LAYOUT;
+    public static final AddressLayout file_path$layout() {
+        return file_path$LAYOUT;
     }
 
-    private static final long tag$OFFSET = 0;
+    private static final long file_path$OFFSET = 0;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * StrPtr file_path
      * }
      */
-    public static final long tag$offset() {
-        return tag$OFFSET;
+    public static final long file_path$offset() {
+        return file_path$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * StrPtr file_path
      * }
      */
-    public static int tag(MemorySegment struct) {
-        return struct.get(tag$LAYOUT, tag$OFFSET);
+    public static MemorySegment file_path(MemorySegment struct) {
+        return struct.get(file_path$LAYOUT, file_path$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * AppMenuItem_Tag tag
+     * StrPtr file_path
      * }
      */
-    public static void tag(MemorySegment struct, int fieldValue) {
-        struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
+    public static void file_path(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(file_path$LAYOUT, file_path$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout action_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$280:3"), groupElement("action_item"));
+    private static final OfInt console_level$LAYOUT = (OfInt)$LAYOUT.select(groupElement("console_level"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * enum LogLevel console_level
      * }
      */
-    public static final GroupLayout action_item$layout() {
-        return action_item$LAYOUT;
+    public static final OfInt console_level$layout() {
+        return console_level$LAYOUT;
     }
 
-    private static final long action_item$OFFSET = 8;
+    private static final long console_level$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * enum LogLevel console_level
      * }
      */
-    public static final long action_item$offset() {
-        return action_item$OFFSET;
+    public static final long console_level$offset() {
+        return console_level$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * enum LogLevel console_level
      * }
      */
-    public static MemorySegment action_item(MemorySegment struct) {
-        return struct.asSlice(action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static int console_level(MemorySegment struct) {
+        return struct.get(console_level$LAYOUT, console_level$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * ActionItem_Body action_item
+     * enum LogLevel console_level
      * }
      */
-    public static void action_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, action_item$OFFSET, action_item$LAYOUT.byteSize());
+    public static void console_level(MemorySegment struct, int fieldValue) {
+        struct.set(console_level$LAYOUT, console_level$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout sub_menu_item$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$280:3"), groupElement("sub_menu_item"));
+    private static final OfInt file_level$LAYOUT = (OfInt)$LAYOUT.select(groupElement("file_level"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * enum LogLevel file_level
      * }
      */
-    public static final GroupLayout sub_menu_item$layout() {
-        return sub_menu_item$LAYOUT;
+    public static final OfInt file_level$layout() {
+        return file_level$LAYOUT;
     }
 
-    private static final long sub_menu_item$OFFSET = 8;
+    private static final long file_level$OFFSET = 12;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * enum LogLevel file_level
      * }
      */
-    public static final long sub_menu_item$offset() {
-        return sub_menu_item$OFFSET;
+    public static final long file_level$offset() {
+        return file_level$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * enum LogLevel file_level
      * }
      */
-    public static MemorySegment sub_menu_item(MemorySegment struct) {
-        return struct.asSlice(sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static int file_level(MemorySegment struct) {
+        return struct.get(file_level$LAYOUT, file_level$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * SubMenuItem_Body sub_menu_item
+     * enum LogLevel file_level
      * }
      */
-    public static void sub_menu_item(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, sub_menu_item$OFFSET, sub_menu_item$LAYOUT.byteSize());
+    public static void file_level(MemorySegment struct, int fieldValue) {
+        struct.set(file_level$LAYOUT, file_level$OFFSET, fieldValue);
     }
 
     /**

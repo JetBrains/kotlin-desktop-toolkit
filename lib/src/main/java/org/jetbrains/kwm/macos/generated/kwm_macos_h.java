@@ -69,6 +69,60 @@ public class kwm_macos_h {
     public static final AddressLayout C_POINTER = ValueLayout.ADDRESS
             .withTargetLayout(MemoryLayout.sequenceLayout(java.lang.Long.MAX_VALUE, JAVA_BYTE));
     public static final ValueLayout.OfLong C_LONG = ValueLayout.JAVA_LONG;
+    private static final int Off = (int)0L;
+    /**
+     * {@snippet lang=c :
+     * enum LogLevel.Off = 0
+     * }
+     */
+    public static int Off() {
+        return Off;
+    }
+    private static final int Error = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * enum LogLevel.Error = 1
+     * }
+     */
+    public static int Error() {
+        return Error;
+    }
+    private static final int Warn = (int)2L;
+    /**
+     * {@snippet lang=c :
+     * enum LogLevel.Warn = 2
+     * }
+     */
+    public static int Warn() {
+        return Warn;
+    }
+    private static final int Info = (int)3L;
+    /**
+     * {@snippet lang=c :
+     * enum LogLevel.Info = 3
+     * }
+     */
+    public static int Info() {
+        return Info;
+    }
+    private static final int Debug = (int)4L;
+    /**
+     * {@snippet lang=c :
+     * enum LogLevel.Debug = 4
+     * }
+     */
+    public static int Debug() {
+        return Debug;
+    }
+    private static final int Trace = (int)5L;
+    /**
+     * {@snippet lang=c :
+     * enum LogLevel.Trace = 5
+     * }
+     */
+    public static int Trace() {
+        return Trace;
+    }
     private static final int TitlebarEffect = (int)0L;
     /**
      * {@snippet lang=c :
@@ -1614,6 +1668,63 @@ public class kwm_macos_h {
         }
     }
 
+    private static class display_link_drop {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("display_link_drop");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void display_link_drop(struct DisplayLinkBox *display_link)
+     * }
+     */
+    public static FunctionDescriptor display_link_drop$descriptor() {
+        return display_link_drop.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void display_link_drop(struct DisplayLinkBox *display_link)
+     * }
+     */
+    public static MethodHandle display_link_drop$handle() {
+        return display_link_drop.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void display_link_drop(struct DisplayLinkBox *display_link)
+     * }
+     */
+    public static MemorySegment display_link_drop$address() {
+        return display_link_drop.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void display_link_drop(struct DisplayLinkBox *display_link)
+     * }
+     */
+    public static void display_link_drop(MemorySegment display_link) {
+        var mh$ = display_link_drop.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("display_link_drop", display_link);
+            }
+            mh$.invokeExact(display_link);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class display_link_set_running {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             kwm_macos_h.C_POINTER,
@@ -1628,7 +1739,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void display_link_set_running(struct DisplayLink *display_link, bool value)
+     * void display_link_set_running(struct DisplayLinkBox *display_link, bool value)
      * }
      */
     public static FunctionDescriptor display_link_set_running$descriptor() {
@@ -1638,7 +1749,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void display_link_set_running(struct DisplayLink *display_link, bool value)
+     * void display_link_set_running(struct DisplayLinkBox *display_link, bool value)
      * }
      */
     public static MethodHandle display_link_set_running$handle() {
@@ -1648,7 +1759,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void display_link_set_running(struct DisplayLink *display_link, bool value)
+     * void display_link_set_running(struct DisplayLinkBox *display_link, bool value)
      * }
      */
     public static MemorySegment display_link_set_running$address() {
@@ -1657,7 +1768,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * void display_link_set_running(struct DisplayLink *display_link, bool value)
+     * void display_link_set_running(struct DisplayLinkBox *display_link, bool value)
      * }
      */
     public static void display_link_set_running(MemorySegment display_link, boolean value) {
@@ -1686,7 +1797,7 @@ public class kwm_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * bool display_link_is_running(struct DisplayLink *display_link)
+     * bool display_link_is_running(struct DisplayLinkBox *display_link)
      * }
      */
     public static FunctionDescriptor display_link_is_running$descriptor() {
@@ -1696,7 +1807,7 @@ public class kwm_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * bool display_link_is_running(struct DisplayLink *display_link)
+     * bool display_link_is_running(struct DisplayLinkBox *display_link)
      * }
      */
     public static MethodHandle display_link_is_running$handle() {
@@ -1706,7 +1817,7 @@ public class kwm_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * bool display_link_is_running(struct DisplayLink *display_link)
+     * bool display_link_is_running(struct DisplayLinkBox *display_link)
      * }
      */
     public static MemorySegment display_link_is_running$address() {
@@ -1715,7 +1826,7 @@ public class kwm_macos_h {
 
     /**
      * {@snippet lang=c :
-     * bool display_link_is_running(struct DisplayLink *display_link)
+     * bool display_link_is_running(struct DisplayLinkBox *display_link)
      * }
      */
     public static boolean display_link_is_running(MemorySegment display_link) {
@@ -1725,63 +1836,6 @@ public class kwm_macos_h {
                 traceDowncall("display_link_is_running", display_link);
             }
             return (boolean)mh$.invokeExact(display_link);
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
-    private static class display_link_drop {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
-            kwm_macos_h.C_POINTER
-        );
-
-        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("display_link_drop");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * void display_link_drop(struct DisplayLink *display_link)
-     * }
-     */
-    public static FunctionDescriptor display_link_drop$descriptor() {
-        return display_link_drop.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * void display_link_drop(struct DisplayLink *display_link)
-     * }
-     */
-    public static MethodHandle display_link_drop$handle() {
-        return display_link_drop.HANDLE;
-    }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void display_link_drop(struct DisplayLink *display_link)
-     * }
-     */
-    public static MemorySegment display_link_drop$address() {
-        return display_link_drop.ADDR;
-    }
-
-    /**
-     * {@snippet lang=c :
-     * void display_link_drop(struct DisplayLink *display_link)
-     * }
-     */
-    public static void display_link_drop(MemorySegment display_link) {
-        var mh$ = display_link_drop.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("display_link_drop", display_link);
-            }
-            mh$.invokeExact(display_link);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
@@ -3165,6 +3219,174 @@ public class kwm_macos_h {
                 traceDowncall("main_menu_set_none");
             }
             mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class logger_check_exceptions {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            ExceptionsArray.layout()    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("logger_check_exceptions");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * struct ExceptionsArray logger_check_exceptions()
+     * }
+     */
+    public static FunctionDescriptor logger_check_exceptions$descriptor() {
+        return logger_check_exceptions.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * struct ExceptionsArray logger_check_exceptions()
+     * }
+     */
+    public static MethodHandle logger_check_exceptions$handle() {
+        return logger_check_exceptions.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * struct ExceptionsArray logger_check_exceptions()
+     * }
+     */
+    public static MemorySegment logger_check_exceptions$address() {
+        return logger_check_exceptions.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * struct ExceptionsArray logger_check_exceptions()
+     * }
+     */
+    public static MemorySegment logger_check_exceptions(SegmentAllocator allocator) {
+        var mh$ = logger_check_exceptions.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("logger_check_exceptions", allocator);
+            }
+            return (MemorySegment)mh$.invokeExact(allocator);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class logger_clear_exceptions {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("logger_clear_exceptions");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void logger_clear_exceptions()
+     * }
+     */
+    public static FunctionDescriptor logger_clear_exceptions$descriptor() {
+        return logger_clear_exceptions.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void logger_clear_exceptions()
+     * }
+     */
+    public static MethodHandle logger_clear_exceptions$handle() {
+        return logger_clear_exceptions.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void logger_clear_exceptions()
+     * }
+     */
+    public static MemorySegment logger_clear_exceptions$address() {
+        return logger_clear_exceptions.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void logger_clear_exceptions()
+     * }
+     */
+    public static void logger_clear_exceptions() {
+        var mh$ = logger_clear_exceptions.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("logger_clear_exceptions");
+            }
+            mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class logger_init {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            kwm_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("logger_init");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void logger_init(const struct LoggerConfiguration *logger_configuration)
+     * }
+     */
+    public static FunctionDescriptor logger_init$descriptor() {
+        return logger_init.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void logger_init(const struct LoggerConfiguration *logger_configuration)
+     * }
+     */
+    public static MethodHandle logger_init$handle() {
+        return logger_init.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void logger_init(const struct LoggerConfiguration *logger_configuration)
+     * }
+     */
+    public static MemorySegment logger_init$address() {
+        return logger_init.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void logger_init(const struct LoggerConfiguration *logger_configuration)
+     * }
+     */
+    public static void logger_init(MemorySegment logger_configuration) {
+        var mh$ = logger_init.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("logger_init", logger_configuration);
+            }
+            mh$.invokeExact(logger_configuration);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

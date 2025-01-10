@@ -1,7 +1,7 @@
-use std::{ffi::c_void, marker::PhantomData, rc::Rc, sync::Arc};
+use std::{ffi::{c_void, CStr}, marker::PhantomData, rc::Rc, sync::Arc};
 
 pub(crate) type StrPtr = *mut std::ffi::c_char;
-pub (crate) type ArraySize = i64;
+pub(crate) type ArraySize = i64;
 
 // ffi ready analog of &[T]
 //#[repr(C)]

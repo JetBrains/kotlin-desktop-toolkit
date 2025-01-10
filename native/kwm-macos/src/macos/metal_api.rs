@@ -1,23 +1,21 @@
 use std::{
-    cell::{Cell, OnceCell},
+    cell::Cell,
     ffi::c_void,
 };
 
-use anyhow::Context;
 use objc2::{
-    class, declare_class, msg_send, msg_send_id, mutability::MainThreadOnly, rc::Retained, runtime::ProtocolObject, ClassType,
-    DeclaredClass,
+    rc::Retained, runtime::ProtocolObject, ClassType
 };
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSColor, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSObjectProtocol, NSRect, NSSize, NSString};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
+use objc2_foundation::{MainThreadMarker, NSString};
 use objc2_metal::{
-    MTLClearColor, MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture,
+    MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture,
 };
-use objc2_metal_kit::MTKView;
 use objc2_quartz_core::{kCAGravityTopLeft, CAAutoresizingMask, CAMetalDrawable, CAMetalLayer};
 
+use crate::logger::{ffi_boundary, PanicDefault};
 use crate::{
-    common::{LogicalSize, PhysicalSize},
+    common::PhysicalSize,
     define_objc_ref,
 };
 
@@ -27,20 +25,33 @@ pub struct MetalDeviceRef {
 }
 define_objc_ref!(MetalDeviceRef, ProtocolObject<dyn MTLDevice>);
 
+impl PanicDefault for MetalDeviceRef {
+    fn default() -> Self {
+        MetalDeviceRef {
+            ptr: std::ptr::null_mut(),
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn metal_create_device() -> MetalDeviceRef {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let device = {
-        let ptr = unsafe { MTLCreateSystemDefaultDevice() };
-        unsafe { Retained::retain(ptr) }.expect("Failed to get default system device.")
-    };
-    return MetalDeviceRef::new(device);
+    ffi_boundary("metal_create_device", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let device = {
+            let ptr = unsafe { MTLCreateSystemDefaultDevice() };
+            unsafe { Retained::retain(ptr) }.expect("Failed to get default system device.")
+        };
+        Ok(MetalDeviceRef::new(device))
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn metal_deref_device(device: MetalDeviceRef) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    unsafe { device.consume() };
+    ffi_boundary("metal_deref_device", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        unsafe { device.consume() };
+        Ok(())
+    })
 }
 
 #[repr(transparent)]
@@ -49,29 +60,45 @@ pub struct MetalCommandQueueRef {
 }
 define_objc_ref!(MetalCommandQueueRef, ProtocolObject<dyn MTLCommandQueue>);
 
+impl PanicDefault for MetalCommandQueueRef {
+    fn default() -> Self {
+        MetalCommandQueueRef {
+            ptr: std::ptr::null_mut(),
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn metal_create_command_queue(device: MetalDeviceRef) -> MetalCommandQueueRef {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let device = unsafe { device.retain() };
-    let queue = device.newCommandQueue().unwrap();
-    return MetalCommandQueueRef::new(queue);
+    ffi_boundary("metal_create_command_queue", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let device = unsafe { device.retain() };
+        let queue = device.newCommandQueue().unwrap();
+        Ok(MetalCommandQueueRef::new(queue))
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn metal_command_queue_commit(queue: MetalCommandQueueRef) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let queue = unsafe { queue.retain() };
+    ffi_boundary("metal_command_queue_commit", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let queue = unsafe { queue.retain() };
 
-    let command_buffer = queue.commandBuffer().unwrap();
-    command_buffer.setLabel(Some(&NSString::from_str("Present")));
-    command_buffer.commit();
-    command_buffer.waitUntilScheduled();
+        let command_buffer = queue.commandBuffer().unwrap();
+        command_buffer.setLabel(Some(&NSString::from_str("Present")));
+        command_buffer.commit();
+        command_buffer.waitUntilScheduled();
+        Ok(())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn metal_deref_command_queue(queue: MetalCommandQueueRef) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    unsafe { queue.consume() };
+    ffi_boundary("metal_deref_command_queue", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        unsafe { queue.consume() };
+        Ok(())
+    })
 }
 
 pub struct MetalView {
@@ -82,83 +109,116 @@ pub struct MetalView {
 
 impl MetalView {
     pub(crate) fn ns_view(&self) -> anyhow::Result<&NSView> {
-        return Ok(&self.ns_view);
+        Ok(&self.ns_view)
+    }
+}
+
+impl PanicDefault for *mut MetalView {
+    fn default() -> Self {
+        std::ptr::null_mut()
     }
 }
 
 #[no_mangle]
-pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> Box<MetalView> {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let device = unsafe { device.retain() };
-    let layer = unsafe { CAMetalLayer::new() };
-    unsafe {
-        layer.setDevice(Some(ProtocolObject::from_ref(&*device)));
-        layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
+pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> *mut MetalView {
+    ffi_boundary("metal_create_view", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let device = unsafe { device.retain() };
+        let layer = unsafe { CAMetalLayer::new() };
+        unsafe {
+            layer.setDevice(Some(ProtocolObject::from_ref(&*device)));
+            layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
 
-        //        layer.setFramebufferOnly(false); // missing in zed
+            //        layer.setFramebufferOnly(false); // missing in zed
 
-        layer.setAllowsNextDrawableTimeout(false);
-        // layer.setDisplaySyncEnabled(false); JWM but why ignore vsync?
+            layer.setAllowsNextDrawableTimeout(false);
+            // layer.setDisplaySyncEnabled(false); JWM but why ignore vsync?
 
-        // this are marked crucial for correct resize
-        layer.setAutoresizingMask(CAAutoresizingMask::kCALayerHeightSizable | CAAutoresizingMask::kCALayerWidthSizable);
-        // layer.setNeedsDisplayOnBoundsChange(true); // not sure that we need to call ::draw when it's resized
-        layer.setPresentsWithTransaction(true);
+            // this are marked crucial for correct resize
+            layer.setAutoresizingMask(CAAutoresizingMask::kCALayerHeightSizable | CAAutoresizingMask::kCALayerWidthSizable);
+            // layer.setNeedsDisplayOnBoundsChange(true); // not sure that we need to call ::draw when it's resized
+            layer.setPresentsWithTransaction(true);
 
-        layer.setContentsGravity(kCAGravityTopLeft); // from JWM
-        // fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
-    }
+            layer.setContentsGravity(kCAGravityTopLeft); // from JWM
+            // fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
+        }
 
-    let layer_view = unsafe { NSView::new(mtm) };
-    unsafe {
-        layer_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+        let layer_view = unsafe { NSView::new(mtm) };
+        unsafe {
+            layer_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
 
-        layer_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
-        layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
-        // layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
-        layer_view.setLayer(Some(&layer));
-    }
+            layer_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
+            layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
+            // layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
+            layer_view.setLayer(Some(&layer));
+        }
 
 
-    layer_view.setWantsLayer(true);
+        layer_view.setWantsLayer(true);
 
-    Box::new(MetalView {
-        ns_view: layer_view,
-        layer,
-        drawable: Cell::new(None),
+        Ok(Box::into_raw(Box::new(MetalView {
+            ns_view: layer_view,
+            layer,
+            drawable: Cell::new(None),
+        })))
     })
 }
 
 #[no_mangle]
-pub extern "C" fn metal_drop_view(view: Box<MetalView>) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    std::mem::drop(view);
+pub extern "C" fn metal_drop_view(view: *mut MetalView) {
+    ffi_boundary("metal_drop_view", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        std::mem::drop(unsafe {
+            assert!(!view.is_null());
+            Box::from_raw(view)
+        });
+        Ok(())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn metal_view_set_is_opaque(view: &MetalView, value: bool) {
-    view.layer.setOpaque(value);
+    ffi_boundary("metal_view_set_is_opaque", || {
+        view.layer.setOpaque(value);
+        Ok(())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn metal_view_get_is_opaque(view: &MetalView) -> bool {
-    return view.layer.isOpaque();
+    ffi_boundary("metal_view_get_is_opaque", || {
+        Ok(view.layer.isOpaque())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn metal_view_present(view: &MetalView) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    if let Some(drawable) = view.drawable.replace(None) {
-        drawable.present();
+    ffi_boundary("metal_view_present", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        if let Some(drawable) = view.drawable.replace(None) {
+            drawable.present();
+        }
+        Ok(())
+    })
+}
+
+impl PanicDefault for PhysicalSize {
+    fn default() -> Self {
+        PhysicalSize {
+            width: 0.0,
+            height: 0.0,
+        }
     }
 }
 
 #[no_mangle]
 pub extern "C" fn metal_view_get_texture_size(view: &MetalView) -> PhysicalSize {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let ns_view = view.ns_view().unwrap();
-    let view_size = unsafe { ns_view.convertSizeToBacking(ns_view.bounds().size) };
-    view_size.into()
+    ffi_boundary("metal_view_get_texture_size", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let ns_view = view.ns_view().unwrap();
+        let view_size = unsafe { ns_view.convertSizeToBacking(ns_view.bounds().size) };
+        Ok(view_size.into())
+    })
 }
 
 #[repr(transparent)]
@@ -167,26 +227,39 @@ pub struct MetalTextureRef {
 }
 define_objc_ref!(MetalTextureRef, ProtocolObject<dyn MTLTexture>);
 
-#[no_mangle]
-pub extern "C" fn metal_view_next_texture(view: &MetalView) -> MetalTextureRef {
-    unsafe {
-        let ns_view = view.ns_view().unwrap();
-        let view_size = ns_view.bounds().size;
-        let drawable_size = view.layer.drawableSize();
-        let new_drawable_size = ns_view.convertSizeToBacking(view_size);
-        let scale = new_drawable_size.width / view_size.width;
-        if new_drawable_size != drawable_size || view.layer.contentsScale() != scale {
-            view.layer.setDrawableSize(new_drawable_size);
-            view.layer.setContentsScale(scale);
+impl PanicDefault for MetalTextureRef {
+    fn default() -> Self {
+        MetalTextureRef {
+            ptr: std::ptr::null_mut(),
         }
     }
-    let drawable = unsafe { view.layer.nextDrawable().expect("No drawable") };
-    let texture = unsafe { drawable.texture() };
-    view.drawable.set(Some(drawable));
-    return MetalTextureRef::new(texture);
+}
+
+#[no_mangle]
+pub extern "C" fn metal_view_next_texture(view: &MetalView) -> MetalTextureRef {
+    ffi_boundary("metal_view_next_texture", || {
+        unsafe {
+            let ns_view = view.ns_view().unwrap();
+            let view_size = ns_view.bounds().size;
+            let drawable_size = view.layer.drawableSize();
+            let new_drawable_size = ns_view.convertSizeToBacking(view_size);
+            let scale = new_drawable_size.width / view_size.width;
+            if new_drawable_size != drawable_size || view.layer.contentsScale() != scale {
+                view.layer.setDrawableSize(new_drawable_size);
+                view.layer.setContentsScale(scale);
+            }
+        }
+        let drawable = unsafe { view.layer.nextDrawable().expect("No drawable") };
+        let texture = unsafe { drawable.texture() };
+        view.drawable.set(Some(drawable));
+        Ok(MetalTextureRef::new(texture))
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn metal_deref_texture(texture: MetalTextureRef) {
-    unsafe { texture.consume() };
+    ffi_boundary("metal_deref_texture", || {
+        unsafe { texture.consume() };
+        Ok(())
+    })
 }

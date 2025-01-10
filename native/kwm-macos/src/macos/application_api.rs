@@ -1,12 +1,13 @@
-use std::cell::{Cell, OnceCell};
-
+use std::{cell::{Cell, OnceCell}, os::unix::thread};
+use anyhow::{anyhow, Context};
+use log::{error, info};
 use objc2::{declare_class, msg_send, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
+    NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
 };
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
 
-use crate::{common::StrPtr, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}};
+use crate::{common::StrPtr, logger::ffi_boundary, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}};
 
 use super::events::{Event, EventHandler};
 
@@ -37,7 +38,7 @@ impl AppState {
 #[derive(Debug)]
 pub struct ApplicationCallbacks {
     // returns true if application should terminate,
-    // oterwise termination will be caneled
+    // otherwise termination will be canceled
     on_should_terminate: extern "C" fn() -> bool,
     on_will_terminate: extern "C" fn(),
     event_handler: EventHandler,
@@ -52,61 +53,89 @@ pub struct ApplicationConfig {
 
 #[no_mangle]
 pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: ApplicationCallbacks) {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-//    unsafe { NSUserDefaults::resetStandardUserDefaults() };
-    let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
-    unsafe {
-        user_defaults.setBool_forKey(
-            config.disable_dictation_menu_item,
-            &NSString::from_str("NSDisabledDictationMenuItem"),
-        );
-        user_defaults.setBool_forKey(
-            config.disable_character_palette_menu_item,
-            &NSString::from_str("NSDisabledCharacterPaletteMenuItem"),
-        );
-    };
-    let app = MyNSApplication::sharedApplication(mtm);
-//    let default_presentation_options = app.presentationOptions();
-//    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
-    app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
-    let event_handler = callbacks.event_handler;
-    let app_delegate = AppDelegate::new(mtm, app.clone(), callbacks);
-    app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
-    APP_STATE.with(|app_state| {
-        app_state.set(AppState {
-            app,
-            app_delegate,
-            event_handler,
-            mtm
-        }).expect("Can't initialize second time!");
+    ffi_boundary("application_init", || {
+        info!("Application Init");
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        //    unsafe { NSUserDefaults::resetStandardUserDefaults() };
+        let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
+        unsafe {
+            user_defaults.setBool_forKey(
+                config.disable_dictation_menu_item,
+                &NSString::from_str("NSDisabledDictationMenuItem"),
+            );
+            user_defaults.setBool_forKey(
+                config.disable_character_palette_menu_item,
+                &NSString::from_str("NSDisabledCharacterPaletteMenuItem"),
+            );
+        };
+        let app = MyNSApplication::sharedApplication(mtm);
+        //    unsafe {
+        //        if let Some(apperance) = NSAppearance::appearanceNamed(NSAppearanceNameDarkAqua) {
+        //            app.setAppearance(Some(&apperance));
+        //        }
+        //    }
+
+        //    let default_presentation_options = app.presentationOptions();
+        //    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
+        app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
+        let event_handler = callbacks.event_handler;
+        let app_delegate = AppDelegate::new(mtm, app.clone(), callbacks);
+        app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
+        APP_STATE.with(|app_state| {
+            // app_state.
+            app_state.set(AppState {
+                app,
+                app_delegate,
+                event_handler,
+                mtm
+            }).map_err(|_| {
+                anyhow!("Can't initialize second time!")
+            })?;
+            Ok(())
+        })
     });
 }
 
 #[no_mangle]
 pub extern "C" fn application_shutdown() {
+    ffi_boundary("application_shutdown", || {
+        // todo
+        Ok(())
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn application_run_event_loop() {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = MyNSApplication::sharedApplication(mtm);
-    unsafe { app.run() };
+    ffi_boundary("application_run_event_loop", || {
+        info!("Start event loop");
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        unsafe { app.run() };
+        Ok(())
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn application_stop_event_loop() {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = MyNSApplication::sharedApplication(mtm);
-    app.stop(None);
+    ffi_boundary("application_stop_event_loop", || {
+        info!("Stop event loop");
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        app.stop(None);
+        Ok(())
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn application_request_termination() {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = MyNSApplication::sharedApplication(mtm);
-    unsafe {
-        app.terminate(None);
-    }
+    ffi_boundary("application_request_termination", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        unsafe {
+            app.terminate(None);
+        }
+        Ok(())
+    });
 }
 
 pub(crate) struct MyNSApplicationIvars {}

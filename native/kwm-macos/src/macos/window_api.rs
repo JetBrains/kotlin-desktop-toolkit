@@ -1,6 +1,10 @@
-use objc2_foundation::MainThreadMarker;
+use core::{panic};
+use std::panic::{AssertUnwindSafe, UnwindSafe};
 
-use crate::common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr};
+use objc2::{exception::{self, Exception}, rc::Retained};
+use objc2_foundation::{MainThreadMarker, NSException, NSString};
+
+use crate::{common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
 
 use super::{application_api::MyNSApplication, metal_api::MetalView, screen::{NSScreenExts, ScreenId}, window::{NSWindowExts, Window}};
 
@@ -21,113 +25,206 @@ pub struct WindowParams {
     pub titlebar_height: LogicalPixels
 }
 
-#[no_mangle]
-pub extern "C" fn window_create(params: &WindowParams) -> Box<Window> {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let window = Window::new(mtm, params);
-    return Box::new(window)
+impl PanicDefault for *mut Window {
+    fn default() -> Self {
+        std::ptr::null_mut()
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn window_drop(window: Box<Window>) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    window.ns_window.close();
-    std::mem::drop(window);
+pub extern "C" fn window_create(params: &WindowParams) -> *mut Window {
+    ffi_boundary("window_create", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let window = Window::new(mtm, params);
+        Ok(Box::into_raw(Box::new(window)))
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn window_drop(window: *mut Window) {
+    ffi_boundary("window_drop", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let window: Box<Window> = unsafe {
+            assert!(!window.is_null());
+            Box::from_raw(window)
+        };
+        window.ns_window.close();
+        std::mem::drop(window);
+        Ok(())
+    })
+}
+
+impl PanicDefault for WindowId {
+    fn default() -> Self {
+        0
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn window_get_window_id(window: &Window) -> WindowId {
-    return window.ns_window.window_id();
+    ffi_boundary("window_get_window_id", || {
+        Ok(window.ns_window.window_id())
+    })
+}
+
+impl PanicDefault for ScreenId {
+    fn default() -> Self {
+        0
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn window_get_screen_id(window: &Window) -> ScreenId {
-    return window.ns_window.screen().unwrap().screen_id();
+    ffi_boundary("window_get_screen_id", || {
+        Ok(window.ns_window.screen().unwrap().screen_id())
+    })
+}
+
+impl PanicDefault for f64 {
+    fn default() -> Self {
+        0.0
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn window_scale_factor(window: &Window) -> f64 {
-    return window.ns_window.backingScaleFactor();
+    ffi_boundary("window_scale_factor", || {
+        Ok(window.ns_window.backingScaleFactor())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    window.attach_layer(layer);
+    ffi_boundary("window_attach_layer", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        window.attach_layer(layer);
+        Ok(())
+    })
+}
+
+impl PanicDefault for LogicalPoint {
+    fn default() -> Self {
+        LogicalPoint {
+            x: 0.0,
+            y: 0.0,
+        }
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn window_get_origin(window: &Window) -> LogicalPoint {
-    return window.ns_window.get_origin()
+    ffi_boundary("window_get_origin", || {
+        Ok(window.ns_window.get_origin())
+    })
+}
+
+impl PanicDefault for LogicalSize {
+    fn default() -> Self {
+        LogicalSize {
+            width: 0.0,
+            height: 0.0,
+        }
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn window_get_size(window: &Window) -> LogicalSize {
-    return window.ns_window.get_size()
+    ffi_boundary("window_get_size", || {
+        Ok(window.ns_window.get_size())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_set_rect(window: &Window, origin: LogicalPoint, size: LogicalSize, animate: bool) {
-    window.ns_window.set_rect(origin.into(), size.into(), animate);
+    ffi_boundary("window_set_rect", || {
+        window.ns_window.set_rect(origin.into(), size.into(), animate);
+        Ok(())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_is_key(window: &Window) -> bool {
-    return window.ns_window.isKeyWindow();
+    ffi_boundary("window_is_key", || {
+        Ok(window.ns_window.isKeyWindow())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_is_main(window: &Window) -> bool {
-    return unsafe {
-        window.ns_window.isMainWindow()
-    }
+    ffi_boundary("window_is_main", || {
+        let result = unsafe {
+            window.ns_window.isMainWindow()
+        };
+        Ok(result)
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_get_max_size(window: &Window) -> LogicalSize {
-    return window.ns_window.get_max_size();
+    ffi_boundary("window_get_max_size", || {
+        Ok(window.ns_window.get_max_size())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_set_max_size(window: &Window, size: LogicalSize) {
-    window.ns_window.set_max_size(size);
+    ffi_boundary("window_set_max_size", || {
+        window.ns_window.set_max_size(size);
+        Ok(())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_get_min_size(window: &Window) -> LogicalSize {
-    return window.ns_window.get_min_size();
+    ffi_boundary("window_get_min_size", || {
+        Ok(window.ns_window.get_min_size())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_set_min_size(window: &Window, size: LogicalSize) {
-    window.ns_window.set_min_size(size);
+    ffi_boundary("window_set_min_size", || {
+        window.ns_window.set_min_size(size);
+        Ok(())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_toggle_full_screen(window: &Window) {
-    window.ns_window.toggleFullScreen(None);
+    ffi_boundary("window_toggle_full_screen", || {
+        window.ns_window.toggleFullScreen(None);
+        Ok(())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_is_full_screen(window: &Window) -> bool {
-    return window.ns_window.is_full_screen();
+    ffi_boundary("window_is_full_screen", || {
+        Ok(window.ns_window.is_full_screen())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_start_drag(window: &Window) {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = MyNSApplication::sharedApplication(mtm);
-    if let Some(event) = app.currentEvent() {
-        window.ns_window.performWindowDragWithEvent(&event);
-    }
+    ffi_boundary("window_start_drag", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        if let Some(event) = app.currentEvent() {
+            window.ns_window.performWindowDragWithEvent(&event);
+        }
+        Ok(())
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn window_invalidate_shadow(window: &Window) {
-    let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    unsafe {
-        window.ns_window.invalidateShadow();
-    }
+    ffi_boundary("window_invalidate_shadow", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        unsafe {
+            window.ns_window.invalidateShadow();
+        }
+        Ok(())
+    })
 }
 
 #[derive(Debug)]
@@ -159,6 +256,9 @@ pub enum WindowBackground {
 
 #[no_mangle]
 pub extern "C" fn window_set_background(window: &Window, background: WindowBackground) {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    window.set_background(mtm, background).unwrap();
+    ffi_boundary("window_set_background", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        window.set_background(mtm, background).unwrap();
+        Ok(())
+    })
 }

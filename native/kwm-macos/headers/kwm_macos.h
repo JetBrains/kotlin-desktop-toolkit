@@ -5,6 +5,15 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef enum LogLevel {
+  Off,
+  Error,
+  Warn,
+  Info,
+  Debug,
+  Trace,
+} LogLevel;
+
 typedef enum WindowVisualEffect {
   TitlebarEffect,
   SelectionEffect,
@@ -21,8 +30,6 @@ typedef enum WindowVisualEffect {
   UnderWindowBackgroundEffect,
   UnderPageBackgroundEffect,
 } WindowVisualEffect;
-
-typedef struct DisplayLink DisplayLink;
 
 typedef struct DisplayLinkBox DisplayLinkBox;
 
@@ -281,6 +288,17 @@ typedef struct AppMenuStructure {
   ArraySize items_count;
 } AppMenuStructure;
 
+typedef struct ExceptionsArray {
+  const StrPtr *items;
+  ArraySize count;
+} ExceptionsArray;
+
+typedef struct LoggerConfiguration {
+  StrPtr file_path;
+  enum LogLevel console_level;
+  enum LogLevel file_level;
+} LoggerConfiguration;
+
 bool dispatcher_is_main_thread(void);
 
 void dispatcher_main_exec_async(void (*f)(void));
@@ -324,11 +342,11 @@ void metal_deref_texture(MetalTextureRef texture);
 
 struct DisplayLinkBox *display_link_create(ScreenId screen_id, DisplayLinkCallback on_next_frame);
 
-void display_link_set_running(struct DisplayLink *display_link, bool value);
+void display_link_drop(struct DisplayLinkBox *display_link);
 
-bool display_link_is_running(struct DisplayLink *display_link);
+void display_link_set_running(struct DisplayLinkBox *display_link, bool value);
 
-void display_link_drop(struct DisplayLink *display_link);
+bool display_link_is_running(struct DisplayLinkBox *display_link);
 
 struct Window *window_create(const struct WindowParams *params);
 
@@ -380,3 +398,9 @@ void screen_list_drop(struct ScreenInfoArray arr);
 void main_menu_update(struct AppMenuStructure menu);
 
 void main_menu_set_none(void);
+
+struct ExceptionsArray logger_check_exceptions(void);
+
+void logger_clear_exceptions(void);
+
+void logger_init(const struct LoggerConfiguration *logger_configuration);

@@ -3,7 +3,7 @@ use objc2_app_kit::{NSApplication, NSEventModifierFlags};
 use objc2_foundation::MainThreadMarker;
 
 use crate::common::{ArraySize, StrPtr};
-
+use crate::logger::ffi_boundary;
 use super::{application_api::MyNSApplication, application_menu::main_menu_update_impl};
 
 // This file contains C API of the library
@@ -65,12 +65,18 @@ pub struct AppMenuStructure {
 
 #[no_mangle]
 pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
-    main_menu_update_impl(menu);
+    ffi_boundary("main_menu_update", || {
+        main_menu_update_impl(menu);
+        Ok(())
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn main_menu_set_none() {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = MyNSApplication::sharedApplication(mtm);
-    app.setMainMenu(None);
+    ffi_boundary("main_menu_set_none", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        app.setMainMenu(None);
+        Ok(())
+    });
 }

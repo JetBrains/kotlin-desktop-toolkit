@@ -1,6 +1,8 @@
-use core::slice;
+use core::{panic, slice};
 use std::ffi::{c_void, CStr, CString};
 
+use anyhow::Context;
+use log::warn;
 use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::Bool,
@@ -8,7 +10,7 @@ use objc2::{
 use objc2_app_kit::{NSApplication, NSScreen};
 use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSNumber, NSObjectNSKeyValueObserverRegistration, NSString};
 
-use crate::common::{ArraySize, LogicalPoint, LogicalSize, StrPtr};
+use crate::{common::{ArraySize, LogicalPoint, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
 
 pub type ScreenId = u32;
 
@@ -52,42 +54,60 @@ impl ScreenInfoArray {
 
 impl Drop for ScreenInfoArray {
     fn drop(&mut self) {
-        let screen_infos = unsafe {
-            let s = slice::from_raw_parts_mut(self.ptr, self.len.try_into().unwrap());
-            Box::from_raw(s)
-        };
-        std::mem::drop(screen_infos);
+        if !self.ptr.is_null() {
+            let screen_infos = unsafe {
+                let s = slice::from_raw_parts_mut(self.ptr, self.len.try_into().unwrap());
+                Box::from_raw(s)
+            };
+            std::mem::drop(screen_infos);
+        } else {
+            warn!("Got null pointer in ScreenInfoArray")
+        }
+    }
+}
+
+impl PanicDefault for ScreenInfoArray {
+    fn default() -> Self {
+        ScreenInfoArray {
+            ptr: std::ptr::null_mut(),
+            len: 0,
+        }
     }
 }
 
 #[no_mangle]
 pub extern "C" fn screen_list() -> ScreenInfoArray {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let screen_infos: Vec<_> = autoreleasepool(|pool| {
-        NSScreen::screens(mtm)
-            .iter()
-            .enumerate()
-            .map(|(num, screen)| {
-                let name = unsafe { screen.localizedName() };
-                let name = CString::new(name.as_str(pool)).unwrap();
-                ScreenInfo {
-                    screen_id: screen.screen_id(),
-                    // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
-                    is_primary: num == 0,
-                    name: name.into_raw(),
-                    origin: screen.frame().origin.into(),
-                    size: screen.frame().size.into(),
-                    scale: screen.backingScaleFactor(),
-                }
-            })
-            .collect()
-    });
-    return ScreenInfoArray::new(screen_infos);
+    ffi_boundary("screen_list", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let screen_infos: Vec<_> = autoreleasepool(|pool| {
+            NSScreen::screens(mtm)
+                .iter()
+                .enumerate()
+                .map(|(num, screen)| {
+                    let name = unsafe { screen.localizedName() };
+                    let name = CString::new(name.as_str(pool)).unwrap();
+                    ScreenInfo {
+                        screen_id: screen.screen_id(),
+                        // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
+                        is_primary: num == 0,
+                        name: name.into_raw(),
+                        origin: screen.frame().origin.into(),
+                        size: screen.frame().size.into(),
+                        scale: screen.backingScaleFactor(),
+                    }
+                })
+                .collect()
+        });
+        Ok(ScreenInfoArray::new(screen_infos))
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
-    std::mem::drop(arr);
+    ffi_boundary("screen_list_drop", || {
+        std::mem::drop(arr);
+        Ok(())
+    })
 }
 
 pub(crate) trait NSScreenExts {

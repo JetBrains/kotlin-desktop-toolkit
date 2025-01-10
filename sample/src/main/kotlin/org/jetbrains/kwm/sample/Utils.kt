@@ -3,13 +3,13 @@ package org.jetbrains.kwm.sample
 import org.jetbrains.kwm.PhysicalPoint
 import org.jetbrains.skia.Canvas
 
-fun printRuntimeInfo() {
+fun runtimeInfo(): String {
     val javaVersion = System.getProperty("java.runtime.version", System.getProperty("java.version", "unknown"))
     val javaVendor = System.getProperty("java.vendor")
-    println("""
+    return """
         Java vendor: $javaVendor
         Java version: $javaVersion
-    """.trimIndent())
+    """.trimIndent()
 }
 
 fun Canvas.withTranslated(point: PhysicalPoint, block: Canvas.() -> Unit) = let { canvas ->

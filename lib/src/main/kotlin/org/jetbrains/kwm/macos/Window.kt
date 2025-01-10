@@ -42,7 +42,7 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
     companion object {
         fun create(params: WindowParams): Window {
             return Arena.ofConfined().use { arena ->
-                Window(kwm_macos_h.window_create(params.toNative(arena)))
+                Window(ffiDownCall { kwm_macos_h.window_create(params.toNative(arena)) })
             }
         }
 
@@ -70,98 +70,114 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
     }
 
     fun windowId(): WindowId {
-        return kwm_macos_h.window_get_window_id(pointer)
+        return ffiDownCall { kwm_macos_h.window_get_window_id(pointer) }
     }
 
     fun screenId(): ScreenId {
-        return kwm_macos_h.window_get_screen_id(pointer)
+        return ffiDownCall {
+            kwm_macos_h.window_get_screen_id(pointer)
+        }
     }
 
     fun scaleFactor(): Double {
-        return kwm_macos_h.window_scale_factor(pointer)
+        return ffiDownCall { kwm_macos_h.window_scale_factor(pointer) }
     }
 
     val origin: LogicalPoint
         get() {
             return Arena.ofConfined().use { arena ->
-                LogicalPoint.fromNative(kwm_macos_h.window_get_origin(arena, pointer))
+                LogicalPoint.fromNative(ffiDownCall { kwm_macos_h.window_get_origin(arena, pointer) })
             }
         }
 
     val size: LogicalSize
         get() {
             return Arena.ofConfined().use { arena ->
-                LogicalSize.fromNative(kwm_macos_h.window_get_size(arena, pointer))
+                LogicalSize.fromNative(ffiDownCall { kwm_macos_h.window_get_size(arena, pointer) })
             }
         }
 
     var maxSize: LogicalSize
         get() {
             return Arena.ofConfined().use { arena ->
-                LogicalSize.fromNative(kwm_macos_h.window_get_max_size(arena, pointer))
+                LogicalSize.fromNative(ffiDownCall { kwm_macos_h.window_get_max_size(arena, pointer) })
             }
         }
         set(value) {
             Arena.ofConfined().use { arena ->
-                kwm_macos_h.window_set_max_size(pointer, value.toNative(arena))
+                ffiDownCall {
+                    kwm_macos_h.window_set_max_size(pointer, value.toNative(arena))
+                }
             }
         }
 
     var minSize: LogicalSize
         get() {
             return Arena.ofConfined().use { arena ->
-                LogicalSize.fromNative(kwm_macos_h.window_get_min_size(arena, pointer))
+                LogicalSize.fromNative(ffiDownCall { kwm_macos_h.window_get_min_size(arena, pointer) })
             }
         }
         set(value) {
             Arena.ofConfined().use { arena ->
-                kwm_macos_h.window_set_min_size(pointer, value.toNative(arena))
+                ffiDownCall { kwm_macos_h.window_set_min_size(pointer, value.toNative(arena)) }
             }
         }
 
     val isFullScreen: Boolean
         get() {
-            return kwm_macos_h.window_is_full_screen(pointer)
+            return ffiDownCall { kwm_macos_h.window_is_full_screen(pointer) }
         }
 
     fun toggleFullScreen() {
-        kwm_macos_h.window_toggle_full_screen(pointer)
+        ffiDownCall {
+            kwm_macos_h.window_toggle_full_screen(pointer)
+        }
     }
 
     val isKey: Boolean
         get() {
-            return kwm_macos_h.window_is_key(pointer)
+            return ffiDownCall { kwm_macos_h.window_is_key(pointer) }
         }
 
     val isMain: Boolean
         get() {
-            return kwm_macos_h.window_is_main(pointer)
+            return ffiDownCall { kwm_macos_h.window_is_main(pointer) }
         }
 
     fun setRect(origin: LogicalPoint, size: LogicalSize, animateTransition: Boolean = true) {
         Arena.ofConfined().use { arena ->
-            kwm_macos_h.window_set_rect(pointer,
-                                        origin.toNative(arena),
-                                        size.toNative(arena),
-                                        animateTransition)
+            ffiDownCall {
+                kwm_macos_h.window_set_rect(pointer,
+                                            origin.toNative(arena),
+                                            size.toNative(arena),
+                                            animateTransition)
+            }
         }
     }
 
     fun startDrag() {
-        kwm_macos_h.window_start_drag(pointer)
+        ffiDownCall {
+            kwm_macos_h.window_start_drag(pointer)
+        }
     }
 
     fun invalidateShadow() {
-        kwm_macos_h.window_invalidate_shadow(pointer)
+        ffiDownCall {
+            kwm_macos_h.window_invalidate_shadow(pointer)
+        }
     }
 
     fun attachView(layer: MetalView) {
-        kwm_macos_h.window_attach_layer(pointer, layer.pointer)
+        ffiDownCall {
+            kwm_macos_h.window_attach_layer(pointer, layer.pointer)
+        }
     }
 
     fun setBackground(background: WindowBackground) {
         Arena.ofConfined().use { arena ->
-            kwm_macos_h.window_set_background(pointer, background.toNative(arena))
+            ffiDownCall {
+                kwm_macos_h.window_set_background(pointer, background.toNative(arena))
+            }
         }
     }
 }
