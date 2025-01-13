@@ -74,7 +74,9 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
     }
 
     fun screenId(): ScreenId {
-        return kwm_macos_h.window_get_screen_id(pointer)
+        return withThrowNativeExceptions {
+            kwm_macos_h.window_get_screen_id(pointer)
+        }
     }
 
     fun scaleFactor(): Double {

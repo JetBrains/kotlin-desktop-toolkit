@@ -58,9 +58,17 @@ pub extern "C" fn window_get_window_id(window: &Window) -> WindowId {
     })).unwrap();
 }
 
+impl PanicDefault for ScreenId {
+    fn default() -> Self {
+        0
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn window_get_screen_id(window: &Window) -> ScreenId {
-    return window.ns_window.screen().unwrap().screen_id();
+    return ffi_boundary("window_get_screen_id", || {
+        Ok(window.ns_window.screen().unwrap().screen_id())
+    });
 }
 
 #[no_mangle]

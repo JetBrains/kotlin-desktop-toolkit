@@ -6,6 +6,7 @@
 #include <stdlib.h>
 
 typedef enum LogLevel {
+  Off,
   Error,
   Warn,
   Info,
@@ -290,13 +291,14 @@ typedef struct AppMenuStructure {
 } AppMenuStructure;
 
 typedef struct ExceptionsArray {
-  StrPtr *items;
+  const StrPtr *items;
   ArraySize count;
 } ExceptionsArray;
 
 typedef struct LoggerConfiguration {
   StrPtr file_path;
-  enum LogLevel level;
+  enum LogLevel console_level;
+  enum LogLevel file_level;
 } LoggerConfiguration;
 
 bool dispatcher_is_main_thread(void);

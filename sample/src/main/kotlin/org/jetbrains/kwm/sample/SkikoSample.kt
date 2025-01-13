@@ -7,6 +7,7 @@ import org.jetbrains.skia.Color
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import java.lang.AutoCloseable
+import java.nio.file.Path
 import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.cos
@@ -447,7 +448,12 @@ class ApplicationState: AutoCloseable {
 
 fun main() {
     printRuntimeInfo()
-    Application.init(Application.Config())
+    initNativeLogger(
+        logFile = Path.of("./build/logs/skiko_sample.log"),
+        consoleLogLevel = LogLevel.Trace,
+        fileLogLevel = LogLevel.Trace
+    )
+    Application.init(Application.ApplicationConfig())
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
         AppMenuManager.setMainMenu(state.buildMenu())

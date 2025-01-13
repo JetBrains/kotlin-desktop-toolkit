@@ -2,7 +2,7 @@ package org.jetbrains.kwm.macos
 
 import org.jetbrains.kwm.macos.generated.EventHandler as NativeEventHandler
 import org.jetbrains.kwm.macos.generated.ApplicationCallbacks
-import org.jetbrains.kwm.macos.generated.ApplicationConfig
+import org.jetbrains.kwm.macos.generated.ApplicationConfig as NativeApplicationConfig
 import org.jetbrains.kwm.macos.generated.kwm_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -15,12 +15,12 @@ enum class EventHandlerResult {
 typealias EventHandler = (Event) -> EventHandlerResult
 
 object Application {
-    data class Config(val disableDictationMenuItem: Boolean = false,
-                      val disableCharacterPaletteMenuItem: Boolean = false) {
-        internal fun toNative(arena: Arena): MemorySegment? {
-            val config = ApplicationConfig.allocate(arena)
-            ApplicationConfig.disable_dictation_menu_item(config, disableDictationMenuItem)
-            ApplicationConfig.disable_character_palette_menu_item(config, disableCharacterPaletteMenuItem)
+    data class ApplicationConfig(val disableDictationMenuItem: Boolean = false,
+                                 val disableCharacterPaletteMenuItem: Boolean = false) {
+        internal fun toNative(arena: Arena): MemorySegment {
+            val config = NativeApplicationConfig.allocate(arena)
+            NativeApplicationConfig.disable_dictation_menu_item(config, disableDictationMenuItem)
+            NativeApplicationConfig.disable_character_palette_menu_item(config, disableCharacterPaletteMenuItem)
             return config
         }
     }
@@ -28,9 +28,11 @@ object Application {
     private var eventHandler: EventHandler? = null
     lateinit var screens: List<Screen>
 
-    fun init(config: Config = Config()) {
-        Arena.ofConfined().use { arena ->
-            kwm_macos_h.application_init(config.toNative(arena), applicationCallbacks())
+    fun init(applicationConfig: ApplicationConfig = ApplicationConfig()) {
+        withThrowNativeExceptions {
+            Arena.ofConfined().use { arena ->
+                kwm_macos_h.application_init(applicationConfig.toNative(arena), applicationCallbacks())
+            }
         }
     }
 
@@ -72,20 +74,25 @@ object Application {
 
     // called from native
     private fun onEvent(nativeEvent: MemorySegment): Boolean {
-        val event = Event.fromNative(nativeEvent)
-        when (event) {
-            is Event.ApplicationDidFinishLaunching -> {
-                screens = Screen.allScreens()
+        return try {
+            val event = Event.fromNative(nativeEvent)
+            when (event) {
+                is Event.ApplicationDidFinishLaunching -> {
+                    screens = Screen.allScreens()
+                }
+                is Event.DisplayConfigurationChange -> {
+                    screens = Screen.allScreens()
+                }
+                else -> {}
             }
-            is Event.DisplayConfigurationChange -> {
-                screens = Screen.allScreens()
+            val result = runEventHandler(event)
+            when (result) {
+                EventHandlerResult.Continue -> false
+                EventHandlerResult.Stop -> true
             }
-            else -> {}
-        }
-        val result = runEventHandler(event)
-        return when (result) {
-            EventHandlerResult.Continue -> false
-            EventHandlerResult.Stop -> true
+        } catch (e: Throwable) {
+            println(e)
+            false
         }
     }
 

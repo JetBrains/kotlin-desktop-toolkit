@@ -1,12 +1,13 @@
 use std::{cell::{Cell, OnceCell}, os::unix::thread};
 
+use log::{error, info};
 use objc2::{declare_class, msg_send, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass};
 use objc2_app_kit::{
     NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
 };
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
 
-use crate::{common::StrPtr, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}};
+use crate::{common::StrPtr, logger::ffi_boundary, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}};
 
 use super::events::{Event, EventHandler};
 
@@ -52,6 +53,7 @@ pub struct ApplicationConfig {
 
 #[no_mangle]
 pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: ApplicationCallbacks) {
+    info!("Application Init");
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
 //    unsafe { NSUserDefaults::resetStandardUserDefaults() };
     let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
@@ -94,6 +96,7 @@ pub extern "C" fn application_shutdown() {
 
 #[no_mangle]
 pub extern "C" fn application_run_event_loop() {
+    info!("Start event loop");
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let app = MyNSApplication::sharedApplication(mtm);
     unsafe { app.run() };
@@ -101,9 +104,13 @@ pub extern "C" fn application_run_event_loop() {
 
 #[no_mangle]
 pub extern "C" fn application_stop_event_loop() {
-    let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-    let app = MyNSApplication::sharedApplication(mtm);
-    app.stop(None);
+    ffi_boundary("application_stop_event_loop", || {
+        info!("Stop event loop");
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        app.stop(None);
+        Ok(())
+    });
 }
 
 #[no_mangle]

@@ -56,20 +56,22 @@ data class Screen(
         }
 
         fun allScreens(): List<Screen> {
-            return Arena.ofConfined().use { arena ->
-                val screenInfoArray = kwm_macos_h.screen_list(arena)
-                val screens = mutableListOf<Screen>()
-                try {
-                    val ptr = ScreenInfoArray.ptr(screenInfoArray)
-                    val len = ScreenInfoArray.len(screenInfoArray)
+            return withThrowNativeExceptions {
+                Arena.ofConfined().use { arena ->
+                    val screenInfoArray = kwm_macos_h.screen_list(arena)
+                    val screens = mutableListOf<Screen>()
+                    try {
+                        val ptr = ScreenInfoArray.ptr(screenInfoArray)
+                        val len = ScreenInfoArray.len(screenInfoArray)
 
-                    for (i in 0 until len) {
-                        screens.add(fromNative(ScreenInfo.asSlice(ptr, i)))
+                        for (i in 0 until len) {
+                            screens.add(fromNative(ScreenInfo.asSlice(ptr, i)))
+                        }
+                    } finally {
+                        kwm_macos_h.screen_list_drop(screenInfoArray)
                     }
-                } finally {
-                    kwm_macos_h.screen_list_drop(screenInfoArray)
+                    screens
                 }
-                screens
             }
         }
     }
