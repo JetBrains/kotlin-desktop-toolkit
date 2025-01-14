@@ -5,19 +5,20 @@ use anyhow::Context;
 use log::{debug, error, info, trace, warn, Level, LevelFilter, Metadata, Record, SetLoggerError};
 use log4rs::{append::{console::{ConsoleAppender, Target}, file::FileAppender}, config::{Appender, Root}, encode::pattern::PatternEncoder, filter::threshold::ThresholdFilter, Config};
 
-use crate::common::{ArraySize, StrPtr};
+use crate::logger_api::{LogLevel, LoggerConfiguration};
+use crate::{common::{ArraySize, StrPtr}, logger_api::ExceptionsArray};
 
 const MAX_EXCEPTIONS_COUNT: usize = 10;
 
-struct LastExceptionMesssages {
-    msgs: [StrPtr; MAX_EXCEPTIONS_COUNT],
+struct LastExceptionMessages {
+    messages: [StrPtr; MAX_EXCEPTIONS_COUNT],
     count: usize
 }
 
-impl LastExceptionMesssages {
+impl LastExceptionMessages {
     const fn new() -> Self {
-        LastExceptionMesssages {
-            msgs: [std::ptr::null_mut(); MAX_EXCEPTIONS_COUNT],
+        LastExceptionMessages {
+            messages: [std::ptr::null_mut(); MAX_EXCEPTIONS_COUNT],
             count: 0,
         }
     }
@@ -26,7 +27,7 @@ impl LastExceptionMesssages {
         if self.count < MAX_EXCEPTIONS_COUNT {
             match CString::new(msg) {
                 Ok(msg) => {
-                    self.msgs[self.count] = CString::into_raw(msg);
+                    self.messages[self.count] = CString::into_raw(msg);
                     self.count += 1;
                 },
                 Err(err) => {
@@ -41,78 +42,42 @@ impl LastExceptionMesssages {
     fn clear(&mut self) {
         for i in 0..self.count {
             let msg = unsafe {
-                CString::from_raw(self.msgs[i])
+                CString::from_raw(self.messages[i])
             };
             std::mem::drop(msg);
-            self.msgs[i] = std::ptr::null_mut();
+            self.messages[i] = std::ptr::null_mut();
         }
         self.count = 0;
     }
 
-    fn exceptions_array(&self) -> ExceptionsArray {
+    pub fn exceptions_array(&self) -> ExceptionsArray {
         ExceptionsArray {
-            items: self.msgs.as_ptr(),
+            items: self.messages.as_ptr(),
             count: self.count as ArraySize,
         }
     }
 }
 
 thread_local! {
-    static LAST_EXCEPTION_MSGS: RefCell<LastExceptionMesssages> = const { RefCell::new(LastExceptionMesssages::new()) };
+    pub(crate) static LAST_EXCEPTION_MSGS: RefCell<LastExceptionMessages> = const { RefCell::new(LastExceptionMessages::new()) };
 }
 
-fn append_exception_msg(msg: String) {
+pub(crate) fn append_exception_msg(msg: String) {
     LAST_EXCEPTION_MSGS.with_borrow_mut(|last_exception_msgs| {
         last_exception_msgs.append(msg);
     });
 }
 
-fn clear_exception_msgs() {
+pub(crate) fn clear_exception_msgs() {
     LAST_EXCEPTION_MSGS.with_borrow_mut(|last_exception_msgs| {
         last_exception_msgs.clear();
     });
 }
 
-#[repr(C)]
-pub struct ExceptionsArray {
-    items: *const StrPtr,
-    count: ArraySize
-}
-
-#[no_mangle]
-pub extern "C" fn logger_check_exceptions() -> ExceptionsArray {
-    let result = std::panic::catch_unwind(|| {
-        LAST_EXCEPTION_MSGS.with_borrow(|last_exception_messages| {
-            last_exception_messages.exceptions_array()
-        })
-    });
-    match result {
-        Ok(result) => result,
-        Err(payload) => {
-            let msg = panic_payload_msg(payload);
-            error!("logger_check_exceptions panic with: {msg}");
-            ExceptionsArray {
-                items: std::ptr::null(),
-                count: 0,
-            }
-        },
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn logger_clear_exceptions() {
-    clear_exception_msgs();
-}
-
-#[allow(dead_code)]
-#[repr(C)]
-enum LogLevel {
-    Off,
-    Error,
-    Warn,
-    Info,
-    Debug,
-    Trace,
+pub(crate) fn exceptions_array() -> ExceptionsArray {
+    LAST_EXCEPTION_MSGS.with_borrow(|last_exception_messages| {
+        last_exception_messages.exceptions_array()
+    })
 }
 
 impl LogLevel {
@@ -126,13 +91,6 @@ impl LogLevel {
             LogLevel::Trace => log::LevelFilter::Trace,
         }
     }
-}
-
-#[repr(C)]
-pub struct LoggerConfiguration {
-    file_path: StrPtr,
-    console_level: LogLevel,
-    file_level: LogLevel
 }
 
 impl LoggerConfiguration {
@@ -153,44 +111,41 @@ impl LoggerConfiguration {
 
     fn file_appender(&self) -> anyhow::Result<FileAppender> {
         let file_path = self.file_path()?;
-        return  FileAppender::builder()
+        FileAppender::builder()
             // Pattern: https://docs.rs/log4rs/*/log4rs/encode/pattern/index.html
             .encoder(Box::new(PatternEncoder::new("[{d(%Y%m%d %H:%M:%S%.6f)} {h({l:5})} {M}:{L}] {m}{n}")))
-            .build(file_path).context("Failed to create file appender");
+            .build(file_path).context("Failed to create file appender")
     }
 
     fn console_appender(&self) -> ConsoleAppender {
-        return ConsoleAppender::builder()
+        ConsoleAppender::builder()
             .encoder(Box::new(PatternEncoder::new("[{d(%Y%m%d %H:%M:%S%.3f)} {h({l:5})} {M}:{L}] {m}{n}")))
             .target(Target::Stderr).build()
     }
-}
 
-#[no_mangle]
-pub extern "C" fn logger_init(logger_configuration: &LoggerConfiguration) {
-    let result = std::panic::catch_unwind(|| {
+    pub(crate) fn init_logger(&self) {
         unsafe {
             // enable backtraces for anyhow errors
             std::env::set_var("RUST_LIB_BACKTRACE", "1");
         }
-        let console_level = logger_configuration.console_log_level();
-        let file_level = logger_configuration.file_log_level();
+        let console_level = self.console_log_level();
+        let file_level = self.file_log_level();
 
         let mut appenders = vec![];
 
-        let console_appender = logger_configuration.console_appender();
+        let console_appender = self.console_appender();
         appenders.push(
             Appender::builder()
-            .filter(Box::new(ThresholdFilter::new(console_level)))
-            .build("stderr", Box::new(console_appender))
+                .filter(Box::new(ThresholdFilter::new(console_level)))
+                .build("stderr", Box::new(console_appender))
         );
 
-        match logger_configuration.file_appender() {
+        match self.file_appender() {
             Ok(file_appender) => {
                 appenders.push(
                     Appender::builder()
-                    .filter(Box::new(ThresholdFilter::new(file_level)))
-                    .build("logfile", Box::new(file_appender)));
+                        .filter(Box::new(ThresholdFilter::new(file_level)))
+                        .build("logfile", Box::new(file_appender)));
             },
             Err(err) => {
                 append_exception_msg(format!("File appender creatrion failed: {err}"));
@@ -220,27 +175,17 @@ pub extern "C" fn logger_init(logger_configuration: &LoggerConfiguration) {
                 append_exception_msg(format!("Failed to create logger config: {err}"));
             },
         };
-    });
-
-    match result {
-        Err(payload) => {
-            let msg = panic_payload_msg(payload);
-            append_exception_msg(format!("logger_init panic with payload: {msg}"));
-        },
-        _ => {}
     }
-    init_panic_handler();
-    info!("Logger initialized");
 }
 
-fn panic_payload_msg(payload: Box<dyn Any + Send + 'static>) -> String {
-    return if let Some(msg) = payload.downcast_ref::<&str>() {
+pub(crate) fn panic_payload_msg(payload: Box<dyn Any + Send + 'static>) -> String {
+    if let Some(msg) = payload.downcast_ref::<&str>() {
         msg.to_string()
     } else if let Some(msg) = payload.downcast_ref::<String>() {
         msg.to_string()
     } else {
         format!("{payload:?}")
-    };
+    }
 }
 
 
@@ -250,13 +195,13 @@ pub(crate) trait PanicDefault {
 
 impl PanicDefault for () {
     fn default() -> Self {
-        return ();
+        ()
     }
 }
 
 // This function ignores [`UnwindSafe`] which means that in case of panic
 // some mutable data types invariants might be violated.
-// E.g. thread withdraw an ammount form one account and panicked before entering it to another account.
+// E.g. thread withdraw an amount form one account and panicked before entering it to another account.
 pub(crate) fn ffi_boundary<R: PanicDefault, F: FnOnce() -> anyhow::Result<R>>(name: &str, f: F) -> R {
     match std::panic::catch_unwind(AssertUnwindSafe(f)) {
         Ok(Ok(result)) => result,

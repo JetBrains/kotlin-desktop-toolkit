@@ -221,28 +221,6 @@ fun <T> withThrowNativeExceptions(body: () -> T): T {
     return result
 }
 
-inline fun wrapWithCatchAndLog(crossinline body: () -> Unit): () -> Unit {
-    return {
-        try {
-            body()
-        } catch (e: Throwable) {
-            Logger.error(e) { "Exception caught" }
-        }
-    }
-}
-
-inline fun <T> wrapWithCatchAndLog(crossinline body: () -> T, default: T): () -> T {
-    return {
-        try {
-            body()
-        } catch (e: Throwable) {
-            Logger.error(e) { "Exception caught" }
-            default
-        }
-    }
-}
-
-
 inline fun ffiBoundary(crossinline body: () -> Unit) {
     return try {
         body()
