@@ -2,6 +2,7 @@ use core::{panic, slice};
 use std::ffi::{c_void, CStr, CString};
 
 use anyhow::Context;
+use log::warn;
 use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::Bool,
@@ -59,6 +60,8 @@ impl Drop for ScreenInfoArray {
                 Box::from_raw(s)
             };
             std::mem::drop(screen_infos);
+        } else {
+            warn!("Got null pointer in ScreenInfoArray")
         }
     }
 }
@@ -101,7 +104,10 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
 
 #[no_mangle]
 pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
-    std::mem::drop(arr);
+    ffi_boundary("screen_list_drop", || {
+        std::mem::drop(arr);
+        Ok(())
+    })
 }
 
 pub(crate) trait NSScreenExts {

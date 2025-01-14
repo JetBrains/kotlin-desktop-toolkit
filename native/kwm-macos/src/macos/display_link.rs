@@ -1,16 +1,14 @@
 use std::{
     ffi::c_void,
-    ptr::{self, addr_of},
-    sync::atomic::{AtomicBool, Ordering},
+    ptr::addr_of
 };
 
+use super::screen::ScreenId;
+use crate::logger::{ffi_boundary, PanicDefault};
 use anyhow::Result;
 use dispatch_sys::{_dispatch_main_q, _dispatch_source_type_data_add, dispatch_object_t, dispatch_queue_t, dispatch_resume, dispatch_set_context, dispatch_source_cancel, dispatch_source_create, dispatch_source_merge_data, dispatch_source_set_event_handler_f, dispatch_source_t, dispatch_suspend};
-use objc2::rc::Retained;
-use objc2_foundation::{MainThreadMarker, NSNumber, NSString};
 use display_link_sys::CGDirectDisplayID;
-
-use super::screen::ScreenId;
+use objc2_foundation::MainThreadMarker;
 
 pub type DisplayLinkCallback = extern "C" fn();
 
@@ -19,32 +17,59 @@ struct DisplayLinkBox {
     display_link: DisplayLink, // we need it for drop 
 }
 
-#[no_mangle]
-extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLinkCallback) -> Box<DisplayLinkBox> {
-    let _mtm = MainThreadMarker::new().unwrap();
-    let display_link = DisplayLink::new(screen_id, on_next_frame).unwrap();
-    return Box::new(DisplayLinkBox { display_link });
-}
-
-#[no_mangle]
-extern "C" fn display_link_set_running(display_link: &mut DisplayLink, value: bool) {
-    if value != display_link.is_running() {
-        if value {
-            display_link.start().unwrap();
-        } else {
-            display_link.stop().unwrap();
-        }
+impl PanicDefault for *mut DisplayLinkBox {
+    fn default() -> Self {
+        std::ptr::null_mut()
     }
 }
 
 #[no_mangle]
-extern "C" fn display_link_is_running(display_link: &mut DisplayLink) -> bool {
-    return display_link.is_running();
+extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLinkCallback) -> *mut DisplayLinkBox {
+    ffi_boundary("display_link_create", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let display_link = DisplayLink::new(screen_id, on_next_frame).unwrap();
+        Ok(Box::into_raw(Box::new(DisplayLinkBox { display_link })))
+    })
 }
 
 #[no_mangle]
-extern "C" fn display_link_drop(display_link: Box<DisplayLink>) {
-    std::mem::drop(display_link);
+extern "C" fn display_link_drop(display_link: *mut DisplayLinkBox) {
+    ffi_boundary("display_link_drop", || {
+        let display_link: Box<DisplayLinkBox> = unsafe {
+            assert!(!display_link.is_null());
+            Box::from_raw(display_link)
+        };
+        std::mem::drop(display_link);
+        Ok(())
+    });
+}
+
+
+#[no_mangle]
+extern "C" fn display_link_set_running(display_link: &mut DisplayLinkBox, value: bool) {
+    ffi_boundary("display_link_set_running", || {
+        if value != display_link.display_link.is_running() {
+            if value {
+                display_link.display_link.start().unwrap();
+            } else {
+                display_link.display_link.stop().unwrap();
+            }
+        }
+        Ok(())
+    })
+}
+
+impl PanicDefault for bool {
+    fn default() -> Self {
+        false
+    }
+}
+
+#[no_mangle]
+extern "C" fn display_link_is_running(display_link: &mut DisplayLinkBox) -> bool {
+    ffi_boundary("display_link_is_running", || {
+        Ok(display_link.display_link.is_running())
+    })
 }
 
 // derived from https://github.com/zed-industries/zed/blob/7425d242bc91d054df3c05f2b88307cfb3e9132f/crates/gpui/src/platform/mac/display_link.rs#L25
