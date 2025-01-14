@@ -29,7 +29,7 @@ object Application {
     lateinit var screens: List<Screen>
 
     fun init(applicationConfig: ApplicationConfig = ApplicationConfig()) {
-        withThrowNativeExceptions {
+        ffiDownCall {
             Arena.ofConfined().use { arena ->
                 kwm_macos_h.application_init(applicationConfig.toNative(arena), applicationCallbacks())
             }
@@ -37,21 +37,27 @@ object Application {
     }
 
     fun runEventLoop(eventHandler: EventHandler) {
-        this.eventHandler = eventHandler
-        kwm_macos_h.application_run_event_loop()
+        ffiDownCall {
+            this.eventHandler = eventHandler
+            kwm_macos_h.application_run_event_loop()
+        }
     }
 
     fun stopEventLoop() {
-        kwm_macos_h.application_stop_event_loop()
+        ffiDownCall {
+            kwm_macos_h.application_stop_event_loop()
+        }
     }
 
     fun requestTermination() {
-        kwm_macos_h.application_request_termination()
+        ffiDownCall {
+            kwm_macos_h.application_request_termination()
+        }
     }
 
     // called from native
     private fun onShouldTerminate(): Boolean {
-        return ffiBoundary(default = false) {
+        return ffiUpCall(default = false) {
             // todo send event to request user interaction?
             false
         }
@@ -62,7 +68,7 @@ object Application {
         // This method will never be executed because
         // the application halt is performed immediately after that
         // which means that JVM shutdown hooks might be interupted
-        ffiBoundary {
+        ffiUpCall {
 
         }
     }
@@ -78,7 +84,7 @@ object Application {
 
     // called from native
     private fun onEvent(nativeEvent: MemorySegment): Boolean {
-        return ffiBoundary(default = false) {
+        return ffiUpCall(default = false) {
             val event = Event.fromNative(nativeEvent)
             when (event) {
                 is Event.ApplicationDidFinishLaunching -> {

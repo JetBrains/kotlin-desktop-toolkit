@@ -18,20 +18,30 @@ class DisplayLink internal constructor(ptr: MemorySegment, val arena: Arena): Ma
         fun create(screenId: ScreenId, onNextFrame: () -> Unit): DisplayLink {
             val arena = Arena.ofConfined()
             val callback = DisplayLinkCallback.allocate({
-                ffiBoundary {
+                ffiUpCall {
                     onNextFrame()
                 }
             }, arena)
-            return DisplayLink(kwm_macos_h.display_link_create(screenId, callback), arena)
+            try {
+                val ptr = ffiDownCall { kwm_macos_h.display_link_create(screenId, callback) }
+                return DisplayLink(ptr, arena)
+            } catch (e: Throwable) {
+                arena.close()
+                throw e
+            }
         }
     }
 
     fun setRunning(value: Boolean) {
-        kwm_macos_h.display_link_set_running(pointer, value);
+        ffiDownCall {
+            kwm_macos_h.display_link_set_running(pointer, value)
+        }
     }
 
     fun isRunning(): Boolean {
-        return kwm_macos_h.display_link_is_running(pointer)
+        return ffiDownCall {
+            kwm_macos_h.display_link_is_running(pointer)
+        }
     }
 
     override fun close() {
@@ -60,9 +70,8 @@ data class Screen(
         }
 
         fun allScreens(): List<Screen> {
-            return withThrowNativeExceptions {
-                Arena.ofConfined().use { arena ->
-                    val screenInfoArray = kwm_macos_h.screen_list(arena)
+            return Arena.ofConfined().use { arena ->
+                    val screenInfoArray = ffiDownCall { kwm_macos_h.screen_list(arena) }
                     val screens = mutableListOf<Screen>()
                     try {
                         val ptr = ScreenInfoArray.ptr(screenInfoArray)
@@ -72,10 +81,9 @@ data class Screen(
                             screens.add(fromNative(ScreenInfo.asSlice(ptr, i)))
                         }
                     } finally {
-                        kwm_macos_h.screen_list_drop(screenInfoArray)
+                        ffiDownCall { kwm_macos_h.screen_list_drop(screenInfoArray) }
                     }
                     screens
-                }
             }
         }
     }

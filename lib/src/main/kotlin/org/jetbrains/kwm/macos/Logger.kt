@@ -180,15 +180,17 @@ fun initLogger(logFile: Path,
                consoleLogLevel: LogLevel = LogLevel.Warn,
                fileLogLevel: LogLevel = LogLevel.Info,
                appender: AppenderInterface = DefaultConsoleAppender.fromLevel(consoleLogLevel)) {
-    Logger.appender = appender
+    ffiDownCall {
+        Logger.appender = appender
 
-    Arena.ofConfined().use { arena ->
-        val configuration = NativeLoggerConfiguration.allocate(arena)
-        val logFileStr = logFile.toAbsolutePath().toString()
-        NativeLoggerConfiguration.file_path(configuration, arena.allocateUtf8String(logFileStr))
-        NativeLoggerConfiguration.console_level(configuration, consoleLogLevel.toNative())
-        NativeLoggerConfiguration.file_level(configuration, fileLogLevel.toNative())
-        kwm_macos_h.logger_init(configuration)
+        Arena.ofConfined().use { arena ->
+            val configuration = NativeLoggerConfiguration.allocate(arena)
+            val logFileStr = logFile.toAbsolutePath().toString()
+            NativeLoggerConfiguration.file_path(configuration, arena.allocateUtf8String(logFileStr))
+            NativeLoggerConfiguration.console_level(configuration, consoleLogLevel.toNative())
+            NativeLoggerConfiguration.file_level(configuration, fileLogLevel.toNative())
+            kwm_macos_h.logger_init(configuration)
+        }
     }
 }
 
@@ -211,7 +213,7 @@ private fun checkExceptions(): List<String> {
     }
 }
 
-fun <T> withThrowNativeExceptions(body: () -> T): T {
+fun <T> ffiDownCall(body: () -> T): T {
     val result = body()
     val exceptions = checkExceptions()
     if (exceptions.isNotEmpty()) {
@@ -221,7 +223,7 @@ fun <T> withThrowNativeExceptions(body: () -> T): T {
     return result
 }
 
-inline fun ffiBoundary(crossinline body: () -> Unit) {
+inline fun ffiUpCall(crossinline body: () -> Unit) {
     return try {
         body()
     } catch (e: Throwable) {
@@ -230,7 +232,7 @@ inline fun ffiBoundary(crossinline body: () -> Unit) {
 }
 
 
-inline fun <T> ffiBoundary(default: T, crossinline body: () -> T): T {
+inline fun <T> ffiUpCall(default: T, crossinline body: () -> T): T {
     return try {
         body()
     } catch (e: Throwable) {

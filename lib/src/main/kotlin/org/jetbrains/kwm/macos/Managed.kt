@@ -15,7 +15,9 @@ open class Managed(private var ptr: MemorySegment,
         if (ptr == MemorySegment.NULL) {
             throw Error("Can't close $this it's already closed!")
         }
-        deref(ptr)
+        ffiDownCall {
+            deref(ptr)
+        }
         ptr = MemorySegment.NULL
     }
 }

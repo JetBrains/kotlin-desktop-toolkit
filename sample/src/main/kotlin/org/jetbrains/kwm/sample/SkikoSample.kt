@@ -71,11 +71,11 @@ class ContentArea(var origin: LogicalPoint, var size: LogicalSize) {
         val contentOrigin = origin.toPhysical(scale)
         val contentSize = size.toPhysical(scale)
 
-//        Paint().use { paint ->
-//            paint.color = 0xFF264653.toInt()
-//            canvas.drawRect(Rect.makeXYWH(contentOrigin.x.toFloat(), contentOrigin.y.toFloat(),
-//                                          contentSize.width.toFloat(), contentSize.height.toFloat()), paint)
-//        }
+        Paint().use { paint ->
+            paint.color = 0x77264653.toInt()
+            canvas.drawRect(Rect.makeXYWH(contentOrigin.x.toFloat(), contentOrigin.y.toFloat(),
+                                          contentSize.width.toFloat(), contentSize.height.toFloat()), paint)
+        }
         canvas.drawSpiningCircle(contentOrigin, contentSize, time, scale.toFloat())
         canvas.drawWindowBorders(contentOrigin, contentSize, time, scale.toFloat())
         canvas.drawCursor(contentOrigin, contentSize, time, scale.toFloat())

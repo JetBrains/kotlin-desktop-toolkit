@@ -46,16 +46,20 @@ object AppMenuManager {
     internal var callbacksArena: Arena? = null
 
     fun setMainMenu(menu: AppMenuStructure) {
-        val previousCallbackArena = callbacksArena
-        callbacksArena = Arena.ofConfined()
-        Arena.ofConfined().use { arena ->
-            kwm_macos_h.main_menu_update(menu.toNative(arena))
+        ffiDownCall {
+            val previousCallbackArena = callbacksArena
+            callbacksArena = Arena.ofConfined()
+            Arena.ofConfined().use { arena ->
+                kwm_macos_h.main_menu_update(menu.toNative(arena))
+            }
+            previousCallbackArena?.close()
         }
-        previousCallbackArena?.close()
     }
 
     fun setMainMenuToNone() {
-        kwm_macos_h.main_menu_set_none()
+        ffiDownCall {
+            kwm_macos_h.main_menu_set_none()
+        }
     }
 }
 
@@ -108,7 +112,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             ActionItem_Body.perform(
                 actionItemBody, ActionItem_Body.perform.allocate(
                     {
-                        ffiBoundary(menuItem.perform)
+                        ffiUpCall(menuItem.perform)
                     },
                     AppMenuManager.callbacksArena
                 )
