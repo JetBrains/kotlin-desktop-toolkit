@@ -321,7 +321,7 @@ class ApplicationState: AutoCloseable {
                 }?.let { window ->
                     killWindow(window)
                 } ?: run {
-                    println("Can't find window for $event")
+                    Logger.warn { "Can't find window for $event" }
                 }
                 EventHandlerResult.Stop
             }
@@ -393,7 +393,7 @@ class ApplicationState: AutoCloseable {
                 AppMenuItem.Action(
                     title = "List Displays",
                     keystroke = Keystroke(key = "d", modifiers = Modifiers(command = true)),
-                    perform = { println(Screen.allScreens()) }
+                    perform = { Logger.info { Screen.allScreens().toString() } }
                 ),
             ),
             AppMenuItem.SubMenu(

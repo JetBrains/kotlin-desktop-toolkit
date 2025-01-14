@@ -44,7 +44,7 @@ fun buildAppMenu(): AppMenuStructure {
                                    key = "x",
                                    modifiers = Modifiers(control = true)
                                ),
-                               perform = { println("First callback from Kotlin!") }),
+                               perform = { Logger.info { "First callback from Kotlin!" } }),
             AppMenuItem.SubMenu(title = "Empty Submenu")
         ),
         AppMenuItem.SubMenu(
@@ -73,10 +73,10 @@ fun buildAppMenu(): AppMenuStructure {
             title = "Keystrokes",
             AppMenuItem.Action("Item1", keystroke = Keystroke(key = "xy", modifiers = Modifiers()),  // second letter is ignored
                 perform = if (imLucky()) {
-                    val f = { println("Odd") }
+                    val f = { Logger.info { "Odd" } }
                     f
                 } else {
-                    val f = { println("Even") }
+                    val f = { Logger.info { "Even" } }
                     f
                 }),
             AppMenuItem.Action("Item2", keystroke = Keystroke(key = "X", modifiers = Modifiers())), // shift modifier added because letter is capital
