@@ -3,7 +3,7 @@ use std::{any::Any, borrow::{Borrow, BorrowMut}, cell::{Cell, RefCell}, ffi::{CS
 
 use anyhow::Context;
 use log::{debug, error, info, trace, warn, Level, LevelFilter, Metadata, Record, SetLoggerError};
-use log4rs::{append::{console::{ConsoleAppender, Target}, file::FileAppender}, config::{Appender, Root}, encode::pattern::PatternEncoder, filter::threshold::ThresholdFilter, Config};
+use log4rs::{append::{console::{ConsoleAppender, Target}, file::FileAppender, rolling_file::{policy::compound::{roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy}, RollingFileAppender}}, config::{Appender, Root}, encode::pattern::PatternEncoder, filter::threshold::ThresholdFilter, Config};
 
 use crate::logger_api::{LogLevel, LoggerConfiguration};
 use crate::{common::{ArraySize, StrPtr}, logger_api::ExceptionsArray};
@@ -109,12 +109,26 @@ impl LoggerConfiguration {
         self.file_level.level_filter()
     }
 
-    fn file_appender(&self) -> anyhow::Result<FileAppender> {
-        let file_path = self.file_path()?;
-        FileAppender::builder()
-            // Pattern: https://docs.rs/log4rs/*/log4rs/encode/pattern/index.html
+    fn file_appender(&self) -> anyhow::Result<RollingFileAppender> {
+        let file_path = std::path::Path::new(self.file_path()?);
+
+        let file_name = file_path
+            .file_stem().context("File expected")?
+            .to_str().context("Can't convert OS string")?;
+        let archive_pattern = file_path
+            .with_file_name(format!("{file_name}{{}}.log"));
+
+        const TRIGGER_FILE_SIZE: u64 = 2 * 1024 * 1024; // 2Mb
+        const LOG_FILE_COUNT: u32 = 3;
+        let trigger = SizeTrigger::new(TRIGGER_FILE_SIZE);
+        let roller = FixedWindowRoller::builder()
+            .build(archive_pattern.to_str().context("file_path contains invalid unicode")?, LOG_FILE_COUNT)
+            .unwrap();
+        let policy = CompoundPolicy::new(Box::new(trigger), Box::new(roller));
+
+        RollingFileAppender::builder()
             .encoder(Box::new(PatternEncoder::new("[{d(%Y%m%d %H:%M:%S%.6f)} {h({l:5})} {M}:{L}] {m}{n}")))
-            .build(file_path).context("Failed to create file appender")
+            .build(file_path, Box::new(policy)).context("Failed to create file appender")
     }
 
     fn console_appender(&self) -> ConsoleAppender {
