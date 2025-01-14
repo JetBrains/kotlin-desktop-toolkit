@@ -8,7 +8,7 @@ import javax.swing.JFrame
 import kotlin.concurrent.thread
 
 fun main() {
-    printRuntimeInfo()
+    Logger.info { runtimeInfo() }
     /// Toolkit initialization will instansiate NSApplication
     val toolkit = Toolkit.getDefaultToolkit()
     GrandCentralDispatch.dispatchOnMainSync {

@@ -69,46 +69,55 @@ public class kwm_macos_h {
     public static final AddressLayout C_POINTER = ValueLayout.ADDRESS
             .withTargetLayout(MemoryLayout.sequenceLayout(java.lang.Long.MAX_VALUE, JAVA_BYTE));
     public static final ValueLayout.OfLong C_LONG = ValueLayout.JAVA_LONG;
-    private static final int Error = (int)0L;
+    private static final int Off = (int)0L;
     /**
      * {@snippet lang=c :
-     * enum LogLevel.Error = 0
+     * enum LogLevel.Off = 0
+     * }
+     */
+    public static int Off() {
+        return Off;
+    }
+    private static final int Error = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * enum LogLevel.Error = 1
      * }
      */
     public static int Error() {
         return Error;
     }
-    private static final int Warn = (int)1L;
+    private static final int Warn = (int)2L;
     /**
      * {@snippet lang=c :
-     * enum LogLevel.Warn = 1
+     * enum LogLevel.Warn = 2
      * }
      */
     public static int Warn() {
         return Warn;
     }
-    private static final int Info = (int)2L;
+    private static final int Info = (int)3L;
     /**
      * {@snippet lang=c :
-     * enum LogLevel.Info = 2
+     * enum LogLevel.Info = 3
      * }
      */
     public static int Info() {
         return Info;
     }
-    private static final int Debug = (int)3L;
+    private static final int Debug = (int)4L;
     /**
      * {@snippet lang=c :
-     * enum LogLevel.Debug = 3
+     * enum LogLevel.Debug = 4
      * }
      */
     public static int Debug() {
         return Debug;
     }
-    private static final int Trace = (int)4L;
+    private static final int Trace = (int)5L;
     /**
      * {@snippet lang=c :
-     * enum LogLevel.Trace = 4
+     * enum LogLevel.Trace = 5
      * }
      */
     public static int Trace() {

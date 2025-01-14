@@ -7,6 +7,7 @@ import java.lang.foreign.Arena
 import java.nio.file.Path
 
 enum class LogLevel {
+    Off,
     Error,
     Warn,
     Info,
@@ -14,11 +15,12 @@ enum class LogLevel {
     Trace;
 
     fun isNoMoreVerbose(other: LogLevel): Boolean {
-        return this.ordinal >= other.ordinal
+        return this.ordinal <= other.ordinal
     }
 
     internal fun toNative(): Int {
         return when (this) {
+            Off -> kwm_macos_h.Off()
             Error -> kwm_macos_h.Error()
             Warn -> kwm_macos_h.Warn()
             Info -> kwm_macos_h.Info()
@@ -28,7 +30,7 @@ enum class LogLevel {
     }
 }
 
-interface LoggerInterface {
+interface AppenderInterface {
     val isTraceEnabled: Boolean
     val isDebugEnabled: Boolean
     val isInfoEnabled: Boolean
@@ -48,15 +50,15 @@ interface LoggerInterface {
     fun error(t: Throwable, message: String)
 }
 
-class DefaultConsoleLogger(override val isTraceEnabled: Boolean = false,
-                           override val isDebugEnabled: Boolean = false,
-                           override val isInfoEnabled: Boolean = true,
-                           override val isWarnEnabled: Boolean = true,
-                           override val isErrorEnabled: Boolean = true): LoggerInterface {
+class DefaultConsoleAppender(override val isTraceEnabled: Boolean,
+                             override val isDebugEnabled: Boolean,
+                             override val isInfoEnabled: Boolean,
+                             override val isWarnEnabled: Boolean,
+                             override val isErrorEnabled: Boolean): AppenderInterface {
 
     companion object {
-        fun fromLevel(level: LogLevel = LogLevel.Info): DefaultConsoleLogger {
-            return DefaultConsoleLogger(
+        fun fromLevel(level: LogLevel = LogLevel.Info): DefaultConsoleAppender {
+            return DefaultConsoleAppender(
                 isTraceEnabled = LogLevel.Trace.isNoMoreVerbose(level),
                 isDebugEnabled = LogLevel.Debug.isNoMoreVerbose(level),
                 isInfoEnabled = LogLevel.Info.isNoMoreVerbose(level),
@@ -89,98 +91,97 @@ class DefaultConsoleLogger(override val isTraceEnabled: Boolean = false,
     }
 
     override fun info(t: Throwable, message: String) {
-        println("[SKIKO] info: $message")
-        println(t)
+        System.err.println("[INFO] $message")
+        System.err.println(t.stackTraceToString())
     }
 
     override fun warn(message: String) {
-        System.err.println("[DEBUG] $message")
+        System.err.println("[WARN] $message")
     }
 
     override fun warn(t: Throwable, message: String) {
-        System.err.println("[DEBUG] $message")
-        println(t)
+        System.err.println("[WARN] $message")
+        System.err.println(t.stackTraceToString())
     }
 
     override fun error(message: String) {
-        System.err.println("[DEBUG] $message")
+        System.err.println("[ERROR] $message")
     }
 
     override fun error(t: Throwable, message: String) {
-        System.err.println("[DEBUG] $message")
-        println(t)
+        System.err.println("[ERROR] $message")
+        System.err.println(t.stackTraceToString())
     }
 }
 
-internal object Logger {
-    var loggerFactory: () -> SkikoLoggerInterface = { DefaultConsoleLogger() }
-
-    val loggerImpl by lazy {
-        loggerFactory()
-    }
+object Logger {
+    var appender: AppenderInterface = DefaultConsoleAppender.fromLevel(LogLevel.Info)
 
     inline fun trace(msg: () -> String) {
-        if (loggerImpl.isTraceEnabled) {
-            loggerImpl.trace(msg())
+        if (appender.isTraceEnabled) {
+            appender.trace(msg())
         }
     }
 
     inline fun debug(msg: () -> String) {
-        if (loggerImpl.isDebugEnabled) {
-            loggerImpl.debug(msg())
+        if (appender.isDebugEnabled) {
+            appender.debug(msg())
         }
     }
 
     inline fun info(msg: () -> String) {
-        if (loggerImpl.isInfoEnabled) {
-            loggerImpl.info(msg())
+        if (appender.isInfoEnabled) {
+            appender.info(msg())
         }
     }
 
     inline fun warn(msg: () -> String) {
-        if (loggerImpl.isWarnEnabled) {
-            loggerImpl.warn(msg())
+        if (appender.isWarnEnabled) {
+            appender.warn(msg())
         }
     }
 
     inline fun error(msg: () -> String) {
-        if (loggerImpl.isErrorEnabled) {
-            loggerImpl.error(msg())
+        if (appender.isErrorEnabled) {
+            appender.error(msg())
         }
     }
 
-    inline fun trace(t: Throwable, msg: () ->  String) {
-        if (loggerImpl.isTraceEnabled) {
-            loggerImpl.trace(t, msg())
+    inline fun trace(t: Throwable, msg: () ->  String = { "" }) {
+        if (appender.isTraceEnabled) {
+            appender.trace(t, msg())
         }
     }
 
-    inline fun debug(t: Throwable, msg: () ->  String) {
-        if (loggerImpl.isDebugEnabled) {
-            loggerImpl.debug(t, msg())
+    inline fun debug(t: Throwable, msg: () ->  String = { "" }) {
+        if (appender.isDebugEnabled) {
+            appender.debug(t, msg())
         }
     }
 
-    inline fun info(t: Throwable, msg: () -> String) {
-        if (loggerImpl.isInfoEnabled) {
-            loggerImpl.info(t, msg())
+    inline fun info(t: Throwable, msg: () -> String = { "" }) {
+        if (appender.isInfoEnabled) {
+            appender.info(t, msg())
         }
     }
-    inline fun warn(t: Throwable, msg: () -> String) {
-        if (loggerImpl.isWarnEnabled) {
-            loggerImpl.warn(t, msg())
+    inline fun warn(t: Throwable, msg: () -> String = { "" }) {
+        if (appender.isWarnEnabled) {
+            appender.warn(t, msg())
         }
     }
-    inline fun error(t: Throwable, msg:() ->  String) {
-        if (loggerImpl.isErrorEnabled) {
-            loggerImpl.error(t, msg())
+    inline fun error(t: Throwable, msg:() ->  String = { "" }) {
+        if (appender.isErrorEnabled) {
+            appender.error(t, msg())
         }
     }
 }
 
-fun initNativeLogger(logFile: Path,
-                     consoleLogLevel: LogLevel = LogLevel.Warn,
-                     fileLogLevel: LogLevel = LogLevel.Info) {
+fun initLogger(logFile: Path,
+               consoleLogLevel: LogLevel = LogLevel.Warn,
+               fileLogLevel: LogLevel = LogLevel.Info,
+               appender: AppenderInterface = DefaultConsoleAppender.fromLevel(consoleLogLevel)) {
+    Logger.appender = appender
+
     Arena.ofConfined().use { arena ->
         val configuration = NativeLoggerConfiguration.allocate(arena)
         val logFileStr = logFile.toAbsolutePath().toString()
@@ -191,7 +192,7 @@ fun initNativeLogger(logFile: Path,
     }
 }
 
-class NativeError(messages: List<String>): Error(messages.joinToString(separator = "\n"))
+class NativeError(messages: List<String>): Error(messages.joinToString(prefix = "[\n", separator = ",\n", postfix = "]"))
 
 private fun checkExceptions(): List<String> {
     return Arena.ofConfined().use { arena ->
@@ -218,4 +219,44 @@ fun <T> withThrowNativeExceptions(body: () -> T): T {
         throw NativeError(exceptions)
     }
     return result
+}
+
+inline fun wrapWithCatchAndLog(crossinline body: () -> Unit): () -> Unit {
+    return {
+        try {
+            body()
+        } catch (e: Throwable) {
+            Logger.error(e) { "Exception caught" }
+        }
+    }
+}
+
+inline fun <T> wrapWithCatchAndLog(crossinline body: () -> T, default: T): () -> T {
+    return {
+        try {
+            body()
+        } catch (e: Throwable) {
+            Logger.error(e) { "Exception caught" }
+            default
+        }
+    }
+}
+
+
+inline fun ffiBoundary(crossinline body: () -> Unit) {
+    return try {
+        body()
+    } catch (e: Throwable) {
+        Logger.error(e) { "Exception caught" }
+    }
+}
+
+
+inline fun <T> ffiBoundary(default: T, crossinline body: () -> T): T {
+    return try {
+        body()
+    } catch (e: Throwable) {
+        Logger.error(e) { "Exception caught" }
+        default
+    }
 }

@@ -1,6 +1,7 @@
 use core::{panic, slice};
 use std::ffi::{c_void, CStr, CString};
 
+use anyhow::Context;
 use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::Bool,
@@ -94,7 +95,6 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
                 })
                 .collect()
         });
-        panic!("Pannic here!");
         Ok(ScreenInfoArray::new(screen_infos))
     })
 }

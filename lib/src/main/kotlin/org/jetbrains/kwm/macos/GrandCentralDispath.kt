@@ -11,7 +11,9 @@ import java.util.concurrent.CountDownLatch
 object GrandCentralDispatch: IGrandCentralDispatch {
     private val queue = ConcurrentLinkedQueue<() -> Unit>()
     private val callback: MemorySegment = `dispatcher_main_exec_async$f`.allocate({
-        queue.poll().invoke()
+        ffiBoundary {
+            queue.poll().invoke()
+        }
     }, Arena.global())
 
     override fun isMainThread(): Boolean {

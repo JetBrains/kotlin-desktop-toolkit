@@ -108,11 +108,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             ActionItem_Body.perform(
                 actionItemBody, ActionItem_Body.perform.allocate(
                     {
-                        try {
-                            menuItem.perform()
-                        } catch (e: Throwable) {
-                            System.err.println(e.stackTraceToString())
-                        }
+                        ffiBoundary(menuItem.perform)
                     },
                     AppMenuManager.callbacksArena
                 )

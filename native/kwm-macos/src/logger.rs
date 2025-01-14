@@ -118,7 +118,7 @@ enum LogLevel {
 impl LogLevel {
     fn level_filter(&self) -> log::LevelFilter {
         match self {
-            LogLevel::Off => logger::LevelFilter::Off,
+            LogLevel::Off => log::LevelFilter::Off,
             LogLevel::Error => log::LevelFilter::Error,
             LogLevel::Warn => log::LevelFilter::Warn,
             LogLevel::Info => log::LevelFilter::Info,
@@ -169,6 +169,10 @@ impl LoggerConfiguration {
 #[no_mangle]
 pub extern "C" fn logger_init(logger_configuration: &LoggerConfiguration) {
     let result = std::panic::catch_unwind(|| {
+        unsafe {
+            // enable backtraces for anyhow errors
+            std::env::set_var("RUST_LIB_BACKTRACE", "1");
+        }
         let console_level = logger_configuration.console_log_level();
         let file_level = logger_configuration.file_log_level();
 
@@ -258,14 +262,14 @@ pub(crate) fn ffi_boundary<R: PanicDefault, F: FnOnce() -> anyhow::Result<R>>(na
         Ok(Ok(result)) => result,
         Ok(Err(err)) => {
             let err = err.context(format!("{name:?} returned error"));
-            let message = format!("{err:#}");
-            append_exception_msg(message);
+            error!("{err:?}");
+            append_exception_msg(format!("{err:#}"));
             PanicDefault::default()
         }
         Err(payload) => {
             let payload_msg = panic_payload_msg(payload);
             let message = format!("{name:?} panic with payload: {payload_msg}");
-            append_exception_msg(message);
+            append_exception_msg(message); // message will be also logged by panic handler
             PanicDefault::default()
         },
     }

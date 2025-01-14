@@ -36,7 +36,7 @@ object Application {
         }
     }
 
-    fun runEventLoop(eventHandler: EventHandler = { EventHandlerResult.Continue }) {
+    fun runEventLoop(eventHandler: EventHandler) {
         this.eventHandler = eventHandler
         kwm_macos_h.application_run_event_loop()
     }
@@ -51,8 +51,10 @@ object Application {
 
     // called from native
     private fun onShouldTerminate(): Boolean {
-        // todo send event to request user interaction?
-        return false
+        return ffiBoundary(default = false) {
+            // todo send event to request user interaction?
+            false
+        }
     }
 
     // called from native
@@ -60,21 +62,23 @@ object Application {
         // This method will never be executed because
         // the application halt is performed immediately after that
         // which means that JVM shutdown hooks might be interupted
+        ffiBoundary {
+
+        }
     }
 
     private fun runEventHandler(event: Event): EventHandlerResult {
         return eventHandler?.let { eventHandler ->
             eventHandler(event)
         } ?: run {
-            // todo remove with proper logging
-            println("eventHandler is null event: $event was ignored!")
+            Logger.warn { "eventHandler is null event: $event was ignored!" }
             EventHandlerResult.Continue
         }
     }
 
     // called from native
     private fun onEvent(nativeEvent: MemorySegment): Boolean {
-        return try {
+        return ffiBoundary(default = false) {
             val event = Event.fromNative(nativeEvent)
             when (event) {
                 is Event.ApplicationDidFinishLaunching -> {
@@ -90,9 +94,6 @@ object Application {
                 EventHandlerResult.Continue -> false
                 EventHandlerResult.Stop -> true
             }
-        } catch (e: Throwable) {
-            println(e)
-            false
         }
     }
 

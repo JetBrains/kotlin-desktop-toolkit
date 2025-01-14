@@ -17,7 +17,11 @@ class DisplayLink internal constructor(ptr: MemorySegment, val arena: Arena): Ma
     companion object {
         fun create(screenId: ScreenId, onNextFrame: () -> Unit): DisplayLink {
             val arena = Arena.ofConfined()
-            val callback = DisplayLinkCallback.allocate(onNextFrame, arena)
+            val callback = DisplayLinkCallback.allocate({
+                ffiBoundary {
+                    onNextFrame()
+                }
+            }, arena)
             return DisplayLink(kwm_macos_h.display_link_create(screenId, callback), arena)
         }
     }

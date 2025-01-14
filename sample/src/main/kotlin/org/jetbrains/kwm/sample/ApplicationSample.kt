@@ -10,8 +10,8 @@ import kotlin.concurrent.thread
 
 
 fun main() {
-    printRuntimeInfo()
-    initNativeLogger(logFile = Path.of("./build/logs/app_samlpe.log"))
+    initLogger(logFile = Path.of("./build/logs/app_samlpe.log"))
+    Logger.info { runtimeInfo() }
     Application.init(Application.ApplicationConfig(
 //        disableDictationMenuItem = true,
 //        disableCharacterPaletteMenuItem = true
@@ -28,7 +28,7 @@ fun main() {
             Thread.sleep(1000)
         }
     }
-    Application.runEventLoop()
+    Application.runEventLoop { EventHandlerResult.Continue }
     window1.close()
     window2.close()
 }

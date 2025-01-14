@@ -447,12 +447,12 @@ class ApplicationState: AutoCloseable {
 }
 
 fun main() {
-    printRuntimeInfo()
-    initNativeLogger(
+    initLogger(
         logFile = Path.of("./build/logs/skiko_sample.log"),
-        consoleLogLevel = LogLevel.Trace,
-        fileLogLevel = LogLevel.Trace
+        consoleLogLevel = LogLevel.Info,
+        fileLogLevel = LogLevel.Info
     )
+    Logger.info { runtimeInfo() }
     Application.init(Application.ApplicationConfig())
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
