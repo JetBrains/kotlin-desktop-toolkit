@@ -3,7 +3,7 @@ use anyhow::{anyhow, Context};
 use log::{error, info};
 use objc2::{declare_class, msg_send, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
+    NSApp, NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSEventType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
 };
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
 
@@ -157,6 +157,23 @@ declare_class!(
     unsafe impl NSObjectProtocol for MyNSApplication {}
 
     unsafe impl MyNSApplication {
+        // https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
+        // The default sendEvent turns key downs into performKeyEquivalent when
+        // modifiers are down, but swallows the key up if the modifiers include
+        // command.  This one makes all modifiers consistent by always sending key ups.
+        #[allow(non_snake_case)]
+        #[method(sendEvent:)]
+        fn sendEvent(&self, event: &NSEvent) {
+            if unsafe { event.r#type() } == NSEventType::KeyUp {
+                if let Some(window) = self.keyWindow() {
+                    window.sendEvent(event);
+                    return;
+                }
+            }
+            unsafe {
+                let _:() = msg_send![super(self), sendEvent: event];
+            }
+        }
     }
 );
 
@@ -195,6 +212,7 @@ declare_class!(
     unsafe impl NSObjectProtocol for AppDelegate {}
 
     unsafe impl NSApplicationDelegate for AppDelegate {
+
         #[method(applicationDidChangeScreenParameters:)]
         fn did_change_screen_parameters(&self, _notification: &NSNotification) {
             handle_display_configuration_change();

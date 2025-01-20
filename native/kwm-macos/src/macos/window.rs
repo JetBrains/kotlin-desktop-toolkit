@@ -2,16 +2,15 @@ use std::{borrow::{Borrow, BorrowMut}, cell::{Cell, RefCell}, ffi::{c_void, CStr
 
 use anyhow::{ensure, Context, Ok};
 use bitflags::Flags;
+use log::info;
 use objc2::{
     declare_class, msg_send, msg_send_id, mutability::{self, MainThreadOnly}, rc::Retained, runtime::{AnyObject, Bool, ProtocolObject}, sel, ClassType, DeclaredClass
 };
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility};
+use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSEventModifierFlags, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility};
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
-    common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
-    define_objc_ref,
-    macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}},
+    common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_key_event, handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event}
 };
 
 use super::{application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}};
@@ -405,6 +404,19 @@ declare_class!(
     unsafe impl NSObjectProtocol for MyNSWindow {}
 
     unsafe impl MyNSWindow {
+        #[method(keyDown:)]
+        fn key_down(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_key_event(event)
+            });
+        }
+
+        #[method(keyUp:)]
+        fn key_up(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_key_event(event)
+            });
+        }
     }
 );
 
@@ -465,6 +477,33 @@ declare_class!(
         fn mouse_up(&self, event: &NSEvent) {
             handle_mouse_up(event);
         }
+
+//        #[method(performKeyEquivalent:)]
+//        fn performKeyEquivalent(&self, event: &NSEvent) -> bool {
+//            info!("performKeyEquivalent: {event:?}");
+//            return false.into();
+//        }
+//
+//        #[method(_wantsKeyDownForEvent:)]
+//        fn wantsKeyDownForEvent(&self, event: &NSEvent) -> bool {
+//            info!("wantsKeyDownForEvent: {event:?}");
+//            return true.into();
+//        }
+
+        #[method(flagsChanged:)]
+        fn flags_changed(&self, event: &NSEvent) {
+            info!("flagsChanged: {event:?}");
+        }
+//
+//        #[method(keyDown:)]
+//        fn key_down(&self, event: &NSEvent) {
+//            info!("keyDown: {event:?}");
+//        }
+//
+//        #[method(keyUp:)]
+//        fn key_up(&self, event: &NSEvent) {
+//            info!("keyUp: {event:?}");
+//        }
 
         // we need those three methods to prevent transparent titlbar from being draggable
         // acceptsFirstMouse, acceptsFirstResponder, opaqueRectForWindowMoveWhenInTitlebar

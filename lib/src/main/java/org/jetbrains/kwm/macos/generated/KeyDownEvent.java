@@ -14,37 +14,25 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct WindowBackground {
- *     WindowBackground_Tag tag;
- *     union {
- *         struct {
- *             struct Color solid_color;
- *         };
- *         struct {
- *             enum WindowVisualEffect visual_effect;
- *         };
- *     };
+ * struct KeyDownEvent {
+ *     WindowId window_id;
+ *     enum KeyCode code;
+ *     bool is_repeat;
  * }
  * }
  */
-public class WindowBackground {
+public class KeyDownEvent {
 
-    WindowBackground() {
+    KeyDownEvent() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
-        kwm_macos_h.C_INT.withName("tag"),
-        MemoryLayout.paddingLayout(4),
-        MemoryLayout.unionLayout(
-            MemoryLayout.structLayout(
-                Color.layout().withName("solid_color")
-            ).withName("$anon$358:5"),
-            MemoryLayout.structLayout(
-                kwm_macos_h.C_INT.withName("visual_effect")
-            ).withName("$anon$361:5")
-        ).withName("$anon$357:3")
-    ).withName("WindowBackground");
+        kwm_macos_h.C_LONG_LONG.withName("window_id"),
+        kwm_macos_h.C_INT.withName("code"),
+        kwm_macos_h.C_BOOL.withName("is_repeat"),
+        MemoryLayout.paddingLayout(3)
+    ).withName("KeyDownEvent");
 
     /**
      * The layout of this struct
@@ -53,136 +41,136 @@ public class WindowBackground {
         return $LAYOUT;
     }
 
-    private static final OfInt tag$LAYOUT = (OfInt)$LAYOUT.select(groupElement("tag"));
+    private static final OfLong window_id$LAYOUT = (OfLong)$LAYOUT.select(groupElement("window_id"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * WindowBackground_Tag tag
+     * WindowId window_id
      * }
      */
-    public static final OfInt tag$layout() {
-        return tag$LAYOUT;
+    public static final OfLong window_id$layout() {
+        return window_id$LAYOUT;
     }
 
-    private static final long tag$OFFSET = 0;
+    private static final long window_id$OFFSET = 0;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * WindowBackground_Tag tag
+     * WindowId window_id
      * }
      */
-    public static final long tag$offset() {
-        return tag$OFFSET;
+    public static final long window_id$offset() {
+        return window_id$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * WindowBackground_Tag tag
+     * WindowId window_id
      * }
      */
-    public static int tag(MemorySegment struct) {
-        return struct.get(tag$LAYOUT, tag$OFFSET);
+    public static long window_id(MemorySegment struct) {
+        return struct.get(window_id$LAYOUT, window_id$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * WindowBackground_Tag tag
+     * WindowId window_id
      * }
      */
-    public static void tag(MemorySegment struct, int fieldValue) {
-        struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
+    public static void window_id(MemorySegment struct, long fieldValue) {
+        struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout solid_color$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$357:3"), groupElement("$anon$358:5"), groupElement("solid_color"));
+    private static final OfInt code$LAYOUT = (OfInt)$LAYOUT.select(groupElement("code"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * struct Color solid_color
+     * enum KeyCode code
      * }
      */
-    public static final GroupLayout solid_color$layout() {
-        return solid_color$LAYOUT;
+    public static final OfInt code$layout() {
+        return code$LAYOUT;
     }
 
-    private static final long solid_color$OFFSET = 8;
+    private static final long code$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * struct Color solid_color
+     * enum KeyCode code
      * }
      */
-    public static final long solid_color$offset() {
-        return solid_color$OFFSET;
+    public static final long code$offset() {
+        return code$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * struct Color solid_color
+     * enum KeyCode code
      * }
      */
-    public static MemorySegment solid_color(MemorySegment struct) {
-        return struct.asSlice(solid_color$OFFSET, solid_color$LAYOUT.byteSize());
+    public static int code(MemorySegment struct) {
+        return struct.get(code$LAYOUT, code$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * struct Color solid_color
+     * enum KeyCode code
      * }
      */
-    public static void solid_color(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, solid_color$OFFSET, solid_color$LAYOUT.byteSize());
+    public static void code(MemorySegment struct, int fieldValue) {
+        struct.set(code$LAYOUT, code$OFFSET, fieldValue);
     }
 
-    private static final OfInt visual_effect$LAYOUT = (OfInt)$LAYOUT.select(groupElement("$anon$357:3"), groupElement("$anon$361:5"), groupElement("visual_effect"));
+    private static final OfBoolean is_repeat$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("is_repeat"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * enum WindowVisualEffect visual_effect
+     * bool is_repeat
      * }
      */
-    public static final OfInt visual_effect$layout() {
-        return visual_effect$LAYOUT;
+    public static final OfBoolean is_repeat$layout() {
+        return is_repeat$LAYOUT;
     }
 
-    private static final long visual_effect$OFFSET = 8;
+    private static final long is_repeat$OFFSET = 12;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * enum WindowVisualEffect visual_effect
+     * bool is_repeat
      * }
      */
-    public static final long visual_effect$offset() {
-        return visual_effect$OFFSET;
+    public static final long is_repeat$offset() {
+        return is_repeat$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * enum WindowVisualEffect visual_effect
+     * bool is_repeat
      * }
      */
-    public static int visual_effect(MemorySegment struct) {
-        return struct.get(visual_effect$LAYOUT, visual_effect$OFFSET);
+    public static boolean is_repeat(MemorySegment struct) {
+        return struct.get(is_repeat$LAYOUT, is_repeat$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * enum WindowVisualEffect visual_effect
+     * bool is_repeat
      * }
      */
-    public static void visual_effect(MemorySegment struct, int fieldValue) {
-        struct.set(visual_effect$LAYOUT, visual_effect$OFFSET, fieldValue);
+    public static void is_repeat(MemorySegment struct, boolean fieldValue) {
+        struct.set(is_repeat$LAYOUT, is_repeat$OFFSET, fieldValue);
     }
 
     /**

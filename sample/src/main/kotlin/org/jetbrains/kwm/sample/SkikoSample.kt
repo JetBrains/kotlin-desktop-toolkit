@@ -315,6 +315,14 @@ class ApplicationState: AutoCloseable {
         val eventWindowId = event.windowId()
 
         return when (event) {
+            is Event.KeyDown -> {
+                Logger.info { "$event" }
+                EventHandlerResult.Continue
+            }
+            is Event.KeyUp -> {
+                Logger.info { "$event" }
+                EventHandlerResult.Continue
+            }
             is Event.WindowCloseRequest -> {
                 windows.find {
                     it.window.windowId() == eventWindowId

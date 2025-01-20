@@ -10,6 +10,17 @@ import java.lang.foreign.MemorySegment
 sealed class Event {
     companion object {}
 
+    data class KeyDown(
+        val windowId: WindowId,
+        val keyCode: KeyCode,
+        val isRepeat: Boolean
+    ): Event()
+
+    data class KeyUp(
+        val windowId: WindowId,
+        val keyCode: KeyCode
+    ): Event()
+
     data class MouseMoved(
         val windowId: WindowId,
         val point: LogicalPoint
@@ -85,6 +96,21 @@ sealed class Event {
 
 fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
+        kwm_macos_h.KeyDown() -> {
+            val nativeEvent = NativeEvent.key_down(s)
+            Event.KeyDown(
+                windowId = KeyDownEvent.window_id(nativeEvent),
+                keyCode = KeyCode.fromNative(KeyDownEvent.code(nativeEvent)),
+                isRepeat = KeyDownEvent.is_repeat(nativeEvent)
+            )
+        }
+        kwm_macos_h.KeyUp() -> {
+            val nativeEvent = NativeEvent.key_up(s)
+            Event.KeyUp(
+                windowId = KeyUpEvent.window_id(nativeEvent),
+                keyCode = KeyCode.fromNative(KeyUpEvent.code(nativeEvent))
+            )
+        }
         kwm_macos_h.MouseMoved() -> {
             val nativeEvent = NativeEvent.mouse_moved(s)
             Event.MouseMoved(

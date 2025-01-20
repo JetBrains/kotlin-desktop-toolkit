@@ -5,6 +5,129 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef enum KeyCode {
+  VK_ANSI_A = 0,
+  VK_ANSI_S = 1,
+  VK_ANSI_D = 2,
+  VK_ANSI_F = 3,
+  VK_ANSI_H = 4,
+  VK_ANSI_G = 5,
+  VK_ANSI_Z = 6,
+  VK_ANSI_X = 7,
+  VK_ANSI_C = 8,
+  VK_ANSI_V = 9,
+  VK_ANSI_B = 11,
+  VK_ANSI_Q = 12,
+  VK_ANSI_W = 13,
+  VK_ANSI_E = 14,
+  VK_ANSI_R = 15,
+  VK_ANSI_Y = 16,
+  VK_ANSI_T = 17,
+  VK_ANSI_1 = 18,
+  VK_ANSI_2 = 19,
+  VK_ANSI_3 = 20,
+  VK_ANSI_4 = 21,
+  VK_ANSI_6 = 22,
+  VK_ANSI_5 = 23,
+  VK_ANSI_Equal = 24,
+  VK_ANSI_9 = 25,
+  VK_ANSI_7 = 26,
+  VK_ANSI_Minus = 27,
+  VK_ANSI_8 = 28,
+  VK_ANSI_0 = 29,
+  VK_ANSI_RightBracket = 30,
+  VK_ANSI_O = 31,
+  VK_ANSI_U = 32,
+  VK_ANSI_LeftBracket = 33,
+  VK_ANSI_I = 34,
+  VK_ANSI_P = 35,
+  VK_ANSI_L = 37,
+  VK_ANSI_J = 38,
+  VK_ANSI_Quote = 39,
+  VK_ANSI_K = 40,
+  VK_ANSI_Semicolon = 41,
+  VK_ANSI_Backslash = 42,
+  VK_ANSI_Comma = 43,
+  VK_ANSI_Slash = 44,
+  VK_ANSI_N = 45,
+  VK_ANSI_M = 46,
+  VK_ANSI_Period = 47,
+  VK_ANSI_Grave = 50,
+  VK_ANSI_KeypadDecimal = 65,
+  VK_ANSI_KeypadMultiply = 67,
+  VK_ANSI_KeypadPlus = 69,
+  VK_ANSI_KeypadClear = 71,
+  VK_ANSI_KeypadDivide = 75,
+  VK_ANSI_KeypadEnter = 76,
+  VK_ANSI_KeypadMinus = 78,
+  VK_ANSI_KeypadEquals = 81,
+  VK_ANSI_Keypad0 = 82,
+  VK_ANSI_Keypad1 = 83,
+  VK_ANSI_Keypad2 = 84,
+  VK_ANSI_Keypad3 = 85,
+  VK_ANSI_Keypad4 = 86,
+  VK_ANSI_Keypad5 = 87,
+  VK_ANSI_Keypad6 = 88,
+  VK_ANSI_Keypad7 = 89,
+  VK_ANSI_Keypad8 = 91,
+  VK_ANSI_Keypad9 = 92,
+  VK_Return = 36,
+  VK_Tab = 48,
+  VK_Space = 49,
+  VK_Delete = 51,
+  VK_Escape = 53,
+  VK_Command = 55,
+  VK_Shift = 56,
+  VK_CapsLock = 57,
+  VK_Option = 58,
+  VK_Control = 59,
+  VK_RightCommand = 54,
+  VK_RightShift = 60,
+  VK_RightOption = 61,
+  VK_RightControl = 62,
+  VK_Function = 63,
+  VK_F17 = 64,
+  VK_VolumeUp = 72,
+  VK_VolumeDown = 73,
+  VK_Mute = 74,
+  VK_F18 = 79,
+  VK_F19 = 80,
+  VK_F20 = 90,
+  VK_F5 = 96,
+  VK_F6 = 97,
+  VK_F7 = 98,
+  VK_F3 = 99,
+  VK_F8 = 100,
+  VK_F9 = 101,
+  VK_F11 = 103,
+  VK_F13 = 105,
+  VK_F16 = 106,
+  VK_F14 = 107,
+  VK_F10 = 109,
+  VK_ContextualMenu = 110,
+  VK_F12 = 111,
+  VK_F15 = 113,
+  VK_Help = 114,
+  VK_Home = 115,
+  VK_PageUp = 116,
+  VK_ForwardDelete = 117,
+  VK_F4 = 118,
+  VK_End = 119,
+  VK_F2 = 120,
+  VK_PageDown = 121,
+  VK_F1 = 122,
+  VK_LeftArrow = 123,
+  VK_RightArrow = 124,
+  VK_DownArrow = 125,
+  VK_UpArrow = 126,
+  VK_ISO_Section = 10,
+  VK_JIS_Yen = 93,
+  VK_JIS_Underscore = 94,
+  VK_JIS_KeypadComma = 95,
+  VK_JIS_Eisu = 102,
+  VK_JIS_Kana = 104,
+} KeyCode;
+
 typedef enum LogLevel {
   Off,
   Error,
@@ -43,6 +166,17 @@ typedef struct ApplicationConfig {
 } ApplicationConfig;
 
 typedef int64_t WindowId;
+
+typedef struct KeyDownEvent {
+  WindowId window_id;
+  enum KeyCode code;
+  bool is_repeat;
+} KeyDownEvent;
+
+typedef struct KeyUpEvent {
+  WindowId window_id;
+  enum KeyCode code;
+} KeyUpEvent;
 
 typedef double LogicalPixels;
 
@@ -110,6 +244,8 @@ typedef struct WindowFullScreenToggleEvent {
 } WindowFullScreenToggleEvent;
 
 typedef enum Event_Tag {
+  KeyDown,
+  KeyUp,
   MouseMoved,
   MouseDown,
   MouseUp,
@@ -127,6 +263,12 @@ typedef enum Event_Tag {
 typedef struct Event {
   Event_Tag tag;
   union {
+    struct {
+      struct KeyDownEvent key_down;
+    };
+    struct {
+      struct KeyUpEvent key_up;
+    };
     struct {
       struct MouseMovedEvent mouse_moved;
     };

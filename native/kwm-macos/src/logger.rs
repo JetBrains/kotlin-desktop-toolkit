@@ -1,7 +1,7 @@
 use core::panic;
 use std::{any::Any, borrow::{Borrow, BorrowMut}, cell::{Cell, RefCell}, ffi::{CStr, CString}, fmt::format, panic::AssertUnwindSafe};
 
-use anyhow::Context;
+use anyhow::{Context, Error};
 use log::{debug, error, info, trace, warn, Level, LevelFilter, Metadata, Record, SetLoggerError};
 use log4rs::{append::{console::{ConsoleAppender, Target}, file::FileAppender, rolling_file::{policy::compound::{roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy}, RollingFileAppender}}, config::{Appender, Root}, encode::pattern::PatternEncoder, filter::threshold::ThresholdFilter, Config};
 
@@ -202,6 +202,21 @@ pub(crate) fn panic_payload_msg(payload: Box<dyn Any + Send + 'static>) -> Strin
     }
 }
 
+// This function intended to stop and log panic when out code is called from Objective C
+// otherwise it will terminate the application
+pub(crate) fn catch_panic<R, F: FnOnce() -> anyhow::Result<R>>(f: F) -> Option<R> {
+    match std::panic::catch_unwind(AssertUnwindSafe(f)) {
+        Ok(Ok(result)) => Some(result),
+        Ok(Err(err)) => {
+            error!("{err:?}");
+            None
+        }
+        Err(_payload) => {
+            // do nothing, panic will be logged by handler
+            None
+        }
+    }
+}
 
 pub(crate) trait PanicDefault {
     fn default() -> Self;
@@ -213,6 +228,8 @@ impl PanicDefault for () {
     }
 }
 
+// We wrap body of API functions that we expose with this function, e.g. see `application_init`
+// It prevents Rust panic from crossing the border
 // This function ignores [`UnwindSafe`] which means that in case of panic
 // some mutable data types invariants might be violated.
 // E.g. thread withdraw an amount form one account and panicked before entering it to another account.

@@ -7,6 +7,7 @@ pub mod window_api;
 pub mod custom_titlebar;
 pub mod screen;
 pub mod events;
+pub mod keyboard;
 pub mod application_menu;
 pub mod application_menu_api;
 pub mod converters;

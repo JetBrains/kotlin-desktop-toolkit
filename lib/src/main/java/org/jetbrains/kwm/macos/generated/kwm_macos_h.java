@@ -69,6 +69,1086 @@ public class kwm_macos_h {
     public static final AddressLayout C_POINTER = ValueLayout.ADDRESS
             .withTargetLayout(MemoryLayout.sequenceLayout(java.lang.Long.MAX_VALUE, JAVA_BYTE));
     public static final ValueLayout.OfLong C_LONG = ValueLayout.JAVA_LONG;
+    private static final int VK_ANSI_A = (int)0L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_A = 0
+     * }
+     */
+    public static int VK_ANSI_A() {
+        return VK_ANSI_A;
+    }
+    private static final int VK_ANSI_S = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_S = 1
+     * }
+     */
+    public static int VK_ANSI_S() {
+        return VK_ANSI_S;
+    }
+    private static final int VK_ANSI_D = (int)2L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_D = 2
+     * }
+     */
+    public static int VK_ANSI_D() {
+        return VK_ANSI_D;
+    }
+    private static final int VK_ANSI_F = (int)3L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_F = 3
+     * }
+     */
+    public static int VK_ANSI_F() {
+        return VK_ANSI_F;
+    }
+    private static final int VK_ANSI_H = (int)4L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_H = 4
+     * }
+     */
+    public static int VK_ANSI_H() {
+        return VK_ANSI_H;
+    }
+    private static final int VK_ANSI_G = (int)5L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_G = 5
+     * }
+     */
+    public static int VK_ANSI_G() {
+        return VK_ANSI_G;
+    }
+    private static final int VK_ANSI_Z = (int)6L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Z = 6
+     * }
+     */
+    public static int VK_ANSI_Z() {
+        return VK_ANSI_Z;
+    }
+    private static final int VK_ANSI_X = (int)7L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_X = 7
+     * }
+     */
+    public static int VK_ANSI_X() {
+        return VK_ANSI_X;
+    }
+    private static final int VK_ANSI_C = (int)8L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_C = 8
+     * }
+     */
+    public static int VK_ANSI_C() {
+        return VK_ANSI_C;
+    }
+    private static final int VK_ANSI_V = (int)9L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_V = 9
+     * }
+     */
+    public static int VK_ANSI_V() {
+        return VK_ANSI_V;
+    }
+    private static final int VK_ANSI_B = (int)11L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_B = 11
+     * }
+     */
+    public static int VK_ANSI_B() {
+        return VK_ANSI_B;
+    }
+    private static final int VK_ANSI_Q = (int)12L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Q = 12
+     * }
+     */
+    public static int VK_ANSI_Q() {
+        return VK_ANSI_Q;
+    }
+    private static final int VK_ANSI_W = (int)13L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_W = 13
+     * }
+     */
+    public static int VK_ANSI_W() {
+        return VK_ANSI_W;
+    }
+    private static final int VK_ANSI_E = (int)14L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_E = 14
+     * }
+     */
+    public static int VK_ANSI_E() {
+        return VK_ANSI_E;
+    }
+    private static final int VK_ANSI_R = (int)15L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_R = 15
+     * }
+     */
+    public static int VK_ANSI_R() {
+        return VK_ANSI_R;
+    }
+    private static final int VK_ANSI_Y = (int)16L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Y = 16
+     * }
+     */
+    public static int VK_ANSI_Y() {
+        return VK_ANSI_Y;
+    }
+    private static final int VK_ANSI_T = (int)17L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_T = 17
+     * }
+     */
+    public static int VK_ANSI_T() {
+        return VK_ANSI_T;
+    }
+    private static final int VK_ANSI_1 = (int)18L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_1 = 18
+     * }
+     */
+    public static int VK_ANSI_1() {
+        return VK_ANSI_1;
+    }
+    private static final int VK_ANSI_2 = (int)19L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_2 = 19
+     * }
+     */
+    public static int VK_ANSI_2() {
+        return VK_ANSI_2;
+    }
+    private static final int VK_ANSI_3 = (int)20L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_3 = 20
+     * }
+     */
+    public static int VK_ANSI_3() {
+        return VK_ANSI_3;
+    }
+    private static final int VK_ANSI_4 = (int)21L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_4 = 21
+     * }
+     */
+    public static int VK_ANSI_4() {
+        return VK_ANSI_4;
+    }
+    private static final int VK_ANSI_6 = (int)22L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_6 = 22
+     * }
+     */
+    public static int VK_ANSI_6() {
+        return VK_ANSI_6;
+    }
+    private static final int VK_ANSI_5 = (int)23L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_5 = 23
+     * }
+     */
+    public static int VK_ANSI_5() {
+        return VK_ANSI_5;
+    }
+    private static final int VK_ANSI_Equal = (int)24L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Equal = 24
+     * }
+     */
+    public static int VK_ANSI_Equal() {
+        return VK_ANSI_Equal;
+    }
+    private static final int VK_ANSI_9 = (int)25L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_9 = 25
+     * }
+     */
+    public static int VK_ANSI_9() {
+        return VK_ANSI_9;
+    }
+    private static final int VK_ANSI_7 = (int)26L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_7 = 26
+     * }
+     */
+    public static int VK_ANSI_7() {
+        return VK_ANSI_7;
+    }
+    private static final int VK_ANSI_Minus = (int)27L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Minus = 27
+     * }
+     */
+    public static int VK_ANSI_Minus() {
+        return VK_ANSI_Minus;
+    }
+    private static final int VK_ANSI_8 = (int)28L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_8 = 28
+     * }
+     */
+    public static int VK_ANSI_8() {
+        return VK_ANSI_8;
+    }
+    private static final int VK_ANSI_0 = (int)29L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_0 = 29
+     * }
+     */
+    public static int VK_ANSI_0() {
+        return VK_ANSI_0;
+    }
+    private static final int VK_ANSI_RightBracket = (int)30L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_RightBracket = 30
+     * }
+     */
+    public static int VK_ANSI_RightBracket() {
+        return VK_ANSI_RightBracket;
+    }
+    private static final int VK_ANSI_O = (int)31L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_O = 31
+     * }
+     */
+    public static int VK_ANSI_O() {
+        return VK_ANSI_O;
+    }
+    private static final int VK_ANSI_U = (int)32L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_U = 32
+     * }
+     */
+    public static int VK_ANSI_U() {
+        return VK_ANSI_U;
+    }
+    private static final int VK_ANSI_LeftBracket = (int)33L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_LeftBracket = 33
+     * }
+     */
+    public static int VK_ANSI_LeftBracket() {
+        return VK_ANSI_LeftBracket;
+    }
+    private static final int VK_ANSI_I = (int)34L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_I = 34
+     * }
+     */
+    public static int VK_ANSI_I() {
+        return VK_ANSI_I;
+    }
+    private static final int VK_ANSI_P = (int)35L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_P = 35
+     * }
+     */
+    public static int VK_ANSI_P() {
+        return VK_ANSI_P;
+    }
+    private static final int VK_ANSI_L = (int)37L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_L = 37
+     * }
+     */
+    public static int VK_ANSI_L() {
+        return VK_ANSI_L;
+    }
+    private static final int VK_ANSI_J = (int)38L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_J = 38
+     * }
+     */
+    public static int VK_ANSI_J() {
+        return VK_ANSI_J;
+    }
+    private static final int VK_ANSI_Quote = (int)39L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Quote = 39
+     * }
+     */
+    public static int VK_ANSI_Quote() {
+        return VK_ANSI_Quote;
+    }
+    private static final int VK_ANSI_K = (int)40L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_K = 40
+     * }
+     */
+    public static int VK_ANSI_K() {
+        return VK_ANSI_K;
+    }
+    private static final int VK_ANSI_Semicolon = (int)41L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Semicolon = 41
+     * }
+     */
+    public static int VK_ANSI_Semicolon() {
+        return VK_ANSI_Semicolon;
+    }
+    private static final int VK_ANSI_Backslash = (int)42L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Backslash = 42
+     * }
+     */
+    public static int VK_ANSI_Backslash() {
+        return VK_ANSI_Backslash;
+    }
+    private static final int VK_ANSI_Comma = (int)43L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Comma = 43
+     * }
+     */
+    public static int VK_ANSI_Comma() {
+        return VK_ANSI_Comma;
+    }
+    private static final int VK_ANSI_Slash = (int)44L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Slash = 44
+     * }
+     */
+    public static int VK_ANSI_Slash() {
+        return VK_ANSI_Slash;
+    }
+    private static final int VK_ANSI_N = (int)45L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_N = 45
+     * }
+     */
+    public static int VK_ANSI_N() {
+        return VK_ANSI_N;
+    }
+    private static final int VK_ANSI_M = (int)46L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_M = 46
+     * }
+     */
+    public static int VK_ANSI_M() {
+        return VK_ANSI_M;
+    }
+    private static final int VK_ANSI_Period = (int)47L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Period = 47
+     * }
+     */
+    public static int VK_ANSI_Period() {
+        return VK_ANSI_Period;
+    }
+    private static final int VK_ANSI_Grave = (int)50L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Grave = 50
+     * }
+     */
+    public static int VK_ANSI_Grave() {
+        return VK_ANSI_Grave;
+    }
+    private static final int VK_ANSI_KeypadDecimal = (int)65L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_KeypadDecimal = 65
+     * }
+     */
+    public static int VK_ANSI_KeypadDecimal() {
+        return VK_ANSI_KeypadDecimal;
+    }
+    private static final int VK_ANSI_KeypadMultiply = (int)67L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_KeypadMultiply = 67
+     * }
+     */
+    public static int VK_ANSI_KeypadMultiply() {
+        return VK_ANSI_KeypadMultiply;
+    }
+    private static final int VK_ANSI_KeypadPlus = (int)69L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_KeypadPlus = 69
+     * }
+     */
+    public static int VK_ANSI_KeypadPlus() {
+        return VK_ANSI_KeypadPlus;
+    }
+    private static final int VK_ANSI_KeypadClear = (int)71L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_KeypadClear = 71
+     * }
+     */
+    public static int VK_ANSI_KeypadClear() {
+        return VK_ANSI_KeypadClear;
+    }
+    private static final int VK_ANSI_KeypadDivide = (int)75L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_KeypadDivide = 75
+     * }
+     */
+    public static int VK_ANSI_KeypadDivide() {
+        return VK_ANSI_KeypadDivide;
+    }
+    private static final int VK_ANSI_KeypadEnter = (int)76L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_KeypadEnter = 76
+     * }
+     */
+    public static int VK_ANSI_KeypadEnter() {
+        return VK_ANSI_KeypadEnter;
+    }
+    private static final int VK_ANSI_KeypadMinus = (int)78L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_KeypadMinus = 78
+     * }
+     */
+    public static int VK_ANSI_KeypadMinus() {
+        return VK_ANSI_KeypadMinus;
+    }
+    private static final int VK_ANSI_KeypadEquals = (int)81L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_KeypadEquals = 81
+     * }
+     */
+    public static int VK_ANSI_KeypadEquals() {
+        return VK_ANSI_KeypadEquals;
+    }
+    private static final int VK_ANSI_Keypad0 = (int)82L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Keypad0 = 82
+     * }
+     */
+    public static int VK_ANSI_Keypad0() {
+        return VK_ANSI_Keypad0;
+    }
+    private static final int VK_ANSI_Keypad1 = (int)83L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Keypad1 = 83
+     * }
+     */
+    public static int VK_ANSI_Keypad1() {
+        return VK_ANSI_Keypad1;
+    }
+    private static final int VK_ANSI_Keypad2 = (int)84L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Keypad2 = 84
+     * }
+     */
+    public static int VK_ANSI_Keypad2() {
+        return VK_ANSI_Keypad2;
+    }
+    private static final int VK_ANSI_Keypad3 = (int)85L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Keypad3 = 85
+     * }
+     */
+    public static int VK_ANSI_Keypad3() {
+        return VK_ANSI_Keypad3;
+    }
+    private static final int VK_ANSI_Keypad4 = (int)86L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Keypad4 = 86
+     * }
+     */
+    public static int VK_ANSI_Keypad4() {
+        return VK_ANSI_Keypad4;
+    }
+    private static final int VK_ANSI_Keypad5 = (int)87L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Keypad5 = 87
+     * }
+     */
+    public static int VK_ANSI_Keypad5() {
+        return VK_ANSI_Keypad5;
+    }
+    private static final int VK_ANSI_Keypad6 = (int)88L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Keypad6 = 88
+     * }
+     */
+    public static int VK_ANSI_Keypad6() {
+        return VK_ANSI_Keypad6;
+    }
+    private static final int VK_ANSI_Keypad7 = (int)89L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Keypad7 = 89
+     * }
+     */
+    public static int VK_ANSI_Keypad7() {
+        return VK_ANSI_Keypad7;
+    }
+    private static final int VK_ANSI_Keypad8 = (int)91L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Keypad8 = 91
+     * }
+     */
+    public static int VK_ANSI_Keypad8() {
+        return VK_ANSI_Keypad8;
+    }
+    private static final int VK_ANSI_Keypad9 = (int)92L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ANSI_Keypad9 = 92
+     * }
+     */
+    public static int VK_ANSI_Keypad9() {
+        return VK_ANSI_Keypad9;
+    }
+    private static final int VK_Return = (int)36L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Return = 36
+     * }
+     */
+    public static int VK_Return() {
+        return VK_Return;
+    }
+    private static final int VK_Tab = (int)48L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Tab = 48
+     * }
+     */
+    public static int VK_Tab() {
+        return VK_Tab;
+    }
+    private static final int VK_Space = (int)49L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Space = 49
+     * }
+     */
+    public static int VK_Space() {
+        return VK_Space;
+    }
+    private static final int VK_Delete = (int)51L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Delete = 51
+     * }
+     */
+    public static int VK_Delete() {
+        return VK_Delete;
+    }
+    private static final int VK_Escape = (int)53L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Escape = 53
+     * }
+     */
+    public static int VK_Escape() {
+        return VK_Escape;
+    }
+    private static final int VK_Command = (int)55L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Command = 55
+     * }
+     */
+    public static int VK_Command() {
+        return VK_Command;
+    }
+    private static final int VK_Shift = (int)56L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Shift = 56
+     * }
+     */
+    public static int VK_Shift() {
+        return VK_Shift;
+    }
+    private static final int VK_CapsLock = (int)57L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_CapsLock = 57
+     * }
+     */
+    public static int VK_CapsLock() {
+        return VK_CapsLock;
+    }
+    private static final int VK_Option = (int)58L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Option = 58
+     * }
+     */
+    public static int VK_Option() {
+        return VK_Option;
+    }
+    private static final int VK_Control = (int)59L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Control = 59
+     * }
+     */
+    public static int VK_Control() {
+        return VK_Control;
+    }
+    private static final int VK_RightCommand = (int)54L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_RightCommand = 54
+     * }
+     */
+    public static int VK_RightCommand() {
+        return VK_RightCommand;
+    }
+    private static final int VK_RightShift = (int)60L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_RightShift = 60
+     * }
+     */
+    public static int VK_RightShift() {
+        return VK_RightShift;
+    }
+    private static final int VK_RightOption = (int)61L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_RightOption = 61
+     * }
+     */
+    public static int VK_RightOption() {
+        return VK_RightOption;
+    }
+    private static final int VK_RightControl = (int)62L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_RightControl = 62
+     * }
+     */
+    public static int VK_RightControl() {
+        return VK_RightControl;
+    }
+    private static final int VK_Function = (int)63L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Function = 63
+     * }
+     */
+    public static int VK_Function() {
+        return VK_Function;
+    }
+    private static final int VK_F17 = (int)64L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F17 = 64
+     * }
+     */
+    public static int VK_F17() {
+        return VK_F17;
+    }
+    private static final int VK_VolumeUp = (int)72L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_VolumeUp = 72
+     * }
+     */
+    public static int VK_VolumeUp() {
+        return VK_VolumeUp;
+    }
+    private static final int VK_VolumeDown = (int)73L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_VolumeDown = 73
+     * }
+     */
+    public static int VK_VolumeDown() {
+        return VK_VolumeDown;
+    }
+    private static final int VK_Mute = (int)74L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Mute = 74
+     * }
+     */
+    public static int VK_Mute() {
+        return VK_Mute;
+    }
+    private static final int VK_F18 = (int)79L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F18 = 79
+     * }
+     */
+    public static int VK_F18() {
+        return VK_F18;
+    }
+    private static final int VK_F19 = (int)80L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F19 = 80
+     * }
+     */
+    public static int VK_F19() {
+        return VK_F19;
+    }
+    private static final int VK_F20 = (int)90L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F20 = 90
+     * }
+     */
+    public static int VK_F20() {
+        return VK_F20;
+    }
+    private static final int VK_F5 = (int)96L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F5 = 96
+     * }
+     */
+    public static int VK_F5() {
+        return VK_F5;
+    }
+    private static final int VK_F6 = (int)97L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F6 = 97
+     * }
+     */
+    public static int VK_F6() {
+        return VK_F6;
+    }
+    private static final int VK_F7 = (int)98L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F7 = 98
+     * }
+     */
+    public static int VK_F7() {
+        return VK_F7;
+    }
+    private static final int VK_F3 = (int)99L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F3 = 99
+     * }
+     */
+    public static int VK_F3() {
+        return VK_F3;
+    }
+    private static final int VK_F8 = (int)100L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F8 = 100
+     * }
+     */
+    public static int VK_F8() {
+        return VK_F8;
+    }
+    private static final int VK_F9 = (int)101L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F9 = 101
+     * }
+     */
+    public static int VK_F9() {
+        return VK_F9;
+    }
+    private static final int VK_F11 = (int)103L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F11 = 103
+     * }
+     */
+    public static int VK_F11() {
+        return VK_F11;
+    }
+    private static final int VK_F13 = (int)105L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F13 = 105
+     * }
+     */
+    public static int VK_F13() {
+        return VK_F13;
+    }
+    private static final int VK_F16 = (int)106L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F16 = 106
+     * }
+     */
+    public static int VK_F16() {
+        return VK_F16;
+    }
+    private static final int VK_F14 = (int)107L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F14 = 107
+     * }
+     */
+    public static int VK_F14() {
+        return VK_F14;
+    }
+    private static final int VK_F10 = (int)109L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F10 = 109
+     * }
+     */
+    public static int VK_F10() {
+        return VK_F10;
+    }
+    private static final int VK_ContextualMenu = (int)110L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ContextualMenu = 110
+     * }
+     */
+    public static int VK_ContextualMenu() {
+        return VK_ContextualMenu;
+    }
+    private static final int VK_F12 = (int)111L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F12 = 111
+     * }
+     */
+    public static int VK_F12() {
+        return VK_F12;
+    }
+    private static final int VK_F15 = (int)113L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F15 = 113
+     * }
+     */
+    public static int VK_F15() {
+        return VK_F15;
+    }
+    private static final int VK_Help = (int)114L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Help = 114
+     * }
+     */
+    public static int VK_Help() {
+        return VK_Help;
+    }
+    private static final int VK_Home = (int)115L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_Home = 115
+     * }
+     */
+    public static int VK_Home() {
+        return VK_Home;
+    }
+    private static final int VK_PageUp = (int)116L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_PageUp = 116
+     * }
+     */
+    public static int VK_PageUp() {
+        return VK_PageUp;
+    }
+    private static final int VK_ForwardDelete = (int)117L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ForwardDelete = 117
+     * }
+     */
+    public static int VK_ForwardDelete() {
+        return VK_ForwardDelete;
+    }
+    private static final int VK_F4 = (int)118L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F4 = 118
+     * }
+     */
+    public static int VK_F4() {
+        return VK_F4;
+    }
+    private static final int VK_End = (int)119L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_End = 119
+     * }
+     */
+    public static int VK_End() {
+        return VK_End;
+    }
+    private static final int VK_F2 = (int)120L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F2 = 120
+     * }
+     */
+    public static int VK_F2() {
+        return VK_F2;
+    }
+    private static final int VK_PageDown = (int)121L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_PageDown = 121
+     * }
+     */
+    public static int VK_PageDown() {
+        return VK_PageDown;
+    }
+    private static final int VK_F1 = (int)122L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_F1 = 122
+     * }
+     */
+    public static int VK_F1() {
+        return VK_F1;
+    }
+    private static final int VK_LeftArrow = (int)123L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_LeftArrow = 123
+     * }
+     */
+    public static int VK_LeftArrow() {
+        return VK_LeftArrow;
+    }
+    private static final int VK_RightArrow = (int)124L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_RightArrow = 124
+     * }
+     */
+    public static int VK_RightArrow() {
+        return VK_RightArrow;
+    }
+    private static final int VK_DownArrow = (int)125L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_DownArrow = 125
+     * }
+     */
+    public static int VK_DownArrow() {
+        return VK_DownArrow;
+    }
+    private static final int VK_UpArrow = (int)126L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_UpArrow = 126
+     * }
+     */
+    public static int VK_UpArrow() {
+        return VK_UpArrow;
+    }
+    private static final int VK_ISO_Section = (int)10L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_ISO_Section = 10
+     * }
+     */
+    public static int VK_ISO_Section() {
+        return VK_ISO_Section;
+    }
+    private static final int VK_JIS_Yen = (int)93L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_JIS_Yen = 93
+     * }
+     */
+    public static int VK_JIS_Yen() {
+        return VK_JIS_Yen;
+    }
+    private static final int VK_JIS_Underscore = (int)94L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_JIS_Underscore = 94
+     * }
+     */
+    public static int VK_JIS_Underscore() {
+        return VK_JIS_Underscore;
+    }
+    private static final int VK_JIS_KeypadComma = (int)95L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_JIS_KeypadComma = 95
+     * }
+     */
+    public static int VK_JIS_KeypadComma() {
+        return VK_JIS_KeypadComma;
+    }
+    private static final int VK_JIS_Eisu = (int)102L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_JIS_Eisu = 102
+     * }
+     */
+    public static int VK_JIS_Eisu() {
+        return VK_JIS_Eisu;
+    }
+    private static final int VK_JIS_Kana = (int)104L;
+    /**
+     * {@snippet lang=c :
+     * enum KeyCode.VK_JIS_Kana = 104
+     * }
+     */
+    public static int VK_JIS_Kana() {
+        return VK_JIS_Kana;
+    }
     private static final int Off = (int)0L;
     /**
      * {@snippet lang=c :
@@ -267,109 +1347,127 @@ public class kwm_macos_h {
      * }
      */
     public static final OfInt ScreenId = kwm_macos_h.C_INT;
-    private static final int MouseMoved = (int)0L;
+    private static final int KeyDown = (int)0L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.MouseMoved = 0
+     * enum Event_Tag.KeyDown = 0
+     * }
+     */
+    public static int KeyDown() {
+        return KeyDown;
+    }
+    private static final int KeyUp = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.KeyUp = 1
+     * }
+     */
+    public static int KeyUp() {
+        return KeyUp;
+    }
+    private static final int MouseMoved = (int)2L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.MouseMoved = 2
      * }
      */
     public static int MouseMoved() {
         return MouseMoved;
     }
-    private static final int MouseDown = (int)1L;
+    private static final int MouseDown = (int)3L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.MouseDown = 1
+     * enum Event_Tag.MouseDown = 3
      * }
      */
     public static int MouseDown() {
         return MouseDown;
     }
-    private static final int MouseUp = (int)2L;
+    private static final int MouseUp = (int)4L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.MouseUp = 2
+     * enum Event_Tag.MouseUp = 4
      * }
      */
     public static int MouseUp() {
         return MouseUp;
     }
-    private static final int ScrollWheel = (int)3L;
+    private static final int ScrollWheel = (int)5L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.ScrollWheel = 3
+     * enum Event_Tag.ScrollWheel = 5
      * }
      */
     public static int ScrollWheel() {
         return ScrollWheel;
     }
-    private static final int WindowScreenChange = (int)4L;
+    private static final int WindowScreenChange = (int)6L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowScreenChange = 4
+     * enum Event_Tag.WindowScreenChange = 6
      * }
      */
     public static int WindowScreenChange() {
         return WindowScreenChange;
     }
-    private static final int WindowResize = (int)5L;
+    private static final int WindowResize = (int)7L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowResize = 5
+     * enum Event_Tag.WindowResize = 7
      * }
      */
     public static int WindowResize() {
         return WindowResize;
     }
-    private static final int WindowMove = (int)6L;
+    private static final int WindowMove = (int)8L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowMove = 6
+     * enum Event_Tag.WindowMove = 8
      * }
      */
     public static int WindowMove() {
         return WindowMove;
     }
-    private static final int WindowFocusChange = (int)7L;
+    private static final int WindowFocusChange = (int)9L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowFocusChange = 7
+     * enum Event_Tag.WindowFocusChange = 9
      * }
      */
     public static int WindowFocusChange() {
         return WindowFocusChange;
     }
-    private static final int WindowCloseRequest = (int)8L;
+    private static final int WindowCloseRequest = (int)10L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowCloseRequest = 8
+     * enum Event_Tag.WindowCloseRequest = 10
      * }
      */
     public static int WindowCloseRequest() {
         return WindowCloseRequest;
     }
-    private static final int WindowFullScreenToggle = (int)9L;
+    private static final int WindowFullScreenToggle = (int)11L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowFullScreenToggle = 9
+     * enum Event_Tag.WindowFullScreenToggle = 11
      * }
      */
     public static int WindowFullScreenToggle() {
         return WindowFullScreenToggle;
     }
-    private static final int DisplayConfigurationChange = (int)10L;
+    private static final int DisplayConfigurationChange = (int)12L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.DisplayConfigurationChange = 10
+     * enum Event_Tag.DisplayConfigurationChange = 12
      * }
      */
     public static int DisplayConfigurationChange() {
         return DisplayConfigurationChange;
     }
-    private static final int ApplicationDidFinishLaunching = (int)11L;
+    private static final int ApplicationDidFinishLaunching = (int)13L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.ApplicationDidFinishLaunching = 11
+     * enum Event_Tag.ApplicationDidFinishLaunching = 13
      * }
      */
     public static int ApplicationDidFinishLaunching() {

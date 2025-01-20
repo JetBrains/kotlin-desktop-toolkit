@@ -18,6 +18,12 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     Event_Tag tag;
  *     union {
  *         struct {
+ *             struct KeyDownEvent key_down;
+ *         };
+ *         struct {
+ *             struct KeyUpEvent key_up;
+ *         };
+ *         struct {
  *             struct MouseMovedEvent mouse_moved;
  *         };
  *         struct {

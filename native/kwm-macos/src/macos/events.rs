@@ -1,13 +1,29 @@
-use objc2_app_kit::{NSEvent, NSWindow};
+use objc2_app_kit::{NSEvent, NSEventType, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
 use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize}, macos::window};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 
-use super::{application_api::AppState, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
+use super::{application_api::AppState, keyboard::{unpack_key_event, KeyCode}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
+
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct KeyDownEvent {
+    window_id: WindowId,
+    code: KeyCode,
+    is_repeat: bool,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct KeyUpEvent {
+    window_id: WindowId,
+    code: KeyCode,
+}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -84,6 +100,8 @@ pub struct WindowFullScreenToggleEvent {
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum Event {
+    KeyDown(KeyDownEvent),
+    KeyUp(KeyUpEvent),
     MouseMoved(MouseMovedEvent),
     MouseDown(MouseDownEvent),
     MouseUp(MouseUpEvent),
@@ -97,6 +115,35 @@ pub enum Event {
     WindowFullScreenToggle(WindowFullScreenToggleEvent),
     DisplayConfigurationChange,
     ApplicationDidFinishLaunching
+}
+
+pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
+    let handled = AppState::with(|state| {
+        let window_id = unsafe {
+            ns_event.windowNumber() as WindowId
+        };
+
+        let event = match unsafe { ns_event.r#type() } {
+            NSEventType::KeyDown => {
+                let key_info = unpack_key_event(ns_event)?;
+                Event::KeyDown(KeyDownEvent {
+                    window_id,
+                    code: key_info.code,
+                    is_repeat: key_info.is_repeat,
+                })
+            },
+            NSEventType::KeyUp => {
+                let key_info = unpack_key_event(ns_event)?;
+                Event::KeyUp(KeyUpEvent {
+                    window_id,
+                    code: key_info.code,
+                })
+            },
+            _ => bail!("Unexpected type of event {:?}", ns_event)
+        };
+        Ok((state.event_handler)(&event))
+    });
+    handled
 }
 
 pub(crate) fn handle_mouse_move(event: &NSEvent) -> bool {
@@ -180,6 +227,7 @@ pub(crate) fn handle_window_screen_change(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowScreenChange(WindowScreenChangeEvent {
             window_id: window.window_id(),
+            // todo sometimes it panics when you close the lid
             new_screen_id: window.screen().unwrap().screen_id()
         });
         (state.event_handler)(&event)
