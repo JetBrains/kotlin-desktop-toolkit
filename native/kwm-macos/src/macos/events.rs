@@ -1,7 +1,9 @@
+use std::ffi::{CStr, CString};
+
 use objc2_app_kit::{NSEvent, NSEventType, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
-use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize}, macos::window};
+use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, macos::window};
 use anyhow::{anyhow, bail, Result};
 
 use super::{application_api::AppState, keyboard::{unpack_key_event, KeyCode}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
@@ -15,14 +17,36 @@ pub type EventHandler = extern "C" fn(&Event) -> bool;
 pub struct KeyDownEvent {
     window_id: WindowId,
     code: KeyCode,
+    characters: StrPtr,
+    key_title: StrPtr,
     is_repeat: bool,
+}
+
+impl Drop for KeyDownEvent {
+    fn drop(&mut self) {
+        let characters = unsafe {
+            CString::from_raw(self.characters)
+        };
+        std::mem::drop(characters);
+    }
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyUpEvent {
     window_id: WindowId,
+    characters: StrPtr,
+    key_title: StrPtr,
     code: KeyCode,
+}
+
+impl Drop for KeyUpEvent {
+    fn drop(&mut self) {
+        let characters = unsafe {
+            CString::from_raw(self.characters)
+        };
+        std::mem::drop(characters);
+    }
 }
 
 #[repr(C)]
