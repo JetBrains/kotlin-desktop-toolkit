@@ -331,10 +331,22 @@ typedef struct ApplicationConfig {
 
 typedef int64_t WindowId;
 
+typedef struct KeyModifiers {
+  bool capslock;
+  bool shift;
+  bool control;
+  bool option;
+  bool command;
+  bool numeric_pad;
+  bool help;
+  bool function;
+} KeyModifiers;
+
 typedef char *StrPtr;
 
 typedef struct KeyDownEvent {
   WindowId window_id;
+  struct KeyModifiers modifiers;
   enum KeyCode code;
   StrPtr characters;
   StrPtr key;
@@ -343,9 +355,10 @@ typedef struct KeyDownEvent {
 
 typedef struct KeyUpEvent {
   WindowId window_id;
+  struct KeyModifiers modifiers;
+  enum KeyCode code;
   StrPtr characters;
   StrPtr key;
-  enum KeyCode code;
 } KeyUpEvent;
 
 typedef double LogicalPixels;

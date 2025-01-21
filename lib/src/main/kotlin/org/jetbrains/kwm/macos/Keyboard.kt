@@ -1,5 +1,9 @@
 package org.jetbrains.kwm.macos
 
+import java.lang.foreign.Arena
+import org.jetbrains.kwm.macos.generated.KeyModifiers as NativeKeyModifiers
+import java.lang.foreign.MemorySegment
+
 
 /*  MacOSX15.2
 * 🚨🚨🚨 This code should be aligned with `typedef enum KeyCode` in .h file 🚨🚨🚨
@@ -279,6 +283,45 @@ value class KeyCode internal constructor(val value: String) {
         }
     }
 }
+
+data class KeyModifiers(
+    val capsLock: Boolean = false,
+    val shift: Boolean = false,
+    val control: Boolean = false,
+    val option: Boolean = false,
+    val command: Boolean = false,
+    val numericPad: Boolean = false,
+    val help: Boolean = false,
+    val function: Boolean = false
+) {
+    companion object {
+        internal fun fromNative(s: MemorySegment): KeyModifiers {
+            return KeyModifiers(
+                capsLock = NativeKeyModifiers.capslock(s),
+                shift = NativeKeyModifiers.shift(s),
+                control = NativeKeyModifiers.control(s),
+                option = NativeKeyModifiers.option(s),
+                command = NativeKeyModifiers.command(s),
+                numericPad = NativeKeyModifiers.numeric_pad(s),
+                help = NativeKeyModifiers.help(s),
+                function = NativeKeyModifiers.function(s))
+        }
+    }
+
+    internal fun toNative(arena: Arena): MemorySegment {
+        val result = NativeKeyModifiers.allocate(arena)
+        NativeKeyModifiers.capslock(result, capsLock)
+        NativeKeyModifiers.shift(result, shift)
+        NativeKeyModifiers.control(result, control)
+        NativeKeyModifiers.option(result, option)
+        NativeKeyModifiers.command(result, command)
+        NativeKeyModifiers.numeric_pad(result, numericPad)
+        NativeKeyModifiers.help(result, help)
+        NativeKeyModifiers.function(result, function)
+        return result
+    }
+}
+
 
 object CodepointConstants {
     const val EnterCharacter = 0x0003

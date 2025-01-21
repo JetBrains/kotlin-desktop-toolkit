@@ -1,6 +1,7 @@
 use std::ffi::CString;
 
 use anyhow::{bail, Context, Error, Ok};
+use bitflags::Flags;
 use log::{error, info};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
@@ -30,7 +31,9 @@ pub(crate) struct KeyEventInfo {
     // For keys that depend on keyboard layout it will be the symbol typed for default layer
     // For functional keys it will try to produce some meaningful codepoint, but not the same as for `characters`
     // For dead keys it will produce text from deafult layer
-    pub(crate) key: CString
+    pub(crate) key: CString,
+
+    pub(crate) modifiers: KeyModifiers
 }
 
 pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInfo> {
@@ -68,16 +71,78 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
         let chars = CString::new(chars.as_str(pool)).with_context(|| format!("{chars:?}"))?;
         let key = CString::new(key.as_str(pool)).with_context(|| format!("{key:?}"))?;
 
+        let modifiers = unsafe { ns_event.modifierFlags() }.into();
+
         // todo unpack modifiers
         let key_info = KeyEventInfo {
             is_press,
             is_repeat,
             code,
             chars,
-            key
+            key,
+            modifiers
         };
         Ok(key_info)
     })
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct KeyModifiers {
+    pub capslock: bool,
+    pub shift: bool,
+    pub control: bool,
+    pub option: bool,
+    pub command: bool,
+    pub numeric_pad: bool,
+    pub help: bool,
+    pub function: bool,
+}
+
+impl From<NSEventModifierFlags> for KeyModifiers {
+    fn from(value: NSEventModifierFlags) -> Self {
+        KeyModifiers {
+            capslock: value.contains(NSEventModifierFlags::NSEventModifierFlagCapsLock),
+            shift: value.contains(NSEventModifierFlags::NSEventModifierFlagShift),
+            control: value.contains(NSEventModifierFlags::NSEventModifierFlagControl),
+            option: value.contains(NSEventModifierFlags::NSEventModifierFlagOption),
+            command: value.contains(NSEventModifierFlags::NSEventModifierFlagCommand),
+            numeric_pad: value.contains(NSEventModifierFlags::NSEventModifierFlagNumericPad),
+            help: value.contains(NSEventModifierFlags::NSEventModifierFlagHelp),
+            function: value.contains(NSEventModifierFlags::NSEventModifierFlagFunction)
+        }
+    }
+}
+
+impl From<KeyModifiers> for NSEventModifierFlags {
+    fn from(value: KeyModifiers) -> Self {
+        let mut result = NSEventModifierFlags::empty();
+        if value.capslock {
+            result |= NSEventModifierFlags::NSEventModifierFlagCapsLock;
+        }
+        if value.shift {
+            result |= NSEventModifierFlags::NSEventModifierFlagShift;
+        }
+        if value.control {
+            result |= NSEventModifierFlags::NSEventModifierFlagControl;
+        }
+        if value.option {
+            result |= NSEventModifierFlags::NSEventModifierFlagOption;
+        }
+        if value.command {
+            result |= NSEventModifierFlags::NSEventModifierFlagCommand;
+        }
+        if value.numeric_pad {
+            result |= NSEventModifierFlags::NSEventModifierFlagNumericPad;
+        }
+        if value.help {
+            result |= NSEventModifierFlags::NSEventModifierFlagHelp;
+        }
+        if value.function {
+            result |= NSEventModifierFlags::NSEventModifierFlagFunction;
+        }
+        result
+    }
 }
 
 #[allow(dead_code)]

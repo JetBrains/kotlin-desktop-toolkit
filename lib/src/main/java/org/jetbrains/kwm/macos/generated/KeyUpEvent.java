@@ -16,9 +16,10 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * {@snippet lang=c :
  * struct KeyUpEvent {
  *     WindowId window_id;
+ *     struct KeyModifiers modifiers;
+ *     enum KeyCode code;
  *     StrPtr characters;
  *     StrPtr key;
- *     enum KeyCode code;
  * }
  * }
  */
@@ -30,10 +31,11 @@ public class KeyUpEvent {
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_LONG_LONG.withName("window_id"),
-        kwm_macos_h.C_POINTER.withName("characters"),
-        kwm_macos_h.C_POINTER.withName("key"),
+        KeyModifiers.layout().withName("modifiers"),
         kwm_macos_h.C_INT.withName("code"),
-        MemoryLayout.paddingLayout(4)
+        MemoryLayout.paddingLayout(4),
+        kwm_macos_h.C_POINTER.withName("characters"),
+        kwm_macos_h.C_POINTER.withName("key")
     ).withName("KeyUpEvent");
 
     /**
@@ -87,6 +89,94 @@ public class KeyUpEvent {
         struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
+    private static final GroupLayout modifiers$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("modifiers"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * struct KeyModifiers modifiers
+     * }
+     */
+    public static final GroupLayout modifiers$layout() {
+        return modifiers$LAYOUT;
+    }
+
+    private static final long modifiers$OFFSET = 8;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * struct KeyModifiers modifiers
+     * }
+     */
+    public static final long modifiers$offset() {
+        return modifiers$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * struct KeyModifiers modifiers
+     * }
+     */
+    public static MemorySegment modifiers(MemorySegment struct) {
+        return struct.asSlice(modifiers$OFFSET, modifiers$LAYOUT.byteSize());
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * struct KeyModifiers modifiers
+     * }
+     */
+    public static void modifiers(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, modifiers$OFFSET, modifiers$LAYOUT.byteSize());
+    }
+
+    private static final OfInt code$LAYOUT = (OfInt)$LAYOUT.select(groupElement("code"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * enum KeyCode code
+     * }
+     */
+    public static final OfInt code$layout() {
+        return code$LAYOUT;
+    }
+
+    private static final long code$OFFSET = 16;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * enum KeyCode code
+     * }
+     */
+    public static final long code$offset() {
+        return code$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * enum KeyCode code
+     * }
+     */
+    public static int code(MemorySegment struct) {
+        return struct.get(code$LAYOUT, code$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * enum KeyCode code
+     * }
+     */
+    public static void code(MemorySegment struct, int fieldValue) {
+        struct.set(code$LAYOUT, code$OFFSET, fieldValue);
+    }
+
     private static final AddressLayout characters$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("characters"));
 
     /**
@@ -99,7 +189,7 @@ public class KeyUpEvent {
         return characters$LAYOUT;
     }
 
-    private static final long characters$OFFSET = 8;
+    private static final long characters$OFFSET = 24;
 
     /**
      * Offset for field:
@@ -143,7 +233,7 @@ public class KeyUpEvent {
         return key$LAYOUT;
     }
 
-    private static final long key$OFFSET = 16;
+    private static final long key$OFFSET = 32;
 
     /**
      * Offset for field:
@@ -173,50 +263,6 @@ public class KeyUpEvent {
      */
     public static void key(MemorySegment struct, MemorySegment fieldValue) {
         struct.set(key$LAYOUT, key$OFFSET, fieldValue);
-    }
-
-    private static final OfInt code$LAYOUT = (OfInt)$LAYOUT.select(groupElement("code"));
-
-    /**
-     * Layout for field:
-     * {@snippet lang=c :
-     * enum KeyCode code
-     * }
-     */
-    public static final OfInt code$layout() {
-        return code$LAYOUT;
-    }
-
-    private static final long code$OFFSET = 24;
-
-    /**
-     * Offset for field:
-     * {@snippet lang=c :
-     * enum KeyCode code
-     * }
-     */
-    public static final long code$offset() {
-        return code$OFFSET;
-    }
-
-    /**
-     * Getter for field:
-     * {@snippet lang=c :
-     * enum KeyCode code
-     * }
-     */
-    public static int code(MemorySegment struct) {
-        return struct.get(code$LAYOUT, code$OFFSET);
-    }
-
-    /**
-     * Setter for field:
-     * {@snippet lang=c :
-     * enum KeyCode code
-     * }
-     */
-    public static void code(MemorySegment struct, int fieldValue) {
-        struct.set(code$LAYOUT, code$OFFSET, fieldValue);
     }
 
     /**

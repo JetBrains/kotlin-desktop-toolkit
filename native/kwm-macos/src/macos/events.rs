@@ -7,7 +7,7 @@ use objc2_foundation::MainThreadMarker;
 use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, macos::window};
 use anyhow::{anyhow, bail, Result};
 
-use super::{application_api::AppState, keyboard::{unpack_key_event, KeyCode}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
+use super::{application_api::AppState, keyboard::{unpack_key_event, KeyCode, KeyModifiers}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
@@ -17,6 +17,7 @@ pub type EventHandler = extern "C" fn(&Event) -> bool;
 #[derive(Debug)]
 pub struct KeyDownEvent {
     window_id: WindowId,
+    modifiers: KeyModifiers,
     code: KeyCode,
     characters: StrPtr,
     key: StrPtr,
@@ -36,9 +37,10 @@ impl Drop for KeyDownEvent {
 #[derive(Debug)]
 pub struct KeyUpEvent {
     window_id: WindowId,
+    modifiers: KeyModifiers,
+    code: KeyCode,
     characters: StrPtr,
     key: StrPtr,
-    code: KeyCode,
 }
 
 impl Drop for KeyUpEvent {
@@ -157,6 +159,7 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                     is_repeat: key_info.is_repeat,
                     characters: key_info.chars.into_raw(),
                     key: key_info.key.into_raw(),
+                    modifiers: key_info.modifiers
                 })
             },
             NSEventType::KeyUp => {
@@ -165,7 +168,8 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                     window_id,
                     code: key_info.code,
                     characters: key_info.chars.into_raw(),
-                    key: key_info.key.into_raw()
+                    key: key_info.key.into_raw(),
+                    modifiers: key_info.modifiers,
                 })
             },
             _ => bail!("Unexpected type of event {:?}", ns_event)
