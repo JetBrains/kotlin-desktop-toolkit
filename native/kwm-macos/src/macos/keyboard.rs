@@ -46,6 +46,7 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
 
         let is_repeat = unsafe { ns_event.isARepeat() };
         let code = unsafe { ns_event.keyCode() };
+        let code = KeyCode::from_u16(code).with_context(|| { format!("Event with unexpected key code: {ns_event:?}") })?;
 
         let chars = unsafe { ns_event.characters() }.with_context(|| {
             format!("No characters field in {ns_event:?}")
@@ -65,8 +66,6 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
 //            ns_event.charactersByApplyingModifiers(ns_event.modifierFlags())
 //        }.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
 
-        let code = KeyCode::from_u16(code).with_context(|| { format!("Event with unexpected key code: {ns_event:?}") })?;
-
         // todo probably we could meet \u0000 here
         let chars = CString::new(chars.as_str(pool)).with_context(|| format!("{chars:?}"))?;
         let key = CString::new(key.as_str(pool)).with_context(|| format!("{key:?}"))?;
@@ -83,6 +82,26 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
             modifiers
         };
         Ok(key_info)
+    })
+}
+
+#[derive(Debug)]
+pub(crate) struct FlagsChangedInfo {
+    pub(crate) modifiers: KeyModifiers,
+    pub(crate) code: KeyCode
+}
+
+pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<FlagsChangedInfo> {
+    if unsafe { ns_event.r#type() } != NSEventType::FlagsChanged {
+        bail!("Unexpected type of event {:?}", ns_event);
+    }
+    let modifiers = unsafe { ns_event.modifierFlags() }.into();
+    let code = unsafe { ns_event.keyCode() };
+    let code = KeyCode::from_u16(code).with_context(|| { format!("Event with unexpected key code: {ns_event:?}") })?;
+
+    Ok(FlagsChangedInfo {
+        modifiers,
+        code,
     })
 }
 

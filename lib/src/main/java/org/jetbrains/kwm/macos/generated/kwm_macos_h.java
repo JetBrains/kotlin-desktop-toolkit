@@ -2109,109 +2109,118 @@ public class kwm_macos_h {
     public static int KeyUp() {
         return KeyUp;
     }
-    private static final int MouseMoved = (int)2L;
+    private static final int ModifiersChanged = (int)2L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.MouseMoved = 2
+     * enum Event_Tag.ModifiersChanged = 2
+     * }
+     */
+    public static int ModifiersChanged() {
+        return ModifiersChanged;
+    }
+    private static final int MouseMoved = (int)3L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.MouseMoved = 3
      * }
      */
     public static int MouseMoved() {
         return MouseMoved;
     }
-    private static final int MouseDown = (int)3L;
+    private static final int MouseDown = (int)4L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.MouseDown = 3
+     * enum Event_Tag.MouseDown = 4
      * }
      */
     public static int MouseDown() {
         return MouseDown;
     }
-    private static final int MouseUp = (int)4L;
+    private static final int MouseUp = (int)5L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.MouseUp = 4
+     * enum Event_Tag.MouseUp = 5
      * }
      */
     public static int MouseUp() {
         return MouseUp;
     }
-    private static final int ScrollWheel = (int)5L;
+    private static final int ScrollWheel = (int)6L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.ScrollWheel = 5
+     * enum Event_Tag.ScrollWheel = 6
      * }
      */
     public static int ScrollWheel() {
         return ScrollWheel;
     }
-    private static final int WindowScreenChange = (int)6L;
+    private static final int WindowScreenChange = (int)7L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowScreenChange = 6
+     * enum Event_Tag.WindowScreenChange = 7
      * }
      */
     public static int WindowScreenChange() {
         return WindowScreenChange;
     }
-    private static final int WindowResize = (int)7L;
+    private static final int WindowResize = (int)8L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowResize = 7
+     * enum Event_Tag.WindowResize = 8
      * }
      */
     public static int WindowResize() {
         return WindowResize;
     }
-    private static final int WindowMove = (int)8L;
+    private static final int WindowMove = (int)9L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowMove = 8
+     * enum Event_Tag.WindowMove = 9
      * }
      */
     public static int WindowMove() {
         return WindowMove;
     }
-    private static final int WindowFocusChange = (int)9L;
+    private static final int WindowFocusChange = (int)10L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowFocusChange = 9
+     * enum Event_Tag.WindowFocusChange = 10
      * }
      */
     public static int WindowFocusChange() {
         return WindowFocusChange;
     }
-    private static final int WindowCloseRequest = (int)10L;
+    private static final int WindowCloseRequest = (int)11L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowCloseRequest = 10
+     * enum Event_Tag.WindowCloseRequest = 11
      * }
      */
     public static int WindowCloseRequest() {
         return WindowCloseRequest;
     }
-    private static final int WindowFullScreenToggle = (int)11L;
+    private static final int WindowFullScreenToggle = (int)12L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowFullScreenToggle = 11
+     * enum Event_Tag.WindowFullScreenToggle = 12
      * }
      */
     public static int WindowFullScreenToggle() {
         return WindowFullScreenToggle;
     }
-    private static final int DisplayConfigurationChange = (int)12L;
+    private static final int DisplayConfigurationChange = (int)13L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.DisplayConfigurationChange = 12
+     * enum Event_Tag.DisplayConfigurationChange = 13
      * }
      */
     public static int DisplayConfigurationChange() {
         return DisplayConfigurationChange;
     }
-    private static final int ApplicationDidFinishLaunching = (int)13L;
+    private static final int ApplicationDidFinishLaunching = (int)14L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.ApplicationDidFinishLaunching = 13
+     * enum Event_Tag.ApplicationDidFinishLaunching = 14
      * }
      */
     public static int ApplicationDidFinishLaunching() {

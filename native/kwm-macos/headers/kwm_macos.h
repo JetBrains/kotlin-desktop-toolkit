@@ -361,6 +361,12 @@ typedef struct KeyUpEvent {
   StrPtr key;
 } KeyUpEvent;
 
+typedef struct ModifiersChangedEvent {
+  WindowId window_id;
+  struct KeyModifiers modifiers;
+  enum KeyCode code;
+} ModifiersChangedEvent;
+
 typedef double LogicalPixels;
 
 typedef struct LogicalPoint {
@@ -429,6 +435,7 @@ typedef struct WindowFullScreenToggleEvent {
 typedef enum Event_Tag {
   KeyDown,
   KeyUp,
+  ModifiersChanged,
   MouseMoved,
   MouseDown,
   MouseUp,
@@ -451,6 +458,9 @@ typedef struct Event {
     };
     struct {
       struct KeyUpEvent key_up;
+    };
+    struct {
+      struct ModifiersChangedEvent modifiers_changed;
     };
     struct {
       struct MouseMovedEvent mouse_moved;

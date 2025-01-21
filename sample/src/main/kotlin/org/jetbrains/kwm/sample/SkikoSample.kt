@@ -323,6 +323,10 @@ class ApplicationState: AutoCloseable {
                 Logger.info { "$event" }
                 EventHandlerResult.Continue
             }
+            is Event.ModifiersChanged -> {
+                Logger.info { "$event" }
+                EventHandlerResult.Continue
+            }
             is Event.WindowCloseRequest -> {
                 windows.find {
                     it.window.windowId() == eventWindowId

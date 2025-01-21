@@ -24,6 +24,9 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *             struct KeyUpEvent key_up;
  *         };
  *         struct {
+ *             struct ModifiersChangedEvent modifiers_changed;
+ *         };
+ *         struct {
  *             struct MouseMovedEvent mouse_moved;
  *         };
  *         struct {

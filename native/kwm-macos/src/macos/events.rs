@@ -7,7 +7,7 @@ use objc2_foundation::MainThreadMarker;
 use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, macos::window};
 use anyhow::{anyhow, bail, Result};
 
-use super::{application_api::AppState, keyboard::{unpack_key_event, KeyCode, KeyModifiers}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
+use super::{application_api::AppState, keyboard::{unpack_flags_changed_event, unpack_key_event, KeyCode, KeyModifiers}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
@@ -50,6 +50,14 @@ impl Drop for KeyUpEvent {
         };
         std::mem::drop(characters);
     }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct ModifiersChangedEvent {
+    window_id: WindowId,
+    modifiers: KeyModifiers,
+    code: KeyCode
 }
 
 #[repr(C)]
@@ -129,6 +137,7 @@ pub struct WindowFullScreenToggleEvent {
 pub enum Event {
     KeyDown(KeyDownEvent),
     KeyUp(KeyUpEvent),
+    ModifiersChanged(ModifiersChangedEvent),
     MouseMoved(MouseMovedEvent),
     MouseDown(MouseDownEvent),
     MouseUp(MouseUpEvent),
@@ -174,6 +183,24 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
             },
             _ => bail!("Unexpected type of event {:?}", ns_event)
         };
+        Ok((state.event_handler)(&event))
+    });
+    handled
+}
+
+pub(crate) fn handle_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
+    let handled = AppState::with(|state| {
+        let window_id = unsafe {
+            ns_event.windowNumber() as WindowId
+        };
+
+        let flags_changed_info = unpack_flags_changed_event(ns_event)?;
+        let event = Event::ModifiersChanged(ModifiersChangedEvent {
+            window_id,
+            modifiers: flags_changed_info.modifiers,
+            code: flags_changed_info.code
+        });
+
         Ok((state.event_handler)(&event))
     });
     handled

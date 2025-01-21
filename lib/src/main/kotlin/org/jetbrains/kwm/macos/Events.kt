@@ -27,6 +27,12 @@ sealed class Event {
         val modifiers: KeyModifiers,
     ): Event()
 
+    data class ModifiersChanged(
+        val windowId: WindowId,
+        val modifiers: KeyModifiers,
+        val keyCode: KeyCode
+    ): Event()
+
     data class MouseMoved(
         val windowId: WindowId,
         val point: LogicalPoint
@@ -123,6 +129,14 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 key = KeyUpEvent.key(nativeEvent).getUtf8String(0),
                 modifiers = KeyModifiers.fromNative(KeyUpEvent.modifiers(nativeEvent)),
                 keyCode = KeyCode.fromNative(KeyUpEvent.code(nativeEvent))
+            )
+        }
+        kwm_macos_h.ModifiersChanged() -> {
+            val nativeEvent = NativeEvent.modifiers_changed(s)
+            Event.ModifiersChanged(
+                windowId = ModifiersChangedEvent.window_id(nativeEvent),
+                modifiers = KeyModifiers.fromNative(ModifiersChangedEvent.modifiers(nativeEvent)),
+                keyCode = KeyCode.fromNative(ModifiersChangedEvent.code(nativeEvent))
             )
         }
         kwm_macos_h.MouseMoved() -> {

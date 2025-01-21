@@ -10,7 +10,7 @@ use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSC
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
-    common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_key_event, handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event}
+    common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event}
 };
 
 use super::{application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}};
@@ -403,21 +403,7 @@ declare_class!(
 
     unsafe impl NSObjectProtocol for MyNSWindow {}
 
-    unsafe impl MyNSWindow {
-        #[method(keyDown:)]
-        fn key_down(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_key_event(event)
-            });
-        }
-
-        #[method(keyUp:)]
-        fn key_up(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_key_event(event)
-            });
-        }
-    }
+    unsafe impl MyNSWindow {}
 );
 
 impl MyNSWindow {
@@ -478,6 +464,20 @@ declare_class!(
             handle_mouse_up(event);
         }
 
+        #[method(keyDown:)]
+        fn key_down(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_key_event(event)
+            });
+        }
+
+        #[method(keyUp:)]
+        fn key_up(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_key_event(event)
+            });
+        }
+
 //        #[method(performKeyEquivalent:)]
 //        fn performKeyEquivalent(&self, event: &NSEvent) -> bool {
 //            info!("performKeyEquivalent: {event:?}");
@@ -492,18 +492,10 @@ declare_class!(
 
         #[method(flagsChanged:)]
         fn flags_changed(&self, event: &NSEvent) {
-            info!("flagsChanged: {event:?}");
+            catch_panic(|| {
+               handle_flags_changed_event(event) 
+            });
         }
-//
-//        #[method(keyDown:)]
-//        fn key_down(&self, event: &NSEvent) {
-//            info!("keyDown: {event:?}");
-//        }
-//
-//        #[method(keyUp:)]
-//        fn key_up(&self, event: &NSEvent) {
-//            info!("keyUp: {event:?}");
-//        }
 
         // we need those three methods to prevent transparent titlbar from being draggable
         // acceptsFirstMouse, acceptsFirstResponder, opaqueRectForWindowMoveWhenInTitlebar
