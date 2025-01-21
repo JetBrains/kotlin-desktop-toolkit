@@ -16,7 +16,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * {@snippet lang=c :
  * struct AppMenuKeystroke {
  *     StrPtr key;
- *     AppMenuKeyModifiers modifiers;
+ *     struct KeyModifiers modifiers;
  * }
  * }
  */
@@ -28,8 +28,7 @@ public class AppMenuKeystroke {
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_POINTER.withName("key"),
-        kwm_macos_h.C_INT.withName("modifiers"),
-        MemoryLayout.paddingLayout(4)
+        KeyModifiers.layout().withName("modifiers")
     ).withName("AppMenuKeystroke");
 
     /**
@@ -83,15 +82,15 @@ public class AppMenuKeystroke {
         struct.set(key$LAYOUT, key$OFFSET, fieldValue);
     }
 
-    private static final OfInt modifiers$LAYOUT = (OfInt)$LAYOUT.select(groupElement("modifiers"));
+    private static final GroupLayout modifiers$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("modifiers"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * AppMenuKeyModifiers modifiers
+     * struct KeyModifiers modifiers
      * }
      */
-    public static final OfInt modifiers$layout() {
+    public static final GroupLayout modifiers$layout() {
         return modifiers$LAYOUT;
     }
 
@@ -100,7 +99,7 @@ public class AppMenuKeystroke {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * AppMenuKeyModifiers modifiers
+     * struct KeyModifiers modifiers
      * }
      */
     public static final long modifiers$offset() {
@@ -110,21 +109,21 @@ public class AppMenuKeystroke {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * AppMenuKeyModifiers modifiers
+     * struct KeyModifiers modifiers
      * }
      */
-    public static int modifiers(MemorySegment struct) {
-        return struct.get(modifiers$LAYOUT, modifiers$OFFSET);
+    public static MemorySegment modifiers(MemorySegment struct) {
+        return struct.asSlice(modifiers$OFFSET, modifiers$LAYOUT.byteSize());
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * AppMenuKeyModifiers modifiers
+     * struct KeyModifiers modifiers
      * }
      */
-    public static void modifiers(MemorySegment struct, int fieldValue) {
-        struct.set(modifiers$LAYOUT, modifiers$OFFSET, fieldValue);
+    public static void modifiers(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, modifiers$OFFSET, modifiers$LAYOUT.byteSize());
     }
 
     /**

@@ -9,7 +9,7 @@ use objc2::{
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
 
-use super::{application_api::MyNSApplication, application_menu_api::{AppMenuItem, AppMenuKeyModifiers, AppMenuStructure}};
+use super::{application_api::MyNSApplication, application_menu_api::{AppMenuItem, AppMenuStructure}, keyboard::KeyModifiers};
 
 pub fn main_menu_update_impl(menu: AppMenuStructure) {
     let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
@@ -32,7 +32,7 @@ pub fn main_menu_update_impl(menu: AppMenuStructure) {
 #[derive(Debug)]
 struct AppMenuKeystrokeSafe<'a> {
     key: &'a str,
-    modifiers: AppMenuKeyModifiers,
+    modifiers: &'a KeyModifiers,
 }
 
 type Callback = extern "C" fn();
@@ -88,7 +88,7 @@ impl<'a> AppMenuItemSafe<'a> {
                     let keystroke = unsafe { &*keystroke };
                     Some(AppMenuKeystrokeSafe {
                         key: unsafe { CStr::from_ptr(keystroke.key) }.to_str()?,
-                        modifiers: keystroke.modifiers,
+                        modifiers: &keystroke.modifiers,
                     })
                 } else {
                     None
@@ -248,12 +248,6 @@ impl<'a> AppMenuItemSafe<'a> {
                 Some(item)
             }
         }
-    }
-}
-
-impl From<AppMenuKeyModifiers> for NSEventModifierFlags {
-    fn from(value: AppMenuKeyModifiers) -> Self {
-        return Self::from_bits(value.bits().try_into().unwrap()).expect("Unexpected bits found")
     }
 }
 

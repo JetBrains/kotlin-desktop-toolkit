@@ -42,7 +42,7 @@ fun buildAppMenu(): AppMenuStructure {
                                isEnabled = true,
                                keystroke = Keystroke(
                                    key = "x",
-                                   modifiers = Modifiers(control = true)
+                                   modifiers = KeyModifiers(control = true)
                                ),
                                perform = { Logger.info { "First callback from Kotlin!" } }),
             AppMenuItem.SubMenu(title = "Empty Submenu")
@@ -71,7 +71,7 @@ fun buildAppMenu(): AppMenuStructure {
         ),
         AppMenuItem.SubMenu(
             title = "Keystrokes",
-            AppMenuItem.Action("Item1", keystroke = Keystroke(key = "xy", modifiers = Modifiers()),  // second letter is ignored
+            AppMenuItem.Action("Item1", keystroke = Keystroke(key = "xy", modifiers = KeyModifiers()),  // second letter is ignored
                 perform = if (imLucky()) {
                     val f = { Logger.info { "Odd" } }
                     f
@@ -79,10 +79,10 @@ fun buildAppMenu(): AppMenuStructure {
                     val f = { Logger.info { "Even" } }
                     f
                 }),
-            AppMenuItem.Action("Item2", keystroke = Keystroke(key = "X", modifiers = Modifiers())), // shift modifier added because letter is capital
-            AppMenuItem.Action("Item3", keystroke = Keystroke(key = "й", modifiers = Modifiers(option = true))),
-            AppMenuItem.Action("Item4", keystroke = Keystroke(key = "\u000d", modifiers = Modifiers(command = true))), // it's enter
-            AppMenuItem.Action("Item5", keystroke = if (imLucky()) Keystroke(key = "k", modifiers = Modifiers(shift = true)) else null )
+            AppMenuItem.Action("Item2", keystroke = Keystroke(key = "X", modifiers = KeyModifiers())), // shift modifier added because letter is capital
+            AppMenuItem.Action("Item3", keystroke = Keystroke(key = "й", modifiers = KeyModifiers(option = true))),
+            AppMenuItem.Action("Item4", keystroke = Keystroke(key = "\u000d", modifiers = KeyModifiers(command = true))), // it's enter
+            AppMenuItem.Action("Item5", keystroke = if (imLucky()) Keystroke(key = "k", modifiers = KeyModifiers(shift = true)) else null )
         ),
         AppMenuItem.Action("Top level action", true),
         AppMenuItem.SubMenu(

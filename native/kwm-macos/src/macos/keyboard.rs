@@ -86,7 +86,7 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct KeyModifiers {
     pub capslock: bool,
@@ -114,8 +114,8 @@ impl From<NSEventModifierFlags> for KeyModifiers {
     }
 }
 
-impl From<KeyModifiers> for NSEventModifierFlags {
-    fn from(value: KeyModifiers) -> Self {
+impl From<&KeyModifiers> for NSEventModifierFlags {
+    fn from(value: &KeyModifiers) -> Self {
         let mut result = NSEventModifierFlags::empty();
         if value.capslock {
             result |= NSEventModifierFlags::NSEventModifierFlagCapsLock;

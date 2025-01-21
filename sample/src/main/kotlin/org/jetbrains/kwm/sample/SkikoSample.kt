@@ -350,22 +350,22 @@ class ApplicationState: AutoCloseable {
                 title = "App", // Ignored
                 AppMenuItem.Action(
                     "New Window",
-                    keystroke = Keystroke(key = "n", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "n", modifiers = KeyModifiers(command = true)),
                     perform = { createWindow(useCustomTitlebar = true) }
                 ),
                 AppMenuItem.Action(
                     "New Titled Window",
-                    keystroke = Keystroke(key = "n", modifiers = Modifiers(command = true, shift = true)),
+                    keystroke = Keystroke(key = "n", modifiers = KeyModifiers(command = true, shift = true)),
                     perform = { createWindow(useCustomTitlebar = false) }
                 ),
                 AppMenuItem.Action(
                     "Quit1",
-                    keystroke = Keystroke(key = "q", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "q", modifiers = KeyModifiers(command = true)),
                     perform = { Application.stopEventLoop() }
                 ),
                 AppMenuItem.Action(
                     "Quit2",
-                    keystroke = Keystroke(key = "w", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "w", modifiers = KeyModifiers(command = true)),
                     perform = {
                         thread {
                             // we shouldn't call this function on main thread because it block it
@@ -378,7 +378,7 @@ class ApplicationState: AutoCloseable {
                 title = "View",
                 AppMenuItem.Action(
                     title = "Toggle Full Screen",
-                    keystroke = Keystroke(key = "f", modifiers = Modifiers(command = true, control = true)),
+                    keystroke = Keystroke(key = "f", modifiers = KeyModifiers(command = true, control = true)),
                     perform = { mainWindow()?.window?.toggleFullScreen() }
                 ),
                 specialTag = "View"
@@ -387,12 +387,12 @@ class ApplicationState: AutoCloseable {
                 title = "Animation",
                 AppMenuItem.Action(
                     title = "Pause",
-                    keystroke = Keystroke(key = "p", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "p", modifiers = KeyModifiers(command = true)),
                     perform = { setPaused(true) }
                 ),
                 AppMenuItem.Action(
                     title = "Run",
-                    keystroke = Keystroke(key = "r", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "r", modifiers = KeyModifiers(command = true)),
                     perform = { setPaused(false) }
                 ),
             ),
@@ -400,7 +400,7 @@ class ApplicationState: AutoCloseable {
                 title = "Displays",
                 AppMenuItem.Action(
                     title = "List Displays",
-                    keystroke = Keystroke(key = "d", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "d", modifiers = KeyModifiers(command = true)),
                     perform = { Logger.info { Screen.allScreens().toString() } }
                 ),
             ),
@@ -408,32 +408,32 @@ class ApplicationState: AutoCloseable {
                 title = "Window",
                 AppMenuItem.Action(
                     title = "Increase Size",
-                    keystroke = Keystroke(key = "+", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "+", modifiers = KeyModifiers(command = true)),
                     perform = { changeCurrentWindowSize(50.0) }
                 ),
                 AppMenuItem.Action(
                     title = "Drecrease Size",
-                    keystroke = Keystroke(key = "-", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "-", modifiers = KeyModifiers(command = true)),
                     perform = { changeCurrentWindowSize(-50.0) }
                 ),
                 AppMenuItem.Action(
                     title = "Make Window Transparent",
-                    keystroke = Keystroke(key = "t", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "t", modifiers = KeyModifiers(command = true)),
                     perform = { makeWindowTransparent() }
                 ),
                 AppMenuItem.Action(
                     title = "Make Window Opaque",
-                    keystroke = Keystroke(key = "o", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "o", modifiers = KeyModifiers(command = true)),
                     perform = { makeWindowOpaque() }
                 ),
                 AppMenuItem.Action(
                     title = "Cycle Window Effects",
-                    keystroke = Keystroke(key = "e", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "e", modifiers = KeyModifiers(command = true)),
                     perform = { cycleWindowEffects() }
                 ),
                 AppMenuItem.Action(
                     title = "Kill",
-                    keystroke = Keystroke(key = "w", modifiers = Modifiers(command = true)),
+                    keystroke = Keystroke(key = "w", modifiers = KeyModifiers(command = true)),
                     perform = {
                         mainWindow()?.let {
                             killWindow(it)

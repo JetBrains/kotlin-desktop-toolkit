@@ -2274,12 +2274,6 @@ public class kwm_macos_h {
      * }
      */
     public static final OfLong ArraySize = kwm_macos_h.C_LONG_LONG;
-    /**
-     * {@snippet lang=c :
-     * typedef uint32_t AppMenuKeyModifiers
-     * }
-     */
-    public static final OfInt AppMenuKeyModifiers = kwm_macos_h.C_INT;
     private static final int ActionItem = (int)0L;
     /**
      * {@snippet lang=c :
@@ -5226,87 +5220,6 @@ public class kwm_macos_h {
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
-    }
-    private static final int AppMenuKeyModifiers_ModifierFlagCapsLock = (int)65536L;
-    /**
-     * {@snippet lang=c :
-     * #define AppMenuKeyModifiers_ModifierFlagCapsLock 65536
-     * }
-     */
-    public static int AppMenuKeyModifiers_ModifierFlagCapsLock() {
-        return AppMenuKeyModifiers_ModifierFlagCapsLock;
-    }
-    private static final int AppMenuKeyModifiers_ModifierFlagShift = (int)131072L;
-    /**
-     * {@snippet lang=c :
-     * #define AppMenuKeyModifiers_ModifierFlagShift 131072
-     * }
-     */
-    public static int AppMenuKeyModifiers_ModifierFlagShift() {
-        return AppMenuKeyModifiers_ModifierFlagShift;
-    }
-    private static final int AppMenuKeyModifiers_ModifierFlagControl = (int)262144L;
-    /**
-     * {@snippet lang=c :
-     * #define AppMenuKeyModifiers_ModifierFlagControl 262144
-     * }
-     */
-    public static int AppMenuKeyModifiers_ModifierFlagControl() {
-        return AppMenuKeyModifiers_ModifierFlagControl;
-    }
-    private static final int AppMenuKeyModifiers_ModifierFlagOption = (int)524288L;
-    /**
-     * {@snippet lang=c :
-     * #define AppMenuKeyModifiers_ModifierFlagOption 524288
-     * }
-     */
-    public static int AppMenuKeyModifiers_ModifierFlagOption() {
-        return AppMenuKeyModifiers_ModifierFlagOption;
-    }
-    private static final int AppMenuKeyModifiers_ModifierFlagCommand = (int)1048576L;
-    /**
-     * {@snippet lang=c :
-     * #define AppMenuKeyModifiers_ModifierFlagCommand 1048576
-     * }
-     */
-    public static int AppMenuKeyModifiers_ModifierFlagCommand() {
-        return AppMenuKeyModifiers_ModifierFlagCommand;
-    }
-    private static final int AppMenuKeyModifiers_ModifierFlagNumericPad = (int)2097152L;
-    /**
-     * {@snippet lang=c :
-     * #define AppMenuKeyModifiers_ModifierFlagNumericPad 2097152
-     * }
-     */
-    public static int AppMenuKeyModifiers_ModifierFlagNumericPad() {
-        return AppMenuKeyModifiers_ModifierFlagNumericPad;
-    }
-    private static final int AppMenuKeyModifiers_ModifierFlagHelp = (int)4194304L;
-    /**
-     * {@snippet lang=c :
-     * #define AppMenuKeyModifiers_ModifierFlagHelp 4194304
-     * }
-     */
-    public static int AppMenuKeyModifiers_ModifierFlagHelp() {
-        return AppMenuKeyModifiers_ModifierFlagHelp;
-    }
-    private static final int AppMenuKeyModifiers_ModifierFlagFunction = (int)8388608L;
-    /**
-     * {@snippet lang=c :
-     * #define AppMenuKeyModifiers_ModifierFlagFunction 8388608
-     * }
-     */
-    public static int AppMenuKeyModifiers_ModifierFlagFunction() {
-        return AppMenuKeyModifiers_ModifierFlagFunction;
-    }
-    private static final int AppMenuKeyModifiers_ModifierFlagDeviceIndependentFlagsMask = (int)4294901760L;
-    /**
-     * {@snippet lang=c :
-     * #define AppMenuKeyModifiers_ModifierFlagDeviceIndependentFlagsMask 4294901760
-     * }
-     */
-    public static int AppMenuKeyModifiers_ModifierFlagDeviceIndependentFlagsMask() {
-        return AppMenuKeyModifiers_ModifierFlagDeviceIndependentFlagsMask;
     }
 }
 

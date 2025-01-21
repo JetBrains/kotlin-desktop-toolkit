@@ -561,20 +561,9 @@ typedef struct ScreenInfoArray {
   ArraySize len;
 } ScreenInfoArray;
 
-typedef uint32_t AppMenuKeyModifiers;
-#define AppMenuKeyModifiers_ModifierFlagCapsLock (uint32_t)(1 << 16)
-#define AppMenuKeyModifiers_ModifierFlagShift (uint32_t)(1 << 17)
-#define AppMenuKeyModifiers_ModifierFlagControl (uint32_t)(1 << 18)
-#define AppMenuKeyModifiers_ModifierFlagOption (uint32_t)(1 << 19)
-#define AppMenuKeyModifiers_ModifierFlagCommand (uint32_t)(1 << 20)
-#define AppMenuKeyModifiers_ModifierFlagNumericPad (uint32_t)(1 << 21)
-#define AppMenuKeyModifiers_ModifierFlagHelp (uint32_t)(1 << 22)
-#define AppMenuKeyModifiers_ModifierFlagFunction (uint32_t)(1 << 23)
-#define AppMenuKeyModifiers_ModifierFlagDeviceIndependentFlagsMask (uint32_t)4294901760
-
 typedef struct AppMenuKeystroke {
   StrPtr key;
-  AppMenuKeyModifiers modifiers;
+  struct KeyModifiers modifiers;
 } AppMenuKeystroke;
 
 typedef enum AppMenuItem_Tag {

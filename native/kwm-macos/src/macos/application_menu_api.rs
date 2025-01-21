@@ -4,6 +4,7 @@ use objc2_foundation::MainThreadMarker;
 
 use crate::common::{ArraySize, StrPtr};
 use crate::logger::ffi_boundary;
+use super::keyboard::KeyModifiers;
 use super::{application_api::MyNSApplication, application_menu::main_menu_update_impl};
 
 // This file contains C API of the library
@@ -11,29 +12,11 @@ use super::{application_api::MyNSApplication, application_menu::main_menu_update
 
 // Application Menu:
 
-bitflags! {
-    #[repr(transparent)]
-    #[derive(Debug, Clone, Copy)]
-    // same valus as in NSEventModifierFlags
-    pub struct AppMenuKeyModifiers: u32 {
-        const ModifierFlagCapsLock = 1<<16;
-        const ModifierFlagShift = 1<<17;
-        const ModifierFlagControl = 1<<18;
-        const ModifierFlagOption = 1<<19;
-        const ModifierFlagCommand = 1<<20;
-        const ModifierFlagNumericPad = 1<<21;
-        const ModifierFlagHelp = 1<<22;
-        const ModifierFlagFunction = 1<<23;
-        const ModifierFlagDeviceIndependentFlagsMask = 0xffff0000;
-    }
-}
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct AppMenuKeystroke {
-    // TODO Function keys, enter, arrows, etc
     pub key: StrPtr,
-    pub modifiers: AppMenuKeyModifiers
+    pub modifiers: KeyModifiers
 }
 
 #[allow(dead_code)]
