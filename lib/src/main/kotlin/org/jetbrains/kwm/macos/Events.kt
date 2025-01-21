@@ -13,12 +13,16 @@ sealed class Event {
     data class KeyDown(
         val windowId: WindowId,
         val keyCode: KeyCode,
+        val characters: String,
+        val key: String,
         val isRepeat: Boolean
     ): Event()
 
     data class KeyUp(
         val windowId: WindowId,
-        val keyCode: KeyCode
+        val keyCode: KeyCode,
+        val characters: String,
+        val key: String,
     ): Event()
 
     data class MouseMoved(
@@ -101,6 +105,8 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.KeyDown(
                 windowId = KeyDownEvent.window_id(nativeEvent),
                 keyCode = KeyCode.fromNative(KeyDownEvent.code(nativeEvent)),
+                characters = KeyDownEvent.characters(nativeEvent).getUtf8String(0),
+                key = KeyDownEvent.key(nativeEvent).getUtf8String(0),
                 isRepeat = KeyDownEvent.is_repeat(nativeEvent)
             )
         }
@@ -108,6 +114,8 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             val nativeEvent = NativeEvent.key_up(s)
             Event.KeyUp(
                 windowId = KeyUpEvent.window_id(nativeEvent),
+                characters = KeyUpEvent.characters(nativeEvent).getUtf8String(0),
+                key = KeyUpEvent.key(nativeEvent).getUtf8String(0),
                 keyCode = KeyCode.fromNative(KeyUpEvent.code(nativeEvent))
             )
         }

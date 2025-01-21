@@ -17,6 +17,8 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * struct KeyDownEvent {
  *     WindowId window_id;
  *     enum KeyCode code;
+ *     StrPtr characters;
+ *     StrPtr key;
  *     bool is_repeat;
  * }
  * }
@@ -30,8 +32,11 @@ public class KeyDownEvent {
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_LONG_LONG.withName("window_id"),
         kwm_macos_h.C_INT.withName("code"),
+        MemoryLayout.paddingLayout(4),
+        kwm_macos_h.C_POINTER.withName("characters"),
+        kwm_macos_h.C_POINTER.withName("key"),
         kwm_macos_h.C_BOOL.withName("is_repeat"),
-        MemoryLayout.paddingLayout(3)
+        MemoryLayout.paddingLayout(7)
     ).withName("KeyDownEvent");
 
     /**
@@ -129,6 +134,94 @@ public class KeyDownEvent {
         struct.set(code$LAYOUT, code$OFFSET, fieldValue);
     }
 
+    private static final AddressLayout characters$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("characters"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * StrPtr characters
+     * }
+     */
+    public static final AddressLayout characters$layout() {
+        return characters$LAYOUT;
+    }
+
+    private static final long characters$OFFSET = 16;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * StrPtr characters
+     * }
+     */
+    public static final long characters$offset() {
+        return characters$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * StrPtr characters
+     * }
+     */
+    public static MemorySegment characters(MemorySegment struct) {
+        return struct.get(characters$LAYOUT, characters$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * StrPtr characters
+     * }
+     */
+    public static void characters(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(characters$LAYOUT, characters$OFFSET, fieldValue);
+    }
+
+    private static final AddressLayout key$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("key"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * StrPtr key
+     * }
+     */
+    public static final AddressLayout key$layout() {
+        return key$LAYOUT;
+    }
+
+    private static final long key$OFFSET = 24;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * StrPtr key
+     * }
+     */
+    public static final long key$offset() {
+        return key$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * StrPtr key
+     * }
+     */
+    public static MemorySegment key(MemorySegment struct) {
+        return struct.get(key$LAYOUT, key$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * StrPtr key
+     * }
+     */
+    public static void key(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(key$LAYOUT, key$OFFSET, fieldValue);
+    }
+
     private static final OfBoolean is_repeat$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("is_repeat"));
 
     /**
@@ -141,7 +234,7 @@ public class KeyDownEvent {
         return is_repeat$LAYOUT;
     }
 
-    private static final long is_repeat$OFFSET = 12;
+    private static final long is_repeat$OFFSET = 32;
 
     /**
      * Offset for field:

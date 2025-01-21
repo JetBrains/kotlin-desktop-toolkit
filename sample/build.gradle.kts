@@ -80,7 +80,7 @@ tasks.register<JavaExec>("runAppMenuAwtSample") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false"
     )
-    environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/debug")
+    environment("DYLD_LIBRARY_PATH", "/Users/pavel.sergeev/work/kotlin-desktop-toolkit/native/target/debug")
 }
 
 tasks.register<JavaExec>("runSkikoSample") {
@@ -97,7 +97,7 @@ tasks.register<JavaExec>("runSkikoSample") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false"
     )
-    environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/debug")
+    environment("DYLD_LIBRARY_PATH", "/Users/pavel.sergeev/work/kotlin-desktop-toolkit/native/target/debug")
 //    environment("MallocStackLogging", "1")
 }
 
@@ -115,7 +115,7 @@ tasks.register<JavaExec>("runSkikoSampleRelease") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false"
     )
-    environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/release")
+    environment("DYLD_LIBRARY_PATH", "/Users/pavel.sergeev/work/kotlin-desktop-toolkit/native/target/release")
 //    environment("MallocStackLogging", "1")
 }
 

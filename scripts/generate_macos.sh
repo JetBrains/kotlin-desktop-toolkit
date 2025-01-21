@@ -9,6 +9,7 @@ cd ..
 
 jextract \
 --include-dir /Library/Developer/CommandLineTools/usr/lib/clang/16.0.0/include \
+--include-dir /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include \
 --dump-includes scripts/filtered_headers/headers.txt \
 native/kwm-macos/headers/kwm_macos.h
 
@@ -18,6 +19,7 @@ rm -rf lib/src/main/java/org/jetbrains/kwm/macos/generated/*
 
 jextract \
   --include-dir /Library/Developer/CommandLineTools/usr/lib/clang/16.0.0/include \
+  --include-dir /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include \
   --output lib/src/main/java \
   --target-package org.jetbrains.kwm.macos.generated \
   --library kwm_macos \

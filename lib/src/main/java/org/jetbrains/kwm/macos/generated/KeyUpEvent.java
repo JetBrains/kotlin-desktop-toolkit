@@ -16,6 +16,8 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * {@snippet lang=c :
  * struct KeyUpEvent {
  *     WindowId window_id;
+ *     StrPtr characters;
+ *     StrPtr key;
  *     enum KeyCode code;
  * }
  * }
@@ -28,6 +30,8 @@ public class KeyUpEvent {
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_LONG_LONG.withName("window_id"),
+        kwm_macos_h.C_POINTER.withName("characters"),
+        kwm_macos_h.C_POINTER.withName("key"),
         kwm_macos_h.C_INT.withName("code"),
         MemoryLayout.paddingLayout(4)
     ).withName("KeyUpEvent");
@@ -83,6 +87,94 @@ public class KeyUpEvent {
         struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
+    private static final AddressLayout characters$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("characters"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * StrPtr characters
+     * }
+     */
+    public static final AddressLayout characters$layout() {
+        return characters$LAYOUT;
+    }
+
+    private static final long characters$OFFSET = 8;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * StrPtr characters
+     * }
+     */
+    public static final long characters$offset() {
+        return characters$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * StrPtr characters
+     * }
+     */
+    public static MemorySegment characters(MemorySegment struct) {
+        return struct.get(characters$LAYOUT, characters$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * StrPtr characters
+     * }
+     */
+    public static void characters(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(characters$LAYOUT, characters$OFFSET, fieldValue);
+    }
+
+    private static final AddressLayout key$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("key"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * StrPtr key
+     * }
+     */
+    public static final AddressLayout key$layout() {
+        return key$LAYOUT;
+    }
+
+    private static final long key$OFFSET = 16;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * StrPtr key
+     * }
+     */
+    public static final long key$offset() {
+        return key$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * StrPtr key
+     * }
+     */
+    public static MemorySegment key(MemorySegment struct) {
+        return struct.get(key$LAYOUT, key$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * StrPtr key
+     * }
+     */
+    public static void key(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(key$LAYOUT, key$OFFSET, fieldValue);
+    }
+
     private static final OfInt code$LAYOUT = (OfInt)$LAYOUT.select(groupElement("code"));
 
     /**
@@ -95,7 +187,7 @@ public class KeyUpEvent {
         return code$LAYOUT;
     }
 
-    private static final long code$OFFSET = 8;
+    private static final long code$OFFSET = 24;
 
     /**
      * Offset for field:

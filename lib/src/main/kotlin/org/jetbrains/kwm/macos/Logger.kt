@@ -21,7 +21,7 @@ enum class LogLevel {
     internal fun toNative(): Int {
         return when (this) {
             Off -> kwm_macos_h.Off()
-            Error -> kwm_macos_h.Error()
+            Error -> kwm_macos_h.Error_()
             Warn -> kwm_macos_h.Warn()
             Info -> kwm_macos_h.Info()
             Debug -> kwm_macos_h.Debug()

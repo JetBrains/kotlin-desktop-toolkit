@@ -1,5 +1,6 @@
 use std::ffi::{CStr, CString};
 
+use log::info;
 use objc2_app_kit::{NSEvent, NSEventType, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
@@ -18,7 +19,7 @@ pub struct KeyDownEvent {
     window_id: WindowId,
     code: KeyCode,
     characters: StrPtr,
-    key_title: StrPtr,
+    key: StrPtr,
     is_repeat: bool,
 }
 
@@ -36,7 +37,7 @@ impl Drop for KeyDownEvent {
 pub struct KeyUpEvent {
     window_id: WindowId,
     characters: StrPtr,
-    key_title: StrPtr,
+    key: StrPtr,
     code: KeyCode,
 }
 
@@ -154,6 +155,8 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                     window_id,
                     code: key_info.code,
                     is_repeat: key_info.is_repeat,
+                    characters: key_info.chars.into_raw(),
+                    key: key_info.key.into_raw(),
                 })
             },
             NSEventType::KeyUp => {
@@ -161,6 +164,8 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                 Event::KeyUp(KeyUpEvent {
                     window_id,
                     code: key_info.code,
+                    characters: key_info.chars.into_raw(),
+                    key: key_info.key.into_raw()
                 })
             },
             _ => bail!("Unexpected type of event {:?}", ns_event)

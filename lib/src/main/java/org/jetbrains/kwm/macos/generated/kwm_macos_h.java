@@ -69,6 +69,744 @@ public class kwm_macos_h {
     public static final AddressLayout C_POINTER = ValueLayout.ADDRESS
             .withTargetLayout(MemoryLayout.sequenceLayout(java.lang.Long.MAX_VALUE, JAVA_BYTE));
     public static final ValueLayout.OfLong C_LONG = ValueLayout.JAVA_LONG;
+    private static final int EnterCharacter = (int)3L;
+    /**
+     * {@snippet lang=c :
+     * #define EnterCharacter 3
+     * }
+     */
+    public static int EnterCharacter() {
+        return EnterCharacter;
+    }
+    private static final int BackspaceCharacter = (int)8L;
+    /**
+     * {@snippet lang=c :
+     * #define BackspaceCharacter 8
+     * }
+     */
+    public static int BackspaceCharacter() {
+        return BackspaceCharacter;
+    }
+    private static final int TabCharacter = (int)9L;
+    /**
+     * {@snippet lang=c :
+     * #define TabCharacter 9
+     * }
+     */
+    public static int TabCharacter() {
+        return TabCharacter;
+    }
+    private static final int NewlineCharacter = (int)10L;
+    /**
+     * {@snippet lang=c :
+     * #define NewlineCharacter 10
+     * }
+     */
+    public static int NewlineCharacter() {
+        return NewlineCharacter;
+    }
+    private static final int FormFeedCharacter = (int)12L;
+    /**
+     * {@snippet lang=c :
+     * #define FormFeedCharacter 12
+     * }
+     */
+    public static int FormFeedCharacter() {
+        return FormFeedCharacter;
+    }
+    private static final int CarriageReturnCharacter = (int)13L;
+    /**
+     * {@snippet lang=c :
+     * #define CarriageReturnCharacter 13
+     * }
+     */
+    public static int CarriageReturnCharacter() {
+        return CarriageReturnCharacter;
+    }
+    private static final int BackTabCharacter = (int)25L;
+    /**
+     * {@snippet lang=c :
+     * #define BackTabCharacter 25
+     * }
+     */
+    public static int BackTabCharacter() {
+        return BackTabCharacter;
+    }
+    private static final int DeleteCharacter = (int)127L;
+    /**
+     * {@snippet lang=c :
+     * #define DeleteCharacter 127
+     * }
+     */
+    public static int DeleteCharacter() {
+        return DeleteCharacter;
+    }
+    private static final int LineSeparatorCharacter = (int)8232L;
+    /**
+     * {@snippet lang=c :
+     * #define LineSeparatorCharacter 8232
+     * }
+     */
+    public static int LineSeparatorCharacter() {
+        return LineSeparatorCharacter;
+    }
+    private static final int ParagraphSeparatorCharacter = (int)8233L;
+    /**
+     * {@snippet lang=c :
+     * #define ParagraphSeparatorCharacter 8233
+     * }
+     */
+    public static int ParagraphSeparatorCharacter() {
+        return ParagraphSeparatorCharacter;
+    }
+    private static final int UpArrowFunctionKey = (int)63232L;
+    /**
+     * {@snippet lang=c :
+     * #define UpArrowFunctionKey 63232
+     * }
+     */
+    public static int UpArrowFunctionKey() {
+        return UpArrowFunctionKey;
+    }
+    private static final int DownArrowFunctionKey = (int)63233L;
+    /**
+     * {@snippet lang=c :
+     * #define DownArrowFunctionKey 63233
+     * }
+     */
+    public static int DownArrowFunctionKey() {
+        return DownArrowFunctionKey;
+    }
+    private static final int LeftArrowFunctionKey = (int)63234L;
+    /**
+     * {@snippet lang=c :
+     * #define LeftArrowFunctionKey 63234
+     * }
+     */
+    public static int LeftArrowFunctionKey() {
+        return LeftArrowFunctionKey;
+    }
+    private static final int RightArrowFunctionKey = (int)63235L;
+    /**
+     * {@snippet lang=c :
+     * #define RightArrowFunctionKey 63235
+     * }
+     */
+    public static int RightArrowFunctionKey() {
+        return RightArrowFunctionKey;
+    }
+    private static final int F1FunctionKey = (int)63236L;
+    /**
+     * {@snippet lang=c :
+     * #define F1FunctionKey 63236
+     * }
+     */
+    public static int F1FunctionKey() {
+        return F1FunctionKey;
+    }
+    private static final int F2FunctionKey = (int)63237L;
+    /**
+     * {@snippet lang=c :
+     * #define F2FunctionKey 63237
+     * }
+     */
+    public static int F2FunctionKey() {
+        return F2FunctionKey;
+    }
+    private static final int F3FunctionKey = (int)63238L;
+    /**
+     * {@snippet lang=c :
+     * #define F3FunctionKey 63238
+     * }
+     */
+    public static int F3FunctionKey() {
+        return F3FunctionKey;
+    }
+    private static final int F4FunctionKey = (int)63239L;
+    /**
+     * {@snippet lang=c :
+     * #define F4FunctionKey 63239
+     * }
+     */
+    public static int F4FunctionKey() {
+        return F4FunctionKey;
+    }
+    private static final int F5FunctionKey = (int)63240L;
+    /**
+     * {@snippet lang=c :
+     * #define F5FunctionKey 63240
+     * }
+     */
+    public static int F5FunctionKey() {
+        return F5FunctionKey;
+    }
+    private static final int F6FunctionKey = (int)63241L;
+    /**
+     * {@snippet lang=c :
+     * #define F6FunctionKey 63241
+     * }
+     */
+    public static int F6FunctionKey() {
+        return F6FunctionKey;
+    }
+    private static final int F7FunctionKey = (int)63242L;
+    /**
+     * {@snippet lang=c :
+     * #define F7FunctionKey 63242
+     * }
+     */
+    public static int F7FunctionKey() {
+        return F7FunctionKey;
+    }
+    private static final int F8FunctionKey = (int)63243L;
+    /**
+     * {@snippet lang=c :
+     * #define F8FunctionKey 63243
+     * }
+     */
+    public static int F8FunctionKey() {
+        return F8FunctionKey;
+    }
+    private static final int F9FunctionKey = (int)63244L;
+    /**
+     * {@snippet lang=c :
+     * #define F9FunctionKey 63244
+     * }
+     */
+    public static int F9FunctionKey() {
+        return F9FunctionKey;
+    }
+    private static final int F10FunctionKey = (int)63245L;
+    /**
+     * {@snippet lang=c :
+     * #define F10FunctionKey 63245
+     * }
+     */
+    public static int F10FunctionKey() {
+        return F10FunctionKey;
+    }
+    private static final int F11FunctionKey = (int)63246L;
+    /**
+     * {@snippet lang=c :
+     * #define F11FunctionKey 63246
+     * }
+     */
+    public static int F11FunctionKey() {
+        return F11FunctionKey;
+    }
+    private static final int F12FunctionKey = (int)63247L;
+    /**
+     * {@snippet lang=c :
+     * #define F12FunctionKey 63247
+     * }
+     */
+    public static int F12FunctionKey() {
+        return F12FunctionKey;
+    }
+    private static final int F13FunctionKey = (int)63248L;
+    /**
+     * {@snippet lang=c :
+     * #define F13FunctionKey 63248
+     * }
+     */
+    public static int F13FunctionKey() {
+        return F13FunctionKey;
+    }
+    private static final int F14FunctionKey = (int)63249L;
+    /**
+     * {@snippet lang=c :
+     * #define F14FunctionKey 63249
+     * }
+     */
+    public static int F14FunctionKey() {
+        return F14FunctionKey;
+    }
+    private static final int F15FunctionKey = (int)63250L;
+    /**
+     * {@snippet lang=c :
+     * #define F15FunctionKey 63250
+     * }
+     */
+    public static int F15FunctionKey() {
+        return F15FunctionKey;
+    }
+    private static final int F16FunctionKey = (int)63251L;
+    /**
+     * {@snippet lang=c :
+     * #define F16FunctionKey 63251
+     * }
+     */
+    public static int F16FunctionKey() {
+        return F16FunctionKey;
+    }
+    private static final int F17FunctionKey = (int)63252L;
+    /**
+     * {@snippet lang=c :
+     * #define F17FunctionKey 63252
+     * }
+     */
+    public static int F17FunctionKey() {
+        return F17FunctionKey;
+    }
+    private static final int F18FunctionKey = (int)63253L;
+    /**
+     * {@snippet lang=c :
+     * #define F18FunctionKey 63253
+     * }
+     */
+    public static int F18FunctionKey() {
+        return F18FunctionKey;
+    }
+    private static final int F19FunctionKey = (int)63254L;
+    /**
+     * {@snippet lang=c :
+     * #define F19FunctionKey 63254
+     * }
+     */
+    public static int F19FunctionKey() {
+        return F19FunctionKey;
+    }
+    private static final int F20FunctionKey = (int)63255L;
+    /**
+     * {@snippet lang=c :
+     * #define F20FunctionKey 63255
+     * }
+     */
+    public static int F20FunctionKey() {
+        return F20FunctionKey;
+    }
+    private static final int F21FunctionKey = (int)63256L;
+    /**
+     * {@snippet lang=c :
+     * #define F21FunctionKey 63256
+     * }
+     */
+    public static int F21FunctionKey() {
+        return F21FunctionKey;
+    }
+    private static final int F22FunctionKey = (int)63257L;
+    /**
+     * {@snippet lang=c :
+     * #define F22FunctionKey 63257
+     * }
+     */
+    public static int F22FunctionKey() {
+        return F22FunctionKey;
+    }
+    private static final int F23FunctionKey = (int)63258L;
+    /**
+     * {@snippet lang=c :
+     * #define F23FunctionKey 63258
+     * }
+     */
+    public static int F23FunctionKey() {
+        return F23FunctionKey;
+    }
+    private static final int F24FunctionKey = (int)63259L;
+    /**
+     * {@snippet lang=c :
+     * #define F24FunctionKey 63259
+     * }
+     */
+    public static int F24FunctionKey() {
+        return F24FunctionKey;
+    }
+    private static final int F25FunctionKey = (int)63260L;
+    /**
+     * {@snippet lang=c :
+     * #define F25FunctionKey 63260
+     * }
+     */
+    public static int F25FunctionKey() {
+        return F25FunctionKey;
+    }
+    private static final int F26FunctionKey = (int)63261L;
+    /**
+     * {@snippet lang=c :
+     * #define F26FunctionKey 63261
+     * }
+     */
+    public static int F26FunctionKey() {
+        return F26FunctionKey;
+    }
+    private static final int F27FunctionKey = (int)63262L;
+    /**
+     * {@snippet lang=c :
+     * #define F27FunctionKey 63262
+     * }
+     */
+    public static int F27FunctionKey() {
+        return F27FunctionKey;
+    }
+    private static final int F28FunctionKey = (int)63263L;
+    /**
+     * {@snippet lang=c :
+     * #define F28FunctionKey 63263
+     * }
+     */
+    public static int F28FunctionKey() {
+        return F28FunctionKey;
+    }
+    private static final int F29FunctionKey = (int)63264L;
+    /**
+     * {@snippet lang=c :
+     * #define F29FunctionKey 63264
+     * }
+     */
+    public static int F29FunctionKey() {
+        return F29FunctionKey;
+    }
+    private static final int F30FunctionKey = (int)63265L;
+    /**
+     * {@snippet lang=c :
+     * #define F30FunctionKey 63265
+     * }
+     */
+    public static int F30FunctionKey() {
+        return F30FunctionKey;
+    }
+    private static final int F31FunctionKey = (int)63266L;
+    /**
+     * {@snippet lang=c :
+     * #define F31FunctionKey 63266
+     * }
+     */
+    public static int F31FunctionKey() {
+        return F31FunctionKey;
+    }
+    private static final int F32FunctionKey = (int)63267L;
+    /**
+     * {@snippet lang=c :
+     * #define F32FunctionKey 63267
+     * }
+     */
+    public static int F32FunctionKey() {
+        return F32FunctionKey;
+    }
+    private static final int F33FunctionKey = (int)63268L;
+    /**
+     * {@snippet lang=c :
+     * #define F33FunctionKey 63268
+     * }
+     */
+    public static int F33FunctionKey() {
+        return F33FunctionKey;
+    }
+    private static final int F34FunctionKey = (int)63269L;
+    /**
+     * {@snippet lang=c :
+     * #define F34FunctionKey 63269
+     * }
+     */
+    public static int F34FunctionKey() {
+        return F34FunctionKey;
+    }
+    private static final int F35FunctionKey = (int)63270L;
+    /**
+     * {@snippet lang=c :
+     * #define F35FunctionKey 63270
+     * }
+     */
+    public static int F35FunctionKey() {
+        return F35FunctionKey;
+    }
+    private static final int InsertFunctionKey = (int)63271L;
+    /**
+     * {@snippet lang=c :
+     * #define InsertFunctionKey 63271
+     * }
+     */
+    public static int InsertFunctionKey() {
+        return InsertFunctionKey;
+    }
+    private static final int DeleteFunctionKey = (int)63272L;
+    /**
+     * {@snippet lang=c :
+     * #define DeleteFunctionKey 63272
+     * }
+     */
+    public static int DeleteFunctionKey() {
+        return DeleteFunctionKey;
+    }
+    private static final int HomeFunctionKey = (int)63273L;
+    /**
+     * {@snippet lang=c :
+     * #define HomeFunctionKey 63273
+     * }
+     */
+    public static int HomeFunctionKey() {
+        return HomeFunctionKey;
+    }
+    private static final int BeginFunctionKey = (int)63274L;
+    /**
+     * {@snippet lang=c :
+     * #define BeginFunctionKey 63274
+     * }
+     */
+    public static int BeginFunctionKey() {
+        return BeginFunctionKey;
+    }
+    private static final int EndFunctionKey = (int)63275L;
+    /**
+     * {@snippet lang=c :
+     * #define EndFunctionKey 63275
+     * }
+     */
+    public static int EndFunctionKey() {
+        return EndFunctionKey;
+    }
+    private static final int PageUpFunctionKey = (int)63276L;
+    /**
+     * {@snippet lang=c :
+     * #define PageUpFunctionKey 63276
+     * }
+     */
+    public static int PageUpFunctionKey() {
+        return PageUpFunctionKey;
+    }
+    private static final int PageDownFunctionKey = (int)63277L;
+    /**
+     * {@snippet lang=c :
+     * #define PageDownFunctionKey 63277
+     * }
+     */
+    public static int PageDownFunctionKey() {
+        return PageDownFunctionKey;
+    }
+    private static final int PrintScreenFunctionKey = (int)63278L;
+    /**
+     * {@snippet lang=c :
+     * #define PrintScreenFunctionKey 63278
+     * }
+     */
+    public static int PrintScreenFunctionKey() {
+        return PrintScreenFunctionKey;
+    }
+    private static final int ScrollLockFunctionKey = (int)63279L;
+    /**
+     * {@snippet lang=c :
+     * #define ScrollLockFunctionKey 63279
+     * }
+     */
+    public static int ScrollLockFunctionKey() {
+        return ScrollLockFunctionKey;
+    }
+    private static final int PauseFunctionKey = (int)63280L;
+    /**
+     * {@snippet lang=c :
+     * #define PauseFunctionKey 63280
+     * }
+     */
+    public static int PauseFunctionKey() {
+        return PauseFunctionKey;
+    }
+    private static final int SysReqFunctionKey = (int)63281L;
+    /**
+     * {@snippet lang=c :
+     * #define SysReqFunctionKey 63281
+     * }
+     */
+    public static int SysReqFunctionKey() {
+        return SysReqFunctionKey;
+    }
+    private static final int BreakFunctionKey = (int)63282L;
+    /**
+     * {@snippet lang=c :
+     * #define BreakFunctionKey 63282
+     * }
+     */
+    public static int BreakFunctionKey() {
+        return BreakFunctionKey;
+    }
+    private static final int ResetFunctionKey = (int)63283L;
+    /**
+     * {@snippet lang=c :
+     * #define ResetFunctionKey 63283
+     * }
+     */
+    public static int ResetFunctionKey() {
+        return ResetFunctionKey;
+    }
+    private static final int StopFunctionKey = (int)63284L;
+    /**
+     * {@snippet lang=c :
+     * #define StopFunctionKey 63284
+     * }
+     */
+    public static int StopFunctionKey() {
+        return StopFunctionKey;
+    }
+    private static final int MenuFunctionKey = (int)63285L;
+    /**
+     * {@snippet lang=c :
+     * #define MenuFunctionKey 63285
+     * }
+     */
+    public static int MenuFunctionKey() {
+        return MenuFunctionKey;
+    }
+    private static final int UserFunctionKey = (int)63286L;
+    /**
+     * {@snippet lang=c :
+     * #define UserFunctionKey 63286
+     * }
+     */
+    public static int UserFunctionKey() {
+        return UserFunctionKey;
+    }
+    private static final int SystemFunctionKey = (int)63287L;
+    /**
+     * {@snippet lang=c :
+     * #define SystemFunctionKey 63287
+     * }
+     */
+    public static int SystemFunctionKey() {
+        return SystemFunctionKey;
+    }
+    private static final int PrintFunctionKey = (int)63288L;
+    /**
+     * {@snippet lang=c :
+     * #define PrintFunctionKey 63288
+     * }
+     */
+    public static int PrintFunctionKey() {
+        return PrintFunctionKey;
+    }
+    private static final int ClearLineFunctionKey = (int)63289L;
+    /**
+     * {@snippet lang=c :
+     * #define ClearLineFunctionKey 63289
+     * }
+     */
+    public static int ClearLineFunctionKey() {
+        return ClearLineFunctionKey;
+    }
+    private static final int ClearDisplayFunctionKey = (int)63290L;
+    /**
+     * {@snippet lang=c :
+     * #define ClearDisplayFunctionKey 63290
+     * }
+     */
+    public static int ClearDisplayFunctionKey() {
+        return ClearDisplayFunctionKey;
+    }
+    private static final int InsertLineFunctionKey = (int)63291L;
+    /**
+     * {@snippet lang=c :
+     * #define InsertLineFunctionKey 63291
+     * }
+     */
+    public static int InsertLineFunctionKey() {
+        return InsertLineFunctionKey;
+    }
+    private static final int DeleteLineFunctionKey = (int)63292L;
+    /**
+     * {@snippet lang=c :
+     * #define DeleteLineFunctionKey 63292
+     * }
+     */
+    public static int DeleteLineFunctionKey() {
+        return DeleteLineFunctionKey;
+    }
+    private static final int InsertCharFunctionKey = (int)63293L;
+    /**
+     * {@snippet lang=c :
+     * #define InsertCharFunctionKey 63293
+     * }
+     */
+    public static int InsertCharFunctionKey() {
+        return InsertCharFunctionKey;
+    }
+    private static final int DeleteCharFunctionKey = (int)63294L;
+    /**
+     * {@snippet lang=c :
+     * #define DeleteCharFunctionKey 63294
+     * }
+     */
+    public static int DeleteCharFunctionKey() {
+        return DeleteCharFunctionKey;
+    }
+    private static final int PrevFunctionKey = (int)63295L;
+    /**
+     * {@snippet lang=c :
+     * #define PrevFunctionKey 63295
+     * }
+     */
+    public static int PrevFunctionKey() {
+        return PrevFunctionKey;
+    }
+    private static final int NextFunctionKey = (int)63296L;
+    /**
+     * {@snippet lang=c :
+     * #define NextFunctionKey 63296
+     * }
+     */
+    public static int NextFunctionKey() {
+        return NextFunctionKey;
+    }
+    private static final int SelectFunctionKey = (int)63297L;
+    /**
+     * {@snippet lang=c :
+     * #define SelectFunctionKey 63297
+     * }
+     */
+    public static int SelectFunctionKey() {
+        return SelectFunctionKey;
+    }
+    private static final int ExecuteFunctionKey = (int)63298L;
+    /**
+     * {@snippet lang=c :
+     * #define ExecuteFunctionKey 63298
+     * }
+     */
+    public static int ExecuteFunctionKey() {
+        return ExecuteFunctionKey;
+    }
+    private static final int UndoFunctionKey = (int)63299L;
+    /**
+     * {@snippet lang=c :
+     * #define UndoFunctionKey 63299
+     * }
+     */
+    public static int UndoFunctionKey() {
+        return UndoFunctionKey;
+    }
+    private static final int RedoFunctionKey = (int)63300L;
+    /**
+     * {@snippet lang=c :
+     * #define RedoFunctionKey 63300
+     * }
+     */
+    public static int RedoFunctionKey() {
+        return RedoFunctionKey;
+    }
+    private static final int FindFunctionKey = (int)63301L;
+    /**
+     * {@snippet lang=c :
+     * #define FindFunctionKey 63301
+     * }
+     */
+    public static int FindFunctionKey() {
+        return FindFunctionKey;
+    }
+    private static final int HelpFunctionKey = (int)63302L;
+    /**
+     * {@snippet lang=c :
+     * #define HelpFunctionKey 63302
+     * }
+     */
+    public static int HelpFunctionKey() {
+        return HelpFunctionKey;
+    }
+    private static final int ModeSwitchFunctionKey = (int)63303L;
+    /**
+     * {@snippet lang=c :
+     * #define ModeSwitchFunctionKey 63303
+     * }
+     */
+    public static int ModeSwitchFunctionKey() {
+        return ModeSwitchFunctionKey;
+    }
     private static final int VK_ANSI_A = (int)0L;
     /**
      * {@snippet lang=c :
@@ -1158,14 +1896,14 @@ public class kwm_macos_h {
     public static int Off() {
         return Off;
     }
-    private static final int Error = (int)1L;
+    private static final int Error_ = (int)1L;
     /**
      * {@snippet lang=c :
      * enum LogLevel.Error = 1
      * }
      */
-    public static int Error() {
-        return Error;
+    public static int Error_() {
+        return Error_;
     }
     private static final int Warn = (int)2L;
     /**
@@ -1337,6 +2075,12 @@ public class kwm_macos_h {
     public static final OfLong WindowId = kwm_macos_h.C_LONG_LONG;
     /**
      * {@snippet lang=c :
+     * typedef char *StrPtr
+     * }
+     */
+    public static final AddressLayout StrPtr = kwm_macos_h.C_POINTER;
+    /**
+     * {@snippet lang=c :
      * typedef double LogicalPixels
      * }
      */
@@ -1497,12 +2241,6 @@ public class kwm_macos_h {
      * }
      */
     public static final AddressLayout MetalTextureRef = kwm_macos_h.C_POINTER;
-    /**
-     * {@snippet lang=c :
-     * typedef char *StrPtr
-     * }
-     */
-    public static final AddressLayout StrPtr = kwm_macos_h.C_POINTER;
     private static final int Transparent = (int)0L;
     /**
      * {@snippet lang=c :

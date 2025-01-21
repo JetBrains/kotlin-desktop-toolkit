@@ -8,6 +8,7 @@ use objc2::rc::{autoreleasepool, Retained};
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
 use objc2_foundation::NSString;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct KeyEventInfo {
     pub(crate) is_press: bool,
@@ -32,7 +33,6 @@ pub(crate) struct KeyEventInfo {
     pub(crate) key: CString
 }
 
-// todo unpack modifiers
 pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInfo> {
     autoreleasepool(|pool| {
         let is_press = match unsafe { ns_event.r#type() } {
@@ -63,103 +63,110 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
 //        }.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
 
         let code = KeyCode::from_u16(code).with_context(|| { format!("Event with unexpected key code: {ns_event:?}") })?;
+
+        // todo probably we could meet \u0000 here
         let chars = CString::new(chars.as_str(pool)).with_context(|| format!("{chars:?}"))?;
-        let chars = CString::new(chars.as_str(pool)).with_context(|| format!("{chars:?}"))?;
-        let key = KeyEventInfo {
+        let key = CString::new(key.as_str(pool)).with_context(|| format!("{key:?}"))?;
+
+        // todo unpack modifiers
+        let key_info = KeyEventInfo {
             is_press,
             is_repeat,
             code,
             chars,
-    //        no_modifiers,
-    //        with_modifiers
+            key
         };
-        Ok(key)
-    });
+        Ok(key_info)
+    })
 }
 
-pub const NSEnterCharacter: u32                = 0x0003;
-pub const NSBackspaceCharacter: u32            = 0x0008;
-pub const NSTabCharacter: u32                  = 0x0009;
-pub const NSNewlineCharacter: u32              = 0x000a;
-pub const NSFormFeedCharacter: u32             = 0x000c;
-pub const NSCarriageReturnCharacter: u32       = 0x000d;
-pub const NSBackTabCharacter: u32              = 0x0019;
-pub const NSDeleteCharacter: u32               = 0x007f;
-pub const NSLineSeparatorCharacter: u32        = 0x2028;
-pub const NSParagraphSeparatorCharacter: u32   = 0x2029;
+#[allow(dead_code)]
+#[allow(non_upper_case_globals)]
+pub mod codepoint_constants {
+    pub const EnterCharacter: u32                = 0x0003;
+    pub const BackspaceCharacter: u32            = 0x0008;
+    pub const TabCharacter: u32                  = 0x0009;
+    pub const NewlineCharacter: u32              = 0x000a;
+    pub const FormFeedCharacter: u32             = 0x000c;
+    pub const CarriageReturnCharacter: u32       = 0x000d;
+    pub const BackTabCharacter: u32              = 0x0019;
+    pub const DeleteCharacter: u32               = 0x007f;
+    pub const LineSeparatorCharacter: u32        = 0x2028;
+    pub const ParagraphSeparatorCharacter: u32   = 0x2029;
 
-pub const NSUpArrowFunctionKey: u32 = 0xF700;
-pub const NSDownArrowFunctionKey: u32 = 0xF701;
-pub const NSLeftArrowFunctionKey: u32 = 0xF702;
-pub const NSRightArrowFunctionKey: u32 = 0xF703;
-pub const NSF1FunctionKey: u32 = 0xF704;
-pub const NSF2FunctionKey: u32 = 0xF705;
-pub const NSF3FunctionKey: u32 = 0xF706;
-pub const NSF4FunctionKey: u32 = 0xF707;
-pub const NSF5FunctionKey: u32 = 0xF708;
-pub const NSF6FunctionKey: u32 = 0xF709;
-pub const NSF7FunctionKey: u32 = 0xF70A;
-pub const NSF8FunctionKey: u32 = 0xF70B;
-pub const NSF9FunctionKey: u32 = 0xF70C;
-pub const NSF10FunctionKey: u32 = 0xF70D;
-pub const NSF11FunctionKey: u32 = 0xF70E;
-pub const NSF12FunctionKey: u32 = 0xF70F;
-pub const NSF13FunctionKey: u32 = 0xF710;
-pub const NSF14FunctionKey: u32 = 0xF711;
-pub const NSF15FunctionKey: u32 = 0xF712;
-pub const NSF16FunctionKey: u32 = 0xF713;
-pub const NSF17FunctionKey: u32 = 0xF714;
-pub const NSF18FunctionKey: u32 = 0xF715;
-pub const NSF19FunctionKey: u32 = 0xF716;
-pub const NSF20FunctionKey: u32 = 0xF717;
-pub const NSF21FunctionKey: u32 = 0xF718;
-pub const NSF22FunctionKey: u32 = 0xF719;
-pub const NSF23FunctionKey: u32 = 0xF71A;
-pub const NSF24FunctionKey: u32 = 0xF71B;
-pub const NSF25FunctionKey: u32 = 0xF71C;
-pub const NSF26FunctionKey: u32 = 0xF71D;
-pub const NSF27FunctionKey: u32 = 0xF71E;
-pub const NSF28FunctionKey: u32 = 0xF71F;
-pub const NSF29FunctionKey: u32 = 0xF720;
-pub const NSF30FunctionKey: u32 = 0xF721;
-pub const NSF31FunctionKey: u32 = 0xF722;
-pub const NSF32FunctionKey: u32 = 0xF723;
-pub const NSF33FunctionKey: u32 = 0xF724;
-pub const NSF34FunctionKey: u32 = 0xF725;
-pub const NSF35FunctionKey: u32 = 0xF726;
-pub const NSInsertFunctionKey: u32 = 0xF727;
-pub const NSDeleteFunctionKey: u32 = 0xF728;
-pub const NSHomeFunctionKey: u32 = 0xF729;
-pub const NSBeginFunctionKey: u32 = 0xF72A;
-pub const NSEndFunctionKey: u32 = 0xF72B;
-pub const NSPageUpFunctionKey: u32 = 0xF72C;
-pub const NSPageDownFunctionKey: u32 = 0xF72D;
-pub const NSPrintScreenFunctionKey: u32 = 0xF72E;
-pub const NSScrollLockFunctionKey: u32 = 0xF72F;
-pub const NSPauseFunctionKey: u32 = 0xF730;
-pub const NSSysReqFunctionKey: u32 = 0xF731;
-pub const NSBreakFunctionKey: u32 = 0xF732;
-pub const NSResetFunctionKey: u32 = 0xF733;
-pub const NSStopFunctionKey: u32 = 0xF734;
-pub const NSMenuFunctionKey: u32 = 0xF735;
-pub const NSUserFunctionKey: u32 = 0xF736;
-pub const NSSystemFunctionKey: u32 = 0xF737;
-pub const NSPrintFunctionKey: u32 = 0xF738;
-pub const NSClearLineFunctionKey: u32 = 0xF739;
-pub const NSClearDisplayFunctionKey: u32 = 0xF73A;
-pub const NSInsertLineFunctionKey: u32 = 0xF73B;
-pub const NSDeleteLineFunctionKey: u32 = 0xF73C;
-pub const NSInsertCharFunctionKey: u32 = 0xF73D;
-pub const NSDeleteCharFunctionKey: u32 = 0xF73E;
-pub const NSPrevFunctionKey: u32 = 0xF73F;
-pub const NSNextFunctionKey: u32 = 0xF740;
-pub const NSSelectFunctionKey: u32 = 0xF741;
-pub const NSExecuteFunctionKey: u32 = 0xF742;
-pub const NSUndoFunctionKey: u32 = 0xF743;
-pub const NSRedoFunctionKey: u32 = 0xF744;
-pub const NSFindFunctionKey: u32 = 0xF745;
-pub const NSHelpFunctionKey: u32 = 0xF746;
-pub const NSModeSwitchFunctionKey: u32 = 0xF747;
+    pub const UpArrowFunctionKey: u32 = 0xF700;
+    pub const DownArrowFunctionKey: u32 = 0xF701;
+    pub const LeftArrowFunctionKey: u32 = 0xF702;
+    pub const RightArrowFunctionKey: u32 = 0xF703;
+    pub const F1FunctionKey: u32 = 0xF704;
+    pub const F2FunctionKey: u32 = 0xF705;
+    pub const F3FunctionKey: u32 = 0xF706;
+    pub const F4FunctionKey: u32 = 0xF707;
+    pub const F5FunctionKey: u32 = 0xF708;
+    pub const F6FunctionKey: u32 = 0xF709;
+    pub const F7FunctionKey: u32 = 0xF70A;
+    pub const F8FunctionKey: u32 = 0xF70B;
+    pub const F9FunctionKey: u32 = 0xF70C;
+    pub const F10FunctionKey: u32 = 0xF70D;
+    pub const F11FunctionKey: u32 = 0xF70E;
+    pub const F12FunctionKey: u32 = 0xF70F;
+    pub const F13FunctionKey: u32 = 0xF710;
+    pub const F14FunctionKey: u32 = 0xF711;
+    pub const F15FunctionKey: u32 = 0xF712;
+    pub const F16FunctionKey: u32 = 0xF713;
+    pub const F17FunctionKey: u32 = 0xF714;
+    pub const F18FunctionKey: u32 = 0xF715;
+    pub const F19FunctionKey: u32 = 0xF716;
+    pub const F20FunctionKey: u32 = 0xF717;
+    pub const F21FunctionKey: u32 = 0xF718;
+    pub const F22FunctionKey: u32 = 0xF719;
+    pub const F23FunctionKey: u32 = 0xF71A;
+    pub const F24FunctionKey: u32 = 0xF71B;
+    pub const F25FunctionKey: u32 = 0xF71C;
+    pub const F26FunctionKey: u32 = 0xF71D;
+    pub const F27FunctionKey: u32 = 0xF71E;
+    pub const F28FunctionKey: u32 = 0xF71F;
+    pub const F29FunctionKey: u32 = 0xF720;
+    pub const F30FunctionKey: u32 = 0xF721;
+    pub const F31FunctionKey: u32 = 0xF722;
+    pub const F32FunctionKey: u32 = 0xF723;
+    pub const F33FunctionKey: u32 = 0xF724;
+    pub const F34FunctionKey: u32 = 0xF725;
+    pub const F35FunctionKey: u32 = 0xF726;
+    pub const InsertFunctionKey: u32 = 0xF727;
+    pub const DeleteFunctionKey: u32 = 0xF728;
+    pub const HomeFunctionKey: u32 = 0xF729;
+    pub const BeginFunctionKey: u32 = 0xF72A;
+    pub const EndFunctionKey: u32 = 0xF72B;
+    pub const PageUpFunctionKey: u32 = 0xF72C;
+    pub const PageDownFunctionKey: u32 = 0xF72D;
+    pub const PrintScreenFunctionKey: u32 = 0xF72E;
+    pub const ScrollLockFunctionKey: u32 = 0xF72F;
+    pub const PauseFunctionKey: u32 = 0xF730;
+    pub const SysReqFunctionKey: u32 = 0xF731;
+    pub const BreakFunctionKey: u32 = 0xF732;
+    pub const ResetFunctionKey: u32 = 0xF733;
+    pub const StopFunctionKey: u32 = 0xF734;
+    pub const MenuFunctionKey: u32 = 0xF735;
+    pub const UserFunctionKey: u32 = 0xF736;
+    pub const SystemFunctionKey: u32 = 0xF737;
+    pub const PrintFunctionKey: u32 = 0xF738;
+    pub const ClearLineFunctionKey: u32 = 0xF739;
+    pub const ClearDisplayFunctionKey: u32 = 0xF73A;
+    pub const InsertLineFunctionKey: u32 = 0xF73B;
+    pub const DeleteLineFunctionKey: u32 = 0xF73C;
+    pub const InsertCharFunctionKey: u32 = 0xF73D;
+    pub const DeleteCharFunctionKey: u32 = 0xF73E;
+    pub const PrevFunctionKey: u32 = 0xF73F;
+    pub const NextFunctionKey: u32 = 0xF740;
+    pub const SelectFunctionKey: u32 = 0xF741;
+    pub const ExecuteFunctionKey: u32 = 0xF742;
+    pub const UndoFunctionKey: u32 = 0xF743;
+    pub const RedoFunctionKey: u32 = 0xF744;
+    pub const FindFunctionKey: u32 = 0xF745;
+    pub const HelpFunctionKey: u32 = 0xF746;
+    pub const ModeSwitchFunctionKey: u32 = 0xF747;
+}
 
 /*  MacOSX15.2
  *  Summary:

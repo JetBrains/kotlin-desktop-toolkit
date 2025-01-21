@@ -5,169 +5,169 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#define NSEnterCharacter 3
+#define EnterCharacter 3
 
-#define NSBackspaceCharacter 8
+#define BackspaceCharacter 8
 
-#define NSTabCharacter 9
+#define TabCharacter 9
 
-#define NSNewlineCharacter 10
+#define NewlineCharacter 10
 
-#define NSFormFeedCharacter 12
+#define FormFeedCharacter 12
 
-#define NSCarriageReturnCharacter 13
+#define CarriageReturnCharacter 13
 
-#define NSBackTabCharacter 25
+#define BackTabCharacter 25
 
-#define NSDeleteCharacter 127
+#define DeleteCharacter 127
 
-#define NSLineSeparatorCharacter 8232
+#define LineSeparatorCharacter 8232
 
-#define NSParagraphSeparatorCharacter 8233
+#define ParagraphSeparatorCharacter 8233
 
-#define NSUpArrowFunctionKey 63232
+#define UpArrowFunctionKey 63232
 
-#define NSDownArrowFunctionKey 63233
+#define DownArrowFunctionKey 63233
 
-#define NSLeftArrowFunctionKey 63234
+#define LeftArrowFunctionKey 63234
 
-#define NSRightArrowFunctionKey 63235
+#define RightArrowFunctionKey 63235
 
-#define NSF1FunctionKey 63236
+#define F1FunctionKey 63236
 
-#define NSF2FunctionKey 63237
+#define F2FunctionKey 63237
 
-#define NSF3FunctionKey 63238
+#define F3FunctionKey 63238
 
-#define NSF4FunctionKey 63239
+#define F4FunctionKey 63239
 
-#define NSF5FunctionKey 63240
+#define F5FunctionKey 63240
 
-#define NSF6FunctionKey 63241
+#define F6FunctionKey 63241
 
-#define NSF7FunctionKey 63242
+#define F7FunctionKey 63242
 
-#define NSF8FunctionKey 63243
+#define F8FunctionKey 63243
 
-#define NSF9FunctionKey 63244
+#define F9FunctionKey 63244
 
-#define NSF10FunctionKey 63245
+#define F10FunctionKey 63245
 
-#define NSF11FunctionKey 63246
+#define F11FunctionKey 63246
 
-#define NSF12FunctionKey 63247
+#define F12FunctionKey 63247
 
-#define NSF13FunctionKey 63248
+#define F13FunctionKey 63248
 
-#define NSF14FunctionKey 63249
+#define F14FunctionKey 63249
 
-#define NSF15FunctionKey 63250
+#define F15FunctionKey 63250
 
-#define NSF16FunctionKey 63251
+#define F16FunctionKey 63251
 
-#define NSF17FunctionKey 63252
+#define F17FunctionKey 63252
 
-#define NSF18FunctionKey 63253
+#define F18FunctionKey 63253
 
-#define NSF19FunctionKey 63254
+#define F19FunctionKey 63254
 
-#define NSF20FunctionKey 63255
+#define F20FunctionKey 63255
 
-#define NSF21FunctionKey 63256
+#define F21FunctionKey 63256
 
-#define NSF22FunctionKey 63257
+#define F22FunctionKey 63257
 
-#define NSF23FunctionKey 63258
+#define F23FunctionKey 63258
 
-#define NSF24FunctionKey 63259
+#define F24FunctionKey 63259
 
-#define NSF25FunctionKey 63260
+#define F25FunctionKey 63260
 
-#define NSF26FunctionKey 63261
+#define F26FunctionKey 63261
 
-#define NSF27FunctionKey 63262
+#define F27FunctionKey 63262
 
-#define NSF28FunctionKey 63263
+#define F28FunctionKey 63263
 
-#define NSF29FunctionKey 63264
+#define F29FunctionKey 63264
 
-#define NSF30FunctionKey 63265
+#define F30FunctionKey 63265
 
-#define NSF31FunctionKey 63266
+#define F31FunctionKey 63266
 
-#define NSF32FunctionKey 63267
+#define F32FunctionKey 63267
 
-#define NSF33FunctionKey 63268
+#define F33FunctionKey 63268
 
-#define NSF34FunctionKey 63269
+#define F34FunctionKey 63269
 
-#define NSF35FunctionKey 63270
+#define F35FunctionKey 63270
 
-#define NSInsertFunctionKey 63271
+#define InsertFunctionKey 63271
 
-#define NSDeleteFunctionKey 63272
+#define DeleteFunctionKey 63272
 
-#define NSHomeFunctionKey 63273
+#define HomeFunctionKey 63273
 
-#define NSBeginFunctionKey 63274
+#define BeginFunctionKey 63274
 
-#define NSEndFunctionKey 63275
+#define EndFunctionKey 63275
 
-#define NSPageUpFunctionKey 63276
+#define PageUpFunctionKey 63276
 
-#define NSPageDownFunctionKey 63277
+#define PageDownFunctionKey 63277
 
-#define NSPrintScreenFunctionKey 63278
+#define PrintScreenFunctionKey 63278
 
-#define NSScrollLockFunctionKey 63279
+#define ScrollLockFunctionKey 63279
 
-#define NSPauseFunctionKey 63280
+#define PauseFunctionKey 63280
 
-#define NSSysReqFunctionKey 63281
+#define SysReqFunctionKey 63281
 
-#define NSBreakFunctionKey 63282
+#define BreakFunctionKey 63282
 
-#define NSResetFunctionKey 63283
+#define ResetFunctionKey 63283
 
-#define NSStopFunctionKey 63284
+#define StopFunctionKey 63284
 
-#define NSMenuFunctionKey 63285
+#define MenuFunctionKey 63285
 
-#define NSUserFunctionKey 63286
+#define UserFunctionKey 63286
 
-#define NSSystemFunctionKey 63287
+#define SystemFunctionKey 63287
 
-#define NSPrintFunctionKey 63288
+#define PrintFunctionKey 63288
 
-#define NSClearLineFunctionKey 63289
+#define ClearLineFunctionKey 63289
 
-#define NSClearDisplayFunctionKey 63290
+#define ClearDisplayFunctionKey 63290
 
-#define NSInsertLineFunctionKey 63291
+#define InsertLineFunctionKey 63291
 
-#define NSDeleteLineFunctionKey 63292
+#define DeleteLineFunctionKey 63292
 
-#define NSInsertCharFunctionKey 63293
+#define InsertCharFunctionKey 63293
 
-#define NSDeleteCharFunctionKey 63294
+#define DeleteCharFunctionKey 63294
 
-#define NSPrevFunctionKey 63295
+#define PrevFunctionKey 63295
 
-#define NSNextFunctionKey 63296
+#define NextFunctionKey 63296
 
-#define NSSelectFunctionKey 63297
+#define SelectFunctionKey 63297
 
-#define NSExecuteFunctionKey 63298
+#define ExecuteFunctionKey 63298
 
-#define NSUndoFunctionKey 63299
+#define UndoFunctionKey 63299
 
-#define NSRedoFunctionKey 63300
+#define RedoFunctionKey 63300
 
-#define NSFindFunctionKey 63301
+#define FindFunctionKey 63301
 
-#define NSHelpFunctionKey 63302
+#define HelpFunctionKey 63302
 
-#define NSModeSwitchFunctionKey 63303
+#define ModeSwitchFunctionKey 63303
 
 typedef enum KeyCode {
   VK_ANSI_A = 0,
@@ -337,14 +337,14 @@ typedef struct KeyDownEvent {
   WindowId window_id;
   enum KeyCode code;
   StrPtr characters;
-  StrPtr key_title;
+  StrPtr key;
   bool is_repeat;
 } KeyDownEvent;
 
 typedef struct KeyUpEvent {
   WindowId window_id;
   StrPtr characters;
-  StrPtr key_title;
+  StrPtr key;
   enum KeyCode code;
 } KeyUpEvent;
 
