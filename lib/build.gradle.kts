@@ -14,10 +14,11 @@ plugins {
     `maven-publish`
 }
 
+group = "org.jetbrains"
 version = "0.1.0"
 
 base {
-    archivesName = "kotlinWindowManager"
+    archivesName = "kotlinDesktopToolkit"
 }
 
 repositories {
@@ -49,6 +50,22 @@ tasks.compileJava {
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
+
+publishing {
+    publications {
+        create<MavenPublication>("myLibrary") {
+            from(components["java"])
+        }
+    }
+
+    repositories {
+        maven {
+            name = "myRepo"
+            url = uri(layout.buildDirectory.dir("repo"))
+        }
     }
 }
 
