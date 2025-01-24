@@ -209,6 +209,7 @@ pub(crate) fn handle_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<b
 pub(crate) fn handle_mouse_move(event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let point = unsafe {
+            // position relative to window content
             event.locationInWindow()
         };
         let window_id = unsafe {
@@ -217,15 +218,11 @@ pub(crate) fn handle_mouse_move(event: &NSEvent) -> bool {
         let window = unsafe {
             event.window(state.mtm).expect("No window for event")
         };
-        // position relative to top left corner of the root view
-        let frame = window.contentView().unwrap().frame();
 
+        let frame = window.contentView().unwrap().frame();
         let event = Event::MouseMoved(MouseMovedEvent {
             window_id,
-            point: LogicalPoint {
-                x: point.x,
-                y: frame.size.height - point.y,
-            },
+            point: LogicalPoint::from_macos_coords(point, frame.size.height),
         });
         (state.event_handler)(&event)
     });
@@ -233,12 +230,12 @@ pub(crate) fn handle_mouse_move(event: &NSEvent) -> bool {
 }
 
 trait NSEventExt {
-    fn logical_point(&self, mtm: MainThreadMarker) -> LogicalPoint;
+    fn location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint;
     fn window_id(&self) -> WindowId;
 }
 
 impl NSEventExt for NSEvent {
-    fn logical_point(&self, mtm: MainThreadMarker) -> LogicalPoint {
+    fn location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint {
         let point = unsafe {
             self.locationInWindow()
         };
@@ -265,7 +262,7 @@ pub(crate) fn handle_mouse_down(event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseDown(MouseDownEvent {
             window_id: event.window_id(),
-            point: event.logical_point(state.mtm),
+            point: event.location_in_window(state.mtm),
         });
         (state.event_handler)(&event)
     });
@@ -276,7 +273,7 @@ pub(crate) fn handle_mouse_up(event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseUp(MouseUpEvent {
             window_id: event.window_id(),
-            point: event.logical_point(state.mtm),
+            point: event.location_in_window(state.mtm),
         });
         (state.event_handler)(&event)
     });
@@ -308,7 +305,7 @@ pub (crate) fn handle_window_move(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowMove(WindowMoveEvent {
             window_id: window.window_id(),
-            origin: window.get_origin()
+            origin: window.get_origin(state.mtm).unwrap() // todo
         });
         (state.event_handler)(&event)
     });

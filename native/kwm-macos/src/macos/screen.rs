@@ -5,12 +5,12 @@ use anyhow::Context;
 use log::warn;
 use objc2::{
     rc::{autoreleasepool, Retained},
-    runtime::Bool,
+    runtime::Bool, ClassType,
 };
 use objc2_app_kit::{NSApplication, NSScreen};
 use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSNumber, NSObjectNSKeyValueObserverRegistration, NSString};
 
-use crate::{common::{ArraySize, LogicalPoint, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
+use crate::{common::{ArraySize, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
 
 pub type ScreenId = u32;
 
@@ -86,13 +86,14 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
                 .map(|(num, screen)| {
                     let name = unsafe { screen.localizedName() };
                     let name = CString::new(name.as_str(pool)).unwrap();
+                    let rect = screen.rect(mtm).unwrap();
                     ScreenInfo {
                         screen_id: screen.screen_id(),
                         // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
                         is_primary: num == 0,
                         name: name.into_raw(),
-                        origin: screen.frame().origin.into(),
-                        size: screen.frame().size.into(),
+                        origin: rect.origin,
+                        size: rect.size,
                         scale: screen.backingScaleFactor(),
                     }
                 })
@@ -111,13 +112,15 @@ pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
 }
 
 pub(crate) trait NSScreenExts {
-    fn screen_id(&self) -> ScreenId;
-}
+    fn me(&self) -> &NSScreen;
 
-impl NSScreenExts for NSScreen {
+    fn primary(mtm: MainThreadMarker) -> anyhow::Result<Retained<NSScreen>> {
+        NSScreen::screens(mtm).first().map(|s| s.retain()).context("Screen list is empty")
+    }
+
     fn screen_id(&self) -> ScreenId {
         return unsafe {
-            let screen_id = self
+            let screen_id = self.me()
                 .deviceDescription()
                 .objectForKey(&*NSString::from_str("NSScreenNumber"))
                 .unwrap();
@@ -125,5 +128,26 @@ impl NSScreenExts for NSScreen {
 
             screen_id.unsignedIntValue()
         };
+    }
+
+    #[allow(dead_code)]
+    fn width(&self) -> LogicalPixels {
+        self.me().frame().size.width
+    }
+
+    fn height(&self) -> LogicalPixels {
+        self.me().frame().size.height
+    }
+
+    fn rect(&self, mtm: MainThreadMarker) -> anyhow::Result<LogicalRect> {
+        let height = Self::primary(mtm)?.frame().size.height;
+        let rect = LogicalRect::from_macos_coords(self.me().frame(), height);
+        Ok(rect)
+    }
+}
+
+impl NSScreenExts for NSScreen {
+    fn me(&self) -> &NSScreen {
+        return self;
     }
 }

@@ -41,6 +41,22 @@ pub struct LogicalPoint {
     pub y: LogicalPixels
 }
 
+#[derive(Debug)]
+pub(crate) struct LogicalRect {
+    // the point closest to coordinates origin
+    pub(crate) origin: LogicalPoint,
+    pub(crate) size: LogicalSize
+}
+
+impl LogicalRect {
+    pub(crate) fn new(origin: LogicalPoint, size: LogicalSize) -> Self {
+        return LogicalRect {
+            origin,
+            size,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Color {

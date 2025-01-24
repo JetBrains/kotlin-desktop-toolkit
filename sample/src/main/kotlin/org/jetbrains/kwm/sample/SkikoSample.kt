@@ -150,14 +150,14 @@ class ContentArea(var origin: LogicalPoint, var size: LogicalSize) {
 
 class WindowContainer(val customTitlebar: CustomTitlebar?, val contentArea: ContentArea) {
     companion object {
-        fun create(windowSize: LogicalSize, useCustomTitlebar: Boolean): WindowContainer {
+        fun create(windowContentSize: LogicalSize, useCustomTitlebar: Boolean): WindowContainer {
             return if (useCustomTitlebar) {
-                val titlebar = CustomTitlebar(LogicalPoint.Zero, LogicalSize(width = windowSize.width, height = CustomTitlebar.customTitlebarHeight))
+                val titlebar = CustomTitlebar(LogicalPoint.Zero, LogicalSize(width = windowContentSize.width, height = CustomTitlebar.customTitlebarHeight))
                 val contentArea = ContentArea(LogicalPoint(x = 0.0, y = CustomTitlebar.customTitlebarHeight),
-                                              LogicalSize(width = windowSize.width, height = windowSize.height - titlebar.size.height))
+                                              LogicalSize(width = windowContentSize.width, height = windowContentSize.height - titlebar.size.height))
                 WindowContainer(titlebar, contentArea)
             } else {
-                val contentArea = ContentArea(LogicalPoint.Zero, windowSize)
+                val contentArea = ContentArea(LogicalPoint.Zero, windowContentSize)
                 WindowContainer(null, contentArea)
             }
         }
@@ -202,8 +202,8 @@ class RotatingBallWindow(device: MetalDevice,
                          origin: LogicalPoint,
                          useCustomTitlebar: Boolean): RotatingBallWindow {
             val windowSize = LogicalSize(640.0, 480.0)
-
-            val container = WindowContainer.create(windowSize, useCustomTitlebar)
+            val windowContentSize = windowSize // todo it's incorrect
+            val container = WindowContainer.create(windowContentSize, useCustomTitlebar)
 
             val windowParams = Window.WindowParams(
                 size = windowSize,
@@ -218,6 +218,7 @@ class RotatingBallWindow(device: MetalDevice,
     }
 
     init {
+        windowContainer.resize(view.size().toLogical(window.scaleFactor()))
         performDrawing()
     }
 
@@ -225,9 +226,12 @@ class RotatingBallWindow(device: MetalDevice,
         return if (super.handleEvent(event) == EventHandlerResult.Continue) {
             when {
                 event is Event.WindowResize -> {
-                    windowContainer.resize(event.size)
+                    windowContainer.resize(view.size().toLogical(window.scaleFactor()))
                     performDrawing()
                     EventHandlerResult.Stop
+                }
+                event is Event.WindowMove -> {
+                    println(event)
                 }
             }
             windowContainer.customTitlebar?.startWindowDrag = {

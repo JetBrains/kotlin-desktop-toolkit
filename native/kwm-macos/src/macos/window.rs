@@ -10,10 +10,10 @@ use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSC
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
-    common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event}
+    common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event}
 };
 
-use super::{application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{NSScreenExts, ScreenId}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}};
+use super::{application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{self, NSScreenExts, ScreenId}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}};
 
 #[allow(dead_code)]
 pub(crate) struct Window {
@@ -57,70 +57,66 @@ impl From<WindowVisualEffect> for NSVisualEffectMaterial {
 }
 
 pub(crate) trait NSWindowExts {
-    fn window_id(&self) -> WindowId;
+    fn me(&self) -> &NSWindow;
 
-    fn get_size(&self) -> LogicalSize;
-    fn get_origin(&self) -> LogicalPoint;
-    fn set_rect(&self, origin: LogicalPoint, size: LogicalSize, animate: bool);
-
-    fn set_max_size(&self, size: LogicalSize);
-    fn set_min_size(&self, size: LogicalSize);
-    fn get_max_size(&self) -> LogicalSize;
-    fn get_min_size(&self) -> LogicalSize;
-
-    fn is_full_screen(&self) -> bool;
-}
-
-impl NSWindowExts for NSWindow {
     fn window_id(&self) -> WindowId {
         unsafe {
-            self.windowNumber() as WindowId
+            self.me().windowNumber() as WindowId
         }
     }
 
     fn get_size(&self) -> LogicalSize {
-        self.frame().size.into()
+        self.me().frame().size.into()
     }
 
-    fn get_origin(&self) -> LogicalPoint {
-        self.frame().origin.into()
+    fn get_origin(&self, mtm: MainThreadMarker) -> anyhow::Result<LogicalPoint> {
+        let screen_height = NSScreen::primary(mtm)?.height();
+        let rect = LogicalRect::from_macos_coords(self.me().frame(), screen_height);
+        Ok(rect.origin)
     }
 
-    fn set_rect(&self, origin: LogicalPoint, size: LogicalSize, animate: bool) {
+    fn set_rect(&self, rect: &LogicalRect, animate: bool, mtm: MainThreadMarker) -> anyhow::Result<()> {
+        let screen_height = NSScreen::primary(mtm)?.height();
         unsafe {
-            self.setFrame_display_animate(CGRect::new(origin.into(), size.into()), true, animate);
+            let frame = rect.to_macos_coords(screen_height);
+            self.me().setFrame_display_animate(frame, true, animate);
         }
+        Ok(())
     }
 
     fn set_max_size(&self, size: LogicalSize) {
-        self.setMaxSize(size.into());
+        self.me().setMaxSize(size.into());
     }
 
     fn set_min_size(&self, size: LogicalSize) {
-        self.setMinSize(size.into());
+        self.me().setMinSize(size.into());
     }
 
     fn get_max_size(&self) -> LogicalSize {
         return unsafe {
-            self.maxSize().into()
+            self.me().maxSize().into()
         };
     }
 
     fn get_min_size(&self) -> LogicalSize {
         return unsafe {
-            self.minSize().into()
+            self.me().minSize().into()
         };
     }
 
     fn is_full_screen(&self) -> bool {
-        return self.styleMask().contains(NSWindowStyleMask::FullScreen);
+        return self.me().styleMask().contains(NSWindowStyleMask::FullScreen);
+    }
+}
+
+impl NSWindowExts for NSWindow {
+    fn me(&self) -> &NSWindow {
+        self
     }
 }
 
 impl Window {
-    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams) -> Window {
-        let rect = CGRect::new(params.origin.into(), params.size.into());
-
+    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams) -> anyhow::Result<Window> {
         /*
         see doc: https://developer.apple.com/documentation/appkit/nswindow/stylemask-swift.struct/resizable?language=objc
 
@@ -150,9 +146,17 @@ impl Window {
         if params.use_custom_titlebar {
             style |= NSWindowStyleMask::FullSizeContentView;
         }
+        
+        let screen_height = NSScreen::primary(mtm)
+            .context("Can't create a window without a screen")?
+            .frame().size.height;
 
-        let ns_window = MyNSWindow::new(mtm, rect, style);
-
+        // Window rect is relative to primary screen
+        let frame = LogicalRect::new(params.origin, params.size).to_macos_coords(screen_height);
+        let content_rect = unsafe {
+            NSWindow::contentRectForFrameRect_styleMask(frame, style, mtm)
+        };
+        let ns_window = MyNSWindow::new(mtm, content_rect, style);
         let custom_titlebar = if params.use_custom_titlebar {
             ns_window.setTitlebarAppearsTransparent(true);
             ns_window.setTitleVisibility(NSWindowTitleVisibility::NSWindowTitleHidden);
@@ -210,13 +214,13 @@ impl Window {
             substrate: None,
         });
 
-        return Window {
+        return Ok(Window {
             ns_window,
             delegate,
             root_view,
             custom_titlebar,
             background_state: window_background
-        };
+        });
     }
 
     pub(crate) fn set_background(&self, mtm: MainThreadMarker, background: WindowBackground) -> anyhow::Result<()> {
@@ -313,7 +317,10 @@ declare_class!(
         #[method(windowDidChangeScreen:)]
         #[allow(non_snake_case)]
         unsafe fn windowDidChangeScreen(&self, _notification: &NSNotification) {
-            handle_window_screen_change(&*self.ivars().ns_window);
+            catch_panic(|| {
+                handle_window_screen_change(&*self.ivars().ns_window);
+                Ok(())
+            });
         }
 
         #[method(windowDidMove:)]
@@ -407,11 +414,11 @@ declare_class!(
 );
 
 impl MyNSWindow {
-    pub(crate) fn new(mtm: MainThreadMarker, rect: NSRect, style: NSWindowStyleMask) -> Retained<Self> {
+    pub(crate) fn new(mtm: MainThreadMarker, content_rect: NSRect, style: NSWindowStyleMask) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(MyNSWindowIvars {});
         let ns_window: Retained<Self> = unsafe {
-            msg_send_id![super(this), initWithContentRect: rect,
+            msg_send_id![super(this), initWithContentRect: content_rect,
                                                 styleMask: style,
                                                  // the only non depricated NSBackingStoreType
                                                   backing: NSBackingStoreType::NSBackingStoreBuffered,

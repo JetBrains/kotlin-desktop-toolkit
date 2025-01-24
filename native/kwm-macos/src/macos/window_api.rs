@@ -4,7 +4,7 @@ use std::panic::{AssertUnwindSafe, UnwindSafe};
 use objc2::{exception::{self, Exception}, rc::Retained};
 use objc2_foundation::{MainThreadMarker, NSException, NSString};
 
-use crate::{common::{Color, LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
+use crate::{common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
 
 use super::{application_api::MyNSApplication, metal_api::MetalView, screen::{NSScreenExts, ScreenId}, window::{NSWindowExts, Window}};
 
@@ -35,7 +35,7 @@ impl PanicDefault for *mut Window {
 pub extern "C" fn window_create(params: &WindowParams) -> *mut Window {
     ffi_boundary("window_create", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let window = Window::new(mtm, params);
+        let window = Window::new(mtm, params)?;
         Ok(Box::into_raw(Box::new(window)))
     })
 }
@@ -114,7 +114,8 @@ impl PanicDefault for LogicalPoint {
 #[no_mangle]
 pub extern "C" fn window_get_origin(window: &Window) -> LogicalPoint {
     ffi_boundary("window_get_origin", || {
-        Ok(window.ns_window.get_origin())
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        window.ns_window.get_origin(mtm)
     })
 }
 
@@ -137,8 +138,8 @@ pub extern "C" fn window_get_size(window: &Window) -> LogicalSize {
 #[no_mangle]
 pub extern "C" fn window_set_rect(window: &Window, origin: LogicalPoint, size: LogicalSize, animate: bool) {
     ffi_boundary("window_set_rect", || {
-        window.ns_window.set_rect(origin.into(), size.into(), animate);
-        Ok(())
+        let mtm = MainThreadMarker::new().unwrap();
+        window.ns_window.set_rect(&LogicalRect::new(origin, size), animate, mtm)
     })
 }
 
