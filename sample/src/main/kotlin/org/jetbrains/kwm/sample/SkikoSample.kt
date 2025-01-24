@@ -369,11 +369,6 @@ class ApplicationState: AutoCloseable {
                 AppMenuItem.Action(
                     "Quit1",
                     keystroke = Keystroke(key = "q", modifiers = KeyModifiers(command = true)),
-                    perform = { Application.stopEventLoop() }
-                ),
-                AppMenuItem.Action(
-                    "Quit2",
-                    keystroke = Keystroke(key = "w", modifiers = KeyModifiers(command = true)),
                     perform = {
                         thread {
                             // we shouldn't call this function on main thread because it block it

@@ -3,9 +3,9 @@ use anyhow::{anyhow, Context};
 use log::{error, info};
 use objc2::{declare_class, msg_send, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApp, NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSEventType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
+    NSApp, NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSEventModifierFlags, NSEventType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
 };
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSString, NSUserDefaults};
+use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
 
 use crate::{common::StrPtr, logger::ffi_boundary, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}};
 
@@ -122,6 +122,22 @@ pub extern "C" fn application_stop_event_loop() {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
         app.stop(None);
+        // In case application_stop_event_loop is not called in response to a UI event, we need to trigger
+        // a dummy event so the UI processing loop picks up the stop request.
+        let dummy_event = unsafe {
+            NSEvent::otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2(
+                NSEventType::ApplicationDefined,
+                NSPoint::ZERO,
+                NSEventModifierFlags::empty(),
+                0f64,
+                0,
+                None,
+                0,
+                0,
+                0
+            )
+        }.unwrap();
+        app.postEvent_atStart(&dummy_event, true);
         Ok(())
     });
 }
