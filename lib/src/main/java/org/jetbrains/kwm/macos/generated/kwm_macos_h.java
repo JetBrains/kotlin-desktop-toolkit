@@ -4951,6 +4951,62 @@ public class kwm_macos_h {
         }
     }
 
+    private static class screen_get_main_screen_id {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            kwm_macos_h.C_INT    );
+
+        public static final MemorySegment ADDR = kwm_macos_h.findOrThrow("screen_get_main_screen_id");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * ScreenId screen_get_main_screen_id()
+     * }
+     */
+    public static FunctionDescriptor screen_get_main_screen_id$descriptor() {
+        return screen_get_main_screen_id.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * ScreenId screen_get_main_screen_id()
+     * }
+     */
+    public static MethodHandle screen_get_main_screen_id$handle() {
+        return screen_get_main_screen_id.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * ScreenId screen_get_main_screen_id()
+     * }
+     */
+    public static MemorySegment screen_get_main_screen_id$address() {
+        return screen_get_main_screen_id.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * ScreenId screen_get_main_screen_id()
+     * }
+     */
+    public static int screen_get_main_screen_id() {
+        var mh$ = screen_get_main_screen_id.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("screen_get_main_screen_id");
+            }
+            return (int)mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class main_menu_update {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             AppMenuStructure.layout()

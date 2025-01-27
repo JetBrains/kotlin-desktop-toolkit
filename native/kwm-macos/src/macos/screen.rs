@@ -111,6 +111,14 @@ pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
     })
 }
 
+#[no_mangle]
+pub extern "C" fn screen_get_main_screen_id() -> ScreenId {
+    ffi_boundary("screen_get_main_screen_id", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        Ok(NSScreen::mainScreen(mtm).context("No main screen")?.screen_id())
+    })
+}
+
 pub(crate) trait NSScreenExts {
     fn me(&self) -> &NSScreen;
 

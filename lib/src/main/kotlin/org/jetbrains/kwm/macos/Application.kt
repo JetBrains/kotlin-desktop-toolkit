@@ -26,7 +26,7 @@ object Application {
     }
 
     private var eventHandler: EventHandler? = null
-    lateinit var screens: List<Screen>
+    lateinit var screens: AllScreens
 
     fun init(applicationConfig: ApplicationConfig = ApplicationConfig()) {
         ffiDownCall {

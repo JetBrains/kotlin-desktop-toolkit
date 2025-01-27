@@ -58,7 +58,7 @@ data class Screen(
     val size: LogicalSize,
     val scale: Double) {
     companion object {
-        internal fun fromNative(s: MemorySegment): Screen {
+        private fun fromNative(s: MemorySegment): Screen {
             return Screen(
                 screenId = ScreenInfo.screen_id(s),
                 isPrimary = ScreenInfo.is_primary(s),
@@ -69,7 +69,7 @@ data class Screen(
             )
         }
 
-        fun allScreens(): List<Screen> {
+        fun allScreens(): AllScreens {
             return Arena.ofConfined().use { arena ->
                     val screenInfoArray = ffiDownCall { kwm_macos_h.screen_list(arena) }
                     val screens = mutableListOf<Screen>()
@@ -83,8 +83,17 @@ data class Screen(
                     } finally {
                         ffiDownCall { kwm_macos_h.screen_list_drop(screenInfoArray) }
                     }
-                    screens
+                    AllScreens(screens)
             }
         }
+    }
+}
+
+data class AllScreens(val screens: List<Screen>) {
+    fun mainScreen(): Screen {
+        val screenId = ffiDownCall {
+            kwm_macos_h.screen_get_main_screen_id()
+        }
+        return screens.first { it.screenId == screenId }
     }
 }

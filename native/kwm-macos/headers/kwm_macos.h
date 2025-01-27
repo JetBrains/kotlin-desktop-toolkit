@@ -717,6 +717,8 @@ struct ScreenInfoArray screen_list(void);
 
 void screen_list_drop(struct ScreenInfoArray arr);
 
+ScreenId screen_get_main_screen_id(void);
+
 void main_menu_update(struct AppMenuStructure menu);
 
 void main_menu_set_none(void);
