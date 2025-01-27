@@ -182,6 +182,12 @@ impl Window {
             ns_window.setReleasedWhenClosed(false);
         }
         ns_window.makeKeyAndOrderFront(None);
+
+        unsafe {
+            // todo we should use  NSApplication.activate();
+            MyNSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+        }
+
         ns_window.setLevel(NSNormalWindowLevel);
         unsafe {
             ns_window.setRestorable(false);

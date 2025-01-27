@@ -237,9 +237,6 @@ declare_class!(
         #[method(applicationDidFinishLaunching:)]
         fn did_finish_launching(&self, _notification: &NSNotification) {
             handle_application_did_finish_launching();
-            // todo probably it's wrong figure out it later
-            #[allow(deprecated)]
-            self.ivars().ns_application.activateIgnoringOtherApps(true);
         }
 
         #[method(applicationShouldTerminate:)]
