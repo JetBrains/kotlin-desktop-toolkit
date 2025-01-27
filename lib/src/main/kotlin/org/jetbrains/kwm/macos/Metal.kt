@@ -12,6 +12,8 @@ class MetalDevice internal constructor(ptr: MemorySegment): Managed(ptr, kwm_mac
             return MetalDevice(ffiDownCall { kwm_macos_h.metal_create_device() })
         }
     }
+
+    val pointerAddress get() = pointer.address()
 }
 
 class MetalCommandQueue internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h::metal_deref_command_queue) {
@@ -26,6 +28,8 @@ class MetalCommandQueue internal constructor(ptr: MemorySegment): Managed(ptr, k
             kwm_macos_h.metal_command_queue_commit(pointer)
         }
     }
+
+    val pointerAddress get() = pointer.address()
 }
 
 class MetalView internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h::metal_drop_view) {
@@ -56,4 +60,6 @@ class MetalView internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos
         set(value) = ffiDownCall { kwm_macos_h.metal_view_set_is_opaque(pointer, value) }
 }
 
-class MetalTexture internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h::metal_deref_texture)
+class MetalTexture internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h::metal_deref_texture) {
+    val pointerAddress get() = pointer.address()
+}

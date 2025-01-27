@@ -16,7 +16,7 @@ abstract class SkikoWindow(device: MetalDevice,
         performDrawing()
     })
 
-    val directContext = DirectContext.makeMetal(device.pointer.address(), queue.pointer.address())
+    val directContext = DirectContext.makeMetal(device.pointerAddress, queue.pointerAddress)
     var view: MetalView = MetalView.create(device)
     val creationTime = TimeSource.Monotonic.markNow()
 
@@ -49,7 +49,7 @@ abstract class SkikoWindow(device: MetalDevice,
         val size = view.size()
         view.nextTexture().use { texture ->
 //             sleep(100) // uncomment this to check window resize quality
-            BackendRenderTarget.makeMetal(size.width.toInt(), size.height.toInt(), texture.pointer.address()).use { renderTarget ->
+            BackendRenderTarget.makeMetal(size.width.toInt(), size.height.toInt(), texture.pointerAddress).use { renderTarget ->
                 Surface.makeFromBackendRenderTarget(
                     context = directContext,
                     origin = SurfaceOrigin.TOP_LEFT,
