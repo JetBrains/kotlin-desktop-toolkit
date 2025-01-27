@@ -682,6 +682,10 @@ double window_scale_factor(const struct Window *window);
 
 void window_attach_layer(const struct Window *window, const struct MetalView *layer);
 
+void window_set_title(const struct Window *window, StrPtr new_title);
+
+StrPtr window_get_title(const struct Window *window);
+
 struct LogicalPoint window_get_origin(const struct Window *window);
 
 struct LogicalSize window_get_size(const struct Window *window);
@@ -722,6 +726,8 @@ ScreenId screen_get_main_screen_id(void);
 void main_menu_update(struct AppMenuStructure menu);
 
 void main_menu_set_none(void);
+
+void string_drop(StrPtr str_ptr);
 
 struct ExceptionsArray logger_check_exceptions(void);
 

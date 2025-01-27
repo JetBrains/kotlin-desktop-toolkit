@@ -12,6 +12,8 @@ use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSNumber, NSObjec
 
 use crate::{common::{ArraySize, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
 
+use super::string::copy_to_c_string;
+
 pub type ScreenId = u32;
 
 #[repr(C)]
@@ -85,13 +87,12 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
                 .enumerate()
                 .map(|(num, screen)| {
                     let name = unsafe { screen.localizedName() };
-                    let name = CString::new(name.as_str(pool)).unwrap();
                     let rect = screen.rect(mtm).unwrap();
                     ScreenInfo {
                         screen_id: screen.screen_id(),
                         // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
                         is_primary: num == 0,
-                        name: name.into_raw(),
+                        name: copy_to_c_string(&name, pool).unwrap(),
                         origin: rect.origin,
                         size: rect.size,
                         scale: screen.backingScaleFactor(),

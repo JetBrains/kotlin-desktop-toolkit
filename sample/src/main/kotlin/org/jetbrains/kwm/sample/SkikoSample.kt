@@ -380,6 +380,17 @@ class ApplicationState: AutoCloseable {
             AppMenuItem.SubMenu(
                 title = "View",
                 AppMenuItem.Action(
+                    title = "Set Title",
+                    keystroke = Keystroke(key = "s", modifiers = KeyModifiers(command = true)),
+                    perform = {
+                        mainWindow()?.window?.let { window ->
+                            val previousTitle = window.title
+                            Logger.info { "Title was: $previousTitle" }
+                            window.title = "$previousTitle[x]"
+                        }
+                    }
+                ),
+                AppMenuItem.Action(
                     title = "Toggle Full Screen",
                     keystroke = Keystroke(key = "f", modifiers = KeyModifiers(command = true, control = true)),
                     perform = { mainWindow()?.window?.toggleFullScreen() }

@@ -1,12 +1,12 @@
 use core::{panic};
-use std::panic::{AssertUnwindSafe, UnwindSafe};
+use std::{ffi::{CStr, CString}, panic::{AssertUnwindSafe, UnwindSafe}};
 
-use objc2::{exception::{self, Exception}, rc::Retained};
+use objc2::{exception::{self, Exception}, rc::{autoreleasepool, Retained}};
 use objc2_foundation::{MainThreadMarker, NSException, NSString};
 
 use crate::{common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
 
-use super::{application_api::MyNSApplication, metal_api::MetalView, screen::{NSScreenExts, ScreenId}, window::{NSWindowExts, Window}};
+use super::{application_api::MyNSApplication, metal_api::MetalView, screen::{NSScreenExts, ScreenId}, string::{copy_to_c_string, copy_to_ns_string}, window::{NSWindowExts, Window}};
 
 pub type WindowId = i64;
 
@@ -109,6 +109,33 @@ impl PanicDefault for LogicalPoint {
             y: 0.0,
         }
     }
+}
+
+#[no_mangle]
+pub extern "C" fn window_set_title(window: &Window, new_title: StrPtr) {
+    ffi_boundary("window_set_title", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let new_title = copy_to_ns_string(new_title)?;
+        window.ns_window.setTitle(&new_title);
+        Ok(())
+    })
+}
+
+impl PanicDefault for StrPtr {
+    fn default() -> Self {
+        std::ptr::null_mut()
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn window_get_title(window: &Window) -> StrPtr {
+    ffi_boundary("window_get_title", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let title = window.ns_window.title();
+        autoreleasepool(|pool| {
+            copy_to_c_string(&title, pool)
+        })
+    })
 }
 
 #[no_mangle]

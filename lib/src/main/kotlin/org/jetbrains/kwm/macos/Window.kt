@@ -83,6 +83,22 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, kwm_macos_h:
         return ffiDownCall { kwm_macos_h.window_scale_factor(pointer) }
     }
 
+    var title: String
+        get() {
+            val title = ffiDownCall { kwm_macos_h.window_get_title(pointer) }
+            return try {
+                title.getUtf8String(0)
+            } finally {
+                ffiDownCall { kwm_macos_h.string_drop(title) }
+            }
+        }
+        set(value) {
+            Arena.ofConfined().use { arena ->
+                val title = arena.allocateUtf8String(value)
+                ffiDownCall { kwm_macos_h.window_set_title(pointer, title) }
+            }
+        }
+
     val origin: LogicalPoint
         get() {
             return Arena.ofConfined().use { arena ->

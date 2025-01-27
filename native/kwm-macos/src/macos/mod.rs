@@ -11,5 +11,6 @@ pub mod keyboard;
 pub mod application_menu;
 pub mod application_menu_api;
 pub mod converters;
+pub mod string;
 
 pub mod playground;

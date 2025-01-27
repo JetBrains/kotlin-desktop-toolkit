@@ -10,7 +10,7 @@ use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSC
 use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
-    common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event}
+    common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event, string::copy_to_ns_string}
 };
 
 use super::{application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{self, NSScreenExts, ScreenId}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}};
@@ -27,12 +27,6 @@ pub(crate) struct Window {
 pub(crate) struct WindowBackgroundState {
     is_transparent: bool,
     substrate: Option<Retained<NSVisualEffectView>>
-}
-
-impl WindowParams {
-    fn title(&self) -> &str {
-        unsafe { CStr::from_ptr(self.title) }.to_str().unwrap()
-    }
 }
 
 impl From<WindowVisualEffect> for NSVisualEffectMaterial {
@@ -183,7 +177,7 @@ impl Window {
             // https://developer.apple.com/library/archive/documentation/General/Conceptual/MOSXAppProgrammingGuide/FullScreenApp/FullScreenApp.html#:~:text=Full%2Dscreen%20support%20in%20NSApplication,is%20also%20key%2Dvalue%20observable.
             ns_window.setCollectionBehavior(collection_behaviour);
         }
-        ns_window.setTitle(&NSString::from_str(params.title()));
+        ns_window.setTitle(&copy_to_ns_string(params.title).unwrap());
         unsafe {
             ns_window.setReleasedWhenClosed(false);
         }
