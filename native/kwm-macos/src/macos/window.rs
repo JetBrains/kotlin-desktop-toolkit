@@ -4,7 +4,7 @@ use anyhow::{ensure, Context, Ok};
 use bitflags::Flags;
 use log::info;
 use objc2::{
-    declare_class, define_class, msg_send, msg_send_id, rc::Retained, runtime::{AnyObject, Bool, ProtocolObject}, sel, ClassType, DeclaredClass, MainThreadOnly
+    declare_class, define_class, msg_send, rc::Retained, runtime::{AnyObject, Bool, ProtocolObject}, sel, ClassType, DeclaredClass, MainThreadOnly
 };
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSEventModifierFlags, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility};
 use objc2_foundation::{MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
@@ -183,10 +183,9 @@ impl Window {
         }
         ns_window.makeKeyAndOrderFront(None);
 
-        unsafe {
-            // todo we should use  NSApplication.activate();
-            MyNSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
-        }
+        // todo we should use  NSApplication.activate();
+        #[allow(deprecated)]
+        MyNSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
 
         ns_window.setLevel(NSNormalWindowLevel);
         unsafe {
@@ -383,7 +382,7 @@ impl WindowDelegate {
            custom_titlebar: Option<CustomTitlebarCell>) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(WindowDelegateIvars { ns_window, custom_titlebar });
-        unsafe { msg_send_id![super(this), init] }
+        unsafe { msg_send![super(this), init] }
     }
 }
 
@@ -405,7 +404,7 @@ impl MyNSWindow {
         let this = mtm.alloc();
         let this = this.set_ivars(MyNSWindowIvars {});
         let ns_window: Retained<Self> = unsafe {
-            msg_send_id![super(this), initWithContentRect: content_rect,
+            msg_send![super(this), initWithContentRect: content_rect,
                                                 styleMask: style,
                                                  // the only non depricated NSBackingStoreType
                                                   backing: NSBackingStoreType::Buffered,
@@ -514,7 +513,7 @@ impl RootView {
     pub(crate) fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars {});
-        let root_view: Retained<Self> = unsafe { msg_send_id![super(this), init] };
+        let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {
             root_view.setAutoresizesSubviews(true);
             root_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);

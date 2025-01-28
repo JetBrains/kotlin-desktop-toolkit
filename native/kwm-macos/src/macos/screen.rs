@@ -5,12 +5,16 @@ use anyhow::Context;
 use log::warn;
 use objc2::{
     rc::{autoreleasepool, Retained},
-    runtime::Bool, ClassType,
+    runtime::Bool,
+    ClassType,
 };
 use objc2_app_kit::{NSApplication, NSScreen};
 use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSNumber, NSObjectNSKeyValueObserverRegistration, NSString};
 
-use crate::{common::{ArraySize, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
+use crate::{
+    common::{ArraySize, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},
+    logger::{ffi_boundary, PanicDefault},
+};
 
 use super::string::copy_to_c_string;
 
@@ -28,8 +32,6 @@ pub struct ScreenInfo {
     // todo color space?
     // todo stable uuid?
 }
-
-
 
 impl Drop for ScreenInfo {
     fn drop(&mut self) {
@@ -128,15 +130,14 @@ pub(crate) trait NSScreenExts {
     }
 
     fn screen_id(&self) -> ScreenId {
-        return unsafe {
-            let screen_id = self.me()
-                .deviceDescription()
-                .objectForKey(&*NSString::from_str("NSScreenNumber"))
-                .unwrap();
-            let screen_id: Retained<NSNumber> = Retained::cast(screen_id);
+        let screen_id = self
+            .me()
+            .deviceDescription()
+            .objectForKey(&*NSString::from_str("NSScreenNumber"))
+            .unwrap();
+        let screen_id: Retained<NSNumber> = Retained::downcast(screen_id).unwrap();
 
-            screen_id.unsignedIntValue()
-        };
+        return screen_id.unsignedIntValue();
     }
 
     #[allow(dead_code)]

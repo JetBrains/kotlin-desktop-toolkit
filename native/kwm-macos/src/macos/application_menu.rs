@@ -4,7 +4,7 @@ use std::{ffi::CStr, slice::from_raw_parts};
 use anyhow::{anyhow, Result};
 
 use objc2::{
-    declare_class, define_class, msg_send_id, rc::{autoreleasepool, Retained}, runtime::AnyObject, sel, ClassType, DeclaredClass, MainThreadOnly
+    declare_class, define_class, msg_send, rc::{autoreleasepool, Retained}, runtime::AnyObject, sel, ClassType, DeclaredClass, MainThreadOnly
 };
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
@@ -279,22 +279,7 @@ define_class!(
 impl MenuItemRepresenter {
     fn new(callback: Option<Callback>, mtm: MainThreadMarker) -> Retained<Self> {
         let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars { callback: callback });
-        unsafe { msg_send_id![super(obj), init] }
-    }
-
-    fn from_any_object(obj: Retained<AnyObject>) -> Option<Retained<Self>> {
-        if obj.class().responds_to(sel!(isKindOfClass:)) {
-            unsafe {
-                let obj = Retained::cast::<NSObject>(obj);
-                if obj.is_kind_of::<Self>() {
-                    Some(Retained::cast::<Self>(obj))
-                } else {
-                    None
-                }
-            }
-        } else {
-            None
-        }
+        unsafe { msg_send![super(obj), init] }
     }
 }
 
@@ -327,7 +312,7 @@ fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: 
             .iter()
             .zip(menu_titles.iter())
             .map(|(item, title)| {
-                unsafe { item.representedObject() }.map(|it| MenuItemRepresenter::from_any_object(it)).map(|_rep_obj| {
+                unsafe { item.representedObject() }.map(|it| it.downcast::<MenuItemRepresenter>()).map(|_rep_obj| {
                     let item_id = if unsafe { item.isSeparatorItem() } {
                         ItemIdentity::Separator
                     } else if unsafe { item.hasSubmenu() } {
@@ -373,7 +358,7 @@ fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: 
                 }
                 Operation::Remove { position } => {
                     let ns_menu_item = unsafe { menu.itemAtIndex((position as isize + position_shift).try_into().unwrap()).unwrap() };
-                    let rep_obj = unsafe { ns_menu_item.representedObject() }.map(|it| MenuItemRepresenter::from_any_object(it));
+                    let rep_obj = unsafe { ns_menu_item.representedObject() }.map(|it| it.downcast::<MenuItemRepresenter>());
                     // Just skip remove commands for macOS provided items
                     if rep_obj.is_some() {
                         unsafe {
