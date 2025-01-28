@@ -124,7 +124,7 @@ pub(crate) trait NSScreenExts {
     fn me(&self) -> &NSScreen;
 
     fn primary(mtm: MainThreadMarker) -> anyhow::Result<Retained<NSScreen>> {
-        NSScreen::screens(mtm).first().map(|s| s.retain()).context("Screen list is empty")
+        NSScreen::screens(mtm).firstObject().context("Screen list is empty")
     }
 
     fn screen_id(&self) -> ScreenId {

@@ -7,10 +7,6 @@ edition = "2021"
 crate-type = ["rlib", "cdylib"]
 name = "kwm_macos"
 
-[[bin]]
-name = "playground"
-path = "src/playground.rs"
-
 [dependencies]
 anyhow = { version = "1.0.93", features = ["backtrace"] }
 bitflags = "2.6.0"
@@ -26,12 +22,13 @@ quickcheck_macros = "1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 foreign-types = "0.5"
+# todo update dispatch
 dispatch = { version = "0.2.0" }
 # "catch-all" feature add try catch for obj-c exceptions in msg_send![]
 # it's nice to have at least for beginning, but later we need to check how it impact performance
-objc2 = { version = "0.5.2", features = ["exception", "catch-all"] }
-objc2-foundation = { version = "0.2.2", features = ["all"] }
-objc2-app-kit = { version = "0.2.2", features = [
+objc2 = { version = "0.6.0", features = ["exception", "catch-all"] }
+objc2-foundation = { version = "0.3.0" }
+objc2-app-kit = { version = "0.3.0", features = [
   "NSApplication",
   "NSWindow",
   "NSWindowRestoration",
@@ -55,8 +52,9 @@ objc2-app-kit = { version = "0.2.2", features = [
   "NSGraphicsContext",
   "objc2-quartz-core",
 ] }
-objc2-quartz-core = { version = "0.2.2", features = ["all"] }
-objc2-metal = { version = "0.2.2", features = ["all"] }
-objc2-metal-kit = { version = "0.2.2", features = ["all"] }
+objc2-quartz-core = { version = "0.3.0" }
+objc2-core-graphics = { version = "0.3.0" }
+objc2-metal = { version = "0.3.0" }
+#objc2-metal-kit = { version = "0.3.0", features = ["all"] }
 num-traits = "0.2"
 num-derive = "0.4"

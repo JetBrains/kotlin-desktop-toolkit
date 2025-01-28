@@ -4,7 +4,7 @@ use std::{ffi::CStr, slice::from_raw_parts};
 use anyhow::{anyhow, Result};
 
 use objc2::{
-    declare_class, msg_send_id, mutability, rc::{autoreleasepool, Retained}, runtime::AnyObject, sel, ClassType, DeclaredClass
+    declare_class, define_class, msg_send_id, rc::{autoreleasepool, Retained}, runtime::AnyObject, sel, ClassType, DeclaredClass, MainThreadOnly
 };
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
@@ -131,7 +131,7 @@ impl<'a> AppMenuItemSafe<'a> {
         Ok(safe_item)
     }
 
-    fn reconcile_action(item: &NSMenuItem, enabled: bool, macos_provided: bool, title: &str, keystroke: &Option<AppMenuKeystrokeSafe<'a>>, perform: Callback) {
+    fn reconcile_action(item: &NSMenuItem, enabled: bool, macos_provided: bool, title: &str, keystroke: &Option<AppMenuKeystrokeSafe<'a>>, perform: Callback, mtm: MainThreadMarker) {
         unsafe {
             item.setTitle(&NSString::from_str(title));
             item.setEnabled(enabled);
@@ -139,7 +139,7 @@ impl<'a> AppMenuItemSafe<'a> {
                 item.setHidden(false);
             }
 
-            let representer = MenuItemRepresenter::new(Some(perform));
+            let representer = MenuItemRepresenter::new(Some(perform), mtm);
             item.setTarget(Some(&representer));
             item.setRepresentedObject(Some(&representer));
             item.setAction(Some(sel!(itemCallback:)));
@@ -180,7 +180,7 @@ impl<'a> AppMenuItemSafe<'a> {
                 ref keystroke,
                 perform
             } => {
-                AppMenuItemSafe::reconcile_action(item, enabled, macos_provided, title, keystroke, perform);
+                AppMenuItemSafe::reconcile_action(item, enabled, macos_provided, title, keystroke, perform, mtm);
             }
             AppMenuItemSafe::Separator => {
                 assert!(unsafe { item.isSeparatorItem() });
@@ -202,7 +202,7 @@ impl<'a> AppMenuItemSafe<'a> {
             } => {
                 if !macos_provided {
                     let item = NSMenuItem::new(mtm);
-                    AppMenuItemSafe::reconcile_action(&item, enabled, macos_provided, title, keystroke, perform);
+                    AppMenuItemSafe::reconcile_action(&item, enabled, macos_provided, title, keystroke, perform, mtm);
                     Some(item)
                 } else {
                     None
@@ -210,7 +210,7 @@ impl<'a> AppMenuItemSafe<'a> {
             }
             AppMenuItemSafe::Separator => {
                 let item = NSMenuItem::separatorItem(mtm);
-                let representer = MenuItemRepresenter::new(None);
+                let representer = MenuItemRepresenter::new(None, mtm);
                 unsafe {
                     item.setTarget(Some(&representer));
                     item.setRepresentedObject(Some(&representer))
@@ -219,7 +219,7 @@ impl<'a> AppMenuItemSafe<'a> {
             },
             AppMenuItemSafe::SubMenu { title, special_tag, items } => {
                 let item = NSMenuItem::new(mtm);
-                let representer = MenuItemRepresenter::new(None);
+                let representer = MenuItemRepresenter::new(None, mtm);
                 unsafe {
                     item.setTarget(Some(&representer));
                     item.setRepresentedObject(Some(&representer))
@@ -251,28 +251,23 @@ impl<'a> AppMenuItemSafe<'a> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug)]
 struct MenuItemRepresenterIvars {
     callback: Option<Callback>
 }
 
-declare_class!(
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "MenuItemRepresenter"]
+    #[ivars = MenuItemRepresenterIvars]
     #[derive(Debug)]
     struct MenuItemRepresenter;
 
-    unsafe impl ClassType for MenuItemRepresenter {
-        type Super = NSObject;
-        type Mutability = mutability::InteriorMutable;
-        const NAME: &'static str = "MenuItemRepresenter";
-    }
-
-    impl DeclaredClass for MenuItemRepresenter {
-        type Ivars = MenuItemRepresenterIvars;
-    }
     unsafe impl NSObjectProtocol for MenuItemRepresenter {}
 
-    unsafe impl MenuItemRepresenter {
-        #[method(itemCallback:)]
+    impl MenuItemRepresenter {
+        #[unsafe(method(itemCallback:))]
         fn item_callback(&self, _sender: &NSMenuItem) {
             if let Some(callback) = self.ivars().callback {
                 callback();
@@ -282,8 +277,8 @@ declare_class!(
 );
 
 impl MenuItemRepresenter {
-    fn new(callback: Option<Callback>) -> Retained<Self> {
-        let obj = Self::alloc().set_ivars(MenuItemRepresenterIvars { callback: callback });
+    fn new(callback: Option<Callback>, mtm: MainThreadMarker) -> Retained<Self> {
+        let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars { callback: callback });
         unsafe { msg_send_id![super(obj), init] }
     }
 
@@ -336,9 +331,9 @@ fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: 
                     let item_id = if unsafe { item.isSeparatorItem() } {
                         ItemIdentity::Separator
                     } else if unsafe { item.hasSubmenu() } {
-                        ItemIdentity::SubMenu { title: title.as_str(pool) }
+                        ItemIdentity::SubMenu { title: unsafe { title.to_str(pool) } }
                     } else {
-                        ItemIdentity::Action { title: title.as_str(pool) }
+                        ItemIdentity::Action { title: unsafe { title.to_str(pool) } }
                     };
                     item_id
                 }).unwrap_or(ItemIdentity::MacOSProvided)

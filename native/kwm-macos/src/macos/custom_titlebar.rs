@@ -42,9 +42,9 @@ impl TitlebarViews {
         // But the order and presence of decorations and effects has been unstable across different macOS versions,
         // even patch upgrades, which is why the code below uses scans instead of indexed access
         //
-        let close_button = ns_window.standardWindowButton(NSWindowButton::NSWindowCloseButton).context("No Close Button")?;
-        let miniaturize_button = ns_window.standardWindowButton(NSWindowButton::NSWindowMiniaturizeButton).context("No Miniaturize Button")?;
-        let zoom_button = ns_window.standardWindowButton(NSWindowButton::NSWindowZoomButton).context("No Zoom Button")?;
+        let close_button = ns_window.standardWindowButton(NSWindowButton::CloseButton).context("No Close Button")?;
+        let miniaturize_button = ns_window.standardWindowButton(NSWindowButton::MiniaturizeButton).context("No Miniaturize Button")?;
+        let zoom_button = ns_window.standardWindowButton(NSWindowButton::ZoomButton).context("No Zoom Button")?;
 
         let titlebar = close_button.superview().context("No titlebar view")?;
         let titlebar_container = titlebar.superview().context("No titlebar container")?;
@@ -114,7 +114,7 @@ impl TitlebarViews {
 
         }
 
-        return NSArray::from_vec(constraints_array);
+        return NSArray::from_retained_slice(&constraints_array);
     }
 }
 

@@ -3,6 +3,7 @@ use std::{
     ffi::c_void,
 };
 
+use anyhow::Context;
 use objc2::{
     rc::Retained, runtime::ProtocolObject, ClassType
 };
@@ -38,8 +39,7 @@ pub extern "C" fn metal_create_device() -> MetalDeviceRef {
     ffi_boundary("metal_create_device", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let device = {
-            let ptr = unsafe { MTLCreateSystemDefaultDevice() };
-            unsafe { Retained::retain(ptr) }.expect("Failed to get default system device.")
+            MTLCreateSystemDefaultDevice().context("Failed to get default system device.")?
         };
         Ok(MetalDeviceRef::new(device))
     })
@@ -135,7 +135,7 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> *mut MetalView {
             // layer.setDisplaySyncEnabled(false); JWM but why ignore vsync?
 
             // this are marked crucial for correct resize
-            layer.setAutoresizingMask(CAAutoresizingMask::kCALayerHeightSizable | CAAutoresizingMask::kCALayerWidthSizable);
+            layer.setAutoresizingMask(CAAutoresizingMask::LayerHeightSizable | CAAutoresizingMask::LayerWidthSizable);
             // layer.setNeedsDisplayOnBoundsChange(true); // not sure that we need to call ::draw when it's resized
             layer.setPresentsWithTransaction(true);
 
@@ -145,9 +145,9 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> *mut MetalView {
 
         let layer_view = unsafe { NSView::new(mtm) };
         unsafe {
-            layer_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+            layer_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
 
-            layer_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::NSViewLayerContentsRedrawDuringViewResize);
+            layer_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::DuringViewResize);
             layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
             // layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
             layer_view.setLayer(Some(&layer));

@@ -1,12 +1,12 @@
 use objc2::rc::Retained;
 use objc2_app_kit::NSColor;
-use objc2_foundation::{CGPoint, CGSize, NSPoint, NSRect};
+use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 use crate::common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint, PhysicalSize};
 
 
-impl From<CGSize> for LogicalSize {
-    fn from(value: CGSize) -> Self {
+impl From<NSSize> for LogicalSize {
+    fn from(value: NSSize) -> Self {
         LogicalSize {
             width: value.width,
             height: value.height
@@ -14,8 +14,8 @@ impl From<CGSize> for LogicalSize {
     }
 }
 
-impl From<CGSize> for PhysicalSize {
-    fn from(value: CGSize) -> Self {
+impl From<NSSize> for PhysicalSize {
+    fn from(value: NSSize) -> Self {
         PhysicalSize {
             width: value.width,
             height: value.height
@@ -23,8 +23,8 @@ impl From<CGSize> for PhysicalSize {
     }
 }
 
-impl From<CGPoint> for PhysicalPoint {
-    fn from(value: CGPoint) -> Self {
+impl From<NSPoint> for PhysicalPoint {
+    fn from(value: NSPoint) -> Self {
         PhysicalPoint {
             x: value.x,
             y: value.y
@@ -32,9 +32,9 @@ impl From<CGPoint> for PhysicalPoint {
     }
 }
 
-impl From<PhysicalPoint> for CGPoint {
+impl From<PhysicalPoint> for NSPoint {
     fn from(value: PhysicalPoint) -> Self {
-        CGPoint {
+        NSPoint {
             x: value.x,
             y: value.y
         }
@@ -44,7 +44,7 @@ impl From<PhysicalPoint> for CGPoint {
 #[allow(dead_code)]
 impl LogicalPoint {
     pub(crate) fn to_macos_coords(&self, height: LogicalPixels) -> NSPoint {
-        CGPoint {
+        NSPoint {
             x: self.x,
             y: height - self.y
         }
@@ -58,18 +58,18 @@ impl LogicalPoint {
     }
 }
 
-impl From<LogicalSize> for CGSize {
+impl From<LogicalSize> for NSSize {
     fn from(value: LogicalSize) -> Self {
-        CGSize {
+        NSSize {
             width: value.width,
             height: value.height
         }
     }
 }
 
-impl From<PhysicalSize> for CGSize {
+impl From<PhysicalSize> for NSSize {
     fn from(value: PhysicalSize) -> Self {
-        CGSize {
+        NSSize {
             width: value.width,
             height: value.height
         }
@@ -78,7 +78,7 @@ impl From<PhysicalSize> for CGSize {
 
 impl LogicalRect {
     pub(crate) fn to_macos_coords(&self, height: LogicalPixels) -> NSRect {
-        let origin = CGPoint {
+        let origin = NSPoint {
             x: self.origin.x,
             y: height - (self.origin.y + self.size.height)
         };

@@ -28,6 +28,6 @@ pub (crate) fn copy_to_ns_string(str_ptr: StrPtr) -> anyhow::Result<Retained<NSS
 
 // Be aware, now you have to release this memory at some point
 pub (crate) fn copy_to_c_string(ns_string: &NSString, pool: AutoreleasePool) -> anyhow::Result<StrPtr> {
-    let s: &str = ns_string.as_str(pool);
+    let s: &str = unsafe { ns_string.to_str(pool) };
     Ok(CString::new(s)?.into_raw())
 }

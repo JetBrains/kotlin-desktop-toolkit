@@ -1,11 +1,11 @@
 use std::{cell::{Cell, OnceCell}, os::unix::thread};
 use anyhow::{anyhow, Context};
 use log::{error, info};
-use objc2::{declare_class, msg_send, msg_send_id, mutability, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass};
+use objc2::{declare_class, define_class, msg_send, msg_send_id, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass, MainThreadOnly};
 use objc2_app_kit::{
     NSApp, NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSEventModifierFlags, NSEventType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
 };
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
+use objc2_foundation::{MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
 
 use crate::{common::StrPtr, logger::ffi_boundary, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}};
 
@@ -154,31 +154,25 @@ pub extern "C" fn application_request_termination() {
     });
 }
 
+#[derive(Debug)]
 pub(crate) struct MyNSApplicationIvars {}
 
-declare_class!(
+define_class!(
+    #[unsafe(super(NSApplication))]
+    #[name = "MyNSApplication"]
+    #[ivars = MyNSApplicationIvars]
     #[derive(Debug)]
     pub(crate) struct MyNSApplication;
 
-    unsafe impl ClassType for MyNSApplication {
-        type Super = NSApplication;
-        type Mutability = mutability::MainThreadOnly;
-        const NAME: &'static str = "MyNSApplication";
-    }
-
-    impl DeclaredClass for MyNSApplication {
-        type Ivars = MyNSApplicationIvars;
-    }
-
     unsafe impl NSObjectProtocol for MyNSApplication {}
 
-    unsafe impl MyNSApplication {
+    impl MyNSApplication {
         // https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
         // The default sendEvent turns key downs into performKeyEquivalent when
         // modifiers are down, but swallows the key up if the modifiers include
         // command.  This one makes all modifiers consistent by always sending key ups.
         #[allow(non_snake_case)]
-        #[method(sendEvent:)]
+        #[unsafe(method(sendEvent:))]
         fn sendEvent(&self, event: &NSEvent) {
             if unsafe { event.r#type() } == NSEventType::KeyUp {
                 if let Some(window) = self.keyWindow() {
@@ -202,54 +196,45 @@ impl MyNSApplication {
     }
 }
 
+#[derive(Debug)]
 struct AppDelegateIvars {
     ns_application: Retained<MyNSApplication>,
     callbacks: ApplicationCallbacks,
 }
 
-declare_class!(
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "AppDelegate"]
+    #[ivars = AppDelegateIvars]
     #[derive(Debug)]
     struct AppDelegate;
-
-    // SAFETY:
-    // - The superclass NSObject does not have any subclassing requirements.
-    // - Main thread only mutability is correct, since this is an application delegate.
-    // - `AppDelegate` does not implement `Drop`.
-    unsafe impl ClassType for AppDelegate {
-        type Super = NSObject;
-        type Mutability = mutability::MainThreadOnly;
-        const NAME: &'static str = "AppDelegate";
-    }
-
-    impl DeclaredClass for AppDelegate {
-        type Ivars = AppDelegateIvars;
-    }
 
     unsafe impl NSObjectProtocol for AppDelegate {}
 
     unsafe impl NSApplicationDelegate for AppDelegate {
 
-        #[method(applicationDidChangeScreenParameters:)]
+        #[unsafe(method(applicationDidChangeScreenParameters:))]
         fn did_change_screen_parameters(&self, _notification: &NSNotification) {
             handle_display_configuration_change();
         }
 
-        #[method(applicationDidFinishLaunching:)]
+        #[unsafe(method(applicationDidFinishLaunching:))]
         fn did_finish_launching(&self, _notification: &NSNotification) {
             handle_application_did_finish_launching();
         }
 
-        #[method(applicationShouldTerminate:)]
+        #[unsafe(method(applicationShouldTerminate:))]
         fn should_terminate(&self, _sender: &NSApplication) -> NSApplicationTerminateReply {
             let result = (self.ivars().callbacks.on_should_terminate)();
             return if result {
-                NSApplicationTerminateReply::NSTerminateNow
+                NSApplicationTerminateReply::TerminateNow
             } else {
-                NSApplicationTerminateReply::NSTerminateCancel
+                NSApplicationTerminateReply::TerminateCancel
             }
         }
 
-        #[method(applicationWillTerminate:)]
+        #[unsafe(method(applicationWillTerminate:))]
         fn will_terminate(&self, _notification: &NSNotification) {
             (self.ivars().callbacks.on_will_terminate)();
         }

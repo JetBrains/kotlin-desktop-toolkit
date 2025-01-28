@@ -4,10 +4,10 @@ use anyhow::{ensure, Context, Ok};
 use bitflags::Flags;
 use log::info;
 use objc2::{
-    declare_class, msg_send, msg_send_id, mutability::{self, MainThreadOnly}, rc::Retained, runtime::{AnyObject, Bool, ProtocolObject}, sel, ClassType, DeclaredClass
+    declare_class, define_class, msg_send, msg_send_id, rc::Retained, runtime::{AnyObject, Bool, ProtocolObject}, sel, ClassType, DeclaredClass, MainThreadOnly
 };
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSEventModifierFlags, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility};
-use objc2_foundation::{CGPoint, CGRect, CGSize, MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
+use objc2_foundation::{MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
     common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event, string::copy_to_ns_string}
@@ -153,7 +153,7 @@ impl Window {
         let ns_window = MyNSWindow::new(mtm, content_rect, style);
         let custom_titlebar = if params.use_custom_titlebar {
             ns_window.setTitlebarAppearsTransparent(true);
-            ns_window.setTitleVisibility(NSWindowTitleVisibility::NSWindowTitleHidden);
+            ns_window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
             // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
             let titlebar = Rc::new(RefCell::new(unsafe { CustomTitlebar::init_custom_titlebar(params.titlebar_height) }.unwrap()));
             unsafe {
@@ -203,7 +203,7 @@ impl Window {
         let container = unsafe { NSView::new(mtm) };
         unsafe {
             container.setAutoresizesSubviews(true);
-            container.addSubview_positioned_relativeTo(&root_view, NSWindowOrderingMode::NSWindowAbove, None);
+            container.addSubview_positioned_relativeTo(&root_view, NSWindowOrderingMode::Above, None);
         }
 
         ns_window.setContentView(Some(&container));
@@ -258,11 +258,11 @@ impl Window {
                         substrate.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
                         substrate.setState(NSVisualEffectState::Active);
                         substrate.setFrameSize(self.ns_window.frame().size);
-                        substrate.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+                        substrate.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
                     }
                     let container = self.ns_window.contentView().context("No container")?;
                     unsafe {
-                        container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::NSWindowBelow, None); // None means below all views
+                        container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::Below, None); // None means below all views
                     }
                     substrate
                 };
@@ -282,7 +282,7 @@ impl Window {
 
         unsafe {
             layer.ns_view.setFrameSize(content_view.frame().size);
-            content_view.addSubview_positioned_relativeTo(&layer.ns_view, NSWindowOrderingMode::NSWindowBelow, Some(&self.root_view));
+            content_view.addSubview_positioned_relativeTo(&layer.ns_view, NSWindowOrderingMode::Below, Some(&self.root_view));
         }
     }
 }
@@ -292,29 +292,23 @@ pub(crate) struct WindowDelegateIvars {
     custom_titlebar: Option<CustomTitlebarCell>
 }
 
-declare_class!(
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "WindowDelegate"]
+    #[ivars = WindowDelegateIvars]
     pub(crate) struct WindowDelegate;
-
-    unsafe impl ClassType for WindowDelegate {
-        type Super = NSObject;
-        type Mutability = MainThreadOnly;
-        const NAME: &'static str = "WindowDelegate";
-    }
-
-    impl DeclaredClass for WindowDelegate {
-        type Ivars = WindowDelegateIvars;
-    }
 
     unsafe impl NSObjectProtocol for WindowDelegate {}
 
     unsafe impl NSWindowDelegate for WindowDelegate {
-        #[method(windowDidResize:)]
+        #[unsafe(method(windowDidResize:))]
         #[allow(non_snake_case)]
         unsafe fn windowDidResize(&self, _notification: &NSNotification) {
             handle_window_resize(&*self.ivars().ns_window);
         }
 
-        #[method(windowDidChangeScreen:)]
+        #[unsafe(method(windowDidChangeScreen:))]
         #[allow(non_snake_case)]
         unsafe fn windowDidChangeScreen(&self, _notification: &NSNotification) {
             catch_panic(|| {
@@ -323,26 +317,26 @@ declare_class!(
             });
         }
 
-        #[method(windowDidMove:)]
+        #[unsafe(method(windowDidMove:))]
         #[allow(non_snake_case)]
         unsafe fn windowDidMove(&self, _notification: &NSNotification) {
             handle_window_move(&*self.ivars().ns_window);
         }
 
-        #[method(windowWillEnterFullScreen:)]
+        #[unsafe(method(windowWillEnterFullScreen:))]
         #[allow(non_snake_case)]
         unsafe fn windowWillEnterFullScreen(&self, _notification: &NSNotification) {
             let ivars = self.ivars();
             CustomTitlebar::before_enter_fullscreen(&ivars.custom_titlebar, &ivars.ns_window);
         }
 
-        #[method(windowDidEnterFullScreen:)]
+        #[unsafe(method(windowDidEnterFullScreen:))]
         #[allow(non_snake_case)]
         unsafe fn windowDidEnterFullScreen(&self, _notification: &NSNotification) {
             handle_window_full_screen_toggle(&*self.ivars().ns_window);
         }
 
-        #[method(windowDidExitFullScreen:)]
+        #[unsafe(method(windowDidExitFullScreen:))]
         #[allow(non_snake_case)]
         unsafe fn windowDidExitFullScreen(&self, _notification: &NSNotification) {
             let ivars = self.ivars();
@@ -350,31 +344,31 @@ declare_class!(
             handle_window_full_screen_toggle(&*self.ivars().ns_window);
         }
 
-        #[method(windowDidBecomeKey:)]
+        #[unsafe(method(windowDidBecomeKey:))]
         #[allow(non_snake_case)]
         unsafe fn windowDidBecomeKey(&self, _notification: &NSNotification) {
             handle_window_focus_change(&*self.ivars().ns_window);
         }
 
-        #[method(windowDidResignKey:)]
+        #[unsafe(method(windowDidResignKey:))]
         #[allow(non_snake_case)]
         unsafe fn windowDidResignKey(&self, _notification: &NSNotification) {
             handle_window_focus_change(&*self.ivars().ns_window);
         }
 
-        #[method(windowDidBecomeMain:)]
+        #[unsafe(method(windowDidBecomeMain:))]
         #[allow(non_snake_case)]
         unsafe fn windowDidBecomeMain(&self, _notification: &NSNotification) {
             handle_window_focus_change(&*self.ivars().ns_window);
         }
 
-        #[method(windowDidResignMain:)]
+        #[unsafe(method(windowDidResignMain:))]
         #[allow(non_snake_case)]
         unsafe fn windowDidResignMain(&self, _notification: &NSNotification) {
             handle_window_focus_change(&*self.ivars().ns_window);
         }
 
-        #[method(windowShouldClose:)]
+        #[unsafe(method(windowShouldClose:))]
         #[allow(non_snake_case)]
         unsafe fn windowShouldClose(&self, _notification: &NSNotification) -> bool {
             handle_window_close_request(&*self.ivars().ns_window);
@@ -395,22 +389,15 @@ impl WindowDelegate {
 
 pub(crate) struct MyNSWindowIvars {}
 
-declare_class!(
+define_class!(
+    #[unsafe(super(NSWindow))]
+    #[name = "MyNSWindow"]
+    #[ivars = MyNSWindowIvars]
     pub(crate) struct MyNSWindow;
-
-    unsafe impl ClassType for MyNSWindow {
-        type Super = NSWindow;
-        type Mutability = MainThreadOnly;
-        const NAME: &'static str = "MyNSWindow";
-    }
-
-    impl DeclaredClass for MyNSWindow {
-        type Ivars = MyNSWindowIvars;
-    }
 
     unsafe impl NSObjectProtocol for MyNSWindow {}
 
-    unsafe impl MyNSWindow {}
+    impl MyNSWindow {}
 );
 
 impl MyNSWindow {
@@ -421,7 +408,7 @@ impl MyNSWindow {
             msg_send_id![super(this), initWithContentRect: content_rect,
                                                 styleMask: style,
                                                  // the only non depricated NSBackingStoreType
-                                                  backing: NSBackingStoreType::NSBackingStoreBuffered,
+                                                  backing: NSBackingStoreType::Buffered,
                                                  // When true, the window server defers creating the window device until the window is moved onscreen.
                                                     defer: false,
                                                  // Screen
@@ -435,69 +422,62 @@ impl MyNSWindow {
 
 pub(crate) struct RootViewIvars {}
 
-declare_class!(
+define_class!(
+    #[unsafe(super(NSView))]
+    #[name = "RootView"]
+    #[ivars = RootViewIvars]
     pub(crate) struct RootView;
-
-    unsafe impl ClassType for RootView {
-        type Super = NSView;
-        type Mutability = MainThreadOnly;
-        const NAME: &'static str = "RootView";
-    }
-
-    impl DeclaredClass for RootView {
-        type Ivars = RootViewIvars;
-    }
 
     unsafe impl NSObjectProtocol for RootView {}
 
-    unsafe impl RootView {
-        #[method(mouseMoved:)]
+    impl RootView {
+        #[unsafe(method(mouseMoved:))]
         fn mouse_moved(&self, event: &NSEvent) {
             handle_mouse_move(event); // todo pass to next responder if it's not handled
         }
 
-        #[method(mouseDragged:)]
+        #[unsafe(method(mouseDragged:))]
         fn mouse_dragged(&self, event: &NSEvent) {
             handle_mouse_move(event);
         }
 
-        #[method(mouseDown:)]
+        #[unsafe(method(mouseDown:))]
         fn mouse_down(&self, event: &NSEvent) {
             handle_mouse_down(event);
         }
 
-        #[method(mouseUp:)]
+        #[unsafe(method(mouseUp:))]
         fn mouse_up(&self, event: &NSEvent) {
             handle_mouse_up(event);
         }
 
-        #[method(keyDown:)]
+        #[unsafe(method(keyDown:))]
         fn key_down(&self, event: &NSEvent) {
             catch_panic(|| {
                 handle_key_event(event)
             });
         }
 
-        #[method(keyUp:)]
+        #[unsafe(method(keyUp:))]
         fn key_up(&self, event: &NSEvent) {
             catch_panic(|| {
                 handle_key_event(event)
             });
         }
 
-//        #[method(performKeyEquivalent:)]
+//        #[unsafe(method(performKeyEquivalent:))]
 //        fn performKeyEquivalent(&self, event: &NSEvent) -> bool {
 //            info!("performKeyEquivalent: {event:?}");
 //            return false.into();
 //        }
 //
-//        #[method(_wantsKeyDownForEvent:)]
+//        #[unsafe(method(_wantsKeyDownForEvent:))]
 //        fn wantsKeyDownForEvent(&self, event: &NSEvent) -> bool {
 //            info!("wantsKeyDownForEvent: {event:?}");
 //            return true.into();
 //        }
 
-        #[method(flagsChanged:)]
+        #[unsafe(method(flagsChanged:))]
         fn flags_changed(&self, event: &NSEvent) {
             catch_panic(|| {
                handle_flags_changed_event(event) 
@@ -510,19 +490,19 @@ declare_class!(
         // please check that titlbar works as expected if you want to change some of them
         // including the case when you click inactive window title bar and starting to drag it
         #[allow(non_snake_case)]
-        #[method(acceptsFirstMouse:)]
+        #[unsafe(method(acceptsFirstMouse:))]
         fn acceptsFirstMouse(&self, _event: Option<&NSEvent>) -> bool {
             return true.into();
         }
 
         #[allow(non_snake_case)]
-        #[method(acceptsFirstResponder)]
+        #[unsafe(method(acceptsFirstResponder))]
         fn acceptsFirstResponder(&self) -> bool {
             return true.into();
         }
 
         #[allow(non_snake_case)]
-        #[method(_opaqueRectForWindowMoveWhenInTitlebar)]
+        #[unsafe(method(_opaqueRectForWindowMoveWhenInTitlebar))]
         fn opaqueRectForWindowMoveWhenInTitlebar(&self) -> NSRect {
             // for windows with non transparent tiile bar this methods doesn't have any effect
             return self.bounds();
@@ -537,7 +517,7 @@ impl RootView {
         let root_view: Retained<Self> = unsafe { msg_send_id![super(this), init] };
         unsafe {
             root_view.setAutoresizesSubviews(true);
-            root_view.setAutoresizingMask(NSAutoresizingMaskOptions::NSViewWidthSizable | NSAutoresizingMaskOptions::NSViewHeightSizable);
+            root_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
         }
         root_view
     }
