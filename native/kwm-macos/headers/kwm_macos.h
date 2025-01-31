@@ -301,6 +301,17 @@ typedef enum LogLevel {
   Trace,
 } LogLevel;
 
+typedef enum MouseButton {
+  Left = (1 << 0),
+  Right = (1 << 1),
+  Middle = (1 << 2),
+  Other1 = (1 << 3),
+  Other2 = (1 << 4),
+  Other3 = (1 << 5),
+  Other4 = (1 << 6),
+  Other5 = (1 << 7),
+} MouseButton;
+
 typedef enum WindowVisualEffect {
   TitlebarEffect,
   SelectionEffect,
@@ -374,19 +385,37 @@ typedef struct LogicalPoint {
   LogicalPixels y;
 } LogicalPoint;
 
+typedef uint32_t MouseButtonsSet;
+
 typedef struct MouseMovedEvent {
   WindowId window_id;
-  struct LogicalPoint point;
+  struct LogicalPoint location_in_window;
+  struct LogicalPoint location_in_screen;
+  MouseButtonsSet pressed_buttons;
 } MouseMovedEvent;
+
+typedef struct MouseDraggedEvent {
+  WindowId window_id;
+  enum MouseButton button;
+  struct LogicalPoint location_in_window;
+  struct LogicalPoint location_in_screen;
+  MouseButtonsSet pressed_buttons;
+} MouseDraggedEvent;
 
 typedef struct MouseDownEvent {
   WindowId window_id;
-  struct LogicalPoint point;
+  enum MouseButton button;
+  struct LogicalPoint location_in_window;
+  struct LogicalPoint location_in_screen;
+  MouseButtonsSet pressed_buttons;
 } MouseDownEvent;
 
 typedef struct MouseUpEvent {
   WindowId window_id;
-  struct LogicalPoint point;
+  enum MouseButton button;
+  struct LogicalPoint location_in_window;
+  struct LogicalPoint location_in_screen;
+  MouseButtonsSet pressed_buttons;
 } MouseUpEvent;
 
 typedef struct ScrollWheelEvent {
@@ -437,6 +466,7 @@ typedef enum Event_Tag {
   KeyUp,
   ModifiersChanged,
   MouseMoved,
+  MouseDragged,
   MouseDown,
   MouseUp,
   ScrollWheel,
@@ -464,6 +494,9 @@ typedef struct Event {
     };
     struct {
       struct MouseMovedEvent mouse_moved;
+    };
+    struct {
+      struct MouseDraggedEvent mouse_dragged;
     };
     struct {
       struct MouseDownEvent mouse_down;

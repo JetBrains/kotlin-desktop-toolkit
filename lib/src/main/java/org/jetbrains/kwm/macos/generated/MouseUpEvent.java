@@ -16,7 +16,10 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * {@snippet lang=c :
  * struct MouseUpEvent {
  *     WindowId window_id;
- *     struct LogicalPoint point;
+ *     enum MouseButton button;
+ *     struct LogicalPoint location_in_window;
+ *     struct LogicalPoint location_in_screen;
+ *     MouseButtonsSet pressed_buttons;
  * }
  * }
  */
@@ -28,7 +31,12 @@ public class MouseUpEvent {
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_LONG_LONG.withName("window_id"),
-        LogicalPoint.layout().withName("point")
+        kwm_macos_h.C_INT.withName("button"),
+        MemoryLayout.paddingLayout(4),
+        LogicalPoint.layout().withName("location_in_window"),
+        LogicalPoint.layout().withName("location_in_screen"),
+        kwm_macos_h.C_INT.withName("pressed_buttons"),
+        MemoryLayout.paddingLayout(4)
     ).withName("MouseUpEvent");
 
     /**
@@ -82,48 +90,180 @@ public class MouseUpEvent {
         struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout point$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("point"));
+    private static final OfInt button$LAYOUT = (OfInt)$LAYOUT.select(groupElement("button"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * struct LogicalPoint point
+     * enum MouseButton button
      * }
      */
-    public static final GroupLayout point$layout() {
-        return point$LAYOUT;
+    public static final OfInt button$layout() {
+        return button$LAYOUT;
     }
 
-    private static final long point$OFFSET = 8;
+    private static final long button$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * struct LogicalPoint point
+     * enum MouseButton button
      * }
      */
-    public static final long point$offset() {
-        return point$OFFSET;
+    public static final long button$offset() {
+        return button$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * struct LogicalPoint point
+     * enum MouseButton button
      * }
      */
-    public static MemorySegment point(MemorySegment struct) {
-        return struct.asSlice(point$OFFSET, point$LAYOUT.byteSize());
+    public static int button(MemorySegment struct) {
+        return struct.get(button$LAYOUT, button$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * struct LogicalPoint point
+     * enum MouseButton button
      * }
      */
-    public static void point(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, point$OFFSET, point$LAYOUT.byteSize());
+    public static void button(MemorySegment struct, int fieldValue) {
+        struct.set(button$LAYOUT, button$OFFSET, fieldValue);
+    }
+
+    private static final GroupLayout location_in_window$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("location_in_window"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_window
+     * }
+     */
+    public static final GroupLayout location_in_window$layout() {
+        return location_in_window$LAYOUT;
+    }
+
+    private static final long location_in_window$OFFSET = 16;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_window
+     * }
+     */
+    public static final long location_in_window$offset() {
+        return location_in_window$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_window
+     * }
+     */
+    public static MemorySegment location_in_window(MemorySegment struct) {
+        return struct.asSlice(location_in_window$OFFSET, location_in_window$LAYOUT.byteSize());
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_window
+     * }
+     */
+    public static void location_in_window(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, location_in_window$OFFSET, location_in_window$LAYOUT.byteSize());
+    }
+
+    private static final GroupLayout location_in_screen$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("location_in_screen"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_screen
+     * }
+     */
+    public static final GroupLayout location_in_screen$layout() {
+        return location_in_screen$LAYOUT;
+    }
+
+    private static final long location_in_screen$OFFSET = 32;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_screen
+     * }
+     */
+    public static final long location_in_screen$offset() {
+        return location_in_screen$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_screen
+     * }
+     */
+    public static MemorySegment location_in_screen(MemorySegment struct) {
+        return struct.asSlice(location_in_screen$OFFSET, location_in_screen$LAYOUT.byteSize());
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_screen
+     * }
+     */
+    public static void location_in_screen(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, location_in_screen$OFFSET, location_in_screen$LAYOUT.byteSize());
+    }
+
+    private static final OfInt pressed_buttons$LAYOUT = (OfInt)$LAYOUT.select(groupElement("pressed_buttons"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * MouseButtonsSet pressed_buttons
+     * }
+     */
+    public static final OfInt pressed_buttons$layout() {
+        return pressed_buttons$LAYOUT;
+    }
+
+    private static final long pressed_buttons$OFFSET = 48;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * MouseButtonsSet pressed_buttons
+     * }
+     */
+    public static final long pressed_buttons$offset() {
+        return pressed_buttons$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * MouseButtonsSet pressed_buttons
+     * }
+     */
+    public static int pressed_buttons(MemorySegment struct) {
+        return struct.get(pressed_buttons$LAYOUT, pressed_buttons$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * MouseButtonsSet pressed_buttons
+     * }
+     */
+    public static void pressed_buttons(MemorySegment struct, int fieldValue) {
+        struct.set(pressed_buttons$LAYOUT, pressed_buttons$OFFSET, fieldValue);
     }
 
     /**

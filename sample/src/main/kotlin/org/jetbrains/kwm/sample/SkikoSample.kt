@@ -21,8 +21,8 @@ class CustomTitlebar(var origin: LogicalPoint, var size: LogicalSize, var startW
     fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
             is Event.MouseDown -> {
-                if (event.point.x > origin.x && event.point.x < origin.x + size.width * 0.75 &&
-                    event.point.y > origin.y && event.point.y < origin.y + size.height) {
+                if (event.locationInWindow.x > origin.x && event.locationInWindow.x < origin.x + size.width * 0.75 &&
+                    event.locationInWindow.y > origin.y && event.locationInWindow.y < origin.y + size.height) {
                     startWindowDrag?.invoke()
                     EventHandlerResult.Stop
                 } else {
@@ -58,8 +58,8 @@ class ContentArea(var origin: LogicalPoint, var size: LogicalSize) {
     fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
             is Event.MouseMoved -> {
-                markerPosition = LogicalPoint(event.point.x - origin.x,
-                                              event.point.y - origin.y)
+                markerPosition = LogicalPoint(event.locationInWindow.x - origin.x,
+                                              event.locationInWindow.y - origin.y)
                 EventHandlerResult.Continue
             }
 
@@ -226,7 +226,9 @@ class RotatingBallWindow(device: MetalDevice,
         return if (super.handleEvent(event) == EventHandlerResult.Continue) {
             when {
                 event is Event.WindowResize -> {
-                    windowContainer.resize(view.size().toLogical(window.scaleFactor()))
+                    val viewSize = view.size().toLogical(window.scaleFactor())
+                    assert(event.size == viewSize)
+                    windowContainer.resize(event.size)
                     performDrawing()
                     EventHandlerResult.Stop
                 }
@@ -315,22 +317,38 @@ class ApplicationState: AutoCloseable {
         window.close()
     }
 
-    fun handleEvent(event: Event): EventHandlerResult {
-        val eventWindowId = event.windowId()
-
-        return when (event) {
+    private fun logEvents(event: Event) {
+        when (event) {
             is Event.KeyDown -> {
                 Logger.info { "$event" }
-                EventHandlerResult.Continue
             }
             is Event.KeyUp -> {
                 Logger.info { "$event" }
-                EventHandlerResult.Continue
             }
             is Event.ModifiersChanged -> {
                 Logger.info { "$event" }
-                EventHandlerResult.Continue
             }
+//            is Event.MouseMoved -> {
+//                Logger.info { "$event" }
+//            }
+            is Event.MouseDragged -> {
+                Logger.info { "$event" }
+            }
+            is Event.MouseDown -> {
+                Logger.info { "$event" }
+            }
+            is Event.MouseUp -> {
+                Logger.info { "$event" }
+            }
+            else -> {}
+        }
+    }
+
+    fun handleEvent(event: Event): EventHandlerResult {
+//        logEvents(event)
+        val eventWindowId = event.windowId()
+
+        return when (event) {
             is Event.WindowCloseRequest -> {
                 windows.find {
                     it.window.windowId() == eventWindowId

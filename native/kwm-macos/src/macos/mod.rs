@@ -8,6 +8,7 @@ pub mod custom_titlebar;
 pub mod screen;
 pub mod events;
 pub mod keyboard;
+pub mod mouse;
 pub mod application_menu;
 pub mod application_menu_api;
 pub mod converters;

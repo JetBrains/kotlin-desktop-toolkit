@@ -14,27 +14,30 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct MouseMovedEvent {
+ * struct MouseDraggedEvent {
  *     WindowId window_id;
+ *     enum MouseButton button;
  *     struct LogicalPoint location_in_window;
  *     struct LogicalPoint location_in_screen;
  *     MouseButtonsSet pressed_buttons;
  * }
  * }
  */
-public class MouseMovedEvent {
+public class MouseDraggedEvent {
 
-    MouseMovedEvent() {
+    MouseDraggedEvent() {
         // Should not be called directly
     }
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_LONG_LONG.withName("window_id"),
+        kwm_macos_h.C_INT.withName("button"),
+        MemoryLayout.paddingLayout(4),
         LogicalPoint.layout().withName("location_in_window"),
         LogicalPoint.layout().withName("location_in_screen"),
         kwm_macos_h.C_INT.withName("pressed_buttons"),
         MemoryLayout.paddingLayout(4)
-    ).withName("MouseMovedEvent");
+    ).withName("MouseDraggedEvent");
 
     /**
      * The layout of this struct
@@ -87,6 +90,50 @@ public class MouseMovedEvent {
         struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
+    private static final OfInt button$LAYOUT = (OfInt)$LAYOUT.select(groupElement("button"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * enum MouseButton button
+     * }
+     */
+    public static final OfInt button$layout() {
+        return button$LAYOUT;
+    }
+
+    private static final long button$OFFSET = 8;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * enum MouseButton button
+     * }
+     */
+    public static final long button$offset() {
+        return button$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * enum MouseButton button
+     * }
+     */
+    public static int button(MemorySegment struct) {
+        return struct.get(button$LAYOUT, button$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * enum MouseButton button
+     * }
+     */
+    public static void button(MemorySegment struct, int fieldValue) {
+        struct.set(button$LAYOUT, button$OFFSET, fieldValue);
+    }
+
     private static final GroupLayout location_in_window$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("location_in_window"));
 
     /**
@@ -99,7 +146,7 @@ public class MouseMovedEvent {
         return location_in_window$LAYOUT;
     }
 
-    private static final long location_in_window$OFFSET = 8;
+    private static final long location_in_window$OFFSET = 16;
 
     /**
      * Offset for field:
@@ -143,7 +190,7 @@ public class MouseMovedEvent {
         return location_in_screen$LAYOUT;
     }
 
-    private static final long location_in_screen$OFFSET = 24;
+    private static final long location_in_screen$OFFSET = 32;
 
     /**
      * Offset for field:
@@ -187,7 +234,7 @@ public class MouseMovedEvent {
         return pressed_buttons$LAYOUT;
     }
 
-    private static final long pressed_buttons$OFFSET = 40;
+    private static final long pressed_buttons$OFFSET = 48;
 
     /**
      * Offset for field:

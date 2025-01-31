@@ -1,13 +1,13 @@
-use std::ffi::{CStr, CString};
+use std::{any::Any, ffi::{CStr, CString}};
 
-use log::info;
-use objc2_app_kit::{NSEvent, NSEventType, NSWindow};
+use log::{debug, info};
+use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
 use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, macos::window};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
-use super::{application_api::AppState, keyboard::{unpack_flags_changed_event, unpack_key_event, KeyCode, KeyModifiers}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
+use super::{application_api::AppState, keyboard::{unpack_flags_changed_event, unpack_key_event, KeyCode, KeyModifiers}, mouse::{MouseButton, MouseButtonsSet, NSMouseEventExt}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
@@ -64,21 +64,39 @@ pub struct ModifiersChangedEvent {
 #[derive(Debug)]
 pub struct MouseMovedEvent {
     window_id: WindowId,
-    point: LogicalPoint
+    location_in_window: LogicalPoint,
+    location_in_screen: LogicalPoint,
+    pressed_buttons: MouseButtonsSet,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct MouseDraggedEvent {
+    window_id: WindowId,
+    button: MouseButton,
+    location_in_window: LogicalPoint,
+    location_in_screen: LogicalPoint,
+    pressed_buttons: MouseButtonsSet
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseDownEvent {
     window_id: WindowId,
-    point: LogicalPoint
+    button: MouseButton,
+    location_in_window: LogicalPoint,
+    location_in_screen: LogicalPoint,
+    pressed_buttons: MouseButtonsSet
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseUpEvent {
     window_id: WindowId,
-    point: LogicalPoint
+    button: MouseButton,
+    location_in_window: LogicalPoint,
+    location_in_screen: LogicalPoint,
+    pressed_buttons: MouseButtonsSet
 }
 
 #[repr(C)]
@@ -139,6 +157,7 @@ pub enum Event {
     KeyUp(KeyUpEvent),
     ModifiersChanged(ModifiersChangedEvent),
     MouseMoved(MouseMovedEvent),
+    MouseDragged(MouseDraggedEvent),
     MouseDown(MouseDownEvent),
     MouseUp(MouseUpEvent),
     // todo mouse enter and exit
@@ -153,17 +172,49 @@ pub enum Event {
     ApplicationDidFinishLaunching
 }
 
+trait NSEventExt {
+    fn me(&self) -> &NSEvent;
+
+    fn window_id(&self) -> WindowId {
+        let me = self.me();
+        unsafe {
+            me.windowNumber() as WindowId
+        }
+    }
+
+    fn location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint {
+        let me = self.me();
+        let point = unsafe {
+            // position is relative to bottom left corner of the root view
+            me.locationInWindow()
+        };
+        let window = unsafe {
+            me.window(mtm).expect("No window for event")
+        };
+        let frame = window.contentView().unwrap().frame();
+        LogicalPoint::from_macos_coords(point, frame.size.height)
+    }
+
+    fn location_in_screen(mtm: MainThreadMarker) -> LogicalPoint {
+        let point = unsafe { NSEvent::mouseLocation() };
+        let screen = NSScreen::primary(mtm).unwrap();
+        LogicalPoint::from_macos_coords(point, screen.height())
+    }
+}
+
+impl NSEventExt for NSEvent {
+    fn me(&self) -> &NSEvent {
+        self
+    }
+}
+
 pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
     let handled = AppState::with(|state| {
-        let window_id = unsafe {
-            ns_event.windowNumber() as WindowId
-        };
-
         let event = match unsafe { ns_event.r#type() } {
             NSEventType::KeyDown => {
                 let key_info = unpack_key_event(ns_event)?;
                 Event::KeyDown(KeyDownEvent {
-                    window_id,
+                    window_id: ns_event.window_id(),
                     code: key_info.code,
                     is_repeat: key_info.is_repeat,
                     characters: key_info.chars.into_raw(),
@@ -174,7 +225,7 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
             NSEventType::KeyUp => {
                 let key_info = unpack_key_event(ns_event)?;
                 Event::KeyUp(KeyUpEvent {
-                    window_id,
+                    window_id: ns_event.window_id(),
                     code: key_info.code,
                     characters: key_info.chars.into_raw(),
                     key: key_info.key.into_raw(),
@@ -190,13 +241,9 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
 
 pub(crate) fn handle_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
     let handled = AppState::with(|state| {
-        let window_id = unsafe {
-            ns_event.windowNumber() as WindowId
-        };
-
         let flags_changed_info = unpack_flags_changed_event(ns_event)?;
         let event = Event::ModifiersChanged(ModifiersChangedEvent {
-            window_id,
+            window_id: ns_event.window_id(),
             modifiers: flags_changed_info.modifiers,
             code: flags_changed_info.code
         });
@@ -206,74 +253,56 @@ pub(crate) fn handle_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<b
     handled
 }
 
-pub(crate) fn handle_mouse_move(event: &NSEvent) -> bool {
+pub(crate) fn handle_mouse_move(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
-        let point = unsafe {
-            // position relative to window content
-            event.locationInWindow()
-        };
-        let window_id = unsafe {
-            event.windowNumber() as WindowId
-        };
-        let window = unsafe {
-            event.window(state.mtm).expect("No window for event")
-        };
-
-        let frame = window.contentView().unwrap().frame();
         let event = Event::MouseMoved(MouseMovedEvent {
-            window_id,
-            point: LogicalPoint::from_macos_coords(point, frame.size.height),
+            window_id: ns_event.window_id(),
+            location_in_window: ns_event.location_in_window(state.mtm),
+            location_in_screen: NSEvent::location_in_screen(state.mtm),
+            pressed_buttons: NSEvent::pressed_mouse_buttons(),
         });
         (state.event_handler)(&event)
     });
     handled
 }
 
-trait NSEventExt {
-    fn location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint;
-    fn window_id(&self) -> WindowId;
+
+pub(crate) fn handle_mouse_drag(ns_event: &NSEvent) -> bool {
+    let handled = AppState::with(|state| {
+        let event = Event::MouseDragged(MouseDraggedEvent {
+            window_id: ns_event.window_id(),
+            button: ns_event.mouse_button().unwrap(),
+            location_in_window: ns_event.location_in_window(state.mtm),
+            location_in_screen: NSEvent::location_in_screen(state.mtm),
+            pressed_buttons: NSEvent::pressed_mouse_buttons(),
+        });
+        (state.event_handler)(&event)
+    });
+    handled
 }
 
-impl NSEventExt for NSEvent {
-    fn location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint {
-        let point = unsafe {
-            self.locationInWindow()
-        };
-        let window = unsafe {
-            self.window(mtm).expect("No window for event")
-        };
-        // position relative to top left corner of the root view
-        let frame = window.contentView().unwrap().frame();
-
-        LogicalPoint {
-            x: point.x,
-            y: frame.size.height - point.y,
-        }
-    }
-
-    fn window_id(&self) -> WindowId {
-        unsafe {
-            self.windowNumber() as WindowId
-        }
-    }
-}
-
-pub(crate) fn handle_mouse_down(event: &NSEvent) -> bool {
+pub(crate) fn handle_mouse_down(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseDown(MouseDownEvent {
-            window_id: event.window_id(),
-            point: event.location_in_window(state.mtm),
+            window_id: ns_event.window_id(),
+            button: ns_event.mouse_button().unwrap(),
+            location_in_window: ns_event.location_in_window(state.mtm),
+            location_in_screen: NSEvent::location_in_screen(state.mtm),
+            pressed_buttons: NSEvent::pressed_mouse_buttons()
         });
         (state.event_handler)(&event)
     });
     handled
 }
 
-pub(crate) fn handle_mouse_up(event: &NSEvent) -> bool {
+pub(crate) fn handle_mouse_up(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseUp(MouseUpEvent {
-            window_id: event.window_id(),
-            point: event.location_in_window(state.mtm),
+            window_id: ns_event.window_id(),
+            button: ns_event.mouse_button().unwrap(),
+            location_in_window: ns_event.location_in_window(state.mtm),
+            location_in_screen: NSEvent::location_in_screen(state.mtm),
+            pressed_buttons: NSEvent::pressed_mouse_buttons()
         });
         (state.event_handler)(&event)
     });

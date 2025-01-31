@@ -10,7 +10,7 @@ use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSC
 use objc2_foundation::{MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
 
 use crate::{
-    common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event, string::copy_to_ns_string}
+    common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_move, handle_mouse_up, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event, string::copy_to_ns_string}
 };
 
 use super::{application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{self, NSScreenExts, ScreenId}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}};
@@ -432,22 +432,82 @@ define_class!(
     impl RootView {
         #[unsafe(method(mouseMoved:))]
         fn mouse_moved(&self, event: &NSEvent) {
-            handle_mouse_move(event); // todo pass to next responder if it's not handled
+            catch_panic(|| {
+                handle_mouse_move(event); // todo pass to next responder if it's not handled
+                Ok(())
+            });
         }
 
         #[unsafe(method(mouseDragged:))]
         fn mouse_dragged(&self, event: &NSEvent) {
-            handle_mouse_move(event);
+            catch_panic(|| {
+                handle_mouse_drag(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(rightMouseDragged:))]
+        fn right_mouse_dragged(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_mouse_drag(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(otherMouseDragged:))]
+        fn other_mouse_dragged(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_mouse_drag(event);
+                Ok(())
+            });
         }
 
         #[unsafe(method(mouseDown:))]
         fn mouse_down(&self, event: &NSEvent) {
-            handle_mouse_down(event);
+            catch_panic(|| {
+                handle_mouse_down(event);
+                Ok(())
+            });
         }
 
         #[unsafe(method(mouseUp:))]
         fn mouse_up(&self, event: &NSEvent) {
-            handle_mouse_up(event);
+            catch_panic(|| {
+                handle_mouse_up(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(rightMouseDown:))]
+        fn right_mouse_down(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_mouse_down(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(rightMouseUp:))]
+        fn right_mouse_up(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_mouse_up(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(otherMouseDown:))]
+        fn other_mouse_down(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_mouse_down(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(otherMouseUp:))]
+        fn other_mouse_up(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_mouse_up(event);
+                Ok(())
+            });
         }
 
         #[unsafe(method(keyDown:))]

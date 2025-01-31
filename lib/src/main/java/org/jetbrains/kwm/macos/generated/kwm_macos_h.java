@@ -1941,6 +1941,78 @@ public class kwm_macos_h {
     public static int Trace() {
         return Trace;
     }
+    private static final int Left = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * enum MouseButton.Left = 1
+     * }
+     */
+    public static int Left() {
+        return Left;
+    }
+    private static final int Right = (int)2L;
+    /**
+     * {@snippet lang=c :
+     * enum MouseButton.Right = 2
+     * }
+     */
+    public static int Right() {
+        return Right;
+    }
+    private static final int Middle = (int)4L;
+    /**
+     * {@snippet lang=c :
+     * enum MouseButton.Middle = 4
+     * }
+     */
+    public static int Middle() {
+        return Middle;
+    }
+    private static final int Other1 = (int)8L;
+    /**
+     * {@snippet lang=c :
+     * enum MouseButton.Other1 = 8
+     * }
+     */
+    public static int Other1() {
+        return Other1;
+    }
+    private static final int Other2 = (int)16L;
+    /**
+     * {@snippet lang=c :
+     * enum MouseButton.Other2 = 16
+     * }
+     */
+    public static int Other2() {
+        return Other2;
+    }
+    private static final int Other3 = (int)32L;
+    /**
+     * {@snippet lang=c :
+     * enum MouseButton.Other3 = 32
+     * }
+     */
+    public static int Other3() {
+        return Other3;
+    }
+    private static final int Other4 = (int)64L;
+    /**
+     * {@snippet lang=c :
+     * enum MouseButton.Other4 = 64
+     * }
+     */
+    public static int Other4() {
+        return Other4;
+    }
+    private static final int Other5 = (int)128L;
+    /**
+     * {@snippet lang=c :
+     * enum MouseButton.Other5 = 128
+     * }
+     */
+    public static int Other5() {
+        return Other5;
+    }
     private static final int TitlebarEffect = (int)0L;
     /**
      * {@snippet lang=c :
@@ -2087,6 +2159,12 @@ public class kwm_macos_h {
     public static final OfDouble LogicalPixels = kwm_macos_h.C_DOUBLE;
     /**
      * {@snippet lang=c :
+     * typedef uint32_t MouseButtonsSet
+     * }
+     */
+    public static final OfInt MouseButtonsSet = kwm_macos_h.C_INT;
+    /**
+     * {@snippet lang=c :
      * typedef uint32_t ScreenId
      * }
      */
@@ -2127,100 +2205,109 @@ public class kwm_macos_h {
     public static int MouseMoved() {
         return MouseMoved;
     }
-    private static final int MouseDown = (int)4L;
+    private static final int MouseDragged = (int)4L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.MouseDown = 4
+     * enum Event_Tag.MouseDragged = 4
+     * }
+     */
+    public static int MouseDragged() {
+        return MouseDragged;
+    }
+    private static final int MouseDown = (int)5L;
+    /**
+     * {@snippet lang=c :
+     * enum Event_Tag.MouseDown = 5
      * }
      */
     public static int MouseDown() {
         return MouseDown;
     }
-    private static final int MouseUp = (int)5L;
+    private static final int MouseUp = (int)6L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.MouseUp = 5
+     * enum Event_Tag.MouseUp = 6
      * }
      */
     public static int MouseUp() {
         return MouseUp;
     }
-    private static final int ScrollWheel = (int)6L;
+    private static final int ScrollWheel = (int)7L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.ScrollWheel = 6
+     * enum Event_Tag.ScrollWheel = 7
      * }
      */
     public static int ScrollWheel() {
         return ScrollWheel;
     }
-    private static final int WindowScreenChange = (int)7L;
+    private static final int WindowScreenChange = (int)8L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowScreenChange = 7
+     * enum Event_Tag.WindowScreenChange = 8
      * }
      */
     public static int WindowScreenChange() {
         return WindowScreenChange;
     }
-    private static final int WindowResize = (int)8L;
+    private static final int WindowResize = (int)9L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowResize = 8
+     * enum Event_Tag.WindowResize = 9
      * }
      */
     public static int WindowResize() {
         return WindowResize;
     }
-    private static final int WindowMove = (int)9L;
+    private static final int WindowMove = (int)10L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowMove = 9
+     * enum Event_Tag.WindowMove = 10
      * }
      */
     public static int WindowMove() {
         return WindowMove;
     }
-    private static final int WindowFocusChange = (int)10L;
+    private static final int WindowFocusChange = (int)11L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowFocusChange = 10
+     * enum Event_Tag.WindowFocusChange = 11
      * }
      */
     public static int WindowFocusChange() {
         return WindowFocusChange;
     }
-    private static final int WindowCloseRequest = (int)11L;
+    private static final int WindowCloseRequest = (int)12L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowCloseRequest = 11
+     * enum Event_Tag.WindowCloseRequest = 12
      * }
      */
     public static int WindowCloseRequest() {
         return WindowCloseRequest;
     }
-    private static final int WindowFullScreenToggle = (int)12L;
+    private static final int WindowFullScreenToggle = (int)13L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.WindowFullScreenToggle = 12
+     * enum Event_Tag.WindowFullScreenToggle = 13
      * }
      */
     public static int WindowFullScreenToggle() {
         return WindowFullScreenToggle;
     }
-    private static final int DisplayConfigurationChange = (int)13L;
+    private static final int DisplayConfigurationChange = (int)14L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.DisplayConfigurationChange = 13
+     * enum Event_Tag.DisplayConfigurationChange = 14
      * }
      */
     public static int DisplayConfigurationChange() {
         return DisplayConfigurationChange;
     }
-    private static final int ApplicationDidFinishLaunching = (int)14L;
+    private static final int ApplicationDidFinishLaunching = (int)15L;
     /**
      * {@snippet lang=c :
-     * enum Event_Tag.ApplicationDidFinishLaunching = 14
+     * enum Event_Tag.ApplicationDidFinishLaunching = 15
      * }
      */
     public static int ApplicationDidFinishLaunching() {
