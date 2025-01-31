@@ -328,9 +328,9 @@ class ApplicationState: AutoCloseable {
             is Event.ModifiersChanged -> {
                 Logger.info { "$event" }
             }
-//            is Event.MouseMoved -> {
-//                Logger.info { "$event" }
-//            }
+            is Event.MouseMoved -> {
+                Logger.info { "$event" }
+            }
             is Event.MouseDragged -> {
                 Logger.info { "$event" }
             }

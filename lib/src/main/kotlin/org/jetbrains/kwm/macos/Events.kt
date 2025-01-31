@@ -65,8 +65,12 @@ sealed class Event {
 
     data class ScrollWheel(
         val windowId: WindowId,
-        val dx: LogicalPixels,
-        val dy: LogicalPixels
+        val scrollingDeltaX: LogicalPixels,
+        val scrollingDeltaY: LogicalPixels,
+        val hasPreciseScrillingDeltas: Boolean,
+        val locationInWindow: LogicalPoint,
+        val locationInScreen: LogicalPoint,
+        val pressedButtons: MouseButtonsSet
     ): Event()
 
     data class WindowScreenChange(
@@ -196,8 +200,12 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             val nativeEvent = NativeEvent.scroll_wheel(s)
             Event.ScrollWheel(
                 windowId = ScrollWheelEvent.window_id(nativeEvent),
-                dx = ScrollWheelEvent.dx(nativeEvent),
-                dy = ScrollWheelEvent.dy(nativeEvent)
+                scrollingDeltaX = ScrollWheelEvent.scrolling_delta_x(nativeEvent),
+                scrollingDeltaY = ScrollWheelEvent.scrolling_delta_y(nativeEvent),
+                hasPreciseScrillingDeltas = ScrollWheelEvent.has_precise_scrolling_deltas(nativeEvent),
+                locationInWindow = LogicalPoint.fromNative(ScrollWheelEvent.location_in_window(nativeEvent)),
+                locationInScreen = LogicalPoint.fromNative(ScrollWheelEvent.location_in_screen(nativeEvent)),
+                pressedButtons = MouseButtonsSet(ScrollWheelEvent.pressed_buttons(nativeEvent))
             )
         }
         kwm_macos_h.WindowScreenChange() -> {

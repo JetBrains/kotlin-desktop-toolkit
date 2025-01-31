@@ -420,8 +420,12 @@ typedef struct MouseUpEvent {
 
 typedef struct ScrollWheelEvent {
   WindowId window_id;
-  LogicalPixels dx;
-  LogicalPixels dy;
+  LogicalPixels scrolling_delta_x;
+  LogicalPixels scrolling_delta_y;
+  bool has_precise_scrolling_deltas;
+  struct LogicalPoint location_in_window;
+  struct LogicalPoint location_in_screen;
+  MouseButtonsSet pressed_buttons;
 } ScrollWheelEvent;
 
 typedef uint32_t ScreenId;

@@ -16,8 +16,12 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * {@snippet lang=c :
  * struct ScrollWheelEvent {
  *     WindowId window_id;
- *     LogicalPixels dx;
- *     LogicalPixels dy;
+ *     LogicalPixels scrolling_delta_x;
+ *     LogicalPixels scrolling_delta_y;
+ *     bool has_precise_scrolling_deltas;
+ *     struct LogicalPoint location_in_window;
+ *     struct LogicalPoint location_in_screen;
+ *     MouseButtonsSet pressed_buttons;
  * }
  * }
  */
@@ -29,8 +33,14 @@ public class ScrollWheelEvent {
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         kwm_macos_h.C_LONG_LONG.withName("window_id"),
-        kwm_macos_h.C_DOUBLE.withName("dx"),
-        kwm_macos_h.C_DOUBLE.withName("dy")
+        kwm_macos_h.C_DOUBLE.withName("scrolling_delta_x"),
+        kwm_macos_h.C_DOUBLE.withName("scrolling_delta_y"),
+        kwm_macos_h.C_BOOL.withName("has_precise_scrolling_deltas"),
+        MemoryLayout.paddingLayout(7),
+        LogicalPoint.layout().withName("location_in_window"),
+        LogicalPoint.layout().withName("location_in_screen"),
+        kwm_macos_h.C_INT.withName("pressed_buttons"),
+        MemoryLayout.paddingLayout(4)
     ).withName("ScrollWheelEvent");
 
     /**
@@ -84,92 +94,268 @@ public class ScrollWheelEvent {
         struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
-    private static final OfDouble dx$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("dx"));
+    private static final OfDouble scrolling_delta_x$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("scrolling_delta_x"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * LogicalPixels scrolling_delta_x
      * }
      */
-    public static final OfDouble dx$layout() {
-        return dx$LAYOUT;
+    public static final OfDouble scrolling_delta_x$layout() {
+        return scrolling_delta_x$LAYOUT;
     }
 
-    private static final long dx$OFFSET = 8;
+    private static final long scrolling_delta_x$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * LogicalPixels scrolling_delta_x
      * }
      */
-    public static final long dx$offset() {
-        return dx$OFFSET;
+    public static final long scrolling_delta_x$offset() {
+        return scrolling_delta_x$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * LogicalPixels scrolling_delta_x
      * }
      */
-    public static double dx(MemorySegment struct) {
-        return struct.get(dx$LAYOUT, dx$OFFSET);
+    public static double scrolling_delta_x(MemorySegment struct) {
+        return struct.get(scrolling_delta_x$LAYOUT, scrolling_delta_x$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * LogicalPixels dx
+     * LogicalPixels scrolling_delta_x
      * }
      */
-    public static void dx(MemorySegment struct, double fieldValue) {
-        struct.set(dx$LAYOUT, dx$OFFSET, fieldValue);
+    public static void scrolling_delta_x(MemorySegment struct, double fieldValue) {
+        struct.set(scrolling_delta_x$LAYOUT, scrolling_delta_x$OFFSET, fieldValue);
     }
 
-    private static final OfDouble dy$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("dy"));
+    private static final OfDouble scrolling_delta_y$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("scrolling_delta_y"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * LogicalPixels dy
+     * LogicalPixels scrolling_delta_y
      * }
      */
-    public static final OfDouble dy$layout() {
-        return dy$LAYOUT;
+    public static final OfDouble scrolling_delta_y$layout() {
+        return scrolling_delta_y$LAYOUT;
     }
 
-    private static final long dy$OFFSET = 16;
+    private static final long scrolling_delta_y$OFFSET = 16;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * LogicalPixels dy
+     * LogicalPixels scrolling_delta_y
      * }
      */
-    public static final long dy$offset() {
-        return dy$OFFSET;
+    public static final long scrolling_delta_y$offset() {
+        return scrolling_delta_y$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * LogicalPixels dy
+     * LogicalPixels scrolling_delta_y
      * }
      */
-    public static double dy(MemorySegment struct) {
-        return struct.get(dy$LAYOUT, dy$OFFSET);
+    public static double scrolling_delta_y(MemorySegment struct) {
+        return struct.get(scrolling_delta_y$LAYOUT, scrolling_delta_y$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * LogicalPixels dy
+     * LogicalPixels scrolling_delta_y
      * }
      */
-    public static void dy(MemorySegment struct, double fieldValue) {
-        struct.set(dy$LAYOUT, dy$OFFSET, fieldValue);
+    public static void scrolling_delta_y(MemorySegment struct, double fieldValue) {
+        struct.set(scrolling_delta_y$LAYOUT, scrolling_delta_y$OFFSET, fieldValue);
+    }
+
+    private static final OfBoolean has_precise_scrolling_deltas$LAYOUT = (OfBoolean)$LAYOUT.select(groupElement("has_precise_scrolling_deltas"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * bool has_precise_scrolling_deltas
+     * }
+     */
+    public static final OfBoolean has_precise_scrolling_deltas$layout() {
+        return has_precise_scrolling_deltas$LAYOUT;
+    }
+
+    private static final long has_precise_scrolling_deltas$OFFSET = 24;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * bool has_precise_scrolling_deltas
+     * }
+     */
+    public static final long has_precise_scrolling_deltas$offset() {
+        return has_precise_scrolling_deltas$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * bool has_precise_scrolling_deltas
+     * }
+     */
+    public static boolean has_precise_scrolling_deltas(MemorySegment struct) {
+        return struct.get(has_precise_scrolling_deltas$LAYOUT, has_precise_scrolling_deltas$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * bool has_precise_scrolling_deltas
+     * }
+     */
+    public static void has_precise_scrolling_deltas(MemorySegment struct, boolean fieldValue) {
+        struct.set(has_precise_scrolling_deltas$LAYOUT, has_precise_scrolling_deltas$OFFSET, fieldValue);
+    }
+
+    private static final GroupLayout location_in_window$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("location_in_window"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_window
+     * }
+     */
+    public static final GroupLayout location_in_window$layout() {
+        return location_in_window$LAYOUT;
+    }
+
+    private static final long location_in_window$OFFSET = 32;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_window
+     * }
+     */
+    public static final long location_in_window$offset() {
+        return location_in_window$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_window
+     * }
+     */
+    public static MemorySegment location_in_window(MemorySegment struct) {
+        return struct.asSlice(location_in_window$OFFSET, location_in_window$LAYOUT.byteSize());
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_window
+     * }
+     */
+    public static void location_in_window(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, location_in_window$OFFSET, location_in_window$LAYOUT.byteSize());
+    }
+
+    private static final GroupLayout location_in_screen$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("location_in_screen"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_screen
+     * }
+     */
+    public static final GroupLayout location_in_screen$layout() {
+        return location_in_screen$LAYOUT;
+    }
+
+    private static final long location_in_screen$OFFSET = 48;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_screen
+     * }
+     */
+    public static final long location_in_screen$offset() {
+        return location_in_screen$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_screen
+     * }
+     */
+    public static MemorySegment location_in_screen(MemorySegment struct) {
+        return struct.asSlice(location_in_screen$OFFSET, location_in_screen$LAYOUT.byteSize());
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * struct LogicalPoint location_in_screen
+     * }
+     */
+    public static void location_in_screen(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, location_in_screen$OFFSET, location_in_screen$LAYOUT.byteSize());
+    }
+
+    private static final OfInt pressed_buttons$LAYOUT = (OfInt)$LAYOUT.select(groupElement("pressed_buttons"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * MouseButtonsSet pressed_buttons
+     * }
+     */
+    public static final OfInt pressed_buttons$layout() {
+        return pressed_buttons$LAYOUT;
+    }
+
+    private static final long pressed_buttons$OFFSET = 64;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * MouseButtonsSet pressed_buttons
+     * }
+     */
+    public static final long pressed_buttons$offset() {
+        return pressed_buttons$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * MouseButtonsSet pressed_buttons
+     * }
+     */
+    public static int pressed_buttons(MemorySegment struct) {
+        return struct.get(pressed_buttons$LAYOUT, pressed_buttons$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * MouseButtonsSet pressed_buttons
+     * }
+     */
+    public static void pressed_buttons(MemorySegment struct, int fieldValue) {
+        struct.set(pressed_buttons$LAYOUT, pressed_buttons$OFFSET, fieldValue);
     }
 
     /**

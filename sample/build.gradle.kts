@@ -98,6 +98,7 @@ tasks.register<JavaExec>("runSkikoSample") {
         "-Djextract.trace.downcalls=false"
     )
     environment("DYLD_LIBRARY_PATH", "/Users/pavel.sergeev/work/kotlin-desktop-toolkit/native/target/debug")
+    environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
 }
 

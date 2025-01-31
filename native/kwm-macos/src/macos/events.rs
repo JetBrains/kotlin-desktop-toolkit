@@ -1,7 +1,8 @@
+use core::f64;
 use std::{any::Any, ffi::{CStr, CString}};
 
 use log::{debug, info};
-use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
+use objc2_app_kit::{NSEvent, NSEventPhase, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
 use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, macos::window};
@@ -103,8 +104,12 @@ pub struct MouseUpEvent {
 #[derive(Debug)]
 pub struct ScrollWheelEvent {
     window_id: WindowId,
-    dx: LogicalPixels,
-    dy: LogicalPixels
+    scrolling_delta_x: LogicalPixels,
+    scrolling_delta_y: LogicalPixels,
+    has_precise_scrolling_deltas: bool,
+    location_in_window: LogicalPoint,
+    location_in_screen: LogicalPoint,
+    pressed_buttons: MouseButtonsSet
 }
 
 #[repr(C)]
@@ -182,7 +187,7 @@ trait NSEventExt {
         }
     }
 
-    fn location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint {
+    fn cursor_location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint {
         let me = self.me();
         let point = unsafe {
             // position is relative to bottom left corner of the root view
@@ -195,7 +200,7 @@ trait NSEventExt {
         LogicalPoint::from_macos_coords(point, frame.size.height)
     }
 
-    fn location_in_screen(mtm: MainThreadMarker) -> LogicalPoint {
+    fn cursor_location_in_screen(mtm: MainThreadMarker) -> LogicalPoint {
         let point = unsafe { NSEvent::mouseLocation() };
         let screen = NSScreen::primary(mtm).unwrap();
         LogicalPoint::from_macos_coords(point, screen.height())
@@ -257,8 +262,8 @@ pub(crate) fn handle_mouse_move(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseMoved(MouseMovedEvent {
             window_id: ns_event.window_id(),
-            location_in_window: ns_event.location_in_window(state.mtm),
-            location_in_screen: NSEvent::location_in_screen(state.mtm),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
             pressed_buttons: NSEvent::pressed_mouse_buttons(),
         });
         (state.event_handler)(&event)
@@ -272,8 +277,8 @@ pub(crate) fn handle_mouse_drag(ns_event: &NSEvent) -> bool {
         let event = Event::MouseDragged(MouseDraggedEvent {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
-            location_in_window: ns_event.location_in_window(state.mtm),
-            location_in_screen: NSEvent::location_in_screen(state.mtm),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
             pressed_buttons: NSEvent::pressed_mouse_buttons(),
         });
         (state.event_handler)(&event)
@@ -286,8 +291,8 @@ pub(crate) fn handle_mouse_down(ns_event: &NSEvent) -> bool {
         let event = Event::MouseDown(MouseDownEvent {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
-            location_in_window: ns_event.location_in_window(state.mtm),
-            location_in_screen: NSEvent::location_in_screen(state.mtm),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
             pressed_buttons: NSEvent::pressed_mouse_buttons()
         });
         (state.event_handler)(&event)
@@ -300,8 +305,24 @@ pub(crate) fn handle_mouse_up(ns_event: &NSEvent) -> bool {
         let event = Event::MouseUp(MouseUpEvent {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
-            location_in_window: ns_event.location_in_window(state.mtm),
-            location_in_screen: NSEvent::location_in_screen(state.mtm),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
+            pressed_buttons: NSEvent::pressed_mouse_buttons()
+        });
+        (state.event_handler)(&event)
+    });
+    handled
+}
+
+pub(crate) fn handle_scroll_wheel(ns_event: &NSEvent) -> bool {
+    let handled = AppState::with(|state| {
+        let event = Event::ScrollWheel(ScrollWheelEvent {
+            window_id: ns_event.window_id(),
+            scrolling_delta_x: unsafe { ns_event.scrollingDeltaX() },
+            scrolling_delta_y: unsafe { ns_event.scrollingDeltaY() },
+            has_precise_scrolling_deltas: unsafe { ns_event.hasPreciseScrollingDeltas() },
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
             pressed_buttons: NSEvent::pressed_mouse_buttons()
         });
         (state.event_handler)(&event)
