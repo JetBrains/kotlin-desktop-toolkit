@@ -40,7 +40,7 @@ dependencies {
 
     // This dependency is used by the application.
     implementation(libs.guava)
-    implementation(project(":lib"))
+    implementation(project(":kotlin-desktop-toolkit"))
     implementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTarget:$skikoVersion")
 }
 

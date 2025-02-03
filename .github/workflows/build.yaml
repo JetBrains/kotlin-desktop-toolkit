@@ -1,0 +1,23 @@
+name: "Build"
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  # TODO: add support for more OS
+  macos:
+    runs-on: macos-14
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Build with Gradle
+        run: ./gradlew build # TODO: maybe a different task?

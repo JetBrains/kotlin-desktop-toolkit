@@ -11,4 +11,6 @@ plugins {
 }
 
 rootProject.name = "KWM"
-include("lib", "sample")
+
+include("kotlin-desktop-toolkit")
+include("sample")
