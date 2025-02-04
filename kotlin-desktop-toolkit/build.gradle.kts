@@ -73,29 +73,29 @@ tasks.test {
 
     // Use JUnit Platform for unit tests.
     jvmArgs("--enable-preview")
-    environment("DYLD_LIBRARY_PATH", compileDebugKwmTask.map { it.libraryDirectory }) // TODO: add env for each OS
+    environment("DYLD_LIBRARY_PATH", compileDebugKwmTask.flatMap { it.libraryDirectory }.get().asFile.absolutePath) // TODO: add env for each OS
     useJUnitPlatform()
 }
 
 val compileDebugKwmTask = tasks.register<CompileRustTask>("compileNative") {
     crateName = "kwm-macos"
-    rustProfile = "debug"
+    rustProfile = "dev"
     nativeDirectory = layout.projectDirectory.dir("../native")
-    headerFile = layout.buildDirectory.file("kwm-macos.h")
-    libraryDirectory = layout.buildDirectory.dir("native/target")
 }
 
 val downloadJExtractTask = tasks.register<DownloadJExtractTask>("downloadJExtract") {
-    slug = "22/6/openjdk-22-jextract+6-47_"
+    slug = "22/6/openjdk-22-jextract+6-47"
     jextractDirectory = layout.buildDirectory.dir("jextract")
 }
 
 val generateBindingsTask = tasks.register<GenerateJavaBindingsTask>("generateBindings") {
     dependsOn(downloadJExtractTask)
+    dependsOn(compileDebugKwmTask)
 
     jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
     headerFile = compileDebugKwmTask.flatMap { it.headerFile }
-    generatedSourcesDirectory = layout.projectDirectory.dir("src/main/java/org/jetbrains/kwm/macos/generated")
+    packageName = "org.jetbrains.kwm.macos.generated"
+    generatedSourcesDirectory = layout.projectDirectory.dir("src/main/java/")
 }
 
 tasks.compileKotlin {

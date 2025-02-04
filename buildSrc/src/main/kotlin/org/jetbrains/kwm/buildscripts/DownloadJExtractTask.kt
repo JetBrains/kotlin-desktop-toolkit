@@ -1,6 +1,10 @@
 package org.jetbrains.kwm.buildscripts
 
+import org.gradle.api.Action
 import org.gradle.api.DefaultTask
+import org.gradle.api.Project
+import org.gradle.api.file.ArchiveOperations
+import org.gradle.api.file.FileVisitDetails
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.Input
@@ -8,13 +12,18 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import org.gradle.kotlin.dsl.property
+import java.io.File
+import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import javax.inject.Inject
 import kotlin.io.path.createDirectories
+import kotlin.io.path.outputStream
 
 abstract class DownloadJExtractTask @Inject constructor(
     objectFactory: ObjectFactory,
     providerFactory: ProviderFactory,
+    private val archiveOperations: ArchiveOperations
 ) : DefaultTask() {
     @get:Input
     val platform = providerFactory.provider { buildPlatform() }
@@ -29,16 +38,17 @@ abstract class DownloadJExtractTask @Inject constructor(
     val jextractBinary = providerFactory.provider {
         val dir = jextractDirectory.get().asFile
         when (platform) { // FIXME: implement for each platform if required
-                else -> dir.resolve("jextract") // FIXME: path under the directory
+                else -> dir.resolve("jextract-22/bin/jextract") // FIXME: path under the directory
         }
     }
 
     @TaskAction
-    fun generate() {
+    fun download() {
         downloadJExtract(
             platform.get(),
             slug.get(),
             jextractDirectory.get().asFile.toPath(),
+            archiveOperations,
         )
     }
 }
@@ -47,13 +57,32 @@ private fun downloadJExtract(
     platform: String,
     slug: String,
     jextractDirectory: Path,
+    archiveOperations: ArchiveOperations,
 ) {
-    val url = jextractUrl(platform, slug)
-    // download URL
-    // extract stuff
-    // fill jextractDirectory with jextract
-    jextractDirectory.createDirectories()
-    jextractDirectory.resolve("jextract").toFile().writeText("fsdfs")
+    val url = java.net.URI(jextractUrl(platform, slug)).toURL()
+
+    val connection = url.openConnection() as java.net.HttpURLConnection
+    val tempFile = kotlin.io.path.createTempFile("jextract", ".tar.gz").toFile()
+
+    connection.inputStream.use { input ->
+        tempFile.outputStream().use { output -> input.copyTo(output) }
+    }
+
+    archiveOperations.tarTree(tempFile).visit(object: Action<FileVisitDetails> {
+        override fun execute(details: FileVisitDetails) {
+            if (!details.isDirectory) {
+                val targetFile = jextractDirectory.resolve(details.relativePath.pathString)
+                Files.createDirectories(targetFile.parent)
+                targetFile.toFile().let {
+                    details.file.copyTo(it, overwrite = true)
+                    if (details.permissions.user.execute) {
+                        it.setExecutable(true)
+                    }
+                }
+            }
+        }
+    })
+    tempFile.delete()
 }
 
 private fun jextractUrl(
@@ -73,5 +102,5 @@ private fun jextractPlatform(os: Os, arch: Arch): String {
         Arch.x86_64 -> "x64"
         Arch.aarch64 -> "aarch64"
     }
-    return "${jextractOs}_$jextractArch"
+    return "${jextractOs}-$jextractArch"
 }

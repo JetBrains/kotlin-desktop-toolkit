@@ -1,3 +1,8 @@
+import org.jetbrains.kwm.buildscripts.Arch
+import org.jetbrains.kwm.buildscripts.Os
+import org.jetbrains.kwm.buildscripts.buildArch
+import org.jetbrains.kwm.buildscripts.buildOs
+
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
@@ -12,19 +17,15 @@ repositories {
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
 
-val osName = System.getProperty("os.name")
-val targetOs = when {
-    osName == "Mac OS X" -> "macos"
-    osName.startsWith("Win") -> "windows"
-    osName.startsWith("Linux") -> "linux"
-    else -> error("Unsupported OS: $osName")
+val targetOs = when (buildOs()) {
+    Os.LINUX -> "linux"
+    Os.MACOS -> "macos"
+    Os.WINDOWS -> "windows"
 }
 
-val osArch = System.getProperty("os.arch")
-val targetArch = when (osArch) {
-    "x86_64", "amd64" -> "x64"
-    "aarch64" -> "arm64"
-    else -> error("Unsupported arch: $osArch")
+val targetArch = when (buildArch()) {
+    Arch.aarch64 -> "arm64"
+    Arch.x86_64 -> "x64"
 }
 
 val skikoVersion = "0.8.18"
