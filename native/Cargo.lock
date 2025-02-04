@@ -250,6 +250,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "desktop-macos"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "cbindgen",
+ "dispatch2",
+ "foreign-types",
+ "log",
+ "log4rs",
+ "num-derive",
+ "num-traits",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-core-graphics",
+ "objc2-foundation",
+ "objc2-metal",
+ "objc2-quartz-core",
+ "quickcheck",
+ "quickcheck_macros",
+]
+
+[[package]]
 name = "destructure_traitobject"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -420,29 +443,6 @@ checksum = "6717b6b5b077764fb5966237269cb3c64edddde4b14ce42647430a78ced9e7b7"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "kwm-macos"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitflags",
- "cbindgen",
- "dispatch2",
- "foreign-types",
- "log",
- "log4rs",
- "num-derive",
- "num-traits",
- "objc2",
- "objc2-app-kit",
- "objc2-core-graphics",
- "objc2-foundation",
- "objc2-metal",
- "objc2-quartz-core",
- "quickcheck",
- "quickcheck_macros",
 ]
 
 [[package]]

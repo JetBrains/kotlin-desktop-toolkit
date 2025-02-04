@@ -1,0 +1,60 @@
+[package]
+name = "desktop-macos"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+name = "desktop_macos"
+
+[dependencies]
+anyhow = { version = "1.0.93", features = ["backtrace"] }
+bitflags = "2.6.0"
+log = "0.4.22"
+log4rs = "1.3.0"
+
+[build-dependencies]
+cbindgen = "0.27.0"
+
+[dev-dependencies]
+quickcheck = "1"
+quickcheck_macros = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+foreign-types = "0.5"
+# todo update dispatch
+dispatch2 = { version = "0.2.0" }
+# "catch-all" feature add try catch for obj-c exceptions in msg_send![]
+# it's nice to have at least for beginning, but later we need to check how it impacts performance
+objc2 = { version = "0.6.0", features = ["exception", "catch-all"] }
+objc2-foundation = { version = "0.3.0" }
+objc2-app-kit = { version = "0.3.0", features = [
+  "NSApplication",
+  "NSWindow",
+  "NSWindowRestoration",
+  "NSGraphics",
+  "NSScreen",
+  "NSRunningApplication",
+  "NSResponder",
+  "NSView",
+  "NSLayoutAnchor",
+  "NSControl",
+  "NSButton",
+  "NSLayoutConstraint",
+  "NSVisualEffectView",
+  "NSColor",
+  "NSMenu",
+  "NSMenuItem",
+  "NSCell",
+  "NSEvent",
+  "NSText",
+  "NSColorSpace",
+  "NSGraphicsContext",
+  "objc2-quartz-core",
+] }
+objc2-quartz-core = { version = "0.3.0" }
+objc2-core-graphics = { version = "0.3.0" }
+objc2-metal = { version = "0.3.0" }
+#objc2-metal-kit = { version = "0.3.0", features = ["all"] }
+num-traits = "0.2"
+num-derive = "0.4"

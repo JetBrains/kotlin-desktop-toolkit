@@ -1,11 +1,10 @@
-import org.gradle.kotlin.dsl.singleFile
-import org.jetbrains.kwm.buildscripts.Arch
-import org.jetbrains.kwm.buildscripts.KotlinDesktopToolkitAttributes
-import org.jetbrains.kwm.buildscripts.KotlingDesktopToolkitArtifactType
-import org.jetbrains.kwm.buildscripts.KotlingDesktopToolkitNativeProfile
-import org.jetbrains.kwm.buildscripts.Os
-import org.jetbrains.kwm.buildscripts.buildArch
-import org.jetbrains.kwm.buildscripts.buildOs
+import org.jetbrains.desktop.buildscripts.Arch
+import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
+import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
+import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
+import org.jetbrains.desktop.buildscripts.Os
+import org.jetbrains.desktop.buildscripts.buildArch
+import org.jetbrains.desktop.buildscripts.buildOs
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -61,7 +60,7 @@ tasks.compileJava {
 }
 
 application {
-    mainClass = "org.jetbrains.kwm.sample.ApplicationSampleKt"
+    mainClass = "org.jetbrains.desktop.sample.ApplicationSampleKt"
     applicationDefaultJvmArgs = listOf("--enable-preview",
                                        "-XstartOnFirstThread",
                                        "--enable-native-access=ALL-UNNAMED",
@@ -91,7 +90,7 @@ tasks.register<JavaExec>("runAppMenuAwtSample") {
     group = "application"
     description = "Runs sample app based on AWT"
     classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("org.jetbrains.kwm.sample.AppMenuAwtSampleKt")
+    mainClass.set("org.jetbrains.desktop.sample.AppMenuAwtSampleKt")
     javaLauncher.set(javaToolchains.launcherFor {
         languageVersion.set(JavaLanguageVersion.of(21))
     })
@@ -108,7 +107,7 @@ tasks.register<JavaExec>("runSkikoSample") {
     group = "application"
     description = "Runs example of integration with Skiko"
     classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("org.jetbrains.kwm.sample.SkikoSampleKt")
+    mainClass.set("org.jetbrains.desktop.sample.SkikoSampleKt")
     javaLauncher.set(javaToolchains.launcherFor {
         languageVersion.set(JavaLanguageVersion.of(21))
     })

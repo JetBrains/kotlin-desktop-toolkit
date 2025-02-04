@@ -4,12 +4,12 @@
  * This generated file contains a sample Kotlin library project to get you started.
  * For more details on building Java & JVM projects, please refer to https://docs.gradle.org/8.10.2/userguide/building_java_projects.html in the Gradle documentation.
  */
-import org.jetbrains.kwm.buildscripts.CompileRustTask
-import org.jetbrains.kwm.buildscripts.DownloadJExtractTask
-import org.jetbrains.kwm.buildscripts.GenerateJavaBindingsTask
-import org.jetbrains.kwm.buildscripts.KotlinDesktopToolkitAttributes
-import org.jetbrains.kwm.buildscripts.KotlingDesktopToolkitArtifactType
-import org.jetbrains.kwm.buildscripts.KotlingDesktopToolkitNativeProfile
+import org.jetbrains.desktop.buildscripts.CompileRustTask
+import org.jetbrains.desktop.buildscripts.DownloadJExtractTask
+import org.jetbrains.desktop.buildscripts.GenerateJavaBindingsTask
+import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
+import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
+import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -57,16 +57,16 @@ java {
 }
 
 tasks.test {
-    dependsOn(compileDebugKwmTask)
+    dependsOn(compileDebugDesktopToolkitTask)
     // Use JUnit Platform for unit tests.
     jvmArgs("--enable-preview")
-    systemProperty("kdt.library.path", compileDebugKwmTask.flatMap { it.libraryFile }.get().absolutePath)
+    systemProperty("kdt.library.path", compileDebugDesktopToolkitTask.flatMap { it.libraryFile }.get().absolutePath)
     systemProperty("kdt.native.log.path", "./build/logs/skiko_sample.log")
     useJUnitPlatform()
 }
 
-val compileDebugKwmTask = tasks.register<CompileRustTask>("compileNative") {
-    crateName = "kwm-macos"
+val compileDebugDesktopToolkitTask = tasks.register<CompileRustTask>("compileNative") {
+    crateName = "desktop-macos"
     rustProfile = "dev"
     nativeDirectory = layout.projectDirectory.dir("../native")
 }
@@ -83,17 +83,17 @@ val nativeConsumable = configurations.consumable("nativeParts") {
     }
 }
 
-artifacts.add(nativeConsumable.name, compileDebugKwmTask.flatMap { it.libraryFile }) {
-    builtBy(compileDebugKwmTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
+artifacts.add(nativeConsumable.name, compileDebugDesktopToolkitTask.flatMap { it.libraryFile }) {
+    builtBy(compileDebugDesktopToolkitTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
 }
 
 val generateBindingsTask = tasks.register<GenerateJavaBindingsTask>("generateBindings") {
     dependsOn(downloadJExtractTask)
-    dependsOn(compileDebugKwmTask)
+    dependsOn(compileDebugDesktopToolkitTask)
 
     jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
-    headerFile = compileDebugKwmTask.flatMap { it.headerFile }
-    packageName = "org.jetbrains.kwm.macos.generated"
+    headerFile = compileDebugDesktopToolkitTask.flatMap { it.headerFile }
+    packageName = "org.jetbrains.desktop.macos.generated"
     generatedSourcesDirectory = layout.projectDirectory.dir("src/main/java/")
 }
 
@@ -113,9 +113,9 @@ tasks.named<Jar>("sourcesJar") {
 sourceSets.main {
     // redundant because we already wire `src/main/java`
     // java.srcDirs(generateBindingsTask.flatMap { it.generatedSources })
-    resources.srcDirs(compileDebugKwmTask.map { it.libraryDirectory }) // parentFile because we need a directory
+    resources.srcDirs(compileDebugDesktopToolkitTask.map { it.libraryDirectory }) // parentFile because we need a directory
 }
 
 tasks.processResources {
-    dependsOn(compileDebugKwmTask)
+    dependsOn(compileDebugDesktopToolkitTask)
 }
