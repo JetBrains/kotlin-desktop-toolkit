@@ -7,6 +7,9 @@
 import org.jetbrains.kwm.buildscripts.CompileRustTask
 import org.jetbrains.kwm.buildscripts.DownloadJExtractTask
 import org.jetbrains.kwm.buildscripts.GenerateJavaBindingsTask
+import org.jetbrains.kwm.buildscripts.KotlinDesktopToolkitAttributes
+import org.jetbrains.kwm.buildscripts.KotlingDesktopToolkitArtifactType
+import org.jetbrains.kwm.buildscripts.KotlingDesktopToolkitNativeProfile
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -86,6 +89,17 @@ val compileDebugKwmTask = tasks.register<CompileRustTask>("compileNative") {
 val downloadJExtractTask = tasks.register<DownloadJExtractTask>("downloadJExtract") {
     slug = "22/6/openjdk-22-jextract+6-47"
     jextractDirectory = layout.buildDirectory.dir("jextract")
+}
+
+val nativeConsumable = configurations.consumable("nativeParts") {
+    attributes {
+        attribute(KotlinDesktopToolkitAttributes.TYPE, KotlingDesktopToolkitArtifactType.NATIVE_LIBRARY)
+        attribute(KotlinDesktopToolkitAttributes.PROFILE, KotlingDesktopToolkitNativeProfile.DEBUG)
+    }
+}
+
+artifacts.add(nativeConsumable.name, compileDebugKwmTask.flatMap { it.libraryFile }) {
+    builtBy(compileDebugKwmTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
 }
 
 val generateBindingsTask = tasks.register<GenerateJavaBindingsTask>("generateBindings") {

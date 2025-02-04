@@ -1,4 +1,8 @@
+import org.gradle.kotlin.dsl.singleFile
 import org.jetbrains.kwm.buildscripts.Arch
+import org.jetbrains.kwm.buildscripts.KotlinDesktopToolkitAttributes
+import org.jetbrains.kwm.buildscripts.KotlingDesktopToolkitArtifactType
+import org.jetbrains.kwm.buildscripts.KotlingDesktopToolkitNativeProfile
 import org.jetbrains.kwm.buildscripts.Os
 import org.jetbrains.kwm.buildscripts.buildArch
 import org.jetbrains.kwm.buildscripts.buildOs
@@ -64,8 +68,21 @@ application {
                                        "-Djextract.trace.downcalls=false")
 }
 
+val depScope = configurations.dependencyScope("native") {
+    withDependencies {
+        add(project.dependencies.project(":kotlin-desktop-toolkit"))
+    }
+}
+val nativeLib = configurations.resolvable("nativeParts") {
+    extendsFrom(depScope.get())
+    attributes {
+        attribute(KotlinDesktopToolkitAttributes.TYPE, KotlingDesktopToolkitArtifactType.NATIVE_LIBRARY)
+        attribute(KotlinDesktopToolkitAttributes.PROFILE, KotlingDesktopToolkitNativeProfile.DEBUG)
+    }
+}
+
 tasks.named<JavaExec>("run") {
-    environment("DYLD_LIBRARY_PATH", "/Users/pavel/work/KWM/native/target/debug")
+    environment("DYLD_LIBRARY_PATH", nativeLib.get().singleFile.parent)
 }
 
 tasks.register<JavaExec>("runAppMenuAwtSample") {
@@ -81,7 +98,7 @@ tasks.register<JavaExec>("runAppMenuAwtSample") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false"
     )
-    environment("DYLD_LIBRARY_PATH", "/Users/pavel.sergeev/work/kotlin-desktop-toolkit/native/target/debug")
+    environment("DYLD_LIBRARY_PATH", nativeLib.get().singleFile.parent)
 }
 
 tasks.register<JavaExec>("runSkikoSample") {
@@ -98,28 +115,28 @@ tasks.register<JavaExec>("runSkikoSample") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false"
     )
-    environment("DYLD_LIBRARY_PATH", "/Users/pavel.sergeev/work/kotlin-desktop-toolkit/native/target/debug")
+    environment("DYLD_LIBRARY_PATH", nativeLib.get().singleFile.parent)
     environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
 }
 
-tasks.register<JavaExec>("runSkikoSampleRelease") {
-    group = "application"
-    description = "Runs example of integration with Skiko with release binary"
-    classpath = sourceSets["main"].runtimeClasspath
-    mainClass.set("org.jetbrains.kwm.sample.SkikoSampleKt")
-    javaLauncher.set(javaToolchains.launcherFor {
-        languageVersion.set(JavaLanguageVersion.of(21))
-    })
-    jvmArgs = listOf(
-        "--enable-preview",
-        "-XstartOnFirstThread",
-        "--enable-native-access=ALL-UNNAMED",
-        "-Djextract.trace.downcalls=false"
-    )
-    environment("DYLD_LIBRARY_PATH", "/Users/pavel.sergeev/work/kotlin-desktop-toolkit/native/target/release")
-//    environment("MallocStackLogging", "1")
-}
+//tasks.register<JavaExec>("runSkikoSampleRelease") {
+//    group = "application"
+//    description = "Runs example of integration with Skiko with release binary"
+//    classpath = sourceSets["main"].runtimeClasspath
+//    mainClass.set("org.jetbrains.kwm.sample.SkikoSampleKt")
+//    javaLauncher.set(javaToolchains.launcherFor {
+//        languageVersion.set(JavaLanguageVersion.of(21))
+//    })
+//    jvmArgs = listOf(
+//        "--enable-preview",
+//        "-XstartOnFirstThread",
+//        "--enable-native-access=ALL-UNNAMED",
+//        "-Djextract.trace.downcalls=false"
+//    )
+//    environment("DYLD_LIBRARY_PATH", nativeLib.get().singleFile.parent)
+////    environment("MallocStackLogging", "1")
+//}
 
 tasks.named<Test>("test") {
     // Use JUnit Platform for unit tests.
