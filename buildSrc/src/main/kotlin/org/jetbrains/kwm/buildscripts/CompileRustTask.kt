@@ -126,6 +126,7 @@ private fun ExecOperations.compileRust(
 
     nativeDirectory
         .resolve("target")
+        .resolve(rustTarget)
         .resolve(folderName)
         .resolve(libraryFile.fileName)
         .copyTo(libraryFile, overwrite = true)
