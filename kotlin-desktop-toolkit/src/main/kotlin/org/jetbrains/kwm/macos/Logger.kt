@@ -176,10 +176,10 @@ object Logger {
     }
 }
 
-fun initLogger(logFile: Path,
-               consoleLogLevel: LogLevel = LogLevel.Warn,
-               fileLogLevel: LogLevel = LogLevel.Info,
-               appender: AppenderInterface = DefaultConsoleAppender.fromLevel(consoleLogLevel)) {
+internal fun initLogger(logFile: Path,
+               consoleLogLevel: LogLevel,
+               fileLogLevel: LogLevel,
+               appender: AppenderInterface) {
     ffiDownCall {
         Logger.appender = appender
 

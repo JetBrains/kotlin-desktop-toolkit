@@ -82,7 +82,9 @@ val nativeLib = configurations.resolvable("nativeParts") {
 }
 
 tasks.named<JavaExec>("run") {
-    environment("DYLD_LIBRARY_PATH", nativeLib.get().singleFile.parent)
+    jvmArgs("--enable-preview")
+    systemProperty("kdt.library.path", nativeLib.get().singleFile)
+    systemProperty("kdt.native.log.path", "./build/logs/skiko_sample.log")
 }
 
 tasks.register<JavaExec>("runAppMenuAwtSample") {
@@ -98,7 +100,8 @@ tasks.register<JavaExec>("runAppMenuAwtSample") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false"
     )
-    environment("DYLD_LIBRARY_PATH", nativeLib.get().singleFile.parent)
+    systemProperty("kdt.library.path", nativeLib.get().singleFile)
+    systemProperty("kdt.native.log.path", "./build/logs/skiko_sample.log")
 }
 
 tasks.register<JavaExec>("runSkikoSample") {
@@ -115,28 +118,11 @@ tasks.register<JavaExec>("runSkikoSample") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false"
     )
-    environment("DYLD_LIBRARY_PATH", nativeLib.get().singleFile.parent)
+    systemProperty("kdt.library.path", nativeLib.get().singleFile)
+    systemProperty("kdt.native.log.path", "./build/logs/skiko_sample.log")
     environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
 }
-
-//tasks.register<JavaExec>("runSkikoSampleRelease") {
-//    group = "application"
-//    description = "Runs example of integration with Skiko with release binary"
-//    classpath = sourceSets["main"].runtimeClasspath
-//    mainClass.set("org.jetbrains.kwm.sample.SkikoSampleKt")
-//    javaLauncher.set(javaToolchains.launcherFor {
-//        languageVersion.set(JavaLanguageVersion.of(21))
-//    })
-//    jvmArgs = listOf(
-//        "--enable-preview",
-//        "-XstartOnFirstThread",
-//        "--enable-native-access=ALL-UNNAMED",
-//        "-Djextract.trace.downcalls=false"
-//    )
-//    environment("DYLD_LIBRARY_PATH", nativeLib.get().singleFile.parent)
-////    environment("MallocStackLogging", "1")
-//}
 
 tasks.named<Test>("test") {
     // Use JUnit Platform for unit tests.

@@ -94,8 +94,6 @@ private fun ExecOperations.generateJavaBindings(
         add(packageName)
         add("--output")
         add(generatedSourcesDirectory.pathString)
-        add("--library")
-        add(headerFile.nameWithoutExtension)
         filteredSymbols.map {
             addAll(it)
         }

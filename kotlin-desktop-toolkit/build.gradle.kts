@@ -56,27 +56,12 @@ java {
     withSourcesJar()
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("myLibrary") {
-            from(components["java"])
-        }
-    }
-
-    repositories {
-        maven {
-            name = "myRepo"
-            url = uri(layout.buildDirectory.dir("repo"))
-        }
-    }
-}
-
 tasks.test {
     dependsOn(compileDebugKwmTask)
-
     // Use JUnit Platform for unit tests.
     jvmArgs("--enable-preview")
-    environment("DYLD_LIBRARY_PATH", compileDebugKwmTask.flatMap { it.libraryDirectory }.get().asFile.absolutePath) // TODO: add env for each OS
+    systemProperty("kdt.library.path", compileDebugKwmTask.flatMap { it.libraryFile }.get().absolutePath)
+    systemProperty("kdt.native.log.path", "./build/logs/skiko_sample.log")
     useJUnitPlatform()
 }
 

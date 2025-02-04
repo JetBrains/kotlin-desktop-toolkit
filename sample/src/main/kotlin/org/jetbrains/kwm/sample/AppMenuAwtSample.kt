@@ -8,8 +8,9 @@ import javax.swing.JFrame
 import kotlin.concurrent.thread
 
 fun main() {
+    KotlinDesktopToolkit.init()
     Logger.info { runtimeInfo() }
-    /// Toolkit initialization will instansiate NSApplication
+    /// Toolkit initialization will instantiate NSApplication
     val toolkit = Toolkit.getDefaultToolkit()
     GrandCentralDispatch.dispatchOnMainSync {
         AppMenuManager.setMainMenuToNone()

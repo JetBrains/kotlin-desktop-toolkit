@@ -10,7 +10,7 @@ import kotlin.concurrent.thread
 
 
 fun main() {
-    initLogger(logFile = Path.of("./build/logs/app_samlpe.log"))
+    KotlinDesktopToolkit.init()
     Logger.info { runtimeInfo() }
     Application.init(Application.ApplicationConfig(
 //        disableDictationMenuItem = true,

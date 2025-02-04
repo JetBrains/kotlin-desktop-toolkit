@@ -4,11 +4,13 @@ import org.jetbrains.kwm.macos.AppMenuItem
 import org.jetbrains.kwm.macos.AppMenuStructure
 import org.jetbrains.kwm.macos.AppMenuManager
 import org.jetbrains.kwm.macos.GrandCentralDispatch
+import org.jetbrains.kwm.macos.KotlinDesktopToolkit
 import kotlin.test.Test
 
 class ApplicationMenuTest {
     @Test
     fun smokeTest() {
+        KotlinDesktopToolkit.init()
         GrandCentralDispatch.dispatchOnMain {
             AppMenuManager.setMainMenu(AppMenuStructure())
             AppMenuManager.setMainMenu(AppMenuStructure(

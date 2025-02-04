@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test
 class MetalTests {
     @Test
     fun smokeTest() {
+
         val (device, queue) = GrandCentralDispatch.dispatchOnMainSync {
             val device = MetalDevice.create()
             val queue = MetalCommandQueue.create(device)
