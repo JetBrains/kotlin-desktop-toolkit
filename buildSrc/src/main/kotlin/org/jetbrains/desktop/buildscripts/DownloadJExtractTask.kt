@@ -36,7 +36,7 @@ abstract class DownloadJExtractTask @Inject constructor(
     val jextractBinary = providerFactory.provider {
         val dir = jextractDirectory.get().asFile
         when (platform) { // FIXME: implement for each platform if required
-                else -> dir.resolve("jextract-22/bin/jextract") // FIXME: path under the directory
+            else -> dir.resolve("jextract-22/bin/jextract") // FIXME: path under the directory
         }
     }
 
@@ -66,20 +66,19 @@ private fun downloadJExtract(
         tempFile.outputStream().use { output -> input.copyTo(output) }
     }
 
-    archiveOperations.tarTree(tempFile).visit(object: Action<FileVisitDetails> {
-        override fun execute(details: FileVisitDetails) {
-            if (!details.isDirectory) {
-                val targetFile = jextractDirectory.resolve(details.relativePath.pathString)
-                Files.createDirectories(targetFile.parent)
-                targetFile.toFile().let {
-                    details.file.copyTo(it, overwrite = true)
-                    if (details.permissions.user.execute) {
-                        it.setExecutable(true)
-                    }
+    archiveOperations.tarTree(tempFile).visit {
+        val details = this
+        if (!details.isDirectory) {
+            val targetFile = jextractDirectory.resolve(details.relativePath.pathString)
+            Files.createDirectories(targetFile.parent)
+            targetFile.toFile().let {
+                details.file.copyTo(it, overwrite = true)
+                if (details.permissions.user.execute) {
+                    it.setExecutable(true)
                 }
             }
         }
-    })
+    }
     tempFile.delete()
 }
 
