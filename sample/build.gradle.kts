@@ -80,10 +80,20 @@ val nativeLib = configurations.resolvable("nativeParts") {
     }
 }
 
+fun JavaExec.setUpLoggingAndLibraryPath() {
+    val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample.log").map { it.asFile.absolutePath }
+    val nativeLibPath = nativeLib.map { it.singleFile.absolutePath }
+    jvmArgumentProviders.add(CommandLineArgumentProvider {
+        listOf(
+            "-Dkdt.library.path=${nativeLibPath.get()}",
+            "-Dkdt.native.log.path=${logFilePath.get()}",
+        )
+    })
+}
+
 tasks.named<JavaExec>("run") {
     jvmArgs("--enable-preview")
-    systemProperty("kdt.library.path", nativeLib.get().singleFile)
-    systemProperty("kdt.native.log.path", "./build/logs/skiko_sample.log")
+    setUpLoggingAndLibraryPath()
 }
 
 tasks.register<JavaExec>("runAppMenuAwtSample") {
@@ -99,8 +109,7 @@ tasks.register<JavaExec>("runAppMenuAwtSample") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false"
     )
-    systemProperty("kdt.library.path", nativeLib.get().singleFile)
-    systemProperty("kdt.native.log.path", "./build/logs/skiko_sample.log")
+    setUpLoggingAndLibraryPath()
 }
 
 tasks.register<JavaExec>("runSkikoSample") {
@@ -117,8 +126,8 @@ tasks.register<JavaExec>("runSkikoSample") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false"
     )
-    systemProperty("kdt.library.path", nativeLib.get().singleFile)
-    systemProperty("kdt.native.log.path", "./build/logs/skiko_sample.log")
+    setUpLoggingAndLibraryPath()
+    
     environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
 }
