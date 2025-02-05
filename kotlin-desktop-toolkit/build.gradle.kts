@@ -21,7 +21,7 @@ plugins {
 }
 
 group = "org.jetbrains"
-version = "0.1-SNAPSHOT"
+version = (project.properties["version"] as? String)?.takeIf { it.isNotBlank() && it != "unspecified" } ?: "SNAPSHOT"
 
 repositories {
     // Use Maven Central for resolving dependencies.
@@ -118,4 +118,32 @@ sourceSets.main {
 
 tasks.processResources {
     dependsOn(compileDebugDesktopToolkitTask)
+}
+
+val spaceUsername: String? by project
+val spacePassword: String? by project
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+            pom {
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "IntellijDependencies"
+            url = uri("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies")
+            credentials {
+                username = spaceUsername
+                password = spacePassword
+            }
+        }
+    }
 }
