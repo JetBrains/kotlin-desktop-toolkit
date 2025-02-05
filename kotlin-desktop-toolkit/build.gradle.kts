@@ -60,7 +60,12 @@ tasks.test {
     dependsOn(compileDebugDesktopToolkitTask)
     // Use JUnit Platform for unit tests.
     jvmArgs("--enable-preview")
-    systemProperty("kdt.library.path", compileDebugDesktopToolkitTask.flatMap { it.libraryFile }.get().absolutePath)
+    val nativeLibProvider = compileDebugDesktopToolkitTask.flatMap { it.libraryFile }.map { it.absolutePath }
+    jvmArgumentProviders.add(CommandLineArgumentProvider {
+        listOf(
+            "-Dkdt.library.path=${nativeLibProvider.get()}",
+        )
+    })
     systemProperty("kdt.native.log.path", "./build/logs/skiko_sample.log")
     useJUnitPlatform()
 }
