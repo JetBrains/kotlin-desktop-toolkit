@@ -10,7 +10,7 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }
 
-rootProject.name = "KWM"
+rootProject.name = "kotlin-desktop-toolkit"
 
 include("kotlin-desktop-toolkit")
 include("sample")

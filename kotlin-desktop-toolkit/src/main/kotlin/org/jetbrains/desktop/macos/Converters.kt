@@ -9,7 +9,7 @@ import org.jetbrains.desktop.macos.generated.LogicalSize as NativeLogicalSize
 import org.jetbrains.desktop.macos.generated.LogicalPoint as NativeLogicalPoint
 import org.jetbrains.desktop.macos.generated.PhysicalSize as NativePhysicalSize
 import org.jetbrains.desktop.macos.generated.Color as NativeColor
-//import org.jetbrains.kwm.macos.generated.PhysicalPoint as NativePhysicalPoint
+//import org.jetbrains.desktop.macos.generated.PhysicalPoint as NativePhysicalPoint
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment): LogicalSize {
     return LogicalSize(width = NativeLogicalSize.width(s),
