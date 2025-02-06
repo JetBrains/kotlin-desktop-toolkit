@@ -33,6 +33,12 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *             struct MouseDraggedEvent mouse_dragged;
  *         };
  *         struct {
+ *             struct MouseEnteredEvent mouse_entered;
+ *         };
+ *         struct {
+ *             struct MouseExitedEvent mouse_exited;
+ *         };
+ *         struct {
  *             struct MouseDownEvent mouse_down;
  *         };
  *         struct {

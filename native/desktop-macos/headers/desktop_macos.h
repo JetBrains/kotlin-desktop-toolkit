@@ -402,6 +402,20 @@ typedef struct MouseDraggedEvent {
   MouseButtonsSet pressed_buttons;
 } MouseDraggedEvent;
 
+typedef struct MouseEnteredEvent {
+  WindowId window_id;
+  struct LogicalPoint location_in_window;
+  struct LogicalPoint location_in_screen;
+  MouseButtonsSet pressed_buttons;
+} MouseEnteredEvent;
+
+typedef struct MouseExitedEvent {
+  WindowId window_id;
+  struct LogicalPoint location_in_window;
+  struct LogicalPoint location_in_screen;
+  MouseButtonsSet pressed_buttons;
+} MouseExitedEvent;
+
 typedef struct MouseDownEvent {
   WindowId window_id;
   enum MouseButton button;
@@ -471,6 +485,8 @@ typedef enum Event_Tag {
   ModifiersChanged,
   MouseMoved,
   MouseDragged,
+  MouseEntered,
+  MouseExited,
   MouseDown,
   MouseUp,
   ScrollWheel,
@@ -501,6 +517,12 @@ typedef struct Event {
     };
     struct {
       struct MouseDraggedEvent mouse_dragged;
+    };
+    struct {
+      struct MouseEnteredEvent mouse_entered;
+    };
+    struct {
+      struct MouseExitedEvent mouse_exited;
     };
     struct {
       struct MouseDownEvent mouse_down;

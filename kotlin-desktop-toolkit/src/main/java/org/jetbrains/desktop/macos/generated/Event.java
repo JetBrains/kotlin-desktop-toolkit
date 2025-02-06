@@ -33,6 +33,12 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *             struct MouseDraggedEvent mouse_dragged;
  *         };
  *         struct {
+ *             struct MouseEnteredEvent mouse_entered;
+ *         };
+ *         struct {
+ *             struct MouseExitedEvent mouse_exited;
+ *         };
+ *         struct {
  *             struct MouseDownEvent mouse_down;
  *         };
  *         struct {
@@ -75,47 +81,53 @@ public class Event {
         MemoryLayout.unionLayout(
             MemoryLayout.structLayout(
                 KeyDownEvent.layout().withName("key_down")
-            ).withName("$anon$490:5"),
+            ).withName("$anon$506:5"),
             MemoryLayout.structLayout(
                 KeyUpEvent.layout().withName("key_up")
-            ).withName("$anon$493:5"),
+            ).withName("$anon$509:5"),
             MemoryLayout.structLayout(
                 ModifiersChangedEvent.layout().withName("modifiers_changed")
-            ).withName("$anon$496:5"),
+            ).withName("$anon$512:5"),
             MemoryLayout.structLayout(
                 MouseMovedEvent.layout().withName("mouse_moved")
-            ).withName("$anon$499:5"),
+            ).withName("$anon$515:5"),
             MemoryLayout.structLayout(
                 MouseDraggedEvent.layout().withName("mouse_dragged")
-            ).withName("$anon$502:5"),
+            ).withName("$anon$518:5"),
+            MemoryLayout.structLayout(
+                MouseEnteredEvent.layout().withName("mouse_entered")
+            ).withName("$anon$521:5"),
+            MemoryLayout.structLayout(
+                MouseExitedEvent.layout().withName("mouse_exited")
+            ).withName("$anon$524:5"),
             MemoryLayout.structLayout(
                 MouseDownEvent.layout().withName("mouse_down")
-            ).withName("$anon$505:5"),
+            ).withName("$anon$527:5"),
             MemoryLayout.structLayout(
                 MouseUpEvent.layout().withName("mouse_up")
-            ).withName("$anon$508:5"),
+            ).withName("$anon$530:5"),
             MemoryLayout.structLayout(
                 ScrollWheelEvent.layout().withName("scroll_wheel")
-            ).withName("$anon$511:5"),
+            ).withName("$anon$533:5"),
             MemoryLayout.structLayout(
                 WindowScreenChangeEvent.layout().withName("window_screen_change")
-            ).withName("$anon$514:5"),
+            ).withName("$anon$536:5"),
             MemoryLayout.structLayout(
                 WindowResizeEvent.layout().withName("window_resize")
-            ).withName("$anon$517:5"),
+            ).withName("$anon$539:5"),
             MemoryLayout.structLayout(
                 WindowMoveEvent.layout().withName("window_move")
-            ).withName("$anon$520:5"),
+            ).withName("$anon$542:5"),
             MemoryLayout.structLayout(
                 WindowFocusChangeEvent.layout().withName("window_focus_change")
-            ).withName("$anon$523:5"),
+            ).withName("$anon$545:5"),
             MemoryLayout.structLayout(
                 WindowCloseRequestEvent.layout().withName("window_close_request")
-            ).withName("$anon$526:5"),
+            ).withName("$anon$548:5"),
             MemoryLayout.structLayout(
                 WindowFullScreenToggleEvent.layout().withName("window_full_screen_toggle")
-            ).withName("$anon$529:5")
-        ).withName("$anon$489:3")
+            ).withName("$anon$551:5")
+        ).withName("$anon$505:3")
     ).withName("Event");
 
     /**
@@ -169,7 +181,7 @@ public class Event {
         struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout key_down$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$490:5"), groupElement("key_down"));
+    private static final GroupLayout key_down$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$506:5"), groupElement("key_down"));
 
     /**
      * Layout for field:
@@ -213,7 +225,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, key_down$OFFSET, key_down$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout key_up$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$493:5"), groupElement("key_up"));
+    private static final GroupLayout key_up$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$509:5"), groupElement("key_up"));
 
     /**
      * Layout for field:
@@ -257,7 +269,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, key_up$OFFSET, key_up$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout modifiers_changed$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$496:5"), groupElement("modifiers_changed"));
+    private static final GroupLayout modifiers_changed$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$512:5"), groupElement("modifiers_changed"));
 
     /**
      * Layout for field:
@@ -301,7 +313,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, modifiers_changed$OFFSET, modifiers_changed$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout mouse_moved$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$499:5"), groupElement("mouse_moved"));
+    private static final GroupLayout mouse_moved$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$515:5"), groupElement("mouse_moved"));
 
     /**
      * Layout for field:
@@ -345,7 +357,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, mouse_moved$OFFSET, mouse_moved$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout mouse_dragged$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$502:5"), groupElement("mouse_dragged"));
+    private static final GroupLayout mouse_dragged$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$518:5"), groupElement("mouse_dragged"));
 
     /**
      * Layout for field:
@@ -389,7 +401,95 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, mouse_dragged$OFFSET, mouse_dragged$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout mouse_down$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$505:5"), groupElement("mouse_down"));
+    private static final GroupLayout mouse_entered$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$521:5"), groupElement("mouse_entered"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * struct MouseEnteredEvent mouse_entered
+     * }
+     */
+    public static final GroupLayout mouse_entered$layout() {
+        return mouse_entered$LAYOUT;
+    }
+
+    private static final long mouse_entered$OFFSET = 8;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * struct MouseEnteredEvent mouse_entered
+     * }
+     */
+    public static final long mouse_entered$offset() {
+        return mouse_entered$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * struct MouseEnteredEvent mouse_entered
+     * }
+     */
+    public static MemorySegment mouse_entered(MemorySegment struct) {
+        return struct.asSlice(mouse_entered$OFFSET, mouse_entered$LAYOUT.byteSize());
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * struct MouseEnteredEvent mouse_entered
+     * }
+     */
+    public static void mouse_entered(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, mouse_entered$OFFSET, mouse_entered$LAYOUT.byteSize());
+    }
+
+    private static final GroupLayout mouse_exited$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$524:5"), groupElement("mouse_exited"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * struct MouseExitedEvent mouse_exited
+     * }
+     */
+    public static final GroupLayout mouse_exited$layout() {
+        return mouse_exited$LAYOUT;
+    }
+
+    private static final long mouse_exited$OFFSET = 8;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * struct MouseExitedEvent mouse_exited
+     * }
+     */
+    public static final long mouse_exited$offset() {
+        return mouse_exited$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * struct MouseExitedEvent mouse_exited
+     * }
+     */
+    public static MemorySegment mouse_exited(MemorySegment struct) {
+        return struct.asSlice(mouse_exited$OFFSET, mouse_exited$LAYOUT.byteSize());
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * struct MouseExitedEvent mouse_exited
+     * }
+     */
+    public static void mouse_exited(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, mouse_exited$OFFSET, mouse_exited$LAYOUT.byteSize());
+    }
+
+    private static final GroupLayout mouse_down$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$527:5"), groupElement("mouse_down"));
 
     /**
      * Layout for field:
@@ -433,7 +533,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, mouse_down$OFFSET, mouse_down$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout mouse_up$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$508:5"), groupElement("mouse_up"));
+    private static final GroupLayout mouse_up$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$530:5"), groupElement("mouse_up"));
 
     /**
      * Layout for field:
@@ -477,7 +577,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, mouse_up$OFFSET, mouse_up$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout scroll_wheel$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$511:5"), groupElement("scroll_wheel"));
+    private static final GroupLayout scroll_wheel$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$533:5"), groupElement("scroll_wheel"));
 
     /**
      * Layout for field:
@@ -521,7 +621,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, scroll_wheel$OFFSET, scroll_wheel$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_screen_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$514:5"), groupElement("window_screen_change"));
+    private static final GroupLayout window_screen_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$536:5"), groupElement("window_screen_change"));
 
     /**
      * Layout for field:
@@ -565,7 +665,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, window_screen_change$OFFSET, window_screen_change$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_resize$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$517:5"), groupElement("window_resize"));
+    private static final GroupLayout window_resize$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$539:5"), groupElement("window_resize"));
 
     /**
      * Layout for field:
@@ -609,7 +709,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, window_resize$OFFSET, window_resize$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_move$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$520:5"), groupElement("window_move"));
+    private static final GroupLayout window_move$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$542:5"), groupElement("window_move"));
 
     /**
      * Layout for field:
@@ -653,7 +753,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, window_move$OFFSET, window_move$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_focus_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$523:5"), groupElement("window_focus_change"));
+    private static final GroupLayout window_focus_change$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$545:5"), groupElement("window_focus_change"));
 
     /**
      * Layout for field:
@@ -697,7 +797,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, window_focus_change$OFFSET, window_focus_change$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_close_request$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$526:5"), groupElement("window_close_request"));
+    private static final GroupLayout window_close_request$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$548:5"), groupElement("window_close_request"));
 
     /**
      * Layout for field:
@@ -741,7 +841,7 @@ public class Event {
         MemorySegment.copy(fieldValue, 0L, struct, window_close_request$OFFSET, window_close_request$LAYOUT.byteSize());
     }
 
-    private static final GroupLayout window_full_screen_toggle$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$489:3"), groupElement("$anon$529:5"), groupElement("window_full_screen_toggle"));
+    private static final GroupLayout window_full_screen_toggle$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$505:3"), groupElement("$anon$551:5"), groupElement("window_full_screen_toggle"));
 
     /**
      * Layout for field:

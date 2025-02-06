@@ -1,19 +1,50 @@
-use std::{borrow::{Borrow, BorrowMut}, cell::{Cell, RefCell}, ffi::{c_void, CStr}, rc::Rc};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    cell::{Cell, RefCell},
+    ffi::{c_void, CStr},
+    rc::Rc,
+};
 
 use anyhow::{ensure, Context, Ok};
 use bitflags::Flags;
 use log::info;
 use objc2::{
-    declare_class, define_class, msg_send, rc::Retained, runtime::{AnyObject, Bool, ProtocolObject}, sel, ClassType, DeclaredClass, MainThreadOnly
+    declare_class, define_class, msg_send,
+    rc::Retained,
+    runtime::{AnyObject, Bool, ProtocolObject},
+    sel, ClassType, DeclaredClass, MainThreadOnly,
 };
-use objc2_app_kit::{NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSEventModifierFlags, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility};
-use objc2_foundation::{MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect, NSString};
+use objc2_app_kit::{
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSEventModifierFlags, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility
+};
+use objc2_foundation::{
+    MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect,
+    NSString,
+};
 
 use crate::{
-    common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, define_objc_ref, logger::catch_panic, macos::{application_api::AppState, custom_titlebar::CustomTitlebar, events::{handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change}, keyboard::unpack_key_event, string::copy_to_ns_string}
+    common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},
+    define_objc_ref,
+    logger::catch_panic,
+    macos::{
+        application_api::AppState,
+        custom_titlebar::CustomTitlebar,
+        events::{
+            handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit, handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change
+        },
+        keyboard::unpack_key_event,
+        string::copy_to_ns_string,
+    },
 };
 
-use super::{application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::{Event, MouseMovedEvent}, metal_api::MetalView, screen::{self, NSScreenExts, ScreenId}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}};
+use super::{
+    application_api::MyNSApplication,
+    custom_titlebar::CustomTitlebarCell,
+    events::{Event, MouseMovedEvent},
+    metal_api::MetalView,
+    screen::{self, NSScreenExts, ScreenId},
+    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
+};
 
 #[allow(dead_code)]
 pub(crate) struct Window {
@@ -26,7 +57,7 @@ pub(crate) struct Window {
 
 pub(crate) struct WindowBackgroundState {
     is_transparent: bool,
-    substrate: Option<Retained<NSVisualEffectView>>
+    substrate: Option<Retained<NSVisualEffectView>>,
 }
 
 impl From<WindowVisualEffect> for NSVisualEffectMaterial {
@@ -54,9 +85,7 @@ pub(crate) trait NSWindowExts {
     fn me(&self) -> &NSWindow;
 
     fn window_id(&self) -> WindowId {
-        unsafe {
-            self.me().windowNumber() as WindowId
-        }
+        unsafe { self.me().windowNumber() as WindowId }
     }
 
     fn get_size(&self) -> LogicalSize {
@@ -87,15 +116,11 @@ pub(crate) trait NSWindowExts {
     }
 
     fn get_max_size(&self) -> LogicalSize {
-        return unsafe {
-            self.me().maxSize().into()
-        };
+        return unsafe { self.me().maxSize().into() };
     }
 
     fn get_min_size(&self) -> LogicalSize {
-        return unsafe {
-            self.me().minSize().into()
-        };
+        return unsafe { self.me().minSize().into() };
     }
 
     fn is_full_screen(&self) -> bool {
@@ -140,22 +165,24 @@ impl Window {
         if params.use_custom_titlebar {
             style |= NSWindowStyleMask::FullSizeContentView;
         }
-        
+
         let screen_height = NSScreen::primary(mtm)
             .context("Can't create a window without a screen")?
-            .frame().size.height;
+            .frame()
+            .size
+            .height;
 
         // Window rect is relative to primary screen
         let frame = LogicalRect::new(params.origin, params.size).to_macos_coords(screen_height);
-        let content_rect = unsafe {
-            NSWindow::contentRectForFrameRect_styleMask(frame, style, mtm)
-        };
+        let content_rect = unsafe { NSWindow::contentRectForFrameRect_styleMask(frame, style, mtm) };
         let ns_window = MyNSWindow::new(mtm, content_rect, style);
         let custom_titlebar = if params.use_custom_titlebar {
             ns_window.setTitlebarAppearsTransparent(true);
             ns_window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
             // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
-            let titlebar = Rc::new(RefCell::new(unsafe { CustomTitlebar::init_custom_titlebar(params.titlebar_height) }.unwrap()));
+            let titlebar = Rc::new(RefCell::new(
+                unsafe { CustomTitlebar::init_custom_titlebar(params.titlebar_height) }.unwrap(),
+            ));
             unsafe {
                 // we assume the window isn't full screen
                 (*titlebar).borrow_mut().activate(&ns_window).unwrap();
@@ -164,7 +191,6 @@ impl Window {
         } else {
             None
         };
-
 
         let mut collection_behaviour: NSWindowCollectionBehavior = unsafe { ns_window.collectionBehavior() };
         if params.is_full_screen_allowed {
@@ -198,7 +224,6 @@ impl Window {
         let root_view = RootView::new(mtm);
         ns_window.setAcceptsMouseMovedEvents(true);
 
-
         let container = unsafe { NSView::new(mtm) };
         unsafe {
             container.setAutoresizesSubviews(true);
@@ -218,7 +243,7 @@ impl Window {
             delegate,
             root_view,
             custom_titlebar,
-            background_state: window_background
+            background_state: window_background,
         });
     }
 
@@ -234,7 +259,7 @@ impl Window {
                 self.ns_window.setOpaque(false);
                 self.ns_window.setBackgroundColor(Some(unsafe { &NSColor::clearColor() }));
                 background_state.is_transparent = true;
-            },
+            }
             WindowBackground::SolidColor(color) => {
                 if let Some(substrate) = background_state.substrate.take() {
                     unsafe {
@@ -245,23 +270,24 @@ impl Window {
                 let ns_color: Retained<NSColor> = From::<Color>::from(color);
                 self.ns_window.setBackgroundColor(Some(&ns_color));
                 background_state.is_transparent = false;
-            },
+            }
             WindowBackground::VisualEffect(window_visual_effect) => {
                 let substrate = if let Some(substrate) = background_state.substrate.take() {
                     substrate
                 } else {
-                    let substrate = unsafe {
-                        NSVisualEffectView::new(mtm)
-                    };
+                    let substrate = unsafe { NSVisualEffectView::new(mtm) };
                     unsafe {
                         substrate.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
                         substrate.setState(NSVisualEffectState::Active);
                         substrate.setFrameSize(self.ns_window.frame().size);
-                        substrate.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
+                        substrate.setAutoresizingMask(
+                            NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
+                        );
                     }
                     let container = self.ns_window.contentView().context("No container")?;
                     unsafe {
-                        container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::Below, None); // None means below all views
+                        container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::Below, None);
+                        // None means below all views
                     }
                     substrate
                 };
@@ -271,7 +297,7 @@ impl Window {
                 self.ns_window.setOpaque(true);
                 background_state.is_transparent = false;
                 background_state.substrate = Some(substrate);
-            },
+            }
         }
         Ok(())
     }
@@ -288,7 +314,7 @@ impl Window {
 
 pub(crate) struct WindowDelegateIvars {
     ns_window: Retained<MyNSWindow>,
-    custom_titlebar: Option<CustomTitlebarCell>
+    custom_titlebar: Option<CustomTitlebarCell>,
 }
 
 define_class!(
@@ -377,11 +403,12 @@ define_class!(
 );
 
 impl WindowDelegate {
-    fn new(mtm: MainThreadMarker,
-           ns_window: Retained<MyNSWindow>,
-           custom_titlebar: Option<CustomTitlebarCell>) -> Retained<Self> {
+    fn new(mtm: MainThreadMarker, ns_window: Retained<MyNSWindow>, custom_titlebar: Option<CustomTitlebarCell>) -> Retained<Self> {
         let this = mtm.alloc();
-        let this = this.set_ivars(WindowDelegateIvars { ns_window, custom_titlebar });
+        let this = this.set_ivars(WindowDelegateIvars {
+            ns_window,
+            custom_titlebar,
+        });
         unsafe { msg_send![super(this), init] }
     }
 }
@@ -419,7 +446,9 @@ impl MyNSWindow {
     }
 }
 
-pub(crate) struct RootViewIvars {}
+pub(crate) struct RootViewIvars {
+    tracking_area: Cell<Option<Retained<NSTrackingArea>>>
+}
 
 define_class!(
     #[unsafe(super(NSView))]
@@ -430,6 +459,18 @@ define_class!(
     unsafe impl NSObjectProtocol for RootView {}
 
     impl RootView {
+        #[allow(non_snake_case)]
+        #[unsafe(method(updateTrackingArea))]
+        fn updateTrackingArea(&self) {
+            catch_panic(|| {
+                let mtm = unsafe {
+                    MainThreadMarker::new_unchecked()
+                };
+                self.update_tracking_area(mtm);
+                Ok(())
+            });
+        }
+
         #[unsafe(method(mouseMoved:))]
         fn mouse_moved(&self, event: &NSEvent) {
             catch_panic(|| {
@@ -458,6 +499,22 @@ define_class!(
         fn other_mouse_dragged(&self, event: &NSEvent) {
             catch_panic(|| {
                 handle_mouse_drag(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(mouseEntered:))]
+        fn mouse_entered(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_mouse_enter(event);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(mouseExited:))]
+        fn mouse_exited(&self, event: &NSEvent) {
+            catch_panic(|| {
+                handle_mouse_exit(event);
                 Ok(())
             });
         }
@@ -548,7 +605,7 @@ define_class!(
         #[unsafe(method(flagsChanged:))]
         fn flags_changed(&self, event: &NSEvent) {
             catch_panic(|| {
-               handle_flags_changed_event(event) 
+               handle_flags_changed_event(event)
             });
         }
 
@@ -581,12 +638,44 @@ define_class!(
 impl RootView {
     pub(crate) fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = mtm.alloc();
-        let this = this.set_ivars(RootViewIvars {});
+        let this = this.set_ivars(RootViewIvars {
+            tracking_area: Cell::new(None)
+        });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {
             root_view.setAutoresizesSubviews(true);
             root_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
         }
+        root_view.update_tracking_area(mtm);
         root_view
+    }
+
+    fn update_tracking_area(&self, mtm: MainThreadMarker) {
+        let rect = self.bounds();
+        let options =
+            NSTrackingAreaOptions::MouseEnteredAndExited |
+            NSTrackingAreaOptions::ActiveInKeyWindow |
+            NSTrackingAreaOptions::EnabledDuringMouseDrag |
+            NSTrackingAreaOptions::CursorUpdate |
+            NSTrackingAreaOptions::InVisibleRect |
+            NSTrackingAreaOptions::AssumeInside;
+        let tracking_area = unsafe {
+            NSTrackingArea::initWithRect_options_owner_userInfo(
+                mtm.alloc(),
+                rect,
+                options,
+                Some(self),
+                None
+            )
+        };
+        if let Some(old_tracking_area) = self.ivars().tracking_area.replace(None) {
+            unsafe {
+                self.removeTrackingArea(&old_tracking_area);
+            }
+        }
+        unsafe {
+            self.addTrackingArea(&tracking_area);
+        }
+        self.ivars().tracking_area.replace(Some(tracking_area));
     }
 }

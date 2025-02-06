@@ -242,9 +242,6 @@ class RotatingBallWindow(device: MetalDevice,
                     performDrawing()
                     EventHandlerResult.Stop
                 }
-                event is Event.WindowMove -> {
-                    println(event)
-                }
             }
             windowContainer.customTitlebar?.startWindowDrag = {
                 window.startDrag()
@@ -343,6 +340,12 @@ class ApplicationState: AutoCloseable {
             is Event.ModifiersChanged -> {
                 Logger.info { "$event" }
             }
+            is Event.MouseEntered -> {
+                Logger.info { "$event" }
+            }
+            is Event.MouseExited -> {
+                Logger.info { "$event" }
+            }
             is Event.MouseMoved -> {
                 Logger.info { "$event" }
             }
@@ -360,7 +363,7 @@ class ApplicationState: AutoCloseable {
     }
 
     fun handleEvent(event: Event): EventHandlerResult {
-//        logEvents(event)
+        logEvents(event)
         val eventWindowId = event.windowId()
 
         return when (event) {

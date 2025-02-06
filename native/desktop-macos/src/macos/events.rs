@@ -82,6 +82,24 @@ pub struct MouseDraggedEvent {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct MouseEnteredEvent {
+    window_id: WindowId,
+    location_in_window: LogicalPoint,
+    location_in_screen: LogicalPoint,
+    pressed_buttons: MouseButtonsSet
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct MouseExitedEvent {
+    window_id: WindowId,
+    location_in_window: LogicalPoint,
+    location_in_screen: LogicalPoint,
+    pressed_buttons: MouseButtonsSet
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct MouseDownEvent {
     window_id: WindowId,
     button: MouseButton,
@@ -163,6 +181,8 @@ pub enum Event {
     ModifiersChanged(ModifiersChangedEvent),
     MouseMoved(MouseMovedEvent),
     MouseDragged(MouseDraggedEvent),
+    MouseEntered(MouseEnteredEvent),
+    MouseExited(MouseExitedEvent),
     MouseDown(MouseDownEvent),
     MouseUp(MouseUpEvent),
     // todo mouse enter and exit
@@ -280,6 +300,32 @@ pub(crate) fn handle_mouse_drag(ns_event: &NSEvent) -> bool {
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
             location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
             pressed_buttons: NSEvent::pressed_mouse_buttons(),
+        });
+        (state.event_handler)(&event)
+    });
+    handled
+}
+
+pub(crate) fn handle_mouse_enter(ns_event: &NSEvent) -> bool {
+    let handled = AppState::with(|state| {
+        let event = Event::MouseEntered(MouseEnteredEvent {
+            window_id: ns_event.window_id(),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
+            pressed_buttons: NSEvent::pressed_mouse_buttons()
+        });
+        (state.event_handler)(&event)
+    });
+    handled
+}
+
+pub(crate) fn handle_mouse_exit(ns_event: &NSEvent) -> bool {
+    let handled = AppState::with(|state| {
+        let event = Event::MouseExited(MouseExitedEvent {
+            window_id: ns_event.window_id(),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
+            pressed_buttons: NSEvent::pressed_mouse_buttons()
         });
         (state.event_handler)(&event)
     });
