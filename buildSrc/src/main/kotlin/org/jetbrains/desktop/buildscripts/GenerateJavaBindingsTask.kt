@@ -44,23 +44,10 @@ abstract class GenerateJavaBindingsTask @Inject constructor(
     }
 }
 
-val macosIncludes = listOf(
-    Paths.get("/Library/Developer/CommandLineTools/usr/lib/clang/16.0.0/include"),
-    Paths.get("/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include"))
-
 private fun ExecOperations.listHeaderSymbols(jextractBinary: Path, headerFile: Path): List<List<String>> {
     val symbols = createTempFile("headerSymbols.txt")
     try {
         val args = buildList {
-            when (buildOs()) {
-                Os.MACOS -> {
-                    for (include in macosIncludes) {
-                        add("--include-dir")
-                        add(include.pathString)
-                    }
-                }
-                else -> {}
-            }
             add("--dump-includes")
             add(symbols.pathString)
             add(headerFile.pathString)
@@ -86,10 +73,6 @@ private fun ExecOperations.generateJavaBindings(
     generatedSourcesDirectory.createDirectories()
     val filteredSymbols = listHeaderSymbols(jextractBinary, headerFile)
     val args = buildList {
-        for (include in macosIncludes) {
-            add("--include-dir")
-            add(include.pathString)
-        }
         add("--target-package")
         add(packageName)
         add("--output")
