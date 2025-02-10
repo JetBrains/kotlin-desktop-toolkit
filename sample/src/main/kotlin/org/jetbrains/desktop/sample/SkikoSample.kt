@@ -229,17 +229,20 @@ class RotatingBallWindow(device: MetalDevice,
 
     init {
         windowContainer.resize(view.size().toLogical(window.scaleFactor()))
-        performDrawing()
+        performDrawing(syncWithCA = true)
     }
 
     override fun handleEvent(event: Event): EventHandlerResult {
         return if (super.handleEvent(event) == EventHandlerResult.Continue) {
             when {
                 event is Event.WindowResize -> {
+                    val isRunning = displayLink.isRunning()
+                    displayLink.setRunning(false)
                     val viewSize = view.size().toLogical(window.scaleFactor())
                     assert(event.size == viewSize)
                     windowContainer.resize(event.size)
-                    performDrawing()
+                    performDrawing(syncWithCA = true)
+                    displayLink.setRunning(isRunning)
                     EventHandlerResult.Stop
                 }
             }

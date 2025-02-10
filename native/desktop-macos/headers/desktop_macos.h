@@ -701,8 +701,6 @@ void metal_deref_device(MetalDeviceRef device);
 
 MetalCommandQueueRef metal_create_command_queue(MetalDeviceRef device);
 
-void metal_command_queue_commit(MetalCommandQueueRef queue);
-
 void metal_deref_command_queue(MetalCommandQueueRef queue);
 
 struct MetalView *metal_create_view(MetalDeviceRef device);
@@ -713,7 +711,9 @@ void metal_view_set_is_opaque(const struct MetalView *view, bool value);
 
 bool metal_view_get_is_opaque(const struct MetalView *view);
 
-void metal_view_present(const struct MetalView *view);
+void metal_view_present(const struct MetalView *view,
+                        MetalCommandQueueRef queue,
+                        bool wait_for_ca_transaction);
 
 struct PhysicalSize metal_view_get_texture_size(const struct MetalView *view);
 

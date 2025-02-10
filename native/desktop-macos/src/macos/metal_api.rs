@@ -1,24 +1,15 @@
-use std::{
-    cell::Cell,
-    ffi::c_void,
-};
+use std::{cell::Cell, ffi::c_void};
 
 use anyhow::Context;
-use objc2::{
-    rc::Retained, runtime::ProtocolObject, ClassType
-};
+use log::info;
+use objc2::{rc::Retained, runtime::ProtocolObject, ClassType};
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
 use objc2_foundation::{MainThreadMarker, NSString};
-use objc2_metal::{
-    MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture,
-};
+use objc2_metal::{MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};
 use objc2_quartz_core::{kCAGravityTopLeft, CAAutoresizingMask, CAMetalDrawable, CAMetalLayer};
 
 use crate::logger::{ffi_boundary, PanicDefault};
-use crate::{
-    common::PhysicalSize,
-    define_objc_ref,
-};
+use crate::{common::PhysicalSize, define_objc_ref};
 
 #[repr(transparent)]
 pub struct MetalDeviceRef {
@@ -28,9 +19,7 @@ define_objc_ref!(MetalDeviceRef, ProtocolObject<dyn MTLDevice>);
 
 impl PanicDefault for MetalDeviceRef {
     fn default() -> Self {
-        MetalDeviceRef {
-            ptr: std::ptr::null_mut(),
-        }
+        MetalDeviceRef { ptr: std::ptr::null_mut() }
     }
 }
 
@@ -38,9 +27,7 @@ impl PanicDefault for MetalDeviceRef {
 pub extern "C" fn metal_create_device() -> MetalDeviceRef {
     ffi_boundary("metal_create_device", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let device = {
-            MTLCreateSystemDefaultDevice().context("Failed to get default system device.")?
-        };
+        let device = { MTLCreateSystemDefaultDevice().context("Failed to get default system device.")? };
         Ok(MetalDeviceRef::new(device))
     })
 }
@@ -62,9 +49,7 @@ define_objc_ref!(MetalCommandQueueRef, ProtocolObject<dyn MTLCommandQueue>);
 
 impl PanicDefault for MetalCommandQueueRef {
     fn default() -> Self {
-        MetalCommandQueueRef {
-            ptr: std::ptr::null_mut(),
-        }
+        MetalCommandQueueRef { ptr: std::ptr::null_mut() }
     }
 }
 
@@ -75,20 +60,6 @@ pub extern "C" fn metal_create_command_queue(device: MetalDeviceRef) -> MetalCom
         let device = unsafe { device.retain() };
         let queue = device.newCommandQueue().unwrap();
         Ok(MetalCommandQueueRef::new(queue))
-    })
-}
-
-#[no_mangle]
-pub extern "C" fn metal_command_queue_commit(queue: MetalCommandQueueRef) {
-    ffi_boundary("metal_command_queue_commit", || {
-        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let queue = unsafe { queue.retain() };
-
-        let command_buffer = queue.commandBuffer().unwrap();
-        command_buffer.setLabel(Some(&NSString::from_str("Present")));
-        command_buffer.commit();
-        command_buffer.waitUntilScheduled();
-        Ok(())
     })
 }
 
@@ -140,7 +111,7 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> *mut MetalView {
             layer.setPresentsWithTransaction(true);
 
             layer.setContentsGravity(kCAGravityTopLeft); // from JWM
-            // fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
+                                                         // fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
         }
 
         let layer_view = unsafe { NSView::new(mtm) };
@@ -149,10 +120,9 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> *mut MetalView {
 
             layer_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::DuringViewResize);
             layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
-            // layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
+                                                                                                        // layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
             layer_view.setLayer(Some(&layer));
         }
-
 
         layer_view.setWantsLayer(true);
 
@@ -186,17 +156,31 @@ pub extern "C" fn metal_view_set_is_opaque(view: &MetalView, value: bool) {
 
 #[no_mangle]
 pub extern "C" fn metal_view_get_is_opaque(view: &MetalView) -> bool {
-    ffi_boundary("metal_view_get_is_opaque", || {
-        Ok(view.layer.isOpaque())
-    })
+    ffi_boundary("metal_view_get_is_opaque", || Ok(view.layer.isOpaque()))
 }
 
 #[no_mangle]
-pub extern "C" fn metal_view_present(view: &MetalView) {
+pub extern "C" fn metal_view_present(view: &MetalView, queue: MetalCommandQueueRef, wait_for_ca_transaction: bool) {
     ffi_boundary("metal_view_present", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         if let Some(drawable) = view.drawable.replace(None) {
-            drawable.present();
+            let queue = unsafe { queue.retain() };
+            let command_buffer = queue.commandBuffer().unwrap();
+            command_buffer.setLabel(Some(&NSString::from_str("Present")));
+            if wait_for_ca_transaction {
+                unsafe {
+                    view.layer.setPresentsWithTransaction(true);
+                }
+                command_buffer.commit();
+                command_buffer.waitUntilScheduled();
+                drawable.present();
+            } else {
+                unsafe {
+                    view.layer.setPresentsWithTransaction(false);
+                }
+                command_buffer.presentDrawable(&ProtocolObject::from_retained(drawable));
+                command_buffer.commit();
+            }
         }
         Ok(())
     })
@@ -204,10 +188,7 @@ pub extern "C" fn metal_view_present(view: &MetalView) {
 
 impl PanicDefault for PhysicalSize {
     fn default() -> Self {
-        PhysicalSize {
-            width: 0.0,
-            height: 0.0,
-        }
+        PhysicalSize { width: 0.0, height: 0.0 }
     }
 }
 
@@ -229,9 +210,7 @@ define_objc_ref!(MetalTextureRef, ProtocolObject<dyn MTLTexture>);
 
 impl PanicDefault for MetalTextureRef {
     fn default() -> Self {
-        MetalTextureRef {
-            ptr: std::ptr::null_mut(),
-        }
+        MetalTextureRef { ptr: std::ptr::null_mut() }
     }
 }
 

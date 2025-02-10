@@ -2977,63 +2977,6 @@ public class desktop_macos_h {
         }
     }
 
-    private static class metal_command_queue_commit {
-        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
-            desktop_macos_h.C_POINTER
-        );
-
-        public static final MemorySegment ADDR = desktop_macos_h.findOrThrow("metal_command_queue_commit");
-
-        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
-    }
-
-    /**
-     * Function descriptor for:
-     * {@snippet lang=c :
-     * void metal_command_queue_commit(MetalCommandQueueRef queue)
-     * }
-     */
-    public static FunctionDescriptor metal_command_queue_commit$descriptor() {
-        return metal_command_queue_commit.DESC;
-    }
-
-    /**
-     * Downcall method handle for:
-     * {@snippet lang=c :
-     * void metal_command_queue_commit(MetalCommandQueueRef queue)
-     * }
-     */
-    public static MethodHandle metal_command_queue_commit$handle() {
-        return metal_command_queue_commit.HANDLE;
-    }
-
-    /**
-     * Address for:
-     * {@snippet lang=c :
-     * void metal_command_queue_commit(MetalCommandQueueRef queue)
-     * }
-     */
-    public static MemorySegment metal_command_queue_commit$address() {
-        return metal_command_queue_commit.ADDR;
-    }
-
-    /**
-     * {@snippet lang=c :
-     * void metal_command_queue_commit(MetalCommandQueueRef queue)
-     * }
-     */
-    public static void metal_command_queue_commit(MemorySegment queue) {
-        var mh$ = metal_command_queue_commit.HANDLE;
-        try {
-            if (TRACE_DOWNCALLS) {
-                traceDowncall("metal_command_queue_commit", queue);
-            }
-            mh$.invokeExact(queue);
-        } catch (Throwable ex$) {
-           throw new AssertionError("should not reach here", ex$);
-        }
-    }
-
     private static class metal_deref_command_queue {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             desktop_macos_h.C_POINTER
@@ -3324,7 +3267,9 @@ public class desktop_macos_h {
 
     private static class metal_view_present {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
-            desktop_macos_h.C_POINTER
+            desktop_macos_h.C_POINTER,
+            desktop_macos_h.C_POINTER,
+            desktop_macos_h.C_BOOL
         );
 
         public static final MemorySegment ADDR = desktop_macos_h.findOrThrow("metal_view_present");
@@ -3335,7 +3280,7 @@ public class desktop_macos_h {
     /**
      * Function descriptor for:
      * {@snippet lang=c :
-     * void metal_view_present(const struct MetalView *view)
+     * void metal_view_present(const struct MetalView *view, MetalCommandQueueRef queue, bool wait_for_ca_transaction)
      * }
      */
     public static FunctionDescriptor metal_view_present$descriptor() {
@@ -3345,7 +3290,7 @@ public class desktop_macos_h {
     /**
      * Downcall method handle for:
      * {@snippet lang=c :
-     * void metal_view_present(const struct MetalView *view)
+     * void metal_view_present(const struct MetalView *view, MetalCommandQueueRef queue, bool wait_for_ca_transaction)
      * }
      */
     public static MethodHandle metal_view_present$handle() {
@@ -3355,7 +3300,7 @@ public class desktop_macos_h {
     /**
      * Address for:
      * {@snippet lang=c :
-     * void metal_view_present(const struct MetalView *view)
+     * void metal_view_present(const struct MetalView *view, MetalCommandQueueRef queue, bool wait_for_ca_transaction)
      * }
      */
     public static MemorySegment metal_view_present$address() {
@@ -3364,16 +3309,16 @@ public class desktop_macos_h {
 
     /**
      * {@snippet lang=c :
-     * void metal_view_present(const struct MetalView *view)
+     * void metal_view_present(const struct MetalView *view, MetalCommandQueueRef queue, bool wait_for_ca_transaction)
      * }
      */
-    public static void metal_view_present(MemorySegment view) {
+    public static void metal_view_present(MemorySegment view, MemorySegment queue, boolean wait_for_ca_transaction) {
         var mh$ = metal_view_present.HANDLE;
         try {
             if (TRACE_DOWNCALLS) {
-                traceDowncall("metal_view_present", view);
+                traceDowncall("metal_view_present", view, queue, wait_for_ca_transaction);
             }
-            mh$.invokeExact(view);
+            mh$.invokeExact(view, queue, wait_for_ca_transaction);
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }

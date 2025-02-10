@@ -22,12 +22,6 @@ class MetalCommandQueue internal constructor(ptr: MemorySegment): Managed(ptr, d
         }
     }
 
-    fun commit() {
-        ffiDownCall {
-            desktop_macos_h.metal_command_queue_commit(pointer)
-        }
-    }
-
     val pointerAddress get() = pointer.address()
 }
 
@@ -42,9 +36,9 @@ class MetalView internal constructor(ptr: MemorySegment): Managed(ptr, desktop_m
         return MetalTexture(ffiDownCall { desktop_macos_h.metal_view_next_texture(pointer) })
     }
 
-    fun present() {
+    fun present(queue: MetalCommandQueue, waitForCATransaction: Boolean) {
         ffiDownCall {
-            desktop_macos_h.metal_view_present(pointer)
+            desktop_macos_h.metal_view_present(pointer, queue.pointer, waitForCATransaction)
         }
     }
 

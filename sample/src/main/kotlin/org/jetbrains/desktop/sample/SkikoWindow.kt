@@ -20,7 +20,7 @@ abstract class SkikoWindow(device: MetalDevice,
 
     val window = Window.create(windowParams)
     var displayLink = DisplayLink.create(window.screenId(), onNextFrame = {
-        performDrawing()
+        performDrawing(syncWithCA = false)
     })
 
     val directContext = DirectContext.makeMetal(device.pointerAddress, queue.pointerAddress)
@@ -37,7 +37,7 @@ abstract class SkikoWindow(device: MetalDevice,
         val isRunning = displayLink.isRunning()
         displayLink.close()
         displayLink = DisplayLink.create(screenId, onNextFrame = {
-            performDrawing()
+            performDrawing(syncWithCA = false)
         })
         displayLink.setRunning(isRunning)
     }
@@ -52,7 +52,7 @@ abstract class SkikoWindow(device: MetalDevice,
         }
     }
 
-    fun performDrawing() {
+    fun performDrawing(syncWithCA: Boolean) {
         val size = view.size()
         view.nextTexture().use { texture ->
 //             sleep(100) // uncomment this to check window resize quality
@@ -71,8 +71,7 @@ abstract class SkikoWindow(device: MetalDevice,
                     surface.flushAndSubmit()
                 }
             }
-            queue.commit()
-            view.present()
+            view.present(queue, waitForCATransaction = syncWithCA)
             window.invalidateShadow()
         }
     }
