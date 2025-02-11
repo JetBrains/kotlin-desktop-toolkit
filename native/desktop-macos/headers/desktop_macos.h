@@ -301,17 +301,6 @@ typedef enum LogLevel {
   Trace,
 } LogLevel;
 
-typedef enum MouseButton {
-  Left = (1 << 0),
-  Right = (1 << 1),
-  Middle = (1 << 2),
-  Other1 = (1 << 3),
-  Other2 = (1 << 4),
-  Other3 = (1 << 5),
-  Other4 = (1 << 6),
-  Other5 = (1 << 7),
-} MouseButton;
-
 typedef enum WindowVisualEffect {
   TitlebarEffect,
   SelectionEffect,
@@ -394,9 +383,11 @@ typedef struct MouseMovedEvent {
   MouseButtonsSet pressed_buttons;
 } MouseMovedEvent;
 
+typedef uint32_t MouseButton;
+
 typedef struct MouseDraggedEvent {
   WindowId window_id;
-  enum MouseButton button;
+  MouseButton button;
   struct LogicalPoint location_in_window;
   struct LogicalPoint location_in_screen;
   MouseButtonsSet pressed_buttons;
@@ -418,7 +409,7 @@ typedef struct MouseExitedEvent {
 
 typedef struct MouseDownEvent {
   WindowId window_id;
-  enum MouseButton button;
+  MouseButton button;
   struct LogicalPoint location_in_window;
   struct LogicalPoint location_in_screen;
   MouseButtonsSet pressed_buttons;
@@ -426,7 +417,7 @@ typedef struct MouseDownEvent {
 
 typedef struct MouseUpEvent {
   WindowId window_id;
-  enum MouseButton button;
+  MouseButton button;
   struct LogicalPoint location_in_window;
   struct LogicalPoint location_in_screen;
   MouseButtonsSet pressed_buttons;
@@ -679,6 +670,12 @@ typedef struct LoggerConfiguration {
   enum LogLevel console_level;
   enum LogLevel file_level;
 } LoggerConfiguration;
+
+#define LeftMouseButton 0
+
+#define RightMouseButton 1
+
+#define MiddleMouseButton 2
 
 bool dispatcher_is_main_thread(void);
 

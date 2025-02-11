@@ -806,6 +806,33 @@ public class desktop_macos_h {
     public static int ModeSwitchFunctionKey() {
         return ModeSwitchFunctionKey;
     }
+    private static final int LeftMouseButton = (int)0L;
+    /**
+     * {@snippet lang=c :
+     * #define LeftMouseButton 0
+     * }
+     */
+    public static int LeftMouseButton() {
+        return LeftMouseButton;
+    }
+    private static final int RightMouseButton = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * #define RightMouseButton 1
+     * }
+     */
+    public static int RightMouseButton() {
+        return RightMouseButton;
+    }
+    private static final int MiddleMouseButton = (int)2L;
+    /**
+     * {@snippet lang=c :
+     * #define MiddleMouseButton 2
+     * }
+     */
+    public static int MiddleMouseButton() {
+        return MiddleMouseButton;
+    }
     private static final int VK_ANSI_A = (int)0L;
     /**
      * {@snippet lang=c :
@@ -1940,78 +1967,6 @@ public class desktop_macos_h {
     public static int Trace() {
         return Trace;
     }
-    private static final int Left = (int)1L;
-    /**
-     * {@snippet lang=c :
-     * enum MouseButton.Left = 1
-     * }
-     */
-    public static int Left() {
-        return Left;
-    }
-    private static final int Right = (int)2L;
-    /**
-     * {@snippet lang=c :
-     * enum MouseButton.Right = 2
-     * }
-     */
-    public static int Right() {
-        return Right;
-    }
-    private static final int Middle = (int)4L;
-    /**
-     * {@snippet lang=c :
-     * enum MouseButton.Middle = 4
-     * }
-     */
-    public static int Middle() {
-        return Middle;
-    }
-    private static final int Other1 = (int)8L;
-    /**
-     * {@snippet lang=c :
-     * enum MouseButton.Other1 = 8
-     * }
-     */
-    public static int Other1() {
-        return Other1;
-    }
-    private static final int Other2 = (int)16L;
-    /**
-     * {@snippet lang=c :
-     * enum MouseButton.Other2 = 16
-     * }
-     */
-    public static int Other2() {
-        return Other2;
-    }
-    private static final int Other3 = (int)32L;
-    /**
-     * {@snippet lang=c :
-     * enum MouseButton.Other3 = 32
-     * }
-     */
-    public static int Other3() {
-        return Other3;
-    }
-    private static final int Other4 = (int)64L;
-    /**
-     * {@snippet lang=c :
-     * enum MouseButton.Other4 = 64
-     * }
-     */
-    public static int Other4() {
-        return Other4;
-    }
-    private static final int Other5 = (int)128L;
-    /**
-     * {@snippet lang=c :
-     * enum MouseButton.Other5 = 128
-     * }
-     */
-    public static int Other5() {
-        return Other5;
-    }
     private static final int TitlebarEffect = (int)0L;
     /**
      * {@snippet lang=c :
@@ -2162,6 +2117,12 @@ public class desktop_macos_h {
      * }
      */
     public static final OfInt MouseButtonsSet = desktop_macos_h.C_INT;
+    /**
+     * {@snippet lang=c :
+     * typedef uint32_t MouseButton
+     * }
+     */
+    public static final OfInt MouseButton = desktop_macos_h.C_INT;
     /**
      * {@snippet lang=c :
      * typedef uint32_t ScreenId

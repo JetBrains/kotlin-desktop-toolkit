@@ -16,7 +16,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * {@snippet lang=c :
  * struct MouseDownEvent {
  *     WindowId window_id;
- *     enum MouseButton button;
+ *     MouseButton button;
  *     struct LogicalPoint location_in_window;
  *     struct LogicalPoint location_in_screen;
  *     MouseButtonsSet pressed_buttons;
@@ -95,7 +95,7 @@ public class MouseDownEvent {
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * enum MouseButton button
+     * MouseButton button
      * }
      */
     public static final OfInt button$layout() {
@@ -107,7 +107,7 @@ public class MouseDownEvent {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * enum MouseButton button
+     * MouseButton button
      * }
      */
     public static final long button$offset() {
@@ -117,7 +117,7 @@ public class MouseDownEvent {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * enum MouseButton button
+     * MouseButton button
      * }
      */
     public static int button(MemorySegment struct) {
@@ -127,7 +127,7 @@ public class MouseDownEvent {
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * enum MouseButton button
+     * MouseButton button
      * }
      */
     public static void button(MemorySegment struct, int fieldValue) {

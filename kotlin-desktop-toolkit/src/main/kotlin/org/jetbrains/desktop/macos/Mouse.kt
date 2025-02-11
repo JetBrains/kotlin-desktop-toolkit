@@ -6,9 +6,9 @@ import org.jetbrains.desktop.macos.generated.desktop_macos_h
 @JvmInline
 value class MouseButton internal constructor(val value: Int) {
     companion object {
-        val LEFT = MouseButton(desktop_macos_h.Left())
-        val RIGHT = MouseButton(desktop_macos_h.Right())
-        val MIDDLE = MouseButton(desktop_macos_h.Middle())
+        val LEFT = MouseButton(desktop_macos_h.LeftMouseButton())
+        val RIGHT = MouseButton(desktop_macos_h.RightMouseButton())
+        val MIDDLE = MouseButton(desktop_macos_h.MiddleMouseButton())
     }
 
     override fun toString(): String {
@@ -24,12 +24,12 @@ value class MouseButton internal constructor(val value: Int) {
 @JvmInline
 value class MouseButtonsSet internal constructor(val value: Int): Iterable<MouseButton> {
     fun contains(button: MouseButton): Boolean {
-        return button.value.and(value) != 0
+        return 1.shl(button.value).and(value) != 0
     }
 
     fun toList(): List<MouseButton> {
         return IntRange(0, Int.SIZE_BITS - 1).mapNotNull { i ->
-            val button = MouseButton(1.shl(i))
+            val button = MouseButton(i)
             if (contains(button)) {
                 button
             } else {

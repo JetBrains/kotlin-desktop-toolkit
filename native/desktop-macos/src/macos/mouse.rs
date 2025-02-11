@@ -4,11 +4,6 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 use objc2_app_kit::{NSEvent, NSEventSubtype, NSEventType};
 
-
-#[derive(Debug)]
-#[repr(transparent)]
-pub struct MouseButtonsSet(u32);
-
 pub(crate) trait NSMouseEventExt {
     fn me(&self) -> &NSEvent;
 
@@ -28,7 +23,7 @@ pub(crate) trait NSMouseEventExt {
             NSEventType::RightMouseDragged |
             NSEventType::OtherMouseDragged => {
                 let button_number = unsafe { me.buttonNumber() };
-                let button = MouseButton::from_u32(1 << button_number);
+                let button = button_number.try_into().map(|button| MouseButton(button)).ok();
                 if button.is_none() {
                     warn!("Ignored mouse button: {me:?}");
                 }
@@ -51,18 +46,23 @@ impl NSMouseEventExt for NSEvent {
     }
 }
 
-#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive)]
-#[repr(C)]
-pub enum MouseButton {
-    Left = 1 << 0,
-    Right = 1 << 1,
-    Middle = 1 << 2,
-    Other1 = 1 << 3,
-    Other2 = 1 << 4,
-    Other3 = 1 << 5,
-    Other4 = 1 << 6,
-    Other5 = 1 << 7,
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct MouseButton(u32);
+
+#[allow(dead_code)]
+#[allow(non_upper_case_globals)]
+pub mod mouse_buttons {
+    use super::MouseButton;
+
+    pub const LeftMouseButton: MouseButton = MouseButton(0);
+    pub const RightMouseButton: MouseButton = MouseButton(1);
+    pub const MiddleMouseButton: MouseButton = MouseButton(2);
 }
+
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct MouseButtonsSet(u32);
 
 //#[derive(Debug)]
 //pub(crate) enum MouseEventType {
