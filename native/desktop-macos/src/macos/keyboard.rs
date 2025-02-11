@@ -32,7 +32,7 @@ pub(crate) struct KeyEventInfo {
     // For dead keys it will produce text from deafult layer
     pub(crate) key: CString,
 
-    pub(crate) modifiers: KeyModifiers
+    pub(crate) modifiers: KeyModifiersSet
 }
 
 pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInfo> {
@@ -86,7 +86,7 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
 
 #[derive(Debug)]
 pub(crate) struct FlagsChangedInfo {
-    pub(crate) modifiers: KeyModifiers,
+    pub(crate) modifiers: KeyModifiersSet,
     pub(crate) code: KeyCode
 }
 
@@ -105,61 +105,38 @@ pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<F
 }
 
 #[derive(Debug, Clone, Copy)]
-#[repr(C)]
-pub struct KeyModifiers {
-    pub capslock: bool,
-    pub shift: bool,
-    pub control: bool,
-    pub option: bool,
-    pub command: bool,
-    pub numeric_pad: bool,
-    pub help: bool,
-    pub function: bool,
+#[repr(transparent)]
+pub struct KeyModifiersSet(u32);
+
+#[allow(non_upper_case_globals)]
+pub (crate) const EmptyKeyModifiers: KeyModifiersSet = KeyModifiersSet(0);
+
+#[allow(dead_code)]
+#[allow(non_upper_case_globals)]
+pub mod key_modifiers {
+    use objc2_app_kit::NSEventModifierFlags;
+
+    // This valuse are basically `NSEventModifierFlags` constants
+    // we copyied it here because it need to be real comp time constant
+    pub const CapsLockModifier: u32 = 1<<16;
+    pub const ShiftModifier: u32 = 1<<17;
+    pub const ControlModifier: u32 = 1<<18;
+    pub const OptionModifier: u32 = 1<<19;
+    pub const CommandModifier: u32 = 1<<20;
+    pub const NumericPadModifier: u32 = 1<<21;
+    pub const HelpModifier: u32 = 1<<22;
+    pub const FunctionModifier: u32 = 1<<23;
 }
 
-impl From<NSEventModifierFlags> for KeyModifiers {
+impl From<NSEventModifierFlags> for KeyModifiersSet {
     fn from(value: NSEventModifierFlags) -> Self {
-        KeyModifiers {
-            capslock: value.contains(NSEventModifierFlags::CapsLock),
-            shift: value.contains(NSEventModifierFlags::Shift),
-            control: value.contains(NSEventModifierFlags::Control),
-            option: value.contains(NSEventModifierFlags::Option),
-            command: value.contains(NSEventModifierFlags::Command),
-            numeric_pad: value.contains(NSEventModifierFlags::NumericPad),
-            help: value.contains(NSEventModifierFlags::Help),
-            function: value.contains(NSEventModifierFlags::Function)
-        }
+        KeyModifiersSet(value.bits() as u32)
     }
 }
 
-impl From<&KeyModifiers> for NSEventModifierFlags {
-    fn from(value: &KeyModifiers) -> Self {
-        let mut result = NSEventModifierFlags::empty();
-        if value.capslock {
-            result |= NSEventModifierFlags::CapsLock;
-        }
-        if value.shift {
-            result |= NSEventModifierFlags::Shift;
-        }
-        if value.control {
-            result |= NSEventModifierFlags::Control;
-        }
-        if value.option {
-            result |= NSEventModifierFlags::Option;
-        }
-        if value.command {
-            result |= NSEventModifierFlags::Command;
-        }
-        if value.numeric_pad {
-            result |= NSEventModifierFlags::NumericPad;
-        }
-        if value.help {
-            result |= NSEventModifierFlags::Help;
-        }
-        if value.function {
-            result |= NSEventModifierFlags::Function;
-        }
-        result
+impl From<&KeyModifiersSet> for NSEventModifierFlags {
+    fn from(value: &KeyModifiersSet) -> Self {
+        NSEventModifierFlags(value.0 as usize)
     }
 }
 

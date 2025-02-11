@@ -3,7 +3,7 @@ use objc2_foundation::MainThreadMarker;
 
 use crate::common::{ArraySize, StrPtr};
 use crate::logger::ffi_boundary;
-use super::keyboard::KeyModifiers;
+use super::keyboard::KeyModifiersSet;
 use super::{application_api::MyNSApplication, application_menu::main_menu_update_impl};
 
 // This file contains C API of the library
@@ -15,7 +15,7 @@ use super::{application_api::MyNSApplication, application_menu::main_menu_update
 #[derive(Debug)]
 pub struct AppMenuKeystroke {
     pub key: StrPtr,
-    pub modifiers: KeyModifiers
+    pub modifiers: KeyModifiersSet
 }
 
 #[allow(dead_code)]

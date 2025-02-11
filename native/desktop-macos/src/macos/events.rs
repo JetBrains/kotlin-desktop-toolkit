@@ -5,20 +5,19 @@ use log::{debug, info};
 use objc2_app_kit::{NSEvent, NSEventPhase, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
-use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, macos::window};
+use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}, macos::window};
 use anyhow::{anyhow, bail, Context, Result};
 
-use super::{application_api::AppState, keyboard::{unpack_flags_changed_event, unpack_key_event, KeyCode, KeyModifiers}, mouse::{MouseButton, MouseButtonsSet, NSMouseEventExt}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
+use super::{application_api::AppState, keyboard::{unpack_flags_changed_event, unpack_key_event, EmptyKeyModifiers, KeyCode, KeyModifiersSet}, mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
-
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyDownEvent {
     window_id: WindowId,
-    modifiers: KeyModifiers,
+    modifiers: KeyModifiersSet,
     code: KeyCode,
     characters: StrPtr,
     key: StrPtr,
@@ -38,7 +37,7 @@ impl Drop for KeyDownEvent {
 #[derive(Debug)]
 pub struct KeyUpEvent {
     window_id: WindowId,
-    modifiers: KeyModifiers,
+    modifiers: KeyModifiersSet,
     code: KeyCode,
     characters: StrPtr,
     key: StrPtr,
@@ -57,7 +56,7 @@ impl Drop for KeyUpEvent {
 #[derive(Debug)]
 pub struct ModifiersChangedEvent {
     window_id: WindowId,
-    modifiers: KeyModifiers,
+    modifiers: KeyModifiersSet,
     code: KeyCode
 }
 
@@ -185,7 +184,6 @@ pub enum Event {
     MouseExited(MouseExitedEvent),
     MouseDown(MouseDownEvent),
     MouseUp(MouseUpEvent),
-    // todo mouse enter and exit
     ScrollWheel(ScrollWheelEvent),
     WindowScreenChange(WindowScreenChangeEvent),
     WindowResize(WindowResizeEvent),
@@ -195,6 +193,40 @@ pub enum Event {
     WindowFullScreenToggle(WindowFullScreenToggleEvent),
     DisplayConfigurationChange,
     ApplicationDidFinishLaunching
+}
+
+impl PanicDefault for MouseButtonsSet {
+    fn default() -> Self {
+        EmptyMouseButtonsSet
+    }
+}
+
+#[no_mangle]
+extern "C" fn events_pressed_mouse_buttons() -> MouseButtonsSet {
+    ffi_boundary("events_pressed_mouse_buttons", || {
+        Ok(NSEvent::pressed_mouse_buttons())
+    })
+}
+
+impl PanicDefault for KeyModifiersSet {
+    fn default() -> Self {
+        EmptyKeyModifiers
+    }
+}
+
+#[no_mangle]
+extern "C" fn events_pressed_modifiers() -> KeyModifiersSet {
+    ffi_boundary("events_pressed_modifiers", || {
+        Ok(NSEvent::pressed_modifiers())
+    })
+}
+
+#[no_mangle]
+extern "C" fn events_cursor_location_in_screen() -> LogicalPoint {
+    ffi_boundary("events_cursor_location_in_screen", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        Ok(NSEvent::cursor_location_in_screen(mtm))
+    })
 }
 
 trait NSEventExt {
@@ -224,6 +256,12 @@ trait NSEventExt {
         let point = unsafe { NSEvent::mouseLocation() };
         let screen = NSScreen::primary(mtm).unwrap();
         LogicalPoint::from_macos_coords(point, screen.height())
+    }
+
+    fn pressed_modifiers() -> KeyModifiersSet {
+        unsafe {
+            NSEvent::modifierFlags_class()
+        }.try_into().unwrap()
     }
 }
 

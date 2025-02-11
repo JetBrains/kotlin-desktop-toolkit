@@ -2,7 +2,7 @@ package org.jetbrains.desktop.sample
 
 import org.jetbrains.desktop.macos.AppMenuItem
 import org.jetbrains.desktop.macos.AppMenuStructure
-import org.jetbrains.desktop.macos.KeyModifiers
+import org.jetbrains.desktop.macos.KeyModifiersSet
 import org.jetbrains.desktop.macos.Keystroke
 import org.jetbrains.desktop.macos.Logger
 import java.time.LocalDate
@@ -47,7 +47,7 @@ fun buildAppMenu(): AppMenuStructure {
                 isEnabled = true,
                 keystroke = Keystroke(
                     key = "x",
-                    modifiers = KeyModifiers(control = true)
+                    modifiers = KeyModifiersSet.create(control = true)
                 ),
                 perform = { Logger.info { "First callback from Kotlin!" } }),
             AppMenuItem.SubMenu(title = "Empty Submenu")
@@ -78,7 +78,7 @@ fun buildAppMenu(): AppMenuStructure {
             title = "Keystrokes",
             AppMenuItem.Action(
                 "Item1",
-                keystroke = Keystroke(key = "xy", modifiers = KeyModifiers()),  // second letter is ignored
+                keystroke = Keystroke(key = "xy", modifiers = KeyModifiersSet.create()),  // second letter is ignored
                 perform = if (imLucky()) {
                     val f = { Logger.info { "Odd" } }
                     f
@@ -88,16 +88,16 @@ fun buildAppMenu(): AppMenuStructure {
                 }),
             AppMenuItem.Action(
                 "Item2",
-                keystroke = Keystroke(key = "X", modifiers = KeyModifiers())
+                keystroke = Keystroke(key = "X", modifiers = KeyModifiersSet.create())
             ), // shift modifier added because letter is capital
-            AppMenuItem.Action("Item3", keystroke = Keystroke(key = "й", modifiers = KeyModifiers(option = true))),
+            AppMenuItem.Action("Item3", keystroke = Keystroke(key = "й", modifiers = KeyModifiersSet.create(option = true))),
             AppMenuItem.Action(
                 "Item4",
-                keystroke = Keystroke(key = "\u000d", modifiers = KeyModifiers(command = true))
+                keystroke = Keystroke(key = "\u000d", modifiers = KeyModifiersSet.create(command = true))
             ), // it's enter
             AppMenuItem.Action(
                 "Item5",
-                keystroke = if (imLucky()) Keystroke(key = "k", modifiers = KeyModifiers(shift = true)) else null
+                keystroke = if (imLucky()) Keystroke(key = "k", modifiers = KeyModifiersSet.create(shift = true)) else null
             )
         ),
         AppMenuItem.Action("Top level action", true),

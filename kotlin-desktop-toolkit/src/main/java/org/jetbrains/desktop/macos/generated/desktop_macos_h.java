@@ -2101,6 +2101,12 @@ public class desktop_macos_h {
     public static final OfLong WindowId = desktop_macos_h.C_LONG_LONG;
     /**
      * {@snippet lang=c :
+     * typedef uint32_t KeyModifiersSet
+     * }
+     */
+    public static final OfInt KeyModifiersSet = desktop_macos_h.C_INT;
+    /**
+     * {@snippet lang=c :
      * typedef char *StrPtr
      * }
      */
@@ -5133,6 +5139,174 @@ public class desktop_macos_h {
         }
     }
 
+    private static class events_pressed_mouse_buttons {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            desktop_macos_h.C_INT    );
+
+        public static final MemorySegment ADDR = desktop_macos_h.findOrThrow("events_pressed_mouse_buttons");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * MouseButtonsSet events_pressed_mouse_buttons()
+     * }
+     */
+    public static FunctionDescriptor events_pressed_mouse_buttons$descriptor() {
+        return events_pressed_mouse_buttons.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * MouseButtonsSet events_pressed_mouse_buttons()
+     * }
+     */
+    public static MethodHandle events_pressed_mouse_buttons$handle() {
+        return events_pressed_mouse_buttons.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * MouseButtonsSet events_pressed_mouse_buttons()
+     * }
+     */
+    public static MemorySegment events_pressed_mouse_buttons$address() {
+        return events_pressed_mouse_buttons.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * MouseButtonsSet events_pressed_mouse_buttons()
+     * }
+     */
+    public static int events_pressed_mouse_buttons() {
+        var mh$ = events_pressed_mouse_buttons.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("events_pressed_mouse_buttons");
+            }
+            return (int)mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class events_pressed_modifiers {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            desktop_macos_h.C_INT    );
+
+        public static final MemorySegment ADDR = desktop_macos_h.findOrThrow("events_pressed_modifiers");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * KeyModifiersSet events_pressed_modifiers()
+     * }
+     */
+    public static FunctionDescriptor events_pressed_modifiers$descriptor() {
+        return events_pressed_modifiers.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * KeyModifiersSet events_pressed_modifiers()
+     * }
+     */
+    public static MethodHandle events_pressed_modifiers$handle() {
+        return events_pressed_modifiers.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * KeyModifiersSet events_pressed_modifiers()
+     * }
+     */
+    public static MemorySegment events_pressed_modifiers$address() {
+        return events_pressed_modifiers.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * KeyModifiersSet events_pressed_modifiers()
+     * }
+     */
+    public static int events_pressed_modifiers() {
+        var mh$ = events_pressed_modifiers.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("events_pressed_modifiers");
+            }
+            return (int)mh$.invokeExact();
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class events_cursor_location_in_screen {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            LogicalPoint.layout()    );
+
+        public static final MemorySegment ADDR = desktop_macos_h.findOrThrow("events_cursor_location_in_screen");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * struct LogicalPoint events_cursor_location_in_screen()
+     * }
+     */
+    public static FunctionDescriptor events_cursor_location_in_screen$descriptor() {
+        return events_cursor_location_in_screen.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * struct LogicalPoint events_cursor_location_in_screen()
+     * }
+     */
+    public static MethodHandle events_cursor_location_in_screen$handle() {
+        return events_cursor_location_in_screen.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * struct LogicalPoint events_cursor_location_in_screen()
+     * }
+     */
+    public static MemorySegment events_cursor_location_in_screen$address() {
+        return events_cursor_location_in_screen.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * struct LogicalPoint events_cursor_location_in_screen()
+     * }
+     */
+    public static MemorySegment events_cursor_location_in_screen(SegmentAllocator allocator) {
+        var mh$ = events_cursor_location_in_screen.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("events_cursor_location_in_screen", allocator);
+            }
+            return (MemorySegment)mh$.invokeExact(allocator);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class main_menu_update {
         public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
             AppMenuStructure.layout()
@@ -5468,6 +5642,78 @@ public class desktop_macos_h {
         } catch (Throwable ex$) {
            throw new AssertionError("should not reach here", ex$);
         }
+    }
+    private static final int CapsLockModifier = (int)65536L;
+    /**
+     * {@snippet lang=c :
+     * #define CapsLockModifier 65536
+     * }
+     */
+    public static int CapsLockModifier() {
+        return CapsLockModifier;
+    }
+    private static final int ShiftModifier = (int)131072L;
+    /**
+     * {@snippet lang=c :
+     * #define ShiftModifier 131072
+     * }
+     */
+    public static int ShiftModifier() {
+        return ShiftModifier;
+    }
+    private static final int ControlModifier = (int)262144L;
+    /**
+     * {@snippet lang=c :
+     * #define ControlModifier 262144
+     * }
+     */
+    public static int ControlModifier() {
+        return ControlModifier;
+    }
+    private static final int OptionModifier = (int)524288L;
+    /**
+     * {@snippet lang=c :
+     * #define OptionModifier 524288
+     * }
+     */
+    public static int OptionModifier() {
+        return OptionModifier;
+    }
+    private static final int CommandModifier = (int)1048576L;
+    /**
+     * {@snippet lang=c :
+     * #define CommandModifier 1048576
+     * }
+     */
+    public static int CommandModifier() {
+        return CommandModifier;
+    }
+    private static final int NumericPadModifier = (int)2097152L;
+    /**
+     * {@snippet lang=c :
+     * #define NumericPadModifier 2097152
+     * }
+     */
+    public static int NumericPadModifier() {
+        return NumericPadModifier;
+    }
+    private static final int HelpModifier = (int)4194304L;
+    /**
+     * {@snippet lang=c :
+     * #define HelpModifier 4194304
+     * }
+     */
+    public static int HelpModifier() {
+        return HelpModifier;
+    }
+    private static final int FunctionModifier = (int)8388608L;
+    /**
+     * {@snippet lang=c :
+     * #define FunctionModifier 8388608
+     * }
+     */
+    public static int FunctionModifier() {
+        return FunctionModifier;
     }
 }
 

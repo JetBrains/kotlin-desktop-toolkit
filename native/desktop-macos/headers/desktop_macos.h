@@ -5,6 +5,22 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define CapsLockModifier (1 << 16)
+
+#define ShiftModifier (1 << 17)
+
+#define ControlModifier (1 << 18)
+
+#define OptionModifier (1 << 19)
+
+#define CommandModifier (1 << 20)
+
+#define NumericPadModifier (1 << 21)
+
+#define HelpModifier (1 << 22)
+
+#define FunctionModifier (1 << 23)
+
 #define EnterCharacter 3
 
 #define BackspaceCharacter 8
@@ -331,22 +347,13 @@ typedef struct ApplicationConfig {
 
 typedef int64_t WindowId;
 
-typedef struct KeyModifiers {
-  bool capslock;
-  bool shift;
-  bool control;
-  bool option;
-  bool command;
-  bool numeric_pad;
-  bool help;
-  bool function;
-} KeyModifiers;
+typedef uint32_t KeyModifiersSet;
 
 typedef char *StrPtr;
 
 typedef struct KeyDownEvent {
   WindowId window_id;
-  struct KeyModifiers modifiers;
+  KeyModifiersSet modifiers;
   enum KeyCode code;
   StrPtr characters;
   StrPtr key;
@@ -355,7 +362,7 @@ typedef struct KeyDownEvent {
 
 typedef struct KeyUpEvent {
   WindowId window_id;
-  struct KeyModifiers modifiers;
+  KeyModifiersSet modifiers;
   enum KeyCode code;
   StrPtr characters;
   StrPtr key;
@@ -363,7 +370,7 @@ typedef struct KeyUpEvent {
 
 typedef struct ModifiersChangedEvent {
   WindowId window_id;
-  struct KeyModifiers modifiers;
+  KeyModifiersSet modifiers;
   enum KeyCode code;
 } ModifiersChangedEvent;
 
@@ -623,7 +630,7 @@ typedef struct ScreenInfoArray {
 
 typedef struct AppMenuKeystroke {
   StrPtr key;
-  struct KeyModifiers modifiers;
+  KeyModifiersSet modifiers;
 } AppMenuKeystroke;
 
 typedef enum AppMenuItem_Tag {
@@ -778,6 +785,12 @@ struct ScreenInfoArray screen_list(void);
 void screen_list_drop(struct ScreenInfoArray arr);
 
 ScreenId screen_get_main_screen_id(void);
+
+MouseButtonsSet events_pressed_mouse_buttons(void);
+
+KeyModifiersSet events_pressed_modifiers(void);
+
+struct LogicalPoint events_cursor_location_in_screen(void);
 
 void main_menu_update(struct AppMenuStructure menu);
 

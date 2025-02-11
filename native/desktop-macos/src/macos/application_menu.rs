@@ -9,7 +9,7 @@ use objc2::{
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
 
-use super::{application_api::MyNSApplication, application_menu_api::{AppMenuItem, AppMenuStructure}, keyboard::KeyModifiers};
+use super::{application_api::MyNSApplication, application_menu_api::{AppMenuItem, AppMenuStructure}, keyboard::KeyModifiersSet};
 
 pub fn main_menu_update_impl(menu: AppMenuStructure) {
     let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
@@ -32,7 +32,7 @@ pub fn main_menu_update_impl(menu: AppMenuStructure) {
 #[derive(Debug)]
 struct AppMenuKeystrokeSafe<'a> {
     key: &'a str,
-    modifiers: &'a KeyModifiers,
+    modifiers: &'a KeyModifiersSet,
 }
 
 type Callback = extern "C" fn();

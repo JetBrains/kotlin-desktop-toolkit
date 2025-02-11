@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.macos
 
+import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import org.jetbrains.desktop.macos.generated.KeyModifiers as NativeKeyModifiers
 import java.lang.foreign.MemorySegment
@@ -284,41 +285,51 @@ value class KeyCode internal constructor(val value: String) {
     }
 }
 
-data class KeyModifiers(
-    val capsLock: Boolean = false,
-    val shift: Boolean = false,
-    val control: Boolean = false,
-    val option: Boolean = false,
-    val command: Boolean = false,
-    val numericPad: Boolean = false,
-    val help: Boolean = false,
-    val function: Boolean = false
-) {
+@JvmInline
+value class KeyModifiersSet internal constructor(internal val value: Int) {
     companion object {
-        internal fun fromNative(s: MemorySegment): KeyModifiers {
-            return KeyModifiers(
-                capsLock = NativeKeyModifiers.capslock(s),
-                shift = NativeKeyModifiers.shift(s),
-                control = NativeKeyModifiers.control(s),
-                option = NativeKeyModifiers.option(s),
-                command = NativeKeyModifiers.command(s),
-                numericPad = NativeKeyModifiers.numeric_pad(s),
-                help = NativeKeyModifiers.help(s),
-                function = NativeKeyModifiers.function(s))
+        fun create(capsLock: Boolean = false,
+                   shift: Boolean = false,
+                   control: Boolean = false,
+                   option: Boolean = false,
+                   command: Boolean = false,
+                   numericPad: Boolean = false,
+                   help: Boolean = false,
+                   function: Boolean = false): KeyModifiersSet {
+            var result = 0
+            if (capsLock) result = result or desktop_macos_h.CapsLockModifier()
+            if (shift) result = result or desktop_macos_h.ShiftModifier()
+            if (control) result = result or desktop_macos_h.ControlModifier()
+            if (option) result = result or desktop_macos_h.OptionModifier()
+            if (command) result = result or desktop_macos_h.CommandModifier()
+            if (numericPad) result = result or desktop_macos_h.NumericPadModifier()
+            if (help) result = result or desktop_macos_h.HelpModifier()
+            if (function) result = result or desktop_macos_h.FunctionModifier()
+            return KeyModifiersSet(result)
         }
     }
 
-    internal fun toNative(arena: Arena): MemorySegment {
-        val result = NativeKeyModifiers.allocate(arena)
-        NativeKeyModifiers.capslock(result, capsLock)
-        NativeKeyModifiers.shift(result, shift)
-        NativeKeyModifiers.control(result, control)
-        NativeKeyModifiers.option(result, option)
-        NativeKeyModifiers.command(result, command)
-        NativeKeyModifiers.numeric_pad(result, numericPad)
-        NativeKeyModifiers.help(result, help)
-        NativeKeyModifiers.function(result, function)
-        return result
+    val capsLock: Boolean get() = (value and desktop_macos_h.CapsLockModifier()) != 0
+    val shift: Boolean get() = (value and desktop_macos_h.ShiftModifier()) != 0
+    val control: Boolean get() = (value and desktop_macos_h.ControlModifier()) != 0
+    val option: Boolean get() = (value and desktop_macos_h.OptionModifier()) != 0
+    val command: Boolean get() = (value and desktop_macos_h.CommandModifier()) != 0
+    val numericPad: Boolean get() = (value and desktop_macos_h.NumericPadModifier()) != 0
+    val help: Boolean get() = (value and desktop_macos_h.HelpModifier()) != 0
+    val function: Boolean get() = (value and desktop_macos_h.FunctionModifier()) != 0
+
+    override fun toString(): String {
+        val modifiers = buildList {
+            if (capsLock) add("CapsLock")
+            if (shift) add("Shift")
+            if (control) add("Control")
+            if (option) add("Option")
+            if (command) add("Command")
+            if (numericPad) add("NumericPad")
+            if (help) add("Help")
+            if (function) add("Function")
+        }
+        return "KeyModifiersSet($modifiers)"
     }
 }
 

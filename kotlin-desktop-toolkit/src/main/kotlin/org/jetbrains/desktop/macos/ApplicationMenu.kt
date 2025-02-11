@@ -12,7 +12,7 @@ import java.lang.foreign.MemorySegment
 /**
  * Be aware capital letter turns shift modifier on
  */
-data class Keystroke(val key: String, val modifiers: KeyModifiers)
+data class Keystroke(val key: String, val modifiers: KeyModifiersSet)
 
 sealed class AppMenuItem {
     data class Action(val title : String,
@@ -56,7 +56,7 @@ object AppMenuManager {
 private fun Keystroke.toNative(arena: Arena): MemorySegment = let { keystroke ->
     val result = NativeAppMenuKeystroke.allocate(arena)
     NativeAppMenuKeystroke.key(result, arena.allocateUtf8String(keystroke.key))
-    NativeAppMenuKeystroke.modifiers(result, keystroke.modifiers.toNative(arena))
+    NativeAppMenuKeystroke.modifiers(result, keystroke.modifiers.value)
     result
 }
 

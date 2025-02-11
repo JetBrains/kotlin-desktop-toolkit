@@ -8,14 +8,22 @@ import org.jetbrains.desktop.macos.generated.Event as NativeEvent
 import java.lang.foreign.MemorySegment
 
 sealed class Event {
-    companion object {}
+    companion object {
+        fun pressedMouseButtons(): MouseButtonsSet {
+            return MouseButtonsSet(desktop_macos_h.events_pressed_mouse_buttons())
+        }
+
+        fun pressedModifiers(): KeyModifiersSet {
+            return KeyModifiersSet(desktop_macos_h.events_pressed_modifiers())
+        }
+    }
 
     data class KeyDown(
         val windowId: WindowId,
         val keyCode: KeyCode,
         val characters: String,
         val key: String,
-        val modifiers: KeyModifiers,
+        val modifiers: KeyModifiersSet,
         val isRepeat: Boolean
     ): Event()
 
@@ -24,12 +32,12 @@ sealed class Event {
         val keyCode: KeyCode,
         val characters: String,
         val key: String,
-        val modifiers: KeyModifiers,
+        val modifiers: KeyModifiersSet,
     ): Event()
 
     data class ModifiersChanged(
         val windowId: WindowId,
-        val modifiers: KeyModifiers,
+        val modifiers: KeyModifiersSet,
         val keyCode: KeyCode
     ): Event()
 
@@ -154,7 +162,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 keyCode = KeyCode.fromNative(KeyDownEvent.code(nativeEvent)),
                 characters = KeyDownEvent.characters(nativeEvent).getUtf8String(0),
                 key = KeyDownEvent.key(nativeEvent).getUtf8String(0),
-                modifiers = KeyModifiers.fromNative(KeyDownEvent.modifiers(nativeEvent)),
+                modifiers = KeyModifiersSet(KeyDownEvent.modifiers(nativeEvent)),
                 isRepeat = KeyDownEvent.is_repeat(nativeEvent)
             )
         }
@@ -164,7 +172,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 windowId = KeyUpEvent.window_id(nativeEvent),
                 characters = KeyUpEvent.characters(nativeEvent).getUtf8String(0),
                 key = KeyUpEvent.key(nativeEvent).getUtf8String(0),
-                modifiers = KeyModifiers.fromNative(KeyUpEvent.modifiers(nativeEvent)),
+                modifiers = KeyModifiersSet(KeyUpEvent.modifiers(nativeEvent)),
                 keyCode = KeyCode.fromNative(KeyUpEvent.code(nativeEvent))
             )
         }
@@ -172,7 +180,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             val nativeEvent = NativeEvent.modifiers_changed(s)
             Event.ModifiersChanged(
                 windowId = ModifiersChangedEvent.window_id(nativeEvent),
-                modifiers = KeyModifiers.fromNative(ModifiersChangedEvent.modifiers(nativeEvent)),
+                modifiers = KeyModifiersSet(ModifiersChangedEvent.modifiers(nativeEvent)),
                 keyCode = KeyCode.fromNative(ModifiersChangedEvent.code(nativeEvent))
             )
         }

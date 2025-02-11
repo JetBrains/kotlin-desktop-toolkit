@@ -16,7 +16,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  * {@snippet lang=c :
  * struct KeyDownEvent {
  *     WindowId window_id;
- *     struct KeyModifiers modifiers;
+ *     KeyModifiersSet modifiers;
  *     enum KeyCode code;
  *     StrPtr characters;
  *     StrPtr key;
@@ -32,9 +32,8 @@ public class KeyDownEvent {
 
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         desktop_macos_h.C_LONG_LONG.withName("window_id"),
-        KeyModifiers.layout().withName("modifiers"),
+        desktop_macos_h.C_INT.withName("modifiers"),
         desktop_macos_h.C_INT.withName("code"),
-        MemoryLayout.paddingLayout(4),
         desktop_macos_h.C_POINTER.withName("characters"),
         desktop_macos_h.C_POINTER.withName("key"),
         desktop_macos_h.C_BOOL.withName("is_repeat"),
@@ -92,15 +91,15 @@ public class KeyDownEvent {
         struct.set(window_id$LAYOUT, window_id$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout modifiers$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("modifiers"));
+    private static final OfInt modifiers$LAYOUT = (OfInt)$LAYOUT.select(groupElement("modifiers"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * struct KeyModifiers modifiers
+     * KeyModifiersSet modifiers
      * }
      */
-    public static final GroupLayout modifiers$layout() {
+    public static final OfInt modifiers$layout() {
         return modifiers$LAYOUT;
     }
 
@@ -109,7 +108,7 @@ public class KeyDownEvent {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * struct KeyModifiers modifiers
+     * KeyModifiersSet modifiers
      * }
      */
     public static final long modifiers$offset() {
@@ -119,21 +118,21 @@ public class KeyDownEvent {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * struct KeyModifiers modifiers
+     * KeyModifiersSet modifiers
      * }
      */
-    public static MemorySegment modifiers(MemorySegment struct) {
-        return struct.asSlice(modifiers$OFFSET, modifiers$LAYOUT.byteSize());
+    public static int modifiers(MemorySegment struct) {
+        return struct.get(modifiers$LAYOUT, modifiers$OFFSET);
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * struct KeyModifiers modifiers
+     * KeyModifiersSet modifiers
      * }
      */
-    public static void modifiers(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, modifiers$OFFSET, modifiers$LAYOUT.byteSize());
+    public static void modifiers(MemorySegment struct, int fieldValue) {
+        struct.set(modifiers$LAYOUT, modifiers$OFFSET, fieldValue);
     }
 
     private static final OfInt code$LAYOUT = (OfInt)$LAYOUT.select(groupElement("code"));
@@ -148,7 +147,7 @@ public class KeyDownEvent {
         return code$LAYOUT;
     }
 
-    private static final long code$OFFSET = 16;
+    private static final long code$OFFSET = 12;
 
     /**
      * Offset for field:
@@ -192,7 +191,7 @@ public class KeyDownEvent {
         return characters$LAYOUT;
     }
 
-    private static final long characters$OFFSET = 24;
+    private static final long characters$OFFSET = 16;
 
     /**
      * Offset for field:
@@ -236,7 +235,7 @@ public class KeyDownEvent {
         return key$LAYOUT;
     }
 
-    private static final long key$OFFSET = 32;
+    private static final long key$OFFSET = 24;
 
     /**
      * Offset for field:
@@ -280,7 +279,7 @@ public class KeyDownEvent {
         return is_repeat$LAYOUT;
     }
 
-    private static final long is_repeat$OFFSET = 40;
+    private static final long is_repeat$OFFSET = 32;
 
     /**
      * Offset for field:

@@ -64,6 +64,9 @@ pub mod mouse_buttons {
 #[repr(transparent)]
 pub struct MouseButtonsSet(u32);
 
+#[allow(non_upper_case_globals)]
+pub (crate) const EmptyMouseButtonsSet: MouseButtonsSet = MouseButtonsSet(0);
+
 //#[derive(Debug)]
 //pub(crate) enum MouseEventType {
 //    Down,
