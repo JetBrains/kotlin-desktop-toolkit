@@ -13,6 +13,7 @@ enum class EventHandlerResult {
 }
 
 typealias EventHandler = (Event) -> EventHandlerResult
+typealias TextOperationHandler = (TextOperation) -> Boolean
 
 object Application {
     data class ApplicationConfig(val disableDictationMenuItem: Boolean = false,
@@ -26,6 +27,7 @@ object Application {
     }
 
     private var eventHandler: EventHandler? = null
+    private var textOperationHandler: TextOperationHandler? = null
     lateinit var screens: AllScreens
 
     fun init(applicationConfig: ApplicationConfig = ApplicationConfig()) {
@@ -41,6 +43,10 @@ object Application {
             this.eventHandler = eventHandler
             desktop_macos_h.application_run_event_loop()
         }
+    }
+
+    fun setTextOperationHandler(textOperationHandler: TextOperationHandler) {
+        this.textOperationHandler = textOperationHandler
     }
 
     fun stopEventLoop() {
@@ -77,7 +83,7 @@ object Application {
         return eventHandler?.let { eventHandler ->
             eventHandler(event)
         } ?: run {
-            Logger.warn { "eventHandler is null event: $event was ignored!" }
+            Logger.warn { "eventHandler is null; event: $event was ignored!" }
             EventHandlerResult.Continue
         }
     }
@@ -103,12 +109,25 @@ object Application {
         }
     }
 
+    private fun onTextOperation(nativeEvent: MemorySegment): Boolean {
+        return ffiUpCall(default = false) {
+            val operation = TextOperation.fromNative(nativeEvent)
+            textOperationHandler?.let {
+                it(operation)
+            } ?: run {
+                Logger.warn { "textOperationHandler is null; event: $operation was ignored!" }
+                false
+            }
+        }
+    }
+
     private fun applicationCallbacks(): MemorySegment {
         val arena = Arena.global()
         val callbacks = ApplicationCallbacks.allocate(arena)
         ApplicationCallbacks.on_should_terminate(callbacks, ApplicationCallbacks.on_should_terminate.allocate(::onShouldTerminate, arena))
         ApplicationCallbacks.on_will_terminate(callbacks, ApplicationCallbacks.on_will_terminate.allocate(::onWillTerminate, arena))
         ApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
+        ApplicationCallbacks.text_operation_handler(callbacks, NativeEventHandler.allocate(::onTextOperation, arena))
         return callbacks
     }
 }

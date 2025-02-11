@@ -18,6 +18,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     bool (*on_should_terminate)(void);
  *     void (*on_will_terminate)(void);
  *     EventHandler event_handler;
+ *     TextOperationHandler text_operation_handler;
  * }
  * }
  */
@@ -30,7 +31,8 @@ public class ApplicationCallbacks {
     private static final GroupLayout $LAYOUT = MemoryLayout.structLayout(
         desktop_macos_h.C_POINTER.withName("on_should_terminate"),
         desktop_macos_h.C_POINTER.withName("on_will_terminate"),
-        desktop_macos_h.C_POINTER.withName("event_handler")
+        desktop_macos_h.C_POINTER.withName("event_handler"),
+        desktop_macos_h.C_POINTER.withName("text_operation_handler")
     ).withName("ApplicationCallbacks");
 
     /**
@@ -273,6 +275,50 @@ public class ApplicationCallbacks {
      */
     public static void event_handler(MemorySegment struct, MemorySegment fieldValue) {
         struct.set(event_handler$LAYOUT, event_handler$OFFSET, fieldValue);
+    }
+
+    private static final AddressLayout text_operation_handler$LAYOUT = (AddressLayout)$LAYOUT.select(groupElement("text_operation_handler"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * TextOperationHandler text_operation_handler
+     * }
+     */
+    public static final AddressLayout text_operation_handler$layout() {
+        return text_operation_handler$LAYOUT;
+    }
+
+    private static final long text_operation_handler$OFFSET = 24;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * TextOperationHandler text_operation_handler
+     * }
+     */
+    public static final long text_operation_handler$offset() {
+        return text_operation_handler$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * TextOperationHandler text_operation_handler
+     * }
+     */
+    public static MemorySegment text_operation_handler(MemorySegment struct) {
+        return struct.get(text_operation_handler$LAYOUT, text_operation_handler$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * TextOperationHandler text_operation_handler
+     * }
+     */
+    public static void text_operation_handler(MemorySegment struct, MemorySegment fieldValue) {
+        struct.set(text_operation_handler$LAYOUT, text_operation_handler$OFFSET, fieldValue);
     }
 
     /**

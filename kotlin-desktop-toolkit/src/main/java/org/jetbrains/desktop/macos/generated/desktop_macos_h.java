@@ -2299,6 +2299,30 @@ public class desktop_macos_h {
     }
     /**
      * {@snippet lang=c :
+     * typedef const char *ConstStrPtr
+     * }
+     */
+    public static final AddressLayout ConstStrPtr = desktop_macos_h.C_POINTER;
+    private static final int TextCommand = (int)0L;
+    /**
+     * {@snippet lang=c :
+     * enum TextOperation_Tag.TextCommand = 0
+     * }
+     */
+    public static int TextCommand() {
+        return TextCommand;
+    }
+    private static final int TextChanged = (int)1L;
+    /**
+     * {@snippet lang=c :
+     * enum TextOperation_Tag.TextChanged = 1
+     * }
+     */
+    public static int TextChanged() {
+        return TextChanged;
+    }
+    /**
+     * {@snippet lang=c :
      * typedef void *MetalDeviceRef
      * }
      */

@@ -9,7 +9,7 @@ use objc2_foundation::{MainThreadMarker, NSNotification, NSNotificationCenter, N
 
 use crate::{common::StrPtr, logger::ffi_boundary, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}};
 
-use super::events::{Event, EventHandler};
+use super::{events::EventHandler, text_operations::TextOperationHandler};
 
 thread_local! {
     pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
@@ -23,6 +23,7 @@ pub(crate) struct AppState {
     app_delegate: Retained<AppDelegate>,
     pub(crate) event_handler: EventHandler,
     pub(crate) mtm: MainThreadMarker,
+    pub(crate) text_operation_handler: TextOperationHandler,
 }
 
 impl AppState {
@@ -42,6 +43,7 @@ pub struct ApplicationCallbacks {
     on_should_terminate: extern "C" fn() -> bool,
     on_will_terminate: extern "C" fn(),
     event_handler: EventHandler,
+    text_operation_handler: TextOperationHandler,
 }
 
 #[repr(C)]
@@ -79,6 +81,7 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         //    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
         app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
         let event_handler = callbacks.event_handler;
+        let text_operation_handler = callbacks.text_operation_handler;
         let app_delegate = AppDelegate::new(mtm, callbacks);
         app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
         APP_STATE.with(|app_state| {
@@ -87,6 +90,7 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
                 app,
                 app_delegate,
                 event_handler,
+                text_operation_handler,
                 mtm
             }).map_err(|_| {
                 anyhow!("Can't initialize second time!")

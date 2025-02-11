@@ -1,25 +1,30 @@
 use std::{
     borrow::{Borrow, BorrowMut},
     cell::{Cell, RefCell},
-    ffi::{c_void, CStr},
+    ffi::{c_void, CStr, CString},
+    ptr::NonNull,
     rc::Rc,
 };
 
 use anyhow::{ensure, Context, Ok};
 use bitflags::Flags;
-use log::info;
+use log::{error, info};
 use objc2::{
-    declare_class, define_class, msg_send,
-    rc::Retained,
-    runtime::{AnyObject, Bool, ProtocolObject},
+    class, declare_class, define_class, extern_protocol, msg_send,
+    rc::{autoreleasepool, Retained},
+    runtime::{AnyObject, Bool, ProtocolObject, Sel},
     sel, ClassType, DeclaredClass, MainThreadOnly,
 };
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSEventModifierFlags, NSLayoutConstraint, NSNormalWindowLevel, NSScreen, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSEventModifierFlags, NSLayoutConstraint,
+    NSNormalWindowLevel, NSScreen, NSStandardKeyBindingResponding, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
+    NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton,
+    NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility,
 };
 use objc2_foundation::{
-    MainThreadMarker, NSArray, NSMutableArray, NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSRect,
-    NSString,
+    MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSCopying, NSMutableArray, NSMutableAttributedString,
+    NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSPoint, NSRange, NSRangePointer, NSRect, NSSize,
+    NSString, NSUInteger,
 };
 
 use crate::{
@@ -30,10 +35,13 @@ use crate::{
         application_api::AppState,
         custom_titlebar::CustomTitlebar,
         events::{
-            handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit, handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change
+            handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter,
+            handle_mouse_exit, handle_mouse_move, handle_mouse_up, handle_scroll_wheel,
+            handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move,
+            handle_window_resize, handle_window_screen_change,
         },
         keyboard::unpack_key_event,
-        string::copy_to_ns_string,
+        string::copy_to_ns_string, text_operations::{handle_text_changed_operation, handle_text_command_operation},
     },
 };
 
@@ -477,6 +485,115 @@ define_class!(
 
     unsafe impl NSObjectProtocol for RootView {}
 
+    #[allow(non_snake_case)]
+    unsafe impl NSTextInputClient for RootView {
+        // Handling marked text
+
+        #[unsafe(method(hasMarkedText))]
+        unsafe fn hasMarkedText(&self) -> bool {
+            info!("hasMarkedText");
+            false  // TODO
+        }
+
+        #[unsafe(method(markedRange))]
+        unsafe fn markedRange(&self) -> NSRange {
+            info!("markedRange");
+            NSRange { location: 0, length: 0 }  // TODO
+        }
+
+        #[unsafe(method(selectedRange))]
+        unsafe fn selectedRange(&self) -> NSRange {
+            info!("selectedRange");
+            NSRange { location: 0, length: 0 }  // TODO
+        }
+
+        #[unsafe(method(setMarkedText:selectedRange:replacementRange:))]
+        unsafe fn setMarkedText_selectedRange_replacementRange(
+            &self,
+            string: &AnyObject,
+            selected_range: NSRange,
+            replacement_range: NSRange,
+        ) {
+            self.setMarkedText_selectedRange_replacementRange_impl(string, selected_range, replacement_range)
+        }
+
+        #[unsafe(method(unmarkText))]
+        unsafe fn unmarkText(&self) {
+            info!("unmarkText");
+            // TODO
+        }
+
+        #[unsafe(method_id(validAttributesForMarkedText))]
+        unsafe fn validAttributesForMarkedText(&self) -> Retained<NSArray<NSAttributedStringKey>> {
+            info!("validAttributesForMarkedText");
+            let v = vec![
+                NSString::from_str("NSFont"),
+                NSString::from_str("NSUnderline"),
+                NSString::from_str("NSColor"),
+                NSString::from_str("NSBackgroundColor"),
+                NSString::from_str("NSUnderlineColor"),
+                NSString::from_str("NSMarkedClauseSegment"),
+                NSString::from_str("NSLanguage"),
+                NSString::from_str("NSTextInputReplacementRangeAttributeName"),
+                NSString::from_str("NSGlyphInfo"),
+                NSString::from_str("NSTextAlternatives"),
+                NSString::from_str("NSTextInsertionUndoable"),
+            ];
+            NSArray::from_retained_slice(&v)
+        }
+
+        // Storing text
+
+        #[unsafe(method_id(attributedSubstringForProposedRange:actualRange:))]
+        unsafe fn attributedSubstringForProposedRange_actualRange(
+            &self,
+            range: NSRange,
+            actual_range: NSRangePointer,
+        ) -> Option<Retained<NSAttributedString>> {
+            let actual_range = NonNull::new(actual_range);
+            info!("attributedSubstringForProposedRange, range={:?}, actual_range={:?}", range, actual_range.map(|r| r.read()));
+            None  // TODO
+        }
+
+        #[unsafe(method(insertText:replacementRange:))]
+        unsafe fn insertText_replacementRange(
+            &self,
+            string: &AnyObject,
+            replacement_range: NSRange,
+        ) {
+            self.insertText_replacementRange_impl(string, replacement_range);
+        }
+
+        // Getting character coordinates
+
+        #[unsafe(method(firstRectForCharacterRange:actualRange:))]
+        unsafe fn firstRectForCharacterRange_actualRange(
+            &self,
+            range: NSRange,
+            actual_range: NSRangePointer,
+        ) -> NSRect {
+            let actual_range = NonNull::new(actual_range);
+            info!("firstRectForCharacterRange: range={:?}, actual_range={:?}", range, actual_range.map(|r| r.read()));
+            NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64))  // TODO
+        }
+
+        #[unsafe(method(characterIndexForPoint:))]
+        unsafe fn characterIndexForPoint(&self, point: NSPoint) -> NSUInteger {
+            info!("characterIndexForPoint: {:?}", point);
+            0  // TODO
+        }
+
+        #[unsafe(method(doCommandBySelector:))]
+        unsafe fn doCommandBySelector(&self, selector: Sel) {
+            catch_panic(|| {
+                let s = selector.name();
+                info!("doCommandBySelector: {s:?}");
+                let window = self.window().context("No window for view")?;
+                handle_text_command_operation(window.window_id(), s)
+            });
+        }
+    }
+
     impl RootView {
         #[allow(non_snake_case)]
         #[unsafe(method(updateTrackingArea))]
@@ -595,10 +712,26 @@ define_class!(
             });
         }
 
+        #[unsafe(method(interpretKeyEvents:))]
+        #[allow(non_snake_case)]
+        fn interpretKeyEvents(&self, event_array: &NSArray<NSEvent>) {
+            info!("interpretKeyEvents: {:?}", event_array);
+            unsafe {
+                let _: () = msg_send![super(self), interpretKeyEvents: event_array];
+            }
+        }
+
         #[unsafe(method(keyDown:))]
-        fn key_down(&self, event: &NSEvent) {
+        fn key_down(&self, nsevent: &NSEvent) {
             catch_panic(|| {
-                handle_key_event(event)
+                info!("key_down");
+                if !handle_key_event(nsevent)? {
+                    unsafe {
+                        let event_array: &AnyObject = msg_send![class!(NSArray), arrayWithObject: nsevent];
+                        let _: () = msg_send!(self, interpretKeyEvents: event_array);
+                    };
+                }
+                Ok(true)
             });
         }
 
@@ -609,17 +742,24 @@ define_class!(
             });
         }
 
-//        #[unsafe(method(performKeyEquivalent:))]
-//        fn performKeyEquivalent(&self, event: &NSEvent) -> bool {
-//            info!("performKeyEquivalent: {event:?}");
-//            return false.into();
-//        }
-//
-//        #[unsafe(method(_wantsKeyDownForEvent:))]
-//        fn wantsKeyDownForEvent(&self, event: &NSEvent) -> bool {
-//            info!("wantsKeyDownForEvent: {event:?}");
-//            return true.into();
-//        }
+        #[unsafe(method(performKeyEquivalent:))]
+        #[allow(non_snake_case)]
+        fn performKeyEquivalent(&self, event: &NSEvent) -> bool {
+            info!("performKeyEquivalent: {event:?}");
+            let ret: Bool = false.into();
+//            let ret = unsafe { msg_send![super(self), performKeyEquivalent: event] };
+            return ret;
+        }
+
+        // Needed for e.g. Ctrl+Tab event reporting
+        #[unsafe(method(_wantsKeyDownForEvent:))]
+        #[allow(non_snake_case)]
+        fn wantsKeyDownForEvent(&self, event: &NSEvent) -> bool {
+            info!("_wantsKeyDownForEvent: {event:?}");
+            let ret: Bool = true.into();
+//            let ret = unsafe { msg_send![super(self), _wantsKeyDownForEvent: event] };
+            return ret;
+        }
 
         #[unsafe(method(flagsChanged:))]
         fn flags_changed(&self, event: &NSEvent) {
@@ -653,6 +793,22 @@ define_class!(
         }
     }
 );
+
+fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttributedString>, CString), anyhow::Error> {
+    autoreleasepool(|pool| {
+        if let Some(ns_attributed_string) = string.downcast_ref::<NSAttributedString>() {
+            let ns_string = ns_attributed_string.string();
+            let text = CString::new(unsafe { ns_string.to_str(pool) }).with_context(|| format!("{ns_string:?}"))?;
+            Ok((Some(ns_attributed_string), text))
+        } else if let Some(ns_string) = string.downcast_ref::<NSString>() {
+            let text = CString::new(unsafe { ns_string.to_str(pool) }).with_context(|| format!("{ns_string:?}"))?;
+            Ok((None, text))
+        } else {
+            // This method is guaranteed to get either a `NSString` or a `NSAttributedString`.
+            panic!("unexpected text {string:?}")
+        }
+    })
+}
 
 impl RootView {
     pub(crate) fn new(mtm: MainThreadMarker) -> Retained<Self> {
@@ -696,5 +852,30 @@ impl RootView {
             self.addTrackingArea(&tracking_area);
         }
         self.ivars().tracking_area.replace(Some(tracking_area));
+    }
+
+    #[allow(non_snake_case)]
+    fn insertText_replacementRange_impl(&self, string: &AnyObject, replacement_range: NSRange) {
+        catch_panic(|| {
+            let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
+            info!(
+                "insertText, marked_text={:?}, string={:?}, replacement_range={:?}",
+                ns_attributed_string, text, replacement_range
+            );
+            let window = self.window().context("No window for view")?;
+            handle_text_changed_operation(window.window_id(), &text)
+        });
+    }
+
+    #[allow(non_snake_case)]
+    fn setMarkedText_selectedRange_replacementRange_impl(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) {
+        catch_panic(|| {
+            let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
+            info!(
+                "setMarkedText, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
+                ns_attributed_string, text, selected_range, replacement_range
+            );
+            Ok(())
+        });
     }
 }

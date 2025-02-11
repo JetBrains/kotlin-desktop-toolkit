@@ -14,22 +14,22 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
 
 /**
  * {@snippet lang=c :
- * struct WindowBackground {
- *     WindowBackground_Tag tag;
+ * struct TextOperation {
+ *     TextOperation_Tag tag;
  *     union {
  *         struct {
- *             struct Color solid_color;
+ *             struct TextCommandOperation text_command;
  *         };
  *         struct {
- *             enum WindowVisualEffect visual_effect;
+ *             struct TextChangedOperation text_changed;
  *         };
  *     };
  * }
  * }
  */
-public class WindowBackground {
+public class TextOperation {
 
-    WindowBackground() {
+    TextOperation() {
         // Should not be called directly
     }
 
@@ -38,13 +38,13 @@ public class WindowBackground {
         MemoryLayout.paddingLayout(4),
         MemoryLayout.unionLayout(
             MemoryLayout.structLayout(
-                Color.layout().withName("solid_color")
-            ).withName("$anon$634:5"),
+                TextCommandOperation.layout().withName("text_command")
+            ).withName("$anon$573:5"),
             MemoryLayout.structLayout(
-                desktop_macos_h.C_INT.withName("visual_effect")
-            ).withName("$anon$637:5")
-        ).withName("$anon$633:3")
-    ).withName("WindowBackground");
+                TextChangedOperation.layout().withName("text_changed")
+            ).withName("$anon$576:5")
+        ).withName("$anon$572:3")
+    ).withName("TextOperation");
 
     /**
      * The layout of this struct
@@ -58,7 +58,7 @@ public class WindowBackground {
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * WindowBackground_Tag tag
+     * TextOperation_Tag tag
      * }
      */
     public static final OfInt tag$layout() {
@@ -70,7 +70,7 @@ public class WindowBackground {
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * WindowBackground_Tag tag
+     * TextOperation_Tag tag
      * }
      */
     public static final long tag$offset() {
@@ -80,7 +80,7 @@ public class WindowBackground {
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * WindowBackground_Tag tag
+     * TextOperation_Tag tag
      * }
      */
     public static int tag(MemorySegment struct) {
@@ -90,99 +90,99 @@ public class WindowBackground {
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * WindowBackground_Tag tag
+     * TextOperation_Tag tag
      * }
      */
     public static void tag(MemorySegment struct, int fieldValue) {
         struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout solid_color$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$633:3"), groupElement("$anon$634:5"), groupElement("solid_color"));
+    private static final GroupLayout text_command$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$572:3"), groupElement("$anon$573:5"), groupElement("text_command"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * struct Color solid_color
+     * struct TextCommandOperation text_command
      * }
      */
-    public static final GroupLayout solid_color$layout() {
-        return solid_color$LAYOUT;
+    public static final GroupLayout text_command$layout() {
+        return text_command$LAYOUT;
     }
 
-    private static final long solid_color$OFFSET = 8;
+    private static final long text_command$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * struct Color solid_color
+     * struct TextCommandOperation text_command
      * }
      */
-    public static final long solid_color$offset() {
-        return solid_color$OFFSET;
+    public static final long text_command$offset() {
+        return text_command$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * struct Color solid_color
+     * struct TextCommandOperation text_command
      * }
      */
-    public static MemorySegment solid_color(MemorySegment struct) {
-        return struct.asSlice(solid_color$OFFSET, solid_color$LAYOUT.byteSize());
+    public static MemorySegment text_command(MemorySegment struct) {
+        return struct.asSlice(text_command$OFFSET, text_command$LAYOUT.byteSize());
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * struct Color solid_color
+     * struct TextCommandOperation text_command
      * }
      */
-    public static void solid_color(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, solid_color$OFFSET, solid_color$LAYOUT.byteSize());
+    public static void text_command(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, text_command$OFFSET, text_command$LAYOUT.byteSize());
     }
 
-    private static final OfInt visual_effect$LAYOUT = (OfInt)$LAYOUT.select(groupElement("$anon$633:3"), groupElement("$anon$637:5"), groupElement("visual_effect"));
+    private static final GroupLayout text_changed$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$572:3"), groupElement("$anon$576:5"), groupElement("text_changed"));
 
     /**
      * Layout for field:
      * {@snippet lang=c :
-     * enum WindowVisualEffect visual_effect
+     * struct TextChangedOperation text_changed
      * }
      */
-    public static final OfInt visual_effect$layout() {
-        return visual_effect$LAYOUT;
+    public static final GroupLayout text_changed$layout() {
+        return text_changed$LAYOUT;
     }
 
-    private static final long visual_effect$OFFSET = 8;
+    private static final long text_changed$OFFSET = 8;
 
     /**
      * Offset for field:
      * {@snippet lang=c :
-     * enum WindowVisualEffect visual_effect
+     * struct TextChangedOperation text_changed
      * }
      */
-    public static final long visual_effect$offset() {
-        return visual_effect$OFFSET;
+    public static final long text_changed$offset() {
+        return text_changed$OFFSET;
     }
 
     /**
      * Getter for field:
      * {@snippet lang=c :
-     * enum WindowVisualEffect visual_effect
+     * struct TextChangedOperation text_changed
      * }
      */
-    public static int visual_effect(MemorySegment struct) {
-        return struct.get(visual_effect$LAYOUT, visual_effect$OFFSET);
+    public static MemorySegment text_changed(MemorySegment struct) {
+        return struct.asSlice(text_changed$OFFSET, text_changed$LAYOUT.byteSize());
     }
 
     /**
      * Setter for field:
      * {@snippet lang=c :
-     * enum WindowVisualEffect visual_effect
+     * struct TextChangedOperation text_changed
      * }
      */
-    public static void visual_effect(MemorySegment struct, int fieldValue) {
-        struct.set(visual_effect$LAYOUT, visual_effect$OFFSET, fieldValue);
+    public static void text_changed(MemorySegment struct, MemorySegment fieldValue) {
+        MemorySegment.copy(fieldValue, 0L, struct, text_changed$OFFSET, text_changed$LAYOUT.byteSize());
     }
 
     /**
