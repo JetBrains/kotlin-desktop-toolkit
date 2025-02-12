@@ -64,9 +64,7 @@ pub struct ModifiersChangedEvent {
 #[derive(Debug)]
 pub struct MouseMovedEvent {
     window_id: WindowId,
-    location_in_window: LogicalPoint,
-    location_in_screen: LogicalPoint,
-    pressed_buttons: MouseButtonsSet,
+    location_in_window: LogicalPoint
 }
 
 #[repr(C)]
@@ -74,27 +72,21 @@ pub struct MouseMovedEvent {
 pub struct MouseDraggedEvent {
     window_id: WindowId,
     button: MouseButton,
-    location_in_window: LogicalPoint,
-    location_in_screen: LogicalPoint,
-    pressed_buttons: MouseButtonsSet
+    location_in_window: LogicalPoint
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseEnteredEvent {
     window_id: WindowId,
-    location_in_window: LogicalPoint,
-    location_in_screen: LogicalPoint,
-    pressed_buttons: MouseButtonsSet
+    location_in_window: LogicalPoint
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseExitedEvent {
     window_id: WindowId,
-    location_in_window: LogicalPoint,
-    location_in_screen: LogicalPoint,
-    pressed_buttons: MouseButtonsSet
+    location_in_window: LogicalPoint
 }
 
 #[repr(C)]
@@ -102,9 +94,7 @@ pub struct MouseExitedEvent {
 pub struct MouseDownEvent {
     window_id: WindowId,
     button: MouseButton,
-    location_in_window: LogicalPoint,
-    location_in_screen: LogicalPoint,
-    pressed_buttons: MouseButtonsSet
+    location_in_window: LogicalPoint
 }
 
 #[repr(C)]
@@ -112,9 +102,7 @@ pub struct MouseDownEvent {
 pub struct MouseUpEvent {
     window_id: WindowId,
     button: MouseButton,
-    location_in_window: LogicalPoint,
-    location_in_screen: LogicalPoint,
-    pressed_buttons: MouseButtonsSet
+    location_in_window: LogicalPoint
 }
 
 #[repr(C)]
@@ -124,9 +112,7 @@ pub struct ScrollWheelEvent {
     scrolling_delta_x: LogicalPixels,
     scrolling_delta_y: LogicalPixels,
     has_precise_scrolling_deltas: bool,
-    location_in_window: LogicalPoint,
-    location_in_screen: LogicalPoint,
-    pressed_buttons: MouseButtonsSet
+    location_in_window: LogicalPoint
 }
 
 #[repr(C)]
@@ -320,9 +306,7 @@ pub(crate) fn handle_mouse_move(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseMoved(MouseMovedEvent {
             window_id: ns_event.window_id(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
-            pressed_buttons: NSEvent::pressed_mouse_buttons(),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm)
         });
         (state.event_handler)(&event)
     });
@@ -335,9 +319,7 @@ pub(crate) fn handle_mouse_drag(ns_event: &NSEvent) -> bool {
         let event = Event::MouseDragged(MouseDraggedEvent {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
-            pressed_buttons: NSEvent::pressed_mouse_buttons(),
+            location_in_window: ns_event.cursor_location_in_window(state.mtm)
         });
         (state.event_handler)(&event)
     });
@@ -348,9 +330,7 @@ pub(crate) fn handle_mouse_enter(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseEntered(MouseEnteredEvent {
             window_id: ns_event.window_id(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
-            pressed_buttons: NSEvent::pressed_mouse_buttons()
+            location_in_window: ns_event.cursor_location_in_window(state.mtm)
         });
         (state.event_handler)(&event)
     });
@@ -361,9 +341,7 @@ pub(crate) fn handle_mouse_exit(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseExited(MouseExitedEvent {
             window_id: ns_event.window_id(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
-            pressed_buttons: NSEvent::pressed_mouse_buttons()
+            location_in_window: ns_event.cursor_location_in_window(state.mtm)
         });
         (state.event_handler)(&event)
     });
@@ -375,9 +353,7 @@ pub(crate) fn handle_mouse_down(ns_event: &NSEvent) -> bool {
         let event = Event::MouseDown(MouseDownEvent {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
-            pressed_buttons: NSEvent::pressed_mouse_buttons()
+            location_in_window: ns_event.cursor_location_in_window(state.mtm)
         });
         (state.event_handler)(&event)
     });
@@ -389,9 +365,7 @@ pub(crate) fn handle_mouse_up(ns_event: &NSEvent) -> bool {
         let event = Event::MouseUp(MouseUpEvent {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
-            pressed_buttons: NSEvent::pressed_mouse_buttons()
+            location_in_window: ns_event.cursor_location_in_window(state.mtm)
         });
         (state.event_handler)(&event)
     });
@@ -405,9 +379,7 @@ pub(crate) fn handle_scroll_wheel(ns_event: &NSEvent) -> bool {
             scrolling_delta_x: unsafe { ns_event.scrollingDeltaX() },
             scrolling_delta_y: unsafe { ns_event.scrollingDeltaY() },
             has_precise_scrolling_deltas: unsafe { ns_event.hasPreciseScrollingDeltas() },
-            location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            location_in_screen: NSEvent::cursor_location_in_screen(state.mtm),
-            pressed_buttons: NSEvent::pressed_mouse_buttons()
+            location_in_window: ns_event.cursor_location_in_window(state.mtm)
         });
         (state.event_handler)(&event)
     });

@@ -2119,12 +2119,6 @@ public class desktop_macos_h {
     public static final OfDouble LogicalPixels = desktop_macos_h.C_DOUBLE;
     /**
      * {@snippet lang=c :
-     * typedef uint32_t MouseButtonsSet
-     * }
-     */
-    public static final OfInt MouseButtonsSet = desktop_macos_h.C_INT;
-    /**
-     * {@snippet lang=c :
      * typedef uint32_t MouseButton
      * }
      */
@@ -2354,6 +2348,12 @@ public class desktop_macos_h {
      * }
      */
     public static final OfLong ArraySize = desktop_macos_h.C_LONG_LONG;
+    /**
+     * {@snippet lang=c :
+     * typedef uint32_t MouseButtonsSet
+     * }
+     */
+    public static final OfInt MouseButtonsSet = desktop_macos_h.C_INT;
     private static final int ActionItem = (int)0L;
     /**
      * {@snippet lang=c :

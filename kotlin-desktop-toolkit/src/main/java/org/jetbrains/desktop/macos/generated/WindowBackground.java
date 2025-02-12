@@ -39,11 +39,11 @@ public class WindowBackground {
         MemoryLayout.unionLayout(
             MemoryLayout.structLayout(
                 Color.layout().withName("solid_color")
-            ).withName("$anon$606:5"),
+            ).withName("$anon$590:5"),
             MemoryLayout.structLayout(
                 desktop_macos_h.C_INT.withName("visual_effect")
-            ).withName("$anon$609:5")
-        ).withName("$anon$605:3")
+            ).withName("$anon$593:5")
+        ).withName("$anon$589:3")
     ).withName("WindowBackground");
 
     /**
@@ -97,7 +97,7 @@ public class WindowBackground {
         struct.set(tag$LAYOUT, tag$OFFSET, fieldValue);
     }
 
-    private static final GroupLayout solid_color$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$605:3"), groupElement("$anon$606:5"), groupElement("solid_color"));
+    private static final GroupLayout solid_color$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("$anon$589:3"), groupElement("$anon$590:5"), groupElement("solid_color"));
 
     /**
      * Layout for field:
@@ -141,7 +141,7 @@ public class WindowBackground {
         MemorySegment.copy(fieldValue, 0L, struct, solid_color$OFFSET, solid_color$LAYOUT.byteSize());
     }
 
-    private static final OfInt visual_effect$LAYOUT = (OfInt)$LAYOUT.select(groupElement("$anon$605:3"), groupElement("$anon$609:5"), groupElement("visual_effect"));
+    private static final OfInt visual_effect$LAYOUT = (OfInt)$LAYOUT.select(groupElement("$anon$589:3"), groupElement("$anon$593:5"), groupElement("visual_effect"));
 
     /**
      * Layout for field:

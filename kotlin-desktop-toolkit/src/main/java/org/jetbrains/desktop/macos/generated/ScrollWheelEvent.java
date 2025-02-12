@@ -20,8 +20,6 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     LogicalPixels scrolling_delta_y;
  *     bool has_precise_scrolling_deltas;
  *     struct LogicalPoint location_in_window;
- *     struct LogicalPoint location_in_screen;
- *     MouseButtonsSet pressed_buttons;
  * }
  * }
  */
@@ -37,10 +35,7 @@ public class ScrollWheelEvent {
         desktop_macos_h.C_DOUBLE.withName("scrolling_delta_y"),
         desktop_macos_h.C_BOOL.withName("has_precise_scrolling_deltas"),
         MemoryLayout.paddingLayout(7),
-        LogicalPoint.layout().withName("location_in_window"),
-        LogicalPoint.layout().withName("location_in_screen"),
-        desktop_macos_h.C_INT.withName("pressed_buttons"),
-        MemoryLayout.paddingLayout(4)
+        LogicalPoint.layout().withName("location_in_window")
     ).withName("ScrollWheelEvent");
 
     /**
@@ -268,94 +263,6 @@ public class ScrollWheelEvent {
      */
     public static void location_in_window(MemorySegment struct, MemorySegment fieldValue) {
         MemorySegment.copy(fieldValue, 0L, struct, location_in_window$OFFSET, location_in_window$LAYOUT.byteSize());
-    }
-
-    private static final GroupLayout location_in_screen$LAYOUT = (GroupLayout)$LAYOUT.select(groupElement("location_in_screen"));
-
-    /**
-     * Layout for field:
-     * {@snippet lang=c :
-     * struct LogicalPoint location_in_screen
-     * }
-     */
-    public static final GroupLayout location_in_screen$layout() {
-        return location_in_screen$LAYOUT;
-    }
-
-    private static final long location_in_screen$OFFSET = 48;
-
-    /**
-     * Offset for field:
-     * {@snippet lang=c :
-     * struct LogicalPoint location_in_screen
-     * }
-     */
-    public static final long location_in_screen$offset() {
-        return location_in_screen$OFFSET;
-    }
-
-    /**
-     * Getter for field:
-     * {@snippet lang=c :
-     * struct LogicalPoint location_in_screen
-     * }
-     */
-    public static MemorySegment location_in_screen(MemorySegment struct) {
-        return struct.asSlice(location_in_screen$OFFSET, location_in_screen$LAYOUT.byteSize());
-    }
-
-    /**
-     * Setter for field:
-     * {@snippet lang=c :
-     * struct LogicalPoint location_in_screen
-     * }
-     */
-    public static void location_in_screen(MemorySegment struct, MemorySegment fieldValue) {
-        MemorySegment.copy(fieldValue, 0L, struct, location_in_screen$OFFSET, location_in_screen$LAYOUT.byteSize());
-    }
-
-    private static final OfInt pressed_buttons$LAYOUT = (OfInt)$LAYOUT.select(groupElement("pressed_buttons"));
-
-    /**
-     * Layout for field:
-     * {@snippet lang=c :
-     * MouseButtonsSet pressed_buttons
-     * }
-     */
-    public static final OfInt pressed_buttons$layout() {
-        return pressed_buttons$LAYOUT;
-    }
-
-    private static final long pressed_buttons$OFFSET = 64;
-
-    /**
-     * Offset for field:
-     * {@snippet lang=c :
-     * MouseButtonsSet pressed_buttons
-     * }
-     */
-    public static final long pressed_buttons$offset() {
-        return pressed_buttons$OFFSET;
-    }
-
-    /**
-     * Getter for field:
-     * {@snippet lang=c :
-     * MouseButtonsSet pressed_buttons
-     * }
-     */
-    public static int pressed_buttons(MemorySegment struct) {
-        return struct.get(pressed_buttons$LAYOUT, pressed_buttons$OFFSET);
-    }
-
-    /**
-     * Setter for field:
-     * {@snippet lang=c :
-     * MouseButtonsSet pressed_buttons
-     * }
-     */
-    public static void pressed_buttons(MemorySegment struct, int fieldValue) {
-        struct.set(pressed_buttons$LAYOUT, pressed_buttons$OFFSET, fieldValue);
     }
 
     /**

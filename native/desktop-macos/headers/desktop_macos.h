@@ -381,13 +381,9 @@ typedef struct LogicalPoint {
   LogicalPixels y;
 } LogicalPoint;
 
-typedef uint32_t MouseButtonsSet;
-
 typedef struct MouseMovedEvent {
   WindowId window_id;
   struct LogicalPoint location_in_window;
-  struct LogicalPoint location_in_screen;
-  MouseButtonsSet pressed_buttons;
 } MouseMovedEvent;
 
 typedef uint32_t MouseButton;
@@ -396,38 +392,28 @@ typedef struct MouseDraggedEvent {
   WindowId window_id;
   MouseButton button;
   struct LogicalPoint location_in_window;
-  struct LogicalPoint location_in_screen;
-  MouseButtonsSet pressed_buttons;
 } MouseDraggedEvent;
 
 typedef struct MouseEnteredEvent {
   WindowId window_id;
   struct LogicalPoint location_in_window;
-  struct LogicalPoint location_in_screen;
-  MouseButtonsSet pressed_buttons;
 } MouseEnteredEvent;
 
 typedef struct MouseExitedEvent {
   WindowId window_id;
   struct LogicalPoint location_in_window;
-  struct LogicalPoint location_in_screen;
-  MouseButtonsSet pressed_buttons;
 } MouseExitedEvent;
 
 typedef struct MouseDownEvent {
   WindowId window_id;
   MouseButton button;
   struct LogicalPoint location_in_window;
-  struct LogicalPoint location_in_screen;
-  MouseButtonsSet pressed_buttons;
 } MouseDownEvent;
 
 typedef struct MouseUpEvent {
   WindowId window_id;
   MouseButton button;
   struct LogicalPoint location_in_window;
-  struct LogicalPoint location_in_screen;
-  MouseButtonsSet pressed_buttons;
 } MouseUpEvent;
 
 typedef struct ScrollWheelEvent {
@@ -436,8 +422,6 @@ typedef struct ScrollWheelEvent {
   LogicalPixels scrolling_delta_y;
   bool has_precise_scrolling_deltas;
   struct LogicalPoint location_in_window;
-  struct LogicalPoint location_in_screen;
-  MouseButtonsSet pressed_buttons;
 } ScrollWheelEvent;
 
 typedef uint32_t ScreenId;
@@ -627,6 +611,8 @@ typedef struct ScreenInfoArray {
   struct ScreenInfo *ptr;
   ArraySize len;
 } ScreenInfoArray;
+
+typedef uint32_t MouseButtonsSet;
 
 typedef struct AppMenuKeystroke {
   StrPtr key;
