@@ -21,6 +21,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     StrPtr characters;
  *     StrPtr key;
  *     bool is_repeat;
+ *     Timestamp timestamp;
  * }
  * }
  */
@@ -37,7 +38,8 @@ public class KeyDownEvent {
         desktop_macos_h.C_POINTER.withName("characters"),
         desktop_macos_h.C_POINTER.withName("key"),
         desktop_macos_h.C_BOOL.withName("is_repeat"),
-        MemoryLayout.paddingLayout(7)
+        MemoryLayout.paddingLayout(7),
+        desktop_macos_h.C_DOUBLE.withName("timestamp")
     ).withName("KeyDownEvent");
 
     /**
@@ -309,6 +311,50 @@ public class KeyDownEvent {
      */
     public static void is_repeat(MemorySegment struct, boolean fieldValue) {
         struct.set(is_repeat$LAYOUT, is_repeat$OFFSET, fieldValue);
+    }
+
+    private static final OfDouble timestamp$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("timestamp"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static final OfDouble timestamp$layout() {
+        return timestamp$LAYOUT;
+    }
+
+    private static final long timestamp$OFFSET = 40;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static final long timestamp$offset() {
+        return timestamp$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static double timestamp(MemorySegment struct) {
+        return struct.get(timestamp$LAYOUT, timestamp$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static void timestamp(MemorySegment struct, double fieldValue) {
+        struct.set(timestamp$LAYOUT, timestamp$OFFSET, fieldValue);
     }
 
     /**

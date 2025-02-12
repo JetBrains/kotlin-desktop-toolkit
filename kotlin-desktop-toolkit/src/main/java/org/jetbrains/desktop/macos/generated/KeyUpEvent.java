@@ -20,6 +20,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     enum KeyCode code;
  *     StrPtr characters;
  *     StrPtr key;
+ *     Timestamp timestamp;
  * }
  * }
  */
@@ -34,7 +35,8 @@ public class KeyUpEvent {
         desktop_macos_h.C_INT.withName("modifiers"),
         desktop_macos_h.C_INT.withName("code"),
         desktop_macos_h.C_POINTER.withName("characters"),
-        desktop_macos_h.C_POINTER.withName("key")
+        desktop_macos_h.C_POINTER.withName("key"),
+        desktop_macos_h.C_DOUBLE.withName("timestamp")
     ).withName("KeyUpEvent");
 
     /**
@@ -262,6 +264,50 @@ public class KeyUpEvent {
      */
     public static void key(MemorySegment struct, MemorySegment fieldValue) {
         struct.set(key$LAYOUT, key$OFFSET, fieldValue);
+    }
+
+    private static final OfDouble timestamp$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("timestamp"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static final OfDouble timestamp$layout() {
+        return timestamp$LAYOUT;
+    }
+
+    private static final long timestamp$OFFSET = 32;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static final long timestamp$offset() {
+        return timestamp$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static double timestamp(MemorySegment struct) {
+        return struct.get(timestamp$LAYOUT, timestamp$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static void timestamp(MemorySegment struct, double fieldValue) {
+        struct.set(timestamp$LAYOUT, timestamp$OFFSET, fieldValue);
     }
 
     /**

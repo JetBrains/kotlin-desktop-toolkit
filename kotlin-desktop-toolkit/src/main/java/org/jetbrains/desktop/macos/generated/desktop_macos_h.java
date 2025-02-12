@@ -2113,6 +2113,12 @@ public class desktop_macos_h {
     public static final AddressLayout StrPtr = desktop_macos_h.C_POINTER;
     /**
      * {@snippet lang=c :
+     * typedef double Timestamp
+     * }
+     */
+    public static final OfDouble Timestamp = desktop_macos_h.C_DOUBLE;
+    /**
+     * {@snippet lang=c :
      * typedef double LogicalPixels
      * }
      */

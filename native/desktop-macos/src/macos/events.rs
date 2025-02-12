@@ -1,17 +1,32 @@
 use core::f64;
-use std::{any::Any, ffi::{CStr, CString}};
+use std::{
+    any::Any,
+    ffi::{CStr, CString},
+};
 
 use log::{debug, info};
 use objc2_app_kit::{NSEvent, NSEventPhase, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
-use crate::{common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}, macos::window};
+use crate::{
+    common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
+    logger::{ffi_boundary, PanicDefault},
+    macos::window,
+};
 use anyhow::{anyhow, bail, Context, Result};
 
-use super::{application_api::AppState, keyboard::{unpack_flags_changed_event, unpack_key_event, EmptyKeyModifiers, KeyCode, KeyModifiersSet}, mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt}, screen::{NSScreenExts, ScreenId}, window::NSWindowExts, window_api::WindowId};
+use super::{
+    application_api::AppState,
+    keyboard::{unpack_flags_changed_event, unpack_key_event, EmptyKeyModifiers, KeyCode, KeyModifiersSet},
+    mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt},
+    screen::{NSScreenExts, ScreenId},
+    window::NSWindowExts,
+    window_api::WindowId,
+};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
+pub type Timestamp = f64;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -22,13 +37,12 @@ pub struct KeyDownEvent {
     characters: StrPtr,
     key: StrPtr,
     is_repeat: bool,
+    timestamp: Timestamp,
 }
 
 impl Drop for KeyDownEvent {
     fn drop(&mut self) {
-        let characters = unsafe {
-            CString::from_raw(self.characters)
-        };
+        let characters = unsafe { CString::from_raw(self.characters) };
         std::mem::drop(characters);
     }
 }
@@ -41,13 +55,12 @@ pub struct KeyUpEvent {
     code: KeyCode,
     characters: StrPtr,
     key: StrPtr,
+    timestamp: Timestamp,
 }
 
 impl Drop for KeyUpEvent {
     fn drop(&mut self) {
-        let characters = unsafe {
-            CString::from_raw(self.characters)
-        };
+        let characters = unsafe { CString::from_raw(self.characters) };
         std::mem::drop(characters);
     }
 }
@@ -57,14 +70,16 @@ impl Drop for KeyUpEvent {
 pub struct ModifiersChangedEvent {
     window_id: WindowId,
     modifiers: KeyModifiersSet,
-    code: KeyCode
+    code: KeyCode,
+    timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseMovedEvent {
     window_id: WindowId,
-    location_in_window: LogicalPoint
+    location_in_window: LogicalPoint,
+    timestamp: Timestamp,
 }
 
 #[repr(C)]
@@ -72,21 +87,24 @@ pub struct MouseMovedEvent {
 pub struct MouseDraggedEvent {
     window_id: WindowId,
     button: MouseButton,
-    location_in_window: LogicalPoint
+    location_in_window: LogicalPoint,
+    timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseEnteredEvent {
     window_id: WindowId,
-    location_in_window: LogicalPoint
+    location_in_window: LogicalPoint,
+    timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseExitedEvent {
     window_id: WindowId,
-    location_in_window: LogicalPoint
+    location_in_window: LogicalPoint,
+    timestamp: Timestamp,
 }
 
 #[repr(C)]
@@ -94,7 +112,8 @@ pub struct MouseExitedEvent {
 pub struct MouseDownEvent {
     window_id: WindowId,
     button: MouseButton,
-    location_in_window: LogicalPoint
+    location_in_window: LogicalPoint,
+    timestamp: Timestamp,
 }
 
 #[repr(C)]
@@ -102,7 +121,8 @@ pub struct MouseDownEvent {
 pub struct MouseUpEvent {
     window_id: WindowId,
     button: MouseButton,
-    location_in_window: LogicalPoint
+    location_in_window: LogicalPoint,
+    timestamp: Timestamp,
 }
 
 #[repr(C)]
@@ -112,28 +132,29 @@ pub struct ScrollWheelEvent {
     scrolling_delta_x: LogicalPixels,
     scrolling_delta_y: LogicalPixels,
     has_precise_scrolling_deltas: bool,
-    location_in_window: LogicalPoint
+    location_in_window: LogicalPoint,
+    timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowScreenChangeEvent {
     window_id: WindowId,
-    new_screen_id: ScreenId
+    new_screen_id: ScreenId,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowResizeEvent {
     window_id: WindowId,
-    size: LogicalSize
+    size: LogicalSize,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowMoveEvent {
     window_id: WindowId,
-    origin: LogicalPoint
+    origin: LogicalPoint,
 }
 
 #[repr(C)]
@@ -141,20 +162,20 @@ pub struct WindowMoveEvent {
 pub struct WindowFocusChangeEvent {
     window_id: WindowId,
     is_key: bool,
-    is_main: bool
+    is_main: bool,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowCloseRequestEvent {
-    window_id: WindowId
+    window_id: WindowId,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowFullScreenToggleEvent {
     window_id: WindowId,
-    is_full_screen: bool
+    is_full_screen: bool,
 }
 
 #[repr(C)]
@@ -178,7 +199,7 @@ pub enum Event {
     WindowCloseRequest(WindowCloseRequestEvent),
     WindowFullScreenToggle(WindowFullScreenToggleEvent),
     DisplayConfigurationChange,
-    ApplicationDidFinishLaunching
+    ApplicationDidFinishLaunching,
 }
 
 impl PanicDefault for MouseButtonsSet {
@@ -189,9 +210,7 @@ impl PanicDefault for MouseButtonsSet {
 
 #[no_mangle]
 extern "C" fn events_pressed_mouse_buttons() -> MouseButtonsSet {
-    ffi_boundary("events_pressed_mouse_buttons", || {
-        Ok(NSEvent::pressed_mouse_buttons())
-    })
+    ffi_boundary("events_pressed_mouse_buttons", || Ok(NSEvent::pressed_mouse_buttons()))
 }
 
 impl PanicDefault for KeyModifiersSet {
@@ -202,9 +221,7 @@ impl PanicDefault for KeyModifiersSet {
 
 #[no_mangle]
 extern "C" fn events_pressed_modifiers() -> KeyModifiersSet {
-    ffi_boundary("events_pressed_modifiers", || {
-        Ok(NSEvent::pressed_modifiers())
-    })
+    ffi_boundary("events_pressed_modifiers", || Ok(NSEvent::pressed_modifiers()))
 }
 
 #[no_mangle]
@@ -220,9 +237,7 @@ trait NSEventExt {
 
     fn window_id(&self) -> WindowId {
         let me = self.me();
-        unsafe {
-            me.windowNumber() as WindowId
-        }
+        unsafe { me.windowNumber() as WindowId }
     }
 
     fn cursor_location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint {
@@ -231,9 +246,7 @@ trait NSEventExt {
             // position is relative to bottom left corner of the root view
             me.locationInWindow()
         };
-        let window = unsafe {
-            me.window(mtm).expect("No window for event")
-        };
+        let window = unsafe { me.window(mtm).expect("No window for event") };
         let frame = window.contentView().unwrap().frame();
         LogicalPoint::from_macos_coords(point, frame.size.height)
     }
@@ -245,9 +258,7 @@ trait NSEventExt {
     }
 
     fn pressed_modifiers() -> KeyModifiersSet {
-        unsafe {
-            NSEvent::modifierFlags_class()
-        }.try_into().unwrap()
+        unsafe { NSEvent::modifierFlags_class() }.try_into().unwrap()
     }
 }
 
@@ -268,9 +279,10 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                     is_repeat: key_info.is_repeat,
                     characters: key_info.chars.into_raw(),
                     key: key_info.key.into_raw(),
-                    modifiers: key_info.modifiers
+                    modifiers: key_info.modifiers,
+                    timestamp: unsafe { ns_event.timestamp() },
                 })
-            },
+            }
             NSEventType::KeyUp => {
                 let key_info = unpack_key_event(ns_event)?;
                 Event::KeyUp(KeyUpEvent {
@@ -279,9 +291,10 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                     characters: key_info.chars.into_raw(),
                     key: key_info.key.into_raw(),
                     modifiers: key_info.modifiers,
+                    timestamp: unsafe { ns_event.timestamp() }
                 })
-            },
-            _ => bail!("Unexpected type of event {:?}", ns_event)
+            }
+            _ => bail!("Unexpected type of event {:?}", ns_event),
         };
         Ok((state.event_handler)(&event))
     });
@@ -294,7 +307,8 @@ pub(crate) fn handle_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<b
         let event = Event::ModifiersChanged(ModifiersChangedEvent {
             window_id: ns_event.window_id(),
             modifiers: flags_changed_info.modifiers,
-            code: flags_changed_info.code
+            code: flags_changed_info.code,
+            timestamp: unsafe { ns_event.timestamp() },
         });
 
         Ok((state.event_handler)(&event))
@@ -306,20 +320,21 @@ pub(crate) fn handle_mouse_move(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseMoved(MouseMovedEvent {
             window_id: ns_event.window_id(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm)
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: unsafe { ns_event.timestamp() },
         });
         (state.event_handler)(&event)
     });
     handled
 }
 
-
 pub(crate) fn handle_mouse_drag(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseDragged(MouseDraggedEvent {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm)
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: unsafe { ns_event.timestamp() },
         });
         (state.event_handler)(&event)
     });
@@ -330,7 +345,8 @@ pub(crate) fn handle_mouse_enter(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseEntered(MouseEnteredEvent {
             window_id: ns_event.window_id(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm)
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: unsafe { ns_event.timestamp() },
         });
         (state.event_handler)(&event)
     });
@@ -341,7 +357,8 @@ pub(crate) fn handle_mouse_exit(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::MouseExited(MouseExitedEvent {
             window_id: ns_event.window_id(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm)
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: unsafe { ns_event.timestamp() },
         });
         (state.event_handler)(&event)
     });
@@ -353,7 +370,8 @@ pub(crate) fn handle_mouse_down(ns_event: &NSEvent) -> bool {
         let event = Event::MouseDown(MouseDownEvent {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm)
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: unsafe { ns_event.timestamp() },
         });
         (state.event_handler)(&event)
     });
@@ -365,7 +383,8 @@ pub(crate) fn handle_mouse_up(ns_event: &NSEvent) -> bool {
         let event = Event::MouseUp(MouseUpEvent {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
-            location_in_window: ns_event.cursor_location_in_window(state.mtm)
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: unsafe { ns_event.timestamp() },
         });
         (state.event_handler)(&event)
     });
@@ -379,7 +398,8 @@ pub(crate) fn handle_scroll_wheel(ns_event: &NSEvent) -> bool {
             scrolling_delta_x: unsafe { ns_event.scrollingDeltaX() },
             scrolling_delta_y: unsafe { ns_event.scrollingDeltaY() },
             has_precise_scrolling_deltas: unsafe { ns_event.hasPreciseScrollingDeltas() },
-            location_in_window: ns_event.cursor_location_in_window(state.mtm)
+            location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            timestamp: unsafe { ns_event.timestamp() },
         });
         (state.event_handler)(&event)
     });
@@ -391,70 +411,70 @@ pub(crate) fn handle_window_screen_change(window: &NSWindow) {
         let event = Event::WindowScreenChange(WindowScreenChangeEvent {
             window_id: window.window_id(),
             // todo sometimes it panics when you close the lid
-            new_screen_id: window.screen().unwrap().screen_id()
+            new_screen_id: window.screen().unwrap().screen_id(),
         });
         (state.event_handler)(&event)
     });
 }
 
-pub (crate) fn handle_window_resize(window: &NSWindow) {
+pub(crate) fn handle_window_resize(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowResize(WindowResizeEvent {
             window_id: window.window_id(),
-            size: window.get_size()
+            size: window.get_size(),
         });
         (state.event_handler)(&event)
     });
 }
 
-pub (crate) fn handle_window_move(window: &NSWindow) {
+pub(crate) fn handle_window_move(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowMove(WindowMoveEvent {
             window_id: window.window_id(),
-            origin: window.get_origin(state.mtm).unwrap() // todo
+            origin: window.get_origin(state.mtm).unwrap(), // todo
         });
         (state.event_handler)(&event)
     });
 }
 
-pub (crate) fn handle_window_close_request(window: &NSWindow) {
+pub(crate) fn handle_window_close_request(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowCloseRequest(WindowCloseRequestEvent {
-            window_id: window.window_id()
+            window_id: window.window_id(),
         });
         (state.event_handler)(&event)
     });
 }
 
-pub (crate) fn handle_window_focus_change(window: &NSWindow) {
+pub(crate) fn handle_window_focus_change(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowFocusChange(WindowFocusChangeEvent {
             window_id: window.window_id(),
             is_key: window.isKeyWindow(),
-            is_main: unsafe { window.isMainWindow() }
+            is_main: unsafe { window.isMainWindow() },
         });
         (state.event_handler)(&event)
     });
 }
 
-pub (crate) fn handle_window_full_screen_toggle(window: &NSWindow) {
+pub(crate) fn handle_window_full_screen_toggle(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowFullScreenToggle(WindowFullScreenToggleEvent {
             window_id: window.window_id(),
-            is_full_screen: window.is_full_screen()
+            is_full_screen: window.is_full_screen(),
         });
         (state.event_handler)(&event)
     });
 }
 
-pub (crate) fn handle_display_configuration_change() {
+pub(crate) fn handle_display_configuration_change() {
     let _handled = AppState::with(|state| {
         let event = Event::DisplayConfigurationChange;
         (state.event_handler)(&event)
     });
 }
 
-pub (crate) fn handle_application_did_finish_launching() {
+pub(crate) fn handle_application_did_finish_launching() {
     let _handled = AppState::with(|state| {
         let event = Event::ApplicationDidFinishLaunching;
         (state.event_handler)(&event)

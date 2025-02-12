@@ -7,6 +7,15 @@ import org.jetbrains.desktop.macos.generated.*
 import java.lang.foreign.Arena
 import org.jetbrains.desktop.macos.generated.Event as NativeEvent
 import java.lang.foreign.MemorySegment
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
+
+@JvmInline
+value class Timestamp(val value: Double /* Count of seconds passed since some fixed but arbitrary moment in the past */) {
+    fun toDuration(): Duration {
+        return value.seconds
+    }
+}
 
 sealed class Event {
     companion object {
@@ -31,7 +40,8 @@ sealed class Event {
         val characters: String,
         val key: String,
         val modifiers: KeyModifiersSet,
-        val isRepeat: Boolean
+        val isRepeat: Boolean,
+        val timestamp: Timestamp
     ): Event()
 
     data class KeyUp(
@@ -40,45 +50,53 @@ sealed class Event {
         val characters: String,
         val key: String,
         val modifiers: KeyModifiersSet,
+        val timestamp: Timestamp
     ): Event()
 
     data class ModifiersChanged(
         val windowId: WindowId,
         val modifiers: KeyModifiersSet,
-        val keyCode: KeyCode
+        val keyCode: KeyCode,
+        val timestamp: Timestamp
     ): Event()
 
     data class MouseMoved(
         val windowId: WindowId,
-        val locationInWindow: LogicalPoint
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp
     ): Event()
 
     data class MouseDragged(
         val windowId: WindowId,
         val button: MouseButton,
-        val locationInWindow: LogicalPoint
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp
     ): Event()
 
     data class MouseEntered(
         val windowId: WindowId,
-        val locationInWindow: LogicalPoint
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp
     ): Event()
 
     data class MouseExited(
         val windowId: WindowId,
-        val locationInWindow: LogicalPoint
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp
     ): Event()
 
     data class MouseUp(
         val windowId: WindowId,
         val button: MouseButton,
-        val locationInWindow: LogicalPoint
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp
     ): Event()
 
     data class MouseDown(
         val windowId: WindowId,
         val button: MouseButton,
-        val locationInWindow: LogicalPoint
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp
     ): Event()
 
     data class ScrollWheel(
@@ -86,9 +104,9 @@ sealed class Event {
         val scrollingDeltaX: LogicalPixels,
         val scrollingDeltaY: LogicalPixels,
         val hasPreciseScrillingDeltas: Boolean,
-        val locationInWindow: LogicalPoint
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp
     ): Event()
-
     data class WindowScreenChange(
         val windowId: WindowId,
         val newScreenId: ScreenId,
@@ -156,7 +174,8 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 characters = KeyDownEvent.characters(nativeEvent).getUtf8String(0),
                 key = KeyDownEvent.key(nativeEvent).getUtf8String(0),
                 modifiers = KeyModifiersSet(KeyDownEvent.modifiers(nativeEvent)),
-                isRepeat = KeyDownEvent.is_repeat(nativeEvent)
+                isRepeat = KeyDownEvent.is_repeat(nativeEvent),
+                timestamp = Timestamp(KeyDownEvent.timestamp(nativeEvent))
             )
         }
         desktop_macos_h.KeyUp() -> {
@@ -166,7 +185,8 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 characters = KeyUpEvent.characters(nativeEvent).getUtf8String(0),
                 key = KeyUpEvent.key(nativeEvent).getUtf8String(0),
                 modifiers = KeyModifiersSet(KeyUpEvent.modifiers(nativeEvent)),
-                keyCode = KeyCode.fromNative(KeyUpEvent.code(nativeEvent))
+                keyCode = KeyCode.fromNative(KeyUpEvent.code(nativeEvent)),
+                timestamp = Timestamp(KeyUpEvent.timestamp(nativeEvent))
             )
         }
         desktop_macos_h.ModifiersChanged() -> {
@@ -174,14 +194,16 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.ModifiersChanged(
                 windowId = ModifiersChangedEvent.window_id(nativeEvent),
                 modifiers = KeyModifiersSet(ModifiersChangedEvent.modifiers(nativeEvent)),
-                keyCode = KeyCode.fromNative(ModifiersChangedEvent.code(nativeEvent))
+                keyCode = KeyCode.fromNative(ModifiersChangedEvent.code(nativeEvent)),
+                timestamp = Timestamp(ModifiersChangedEvent.timestamp(nativeEvent))
             )
         }
         desktop_macos_h.MouseMoved() -> {
             val nativeEvent = NativeEvent.mouse_moved(s)
             Event.MouseMoved(
                 windowId = MouseMovedEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(MouseMovedEvent.location_in_window(nativeEvent))
+                locationInWindow = LogicalPoint.fromNative(MouseMovedEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(MouseMovedEvent.timestamp(nativeEvent))
             )
         }
         desktop_macos_h.MouseDragged() -> {
@@ -189,21 +211,24 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.MouseDragged(
                 windowId = MouseDraggedEvent.window_id(nativeEvent),
                 button = MouseButton(MouseDraggedEvent.button(nativeEvent)),
-                locationInWindow = LogicalPoint.fromNative(MouseDraggedEvent.location_in_window(nativeEvent))
+                locationInWindow = LogicalPoint.fromNative(MouseDraggedEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(MouseDraggedEvent.timestamp(nativeEvent))
             )
         }
         desktop_macos_h.MouseEntered() -> {
             val nativeEvent = NativeEvent.mouse_entered(s)
             Event.MouseEntered(
                 windowId = MouseEnteredEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(MouseEnteredEvent.location_in_window(nativeEvent))
+                locationInWindow = LogicalPoint.fromNative(MouseEnteredEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(MouseEnteredEvent.timestamp(nativeEvent))
             )
         }
         desktop_macos_h.MouseExited() -> {
             val nativeEvent = NativeEvent.mouse_exited(s)
             Event.MouseExited(
                 windowId = MouseExitedEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(MouseExitedEvent.location_in_window(nativeEvent))
+                locationInWindow = LogicalPoint.fromNative(MouseExitedEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(MouseExitedEvent.timestamp(nativeEvent))
             )
         }
         desktop_macos_h.MouseUp() -> {
@@ -211,7 +236,8 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.MouseUp(
                 windowId = MouseUpEvent.window_id(nativeEvent),
                 button = MouseButton(MouseUpEvent.button(nativeEvent)),
-                locationInWindow = LogicalPoint.fromNative(MouseUpEvent.location_in_window(nativeEvent))
+                locationInWindow = LogicalPoint.fromNative(MouseUpEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(MouseUpEvent.timestamp(nativeEvent))
             )
         }
         desktop_macos_h.MouseDown() -> {
@@ -219,7 +245,8 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.MouseDown(
                 windowId = MouseDownEvent.window_id(nativeEvent),
                 button = MouseButton(MouseDownEvent.button(nativeEvent)),
-                locationInWindow = LogicalPoint.fromNative(MouseDownEvent.location_in_window(nativeEvent))
+                locationInWindow = LogicalPoint.fromNative(MouseDownEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(MouseDownEvent.timestamp(nativeEvent))
             )
         }
         desktop_macos_h.ScrollWheel() -> {
@@ -229,10 +256,10 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 scrollingDeltaX = ScrollWheelEvent.scrolling_delta_x(nativeEvent),
                 scrollingDeltaY = ScrollWheelEvent.scrolling_delta_y(nativeEvent),
                 hasPreciseScrillingDeltas = ScrollWheelEvent.has_precise_scrolling_deltas(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(ScrollWheelEvent.location_in_window(nativeEvent))
+                locationInWindow = LogicalPoint.fromNative(ScrollWheelEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(ScrollWheelEvent.timestamp(nativeEvent))
             )
-        }
-        desktop_macos_h.WindowScreenChange() -> {
+        }        desktop_macos_h.WindowScreenChange() -> {
             val nativeEvent = NativeEvent.window_screen_change(s)
             Event.WindowScreenChange(
                 windowId = WindowScreenChangeEvent.window_id(nativeEvent),

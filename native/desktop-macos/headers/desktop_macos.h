@@ -351,6 +351,8 @@ typedef uint32_t KeyModifiersSet;
 
 typedef char *StrPtr;
 
+typedef double Timestamp;
+
 typedef struct KeyDownEvent {
   WindowId window_id;
   KeyModifiersSet modifiers;
@@ -358,6 +360,7 @@ typedef struct KeyDownEvent {
   StrPtr characters;
   StrPtr key;
   bool is_repeat;
+  Timestamp timestamp;
 } KeyDownEvent;
 
 typedef struct KeyUpEvent {
@@ -366,12 +369,14 @@ typedef struct KeyUpEvent {
   enum KeyCode code;
   StrPtr characters;
   StrPtr key;
+  Timestamp timestamp;
 } KeyUpEvent;
 
 typedef struct ModifiersChangedEvent {
   WindowId window_id;
   KeyModifiersSet modifiers;
   enum KeyCode code;
+  Timestamp timestamp;
 } ModifiersChangedEvent;
 
 typedef double LogicalPixels;
@@ -384,6 +389,7 @@ typedef struct LogicalPoint {
 typedef struct MouseMovedEvent {
   WindowId window_id;
   struct LogicalPoint location_in_window;
+  Timestamp timestamp;
 } MouseMovedEvent;
 
 typedef uint32_t MouseButton;
@@ -392,28 +398,33 @@ typedef struct MouseDraggedEvent {
   WindowId window_id;
   MouseButton button;
   struct LogicalPoint location_in_window;
+  Timestamp timestamp;
 } MouseDraggedEvent;
 
 typedef struct MouseEnteredEvent {
   WindowId window_id;
   struct LogicalPoint location_in_window;
+  Timestamp timestamp;
 } MouseEnteredEvent;
 
 typedef struct MouseExitedEvent {
   WindowId window_id;
   struct LogicalPoint location_in_window;
+  Timestamp timestamp;
 } MouseExitedEvent;
 
 typedef struct MouseDownEvent {
   WindowId window_id;
   MouseButton button;
   struct LogicalPoint location_in_window;
+  Timestamp timestamp;
 } MouseDownEvent;
 
 typedef struct MouseUpEvent {
   WindowId window_id;
   MouseButton button;
   struct LogicalPoint location_in_window;
+  Timestamp timestamp;
 } MouseUpEvent;
 
 typedef struct ScrollWheelEvent {
@@ -422,6 +433,7 @@ typedef struct ScrollWheelEvent {
   LogicalPixels scrolling_delta_y;
   bool has_precise_scrolling_deltas;
   struct LogicalPoint location_in_window;
+  Timestamp timestamp;
 } ScrollWheelEvent;
 
 typedef uint32_t ScreenId;

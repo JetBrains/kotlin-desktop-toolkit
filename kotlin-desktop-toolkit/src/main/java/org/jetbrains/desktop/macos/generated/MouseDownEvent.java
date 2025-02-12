@@ -18,6 +18,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     WindowId window_id;
  *     MouseButton button;
  *     struct LogicalPoint location_in_window;
+ *     Timestamp timestamp;
  * }
  * }
  */
@@ -31,7 +32,8 @@ public class MouseDownEvent {
         desktop_macos_h.C_LONG_LONG.withName("window_id"),
         desktop_macos_h.C_INT.withName("button"),
         MemoryLayout.paddingLayout(4),
-        LogicalPoint.layout().withName("location_in_window")
+        LogicalPoint.layout().withName("location_in_window"),
+        desktop_macos_h.C_DOUBLE.withName("timestamp")
     ).withName("MouseDownEvent");
 
     /**
@@ -171,6 +173,50 @@ public class MouseDownEvent {
      */
     public static void location_in_window(MemorySegment struct, MemorySegment fieldValue) {
         MemorySegment.copy(fieldValue, 0L, struct, location_in_window$OFFSET, location_in_window$LAYOUT.byteSize());
+    }
+
+    private static final OfDouble timestamp$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("timestamp"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static final OfDouble timestamp$layout() {
+        return timestamp$LAYOUT;
+    }
+
+    private static final long timestamp$OFFSET = 32;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static final long timestamp$offset() {
+        return timestamp$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static double timestamp(MemorySegment struct) {
+        return struct.get(timestamp$LAYOUT, timestamp$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static void timestamp(MemorySegment struct, double fieldValue) {
+        struct.set(timestamp$LAYOUT, timestamp$OFFSET, fieldValue);
     }
 
     /**

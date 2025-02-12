@@ -20,6 +20,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     LogicalPixels scrolling_delta_y;
  *     bool has_precise_scrolling_deltas;
  *     struct LogicalPoint location_in_window;
+ *     Timestamp timestamp;
  * }
  * }
  */
@@ -35,7 +36,8 @@ public class ScrollWheelEvent {
         desktop_macos_h.C_DOUBLE.withName("scrolling_delta_y"),
         desktop_macos_h.C_BOOL.withName("has_precise_scrolling_deltas"),
         MemoryLayout.paddingLayout(7),
-        LogicalPoint.layout().withName("location_in_window")
+        LogicalPoint.layout().withName("location_in_window"),
+        desktop_macos_h.C_DOUBLE.withName("timestamp")
     ).withName("ScrollWheelEvent");
 
     /**
@@ -263,6 +265,50 @@ public class ScrollWheelEvent {
      */
     public static void location_in_window(MemorySegment struct, MemorySegment fieldValue) {
         MemorySegment.copy(fieldValue, 0L, struct, location_in_window$OFFSET, location_in_window$LAYOUT.byteSize());
+    }
+
+    private static final OfDouble timestamp$LAYOUT = (OfDouble)$LAYOUT.select(groupElement("timestamp"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static final OfDouble timestamp$layout() {
+        return timestamp$LAYOUT;
+    }
+
+    private static final long timestamp$OFFSET = 48;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static final long timestamp$offset() {
+        return timestamp$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static double timestamp(MemorySegment struct) {
+        return struct.get(timestamp$LAYOUT, timestamp$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * Timestamp timestamp
+     * }
+     */
+    public static void timestamp(MemorySegment struct, double fieldValue) {
+        struct.set(timestamp$LAYOUT, timestamp$OFFSET, fieldValue);
     }
 
     /**
