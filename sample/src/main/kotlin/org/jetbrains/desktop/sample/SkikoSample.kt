@@ -366,7 +366,7 @@ class ApplicationState: AutoCloseable {
     }
 
     fun handleEvent(event: Event): EventHandlerResult {
-        logEvents(event)
+//        logEvents(event)
         val eventWindowId = event.windowId()
 
         return when (event) {
@@ -406,7 +406,7 @@ class ApplicationState: AutoCloseable {
                     perform = { createWindow(useCustomTitlebar = false) }
                 ),
                 AppMenuItem.Action(
-                    "Quit1",
+                    "Quit",
                     keystroke = Keystroke(key = "q", modifiers = KeyModifiersSet.create(command = true)),
                     perform = {
                         thread {
@@ -455,7 +455,7 @@ class ApplicationState: AutoCloseable {
                     title = "List Displays",
                     keystroke = Keystroke(key = "d", modifiers = KeyModifiersSet.create(command = true)),
                     perform = { Logger.info { Screen.allScreens().toString() } }
-                ),
+                )
             ),
             AppMenuItem.SubMenu(
                 title = "Window",
@@ -485,7 +485,24 @@ class ApplicationState: AutoCloseable {
                     perform = { cycleWindowEffects() }
                 ),
                 AppMenuItem.Action(
-                    title = "Kill",
+                    title = "Log Window Position",
+                    keystroke = Keystroke(key = "l", modifiers = KeyModifiersSet.create(command = true)),
+                    perform = {
+                        mainWindow()?.window?.let { window ->
+                            Logger.info {
+                                """
+                                    WindowId: ${window.windowId()}
+                                    origin: ${window.origin}
+                                    size: ${window.size}
+                                    contentOrigin: ${window.contentOrigin}
+                                    contentSize: ${window.contentSize}
+                                """.trimIndent()
+                            }
+                        }
+                    }
+                ),
+                AppMenuItem.Action(
+                    title = "Close Window",
                     keystroke = Keystroke(key = "w", modifiers = KeyModifiersSet.create(command = true)),
                     perform = {
                         mainWindow()?.let {

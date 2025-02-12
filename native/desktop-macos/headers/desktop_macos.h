@@ -756,6 +756,15 @@ void window_set_rect(const struct Window *window,
                      struct LogicalSize size,
                      bool animate);
 
+struct LogicalPoint window_get_content_origin(const struct Window *window);
+
+struct LogicalSize window_get_content_size(const struct Window *window);
+
+void window_set_content_rect(const struct Window *window,
+                             struct LogicalPoint origin,
+                             struct LogicalSize size,
+                             bool animate);
+
 bool window_is_key(const struct Window *window);
 
 bool window_is_main(const struct Window *window);

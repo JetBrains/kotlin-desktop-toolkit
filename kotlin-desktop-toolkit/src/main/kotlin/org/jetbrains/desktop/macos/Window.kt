@@ -113,6 +113,20 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, desktop_maco
             }
         }
 
+    val contentOrigin: LogicalPoint
+        get() {
+            return Arena.ofConfined().use { arena ->
+                LogicalPoint.fromNative(ffiDownCall { desktop_macos_h.window_get_content_origin(arena, pointer) })
+            }
+        }
+
+    val contentSize: LogicalSize
+        get() {
+            return Arena.ofConfined().use { arena ->
+                LogicalSize.fromNative(ffiDownCall { desktop_macos_h.window_get_content_size(arena, pointer) })
+            }
+        }
+
     var maxSize: LogicalSize
         get() {
             return Arena.ofConfined().use { arena ->
@@ -167,6 +181,19 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, desktop_maco
                                             origin.toNative(arena),
                                             size.toNative(arena),
                                             animateTransition)
+            }
+        }
+    }
+
+    fun setContentRect(origin: LogicalPoint, size: LogicalSize, animateTransition: Boolean = true) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_macos_h.window_set_content_rect(
+                    pointer,
+                    origin.toNative(arena),
+                    size.toNative(arena),
+                    animateTransition
+                )
             }
         }
     }

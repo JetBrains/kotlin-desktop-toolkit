@@ -171,6 +171,30 @@ pub extern "C" fn window_set_rect(window: &Window, origin: LogicalPoint, size: L
 }
 
 #[no_mangle]
+pub extern "C" fn window_get_content_origin(window: &Window) -> LogicalPoint {
+    ffi_boundary("window_get_content_origin", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        Ok(window.ns_window.get_content_rect(mtm)?.origin)
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn window_get_content_size(window: &Window) -> LogicalSize {
+    ffi_boundary("window_get_content_size", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        Ok(window.ns_window.get_content_rect(mtm)?.size)
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn window_set_content_rect(window: &Window, origin: LogicalPoint, size: LogicalSize, animate: bool) {
+    ffi_boundary("window_set_content_rect", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        window.ns_window.set_content_rect(&LogicalRect::new(origin, size), animate, mtm)
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn window_is_key(window: &Window) -> bool {
     ffi_boundary("window_is_key", || {
         Ok(window.ns_window.isKeyWindow())

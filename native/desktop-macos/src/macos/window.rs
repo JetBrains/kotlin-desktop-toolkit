@@ -98,11 +98,30 @@ pub(crate) trait NSWindowExts {
         Ok(rect.origin)
     }
 
+    fn get_content_rect(&self, mtm: MainThreadMarker) -> anyhow::Result<LogicalRect> {
+        let ns_window = self.me();
+        let window_frame = ns_window.frame();
+        let content_frame = ns_window.contentRectForFrameRect(window_frame);
+        let screen_height = NSScreen::primary(mtm)?.height();
+        return Ok(LogicalRect::from_macos_coords(content_frame, screen_height))
+    }
+
     fn set_rect(&self, rect: &LogicalRect, animate: bool, mtm: MainThreadMarker) -> anyhow::Result<()> {
         let screen_height = NSScreen::primary(mtm)?.height();
         unsafe {
             let frame = rect.to_macos_coords(screen_height);
             self.me().setFrame_display_animate(frame, true, animate);
+        }
+        Ok(())
+    }
+
+    fn set_content_rect(&self, rect: &LogicalRect, animate: bool, mtm: MainThreadMarker) -> anyhow::Result<()> {
+        let ns_window = self.me();
+        let screen_height = NSScreen::primary(mtm)?.height();
+        let content_frame = LogicalRect::to_macos_coords(rect, screen_height);
+        let window_frame = unsafe { ns_window.frameRectForContentRect(content_frame) };
+        unsafe {
+            self.me().setFrame_display_animate(window_frame, true, animate);
         }
         Ok(())
     }

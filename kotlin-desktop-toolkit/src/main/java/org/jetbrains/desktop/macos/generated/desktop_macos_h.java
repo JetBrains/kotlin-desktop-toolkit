@@ -4341,6 +4341,182 @@ public class desktop_macos_h {
         }
     }
 
+    private static class window_get_content_origin {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            LogicalPoint.layout(),
+            desktop_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = desktop_macos_h.findOrThrow("window_get_content_origin");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * struct LogicalPoint window_get_content_origin(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_get_content_origin$descriptor() {
+        return window_get_content_origin.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * struct LogicalPoint window_get_content_origin(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_get_content_origin$handle() {
+        return window_get_content_origin.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * struct LogicalPoint window_get_content_origin(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_get_content_origin$address() {
+        return window_get_content_origin.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * struct LogicalPoint window_get_content_origin(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_get_content_origin(SegmentAllocator allocator, MemorySegment window) {
+        var mh$ = window_get_content_origin.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_get_content_origin", allocator, window);
+            }
+            return (MemorySegment)mh$.invokeExact(allocator, window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_get_content_size {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.of(
+            LogicalSize.layout(),
+            desktop_macos_h.C_POINTER
+        );
+
+        public static final MemorySegment ADDR = desktop_macos_h.findOrThrow("window_get_content_size");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_content_size(const struct Window *window)
+     * }
+     */
+    public static FunctionDescriptor window_get_content_size$descriptor() {
+        return window_get_content_size.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_content_size(const struct Window *window)
+     * }
+     */
+    public static MethodHandle window_get_content_size$handle() {
+        return window_get_content_size.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_content_size(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_get_content_size$address() {
+        return window_get_content_size.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * struct LogicalSize window_get_content_size(const struct Window *window)
+     * }
+     */
+    public static MemorySegment window_get_content_size(SegmentAllocator allocator, MemorySegment window) {
+        var mh$ = window_get_content_size.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_get_content_size", allocator, window);
+            }
+            return (MemorySegment)mh$.invokeExact(allocator, window);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
+    private static class window_set_content_rect {
+        public static final FunctionDescriptor DESC = FunctionDescriptor.ofVoid(
+            desktop_macos_h.C_POINTER,
+            LogicalPoint.layout(),
+            LogicalSize.layout(),
+            desktop_macos_h.C_BOOL
+        );
+
+        public static final MemorySegment ADDR = desktop_macos_h.findOrThrow("window_set_content_rect");
+
+        public static final MethodHandle HANDLE = Linker.nativeLinker().downcallHandle(ADDR, DESC);
+    }
+
+    /**
+     * Function descriptor for:
+     * {@snippet lang=c :
+     * void window_set_content_rect(const struct Window *window, struct LogicalPoint origin, struct LogicalSize size, bool animate)
+     * }
+     */
+    public static FunctionDescriptor window_set_content_rect$descriptor() {
+        return window_set_content_rect.DESC;
+    }
+
+    /**
+     * Downcall method handle for:
+     * {@snippet lang=c :
+     * void window_set_content_rect(const struct Window *window, struct LogicalPoint origin, struct LogicalSize size, bool animate)
+     * }
+     */
+    public static MethodHandle window_set_content_rect$handle() {
+        return window_set_content_rect.HANDLE;
+    }
+
+    /**
+     * Address for:
+     * {@snippet lang=c :
+     * void window_set_content_rect(const struct Window *window, struct LogicalPoint origin, struct LogicalSize size, bool animate)
+     * }
+     */
+    public static MemorySegment window_set_content_rect$address() {
+        return window_set_content_rect.ADDR;
+    }
+
+    /**
+     * {@snippet lang=c :
+     * void window_set_content_rect(const struct Window *window, struct LogicalPoint origin, struct LogicalSize size, bool animate)
+     * }
+     */
+    public static void window_set_content_rect(MemorySegment window, MemorySegment origin, MemorySegment size, boolean animate) {
+        var mh$ = window_set_content_rect.HANDLE;
+        try {
+            if (TRACE_DOWNCALLS) {
+                traceDowncall("window_set_content_rect", window, origin, size, animate);
+            }
+            mh$.invokeExact(window, origin, size, animate);
+        } catch (Throwable ex$) {
+           throw new AssertionError("should not reach here", ex$);
+        }
+    }
+
     private static class window_is_key {
         public static final FunctionDescriptor DESC = FunctionDescriptor.of(
             desktop_macos_h.C_BOOL,

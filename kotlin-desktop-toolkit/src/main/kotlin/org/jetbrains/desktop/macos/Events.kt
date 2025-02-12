@@ -119,7 +119,6 @@ sealed class Event {
 
     data class WindowMove(
         val windowId: WindowId,
-        // bottom left corner of window
         val origin: LogicalPoint
     ): Event()
 
