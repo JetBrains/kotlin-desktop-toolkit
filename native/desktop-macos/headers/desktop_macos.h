@@ -550,10 +550,42 @@ typedef struct Event {
 
 typedef bool (*EventHandler)(const struct Event*);
 
+typedef const char *ConstStrPtr;
+
+typedef struct TextCommandOperation {
+  WindowId window_id;
+  ConstStrPtr command;
+} TextCommandOperation;
+
+typedef struct TextChangedOperation {
+  WindowId window_id;
+  ConstStrPtr text;
+} TextChangedOperation;
+
+typedef enum TextOperation_Tag {
+  TextCommand,
+  TextChanged,
+} TextOperation_Tag;
+
+typedef struct TextOperation {
+  TextOperation_Tag tag;
+  union {
+    struct {
+      struct TextCommandOperation text_command;
+    };
+    struct {
+      struct TextChangedOperation text_changed;
+    };
+  };
+} TextOperation;
+
+typedef bool (*TextOperationHandler)(const struct TextOperation*);
+
 typedef struct ApplicationCallbacks {
   bool (*on_should_terminate)(void);
   void (*on_will_terminate)(void);
   EventHandler event_handler;
+  TextOperationHandler text_operation_handler;
 } ApplicationCallbacks;
 
 typedef void *MetalDeviceRef;

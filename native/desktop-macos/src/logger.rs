@@ -2,7 +2,7 @@ use core::panic;
 use std::{any::Any, borrow::{Borrow, BorrowMut}, cell::{Cell, RefCell}, ffi::{CStr, CString}, fmt::format, panic::AssertUnwindSafe};
 
 use anyhow::{Context, Error};
-use log::{debug, error, info, trace, warn, Level, LevelFilter, Metadata, Record, SetLoggerError};
+use log::error;
 use log4rs::{append::{console::{ConsoleAppender, Target}, file::FileAppender, rolling_file::{policy::compound::{roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy}, RollingFileAppender}}, config::{Appender, Root}, encode::pattern::PatternEncoder, filter::threshold::ThresholdFilter, Config};
 
 use crate::logger_api::{LogLevel, LoggerConfiguration};

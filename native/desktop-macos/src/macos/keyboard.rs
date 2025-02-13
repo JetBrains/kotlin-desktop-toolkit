@@ -65,8 +65,7 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
 //            ns_event.charactersByApplyingModifiers(ns_event.modifierFlags())
 //        }.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
 
-        // todo probably we could meet \u0000 here
-        let chars = CString::new(unsafe { chars.to_str(pool) }).with_context(|| format!("{chars:?}"))?;
+        let chars = CString::new(unsafe { chars.to_str(pool) }).unwrap_or_default(/* to handle e.g. Ctrl+Space */);
         let key = CString::new(unsafe { key.to_str(pool) }).with_context(|| format!("{key:?}"))?;
 
         let modifiers = unsafe { ns_event.modifierFlags() }.into();
