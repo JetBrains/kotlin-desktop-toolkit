@@ -615,6 +615,7 @@ typedef struct ScreenInfo {
   struct LogicalPoint origin;
   struct LogicalSize size;
   double scale;
+  uint32_t maximum_frames_per_second;
 } ScreenInfo;
 
 typedef int64_t ArraySize;

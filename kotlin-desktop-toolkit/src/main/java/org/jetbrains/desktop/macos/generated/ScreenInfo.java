@@ -21,6 +21,7 @@ import static java.lang.foreign.MemoryLayout.PathElement.*;
  *     struct LogicalPoint origin;
  *     struct LogicalSize size;
  *     double scale;
+ *     uint32_t maximum_frames_per_second;
  * }
  * }
  */
@@ -37,7 +38,9 @@ public class ScreenInfo {
         desktop_macos_h.C_POINTER.withName("name"),
         LogicalPoint.layout().withName("origin"),
         LogicalSize.layout().withName("size"),
-        desktop_macos_h.C_DOUBLE.withName("scale")
+        desktop_macos_h.C_DOUBLE.withName("scale"),
+        desktop_macos_h.C_INT.withName("maximum_frames_per_second"),
+        MemoryLayout.paddingLayout(4)
     ).withName("ScreenInfo");
 
     /**
@@ -309,6 +312,50 @@ public class ScreenInfo {
      */
     public static void scale(MemorySegment struct, double fieldValue) {
         struct.set(scale$LAYOUT, scale$OFFSET, fieldValue);
+    }
+
+    private static final OfInt maximum_frames_per_second$LAYOUT = (OfInt)$LAYOUT.select(groupElement("maximum_frames_per_second"));
+
+    /**
+     * Layout for field:
+     * {@snippet lang=c :
+     * uint32_t maximum_frames_per_second
+     * }
+     */
+    public static final OfInt maximum_frames_per_second$layout() {
+        return maximum_frames_per_second$LAYOUT;
+    }
+
+    private static final long maximum_frames_per_second$OFFSET = 56;
+
+    /**
+     * Offset for field:
+     * {@snippet lang=c :
+     * uint32_t maximum_frames_per_second
+     * }
+     */
+    public static final long maximum_frames_per_second$offset() {
+        return maximum_frames_per_second$OFFSET;
+    }
+
+    /**
+     * Getter for field:
+     * {@snippet lang=c :
+     * uint32_t maximum_frames_per_second
+     * }
+     */
+    public static int maximum_frames_per_second(MemorySegment struct) {
+        return struct.get(maximum_frames_per_second$LAYOUT, maximum_frames_per_second$OFFSET);
+    }
+
+    /**
+     * Setter for field:
+     * {@snippet lang=c :
+     * uint32_t maximum_frames_per_second
+     * }
+     */
+    public static void maximum_frames_per_second(MemorySegment struct, int fieldValue) {
+        struct.set(maximum_frames_per_second$LAYOUT, maximum_frames_per_second$OFFSET, fieldValue);
     }
 
     /**

@@ -56,7 +56,8 @@ data class Screen(
     val name: String,
     val origin: LogicalPoint,
     val size: LogicalSize,
-    val scale: Double) {
+    val scale: Double,
+    val maximumFramesPerSecond: Int) {
     companion object {
         private fun fromNative(s: MemorySegment): Screen {
             return Screen(
@@ -65,7 +66,8 @@ data class Screen(
                 name = ScreenInfo.name(s).getUtf8String(0),
                 origin = LogicalPoint.fromNative(ScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(ScreenInfo.size(s)),
-                scale = ScreenInfo.scale(s)
+                scale = ScreenInfo.scale(s),
+                maximumFramesPerSecond = ScreenInfo.maximum_frames_per_second(s)
             )
         }
 
@@ -95,5 +97,9 @@ data class AllScreens(val screens: List<Screen>) {
             desktop_macos_h.screen_get_main_screen_id()
         }
         return screens.first { it.screenId == screenId }
+    }
+
+    fun findById(screenId: ScreenId): Screen? {
+        return screens.firstOrNull { it.screenId == screenId }
     }
 }

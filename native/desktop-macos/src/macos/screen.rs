@@ -29,6 +29,7 @@ pub struct ScreenInfo {
     pub origin: LogicalPoint,
     pub size: LogicalSize,
     pub scale: f64,
+    pub maximum_frames_per_second: u32,
     // todo color space?
     // todo stable uuid?
 }
@@ -98,6 +99,7 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
                         origin: rect.origin,
                         size: rect.size,
                         scale: screen.backingScaleFactor(),
+                        maximum_frames_per_second: unsafe { screen.maximumFramesPerSecond() }.try_into().unwrap(),
                     }
                 })
                 .collect()
