@@ -1,9 +1,7 @@
 package org.jetbrains.desktop.buildscripts
 
-import org.gradle.api.Action
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ArchiveOperations
-import org.gradle.api.file.FileVisitDetails
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.Input

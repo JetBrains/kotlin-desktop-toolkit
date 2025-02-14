@@ -29,15 +29,15 @@ sealed class TextOperation {
                 desktop_macos_h.TextChanged() -> {
                     val nativeEvent = NativeEvent.key_up(s)
                     TextOperation.TextChanged(
-                        windowId = TextInputEvent.window_id(nativeEvent),
-                        text = TextInputEvent.text(nativeEvent).getUtf8String(0),
+                        windowId = TextChangedOperation.window_id(nativeEvent),
+                        text = TextChangedOperation.text(nativeEvent).getUtf8String(0),
                     )
                 }
                 desktop_macos_h.TextCommand() -> {
                     val nativeEvent = NativeEvent.key_up(s)
                     TextOperation.TextCommand(
-                        windowId = TextCommandEvent.window_id(nativeEvent),
-                        command = TextCommandEvent.command(nativeEvent).getUtf8String(0),
+                        windowId = TextCommandOperation.window_id(nativeEvent),
+                        command = TextCommandOperation.command(nativeEvent).getUtf8String(0),
                     )
                 }
                 else -> {
