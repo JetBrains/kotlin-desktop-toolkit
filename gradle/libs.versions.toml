@@ -3,8 +3,8 @@
 
 [versions]
 commons-math3 = "3.6.1"
-guava = "33.2.1-jre"
-junit-jupiter-engine = "5.10.3"
+guava = "33.4.0-jre"
+junit-jupiter-engine = "5.11.4"
 
 [libraries]
 commons-math3 = { module = "org.apache.commons:commons-math3", version.ref = "commons-math3" }
@@ -12,4 +12,4 @@ guava = { module = "com.google.guava:guava", version.ref = "guava" }
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-jupiter-engine" }
 
 [plugins]
-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version = "2.0.0" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version = "2.1.10" }
