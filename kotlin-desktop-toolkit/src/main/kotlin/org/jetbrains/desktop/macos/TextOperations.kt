@@ -26,14 +26,14 @@ sealed class TextOperation {
     companion object {
         internal fun fromNative(s: MemorySegment): TextOperation {
             return when (NativeEvent.tag(s)) {
-                desktop_macos_h.TextChanged() -> {
+                desktop_macos_h.TextOperation_TextChanged() -> {
                     val nativeEvent = NativeEvent.key_up(s)
                     TextOperation.TextChanged(
                         windowId = TextChangedOperation.window_id(nativeEvent),
                         text = TextChangedOperation.text(nativeEvent).getUtf8String(0),
                     )
                 }
-                desktop_macos_h.TextCommand() -> {
+                desktop_macos_h.TextOperation_TextCommand() -> {
                     val nativeEvent = NativeEvent.key_up(s)
                     TextOperation.TextCommand(
                         windowId = TextCommandOperation.window_id(nativeEvent),

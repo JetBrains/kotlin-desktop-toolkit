@@ -21,3 +21,6 @@ bitflags = true
 # If you want to turn macro expansion you need to set "RUSTC_BOOTSTRAP=1" before calling bindgen, or use nightly rustc.
 # see: https://github.com/mozilla/cbindgen/issues/1015
 # crates = ["desktop-macos"]
+
+[enum]
+prefix_with_name = true

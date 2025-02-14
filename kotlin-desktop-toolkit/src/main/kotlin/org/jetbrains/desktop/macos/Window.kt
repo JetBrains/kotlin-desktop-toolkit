@@ -235,20 +235,21 @@ sealed class WindowBackground {
         val result = NativeWindowBackground.allocate(arena)
         when (this) {
             is Transparent -> {
-                NativeWindowBackground.tag(result, desktop_macos_h.Transparent())
+                NativeWindowBackground.tag(result, desktop_macos_h.WindowBackground_Transparent())
             }
             is SolidColor -> {
-                NativeWindowBackground.tag(result, desktop_macos_h.SolidColor())
+                NativeWindowBackground.tag(result, desktop_macos_h.WindowBackground_SolidColor())
                 NativeWindowBackground.solid_color(result, color.toNative(arena))
             }
             is VisualEffect -> {
-                NativeWindowBackground.tag(result, desktop_macos_h.VisualEffect())
+                NativeWindowBackground.tag(result, desktop_macos_h.WindowBackground_VisualEffect())
                 NativeWindowBackground.visual_effect(result, effect.toNative())
             }
         }
         return result
     }
 }
+
 enum class WindowVisualEffect {
     TitlebarEffect,
     SelectionEffect,
@@ -267,20 +268,20 @@ enum class WindowVisualEffect {
 
     internal fun toNative(): Int {
         return when (this) {
-            TitlebarEffect -> desktop_macos_h.TitlebarEffect()
-            SelectionEffect -> desktop_macos_h.SelectionEffect()
-            MenuEffect -> desktop_macos_h.MenuEffect()
-            PopoverEffect -> desktop_macos_h.PopoverEffect()
-            SidebarEffect -> desktop_macos_h.SidebarEffect()
-            HeaderViewEffect -> desktop_macos_h.HeaderViewEffect()
-            SheetEffect -> desktop_macos_h.SheetEffect()
-            WindowBackgroundEffect -> desktop_macos_h.WindowBackgroundEffect()
-            HUDWindowEffect -> desktop_macos_h.HUDWindowEffect()
-            FullScreenUIEffect -> desktop_macos_h.FullScreenUIEffect()
-            ToolTipEffect -> desktop_macos_h.ToolTipEffect()
-            ContentBackgroundEffect -> desktop_macos_h.ContentBackgroundEffect()
-            UnderWindowBackgroundEffect -> desktop_macos_h.UnderWindowBackgroundEffect()
-            UnderPageBackgroundEffect -> desktop_macos_h.UnderPageBackgroundEffect()
+            TitlebarEffect -> desktop_macos_h.WindowVisualEffect_TitlebarEffect()
+            SelectionEffect -> desktop_macos_h.WindowVisualEffect_SelectionEffect()
+            MenuEffect -> desktop_macos_h.WindowVisualEffect_MenuEffect()
+            PopoverEffect -> desktop_macos_h.WindowVisualEffect_PopoverEffect()
+            SidebarEffect -> desktop_macos_h.WindowVisualEffect_SidebarEffect()
+            HeaderViewEffect -> desktop_macos_h.WindowVisualEffect_HeaderViewEffect()
+            SheetEffect -> desktop_macos_h.WindowVisualEffect_SheetEffect()
+            WindowBackgroundEffect -> desktop_macos_h.WindowVisualEffect_WindowBackgroundEffect()
+            HUDWindowEffect -> desktop_macos_h.WindowVisualEffect_HUDWindowEffect()
+            FullScreenUIEffect -> desktop_macos_h.WindowVisualEffect_FullScreenUIEffect()
+            ToolTipEffect -> desktop_macos_h.WindowVisualEffect_ToolTipEffect()
+            ContentBackgroundEffect -> desktop_macos_h.WindowVisualEffect_ContentBackgroundEffect()
+            UnderWindowBackgroundEffect -> desktop_macos_h.WindowVisualEffect_UnderWindowBackgroundEffect()
+            UnderPageBackgroundEffect -> desktop_macos_h.WindowVisualEffect_UnderPageBackgroundEffect()
         }
     }
 }

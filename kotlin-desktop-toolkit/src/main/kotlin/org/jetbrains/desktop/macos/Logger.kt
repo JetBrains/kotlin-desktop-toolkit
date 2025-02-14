@@ -20,12 +20,12 @@ enum class LogLevel {
 
     internal fun toNative(): Int {
         return when (this) {
-            Off -> desktop_macos_h.Off()
-            Error -> desktop_macos_h.Error_()
-            Warn -> desktop_macos_h.Warn()
-            Info -> desktop_macos_h.Info()
-            Debug -> desktop_macos_h.Debug()
-            Trace -> desktop_macos_h.Trace()
+            Off -> desktop_macos_h.LogLevel_Off()
+            Error -> desktop_macos_h.LogLevel_Error()
+            Warn -> desktop_macos_h.LogLevel_Warn()
+            Info -> desktop_macos_h.LogLevel_Info()
+            Debug -> desktop_macos_h.LogLevel_Debug()
+            Trace -> desktop_macos_h.LogLevel_Trace()
         }
     }
 }

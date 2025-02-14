@@ -165,7 +165,7 @@ sealed class Event {
 
 fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
-        desktop_macos_h.KeyDown() -> {
+        desktop_macos_h.Event_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
             Event.KeyDown(
                 windowId = KeyDownEvent.window_id(nativeEvent),
@@ -177,7 +177,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 timestamp = Timestamp(KeyDownEvent.timestamp(nativeEvent))
             )
         }
-        desktop_macos_h.KeyUp() -> {
+        desktop_macos_h.Event_KeyUp() -> {
             val nativeEvent = NativeEvent.key_up(s)
             Event.KeyUp(
                 windowId = KeyUpEvent.window_id(nativeEvent),
@@ -188,7 +188,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 timestamp = Timestamp(KeyUpEvent.timestamp(nativeEvent))
             )
         }
-        desktop_macos_h.ModifiersChanged() -> {
+        desktop_macos_h.Event_ModifiersChanged() -> {
             val nativeEvent = NativeEvent.modifiers_changed(s)
             Event.ModifiersChanged(
                 windowId = ModifiersChangedEvent.window_id(nativeEvent),
@@ -197,7 +197,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 timestamp = Timestamp(ModifiersChangedEvent.timestamp(nativeEvent))
             )
         }
-        desktop_macos_h.MouseMoved() -> {
+        desktop_macos_h.Event_MouseMoved() -> {
             val nativeEvent = NativeEvent.mouse_moved(s)
             Event.MouseMoved(
                 windowId = MouseMovedEvent.window_id(nativeEvent),
@@ -205,7 +205,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 timestamp = Timestamp(MouseMovedEvent.timestamp(nativeEvent))
             )
         }
-        desktop_macos_h.MouseDragged() -> {
+        desktop_macos_h.Event_MouseDragged() -> {
             val nativeEvent = NativeEvent.mouse_dragged(s)
             Event.MouseDragged(
                 windowId = MouseDraggedEvent.window_id(nativeEvent),
@@ -214,7 +214,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 timestamp = Timestamp(MouseDraggedEvent.timestamp(nativeEvent))
             )
         }
-        desktop_macos_h.MouseEntered() -> {
+        desktop_macos_h.Event_MouseEntered() -> {
             val nativeEvent = NativeEvent.mouse_entered(s)
             Event.MouseEntered(
                 windowId = MouseEnteredEvent.window_id(nativeEvent),
@@ -222,7 +222,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 timestamp = Timestamp(MouseEnteredEvent.timestamp(nativeEvent))
             )
         }
-        desktop_macos_h.MouseExited() -> {
+        desktop_macos_h.Event_MouseExited() -> {
             val nativeEvent = NativeEvent.mouse_exited(s)
             Event.MouseExited(
                 windowId = MouseExitedEvent.window_id(nativeEvent),
@@ -230,7 +230,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 timestamp = Timestamp(MouseExitedEvent.timestamp(nativeEvent))
             )
         }
-        desktop_macos_h.MouseUp() -> {
+        desktop_macos_h.Event_MouseUp() -> {
             val nativeEvent = NativeEvent.mouse_up(s)
             Event.MouseUp(
                 windowId = MouseUpEvent.window_id(nativeEvent),
@@ -239,7 +239,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 timestamp = Timestamp(MouseUpEvent.timestamp(nativeEvent))
             )
         }
-        desktop_macos_h.MouseDown() -> {
+        desktop_macos_h.Event_MouseDown() -> {
             val nativeEvent = NativeEvent.mouse_down(s)
             Event.MouseDown(
                 windowId = MouseDownEvent.window_id(nativeEvent),
@@ -248,7 +248,7 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 timestamp = Timestamp(MouseDownEvent.timestamp(nativeEvent))
             )
         }
-        desktop_macos_h.ScrollWheel() -> {
+        desktop_macos_h.Event_ScrollWheel() -> {
             val nativeEvent = NativeEvent.scroll_wheel(s)
             Event.ScrollWheel(
                 windowId = ScrollWheelEvent.window_id(nativeEvent),
@@ -258,28 +258,28 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 locationInWindow = LogicalPoint.fromNative(ScrollWheelEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(ScrollWheelEvent.timestamp(nativeEvent))
             )
-        }        desktop_macos_h.WindowScreenChange() -> {
+        }        desktop_macos_h.Event_WindowScreenChange() -> {
             val nativeEvent = NativeEvent.window_screen_change(s)
             Event.WindowScreenChange(
                 windowId = WindowScreenChangeEvent.window_id(nativeEvent),
                 newScreenId = WindowScreenChangeEvent.new_screen_id(nativeEvent)
             )
         }
-        desktop_macos_h.WindowResize() -> {
+        desktop_macos_h.Event_WindowResize() -> {
             val nativeEvent = NativeEvent.window_resize(s)
             Event.WindowResize(
                 windowId = WindowResizeEvent.window_id(nativeEvent),
                 size = LogicalSize.fromNative(WindowResizeEvent.size(nativeEvent))
             )
         }
-        desktop_macos_h.WindowMove() -> {
+        desktop_macos_h.Event_WindowMove() -> {
             val nativeEvent = NativeEvent.window_move(s)
             Event.WindowMove(
                 windowId = WindowMoveEvent.window_id(nativeEvent),
                 origin = LogicalPoint.fromNative(WindowMoveEvent.origin(nativeEvent))
             )
         }
-        desktop_macos_h.WindowFocusChange() -> {
+        desktop_macos_h.Event_WindowFocusChange() -> {
             val nativeEvent = NativeEvent.window_focus_change(s)
             Event.WindowFocusChange(
                 windowId = WindowFocusChangeEvent.window_id(nativeEvent),
@@ -287,19 +287,19 @@ fun Event.Companion.fromNative(s: MemorySegment): Event {
                 isMainWindow = WindowFocusChangeEvent.is_main(nativeEvent)
             )
         }
-        desktop_macos_h.WindowCloseRequest() -> {
+        desktop_macos_h.Event_WindowCloseRequest() -> {
             val nativeEvent = NativeEvent.window_close_request(s)
             Event.WindowCloseRequest(
                 windowId = WindowCloseRequestEvent.window_id(nativeEvent)
             )
         }
-        desktop_macos_h.DisplayConfigurationChange() -> {
+        desktop_macos_h.Event_DisplayConfigurationChange() -> {
             Event.DisplayConfigurationChange
         }
-        desktop_macos_h.ApplicationDidFinishLaunching() -> {
+        desktop_macos_h.Event_ApplicationDidFinishLaunching() -> {
             Event.ApplicationDidFinishLaunching
         }
-        desktop_macos_h.WindowFullScreenToggle() -> {
+        desktop_macos_h.Event_WindowFullScreenToggle() -> {
             val nativeEvent = NativeEvent.window_full_screen_toggle(s)
             Event.WindowFullScreenToggle(
                 windowId = WindowFullScreenToggleEvent.window_id(nativeEvent),
