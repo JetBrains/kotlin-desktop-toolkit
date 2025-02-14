@@ -19,6 +19,7 @@ class DisplayLink internal constructor(ptr: MemorySegment, val arena: Arena): Ma
             val arena = Arena.ofConfined()
             val callback = DisplayLinkCallback.allocate({
                 ffiUpCall {
+                    // todo don't execute this callback after the link was closed
                     onNextFrame()
                 }
             }, arena)
@@ -46,7 +47,11 @@ class DisplayLink internal constructor(ptr: MemorySegment, val arena: Arena): Ma
 
     override fun close() {
         super.close()
-        arena.close()
+        // We need this dispatchOnMain to make sure that currently we don't have this display link callback in stacktrace
+        // otherwise we will get cryptic sigsegv during the next garbage collection
+        GrandCentralDispatch.dispatchOnMain {
+            arena.close()
+        }
     }
 }
 
