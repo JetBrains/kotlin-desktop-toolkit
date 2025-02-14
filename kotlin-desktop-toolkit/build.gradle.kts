@@ -94,7 +94,7 @@ val generateBindingsTask = tasks.register<GenerateJavaBindingsTask>("generateBin
     jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
     headerFile = compileDebugDesktopToolkitTask.flatMap { it.headerFile }
     packageName = "org.jetbrains.desktop.macos.generated"
-    generatedSourcesDirectory = layout.projectDirectory.dir("src/main/java/")
+    generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/main/java/")
 }
 
 tasks.compileKotlin {
@@ -111,8 +111,7 @@ tasks.named<Jar>("sourcesJar") {
 
 // TODO: decide if this is needed, depending on how we package the native code
 sourceSets.main {
-    // redundant because we already wire `src/main/java`
-    // java.srcDirs(generateBindingsTask.flatMap { it.generatedSources })
+    java.srcDirs(generateBindingsTask.flatMap { it.generatedSourcesDirectory })
     resources.srcDirs(compileDebugDesktopToolkitTask.map { it.libraryDirectory }) // parentFile because we need a directory
 }
 

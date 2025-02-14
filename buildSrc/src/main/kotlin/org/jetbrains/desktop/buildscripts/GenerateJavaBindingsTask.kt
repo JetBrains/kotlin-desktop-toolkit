@@ -34,6 +34,12 @@ abstract class GenerateJavaBindingsTask @Inject constructor(
 
     @TaskAction
     fun generate() {
+        outputs.previousOutputFiles.forEach {
+            if (it.isFile) {
+                it.delete()
+            }
+        }
+
         execOperations.generateJavaBindings(
             jextractBinary.get().asFile.toPath(),
             headerFile.get().asFile.toPath(),
