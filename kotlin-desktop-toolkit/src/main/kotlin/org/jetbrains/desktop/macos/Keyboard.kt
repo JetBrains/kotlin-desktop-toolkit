@@ -19,134 +19,134 @@ import org.jetbrains.desktop.macos.generated.desktop_macos_h
 *    keycode.
 */
 @JvmInline
-value class KeyCode internal constructor(val value: String) {
+public value class KeyCode internal constructor(private val value: String) {
     @Suppress("MemberVisibilityCanBePrivate")
-    companion object {
-        val ANSI_A = KeyCode("ANSI_A")
-        val ANSI_S = KeyCode("ANSI_S")
-        val ANSI_D = KeyCode("ANSI_D")
-        val ANSI_F = KeyCode("ANSI_F")
-        val ANSI_H = KeyCode("ANSI_H")
-        val ANSI_G = KeyCode("ANSI_G")
-        val ANSI_Z = KeyCode("ANSI_Z")
-        val ANSI_X = KeyCode("ANSI_X")
-        val ANSI_C = KeyCode("ANSI_C")
-        val ANSI_V = KeyCode("ANSI_V")
-        val ANSI_B = KeyCode("ANSI_B")
-        val ANSI_Q = KeyCode("ANSI_Q")
-        val ANSI_W = KeyCode("ANSI_W")
-        val ANSI_E = KeyCode("ANSI_E")
-        val ANSI_R = KeyCode("ANSI_R")
-        val ANSI_Y = KeyCode("ANSI_Y")
-        val ANSI_T = KeyCode("ANSI_T")
-        val ANSI_1 = KeyCode("ANSI_1")
-        val ANSI_2 = KeyCode("ANSI_2")
-        val ANSI_3 = KeyCode("ANSI_3")
-        val ANSI_4 = KeyCode("ANSI_4")
-        val ANSI_6 = KeyCode("ANSI_6")
-        val ANSI_5 = KeyCode("ANSI_5")
-        val ANSI_Equal = KeyCode("ANSI_Equal")
-        val ANSI_9 = KeyCode("ANSI_9")
-        val ANSI_7 = KeyCode("ANSI_7")
-        val ANSI_Minus = KeyCode("ANSI_Minus")
-        val ANSI_8 = KeyCode("ANSI_8")
-        val ANSI_0 = KeyCode("ANSI_0")
-        val ANSI_RightBracket = KeyCode("ANSI_RightBracket")
-        val ANSI_O = KeyCode("ANSI_O")
-        val ANSI_U = KeyCode("ANSI_U")
-        val ANSI_LeftBracket = KeyCode("ANSI_LeftBracket")
-        val ANSI_I = KeyCode("ANSI_I")
-        val ANSI_P = KeyCode("ANSI_P")
-        val ANSI_L = KeyCode("ANSI_L")
-        val ANSI_J = KeyCode("ANSI_J")
-        val ANSI_Quote = KeyCode("ANSI_Quote")
-        val ANSI_K = KeyCode("ANSI_K")
-        val ANSI_Semicolon = KeyCode("ANSI_Semicolon")
-        val ANSI_Backslash = KeyCode("ANSI_Backslash")
-        val ANSI_Comma = KeyCode("ANSI_Comma")
-        val ANSI_Slash = KeyCode("ANSI_Slash")
-        val ANSI_N = KeyCode("ANSI_N")
-        val ANSI_M = KeyCode("ANSI_M")
-        val ANSI_Period = KeyCode("ANSI_Period")
-        val ANSI_Grave = KeyCode("ANSI_Grave")
-        val ANSI_KeypadDecimal = KeyCode("ANSI_KeypadDecimal")
-        val ANSI_KeypadMultiply = KeyCode("ANSI_KeypadMultiply")
-        val ANSI_KeypadPlus = KeyCode("ANSI_KeypadPlus")
-        val ANSI_KeypadClear = KeyCode("ANSI_KeypadClear")
-        val ANSI_KeypadDivide = KeyCode("ANSI_KeypadDivide")
-        val ANSI_KeypadEnter = KeyCode("ANSI_KeypadEnter")
-        val ANSI_KeypadMinus = KeyCode("ANSI_KeypadMinus")
-        val ANSI_KeypadEquals = KeyCode("ANSI_KeypadEquals")
-        val ANSI_Keypad0 = KeyCode("ANSI_Keypad0")
-        val ANSI_Keypad1 = KeyCode("ANSI_Keypad1")
-        val ANSI_Keypad2 = KeyCode("ANSI_Keypad2")
-        val ANSI_Keypad3 = KeyCode("ANSI_Keypad3")
-        val ANSI_Keypad4 = KeyCode("ANSI_Keypad4")
-        val ANSI_Keypad5 = KeyCode("ANSI_Keypad5")
-        val ANSI_Keypad6 = KeyCode("ANSI_Keypad6")
-        val ANSI_Keypad7 = KeyCode("ANSI_Keypad7")
-        val ANSI_Keypad8 = KeyCode("ANSI_Keypad8")
-        val ANSI_Keypad9 = KeyCode("ANSI_Keypad9")
+    public companion object {
+        public val ANSI_A: KeyCode = KeyCode("ANSI_A")
+        public val ANSI_S: KeyCode = KeyCode("ANSI_S")
+        public val ANSI_D: KeyCode = KeyCode("ANSI_D")
+        public val ANSI_F: KeyCode = KeyCode("ANSI_F")
+        public val ANSI_H: KeyCode = KeyCode("ANSI_H")
+        public val ANSI_G: KeyCode = KeyCode("ANSI_G")
+        public val ANSI_Z: KeyCode = KeyCode("ANSI_Z")
+        public val ANSI_X: KeyCode = KeyCode("ANSI_X")
+        public val ANSI_C: KeyCode = KeyCode("ANSI_C")
+        public val ANSI_V: KeyCode = KeyCode("ANSI_V")
+        public val ANSI_B: KeyCode = KeyCode("ANSI_B")
+        public val ANSI_Q: KeyCode = KeyCode("ANSI_Q")
+        public val ANSI_W: KeyCode = KeyCode("ANSI_W")
+        public val ANSI_E: KeyCode = KeyCode("ANSI_E")
+        public val ANSI_R: KeyCode = KeyCode("ANSI_R")
+        public val ANSI_Y: KeyCode = KeyCode("ANSI_Y")
+        public val ANSI_T: KeyCode = KeyCode("ANSI_T")
+        public val ANSI_1: KeyCode = KeyCode("ANSI_1")
+        public val ANSI_2: KeyCode = KeyCode("ANSI_2")
+        public val ANSI_3: KeyCode = KeyCode("ANSI_3")
+        public val ANSI_4: KeyCode = KeyCode("ANSI_4")
+        public val ANSI_6: KeyCode = KeyCode("ANSI_6")
+        public val ANSI_5: KeyCode = KeyCode("ANSI_5")
+        public val ANSI_Equal: KeyCode = KeyCode("ANSI_Equal")
+        public val ANSI_9: KeyCode = KeyCode("ANSI_9")
+        public val ANSI_7: KeyCode = KeyCode("ANSI_7")
+        public val ANSI_Minus: KeyCode = KeyCode("ANSI_Minus")
+        public val ANSI_8: KeyCode = KeyCode("ANSI_8")
+        public val ANSI_0: KeyCode = KeyCode("ANSI_0")
+        public val ANSI_RightBracket: KeyCode = KeyCode("ANSI_RightBracket")
+        public val ANSI_O: KeyCode = KeyCode("ANSI_O")
+        public val ANSI_U: KeyCode = KeyCode("ANSI_U")
+        public val ANSI_LeftBracket: KeyCode = KeyCode("ANSI_LeftBracket")
+        public val ANSI_I: KeyCode = KeyCode("ANSI_I")
+        public val ANSI_P: KeyCode = KeyCode("ANSI_P")
+        public val ANSI_L: KeyCode = KeyCode("ANSI_L")
+        public val ANSI_J: KeyCode = KeyCode("ANSI_J")
+        public val ANSI_Quote: KeyCode = KeyCode("ANSI_Quote")
+        public val ANSI_K: KeyCode = KeyCode("ANSI_K")
+        public val ANSI_Semicolon: KeyCode = KeyCode("ANSI_Semicolon")
+        public val ANSI_Backslash: KeyCode = KeyCode("ANSI_Backslash")
+        public val ANSI_Comma: KeyCode = KeyCode("ANSI_Comma")
+        public val ANSI_Slash: KeyCode = KeyCode("ANSI_Slash")
+        public val ANSI_N: KeyCode = KeyCode("ANSI_N")
+        public val ANSI_M: KeyCode = KeyCode("ANSI_M")
+        public val ANSI_Period: KeyCode = KeyCode("ANSI_Period")
+        public val ANSI_Grave: KeyCode = KeyCode("ANSI_Grave")
+        public val ANSI_KeypadDecimal: KeyCode = KeyCode("ANSI_KeypadDecimal")
+        public val ANSI_KeypadMultiply: KeyCode = KeyCode("ANSI_KeypadMultiply")
+        public val ANSI_KeypadPlus: KeyCode = KeyCode("ANSI_KeypadPlus")
+        public val ANSI_KeypadClear: KeyCode = KeyCode("ANSI_KeypadClear")
+        public val ANSI_KeypadDivide: KeyCode = KeyCode("ANSI_KeypadDivide")
+        public val ANSI_KeypadEnter: KeyCode = KeyCode("ANSI_KeypadEnter")
+        public val ANSI_KeypadMinus: KeyCode = KeyCode("ANSI_KeypadMinus")
+        public val ANSI_KeypadEquals: KeyCode = KeyCode("ANSI_KeypadEquals")
+        public val ANSI_Keypad0: KeyCode = KeyCode("ANSI_Keypad0")
+        public val ANSI_Keypad1: KeyCode = KeyCode("ANSI_Keypad1")
+        public val ANSI_Keypad2: KeyCode = KeyCode("ANSI_Keypad2")
+        public val ANSI_Keypad3: KeyCode = KeyCode("ANSI_Keypad3")
+        public val ANSI_Keypad4: KeyCode = KeyCode("ANSI_Keypad4")
+        public val ANSI_Keypad5: KeyCode = KeyCode("ANSI_Keypad5")
+        public val ANSI_Keypad6: KeyCode = KeyCode("ANSI_Keypad6")
+        public val ANSI_Keypad7: KeyCode = KeyCode("ANSI_Keypad7")
+        public val ANSI_Keypad8: KeyCode = KeyCode("ANSI_Keypad8")
+        public val ANSI_Keypad9: KeyCode = KeyCode("ANSI_Keypad9")
 
         /* keycodes for keys that are independent of keyboard layout*/
-        val Return = KeyCode("Return")
-        val Tab = KeyCode("Tab")
-        val Space = KeyCode("Space")
-        val Delete = KeyCode("Delete")
-        val Escape = KeyCode("Escape")
-        val Command = KeyCode("Command")
-        val Shift = KeyCode("Shift")
-        val CapsLock = KeyCode("CapsLock")
-        val Option = KeyCode("Option")
-        val Control = KeyCode("Control")
-        val RightCommand = KeyCode("RightCommand")
-        val RightShift = KeyCode("RightShift")
-        val RightOption = KeyCode("RightOption")
-        val RightControl = KeyCode("RightControl")
-        val Function = KeyCode("Function")
-        val F17 = KeyCode("F17")
-        val VolumeUp = KeyCode("VolumeUp")
-        val VolumeDown = KeyCode("VolumeDown")
-        val Mute = KeyCode("Mute")
-        val F18 = KeyCode("F18")
-        val F19 = KeyCode("F19")
-        val F20 = KeyCode("F20")
-        val F5 = KeyCode("F5")
-        val F6 = KeyCode("F6")
-        val F7 = KeyCode("F7")
-        val F3 = KeyCode("F3")
-        val F8 = KeyCode("F8")
-        val F9 = KeyCode("F9")
-        val F11 = KeyCode("F11")
-        val F13 = KeyCode("F13")
-        val F16 = KeyCode("F16")
-        val F14 = KeyCode("F14")
-        val F10 = KeyCode("F10")
-        val ContextualMenu = KeyCode("ContextualMenu")
-        val F12 = KeyCode("F12")
-        val F15 = KeyCode("F15")
-        val Help = KeyCode("Help")
-        val Home = KeyCode("Home")
-        val PageUp = KeyCode("PageUp")
-        val ForwardDelete = KeyCode("ForwardDelete")
-        val F4 = KeyCode("F4")
-        val End = KeyCode("End")
-        val F2 = KeyCode("F2")
-        val PageDown = KeyCode("PageDown")
-        val F1 = KeyCode("F1")
-        val LeftArrow = KeyCode("LeftArrow")
-        val RightArrow = KeyCode("RightArrow")
-        val DownArrow = KeyCode("DownArrow")
-        val UpArrow = KeyCode("UpArrow")
+        public val Return: KeyCode = KeyCode("Return")
+        public val Tab: KeyCode = KeyCode("Tab")
+        public val Space: KeyCode = KeyCode("Space")
+        public val Delete: KeyCode = KeyCode("Delete")
+        public val Escape: KeyCode = KeyCode("Escape")
+        public val Command: KeyCode = KeyCode("Command")
+        public val Shift: KeyCode = KeyCode("Shift")
+        public val CapsLock: KeyCode = KeyCode("CapsLock")
+        public val Option: KeyCode = KeyCode("Option")
+        public val Control: KeyCode = KeyCode("Control")
+        public val RightCommand: KeyCode = KeyCode("RightCommand")
+        public val RightShift: KeyCode = KeyCode("RightShift")
+        public val RightOption: KeyCode = KeyCode("RightOption")
+        public val RightControl: KeyCode = KeyCode("RightControl")
+        public val Function: KeyCode = KeyCode("Function")
+        public val F17: KeyCode = KeyCode("F17")
+        public val VolumeUp: KeyCode = KeyCode("VolumeUp")
+        public val VolumeDown: KeyCode = KeyCode("VolumeDown")
+        public val Mute: KeyCode = KeyCode("Mute")
+        public val F18: KeyCode = KeyCode("F18")
+        public val F19: KeyCode = KeyCode("F19")
+        public val F20: KeyCode = KeyCode("F20")
+        public val F5: KeyCode = KeyCode("F5")
+        public val F6: KeyCode = KeyCode("F6")
+        public val F7: KeyCode = KeyCode("F7")
+        public val F3: KeyCode = KeyCode("F3")
+        public val F8: KeyCode = KeyCode("F8")
+        public val F9: KeyCode = KeyCode("F9")
+        public val F11: KeyCode = KeyCode("F11")
+        public val F13: KeyCode = KeyCode("F13")
+        public val F16: KeyCode = KeyCode("F16")
+        public val F14: KeyCode = KeyCode("F14")
+        public val F10: KeyCode = KeyCode("F10")
+        public val ContextualMenu: KeyCode = KeyCode("ContextualMenu")
+        public val F12: KeyCode = KeyCode("F12")
+        public val F15: KeyCode = KeyCode("F15")
+        public val Help: KeyCode = KeyCode("Help")
+        public val Home: KeyCode = KeyCode("Home")
+        public val PageUp: KeyCode = KeyCode("PageUp")
+        public val ForwardDelete: KeyCode = KeyCode("ForwardDelete")
+        public val F4: KeyCode = KeyCode("F4")
+        public val End: KeyCode = KeyCode("End")
+        public val F2: KeyCode = KeyCode("F2")
+        public val PageDown: KeyCode = KeyCode("PageDown")
+        public val F1: KeyCode = KeyCode("F1")
+        public val LeftArrow: KeyCode = KeyCode("LeftArrow")
+        public val RightArrow: KeyCode = KeyCode("RightArrow")
+        public val DownArrow: KeyCode = KeyCode("DownArrow")
+        public val UpArrow: KeyCode = KeyCode("UpArrow")
 
         /* ISO keyboards only*/
-        val ISO_Section = KeyCode("ISO_Section")
+        public val ISO_Section: KeyCode = KeyCode("ISO_Section")
 
-        val JIS_Yen = KeyCode("JIS_Yen")
-        val JIS_Underscore = KeyCode("JIS_Underscore")
-        val JIS_KeypadComma = KeyCode("JIS_KeypadComma")
-        val JIS_Eisu = KeyCode("JIS_Eisu")
-        val JIS_Kana = KeyCode("JIS_Kana")
+        public val JIS_Yen: KeyCode = KeyCode("JIS_Yen")
+        public val JIS_Underscore: KeyCode = KeyCode("JIS_Underscore")
+        public val JIS_KeypadComma: KeyCode = KeyCode("JIS_KeypadComma")
+        public val JIS_Eisu: KeyCode = KeyCode("JIS_Eisu")
+        public val JIS_Kana: KeyCode = KeyCode("JIS_Kana")
 
         // This function should be in sync with typedef enum KeyCode
         internal fun fromNative(code: Int): KeyCode {
@@ -283,9 +283,9 @@ value class KeyCode internal constructor(val value: String) {
 
 @Suppress("MemberVisibilityCanBePrivate")
 @JvmInline
-value class KeyModifiersSet internal constructor(internal val value: Int) {
-    companion object {
-        fun create(
+public value class KeyModifiersSet internal constructor(internal val value: Int) {
+    public companion object {
+        public fun create(
             capsLock: Boolean = false,
             shift: Boolean = false,
             control: Boolean = false,
@@ -308,14 +308,14 @@ value class KeyModifiersSet internal constructor(internal val value: Int) {
         }
     }
 
-    val capsLock: Boolean get() = (value and desktop_macos_h.CapsLockModifier()) != 0
-    val shift: Boolean get() = (value and desktop_macos_h.ShiftModifier()) != 0
-    val control: Boolean get() = (value and desktop_macos_h.ControlModifier()) != 0
-    val option: Boolean get() = (value and desktop_macos_h.OptionModifier()) != 0
-    val command: Boolean get() = (value and desktop_macos_h.CommandModifier()) != 0
-    val numericPad: Boolean get() = (value and desktop_macos_h.NumericPadModifier()) != 0
-    val help: Boolean get() = (value and desktop_macos_h.HelpModifier()) != 0
-    val function: Boolean get() = (value and desktop_macos_h.FunctionModifier()) != 0
+    public val capsLock: Boolean get() = (value and desktop_macos_h.CapsLockModifier()) != 0
+    public val shift: Boolean get() = (value and desktop_macos_h.ShiftModifier()) != 0
+    public val control: Boolean get() = (value and desktop_macos_h.ControlModifier()) != 0
+    public val option: Boolean get() = (value and desktop_macos_h.OptionModifier()) != 0
+    public val command: Boolean get() = (value and desktop_macos_h.CommandModifier()) != 0
+    public val numericPad: Boolean get() = (value and desktop_macos_h.NumericPadModifier()) != 0
+    public val help: Boolean get() = (value and desktop_macos_h.HelpModifier()) != 0
+    public val function: Boolean get() = (value and desktop_macos_h.FunctionModifier()) != 0
 
     override fun toString(): String {
         val modifiers = buildList {
@@ -332,89 +332,89 @@ value class KeyModifiersSet internal constructor(internal val value: Int) {
     }
 }
 
-@Suppress("ConstPropertyName", "Unused")
-object CodepointConstants {
-    const val EnterCharacter = 0x0003
-    const val BackspaceCharacter = 0x0008
-    const val TabCharacter = 0x0009
-    const val NewlineCharacter = 0x000a
-    const val FormFeedCharacter = 0x000c
-    const val CarriageReturnCharacter = 0x000d
-    const val BackTabCharacter = 0x0019
-    const val DeleteCharacter = 0x007f
-    const val LineSeparatorCharacter = 0x2028
-    const val ParagraphSeparatorCharacter = 0x2029
+@Suppress("ConstPropertyName")
+public object CodepointConstants {
+    public const val EnterCharacter: Int = 0x0003
+    public const val BackspaceCharacter: Int = 0x0008
+    public const val TabCharacter: Int = 0x0009
+    public const val NewlineCharacter: Int = 0x000a
+    public const val FormFeedCharacter: Int = 0x000c
+    public const val CarriageReturnCharacter: Int = 0x000d
+    public const val BackTabCharacter: Int = 0x0019
+    public const val DeleteCharacter: Int = 0x007f
+    public const val LineSeparatorCharacter: Int = 0x2028
+    public const val ParagraphSeparatorCharacter: Int = 0x2029
 
-    const val UpArrowFunctionKey = 0xF700
-    const val DownArrowFunctionKey = 0xF701
-    const val LeftArrowFunctionKey = 0xF702
-    const val RightArrowFunctionKey = 0xF703
-    const val F1FunctionKey = 0xF704
-    const val F2FunctionKey = 0xF705
-    const val F3FunctionKey = 0xF706
-    const val F4FunctionKey = 0xF707
-    const val F5FunctionKey = 0xF708
-    const val F6FunctionKey = 0xF709
-    const val F7FunctionKey = 0xF70A
-    const val F8FunctionKey = 0xF70B
-    const val F9FunctionKey = 0xF70C
-    const val F10FunctionKey = 0xF70D
-    const val F11FunctionKey = 0xF70E
-    const val F12FunctionKey = 0xF70F
-    const val F13FunctionKey = 0xF710
-    const val F14FunctionKey = 0xF711
-    const val F15FunctionKey = 0xF712
-    const val F16FunctionKey = 0xF713
-    const val F17FunctionKey = 0xF714
-    const val F18FunctionKey = 0xF715
-    const val F19FunctionKey = 0xF716
-    const val F20FunctionKey = 0xF717
-    const val F21FunctionKey = 0xF718
-    const val F22FunctionKey = 0xF719
-    const val F23FunctionKey = 0xF71A
-    const val F24FunctionKey = 0xF71B
-    const val F25FunctionKey = 0xF71C
-    const val F26FunctionKey = 0xF71D
-    const val F27FunctionKey = 0xF71E
-    const val F28FunctionKey = 0xF71F
-    const val F29FunctionKey = 0xF720
-    const val F30FunctionKey = 0xF721
-    const val F31FunctionKey = 0xF722
-    const val F32FunctionKey = 0xF723
-    const val F33FunctionKey = 0xF724
-    const val F34FunctionKey = 0xF725
-    const val F35FunctionKey = 0xF726
-    const val InsertFunctionKey = 0xF727
-    const val DeleteFunctionKey = 0xF728
-    const val HomeFunctionKey = 0xF729
-    const val BeginFunctionKey = 0xF72A
-    const val EndFunctionKey = 0xF72B
-    const val PageUpFunctionKey = 0xF72C
-    const val PageDownFunctionKey = 0xF72D
-    const val PrintScreenFunctionKey = 0xF72E
-    const val ScrollLockFunctionKey = 0xF72F
-    const val PauseFunctionKey = 0xF730
-    const val SysReqFunctionKey = 0xF731
-    const val BreakFunctionKey = 0xF732
-    const val ResetFunctionKey = 0xF733
-    const val StopFunctionKey = 0xF734
-    const val MenuFunctionKey = 0xF735
-    const val UserFunctionKey = 0xF736
-    const val SystemFunctionKey = 0xF737
-    const val PrintFunctionKey = 0xF738
-    const val ClearLineFunctionKey = 0xF739
-    const val ClearDisplayFunctionKey = 0xF73A
-    const val InsertLineFunctionKey = 0xF73B
-    const val DeleteLineFunctionKey = 0xF73C
-    const val InsertCharFunctionKey = 0xF73D
-    const val DeleteCharFunctionKey = 0xF73E
-    const val PrevFunctionKey = 0xF73F
-    const val NextFunctionKey = 0xF740
-    const val SelectFunctionKey = 0xF741
-    const val ExecuteFunctionKey = 0xF742
-    const val UndoFunctionKey = 0xF743
-    const val RedoFunctionKey = 0xF744
-    const val FindFunctionKey = 0xF745
-    const val HelpFunctionKey = 0xF746
-    const val ModeSwitchFunctionKey = 0xF747
+    public const val UpArrowFunctionKey: Int = 0xF700
+    public const val DownArrowFunctionKey: Int = 0xF701
+    public const val LeftArrowFunctionKey: Int = 0xF702
+    public const val RightArrowFunctionKey: Int = 0xF703
+    public const val F1FunctionKey: Int = 0xF704
+    public const val F2FunctionKey: Int = 0xF705
+    public const val F3FunctionKey: Int = 0xF706
+    public const val F4FunctionKey: Int = 0xF707
+    public const val F5FunctionKey: Int = 0xF708
+    public const val F6FunctionKey: Int = 0xF709
+    public const val F7FunctionKey: Int = 0xF70A
+    public const val F8FunctionKey: Int = 0xF70B
+    public const val F9FunctionKey: Int = 0xF70C
+    public const val F10FunctionKey: Int = 0xF70D
+    public const val F11FunctionKey: Int = 0xF70E
+    public const val F12FunctionKey: Int = 0xF70F
+    public const val F13FunctionKey: Int = 0xF710
+    public const val F14FunctionKey: Int = 0xF711
+    public const val F15FunctionKey: Int = 0xF712
+    public const val F16FunctionKey: Int = 0xF713
+    public const val F17FunctionKey: Int = 0xF714
+    public const val F18FunctionKey: Int = 0xF715
+    public const val F19FunctionKey: Int = 0xF716
+    public const val F20FunctionKey: Int = 0xF717
+    public const val F21FunctionKey: Int = 0xF718
+    public const val F22FunctionKey: Int = 0xF719
+    public const val F23FunctionKey: Int = 0xF71A
+    public const val F24FunctionKey: Int = 0xF71B
+    public const val F25FunctionKey: Int = 0xF71C
+    public const val F26FunctionKey: Int = 0xF71D
+    public const val F27FunctionKey: Int = 0xF71E
+    public const val F28FunctionKey: Int = 0xF71F
+    public const val F29FunctionKey: Int = 0xF720
+    public const val F30FunctionKey: Int = 0xF721
+    public const val F31FunctionKey: Int = 0xF722
+    public const val F32FunctionKey: Int = 0xF723
+    public const val F33FunctionKey: Int = 0xF724
+    public const val F34FunctionKey: Int = 0xF725
+    public const val F35FunctionKey: Int = 0xF726
+    public const val InsertFunctionKey: Int = 0xF727
+    public const val DeleteFunctionKey: Int = 0xF728
+    public const val HomeFunctionKey: Int = 0xF729
+    public const val BeginFunctionKey: Int = 0xF72A
+    public const val EndFunctionKey: Int = 0xF72B
+    public const val PageUpFunctionKey: Int = 0xF72C
+    public const val PageDownFunctionKey: Int = 0xF72D
+    public const val PrintScreenFunctionKey: Int = 0xF72E
+    public const val ScrollLockFunctionKey: Int = 0xF72F
+    public const val PauseFunctionKey: Int = 0xF730
+    public const val SysReqFunctionKey: Int = 0xF731
+    public const val BreakFunctionKey: Int = 0xF732
+    public const val ResetFunctionKey: Int = 0xF733
+    public const val StopFunctionKey: Int = 0xF734
+    public const val MenuFunctionKey: Int = 0xF735
+    public const val UserFunctionKey: Int = 0xF736
+    public const val SystemFunctionKey: Int = 0xF737
+    public const val PrintFunctionKey: Int = 0xF738
+    public const val ClearLineFunctionKey: Int = 0xF739
+    public const val ClearDisplayFunctionKey: Int = 0xF73A
+    public const val InsertLineFunctionKey: Int = 0xF73B
+    public const val DeleteLineFunctionKey: Int = 0xF73C
+    public const val InsertCharFunctionKey: Int = 0xF73D
+    public const val DeleteCharFunctionKey: Int = 0xF73E
+    public const val PrevFunctionKey: Int = 0xF73F
+    public const val NextFunctionKey: Int = 0xF740
+    public const val SelectFunctionKey: Int = 0xF741
+    public const val ExecuteFunctionKey: Int = 0xF742
+    public const val UndoFunctionKey: Int = 0xF743
+    public const val RedoFunctionKey: Int = 0xF744
+    public const val FindFunctionKey: Int = 0xF745
+    public const val HelpFunctionKey: Int = 0xF746
+    public const val ModeSwitchFunctionKey: Int = 0xF747
 }

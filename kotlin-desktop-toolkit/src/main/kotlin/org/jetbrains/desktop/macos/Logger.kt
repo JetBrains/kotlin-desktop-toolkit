@@ -6,7 +6,7 @@ import java.lang.foreign.Arena
 import java.nio.file.Path
 import org.jetbrains.desktop.macos.generated.LoggerConfiguration as NativeLoggerConfiguration
 
-enum class LogLevel {
+public enum class LogLevel {
     Off,
     Error,
     Warn,
@@ -15,7 +15,7 @@ enum class LogLevel {
     Trace,
     ;
 
-    fun isNoMoreVerbose(other: LogLevel): Boolean {
+    internal fun isNoMoreVerbose(other: LogLevel): Boolean {
         return this.ordinal <= other.ordinal
     }
 
@@ -31,27 +31,27 @@ enum class LogLevel {
     }
 }
 
-interface AppenderInterface {
-    val isTraceEnabled: Boolean
-    val isDebugEnabled: Boolean
-    val isInfoEnabled: Boolean
-    val isWarnEnabled: Boolean
-    val isErrorEnabled: Boolean
+public interface AppenderInterface {
+    public val isTraceEnabled: Boolean
+    public val isDebugEnabled: Boolean
+    public val isInfoEnabled: Boolean
+    public val isWarnEnabled: Boolean
+    public val isErrorEnabled: Boolean
 
-    fun trace(message: String)
-    fun debug(message: String)
-    fun info(message: String)
-    fun warn(message: String)
-    fun error(message: String)
+    public fun trace(message: String)
+    public fun debug(message: String)
+    public fun info(message: String)
+    public fun warn(message: String)
+    public fun error(message: String)
 
-    fun trace(t: Throwable, message: String)
-    fun debug(t: Throwable, message: String)
-    fun info(t: Throwable, message: String)
-    fun warn(t: Throwable, message: String)
-    fun error(t: Throwable, message: String)
+    public fun trace(t: Throwable, message: String)
+    public fun debug(t: Throwable, message: String)
+    public fun info(t: Throwable, message: String)
+    public fun warn(t: Throwable, message: String)
+    public fun error(t: Throwable, message: String)
 }
 
-class DefaultConsoleAppender(
+internal class DefaultConsoleAppender(
     override val isTraceEnabled: Boolean,
     override val isDebugEnabled: Boolean,
     override val isInfoEnabled: Boolean,
@@ -117,62 +117,64 @@ class DefaultConsoleAppender(
     }
 }
 
-object Logger {
-    var appender: AppenderInterface = DefaultConsoleAppender.fromLevel(LogLevel.Info)
+public object Logger {
+    public var appender: AppenderInterface = DefaultConsoleAppender.fromLevel(LogLevel.Info)
 
-    inline fun trace(msg: () -> String) {
+    public inline fun trace(msg: () -> String) {
         if (appender.isTraceEnabled) {
             appender.trace(msg())
         }
     }
 
-    inline fun debug(msg: () -> String) {
+    public inline fun debug(msg: () -> String) {
         if (appender.isDebugEnabled) {
             appender.debug(msg())
         }
     }
 
-    inline fun info(msg: () -> String) {
+    public inline fun info(msg: () -> String) {
         if (appender.isInfoEnabled) {
             appender.info(msg())
         }
     }
 
-    inline fun warn(msg: () -> String) {
+    public inline fun warn(msg: () -> String) {
         if (appender.isWarnEnabled) {
             appender.warn(msg())
         }
     }
 
-    inline fun error(msg: () -> String) {
+    public inline fun error(msg: () -> String) {
         if (appender.isErrorEnabled) {
             appender.error(msg())
         }
     }
 
-    inline fun trace(t: Throwable, msg: () -> String = { "" }) {
+    public inline fun trace(t: Throwable, msg: () -> String = { "" }) {
         if (appender.isTraceEnabled) {
             appender.trace(t, msg())
         }
     }
 
-    inline fun debug(t: Throwable, msg: () -> String = { "" }) {
+    public inline fun debug(t: Throwable, msg: () -> String = { "" }) {
         if (appender.isDebugEnabled) {
             appender.debug(t, msg())
         }
     }
 
-    inline fun info(t: Throwable, msg: () -> String = { "" }) {
+    public inline fun info(t: Throwable, msg: () -> String = { "" }) {
         if (appender.isInfoEnabled) {
             appender.info(t, msg())
         }
     }
-    inline fun warn(t: Throwable, msg: () -> String = { "" }) {
+
+    public inline fun warn(t: Throwable, msg: () -> String = { "" }) {
         if (appender.isWarnEnabled) {
             appender.warn(t, msg())
         }
     }
-    inline fun error(t: Throwable, msg: () -> String = { "" }) {
+
+    public inline fun error(t: Throwable, msg: () -> String = { "" }) {
         if (appender.isErrorEnabled) {
             appender.error(t, msg())
         }
@@ -194,7 +196,7 @@ internal fun initLogger(logFile: Path, consoleLogLevel: LogLevel, fileLogLevel: 
     }
 }
 
-class NativeError(messages: List<String>) : Error(messages.joinToString(prefix = "[\n", separator = ",\n", postfix = "]"))
+internal class NativeError(messages: List<String>) : Error(messages.joinToString(prefix = "[\n", separator = ",\n", postfix = "]"))
 
 private fun checkExceptions(): List<String> {
     return Arena.ofConfined().use { arena ->
@@ -213,7 +215,7 @@ private fun checkExceptions(): List<String> {
     }
 }
 
-fun <T> ffiDownCall(body: () -> T): T {
+internal fun <T> ffiDownCall(body: () -> T): T {
     val result = body()
     val exceptions = checkExceptions()
     if (exceptions.isNotEmpty()) {
@@ -223,7 +225,7 @@ fun <T> ffiDownCall(body: () -> T): T {
     return result
 }
 
-inline fun ffiUpCall(crossinline body: () -> Unit) {
+internal inline fun ffiUpCall(crossinline body: () -> Unit) {
     return try {
         body()
     } catch (e: Throwable) {
@@ -231,7 +233,7 @@ inline fun ffiUpCall(crossinline body: () -> Unit) {
     }
 }
 
-inline fun <T> ffiUpCall(default: T, crossinline body: () -> T): T {
+internal inline fun <T> ffiUpCall(default: T, crossinline body: () -> T): T {
     return try {
         body()
     } catch (e: Throwable) {

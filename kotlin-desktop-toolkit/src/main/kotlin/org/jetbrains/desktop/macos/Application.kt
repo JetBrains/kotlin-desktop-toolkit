@@ -7,16 +7,16 @@ import java.lang.foreign.MemorySegment
 import org.jetbrains.desktop.macos.generated.ApplicationConfig as NativeApplicationConfig
 import org.jetbrains.desktop.macos.generated.EventHandler as NativeEventHandler
 
-enum class EventHandlerResult {
+public enum class EventHandlerResult {
     Continue,
     Stop,
 }
 
-typealias EventHandler = (Event) -> EventHandlerResult
-typealias TextOperationHandler = (TextOperation) -> Boolean
+public typealias EventHandler = (Event) -> EventHandlerResult
+public typealias TextOperationHandler = (TextOperation) -> Boolean
 
-object Application {
-    data class ApplicationConfig(
+public object Application {
+    public data class ApplicationConfig(
         val disableDictationMenuItem: Boolean = false,
         val disableCharacterPaletteMenuItem: Boolean = false,
     ) {
@@ -30,9 +30,9 @@ object Application {
 
     private var eventHandler: EventHandler? = null
     private var textOperationHandler: TextOperationHandler? = null
-    lateinit var screens: AllScreens
+    public lateinit var screens: AllScreens
 
-    fun init(applicationConfig: ApplicationConfig = ApplicationConfig()) {
+    public fun init(applicationConfig: ApplicationConfig = ApplicationConfig()) {
         ffiDownCall {
             Arena.ofConfined().use { arena ->
                 desktop_macos_h.application_init(applicationConfig.toNative(arena), applicationCallbacks())
@@ -40,24 +40,24 @@ object Application {
         }
     }
 
-    fun runEventLoop(eventHandler: EventHandler) {
+    public fun runEventLoop(eventHandler: EventHandler) {
         ffiDownCall {
             this.eventHandler = eventHandler
             desktop_macos_h.application_run_event_loop()
         }
     }
 
-    fun setTextOperationHandler(textOperationHandler: TextOperationHandler) {
+    public fun setTextOperationHandler(textOperationHandler: TextOperationHandler) {
         this.textOperationHandler = textOperationHandler
     }
 
-    fun stopEventLoop() {
+    public fun stopEventLoop() {
         ffiDownCall {
             desktop_macos_h.application_stop_event_loop()
         }
     }
 
-    fun requestTermination() {
+    public fun requestTermination() {
         ffiDownCall {
             desktop_macos_h.application_request_termination()
         }

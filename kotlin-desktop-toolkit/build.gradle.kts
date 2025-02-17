@@ -121,6 +121,10 @@ tasks.processResources {
     dependsOn(compileDebugDesktopToolkitTask)
 }
 
+kotlin {
+    explicitApi()
+}
+
 val spaceUsername: String? by project
 val spacePassword: String? by project
 publishing {

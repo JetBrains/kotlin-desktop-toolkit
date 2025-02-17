@@ -1,6 +1,6 @@
 package org.jetbrains.desktop
 
-interface IGrandCentralDispatch {
-    fun isMainThread(): Boolean
-    fun dispatchOnMain(f: () -> Unit)
+public interface IGrandCentralDispatch {
+    public fun isMainThread(): Boolean
+    public fun dispatchOnMain(f: () -> Unit)
 }

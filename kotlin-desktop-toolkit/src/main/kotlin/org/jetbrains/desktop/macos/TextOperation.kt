@@ -6,18 +6,18 @@ import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.MemorySegment
 import org.jetbrains.desktop.macos.generated.TextOperation as NativeTextOperation
 
-sealed class TextOperation {
-    data class TextChanged(
+public sealed class TextOperation {
+    public data class TextChanged(
         val windowId: WindowId,
         val text: String,
     ) : TextOperation()
 
-    data class TextCommand(
+    public data class TextCommand(
         val windowId: WindowId,
         val command: String,
     ) : TextOperation()
 
-    fun windowId(): WindowId? {
+    public fun windowId(): WindowId? {
         return when (this) {
             is TextCommand -> windowId
             is TextChanged -> windowId
@@ -25,7 +25,7 @@ sealed class TextOperation {
         }
     }
 
-    companion object {
+    internal companion object {
         internal fun fromNative(s: MemorySegment): TextOperation {
             return when (NativeTextOperation.tag(s)) {
                 desktop_macos_h.TextOperation_TextChanged() -> {

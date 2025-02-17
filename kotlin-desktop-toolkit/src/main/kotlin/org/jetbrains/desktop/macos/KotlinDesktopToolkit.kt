@@ -4,10 +4,10 @@ import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.absolutePathString
 
-object KotlinDesktopToolkit {
-    val isInitialized: AtomicBoolean = AtomicBoolean(false)
+public object KotlinDesktopToolkit {
+    private val isInitialized: AtomicBoolean = AtomicBoolean(false)
 
-    fun init(
+    public fun init(
         libraryPath: Path = property("kdt.library.path"),
         logFilePath: Path = property("kdt.native.log.path"),
         consoleLogLevel: LogLevel = LogLevel.Info,

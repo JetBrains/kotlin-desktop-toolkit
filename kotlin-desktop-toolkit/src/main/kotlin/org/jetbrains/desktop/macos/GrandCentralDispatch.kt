@@ -8,7 +8,7 @@ import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 
-object GrandCentralDispatch : IGrandCentralDispatch {
+public object GrandCentralDispatch : IGrandCentralDispatch {
     private val queue = ConcurrentLinkedQueue<() -> Unit>()
     private val callback: MemorySegment = `dispatcher_main_exec_async$f`.allocate({
         ffiUpCall {
@@ -29,7 +29,7 @@ object GrandCentralDispatch : IGrandCentralDispatch {
         }
     }
 
-    fun <T> dispatchOnMainSync(f: () -> T): T {
+    public fun <T> dispatchOnMainSync(f: () -> T): T {
         val latch = CountDownLatch(1)
         var result: T? = null
         dispatchOnMain {

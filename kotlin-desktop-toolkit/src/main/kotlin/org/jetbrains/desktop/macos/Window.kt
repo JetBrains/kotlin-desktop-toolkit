@@ -9,10 +9,10 @@ import java.lang.foreign.MemorySegment
 import org.jetbrains.desktop.macos.generated.WindowBackground as NativeWindowBackground
 import org.jetbrains.desktop.macos.generated.WindowParams as NativeWindowParams
 
-typealias WindowId = Long
+public typealias WindowId = Long
 
-class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_macos_h::window_drop) {
-    data class WindowParams(
+public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_macos_h::window_drop) {
+    public data class WindowParams(
         val origin: LogicalPoint = LogicalPoint(0.0, 0.0),
         val size: LogicalSize = LogicalSize(640.0, 480.0),
         val title: String = "Window",
@@ -39,14 +39,14 @@ class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_mac
         }
     }
 
-    companion object {
-        fun create(params: WindowParams): Window {
+    public companion object {
+        public fun create(params: WindowParams): Window {
             return Arena.ofConfined().use { arena ->
                 Window(ffiDownCall { desktop_macos_h.window_create(params.toNative(arena)) })
             }
         }
 
-        fun create(
+        public fun create(
             origin: LogicalPoint = LogicalPoint(0.0, 0.0),
             size: LogicalSize = LogicalSize(640.0, 480.0),
             title: String = "Window",
@@ -71,21 +71,21 @@ class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_mac
         }
     }
 
-    fun windowId(): WindowId {
+    public fun windowId(): WindowId {
         return ffiDownCall { desktop_macos_h.window_get_window_id(pointer) }
     }
 
-    fun screenId(): ScreenId {
+    public fun screenId(): ScreenId {
         return ffiDownCall {
             desktop_macos_h.window_get_screen_id(pointer)
         }
     }
 
-    fun scaleFactor(): Double {
+    public fun scaleFactor(): Double {
         return ffiDownCall { desktop_macos_h.window_scale_factor(pointer) }
     }
 
-    var title: String
+    public var title: String
         get() {
             val title = ffiDownCall { desktop_macos_h.window_get_title(pointer) }
             return try {
@@ -101,35 +101,35 @@ class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_mac
             }
         }
 
-    val origin: LogicalPoint
+    public val origin: LogicalPoint
         get() {
             return Arena.ofConfined().use { arena ->
                 LogicalPoint.fromNative(ffiDownCall { desktop_macos_h.window_get_origin(arena, pointer) })
             }
         }
 
-    val size: LogicalSize
+    public val size: LogicalSize
         get() {
             return Arena.ofConfined().use { arena ->
                 LogicalSize.fromNative(ffiDownCall { desktop_macos_h.window_get_size(arena, pointer) })
             }
         }
 
-    val contentOrigin: LogicalPoint
+    public val contentOrigin: LogicalPoint
         get() {
             return Arena.ofConfined().use { arena ->
                 LogicalPoint.fromNative(ffiDownCall { desktop_macos_h.window_get_content_origin(arena, pointer) })
             }
         }
 
-    val contentSize: LogicalSize
+    public val contentSize: LogicalSize
         get() {
             return Arena.ofConfined().use { arena ->
                 LogicalSize.fromNative(ffiDownCall { desktop_macos_h.window_get_content_size(arena, pointer) })
             }
         }
 
-    var maxSize: LogicalSize
+    public var maxSize: LogicalSize
         get() {
             return Arena.ofConfined().use { arena ->
                 LogicalSize.fromNative(ffiDownCall { desktop_macos_h.window_get_max_size(arena, pointer) })
@@ -143,7 +143,7 @@ class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_mac
             }
         }
 
-    var minSize: LogicalSize
+    public var minSize: LogicalSize
         get() {
             return Arena.ofConfined().use { arena ->
                 LogicalSize.fromNative(ffiDownCall { desktop_macos_h.window_get_min_size(arena, pointer) })
@@ -155,28 +155,28 @@ class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_mac
             }
         }
 
-    val isFullScreen: Boolean
+    public val isFullScreen: Boolean
         get() {
             return ffiDownCall { desktop_macos_h.window_is_full_screen(pointer) }
         }
 
-    fun toggleFullScreen() {
+    public fun toggleFullScreen() {
         ffiDownCall {
             desktop_macos_h.window_toggle_full_screen(pointer)
         }
     }
 
-    val isKey: Boolean
+    public val isKey: Boolean
         get() {
             return ffiDownCall { desktop_macos_h.window_is_key(pointer) }
         }
 
-    val isMain: Boolean
+    public val isMain: Boolean
         get() {
             return ffiDownCall { desktop_macos_h.window_is_main(pointer) }
         }
 
-    fun setRect(origin: LogicalPoint, size: LogicalSize, animateTransition: Boolean = true) {
+    public fun setRect(origin: LogicalPoint, size: LogicalSize, animateTransition: Boolean = true) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.window_set_rect(
@@ -189,7 +189,7 @@ class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_mac
         }
     }
 
-    fun setContentRect(origin: LogicalPoint, size: LogicalSize, animateTransition: Boolean = true) {
+    public fun setContentRect(origin: LogicalPoint, size: LogicalSize, animateTransition: Boolean = true) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.window_set_content_rect(
@@ -202,25 +202,25 @@ class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_mac
         }
     }
 
-    fun startDrag() {
+    public fun startDrag() {
         ffiDownCall {
             desktop_macos_h.window_start_drag(pointer)
         }
     }
 
-    fun invalidateShadow() {
+    public fun invalidateShadow() {
         ffiDownCall {
             desktop_macos_h.window_invalidate_shadow(pointer)
         }
     }
 
-    fun attachView(layer: MetalView) {
+    public fun attachView(layer: MetalView) {
         ffiDownCall {
             desktop_macos_h.window_attach_layer(pointer, layer.pointer)
         }
     }
 
-    fun setBackground(background: WindowBackground) {
+    public fun setBackground(background: WindowBackground) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.window_set_background(pointer, background.toNative(arena))
@@ -229,11 +229,11 @@ class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_mac
     }
 }
 
-sealed class WindowBackground {
-    data object Transparent : WindowBackground()
-    data class SolidColor(val color: Color) : WindowBackground()
+public sealed class WindowBackground {
+    public data object Transparent : WindowBackground()
+    public data class SolidColor(val color: Color) : WindowBackground()
 
-    data class VisualEffect(val effect: WindowVisualEffect) : WindowBackground()
+    public data class VisualEffect(val effect: WindowVisualEffect) : WindowBackground()
 
     internal fun toNative(arena: Arena): MemorySegment {
         val result = NativeWindowBackground.allocate(arena)
@@ -254,7 +254,7 @@ sealed class WindowBackground {
     }
 }
 
-enum class WindowVisualEffect {
+public enum class WindowVisualEffect {
     TitlebarEffect,
     SelectionEffect,
     MenuEffect,

@@ -26,35 +26,33 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import org.jetbrains.desktop.macos.generated.Event as NativeEvent
 
-@Suppress("Unused")
 @JvmInline
-value class Timestamp(
+public value class Timestamp(
     private val value: Double, // Count of seconds passed since some fixed but arbitrary moment in the past
 ) {
-    fun toDuration(): Duration {
+    public fun toDuration(): Duration {
         return value.seconds
     }
 }
 
-@Suppress("Unused")
-sealed class Event {
-    companion object {
-        fun pressedMouseButtons(): MouseButtonsSet {
+public sealed class Event {
+    public companion object {
+        public fun pressedMouseButtons(): MouseButtonsSet {
             return MouseButtonsSet(desktop_macos_h.events_pressed_mouse_buttons())
         }
 
-        fun pressedModifiers(): KeyModifiersSet {
+        public fun pressedModifiers(): KeyModifiersSet {
             return KeyModifiersSet(desktop_macos_h.events_pressed_modifiers())
         }
 
-        fun cursorLocationInScreen(): LogicalPoint {
+        public fun cursorLocationInScreen(): LogicalPoint {
             return Arena.ofConfined().use { arena ->
                 LogicalPoint.fromNative(desktop_macos_h.events_cursor_location_in_screen(arena))
             }
         }
     }
 
-    data class KeyDown(
+    public data class KeyDown(
         val windowId: WindowId,
         val keyCode: KeyCode,
         val characters: String,
@@ -64,7 +62,7 @@ sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
-    data class KeyUp(
+    public data class KeyUp(
         val windowId: WindowId,
         val keyCode: KeyCode,
         val characters: String,
@@ -73,53 +71,53 @@ sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
-    data class ModifiersChanged(
+    public data class ModifiersChanged(
         val windowId: WindowId,
         val modifiers: KeyModifiersSet,
         val keyCode: KeyCode,
         val timestamp: Timestamp,
     ) : Event()
 
-    data class MouseMoved(
+    public data class MouseMoved(
         val windowId: WindowId,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
     ) : Event()
 
-    data class MouseDragged(
-        val windowId: WindowId,
-        val button: MouseButton,
-        val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
-    ) : Event()
-
-    data class MouseEntered(
-        val windowId: WindowId,
-        val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
-    ) : Event()
-
-    data class MouseExited(
-        val windowId: WindowId,
-        val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
-    ) : Event()
-
-    data class MouseUp(
+    public data class MouseDragged(
         val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
     ) : Event()
 
-    data class MouseDown(
+    public data class MouseEntered(
+        val windowId: WindowId,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class MouseExited(
+        val windowId: WindowId,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class MouseUp(
         val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
     ) : Event()
 
-    data class ScrollWheel(
+    public data class MouseDown(
+        val windowId: WindowId,
+        val button: MouseButton,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class ScrollWheel(
         val windowId: WindowId,
         val scrollingDeltaX: LogicalPixels,
         val scrollingDeltaY: LogicalPixels,
@@ -128,39 +126,39 @@ sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
-    data class WindowScreenChange(
+    public data class WindowScreenChange(
         val windowId: WindowId,
         val newScreenId: ScreenId,
     ) : Event()
 
-    data class WindowResize(
+    public data class WindowResize(
         val windowId: WindowId,
         val size: LogicalSize,
     ) : Event()
 
-    data class WindowMove(
+    public data class WindowMove(
         val windowId: WindowId,
         val origin: LogicalPoint,
     ) : Event()
 
-    data class WindowFocusChange(
+    public data class WindowFocusChange(
         val windowId: WindowId,
         val isKeyWindow: Boolean,
         val isMainWindow: Boolean,
     ) : Event()
 
-    data class WindowFullScreenToggle(
+    public data class WindowFullScreenToggle(
         val windowId: WindowId,
         val isFullScreen: Boolean,
     ) : Event()
 
-    data object DisplayConfigurationChange : Event()
+    public data object DisplayConfigurationChange : Event()
 
-    data object ApplicationDidFinishLaunching : Event()
+    public data object ApplicationDidFinishLaunching : Event()
 
-    data class WindowCloseRequest(val windowId: WindowId) : Event()
+    public data class WindowCloseRequest(val windowId: WindowId) : Event()
 
-    fun windowId(): WindowId? {
+    public fun windowId(): WindowId? {
         return when (this) {
             is KeyDown -> windowId
             is KeyUp -> windowId
@@ -182,7 +180,7 @@ sealed class Event {
     }
 }
 
-fun Event.Companion.fromNative(s: MemorySegment): Event {
+internal fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
         desktop_macos_h.Event_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)

@@ -12,37 +12,39 @@ import org.jetbrains.desktop.macos.generated.AppMenuStructure as NativeAppMenuSt
 /**
  * Be aware capital letter turns shift modifier on
  */
-data class Keystroke(
+public data class Keystroke(
     val key: String,
     val modifiers: KeyModifiersSet,
 )
 
-sealed class AppMenuItem {
-    data class Action(
+public sealed class AppMenuItem {
+    public data class Action(
         val title: String,
         val isEnabled: Boolean = true,
         val keystroke: Keystroke? = null,
         val isMacOSProvided: Boolean = false,
         val perform: () -> Unit = {},
     ) : AppMenuItem()
-    data object Separator : AppMenuItem()
-    class SubMenu(
-        val title: String,
-        val items: List<AppMenuItem>,
-        val specialTag: String? = null,
+
+    public data object Separator : AppMenuItem()
+
+    public class SubMenu(
+        public val title: String,
+        public val items: List<AppMenuItem>,
+        public val specialTag: String? = null,
     ) : AppMenuItem() {
-        constructor(title: String, vararg items: AppMenuItem, specialTag: String? = null) : this(title, items.toList(), specialTag)
+        public constructor(title: String, vararg items: AppMenuItem, specialTag: String? = null) : this(title, items.toList(), specialTag)
     }
 }
 
-data class AppMenuStructure(val items: List<AppMenuItem>) {
-    constructor(vararg items: AppMenuItem) : this(items.toList())
+public data class AppMenuStructure(val items: List<AppMenuItem>) {
+    public constructor(vararg items: AppMenuItem) : this(items.toList())
 }
 
-object AppMenuManager {
+public object AppMenuManager {
     internal var callbacksArena: Arena? = null
 
-    fun setMainMenu(menu: AppMenuStructure) {
+    public fun setMainMenu(menu: AppMenuStructure) {
         ffiDownCall {
             val previousCallbackArena = callbacksArena
             callbacksArena = Arena.ofConfined()
@@ -53,7 +55,7 @@ object AppMenuManager {
         }
     }
 
-    fun setMainMenuToNone() {
+    public fun setMainMenuToNone() {
         ffiDownCall {
             desktop_macos_h.main_menu_set_none()
         }

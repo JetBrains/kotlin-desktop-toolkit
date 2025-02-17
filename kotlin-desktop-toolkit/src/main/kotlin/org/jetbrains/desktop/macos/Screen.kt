@@ -9,17 +9,17 @@ import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
-typealias ScreenId = Int
+public typealias ScreenId = Int
 
-class DisplayLink internal constructor(
+public class DisplayLink internal constructor(
     ptr: MemorySegment,
-    val arena: Arena,
+    private val arena: Arena,
 ) : Managed(
     ptr,
     desktop_macos_h::display_link_drop,
 ) {
-    companion object {
-        fun create(screenId: ScreenId, onNextFrame: () -> Unit): DisplayLink {
+    public companion object {
+        public fun create(screenId: ScreenId, onNextFrame: () -> Unit): DisplayLink {
             val arena = Arena.ofConfined()
             val callback = DisplayLinkCallback.allocate({
                 ffiUpCall {
@@ -37,13 +37,13 @@ class DisplayLink internal constructor(
         }
     }
 
-    fun setRunning(value: Boolean) {
+    public fun setRunning(value: Boolean) {
         ffiDownCall {
             desktop_macos_h.display_link_set_running(pointer, value)
         }
     }
 
-    fun isRunning(): Boolean {
+    public fun isRunning(): Boolean {
         return ffiDownCall {
             desktop_macos_h.display_link_is_running(pointer)
         }
@@ -59,7 +59,7 @@ class DisplayLink internal constructor(
     }
 }
 
-data class Screen(
+public data class Screen(
     val screenId: ScreenId,
     val isPrimary: Boolean,
     val name: String,
@@ -68,7 +68,7 @@ data class Screen(
     val scale: Double,
     val maximumFramesPerSecond: Int,
 ) {
-    companion object {
+    public companion object {
         private fun fromNative(s: MemorySegment): Screen {
             return Screen(
                 screenId = ScreenInfo.screen_id(s),
@@ -81,7 +81,7 @@ data class Screen(
             )
         }
 
-        fun allScreens(): AllScreens {
+        public fun allScreens(): AllScreens {
             return Arena.ofConfined().use { arena ->
                 val screenInfoArray = ffiDownCall { desktop_macos_h.screen_list(arena) }
                 val screens = mutableListOf<Screen>()
@@ -101,15 +101,15 @@ data class Screen(
     }
 }
 
-data class AllScreens(val screens: List<Screen>) {
-    fun mainScreen(): Screen {
+public data class AllScreens(val screens: List<Screen>) {
+    public fun mainScreen(): Screen {
         val screenId = ffiDownCall {
             desktop_macos_h.screen_get_main_screen_id()
         }
         return screens.first { it.screenId == screenId }
     }
 
-    fun findById(screenId: ScreenId): Screen? {
+    public fun findById(screenId: ScreenId): Screen? {
         return screens.firstOrNull { it.screenId == screenId }
     }
 }

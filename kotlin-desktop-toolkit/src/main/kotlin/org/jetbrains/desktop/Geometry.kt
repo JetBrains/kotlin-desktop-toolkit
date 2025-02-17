@@ -1,42 +1,38 @@
 package org.jetbrains.desktop
 
-typealias PhysicalPixels = Double
-typealias LogicalPixels = Double
+public typealias PhysicalPixels = Double
+public typealias LogicalPixels = Double
 
-data class PhysicalSize(
+public data class PhysicalSize(
     val width: PhysicalPixels,
     val height: PhysicalPixels,
 ) {
-    companion object
-
-    fun toLogical(scale: Double) = LogicalSize(width / scale, height / scale)
+    public companion object {}
+    public fun toLogical(scale: Double): LogicalSize = LogicalSize(width / scale, height / scale)
 }
 
-data class PhysicalPoint(
+public data class PhysicalPoint(
     val x: PhysicalPixels,
     val y: PhysicalPixels,
 ) {
-    companion object
-
-    fun toLogical(scale: Double) = LogicalPoint(x / scale, y / scale)
+    public companion object {}
+    public fun toLogical(scale: Double): LogicalPoint = LogicalPoint(x / scale, y / scale)
 }
 
-data class LogicalSize(
+public data class LogicalSize(
     val width: LogicalPixels,
     val height: LogicalPixels,
 ) {
-    companion object
-
-    fun toPhysical(scale: Double) = PhysicalSize(width * scale, height * scale)
+    public companion object {}
+    public fun toPhysical(scale: Double): PhysicalSize = PhysicalSize(width * scale, height * scale)
 }
 
-data class LogicalPoint(
+public data class LogicalPoint(
     val x: LogicalPixels,
     val y: LogicalPixels,
 ) {
-    companion object {
-        val Zero = LogicalPoint(0.0, 0.0)
+    public companion object {
+        public val Zero: LogicalPoint = LogicalPoint(0.0, 0.0)
     }
-
-    fun toPhysical(scale: Double) = PhysicalPoint(x * scale, y * scale)
+    public fun toPhysical(scale: Double): PhysicalPoint = PhysicalPoint(x * scale, y * scale)
 }

@@ -42,8 +42,8 @@ pub struct KeyDownEvent {
 
 impl Drop for KeyDownEvent {
     fn drop(&mut self) {
-        let characters = unsafe { CString::from_raw(self.characters) };
-        std::mem::drop(characters);
+        std::mem::drop(unsafe { CString::from_raw(self.characters) });
+        std::mem::drop(unsafe { CString::from_raw(self.key) });
     }
 }
 
