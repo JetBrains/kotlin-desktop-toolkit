@@ -2,7 +2,6 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 
-
 /*  MacOSX15.2
 * 🚨🚨🚨 This code should be aligned with `typedef enum KeyCode` in .h file 🚨🚨🚨
 *  Summary:
@@ -21,6 +20,7 @@ import org.jetbrains.desktop.macos.generated.desktop_macos_h
 */
 @JvmInline
 value class KeyCode internal constructor(val value: String) {
+    @Suppress("MemberVisibilityCanBePrivate")
     companion object {
         val ANSI_A = KeyCode("ANSI_A")
         val ANSI_S = KeyCode("ANSI_S")
@@ -142,7 +142,6 @@ value class KeyCode internal constructor(val value: String) {
         /* ISO keyboards only*/
         val ISO_Section = KeyCode("ISO_Section")
 
-
         val JIS_Yen = KeyCode("JIS_Yen")
         val JIS_Underscore = KeyCode("JIS_Underscore")
         val JIS_KeypadComma = KeyCode("JIS_KeypadComma")
@@ -152,147 +151,150 @@ value class KeyCode internal constructor(val value: String) {
         // This function should be in sync with typedef enum KeyCode
         internal fun fromNative(code: Int): KeyCode {
             return when (code) {
-                 0 -> ANSI_A
-                 1 -> ANSI_S
-                 2 -> ANSI_D
-                 3 -> ANSI_F
-                 4 -> ANSI_H
-                 5 -> ANSI_G
-                 6 -> ANSI_Z
-                 7 -> ANSI_X
-                 8 -> ANSI_C
-                 9 -> ANSI_V
-                 11 -> ANSI_B
-                 12 -> ANSI_Q
-                 13 -> ANSI_W
-                 14 -> ANSI_E
-                 15 -> ANSI_R
-                 16 -> ANSI_Y
-                 17 -> ANSI_T
-                 18 -> ANSI_1
-                 19 -> ANSI_2
-                 20 -> ANSI_3
-                 21 -> ANSI_4
-                 22 -> ANSI_6
-                 23 -> ANSI_5
-                 24 -> ANSI_Equal
-                 25 -> ANSI_9
-                 26 -> ANSI_7
-                 27 -> ANSI_Minus
-                 28 -> ANSI_8
-                 29 -> ANSI_0
-                 30 -> ANSI_RightBracket
-                 31 -> ANSI_O
-                 32 -> ANSI_U
-                 33 -> ANSI_LeftBracket
-                 34 -> ANSI_I
-                 35 -> ANSI_P
-                 37 -> ANSI_L
-                 38 -> ANSI_J
-                 39 -> ANSI_Quote
-                 40 -> ANSI_K
-                 41 -> ANSI_Semicolon
-                 42 -> ANSI_Backslash
-                 43 -> ANSI_Comma
-                 44 -> ANSI_Slash
-                 45 -> ANSI_N
-                 46 -> ANSI_M
-                 47 -> ANSI_Period
-                 50 -> ANSI_Grave
-                 65 -> ANSI_KeypadDecimal
-                 67 -> ANSI_KeypadMultiply
-                 69 -> ANSI_KeypadPlus
-                 71 -> ANSI_KeypadClear
-                 75 -> ANSI_KeypadDivide
-                 76 -> ANSI_KeypadEnter
-                 78 -> ANSI_KeypadMinus
-                 81 -> ANSI_KeypadEquals
-                 82 -> ANSI_Keypad0
-                 83 -> ANSI_Keypad1
-                 84 -> ANSI_Keypad2
-                 85 -> ANSI_Keypad3
-                 86 -> ANSI_Keypad4
-                 87 -> ANSI_Keypad5
-                 88 -> ANSI_Keypad6
-                 89 -> ANSI_Keypad7
-                 91 -> ANSI_Keypad8
-                 92 -> ANSI_Keypad9
-                 36 -> Return
-                 48 -> Tab
-                 49 -> Space
-                 51 -> Delete
-                 53 -> Escape
-                 55 -> Command
-                 56 -> Shift
-                 57 -> CapsLock
-                 58 -> Option
-                 59 -> Control
-                 54 -> RightCommand
-                 60 -> RightShift
-                 61 -> RightOption
-                 62 -> RightControl
-                 63 -> Function
-                 64 -> F17
-                 72 -> VolumeUp
-                 73 -> VolumeDown
-                 74 -> Mute
-                 79 -> F18
-                 80 -> F19
-                 90 -> F20
-                 96 -> F5
-                 97 -> F6
-                 98 -> F7
-                 99 -> F3
-                 100 -> F8
-                 101 -> F9
-                 103 -> F11
-                 105 -> F13
-                 106 -> F16
-                 107 -> F14
-                 109 -> F10
-                 110 -> ContextualMenu
-                 111 -> F12
-                 113 -> F15
-                 114 -> Help
-                 115 -> Home
-                 116 -> PageUp
-                 117 -> ForwardDelete
-                 118 -> F4
-                 119 -> End
-                 120 -> F2
-                 121 -> PageDown
-                 122 -> F1
-                 123 -> LeftArrow
-                 124 -> RightArrow
-                 125 -> DownArrow
-                 126 -> UpArrow
-                 10 -> ISO_Section
-                 93 -> JIS_Yen
-                 94 -> JIS_Underscore
-                 95 -> JIS_KeypadComma
-                 102 -> JIS_Eisu
-                 104 -> JIS_Kana
-                 else -> {
-                     val keyCode = KeyCode("Unknown($code)")
-                     Logger.warn { "Got unknown keycode: $keyCode" }
-                     keyCode
-                 }
+                0 -> ANSI_A
+                1 -> ANSI_S
+                2 -> ANSI_D
+                3 -> ANSI_F
+                4 -> ANSI_H
+                5 -> ANSI_G
+                6 -> ANSI_Z
+                7 -> ANSI_X
+                8 -> ANSI_C
+                9 -> ANSI_V
+                11 -> ANSI_B
+                12 -> ANSI_Q
+                13 -> ANSI_W
+                14 -> ANSI_E
+                15 -> ANSI_R
+                16 -> ANSI_Y
+                17 -> ANSI_T
+                18 -> ANSI_1
+                19 -> ANSI_2
+                20 -> ANSI_3
+                21 -> ANSI_4
+                22 -> ANSI_6
+                23 -> ANSI_5
+                24 -> ANSI_Equal
+                25 -> ANSI_9
+                26 -> ANSI_7
+                27 -> ANSI_Minus
+                28 -> ANSI_8
+                29 -> ANSI_0
+                30 -> ANSI_RightBracket
+                31 -> ANSI_O
+                32 -> ANSI_U
+                33 -> ANSI_LeftBracket
+                34 -> ANSI_I
+                35 -> ANSI_P
+                37 -> ANSI_L
+                38 -> ANSI_J
+                39 -> ANSI_Quote
+                40 -> ANSI_K
+                41 -> ANSI_Semicolon
+                42 -> ANSI_Backslash
+                43 -> ANSI_Comma
+                44 -> ANSI_Slash
+                45 -> ANSI_N
+                46 -> ANSI_M
+                47 -> ANSI_Period
+                50 -> ANSI_Grave
+                65 -> ANSI_KeypadDecimal
+                67 -> ANSI_KeypadMultiply
+                69 -> ANSI_KeypadPlus
+                71 -> ANSI_KeypadClear
+                75 -> ANSI_KeypadDivide
+                76 -> ANSI_KeypadEnter
+                78 -> ANSI_KeypadMinus
+                81 -> ANSI_KeypadEquals
+                82 -> ANSI_Keypad0
+                83 -> ANSI_Keypad1
+                84 -> ANSI_Keypad2
+                85 -> ANSI_Keypad3
+                86 -> ANSI_Keypad4
+                87 -> ANSI_Keypad5
+                88 -> ANSI_Keypad6
+                89 -> ANSI_Keypad7
+                91 -> ANSI_Keypad8
+                92 -> ANSI_Keypad9
+                36 -> Return
+                48 -> Tab
+                49 -> Space
+                51 -> Delete
+                53 -> Escape
+                55 -> Command
+                56 -> Shift
+                57 -> CapsLock
+                58 -> Option
+                59 -> Control
+                54 -> RightCommand
+                60 -> RightShift
+                61 -> RightOption
+                62 -> RightControl
+                63 -> Function
+                64 -> F17
+                72 -> VolumeUp
+                73 -> VolumeDown
+                74 -> Mute
+                79 -> F18
+                80 -> F19
+                90 -> F20
+                96 -> F5
+                97 -> F6
+                98 -> F7
+                99 -> F3
+                100 -> F8
+                101 -> F9
+                103 -> F11
+                105 -> F13
+                106 -> F16
+                107 -> F14
+                109 -> F10
+                110 -> ContextualMenu
+                111 -> F12
+                113 -> F15
+                114 -> Help
+                115 -> Home
+                116 -> PageUp
+                117 -> ForwardDelete
+                118 -> F4
+                119 -> End
+                120 -> F2
+                121 -> PageDown
+                122 -> F1
+                123 -> LeftArrow
+                124 -> RightArrow
+                125 -> DownArrow
+                126 -> UpArrow
+                10 -> ISO_Section
+                93 -> JIS_Yen
+                94 -> JIS_Underscore
+                95 -> JIS_KeypadComma
+                102 -> JIS_Eisu
+                104 -> JIS_Kana
+                else -> {
+                    val keyCode = KeyCode("Unknown($code)")
+                    Logger.warn { "Got unknown keycode: $keyCode" }
+                    keyCode
+                }
             }
         }
     }
 }
 
+@Suppress("MemberVisibilityCanBePrivate")
 @JvmInline
 value class KeyModifiersSet internal constructor(internal val value: Int) {
     companion object {
-        fun create(capsLock: Boolean = false,
-                   shift: Boolean = false,
-                   control: Boolean = false,
-                   option: Boolean = false,
-                   command: Boolean = false,
-                   numericPad: Boolean = false,
-                   help: Boolean = false,
-                   function: Boolean = false): KeyModifiersSet {
+        fun create(
+            capsLock: Boolean = false,
+            shift: Boolean = false,
+            control: Boolean = false,
+            option: Boolean = false,
+            command: Boolean = false,
+            numericPad: Boolean = false,
+            help: Boolean = false,
+            function: Boolean = false,
+        ): KeyModifiersSet {
             var result = 0
             if (capsLock) result = result or desktop_macos_h.CapsLockModifier()
             if (shift) result = result or desktop_macos_h.ShiftModifier()
@@ -330,7 +332,7 @@ value class KeyModifiersSet internal constructor(internal val value: Int) {
     }
 }
 
-
+@Suppress("ConstPropertyName", "Unused")
 object CodepointConstants {
     const val EnterCharacter = 0x0003
     const val BackspaceCharacter = 0x0008

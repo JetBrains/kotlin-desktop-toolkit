@@ -1,11 +1,11 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import org.jetbrains.desktop.PhysicalSize
+import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
-class MetalDevice internal constructor(ptr: MemorySegment): Managed(ptr, desktop_macos_h::metal_deref_device) {
+class MetalDevice internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_macos_h::metal_deref_device) {
     companion object {
         fun create(): MetalDevice {
             return MetalDevice(ffiDownCall { desktop_macos_h.metal_create_device() })
@@ -15,7 +15,7 @@ class MetalDevice internal constructor(ptr: MemorySegment): Managed(ptr, desktop
     val pointerAddress get() = pointer.address()
 }
 
-class MetalCommandQueue internal constructor(ptr: MemorySegment): Managed(ptr, desktop_macos_h::metal_deref_command_queue) {
+class MetalCommandQueue internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_macos_h::metal_deref_command_queue) {
     companion object {
         fun create(device: MetalDevice): MetalCommandQueue {
             return MetalCommandQueue(ffiDownCall { desktop_macos_h.metal_create_command_queue(device.pointer) })
@@ -25,7 +25,7 @@ class MetalCommandQueue internal constructor(ptr: MemorySegment): Managed(ptr, d
     val pointerAddress get() = pointer.address()
 }
 
-class MetalView internal constructor(ptr: MemorySegment): Managed(ptr, desktop_macos_h::metal_drop_view) {
+class MetalView internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_macos_h::metal_drop_view) {
     companion object {
         fun create(device: MetalDevice): MetalView {
             return MetalView(ffiDownCall { desktop_macos_h.metal_create_view(device.pointer) })
@@ -53,6 +53,6 @@ class MetalView internal constructor(ptr: MemorySegment): Managed(ptr, desktop_m
         set(value) = ffiDownCall { desktop_macos_h.metal_view_set_is_opaque(pointer, value) }
 }
 
-class MetalTexture internal constructor(ptr: MemorySegment): Managed(ptr, desktop_macos_h::metal_deref_texture) {
+class MetalTexture internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_macos_h::metal_deref_texture) {
     val pointerAddress get() = pointer.address()
 }

@@ -56,12 +56,14 @@ tasks.test {
     jvmArgs("--enable-preview")
     val nativeLibProvider = compileDebugDesktopToolkitTask.flatMap { it.libraryFile }.map { it.absolutePath }
     val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
-    jvmArgumentProviders.add(CommandLineArgumentProvider {
-        listOf(
-            "-Dkdt.library.path=${nativeLibProvider.get()}",
-            "-Dkdt.native.log.path=${logFile.get().asFile.absolutePath}",
-        )
-    })
+    jvmArgumentProviders.add(
+        CommandLineArgumentProvider {
+            listOf(
+                "-Dkdt.library.path=${nativeLibProvider.get()}",
+                "-Dkdt.native.log.path=${logFile.get().asFile.absolutePath}",
+            )
+        },
+    )
     useJUnitPlatform()
 }
 

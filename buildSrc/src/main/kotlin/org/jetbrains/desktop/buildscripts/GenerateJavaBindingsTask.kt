@@ -18,7 +18,7 @@ import kotlin.io.path.pathString
 
 abstract class GenerateJavaBindingsTask @Inject constructor(
     objectFactory: ObjectFactory,
-    private val execOperations: ExecOperations
+    private val execOperations: ExecOperations,
 ) : DefaultTask() {
     @get:InputFile
     val jextractBinary = objectFactory.fileProperty()
@@ -44,7 +44,7 @@ abstract class GenerateJavaBindingsTask @Inject constructor(
             jextractBinary.get().asFile.toPath(),
             headerFile.get().asFile.toPath(),
             packageName.get(),
-            generatedSourcesDirectory.get().asFile.toPath()
+            generatedSourcesDirectory.get().asFile.toPath(),
         )
     }
 }

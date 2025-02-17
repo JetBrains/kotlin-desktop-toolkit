@@ -1,7 +1,26 @@
 package org.jetbrains.desktop.sample
 
-import org.jetbrains.desktop.*
-import org.jetbrains.desktop.macos.*
+import org.jetbrains.desktop.LogicalPixels
+import org.jetbrains.desktop.LogicalPoint
+import org.jetbrains.desktop.LogicalSize
+import org.jetbrains.desktop.PhysicalPoint
+import org.jetbrains.desktop.PhysicalSize
+import org.jetbrains.desktop.macos.AppMenuItem
+import org.jetbrains.desktop.macos.AppMenuManager
+import org.jetbrains.desktop.macos.AppMenuStructure
+import org.jetbrains.desktop.macos.Application
+import org.jetbrains.desktop.macos.Event
+import org.jetbrains.desktop.macos.EventHandlerResult
+import org.jetbrains.desktop.macos.KeyModifiersSet
+import org.jetbrains.desktop.macos.Keystroke
+import org.jetbrains.desktop.macos.KotlinDesktopToolkit
+import org.jetbrains.desktop.macos.Logger
+import org.jetbrains.desktop.macos.MetalCommandQueue
+import org.jetbrains.desktop.macos.MetalDevice
+import org.jetbrains.desktop.macos.Screen
+import org.jetbrains.desktop.macos.Window
+import org.jetbrains.desktop.macos.WindowBackground
+import org.jetbrains.desktop.macos.WindowVisualEffect
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.Paint
@@ -12,16 +31,23 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-class CustomTitlebar(var origin: LogicalPoint, var size: LogicalSize, var startWindowDrag: (() -> Unit)? = null) {
+class CustomTitlebar(
+    private var origin: LogicalPoint,
+    var size: LogicalSize,
+    var startWindowDrag: (() -> Unit)? = null,
+) {
     companion object {
-        val customTitlebarHeight: LogicalPixels = 55.0
+        const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55.0
     }
 
     fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
             is Event.MouseDown -> {
-                if (event.locationInWindow.x > origin.x && event.locationInWindow.x < origin.x + size.width * 0.75 &&
-                    event.locationInWindow.y > origin.y && event.locationInWindow.y < origin.y + size.height) {
+                if (event.locationInWindow.x > origin.x &&
+                    event.locationInWindow.x < origin.x + size.width * 0.75 &&
+                    event.locationInWindow.y > origin.y &&
+                    event.locationInWindow.y < origin.y + size.height
+                ) {
                     startWindowDrag?.invoke()
                     EventHandlerResult.Stop
                 } else {
@@ -50,16 +76,19 @@ class CustomTitlebar(var origin: LogicalPoint, var size: LogicalSize, var startW
     }
 }
 
-class ContentArea(var origin: LogicalPoint, var size: LogicalSize) {
+class ContentArea(
+    var origin: LogicalPoint,
+    var size: LogicalSize,
+) {
 
-    var markerPosition: LogicalPoint? = null
+    private var markerPosition: LogicalPoint? = null
 
     fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
             is Event.MouseMoved -> {
                 markerPosition = LogicalPoint(
                     event.locationInWindow.x - origin.x,
-                    event.locationInWindow.y - origin.y
+                    event.locationInWindow.y - origin.y,
                 )
                 EventHandlerResult.Continue
             }
@@ -73,15 +102,21 @@ class ContentArea(var origin: LogicalPoint, var size: LogicalSize) {
         val contentSize = size.toPhysical(scale)
 
         Paint().use { paint ->
-            paint.color = 0x77264653.toInt()
-            canvas.drawRect(Rect.makeXYWH(contentOrigin.x.toFloat(), contentOrigin.y.toFloat(),
-                                          contentSize.width.toFloat(), contentSize.height.toFloat()), paint)
+            paint.color = 0x77264653
+            canvas.drawRect(
+                Rect.makeXYWH(
+                    contentOrigin.x.toFloat(),
+                    contentOrigin.y.toFloat(),
+                    contentSize.width.toFloat(),
+                    contentSize.height.toFloat(),
+                ),
+                paint,
+            )
         }
         canvas.drawSpiningCircle(contentOrigin, contentSize, time, scale.toFloat())
         canvas.drawWindowBorders(contentOrigin, contentSize, time, scale.toFloat())
         canvas.drawCursor(contentOrigin, contentSize, time, scale.toFloat())
     }
-
 
     private fun Canvas.drawSpiningCircle(origin: PhysicalPoint, size: PhysicalSize, t: Long, scale: Float) = withTranslated(origin) {
         val width = size.width.toFloat()
@@ -149,20 +184,23 @@ class ContentArea(var origin: LogicalPoint, var size: LogicalSize) {
     }
 }
 
-class WindowContainer(val customTitlebar: CustomTitlebar?, val contentArea: ContentArea) {
+class WindowContainer(
+    val customTitlebar: CustomTitlebar?,
+    private val contentArea: ContentArea,
+) {
     companion object {
         fun create(windowContentSize: LogicalSize, useCustomTitlebar: Boolean): WindowContainer {
             return if (useCustomTitlebar) {
                 val titlebar = CustomTitlebar(
                     LogicalPoint.Zero,
-                    LogicalSize(width = windowContentSize.width, height = CustomTitlebar.customTitlebarHeight)
+                    LogicalSize(width = windowContentSize.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT),
                 )
                 val contentArea = ContentArea(
-                    LogicalPoint(x = 0.0, y = CustomTitlebar.customTitlebarHeight),
+                    LogicalPoint(x = 0.0, y = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT),
                     LogicalSize(
                         width = windowContentSize.width,
-                        height = windowContentSize.height - titlebar.size.height
-                    )
+                        height = windowContentSize.height - titlebar.size.height,
+                    ),
                 )
                 WindowContainer(titlebar, contentArea)
             } else {
@@ -174,7 +212,7 @@ class WindowContainer(val customTitlebar: CustomTitlebar?, val contentArea: Cont
 
     fun resize(windowSize: LogicalSize) {
         if (customTitlebar != null) {
-            customTitlebar.size = LogicalSize(width = windowSize.width, height = CustomTitlebar.customTitlebarHeight)
+            customTitlebar.size = LogicalSize(width = windowSize.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
             contentArea.origin = LogicalPoint(x = 0.0, y = customTitlebar.size.height)
             contentArea.size =
                 LogicalSize(width = windowSize.width, height = windowSize.height - customTitlebar.size.height)
@@ -184,7 +222,7 @@ class WindowContainer(val customTitlebar: CustomTitlebar?, val contentArea: Cont
     }
 
     fun handleEvent(event: Event): EventHandlerResult {
-        return when  {
+        return when {
             customTitlebar?.handleEvent(event) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             contentArea.handleEvent(event) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             else -> EventHandlerResult.Continue
@@ -197,20 +235,25 @@ class WindowContainer(val customTitlebar: CustomTitlebar?, val contentArea: Cont
     }
 }
 
-class RotatingBallWindow(device: MetalDevice,
-                         queue: MetalCommandQueue,
-                         private val windowContainer: WindowContainer,
-                         windowParams: Window.WindowParams): SkikoWindow(
-                             device,
-                             queue,
-                             windowParams) {
+class RotatingBallWindow(
+    device: MetalDevice,
+    queue: MetalCommandQueue,
+    private val windowContainer: WindowContainer,
+    windowParams: Window.WindowParams,
+) : SkikoWindow(
+    device,
+    queue,
+    windowParams,
+) {
 
     companion object {
-        fun createWindow(device: MetalDevice,
-                         queue: MetalCommandQueue,
-                         title: String,
-                         origin: LogicalPoint,
-                         useCustomTitlebar: Boolean): RotatingBallWindow {
+        fun createWindow(
+            device: MetalDevice,
+            queue: MetalCommandQueue,
+            title: String,
+            origin: LogicalPoint,
+            useCustomTitlebar: Boolean,
+        ): RotatingBallWindow {
             val windowSize = LogicalSize(640.0, 480.0)
             val windowContentSize = windowSize // todo it's incorrect
             val container = WindowContainer.create(windowContentSize, useCustomTitlebar)
@@ -255,30 +298,37 @@ class RotatingBallWindow(device: MetalDevice,
         }
     }
 
-    override fun Canvas.draw(size: PhysicalSize, t: Long) {
+    override fun Canvas.draw(size: PhysicalSize, time: Long) {
         val canvas = this
 //        canvas.clear(Color.TRANSPARENT) // use RED to debug
-        windowContainer.draw(canvas, t, window.scaleFactor())
+        windowContainer.draw(canvas, time, window.scaleFactor())
     }
 }
 
-class ApplicationState: AutoCloseable {
-    val windows = mutableListOf<RotatingBallWindow>()
+class ApplicationState : AutoCloseable {
+    private val windows = mutableListOf<RotatingBallWindow>()
 
-    val device: MetalDevice by lazy {
+    private val device: MetalDevice by lazy {
         MetalDevice.create()
     }
 
-    val queue by lazy {
+    private val queue by lazy {
         MetalCommandQueue.create(device)
     }
 
     fun createWindow(useCustomTitlebar: Boolean) {
-        windows.add(RotatingBallWindow.createWindow(device, queue, "Window ${windows.count()}",
-            LogicalPoint(0.0, 0.0), useCustomTitlebar))
+        windows.add(
+            RotatingBallWindow.createWindow(
+                device,
+                queue,
+                "Window ${windows.count()}",
+                LogicalPoint(0.0, 0.0),
+                useCustomTitlebar,
+            ),
+        )
     }
 
-    fun setPaused(value: Boolean) {
+    private fun setPaused(value: Boolean) {
         mainWindow()?.displayLink?.setRunning(!value)
     }
 
@@ -297,13 +347,14 @@ class ApplicationState: AutoCloseable {
             window.window.setRect(
                 origin = LogicalPoint(
                     currentOrigin.x - delta / 2.0,
-                    currentOrigin.y - delta / 2.0
+                    currentOrigin.y - delta / 2.0,
                 ),
                 size = LogicalSize(
                     currentSize.width + delta,
-                    currentSize.height + delta
+                    currentSize.height + delta,
                 ),
-                animateTransition = true)
+                animateTransition = true,
+            )
         }
     }
 
@@ -315,11 +366,11 @@ class ApplicationState: AutoCloseable {
 
     private fun makeWindowOpaque() {
         mainWindow()?.let { window ->
-            window.window.setBackground(WindowBackground.SolidColor(Color(1.0, 1.0, 1.0, 1.0)))
+            window.window.setBackground(WindowBackground.SolidColor(org.jetbrains.desktop.macos.Color(1.0, 1.0, 1.0, 1.0)))
         }
     }
 
-    var effect = generateSequence { WindowVisualEffect.entries.asSequence() }.flatten().iterator()
+    private var effect = generateSequence { WindowVisualEffect.entries.asSequence() }.flatten().iterator()
 
     private fun cycleWindowEffects() {
         mainWindow()?.let { window ->
@@ -398,12 +449,12 @@ class ApplicationState: AutoCloseable {
                 AppMenuItem.Action(
                     "New Window",
                     keystroke = Keystroke(key = "n", modifiers = KeyModifiersSet.create(command = true)),
-                    perform = { createWindow(useCustomTitlebar = true) }
+                    perform = { createWindow(useCustomTitlebar = true) },
                 ),
                 AppMenuItem.Action(
                     "New Titled Window",
                     keystroke = Keystroke(key = "n", modifiers = KeyModifiersSet.create(command = true, shift = true)),
-                    perform = { createWindow(useCustomTitlebar = false) }
+                    perform = { createWindow(useCustomTitlebar = false) },
                 ),
                 AppMenuItem.Action(
                     "Quit",
@@ -413,7 +464,7 @@ class ApplicationState: AutoCloseable {
                             // we shouldn't call this function on main thread because it block it
                             Runtime.getRuntime().exit(0)
                         }
-                    }
+                    },
                 ),
             ),
             AppMenuItem.SubMenu(
@@ -427,26 +478,26 @@ class ApplicationState: AutoCloseable {
                             Logger.info { "Title was: $previousTitle" }
                             window.title = "$previousTitle[x]"
                         }
-                    }
+                    },
                 ),
                 AppMenuItem.Action(
                     title = "Toggle Full Screen",
                     keystroke = Keystroke(key = "f", modifiers = KeyModifiersSet.create(command = true, control = true)),
-                    perform = { mainWindow()?.window?.toggleFullScreen() }
+                    perform = { mainWindow()?.window?.toggleFullScreen() },
                 ),
-                specialTag = "View"
+                specialTag = "View",
             ),
             AppMenuItem.SubMenu(
                 title = "Animation",
                 AppMenuItem.Action(
                     title = "Pause",
                     keystroke = Keystroke(key = "p", modifiers = KeyModifiersSet.create(command = true)),
-                    perform = { setPaused(true) }
+                    perform = { setPaused(true) },
                 ),
                 AppMenuItem.Action(
                     title = "Run",
                     keystroke = Keystroke(key = "r", modifiers = KeyModifiersSet.create(command = true)),
-                    perform = { setPaused(false) }
+                    perform = { setPaused(false) },
                 ),
             ),
             AppMenuItem.SubMenu(
@@ -454,35 +505,35 @@ class ApplicationState: AutoCloseable {
                 AppMenuItem.Action(
                     title = "List Displays",
                     keystroke = Keystroke(key = "d", modifiers = KeyModifiersSet.create(command = true)),
-                    perform = { Logger.info { Screen.allScreens().toString() } }
-                )
+                    perform = { Logger.info { Screen.allScreens().toString() } },
+                ),
             ),
             AppMenuItem.SubMenu(
                 title = "Window",
                 AppMenuItem.Action(
                     title = "Increase Size",
                     keystroke = Keystroke(key = "+", modifiers = KeyModifiersSet.create(command = true)),
-                    perform = { changeCurrentWindowSize(50.0) }
+                    perform = { changeCurrentWindowSize(50.0) },
                 ),
                 AppMenuItem.Action(
                     title = "Drecrease Size",
                     keystroke = Keystroke(key = "-", modifiers = KeyModifiersSet.create(command = true)),
-                    perform = { changeCurrentWindowSize(-50.0) }
+                    perform = { changeCurrentWindowSize(-50.0) },
                 ),
                 AppMenuItem.Action(
                     title = "Make Window Transparent",
                     keystroke = Keystroke(key = "t", modifiers = KeyModifiersSet.create(command = true)),
-                    perform = { makeWindowTransparent() }
+                    perform = { makeWindowTransparent() },
                 ),
                 AppMenuItem.Action(
                     title = "Make Window Opaque",
                     keystroke = Keystroke(key = "o", modifiers = KeyModifiersSet.create(command = true)),
-                    perform = { makeWindowOpaque() }
+                    perform = { makeWindowOpaque() },
                 ),
                 AppMenuItem.Action(
                     title = "Cycle Window Effects",
                     keystroke = Keystroke(key = "e", modifiers = KeyModifiersSet.create(command = true)),
-                    perform = { cycleWindowEffects() }
+                    perform = { cycleWindowEffects() },
                 ),
                 AppMenuItem.Action(
                     title = "Log Window Position",
@@ -499,7 +550,7 @@ class ApplicationState: AutoCloseable {
                                 """.trimIndent()
                             }
                         }
-                    }
+                    },
                 ),
                 AppMenuItem.Action(
                     title = "Close Window",
@@ -508,10 +559,10 @@ class ApplicationState: AutoCloseable {
                         mainWindow()?.let {
                             killWindow(it)
                         }
-                    }
+                    },
                 ),
-                specialTag = "Window"
-            )
+                specialTag = "Window",
+            ),
         )
     }
 

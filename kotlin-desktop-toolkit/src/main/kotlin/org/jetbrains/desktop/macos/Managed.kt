@@ -2,8 +2,10 @@ package org.jetbrains.desktop.macos
 
 import java.lang.foreign.MemorySegment
 
-open class Managed(private var ptr: MemorySegment,
-                   private val deref: (MemorySegment) -> Unit): AutoCloseable {
+open class Managed(
+    private var ptr: MemorySegment,
+    private val deref: (MemorySegment) -> Unit,
+) : AutoCloseable {
     val pointer: MemorySegment get() {
         return if (ptr != MemorySegment.NULL) {
             ptr

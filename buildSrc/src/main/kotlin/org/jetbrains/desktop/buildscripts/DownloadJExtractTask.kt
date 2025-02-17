@@ -19,7 +19,7 @@ import kotlin.io.path.createTempFile
 abstract class DownloadJExtractTask @Inject constructor(
     objectFactory: ObjectFactory,
     providerFactory: ProviderFactory,
-    private val archiveOperations: ArchiveOperations
+    private val archiveOperations: ArchiveOperations,
 ) : DefaultTask() {
     @get:Input
     val platform = providerFactory.provider { buildPlatform() }
@@ -49,12 +49,7 @@ abstract class DownloadJExtractTask @Inject constructor(
     }
 }
 
-private fun downloadJExtract(
-    platform: String,
-    slug: String,
-    jextractDirectory: Path,
-    archiveOperations: ArchiveOperations,
-) {
+private fun downloadJExtract(platform: String, slug: String, jextractDirectory: Path, archiveOperations: ArchiveOperations) {
     val url = URI(jextractUrl(platform, slug)).toURL()
 
     val connection = url.openConnection() as HttpURLConnection
@@ -80,10 +75,8 @@ private fun downloadJExtract(
     tempFile.delete()
 }
 
-private fun jextractUrl(
-    platform: String,
-    slug: String,
-): String = "https://download.java.net/java/early_access/jextract/${slug}_${platform}_bin.tar.gz"
+private fun jextractUrl(platform: String, slug: String): String =
+    "https://download.java.net/java/early_access/jextract/${slug}_${platform}_bin.tar.gz"
 
 private fun buildPlatform(): String = jextractPlatform(buildOs(), buildArch())
 
@@ -94,8 +87,8 @@ private fun jextractPlatform(os: Os, arch: Arch): String {
         Os.MACOS -> "macos"
     }
     val jextractArch = when (arch) {
-        Arch.x86_64 -> "x64"
-        Arch.aarch64 -> "aarch64"
+        Arch.X86_64 -> "x64"
+        Arch.AARCH64 -> "aarch64"
     }
-    return "${jextractOs}-$jextractArch"
+    return "$jextractOs-$jextractArch"
 }

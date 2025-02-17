@@ -1,17 +1,17 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import org.jetbrains.desktop.LogicalPixels
-import org.jetbrains.desktop.LogicalSize
 import org.jetbrains.desktop.LogicalPoint
-import org.jetbrains.desktop.macos.generated.WindowParams as NativeWindowParams
-import org.jetbrains.desktop.macos.generated.WindowBackground as NativeWindowBackground
+import org.jetbrains.desktop.LogicalSize
+import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import org.jetbrains.desktop.macos.generated.WindowBackground as NativeWindowBackground
+import org.jetbrains.desktop.macos.generated.WindowParams as NativeWindowParams
 
-typealias WindowId = Long;
+typealias WindowId = Long
 
-class Window internal constructor(ptr: MemorySegment): Managed(ptr, desktop_macos_h::window_drop) {
+class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_macos_h::window_drop) {
     data class WindowParams(
         val origin: LogicalPoint = LogicalPoint(0.0, 0.0),
         val size: LogicalSize = LogicalSize(640.0, 480.0),
@@ -21,7 +21,7 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, desktop_maco
         val isMiniaturizable: Boolean = true,
         val isFullScreenAllowed: Boolean = true,
         val useCustomTitlebar: Boolean = false,
-        val titlebarHeight: LogicalPixels = 28.0
+        val titlebarHeight: LogicalPixels = 28.0,
     ) {
         internal fun toNative(arena: Arena): MemorySegment {
             val nativeWindowParams = NativeWindowParams.allocate(arena)
@@ -46,14 +46,16 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, desktop_maco
             }
         }
 
-        fun create(origin: LogicalPoint = LogicalPoint(0.0, 0.0),
-                   size: LogicalSize = LogicalSize(640.0, 480.0),
-                   title: String = "Window",
-                   isResizable: Boolean = true,
-                   isClosable: Boolean = true,
-                   isMiniaturizable: Boolean = true,
-                   isFullScreenAllowed: Boolean = true,
-                   useCustomTitlebar: Boolean = false): Window {
+        fun create(
+            origin: LogicalPoint = LogicalPoint(0.0, 0.0),
+            size: LogicalSize = LogicalSize(640.0, 480.0),
+            title: String = "Window",
+            isResizable: Boolean = true,
+            isClosable: Boolean = true,
+            isMiniaturizable: Boolean = true,
+            isFullScreenAllowed: Boolean = true,
+            useCustomTitlebar: Boolean = false,
+        ): Window {
             return create(
                 WindowParams(
                     origin,
@@ -63,8 +65,8 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, desktop_maco
                     isClosable,
                     isMiniaturizable,
                     isFullScreenAllowed,
-                    useCustomTitlebar
-                )
+                    useCustomTitlebar,
+                ),
             )
         }
     }
@@ -177,10 +179,12 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, desktop_maco
     fun setRect(origin: LogicalPoint, size: LogicalSize, animateTransition: Boolean = true) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_macos_h.window_set_rect(pointer,
-                                            origin.toNative(arena),
-                                            size.toNative(arena),
-                                            animateTransition)
+                desktop_macos_h.window_set_rect(
+                    pointer,
+                    origin.toNative(arena),
+                    size.toNative(arena),
+                    animateTransition,
+                )
             }
         }
     }
@@ -192,7 +196,7 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, desktop_maco
                     pointer,
                     origin.toNative(arena),
                     size.toNative(arena),
-                    animateTransition
+                    animateTransition,
                 )
             }
         }
@@ -226,10 +230,10 @@ class Window internal constructor(ptr: MemorySegment): Managed(ptr, desktop_maco
 }
 
 sealed class WindowBackground {
-    data object Transparent: WindowBackground()
-    data class SolidColor(val color: Color): WindowBackground()
+    data object Transparent : WindowBackground()
+    data class SolidColor(val color: Color) : WindowBackground()
 
-    data class VisualEffect(val effect: WindowVisualEffect): WindowBackground()
+    data class VisualEffect(val effect: WindowVisualEffect) : WindowBackground()
 
     internal fun toNative(arena: Arena): MemorySegment {
         val result = NativeWindowBackground.allocate(arena)
@@ -264,7 +268,8 @@ enum class WindowVisualEffect {
     ToolTipEffect,
     ContentBackgroundEffect,
     UnderWindowBackgroundEffect,
-    UnderPageBackgroundEffect;
+    UnderPageBackgroundEffect,
+    ;
 
     internal fun toNative(): Int {
         return when (this) {

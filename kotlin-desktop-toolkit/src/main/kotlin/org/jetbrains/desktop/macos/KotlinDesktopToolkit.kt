@@ -7,11 +7,13 @@ import kotlin.io.path.absolutePathString
 object KotlinDesktopToolkit {
     val isInitialized: AtomicBoolean = AtomicBoolean(false)
 
-    fun init(libraryPath: Path = property("kdt.library.path"),
-             logFilePath: Path = property("kdt.native.log.path"),
-             consoleLogLevel: LogLevel = LogLevel.Info,
-             fileLogLevel: LogLevel = LogLevel.Info,
-             appenderInterface: AppenderInterface = DefaultConsoleAppender.fromLevel(consoleLogLevel)) {
+    fun init(
+        libraryPath: Path = property("kdt.library.path"),
+        logFilePath: Path = property("kdt.native.log.path"),
+        consoleLogLevel: LogLevel = LogLevel.Info,
+        fileLogLevel: LogLevel = LogLevel.Info,
+        appenderInterface: AppenderInterface = DefaultConsoleAppender.fromLevel(consoleLogLevel),
+    ) {
         if (isInitialized.compareAndSet(false, true)) {
             // todo check that native library version is consistent with Kotlin code
             load(libraryPath)
@@ -19,7 +21,8 @@ object KotlinDesktopToolkit {
                 logFile = logFilePath,
                 consoleLogLevel = consoleLogLevel,
                 fileLogLevel = fileLogLevel,
-                appender = appenderInterface)
+                appender = appenderInterface,
+            )
             Logger.info { "KotlinDesktopToolkit is initialized" }
         } else {
             Logger.error { "Init was called for already initialized library" }
@@ -33,7 +36,6 @@ object KotlinDesktopToolkit {
         }
         return Path.of(path)
     }
-
 
     private fun load(libraryPath: Path) {
         System.load(libraryPath.absolutePathString())

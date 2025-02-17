@@ -1,23 +1,25 @@
 package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.ApplicationCallbacks
-import org.jetbrains.desktop.macos.generated.EventHandler as NativeEventHandler
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
-import org.jetbrains.desktop.macos.generated.ApplicationConfig as NativeApplicationConfig
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import org.jetbrains.desktop.macos.generated.ApplicationConfig as NativeApplicationConfig
+import org.jetbrains.desktop.macos.generated.EventHandler as NativeEventHandler
 
 enum class EventHandlerResult {
     Continue,
-    Stop
+    Stop,
 }
 
 typealias EventHandler = (Event) -> EventHandlerResult
 typealias TextOperationHandler = (TextOperation) -> Boolean
 
 object Application {
-    data class ApplicationConfig(val disableDictationMenuItem: Boolean = false,
-                                 val disableCharacterPaletteMenuItem: Boolean = false) {
+    data class ApplicationConfig(
+        val disableDictationMenuItem: Boolean = false,
+        val disableCharacterPaletteMenuItem: Boolean = false,
+    ) {
         internal fun toNative(arena: Arena): MemorySegment {
             val config = NativeApplicationConfig.allocate(arena)
             NativeApplicationConfig.disable_dictation_menu_item(config, disableDictationMenuItem)
@@ -75,7 +77,6 @@ object Application {
         // the application halt is performed immediately after that
         // which means that JVM shutdown hooks might be interupted
         ffiUpCall {
-
         }
     }
 

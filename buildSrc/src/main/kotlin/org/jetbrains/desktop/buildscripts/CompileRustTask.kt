@@ -23,7 +23,7 @@ abstract class CompileRustTask @Inject constructor(
     providerFactory: ProviderFactory,
     projectLayout: ProjectLayout,
     private val execOperations: ExecOperations,
-): DefaultTask() {
+) : DefaultTask() {
     @get:InputDirectory
     val nativeDirectory = objectFactory.directoryProperty()
 
@@ -91,10 +91,9 @@ internal fun ExecOperations.findCommand(command: String): Path? {
     return when {
         result.exitValue != 0 -> null
         out == null -> error("failed to resolve absolute path of command '$command'")
-        else ->  Path.of(out)
+        else -> Path.of(out)
     }
 }
-
 
 private fun ExecOperations.compileRust(
     nativeDirectory: Path,
@@ -106,11 +105,14 @@ private fun ExecOperations.compileRust(
 ) {
     exec {
         workingDir = nativeDirectory.toFile()
-        commandLine(findCommand("cargo"), "build",
+        commandLine(
+            findCommand("cargo"),
+            "build",
             "--package=$crateName",
             "--profile=$rustProfile",
             "--target=$rustTarget",
-            "--color=always")
+            "--color=always",
+        )
     }
 
     nativeDirectory
@@ -138,8 +140,8 @@ private fun buildPlatformRustTarget(): String {
         Os.LINUX -> "unknown-linux-gnu"
     }
     val archPart = when (buildArch()) {
-        Arch.aarch64 -> "aarch64"
-        Arch.x86_64 -> "x86_64"
+        Arch.AARCH64 -> "aarch64"
+        Arch.X86_64 -> "x86_64"
     }
     return "$archPart-$osPart"
 }

@@ -2,7 +2,6 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 
-
 @JvmInline
 value class MouseButton internal constructor(val value: Int) {
     companion object {
@@ -22,7 +21,7 @@ value class MouseButton internal constructor(val value: Int) {
 }
 
 @JvmInline
-value class MouseButtonsSet internal constructor(val value: Int): Iterable<MouseButton> {
+value class MouseButtonsSet internal constructor(val value: Int) : Iterable<MouseButton> {
     fun contains(button: MouseButton): Boolean {
         return 1.shl(button.value).and(value) != 0
     }
@@ -45,5 +44,4 @@ value class MouseButtonsSet internal constructor(val value: Int): Iterable<Mouse
     override fun toString(): String {
         return toList().toString()
     }
-
 }

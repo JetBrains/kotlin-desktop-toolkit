@@ -36,7 +36,7 @@ fun buildAppMenu(): AppMenuStructure {
             AppMenuItem.SubMenu("Services", specialTag = "Services"),
             AppMenuItem.Separator,
             AppMenuItem.Action("App menu item2", true),
-            AppMenuItem.SubMenu(title = "Empty Submenu")
+            AppMenuItem.SubMenu(title = "Empty Submenu"),
         ),
         AppMenuItem.SubMenu(
             title = "File",
@@ -47,10 +47,11 @@ fun buildAppMenu(): AppMenuStructure {
                 isEnabled = true,
                 keystroke = Keystroke(
                     key = "x",
-                    modifiers = KeyModifiersSet.create(control = true)
+                    modifiers = KeyModifiersSet.create(control = true),
                 ),
-                perform = { Logger.info { "First callback from Kotlin!" } }),
-            AppMenuItem.SubMenu(title = "Empty Submenu")
+                perform = { Logger.info { "First callback from Kotlin!" } },
+            ),
+            AppMenuItem.SubMenu(title = "Empty Submenu"),
         ),
         AppMenuItem.SubMenu(
             title = "Edit",
@@ -78,27 +79,28 @@ fun buildAppMenu(): AppMenuStructure {
             title = "Keystrokes",
             AppMenuItem.Action(
                 "Item1",
-                keystroke = Keystroke(key = "xy", modifiers = KeyModifiersSet.create()),  // second letter is ignored
+                keystroke = Keystroke(key = "xy", modifiers = KeyModifiersSet.create()), // second letter is ignored
                 perform = if (imLucky()) {
                     val f = { Logger.info { "Odd" } }
                     f
                 } else {
                     val f = { Logger.info { "Even" } }
                     f
-                }),
+                },
+            ),
             AppMenuItem.Action(
                 "Item2",
-                keystroke = Keystroke(key = "X", modifiers = KeyModifiersSet.create())
+                keystroke = Keystroke(key = "X", modifiers = KeyModifiersSet.create()),
             ), // shift modifier added because letter is capital
             AppMenuItem.Action("Item3", keystroke = Keystroke(key = "й", modifiers = KeyModifiersSet.create(option = true))),
             AppMenuItem.Action(
                 "Item4",
-                keystroke = Keystroke(key = "\u000d", modifiers = KeyModifiersSet.create(command = true))
+                keystroke = Keystroke(key = "\u000d", modifiers = KeyModifiersSet.create(command = true)),
             ), // it's enter
             AppMenuItem.Action(
                 "Item5",
-                keystroke = if (imLucky()) Keystroke(key = "k", modifiers = KeyModifiersSet.create(shift = true)) else null
-            )
+                keystroke = if (imLucky()) Keystroke(key = "k", modifiers = KeyModifiersSet.create(shift = true)) else null,
+            ),
         ),
         AppMenuItem.Action("Top level action", true),
         AppMenuItem.SubMenu(
@@ -109,7 +111,7 @@ fun buildAppMenu(): AppMenuStructure {
             AppMenuItem.Action("Foo", isEnabled = (System.currentTimeMillis() / 2000L) % 2 == 0L),
             AppMenuItem.Separator,
             AppMenuItem.Action("Bar", false),
-            AppMenuItem.SubMenu(title = "Empty Submenu")
+            AppMenuItem.SubMenu(title = "Empty Submenu"),
         ),
         AppMenuItem.Separator,
         AppMenuItem.SubMenu(
@@ -117,7 +119,7 @@ fun buildAppMenu(): AppMenuStructure {
             AppMenuItem.Action("Foo ${System.currentTimeMillis() % 100}", true),
             AppMenuItem.Separator,
             AppMenuItem.Action("Bar", false),
-            AppMenuItem.SubMenu(title = "Empty Submenu")
+            AppMenuItem.SubMenu(title = "Empty Submenu"),
         ),
         AppMenuItem.SubMenu(
             title = "FooBar3",
@@ -128,8 +130,8 @@ fun buildAppMenu(): AppMenuStructure {
                 title = "Not empty submenu",
                 AppMenuItem.Action("Action", false),
                 AppMenuItem.Separator,
-                AppMenuItem.Action("Date: ${LocalDate.now()}", true)
-            )
+                AppMenuItem.Action("Date: ${LocalDate.now()}", true),
+            ),
         ),
         AppMenuItem.SubMenu(
             title = "MyWindow",
@@ -144,13 +146,13 @@ fun buildAppMenu(): AppMenuStructure {
                     add(AppMenuItem.Action("Last Flickering Item", true))
                 }
             },
-            specialTag = "Window"
+            specialTag = "Window",
         ),
         AppMenuItem.SubMenu(
             title = "Help",
             AppMenuItem.Action("Help1", true),
             AppMenuItem.Action("Help2", true),
-            AppMenuItem.Action("Help3", true)
-        )
+            AppMenuItem.Action("Help3", true),
+        ),
     )
 }

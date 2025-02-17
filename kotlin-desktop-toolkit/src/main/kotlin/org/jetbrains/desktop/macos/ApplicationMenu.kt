@@ -3,27 +3,34 @@ package org.jetbrains.desktop.macos
 import org.jetbrains.desktop.macos.generated.AppMenuItem_ActionItem_Body
 import org.jetbrains.desktop.macos.generated.AppMenuItem_SubMenuItem_Body
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
-import org.jetbrains.desktop.macos.generated.AppMenuItem as NativeAppMenuItem
-import org.jetbrains.desktop.macos.generated.AppMenuStructure as NativeAppMenuStructure
-import org.jetbrains.desktop.macos.generated.AppMenuKeystroke as NativeAppMenuKeystroke
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import org.jetbrains.desktop.macos.generated.AppMenuItem as NativeAppMenuItem
+import org.jetbrains.desktop.macos.generated.AppMenuKeystroke as NativeAppMenuKeystroke
+import org.jetbrains.desktop.macos.generated.AppMenuStructure as NativeAppMenuStructure
 
 /**
  * Be aware capital letter turns shift modifier on
  */
-data class Keystroke(val key: String, val modifiers: KeyModifiersSet)
+data class Keystroke(
+    val key: String,
+    val modifiers: KeyModifiersSet,
+)
 
 sealed class AppMenuItem {
-    data class Action(val title : String,
-                      val isEnabled: Boolean = true,
-                      val keystroke: Keystroke? = null,
-                      val isMacOSProvided: Boolean = false,
-                      val perform: () -> Unit = {}): AppMenuItem()
-    data object Separator: AppMenuItem()
-    class SubMenu(val title: String,
-                  val items: List<AppMenuItem>,
-                  val specialTag: String? = null): AppMenuItem() {
+    data class Action(
+        val title: String,
+        val isEnabled: Boolean = true,
+        val keystroke: Keystroke? = null,
+        val isMacOSProvided: Boolean = false,
+        val perform: () -> Unit = {},
+    ) : AppMenuItem()
+    data object Separator : AppMenuItem()
+    class SubMenu(
+        val title: String,
+        val items: List<AppMenuItem>,
+        val specialTag: String? = null,
+    ) : AppMenuItem() {
         constructor(title: String, vararg items: AppMenuItem, specialTag: String? = null) : this(title, items.toList(), specialTag)
     }
 }
@@ -71,12 +78,13 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             AppMenuItem_ActionItem_Body.macos_provided(actionItemBody, menuItem.isMacOSProvided)
             AppMenuItem_ActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)
             AppMenuItem_ActionItem_Body.perform(
-                actionItemBody, AppMenuItem_ActionItem_Body.perform.allocate(
+                actionItemBody,
+                AppMenuItem_ActionItem_Body.perform.allocate(
                     {
                         ffiUpCall(menuItem.perform)
                     },
-                    AppMenuManager.callbacksArena
-                )
+                    AppMenuManager.callbacksArena,
+                ),
             )
             NativeAppMenuItem.action_item(nativeItem, actionItemBody)
         }
@@ -98,7 +106,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             AppMenuItem_SubMenuItem_Body.title(subMenuItemBody, arena.allocateUtf8String(menuItem.title))
             AppMenuItem_SubMenuItem_Body.special_tag(
                 subMenuItemBody,
-                menuItem.specialTag?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+                menuItem.specialTag?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
             )
             AppMenuItem_SubMenuItem_Body.items_count(subMenuItemBody, menuItem.items.size.toLong())
             AppMenuItem_SubMenuItem_Body.items(subMenuItemBody, itemsArray)

@@ -10,7 +10,6 @@ import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.Window
 import kotlin.concurrent.thread
 
-
 fun main() {
     KotlinDesktopToolkit.init()
     Logger.info { runtimeInfo() }
@@ -18,7 +17,8 @@ fun main() {
         Application.ApplicationConfig(
 //        disableDictationMenuItem = true,
 //        disableCharacterPaletteMenuItem = true
-    ))
+        ),
+    )
     AppMenuManager.setMainMenu(buildAppMenu())
     val window1 = Window.create(origin = LogicalPoint(100.0, 200.0), title = "Window1")
     val window2 = Window.create(origin = LogicalPoint(200.0, 300.0), title = "Window2")

@@ -1,18 +1,22 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.DisplayLinkCallback
-import org.jetbrains.desktop.macos.generated.ScreenInfo
-import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import org.jetbrains.desktop.LogicalPoint
 import org.jetbrains.desktop.LogicalSize
+import org.jetbrains.desktop.macos.generated.DisplayLinkCallback
+import org.jetbrains.desktop.macos.generated.ScreenInfo
 import org.jetbrains.desktop.macos.generated.ScreenInfoArray
+import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
 typealias ScreenId = Int
 
-class DisplayLink internal constructor(ptr: MemorySegment, val arena: Arena): Managed(ptr,
-    desktop_macos_h::display_link_drop
+class DisplayLink internal constructor(
+    ptr: MemorySegment,
+    val arena: Arena,
+) : Managed(
+    ptr,
+    desktop_macos_h::display_link_drop,
 ) {
     companion object {
         fun create(screenId: ScreenId, onNextFrame: () -> Unit): DisplayLink {
@@ -62,7 +66,8 @@ data class Screen(
     val origin: LogicalPoint,
     val size: LogicalSize,
     val scale: Double,
-    val maximumFramesPerSecond: Int) {
+    val maximumFramesPerSecond: Int,
+) {
     companion object {
         private fun fromNative(s: MemorySegment): Screen {
             return Screen(
@@ -72,25 +77,25 @@ data class Screen(
                 origin = LogicalPoint.fromNative(ScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(ScreenInfo.size(s)),
                 scale = ScreenInfo.scale(s),
-                maximumFramesPerSecond = ScreenInfo.maximum_frames_per_second(s)
+                maximumFramesPerSecond = ScreenInfo.maximum_frames_per_second(s),
             )
         }
 
         fun allScreens(): AllScreens {
             return Arena.ofConfined().use { arena ->
-                    val screenInfoArray = ffiDownCall { desktop_macos_h.screen_list(arena) }
-                    val screens = mutableListOf<Screen>()
-                    try {
-                        val ptr = ScreenInfoArray.ptr(screenInfoArray)
-                        val len = ScreenInfoArray.len(screenInfoArray)
+                val screenInfoArray = ffiDownCall { desktop_macos_h.screen_list(arena) }
+                val screens = mutableListOf<Screen>()
+                try {
+                    val ptr = ScreenInfoArray.ptr(screenInfoArray)
+                    val len = ScreenInfoArray.len(screenInfoArray)
 
-                        for (i in 0 until len) {
-                            screens.add(fromNative(ScreenInfo.asSlice(ptr, i)))
-                        }
-                    } finally {
-                        ffiDownCall { desktop_macos_h.screen_list_drop(screenInfoArray) }
+                    for (i in 0 until len) {
+                        screens.add(fromNative(ScreenInfo.asSlice(ptr, i)))
                     }
-                    AllScreens(screens)
+                } finally {
+                    ffiDownCall { desktop_macos_h.screen_list_drop(screenInfoArray) }
+                }
+                AllScreens(screens)
             }
         }
     }

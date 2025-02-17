@@ -1,14 +1,14 @@
 package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.IGrandCentralDispatch
-import org.jetbrains.desktop.macos.generated.`dispatcher_main_exec_async$f`
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
+import org.jetbrains.desktop.macos.generated.`dispatcher_main_exec_async$f`
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 
-object GrandCentralDispatch: IGrandCentralDispatch {
+object GrandCentralDispatch : IGrandCentralDispatch {
     private val queue = ConcurrentLinkedQueue<() -> Unit>()
     private val callback: MemorySegment = `dispatcher_main_exec_async$f`.allocate({
         ffiUpCall {

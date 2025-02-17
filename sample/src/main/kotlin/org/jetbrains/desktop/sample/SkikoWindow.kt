@@ -10,22 +10,30 @@ import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView
 import org.jetbrains.desktop.macos.ScreenId
 import org.jetbrains.desktop.macos.Window
-import org.jetbrains.skia.*
+import org.jetbrains.skia.BackendRenderTarget
+import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
+import org.jetbrains.skia.ColorSpace
+import org.jetbrains.skia.DirectContext
+import org.jetbrains.skia.Surface
+import org.jetbrains.skia.SurfaceColorFormat
+import org.jetbrains.skia.SurfaceOrigin
 import kotlin.time.TimeSource
 
-abstract class SkikoWindow(device: MetalDevice,
-                           val queue: MetalCommandQueue,
-                           windowParams: Window.WindowParams): AutoCloseable {
+abstract class SkikoWindow(
+    device: MetalDevice,
+    private val queue: MetalCommandQueue,
+    windowParams: Window.WindowParams,
+) : AutoCloseable {
 
     val window = Window.create(windowParams)
     var displayLink = DisplayLink.create(window.screenId(), onNextFrame = {
         performDrawing(syncWithCA = false)
     })
 
-    val directContext = DirectContext.makeMetal(device.pointerAddress, queue.pointerAddress)
+    private val directContext = DirectContext.makeMetal(device.pointerAddress, queue.pointerAddress)
     var view: MetalView = MetalView.create(device)
-    val creationTime = TimeSource.Monotonic.markNow()
+    private val creationTime = TimeSource.Monotonic.markNow()
 
     init {
         window.minSize = LogicalSize(320.0, 240.0)
@@ -63,7 +71,7 @@ abstract class SkikoWindow(device: MetalDevice,
                     colorFormat = SurfaceColorFormat.BGRA_8888,
                     colorSpace = ColorSpace.sRGB,
                     surfaceProps = null,
-                    rt = renderTarget
+                    rt = renderTarget,
                 )!!.use { surface ->
                     val time = creationTime.elapsedNow().inWholeMilliseconds
                     surface.canvas.clear(Color.TRANSPARENT)

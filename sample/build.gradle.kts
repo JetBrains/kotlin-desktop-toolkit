@@ -27,12 +27,12 @@ val targetOs = when (buildOs()) {
 }
 
 val targetArch = when (buildArch()) {
-    Arch.aarch64 -> "arm64"
-    Arch.x86_64 -> "x64"
+    Arch.AARCH64 -> "arm64"
+    Arch.X86_64 -> "x64"
 }
 
 val skikoVersion = "0.8.18"
-val skikoTarget = "${targetOs}-${targetArch}"
+val skikoTarget = "$targetOs-$targetArch"
 dependencies {
     // Use the Kotlin JUnit 5 integration.
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
@@ -61,10 +61,12 @@ tasks.compileJava {
 
 application {
     mainClass = "org.jetbrains.desktop.sample.ApplicationSampleKt"
-    applicationDefaultJvmArgs = listOf("--enable-preview",
-                                       "-XstartOnFirstThread",
-                                       "--enable-native-access=ALL-UNNAMED",
-                                       "-Djextract.trace.downcalls=false")
+    applicationDefaultJvmArgs = listOf(
+        "--enable-preview",
+        "-XstartOnFirstThread",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+    )
 }
 
 val depScope = configurations.dependencyScope("native") {
@@ -83,12 +85,14 @@ val nativeLib = configurations.resolvable("nativeParts") {
 fun JavaExec.setUpLoggingAndLibraryPath() {
     val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample.log").map { it.asFile.absolutePath }
     val nativeLibPath = nativeLib.map { it.singleFile.absolutePath }
-    jvmArgumentProviders.add(CommandLineArgumentProvider {
-        listOf(
-            "-Dkdt.library.path=${nativeLibPath.get()}",
-            "-Dkdt.native.log.path=${logFilePath.get()}",
-        )
-    })
+    jvmArgumentProviders.add(
+        CommandLineArgumentProvider {
+            listOf(
+                "-Dkdt.library.path=${nativeLibPath.get()}",
+                "-Dkdt.native.log.path=${logFilePath.get()}",
+            )
+        },
+    )
 }
 
 tasks.named<JavaExec>("run") {
@@ -101,13 +105,15 @@ tasks.register<JavaExec>("runAppMenuAwtSample") {
     description = "Runs sample app based on AWT"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("org.jetbrains.desktop.sample.AppMenuAwtSampleKt")
-    javaLauncher.set(javaToolchains.launcherFor {
-        languageVersion.set(JavaLanguageVersion.of(21))
-    })
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        },
+    )
     jvmArgs = listOf(
         "--enable-preview",
         "--enable-native-access=ALL-UNNAMED",
-        "-Djextract.trace.downcalls=false"
+        "-Djextract.trace.downcalls=false",
     )
     setUpLoggingAndLibraryPath()
 }
@@ -117,17 +123,19 @@ tasks.register<JavaExec>("runSkikoSample") {
     description = "Runs example of integration with Skiko"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("org.jetbrains.desktop.sample.SkikoSampleKt")
-    javaLauncher.set(javaToolchains.launcherFor {
-        languageVersion.set(JavaLanguageVersion.of(21))
-    })
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        },
+    )
     jvmArgs = listOf(
         "--enable-preview",
         "-XstartOnFirstThread",
         "--enable-native-access=ALL-UNNAMED",
-        "-Djextract.trace.downcalls=false"
+        "-Djextract.trace.downcalls=false",
     )
     setUpLoggingAndLibraryPath()
-    
+
     environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
 }

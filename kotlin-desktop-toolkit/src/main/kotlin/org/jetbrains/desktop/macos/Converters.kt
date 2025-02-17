@@ -5,15 +5,17 @@ import org.jetbrains.desktop.LogicalSize
 import org.jetbrains.desktop.PhysicalSize
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
-import org.jetbrains.desktop.macos.generated.LogicalSize as NativeLogicalSize
-import org.jetbrains.desktop.macos.generated.LogicalPoint as NativeLogicalPoint
-import org.jetbrains.desktop.macos.generated.PhysicalSize as NativePhysicalSize
 import org.jetbrains.desktop.macos.generated.Color as NativeColor
-//import org.jetbrains.desktop.macos.generated.PhysicalPoint as NativePhysicalPoint
+import org.jetbrains.desktop.macos.generated.LogicalPoint as NativeLogicalPoint
+import org.jetbrains.desktop.macos.generated.LogicalSize as NativeLogicalSize
+import org.jetbrains.desktop.macos.generated.PhysicalSize as NativePhysicalSize
+// import org.jetbrains.desktop.macos.generated.PhysicalPoint as NativePhysicalPoint
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment): LogicalSize {
-    return LogicalSize(width = NativeLogicalSize.width(s),
-                       height = NativeLogicalSize.height(s))
+    return LogicalSize(
+        width = NativeLogicalSize.width(s),
+        height = NativeLogicalSize.height(s),
+    )
 }
 
 internal fun LogicalSize.toNative(arena: Arena): MemorySegment {
@@ -24,8 +26,10 @@ internal fun LogicalSize.toNative(arena: Arena): MemorySegment {
 }
 
 internal fun LogicalPoint.Companion.fromNative(s: MemorySegment): LogicalPoint {
-    return LogicalPoint(x = NativeLogicalPoint.x(s),
-                        y = NativeLogicalPoint.y(s))
+    return LogicalPoint(
+        x = NativeLogicalPoint.x(s),
+        y = NativeLogicalPoint.y(s),
+    )
 }
 
 internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
@@ -36,8 +40,10 @@ internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
 }
 
 internal fun PhysicalSize.Companion.fromNative(s: MemorySegment): PhysicalSize {
-    return PhysicalSize(width = NativePhysicalSize.width(s),
-                        height = NativePhysicalSize.height(s))
+    return PhysicalSize(
+        width = NativePhysicalSize.width(s),
+        height = NativePhysicalSize.height(s),
+    )
 }
 
 internal fun PhysicalSize.toNative(arena: Arena): MemorySegment {
@@ -47,11 +53,10 @@ internal fun PhysicalSize.toNative(arena: Arena): MemorySegment {
     return result
 }
 
-//internal fun PhysicalPoint.Companion.fromNative(s: MemorySegment): PhysicalPoint {
+// internal fun PhysicalPoint.Companion.fromNative(s: MemorySegment): PhysicalPoint {
 //    return PhysicalPoint(x = NativePhysicalPoint.x(s),
 //                 y = NativePhysicalPoint.y(s))
-//}
-
+// }
 
 internal fun Color.toNative(arena: Arena): MemorySegment {
     val result = NativeColor.allocate(arena)

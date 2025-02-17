@@ -2,9 +2,9 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.ExceptionsArray
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
-import org.jetbrains.desktop.macos.generated.LoggerConfiguration as NativeLoggerConfiguration
 import java.lang.foreign.Arena
 import java.nio.file.Path
+import org.jetbrains.desktop.macos.generated.LoggerConfiguration as NativeLoggerConfiguration
 
 enum class LogLevel {
     Off,
@@ -12,7 +12,8 @@ enum class LogLevel {
     Warn,
     Info,
     Debug,
-    Trace;
+    Trace,
+    ;
 
     fun isNoMoreVerbose(other: LogLevel): Boolean {
         return this.ordinal <= other.ordinal
@@ -50,11 +51,13 @@ interface AppenderInterface {
     fun error(t: Throwable, message: String)
 }
 
-class DefaultConsoleAppender(override val isTraceEnabled: Boolean,
-                             override val isDebugEnabled: Boolean,
-                             override val isInfoEnabled: Boolean,
-                             override val isWarnEnabled: Boolean,
-                             override val isErrorEnabled: Boolean): AppenderInterface {
+class DefaultConsoleAppender(
+    override val isTraceEnabled: Boolean,
+    override val isDebugEnabled: Boolean,
+    override val isInfoEnabled: Boolean,
+    override val isWarnEnabled: Boolean,
+    override val isErrorEnabled: Boolean,
+) : AppenderInterface {
 
     companion object {
         fun fromLevel(level: LogLevel = LogLevel.Info): DefaultConsoleAppender {
@@ -63,7 +66,7 @@ class DefaultConsoleAppender(override val isTraceEnabled: Boolean,
                 isDebugEnabled = LogLevel.Debug.isNoMoreVerbose(level),
                 isInfoEnabled = LogLevel.Info.isNoMoreVerbose(level),
                 isWarnEnabled = LogLevel.Warn.isNoMoreVerbose(level),
-                isErrorEnabled = LogLevel.Error.isNoMoreVerbose(level)
+                isErrorEnabled = LogLevel.Error.isNoMoreVerbose(level),
             )
         }
     }
@@ -147,13 +150,13 @@ object Logger {
         }
     }
 
-    inline fun trace(t: Throwable, msg: () ->  String = { "" }) {
+    inline fun trace(t: Throwable, msg: () -> String = { "" }) {
         if (appender.isTraceEnabled) {
             appender.trace(t, msg())
         }
     }
 
-    inline fun debug(t: Throwable, msg: () ->  String = { "" }) {
+    inline fun debug(t: Throwable, msg: () -> String = { "" }) {
         if (appender.isDebugEnabled) {
             appender.debug(t, msg())
         }
@@ -169,17 +172,14 @@ object Logger {
             appender.warn(t, msg())
         }
     }
-    inline fun error(t: Throwable, msg:() ->  String = { "" }) {
+    inline fun error(t: Throwable, msg: () -> String = { "" }) {
         if (appender.isErrorEnabled) {
             appender.error(t, msg())
         }
     }
 }
 
-internal fun initLogger(logFile: Path,
-               consoleLogLevel: LogLevel,
-               fileLogLevel: LogLevel,
-               appender: AppenderInterface) {
+internal fun initLogger(logFile: Path, consoleLogLevel: LogLevel, fileLogLevel: LogLevel, appender: AppenderInterface) {
     ffiDownCall {
         Logger.appender = appender
 
@@ -194,7 +194,7 @@ internal fun initLogger(logFile: Path,
     }
 }
 
-class NativeError(messages: List<String>): Error(messages.joinToString(prefix = "[\n", separator = ",\n", postfix = "]"))
+class NativeError(messages: List<String>) : Error(messages.joinToString(prefix = "[\n", separator = ",\n", postfix = "]"))
 
 private fun checkExceptions(): List<String> {
     return Arena.ofConfined().use { arena ->
@@ -230,7 +230,6 @@ inline fun ffiUpCall(crossinline body: () -> Unit) {
         Logger.error(e) { "Exception caught" }
     }
 }
-
 
 inline fun <T> ffiUpCall(default: T, crossinline body: () -> T): T {
     return try {

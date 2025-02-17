@@ -3,19 +3,19 @@ package org.jetbrains.desktop.macos
 import org.jetbrains.desktop.macos.generated.TextChangedOperation
 import org.jetbrains.desktop.macos.generated.TextCommandOperation
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
-import org.jetbrains.desktop.macos.generated.TextOperation as NativeTextOperation
 import java.lang.foreign.MemorySegment
+import org.jetbrains.desktop.macos.generated.TextOperation as NativeTextOperation
 
 sealed class TextOperation {
     data class TextChanged(
         val windowId: WindowId,
         val text: String,
-    ): TextOperation()
+    ) : TextOperation()
 
     data class TextCommand(
         val windowId: WindowId,
         val command: String,
-    ): TextOperation()
+    ) : TextOperation()
 
     fun windowId(): WindowId? {
         return when (this) {
