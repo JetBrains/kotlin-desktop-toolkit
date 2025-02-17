@@ -1,9 +1,7 @@
 /* This header is generated please don't edit it manually. */
 
-#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
 
 #define CapsLockModifier (1 << 16)
 

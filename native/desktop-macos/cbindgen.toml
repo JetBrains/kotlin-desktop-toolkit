@@ -1,5 +1,7 @@
 language = "C"
 header = "/* This header is generated please don't edit it manually. */"
+sys_includes = ["stdbool.h", "stdint.h"]
+no_includes = true
 
 [macro_expansion]
 # Whether bindings should be generated for instances of the bitflags! macro.
