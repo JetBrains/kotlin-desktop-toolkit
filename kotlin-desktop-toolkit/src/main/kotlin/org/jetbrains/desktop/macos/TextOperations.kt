@@ -1,7 +1,9 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.*
-import org.jetbrains.desktop.macos.generated.Event as NativeEvent
+import org.jetbrains.desktop.macos.generated.TextChangedOperation
+import org.jetbrains.desktop.macos.generated.TextCommandOperation
+import org.jetbrains.desktop.macos.generated.desktop_macos_h
+import org.jetbrains.desktop.macos.generated.TextOperation as NativeTextOperation
 import java.lang.foreign.MemorySegment
 
 sealed class TextOperation {
@@ -25,17 +27,17 @@ sealed class TextOperation {
 
     companion object {
         internal fun fromNative(s: MemorySegment): TextOperation {
-            return when (NativeEvent.tag(s)) {
+            return when (NativeTextOperation.tag(s)) {
                 desktop_macos_h.TextOperation_TextChanged() -> {
-                    val nativeEvent = NativeEvent.key_up(s)
-                    TextOperation.TextChanged(
+                    val nativeEvent = NativeTextOperation.text_changed(s)
+                    TextChanged(
                         windowId = TextChangedOperation.window_id(nativeEvent),
                         text = TextChangedOperation.text(nativeEvent).getUtf8String(0),
                     )
                 }
                 desktop_macos_h.TextOperation_TextCommand() -> {
-                    val nativeEvent = NativeEvent.key_up(s)
-                    TextOperation.TextCommand(
+                    val nativeEvent = NativeTextOperation.text_command(s)
+                    TextCommand(
                         windowId = TextCommandOperation.window_id(nativeEvent),
                         command = TextCommandOperation.command(nativeEvent).getUtf8String(0),
                     )
