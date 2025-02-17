@@ -291,7 +291,7 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                     characters: key_info.chars.into_raw(),
                     key: key_info.key.into_raw(),
                     modifiers: key_info.modifiers,
-                    timestamp: unsafe { ns_event.timestamp() }
+                    timestamp: unsafe { ns_event.timestamp() },
                 })
             }
             _ => bail!("Unexpected type of event {:?}", ns_event),

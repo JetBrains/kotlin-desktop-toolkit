@@ -11,17 +11,15 @@ pub(crate) trait NSMouseEventExt {
         let me = self.me();
 
         match unsafe { me.r#type() } {
-            NSEventType::LeftMouseDown |
-            NSEventType::RightMouseDown |
-            NSEventType::OtherMouseDown |
-
-            NSEventType::LeftMouseUp |
-            NSEventType::RightMouseUp |
-            NSEventType::OtherMouseUp |
-
-            NSEventType::LeftMouseDragged |
-            NSEventType::RightMouseDragged |
-            NSEventType::OtherMouseDragged => {
+            NSEventType::LeftMouseDown
+            | NSEventType::RightMouseDown
+            | NSEventType::OtherMouseDown
+            | NSEventType::LeftMouseUp
+            | NSEventType::RightMouseUp
+            | NSEventType::OtherMouseUp
+            | NSEventType::LeftMouseDragged
+            | NSEventType::RightMouseDragged
+            | NSEventType::OtherMouseDragged => {
                 let button_number = unsafe { me.buttonNumber() };
                 let button = button_number.try_into().map(|button| MouseButton(button)).ok();
                 if button.is_none() {
@@ -30,7 +28,7 @@ pub(crate) trait NSMouseEventExt {
                 button
             }
 
-            _ => None
+            _ => None,
         }
     }
 
@@ -65,7 +63,7 @@ pub mod mouse_buttons {
 pub struct MouseButtonsSet(u32);
 
 #[allow(non_upper_case_globals)]
-pub (crate) const EmptyMouseButtonsSet: MouseButtonsSet = MouseButtonsSet(0);
+pub(crate) const EmptyMouseButtonsSet: MouseButtonsSet = MouseButtonsSet(0);
 
 //#[derive(Debug)]
 //pub(crate) enum MouseEventType {

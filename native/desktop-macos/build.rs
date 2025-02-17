@@ -12,17 +12,19 @@ fn main() {
     println!("cargo:rustc-link-arg=-Wl,-install_name,./{dylib_name}");
 
     cbindgen::generate(crate_dir)
-//      .expect("Unable to generate bindings")
-//      .write_to_file("headers/desktop_macos.h");
-      .map_or_else(
-        |error| match error {
-            e@cbindgen::Error::ParseSyntaxError { .. } => { eprintln!("Parse error: {:?}", e) }
-            e => panic!("{:?}", e),
-        },
-        |bindings| {
-            bindings.write_to_file(format!("headers/{header_name}"));
-        },
-    );
+        //.expect("Unable to generate bindings")
+        //.write_to_file("headers/desktop_macos.h");
+        .map_or_else(
+            |error| match error {
+                e @ cbindgen::Error::ParseSyntaxError { .. } => {
+                    eprintln!("Parse error: {:?}", e)
+                }
+                e => panic!("{:?}", e),
+            },
+            |bindings| {
+                bindings.write_to_file(format!("headers/{header_name}"));
+            },
+        );
     unsafe {
         env::set_var("RUSTC_BOOTSTRAP", "0");
     }

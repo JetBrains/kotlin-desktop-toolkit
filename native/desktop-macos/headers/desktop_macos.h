@@ -340,6 +340,21 @@ typedef struct MetalView MetalView;
 
 typedef struct Window Window;
 
+typedef char *StrPtr;
+
+typedef int64_t ArraySize;
+
+typedef struct ExceptionsArray {
+  const StrPtr *items;
+  ArraySize count;
+} ExceptionsArray;
+
+typedef struct LoggerConfiguration {
+  StrPtr file_path;
+  enum LogLevel console_level;
+  enum LogLevel file_level;
+} LoggerConfiguration;
+
 typedef struct ApplicationConfig {
   bool disable_dictation_menu_item;
   bool disable_character_palette_menu_item;
@@ -348,8 +363,6 @@ typedef struct ApplicationConfig {
 typedef int64_t WindowId;
 
 typedef uint32_t KeyModifiersSet;
-
-typedef char *StrPtr;
 
 typedef double Timestamp;
 
@@ -588,77 +601,6 @@ typedef struct ApplicationCallbacks {
   TextOperationHandler text_operation_handler;
 } ApplicationCallbacks;
 
-typedef void *MetalDeviceRef;
-
-typedef void *MetalCommandQueueRef;
-
-typedef double PhysicalPixels;
-
-typedef struct PhysicalSize {
-  PhysicalPixels width;
-  PhysicalPixels height;
-} PhysicalSize;
-
-typedef void *MetalTextureRef;
-
-typedef void (*DisplayLinkCallback)(void);
-
-typedef struct WindowParams {
-  struct LogicalPoint origin;
-  struct LogicalSize size;
-  StrPtr title;
-  bool is_resizable;
-  bool is_closable;
-  bool is_miniaturizable;
-  bool is_full_screen_allowed;
-  bool use_custom_titlebar;
-  LogicalPixels titlebar_height;
-} WindowParams;
-
-typedef struct Color {
-  double red;
-  double green;
-  double blue;
-  double alpha;
-} Color;
-
-typedef enum WindowBackground_Tag {
-  WindowBackground_Transparent,
-  WindowBackground_SolidColor,
-  WindowBackground_VisualEffect,
-} WindowBackground_Tag;
-
-typedef struct WindowBackground {
-  WindowBackground_Tag tag;
-  union {
-    struct {
-      struct Color solid_color;
-    };
-    struct {
-      enum WindowVisualEffect visual_effect;
-    };
-  };
-} WindowBackground;
-
-typedef struct ScreenInfo {
-  ScreenId screen_id;
-  bool is_primary;
-  StrPtr name;
-  struct LogicalPoint origin;
-  struct LogicalSize size;
-  double scale;
-  uint32_t maximum_frames_per_second;
-} ScreenInfo;
-
-typedef int64_t ArraySize;
-
-typedef struct ScreenInfoArray {
-  struct ScreenInfo *ptr;
-  ArraySize len;
-} ScreenInfoArray;
-
-typedef uint32_t MouseButtonsSet;
-
 typedef struct AppMenuKeystroke {
   StrPtr key;
   KeyModifiersSet modifiers;
@@ -698,16 +640,74 @@ typedef struct AppMenuStructure {
   ArraySize items_count;
 } AppMenuStructure;
 
-typedef struct ExceptionsArray {
-  const StrPtr *items;
-  ArraySize count;
-} ExceptionsArray;
+typedef void (*DisplayLinkCallback)(void);
 
-typedef struct LoggerConfiguration {
-  StrPtr file_path;
-  enum LogLevel console_level;
-  enum LogLevel file_level;
-} LoggerConfiguration;
+typedef uint32_t MouseButtonsSet;
+
+typedef void *MetalDeviceRef;
+
+typedef void *MetalCommandQueueRef;
+
+typedef double PhysicalPixels;
+
+typedef struct PhysicalSize {
+  PhysicalPixels width;
+  PhysicalPixels height;
+} PhysicalSize;
+
+typedef void *MetalTextureRef;
+
+typedef struct ScreenInfo {
+  ScreenId screen_id;
+  bool is_primary;
+  StrPtr name;
+  struct LogicalPoint origin;
+  struct LogicalSize size;
+  double scale;
+  uint32_t maximum_frames_per_second;
+} ScreenInfo;
+
+typedef struct ScreenInfoArray {
+  struct ScreenInfo *ptr;
+  ArraySize len;
+} ScreenInfoArray;
+
+typedef struct WindowParams {
+  struct LogicalPoint origin;
+  struct LogicalSize size;
+  StrPtr title;
+  bool is_resizable;
+  bool is_closable;
+  bool is_miniaturizable;
+  bool is_full_screen_allowed;
+  bool use_custom_titlebar;
+  LogicalPixels titlebar_height;
+} WindowParams;
+
+typedef struct Color {
+  double red;
+  double green;
+  double blue;
+  double alpha;
+} Color;
+
+typedef enum WindowBackground_Tag {
+  WindowBackground_Transparent,
+  WindowBackground_SolidColor,
+  WindowBackground_VisualEffect,
+} WindowBackground_Tag;
+
+typedef struct WindowBackground {
+  WindowBackground_Tag tag;
+  union {
+    struct {
+      struct Color solid_color;
+    };
+    struct {
+      enum WindowVisualEffect visual_effect;
+    };
+  };
+} WindowBackground;
 
 #define LeftMouseButton 0
 
@@ -715,9 +715,11 @@ typedef struct LoggerConfiguration {
 
 #define MiddleMouseButton 2
 
-bool dispatcher_is_main_thread(void);
+struct ExceptionsArray logger_check_exceptions(void);
 
-void dispatcher_main_exec_async(void (*f)(void));
+void logger_clear_exceptions(void);
+
+void logger_init(const struct LoggerConfiguration *logger_configuration);
 
 void application_init(const struct ApplicationConfig *config,
                       struct ApplicationCallbacks callbacks);
@@ -729,6 +731,28 @@ void application_run_event_loop(void);
 void application_stop_event_loop(void);
 
 void application_request_termination(void);
+
+void main_menu_update(struct AppMenuStructure menu);
+
+void main_menu_set_none(void);
+
+bool dispatcher_is_main_thread(void);
+
+void dispatcher_main_exec_async(void (*f)(void));
+
+struct DisplayLinkBox *display_link_create(ScreenId screen_id, DisplayLinkCallback on_next_frame);
+
+void display_link_drop(struct DisplayLinkBox *display_link);
+
+void display_link_set_running(struct DisplayLinkBox *display_link, bool value);
+
+bool display_link_is_running(struct DisplayLinkBox *display_link);
+
+MouseButtonsSet events_pressed_mouse_buttons(void);
+
+KeyModifiersSet events_pressed_modifiers(void);
+
+struct LogicalPoint events_cursor_location_in_screen(void);
 
 MetalDeviceRef metal_create_device(void);
 
@@ -756,13 +780,13 @@ MetalTextureRef metal_view_next_texture(const struct MetalView *view);
 
 void metal_deref_texture(MetalTextureRef texture);
 
-struct DisplayLinkBox *display_link_create(ScreenId screen_id, DisplayLinkCallback on_next_frame);
+struct ScreenInfoArray screen_list(void);
 
-void display_link_drop(struct DisplayLinkBox *display_link);
+void screen_list_drop(struct ScreenInfoArray arr);
 
-void display_link_set_running(struct DisplayLinkBox *display_link, bool value);
+ScreenId screen_get_main_screen_id(void);
 
-bool display_link_is_running(struct DisplayLinkBox *display_link);
+void string_drop(StrPtr str_ptr);
 
 struct Window *window_create(const struct WindowParams *params);
 
@@ -819,27 +843,3 @@ void window_start_drag(const struct Window *window);
 void window_invalidate_shadow(const struct Window *window);
 
 void window_set_background(const struct Window *window, struct WindowBackground background);
-
-struct ScreenInfoArray screen_list(void);
-
-void screen_list_drop(struct ScreenInfoArray arr);
-
-ScreenId screen_get_main_screen_id(void);
-
-MouseButtonsSet events_pressed_mouse_buttons(void);
-
-KeyModifiersSet events_pressed_modifiers(void);
-
-struct LogicalPoint events_cursor_location_in_screen(void);
-
-void main_menu_update(struct AppMenuStructure menu);
-
-void main_menu_set_none(void);
-
-void string_drop(StrPtr str_ptr);
-
-struct ExceptionsArray logger_check_exceptions(void);
-
-void logger_clear_exceptions(void);
-
-void logger_init(const struct LoggerConfiguration *logger_configuration);

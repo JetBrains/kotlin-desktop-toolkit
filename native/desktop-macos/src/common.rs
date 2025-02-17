@@ -1,4 +1,9 @@
-use std::{ffi::{c_void, CStr}, marker::PhantomData, rc::Rc, sync::Arc};
+use std::{
+    ffi::{c_void, CStr},
+    marker::PhantomData,
+    rc::Rc,
+    sync::Arc,
+};
 
 pub(crate) type StrPtr = *mut std::ffi::c_char;
 pub(crate) type ConstStrPtr = *const std::ffi::c_char;
@@ -18,43 +23,40 @@ pub type LogicalPixels = f64;
 #[derive(Debug, Clone, Copy)]
 pub struct PhysicalSize {
     pub width: PhysicalPixels,
-    pub height: PhysicalPixels
+    pub height: PhysicalPixels,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct PhysicalPoint {
     pub x: PhysicalPixels,
-    pub y: PhysicalPixels
+    pub y: PhysicalPixels,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct LogicalSize {
     pub width: LogicalPixels,
-    pub height: LogicalPixels
+    pub height: LogicalPixels,
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct LogicalPoint {
     pub x: LogicalPixels,
-    pub y: LogicalPixels
+    pub y: LogicalPixels,
 }
 
 #[derive(Debug)]
 pub(crate) struct LogicalRect {
     // the point closest to coordinates origin
     pub(crate) origin: LogicalPoint,
-    pub(crate) size: LogicalSize
+    pub(crate) size: LogicalSize,
 }
 
 impl LogicalRect {
     pub(crate) fn new(origin: LogicalPoint, size: LogicalSize) -> Self {
-        return LogicalRect {
-            origin,
-            size,
-        }
+        return LogicalRect { origin, size };
     }
 }
 
@@ -64,7 +66,7 @@ pub struct Color {
     pub red: f64,
     pub green: f64,
     pub blue: f64,
-    pub alpha: f64
+    pub alpha: f64,
 }
 
 #[macro_export]
@@ -74,16 +76,16 @@ macro_rules! define_objc_ref {
         impl $name {
             pub(crate) fn new(obj: Retained<$otype>) -> Self {
                 return Self {
-                    ptr: Retained::into_raw(obj) as *mut c_void
-                }
+                    ptr: Retained::into_raw(obj) as *mut c_void,
+                };
             }
 
             pub(crate) unsafe fn retain(&self) -> Retained<$otype> {
-                return Retained::retain(self.ptr as *mut $otype).unwrap()
+                return Retained::retain(self.ptr as *mut $otype).unwrap();
             }
 
             pub(crate) unsafe fn consume(self) -> Retained<$otype> {
-                return Retained::from_raw(self.ptr as *mut $otype).unwrap()
+                return Retained::from_raw(self.ptr as *mut $otype).unwrap();
             }
         }
     };

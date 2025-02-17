@@ -35,13 +35,13 @@ use crate::{
         application_api::AppState,
         custom_titlebar::CustomTitlebar,
         events::{
-            handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter,
-            handle_mouse_exit, handle_mouse_move, handle_mouse_up, handle_scroll_wheel,
-            handle_window_close_request, handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move,
-            handle_window_resize, handle_window_screen_change,
+            handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
+            handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_close_request, handle_window_focus_change,
+            handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change,
         },
         keyboard::unpack_key_event,
-        string::copy_to_ns_string, text_operations::{handle_text_changed_operation, handle_text_command_operation},
+        string::copy_to_ns_string,
+        text_operations::{handle_text_changed_operation, handle_text_command_operation},
     },
 };
 
@@ -111,7 +111,7 @@ pub(crate) trait NSWindowExts {
         let window_frame = ns_window.frame();
         let content_frame = ns_window.contentRectForFrameRect(window_frame);
         let screen_height = NSScreen::primary(mtm)?.height();
-        return Ok(LogicalRect::from_macos_coords(content_frame, screen_height))
+        return Ok(LogicalRect::from_macos_coords(content_frame, screen_height));
     }
 
     fn set_rect(&self, rect: &LogicalRect, animate: bool, mtm: MainThreadMarker) -> anyhow::Result<()> {
@@ -474,7 +474,7 @@ impl MyNSWindow {
 }
 
 pub(crate) struct RootViewIvars {
-    tracking_area: Cell<Option<Retained<NSTrackingArea>>>
+    tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
 }
 
 define_class!(
@@ -814,7 +814,7 @@ impl RootView {
     pub(crate) fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars {
-            tracking_area: Cell::new(None)
+            tracking_area: Cell::new(None),
         });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {
@@ -827,22 +827,13 @@ impl RootView {
 
     fn update_tracking_area(&self, mtm: MainThreadMarker) {
         let rect = self.bounds();
-        let options =
-            NSTrackingAreaOptions::MouseEnteredAndExited |
-            NSTrackingAreaOptions::ActiveInKeyWindow |
-            NSTrackingAreaOptions::EnabledDuringMouseDrag |
-            NSTrackingAreaOptions::CursorUpdate |
-            NSTrackingAreaOptions::InVisibleRect |
-            NSTrackingAreaOptions::AssumeInside;
-        let tracking_area = unsafe {
-            NSTrackingArea::initWithRect_options_owner_userInfo(
-                mtm.alloc(),
-                rect,
-                options,
-                Some(self),
-                None
-            )
-        };
+        let options = NSTrackingAreaOptions::MouseEnteredAndExited
+            | NSTrackingAreaOptions::ActiveInKeyWindow
+            | NSTrackingAreaOptions::EnabledDuringMouseDrag
+            | NSTrackingAreaOptions::CursorUpdate
+            | NSTrackingAreaOptions::InVisibleRect
+            | NSTrackingAreaOptions::AssumeInside;
+        let tracking_area = unsafe { NSTrackingArea::initWithRect_options_owner_userInfo(mtm.alloc(), rect, options, Some(self), None) };
         if let Some(old_tracking_area) = self.ivars().tracking_area.replace(None) {
             unsafe {
                 self.removeTrackingArea(&old_tracking_area);

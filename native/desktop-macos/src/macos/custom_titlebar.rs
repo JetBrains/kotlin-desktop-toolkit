@@ -7,12 +7,11 @@ use objc2_foundation::NSArray;
 
 use crate::common::LogicalPixels;
 
-
 pub(crate) type CustomTitlebarCell = Rc<RefCell<CustomTitlebar>>;
 
 pub(crate) struct CustomTitlebar {
     constraints: Option<Retained<NSArray<NSLayoutConstraint>>>,
-    height: LogicalPixels
+    height: LogicalPixels,
 }
 
 struct TitlebarViews {
@@ -21,7 +20,7 @@ struct TitlebarViews {
     zoom_button: Retained<NSButton>,
     titlebar: Retained<NSView>,
     titlebar_container: Retained<NSView>,
-    theme_frame: Retained<NSView>
+    theme_frame: Retained<NSView>,
 }
 
 impl TitlebarViews {
@@ -42,9 +41,15 @@ impl TitlebarViews {
         // But the order and presence of decorations and effects has been unstable across different macOS versions,
         // even patch upgrades, which is why the code below uses scans instead of indexed access
         //
-        let close_button = ns_window.standardWindowButton(NSWindowButton::CloseButton).context("No Close Button")?;
-        let miniaturize_button = ns_window.standardWindowButton(NSWindowButton::MiniaturizeButton).context("No Miniaturize Button")?;
-        let zoom_button = ns_window.standardWindowButton(NSWindowButton::ZoomButton).context("No Zoom Button")?;
+        let close_button = ns_window
+            .standardWindowButton(NSWindowButton::CloseButton)
+            .context("No Close Button")?;
+        let miniaturize_button = ns_window
+            .standardWindowButton(NSWindowButton::MiniaturizeButton)
+            .context("No Miniaturize Button")?;
+        let zoom_button = ns_window
+            .standardWindowButton(NSWindowButton::ZoomButton)
+            .context("No Zoom Button")?;
 
         let titlebar = close_button.superview().context("No titlebar view")?;
         let titlebar_container = titlebar.superview().context("No titlebar container")?;
@@ -56,7 +61,7 @@ impl TitlebarViews {
             titlebar,
             titlebar_container,
             theme_frame,
-        })
+        });
     }
 
     #[allow(non_snake_case)]
@@ -83,9 +88,21 @@ impl TitlebarViews {
     unsafe fn build_constraints(&self, titlebar_height: LogicalPixels) -> Retained<NSArray<NSLayoutConstraint>> {
         let mut constraints_array = Vec::new();
 
-        constraints_array.push(self.titlebar_container.leftAnchor().constraintEqualToAnchor(&self.theme_frame.leftAnchor()));
-        constraints_array.push(self.titlebar_container.widthAnchor().constraintEqualToAnchor(&self.theme_frame.widthAnchor()));
-        constraints_array.push(self.titlebar_container.topAnchor().constraintEqualToAnchor(&self.theme_frame.topAnchor()));
+        constraints_array.push(
+            self.titlebar_container
+                .leftAnchor()
+                .constraintEqualToAnchor(&self.theme_frame.leftAnchor()),
+        );
+        constraints_array.push(
+            self.titlebar_container
+                .widthAnchor()
+                .constraintEqualToAnchor(&self.theme_frame.widthAnchor()),
+        );
+        constraints_array.push(
+            self.titlebar_container
+                .topAnchor()
+                .constraintEqualToAnchor(&self.theme_frame.topAnchor()),
+        );
         let height_constraint = self.titlebar_container.heightAnchor().constraintEqualToConstant(titlebar_height);
         constraints_array.push(height_constraint);
 
@@ -101,17 +118,27 @@ impl TitlebarViews {
         for (index, button) in [&self.close_button, &self.miniaturize_button, &self.zoom_button].iter().enumerate() {
             let button_center_horizontal_shift = titlebar_height / 2f64 + (index as f64 * horizontal_button_offset);
 
-
-            constraints_array.push(button.widthAnchor().constraintLessThanOrEqualToAnchor_multiplier(&self.titlebar_container.heightAnchor(), 0.5));
+            constraints_array.push(
+                button
+                    .widthAnchor()
+                    .constraintLessThanOrEqualToAnchor_multiplier(&self.titlebar_container.heightAnchor(), 0.5),
+            );
             // Those corrections are required to keep the icons perfectly round because macOS adds a constant 2 px in resulting height to their frame
-            constraints_array.push(button.heightAnchor()
-                                         .constraintEqualToAnchor_multiplier_constant(&button.widthAnchor(), 14.0/12.0, -2.0));
-            constraints_array.push(button.centerXAnchor()
-                                         .constraintEqualToAnchor_constant(&self.titlebar_container.leftAnchor(),
-                                                                           button_center_horizontal_shift));
-            constraints_array.push(button.centerYAnchor()
-                                         .constraintEqualToAnchor(&self.titlebar_container.centerYAnchor()));
-
+            constraints_array.push(button.heightAnchor().constraintEqualToAnchor_multiplier_constant(
+                &button.widthAnchor(),
+                14.0 / 12.0,
+                -2.0,
+            ));
+            constraints_array.push(
+                button
+                    .centerXAnchor()
+                    .constraintEqualToAnchor_constant(&self.titlebar_container.leftAnchor(), button_center_horizontal_shift),
+            );
+            constraints_array.push(
+                button
+                    .centerYAnchor()
+                    .constraintEqualToAnchor(&self.titlebar_container.centerYAnchor()),
+            );
         }
 
         return NSArray::from_retained_slice(&constraints_array);
@@ -122,8 +149,8 @@ impl CustomTitlebar {
     pub(crate) unsafe fn init_custom_titlebar(titlebar_height: LogicalPixels) -> anyhow::Result<CustomTitlebar> {
         return Ok(CustomTitlebar {
             constraints: None,
-            height: titlebar_height
-        })
+            height: titlebar_height,
+        });
     }
 
     pub(crate) unsafe fn activate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {

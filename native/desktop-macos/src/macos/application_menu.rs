@@ -4,12 +4,19 @@ use std::{ffi::CStr, slice::from_raw_parts};
 use anyhow::{anyhow, Result};
 
 use objc2::{
-    declare_class, define_class, msg_send, rc::{autoreleasepool, Retained}, runtime::AnyObject, sel, ClassType, DeclaredClass, MainThreadOnly
+    declare_class, define_class, msg_send,
+    rc::{autoreleasepool, Retained},
+    runtime::AnyObject,
+    sel, ClassType, DeclaredClass, MainThreadOnly,
 };
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSMenu, NSMenuItem};
-use objc2_foundation::{MainThreadMarker, NSObject, NSString, NSObjectProtocol};
+use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSString};
 
-use super::{application_api::MyNSApplication, application_menu_api::{AppMenuItem, AppMenuStructure}, keyboard::KeyModifiersSet};
+use super::{
+    application_api::MyNSApplication,
+    application_menu_api::{AppMenuItem, AppMenuStructure},
+    keyboard::KeyModifiersSet,
+};
 
 pub fn main_menu_update_impl(menu: AppMenuStructure) {
     let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
@@ -44,7 +51,7 @@ enum AppMenuItemSafe<'a> {
         macos_provided: bool,
         title: &'a str,
         keystroke: Option<AppMenuKeystrokeSafe<'a>>,
-        perform: Callback
+        perform: Callback,
     },
     Separator,
     SubMenu {
@@ -82,7 +89,7 @@ impl<'a> AppMenuItemSafe<'a> {
                 title,
                 macos_provided,
                 keystroke,
-                perform
+                perform,
             } => {
                 let keystroke = if !keystroke.is_null() {
                     let keystroke = unsafe { &*keystroke };
@@ -98,9 +105,9 @@ impl<'a> AppMenuItemSafe<'a> {
                     macos_provided: macos_provided,
                     title: unsafe { CStr::from_ptr(title) }.to_str()?,
                     keystroke,
-                    perform
+                    perform,
                 }
-            },
+            }
             AppMenuItem::SeparatorItem => AppMenuItemSafe::Separator,
             sub_menu @ &AppMenuItem::SubMenuItem {
                 title,
@@ -131,7 +138,15 @@ impl<'a> AppMenuItemSafe<'a> {
         Ok(safe_item)
     }
 
-    fn reconcile_action(item: &NSMenuItem, enabled: bool, macos_provided: bool, title: &str, keystroke: &Option<AppMenuKeystrokeSafe<'a>>, perform: Callback, mtm: MainThreadMarker) {
+    fn reconcile_action(
+        item: &NSMenuItem,
+        enabled: bool,
+        macos_provided: bool,
+        title: &str,
+        keystroke: &Option<AppMenuKeystrokeSafe<'a>>,
+        perform: Callback,
+        mtm: MainThreadMarker,
+    ) {
         unsafe {
             item.setTitle(&NSString::from_str(title));
             item.setEnabled(enabled);
@@ -153,7 +168,6 @@ impl<'a> AppMenuItemSafe<'a> {
             }
         }
     }
-
 
     fn reconcile_ns_submenu(mtm: MainThreadMarker, item: &NSMenuItem, title: &str, special_tag: Option<&str>, items: &[Self]) {
         let ns_title = NSString::from_str(title);
@@ -178,7 +192,7 @@ impl<'a> AppMenuItemSafe<'a> {
                 title,
                 macos_provided,
                 ref keystroke,
-                perform
+                perform,
             } => {
                 AppMenuItemSafe::reconcile_action(item, enabled, macos_provided, title, keystroke, perform, mtm);
             }
@@ -198,7 +212,7 @@ impl<'a> AppMenuItemSafe<'a> {
                 title,
                 macos_provided,
                 ref keystroke,
-                perform
+                perform,
             } => {
                 if !macos_provided {
                     let item = NSMenuItem::new(mtm);
@@ -216,7 +230,7 @@ impl<'a> AppMenuItemSafe<'a> {
                     item.setRepresentedObject(Some(&representer))
                 };
                 Some(item)
-            },
+            }
             AppMenuItemSafe::SubMenu { title, special_tag, items } => {
                 let item = NSMenuItem::new(mtm);
                 let representer = MenuItemRepresenter::new(None, mtm);
@@ -253,7 +267,7 @@ impl<'a> AppMenuItemSafe<'a> {
 
 #[derive(Debug)]
 struct MenuItemRepresenterIvars {
-    callback: Option<Callback>
+    callback: Option<Callback>,
 }
 
 define_class!(
@@ -288,7 +302,7 @@ enum ItemIdentity<'a> {
     Action { title: &'a str },
     Separator,
     SubMenu { title: &'a str },
-    MacOSProvided
+    MacOSProvided,
 }
 
 impl<'a> ItemIdentity<'a> {
@@ -312,16 +326,23 @@ fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: 
             .iter()
             .zip(menu_titles.iter())
             .map(|(item, title)| {
-                unsafe { item.representedObject() }.map(|it| it.downcast::<MenuItemRepresenter>()).map(|_rep_obj| {
-                    let item_id = if unsafe { item.isSeparatorItem() } {
-                        ItemIdentity::Separator
-                    } else if unsafe { item.hasSubmenu() } {
-                        ItemIdentity::SubMenu { title: unsafe { title.to_str(pool) } }
-                    } else {
-                        ItemIdentity::Action { title: unsafe { title.to_str(pool) } }
-                    };
-                    item_id
-                }).unwrap_or(ItemIdentity::MacOSProvided)
+                unsafe { item.representedObject() }
+                    .map(|it| it.downcast::<MenuItemRepresenter>())
+                    .map(|_rep_obj| {
+                        let item_id = if unsafe { item.isSeparatorItem() } {
+                            ItemIdentity::Separator
+                        } else if unsafe { item.hasSubmenu() } {
+                            ItemIdentity::SubMenu {
+                                title: unsafe { title.to_str(pool) },
+                            }
+                        } else {
+                            ItemIdentity::Action {
+                                title: unsafe { title.to_str(pool) },
+                            }
+                        };
+                        item_id
+                    })
+                    .unwrap_or(ItemIdentity::MacOSProvided)
             })
             .collect();
 
@@ -330,14 +351,10 @@ fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: 
         let first_item = old_item_ids.iter().position(|it| *it != ItemIdentity::MacOSProvided);
         let last_item = old_item_ids.iter().rposition(|it| *it != ItemIdentity::MacOSProvided);
         let (old_item_ids, base_position) = match (first_item, last_item) {
-            (Some(first_item), Some(last_item)) => {
-                (&old_item_ids[first_item..=last_item], first_item)
-            },
+            (Some(first_item), Some(last_item)) => (&old_item_ids[first_item..=last_item], first_item),
             // All items in menu are macOS provided
             // Our items will be placed before them
-            _ => {
-                ([].as_slice(), 0)
-            }
+            _ => ([].as_slice(), 0),
         };
 
         let operations = edit_operations(&old_item_ids, &new_item_ids);

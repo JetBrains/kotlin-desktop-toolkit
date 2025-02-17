@@ -1,12 +1,13 @@
-use std::{
-    ffi::c_void,
-    ptr::addr_of
-};
+use std::{ffi::c_void, ptr::addr_of};
 
 use super::screen::ScreenId;
 use crate::logger::{ffi_boundary, PanicDefault};
 use anyhow::Result;
-use dispatch_sys::{_dispatch_main_q, _dispatch_source_type_data_add, dispatch_object_t, dispatch_queue_t, dispatch_resume, dispatch_set_context, dispatch_source_cancel, dispatch_source_create, dispatch_source_merge_data, dispatch_source_set_event_handler_f, dispatch_source_t, dispatch_suspend};
+use dispatch_sys::{
+    _dispatch_main_q, _dispatch_source_type_data_add, dispatch_object_t, dispatch_queue_t, dispatch_resume, dispatch_set_context,
+    dispatch_source_cancel, dispatch_source_create, dispatch_source_merge_data, dispatch_source_set_event_handler_f, dispatch_source_t,
+    dispatch_suspend,
+};
 use display_link_sys::CGDirectDisplayID;
 use objc2_foundation::MainThreadMarker;
 
@@ -14,7 +15,7 @@ pub type DisplayLinkCallback = extern "C" fn();
 
 #[allow(dead_code)]
 struct DisplayLinkBox {
-    display_link: DisplayLink, // we need it for drop 
+    display_link: DisplayLink, // we need it for drop
 }
 
 impl PanicDefault for *mut DisplayLinkBox {
@@ -44,7 +45,6 @@ extern "C" fn display_link_drop(display_link: *mut DisplayLinkBox) {
     });
 }
 
-
 #[no_mangle]
 extern "C" fn display_link_set_running(display_link: &mut DisplayLinkBox, value: bool) {
     ffi_boundary("display_link_set_running", || {
@@ -67,9 +67,7 @@ impl PanicDefault for bool {
 
 #[no_mangle]
 extern "C" fn display_link_is_running(display_link: &mut DisplayLinkBox) -> bool {
-    ffi_boundary("display_link_is_running", || {
-        Ok(display_link.display_link.is_running())
-    })
+    ffi_boundary("display_link_is_running", || Ok(display_link.display_link.is_running()))
 }
 
 // derived from https://github.com/zed-industries/zed/blob/7425d242bc91d054df3c05f2b88307cfb3e9132f/crates/gpui/src/platform/mac/display_link.rs#L25
@@ -104,9 +102,7 @@ impl DisplayLink {
             dispatch_set_context(dispatch_object_t { _ds: frame_requests }, callback as *mut c_void);
             dispatch_source_set_event_handler_f(frame_requests, Some(callback_impl));
 
-            dispatch_resume(dispatch_sys::dispatch_object_t {
-                _ds: frame_requests,
-            });
+            dispatch_resume(dispatch_sys::dispatch_object_t { _ds: frame_requests });
 
             let display_link = display_link_sys::DisplayLink::new(display_id, display_link_callback, frame_requests as *mut c_void)?;
 
@@ -143,9 +139,7 @@ impl Drop for DisplayLink {
         }
 
         unsafe {
-            dispatch_suspend(dispatch_sys::dispatch_object_t {
-                _ds: self.frame_requests,
-            });
+            dispatch_suspend(dispatch_sys::dispatch_object_t { _ds: self.frame_requests });
         }
 
         unsafe {

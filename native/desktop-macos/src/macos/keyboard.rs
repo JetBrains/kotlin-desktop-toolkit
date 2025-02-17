@@ -32,7 +32,7 @@ pub(crate) struct KeyEventInfo {
     // For dead keys it will produce text from deafult layer
     pub(crate) key: CString,
 
-    pub(crate) modifiers: KeyModifiersSet
+    pub(crate) modifiers: KeyModifiersSet,
 }
 
 pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInfo> {
@@ -40,20 +40,17 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
         let is_press = match unsafe { ns_event.r#type() } {
             NSEventType::KeyDown => true,
             NSEventType::KeyUp => false,
-            _ => bail!("Unexpected type of event {:?}", ns_event)
+            _ => bail!("Unexpected type of event {:?}", ns_event),
         };
 
         let is_repeat = unsafe { ns_event.isARepeat() };
         let code = unsafe { ns_event.keyCode() };
-        let code = KeyCode::from_u16(code).with_context(|| { format!("Event with unexpected key code: {ns_event:?}") })?;
+        let code = KeyCode::from_u16(code).with_context(|| format!("Event with unexpected key code: {ns_event:?}"))?;
 
-        let chars = unsafe { ns_event.characters() }.with_context(|| {
-            format!("No characters field in {ns_event:?}")
-        })?;
+        let chars = unsafe { ns_event.characters() }.with_context(|| format!("No characters field in {ns_event:?}"))?;
 
-        let key = unsafe {
-            ns_event.charactersByApplyingModifiers(NSEventModifierFlags::empty())
-        }.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
+        let key = unsafe { ns_event.charactersByApplyingModifiers(NSEventModifierFlags::empty()) }
+            .with_context(|| format!("Event contains invalid data: {ns_event:?}"))?;
 
         // though we apply the same modifiers, it's not the same as characters
         // there are number of differences:
@@ -61,9 +58,9 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
         // * for for keys like F1..F12 characters will contain codepoints from private use area defined in `KeyCodePoints`,
         // but this function will try to return some meaniingful code points
         // * for all F1..F16 keys this function will return the same codepoint: \u{10} for F17 it will be empty line
-//        let _with_modifiers = unsafe {
-//            ns_event.charactersByApplyingModifiers(ns_event.modifierFlags())
-//        }.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
+        //let _with_modifiers = unsafe {
+        //    ns_event.charactersByApplyingModifiers(ns_event.modifierFlags())
+        //}.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
 
         let chars = CString::new(unsafe { chars.to_str(pool) }).unwrap_or_default(/* to handle e.g. Ctrl+Space */);
         let key = CString::new(unsafe { key.to_str(pool) }).with_context(|| format!("{key:?}"))?;
@@ -77,7 +74,7 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
             code,
             chars,
             key,
-            modifiers
+            modifiers,
         };
         Ok(key_info)
     })
@@ -86,7 +83,7 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
 #[derive(Debug)]
 pub(crate) struct FlagsChangedInfo {
     pub(crate) modifiers: KeyModifiersSet,
-    pub(crate) code: KeyCode
+    pub(crate) code: KeyCode,
 }
 
 pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<FlagsChangedInfo> {
@@ -95,12 +92,9 @@ pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<F
     }
     let modifiers = unsafe { ns_event.modifierFlags() }.into();
     let code = unsafe { ns_event.keyCode() };
-    let code = KeyCode::from_u16(code).with_context(|| { format!("Event with unexpected key code: {ns_event:?}") })?;
+    let code = KeyCode::from_u16(code).with_context(|| format!("Event with unexpected key code: {ns_event:?}"))?;
 
-    Ok(FlagsChangedInfo {
-        modifiers,
-        code,
-    })
+    Ok(FlagsChangedInfo { modifiers, code })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -108,7 +102,7 @@ pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<F
 pub struct KeyModifiersSet(u32);
 
 #[allow(non_upper_case_globals)]
-pub (crate) const EmptyKeyModifiers: KeyModifiersSet = KeyModifiersSet(0);
+pub(crate) const EmptyKeyModifiers: KeyModifiersSet = KeyModifiersSet(0);
 
 #[allow(dead_code)]
 #[allow(non_upper_case_globals)]
@@ -117,14 +111,14 @@ pub mod key_modifiers {
 
     // This valuse are basically `NSEventModifierFlags` constants
     // we copyied it here because it need to be real comp time constant
-    pub const CapsLockModifier: u32 = 1<<16;
-    pub const ShiftModifier: u32 = 1<<17;
-    pub const ControlModifier: u32 = 1<<18;
-    pub const OptionModifier: u32 = 1<<19;
-    pub const CommandModifier: u32 = 1<<20;
-    pub const NumericPadModifier: u32 = 1<<21;
-    pub const HelpModifier: u32 = 1<<22;
-    pub const FunctionModifier: u32 = 1<<23;
+    pub const CapsLockModifier: u32 = 1 << 16;
+    pub const ShiftModifier: u32 = 1 << 17;
+    pub const ControlModifier: u32 = 1 << 18;
+    pub const OptionModifier: u32 = 1 << 19;
+    pub const CommandModifier: u32 = 1 << 20;
+    pub const NumericPadModifier: u32 = 1 << 21;
+    pub const HelpModifier: u32 = 1 << 22;
+    pub const FunctionModifier: u32 = 1 << 23;
 }
 
 impl From<NSEventModifierFlags> for KeyModifiersSet {
@@ -142,16 +136,16 @@ impl From<&KeyModifiersSet> for NSEventModifierFlags {
 #[allow(dead_code)]
 #[allow(non_upper_case_globals)]
 pub mod codepoint_constants {
-    pub const EnterCharacter: u32                = 0x0003;
-    pub const BackspaceCharacter: u32            = 0x0008;
-    pub const TabCharacter: u32                  = 0x0009;
-    pub const NewlineCharacter: u32              = 0x000a;
-    pub const FormFeedCharacter: u32             = 0x000c;
-    pub const CarriageReturnCharacter: u32       = 0x000d;
-    pub const BackTabCharacter: u32              = 0x0019;
-    pub const DeleteCharacter: u32               = 0x007f;
-    pub const LineSeparatorCharacter: u32        = 0x2028;
-    pub const ParagraphSeparatorCharacter: u32   = 0x2029;
+    pub const EnterCharacter: u32 = 0x0003;
+    pub const BackspaceCharacter: u32 = 0x0008;
+    pub const TabCharacter: u32 = 0x0009;
+    pub const NewlineCharacter: u32 = 0x000a;
+    pub const FormFeedCharacter: u32 = 0x000c;
+    pub const CarriageReturnCharacter: u32 = 0x000d;
+    pub const BackTabCharacter: u32 = 0x0019;
+    pub const DeleteCharacter: u32 = 0x007f;
+    pub const LineSeparatorCharacter: u32 = 0x2028;
+    pub const ParagraphSeparatorCharacter: u32 = 0x2029;
 
     pub const UpArrowFunctionKey: u32 = 0xF700;
     pub const DownArrowFunctionKey: u32 = 0xF701;
@@ -246,129 +240,129 @@ pub mod codepoint_constants {
 #[repr(C)]
 #[allow(non_camel_case_types)]
 pub enum KeyCode {
-    VK_ANSI_A                    = 0x00,
-    VK_ANSI_S                    = 0x01,
-    VK_ANSI_D                    = 0x02,
-    VK_ANSI_F                    = 0x03,
-    VK_ANSI_H                    = 0x04,
-    VK_ANSI_G                    = 0x05,
-    VK_ANSI_Z                    = 0x06,
-    VK_ANSI_X                    = 0x07,
-    VK_ANSI_C                    = 0x08,
-    VK_ANSI_V                    = 0x09,
-    VK_ANSI_B                    = 0x0B,
-    VK_ANSI_Q                    = 0x0C,
-    VK_ANSI_W                    = 0x0D,
-    VK_ANSI_E                    = 0x0E,
-    VK_ANSI_R                    = 0x0F,
-    VK_ANSI_Y                    = 0x10,
-    VK_ANSI_T                    = 0x11,
-    VK_ANSI_1                    = 0x12,
-    VK_ANSI_2                    = 0x13,
-    VK_ANSI_3                    = 0x14,
-    VK_ANSI_4                    = 0x15,
-    VK_ANSI_6                    = 0x16,
-    VK_ANSI_5                    = 0x17,
-    VK_ANSI_Equal                = 0x18,
-    VK_ANSI_9                    = 0x19,
-    VK_ANSI_7                    = 0x1A,
-    VK_ANSI_Minus                = 0x1B,
-    VK_ANSI_8                    = 0x1C,
-    VK_ANSI_0                    = 0x1D,
-    VK_ANSI_RightBracket         = 0x1E,
-    VK_ANSI_O                    = 0x1F,
-    VK_ANSI_U                    = 0x20,
-    VK_ANSI_LeftBracket          = 0x21,
-    VK_ANSI_I                    = 0x22,
-    VK_ANSI_P                    = 0x23,
-    VK_ANSI_L                    = 0x25,
-    VK_ANSI_J                    = 0x26,
-    VK_ANSI_Quote                = 0x27,
-    VK_ANSI_K                    = 0x28,
-    VK_ANSI_Semicolon            = 0x29,
-    VK_ANSI_Backslash            = 0x2A,
-    VK_ANSI_Comma                = 0x2B,
-    VK_ANSI_Slash                = 0x2C,
-    VK_ANSI_N                    = 0x2D,
-    VK_ANSI_M                    = 0x2E,
-    VK_ANSI_Period               = 0x2F,
-    VK_ANSI_Grave                = 0x32,
-    VK_ANSI_KeypadDecimal        = 0x41,
-    VK_ANSI_KeypadMultiply       = 0x43,
-    VK_ANSI_KeypadPlus           = 0x45,
-    VK_ANSI_KeypadClear          = 0x47,
-    VK_ANSI_KeypadDivide         = 0x4B,
-    VK_ANSI_KeypadEnter          = 0x4C,
-    VK_ANSI_KeypadMinus          = 0x4E,
-    VK_ANSI_KeypadEquals         = 0x51,
-    VK_ANSI_Keypad0              = 0x52,
-    VK_ANSI_Keypad1              = 0x53,
-    VK_ANSI_Keypad2              = 0x54,
-    VK_ANSI_Keypad3              = 0x55,
-    VK_ANSI_Keypad4              = 0x56,
-    VK_ANSI_Keypad5              = 0x57,
-    VK_ANSI_Keypad6              = 0x58,
-    VK_ANSI_Keypad7              = 0x59,
-    VK_ANSI_Keypad8              = 0x5B,
-    VK_ANSI_Keypad9              = 0x5C,
+    VK_ANSI_A = 0x00,
+    VK_ANSI_S = 0x01,
+    VK_ANSI_D = 0x02,
+    VK_ANSI_F = 0x03,
+    VK_ANSI_H = 0x04,
+    VK_ANSI_G = 0x05,
+    VK_ANSI_Z = 0x06,
+    VK_ANSI_X = 0x07,
+    VK_ANSI_C = 0x08,
+    VK_ANSI_V = 0x09,
+    VK_ANSI_B = 0x0B,
+    VK_ANSI_Q = 0x0C,
+    VK_ANSI_W = 0x0D,
+    VK_ANSI_E = 0x0E,
+    VK_ANSI_R = 0x0F,
+    VK_ANSI_Y = 0x10,
+    VK_ANSI_T = 0x11,
+    VK_ANSI_1 = 0x12,
+    VK_ANSI_2 = 0x13,
+    VK_ANSI_3 = 0x14,
+    VK_ANSI_4 = 0x15,
+    VK_ANSI_6 = 0x16,
+    VK_ANSI_5 = 0x17,
+    VK_ANSI_Equal = 0x18,
+    VK_ANSI_9 = 0x19,
+    VK_ANSI_7 = 0x1A,
+    VK_ANSI_Minus = 0x1B,
+    VK_ANSI_8 = 0x1C,
+    VK_ANSI_0 = 0x1D,
+    VK_ANSI_RightBracket = 0x1E,
+    VK_ANSI_O = 0x1F,
+    VK_ANSI_U = 0x20,
+    VK_ANSI_LeftBracket = 0x21,
+    VK_ANSI_I = 0x22,
+    VK_ANSI_P = 0x23,
+    VK_ANSI_L = 0x25,
+    VK_ANSI_J = 0x26,
+    VK_ANSI_Quote = 0x27,
+    VK_ANSI_K = 0x28,
+    VK_ANSI_Semicolon = 0x29,
+    VK_ANSI_Backslash = 0x2A,
+    VK_ANSI_Comma = 0x2B,
+    VK_ANSI_Slash = 0x2C,
+    VK_ANSI_N = 0x2D,
+    VK_ANSI_M = 0x2E,
+    VK_ANSI_Period = 0x2F,
+    VK_ANSI_Grave = 0x32,
+    VK_ANSI_KeypadDecimal = 0x41,
+    VK_ANSI_KeypadMultiply = 0x43,
+    VK_ANSI_KeypadPlus = 0x45,
+    VK_ANSI_KeypadClear = 0x47,
+    VK_ANSI_KeypadDivide = 0x4B,
+    VK_ANSI_KeypadEnter = 0x4C,
+    VK_ANSI_KeypadMinus = 0x4E,
+    VK_ANSI_KeypadEquals = 0x51,
+    VK_ANSI_Keypad0 = 0x52,
+    VK_ANSI_Keypad1 = 0x53,
+    VK_ANSI_Keypad2 = 0x54,
+    VK_ANSI_Keypad3 = 0x55,
+    VK_ANSI_Keypad4 = 0x56,
+    VK_ANSI_Keypad5 = 0x57,
+    VK_ANSI_Keypad6 = 0x58,
+    VK_ANSI_Keypad7 = 0x59,
+    VK_ANSI_Keypad8 = 0x5B,
+    VK_ANSI_Keypad9 = 0x5C,
 
     /* keycodes for keys that are independent of keyboard layout*/
-    VK_Return                    = 0x24,
-    VK_Tab                       = 0x30,
-    VK_Space                     = 0x31,
-    VK_Delete                    = 0x33,
-    VK_Escape                    = 0x35,
-    VK_Command                   = 0x37,
-    VK_Shift                     = 0x38,
-    VK_CapsLock                  = 0x39,
-    VK_Option                    = 0x3A,
-    VK_Control                   = 0x3B,
-    VK_RightCommand              = 0x36,
-    VK_RightShift                = 0x3C,
-    VK_RightOption               = 0x3D,
-    VK_RightControl              = 0x3E,
-    VK_Function                  = 0x3F,
-    VK_F17                       = 0x40,
-    VK_VolumeUp                  = 0x48,
-    VK_VolumeDown                = 0x49,
-    VK_Mute                      = 0x4A,
-    VK_F18                       = 0x4F,
-    VK_F19                       = 0x50,
-    VK_F20                       = 0x5A,
-    VK_F5                        = 0x60,
-    VK_F6                        = 0x61,
-    VK_F7                        = 0x62,
-    VK_F3                        = 0x63,
-    VK_F8                        = 0x64,
-    VK_F9                        = 0x65,
-    VK_F11                       = 0x67,
-    VK_F13                       = 0x69,
-    VK_F16                       = 0x6A,
-    VK_F14                       = 0x6B,
-    VK_F10                       = 0x6D,
-    VK_ContextualMenu            = 0x6E,
-    VK_F12                       = 0x6F,
-    VK_F15                       = 0x71,
-    VK_Help                      = 0x72,
-    VK_Home                      = 0x73,
-    VK_PageUp                    = 0x74,
-    VK_ForwardDelete             = 0x75,
-    VK_F4                        = 0x76,
-    VK_End                       = 0x77,
-    VK_F2                        = 0x78,
-    VK_PageDown                  = 0x79,
-    VK_F1                        = 0x7A,
-    VK_LeftArrow                 = 0x7B,
-    VK_RightArrow                = 0x7C,
-    VK_DownArrow                 = 0x7D,
-    VK_UpArrow                   = 0x7E,
+    VK_Return = 0x24,
+    VK_Tab = 0x30,
+    VK_Space = 0x31,
+    VK_Delete = 0x33,
+    VK_Escape = 0x35,
+    VK_Command = 0x37,
+    VK_Shift = 0x38,
+    VK_CapsLock = 0x39,
+    VK_Option = 0x3A,
+    VK_Control = 0x3B,
+    VK_RightCommand = 0x36,
+    VK_RightShift = 0x3C,
+    VK_RightOption = 0x3D,
+    VK_RightControl = 0x3E,
+    VK_Function = 0x3F,
+    VK_F17 = 0x40,
+    VK_VolumeUp = 0x48,
+    VK_VolumeDown = 0x49,
+    VK_Mute = 0x4A,
+    VK_F18 = 0x4F,
+    VK_F19 = 0x50,
+    VK_F20 = 0x5A,
+    VK_F5 = 0x60,
+    VK_F6 = 0x61,
+    VK_F7 = 0x62,
+    VK_F3 = 0x63,
+    VK_F8 = 0x64,
+    VK_F9 = 0x65,
+    VK_F11 = 0x67,
+    VK_F13 = 0x69,
+    VK_F16 = 0x6A,
+    VK_F14 = 0x6B,
+    VK_F10 = 0x6D,
+    VK_ContextualMenu = 0x6E,
+    VK_F12 = 0x6F,
+    VK_F15 = 0x71,
+    VK_Help = 0x72,
+    VK_Home = 0x73,
+    VK_PageUp = 0x74,
+    VK_ForwardDelete = 0x75,
+    VK_F4 = 0x76,
+    VK_End = 0x77,
+    VK_F2 = 0x78,
+    VK_PageDown = 0x79,
+    VK_F1 = 0x7A,
+    VK_LeftArrow = 0x7B,
+    VK_RightArrow = 0x7C,
+    VK_DownArrow = 0x7D,
+    VK_UpArrow = 0x7E,
 
     /* ISO keyboards only*/
-    VK_ISO_Section               = 0x0A,
+    VK_ISO_Section = 0x0A,
 
-    VK_JIS_Yen                   = 0x5D,
-    VK_JIS_Underscore            = 0x5E,
-    VK_JIS_KeypadComma           = 0x5F,
-    VK_JIS_Eisu                  = 0x66,
-    VK_JIS_Kana                  = 0x68
+    VK_JIS_Yen = 0x5D,
+    VK_JIS_Underscore = 0x5E,
+    VK_JIS_KeypadComma = 0x5F,
+    VK_JIS_Eisu = 0x66,
+    VK_JIS_Kana = 0x68,
 }

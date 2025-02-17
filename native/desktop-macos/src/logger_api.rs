@@ -1,22 +1,21 @@
 use crate::common::{ArraySize, StrPtr};
-use crate::logger::{append_exception_msg, clear_exception_msgs, exceptions_array, init_panic_handler, panic_payload_msg, LAST_EXCEPTION_MSGS};
+use crate::logger::{
+    append_exception_msg, clear_exception_msgs, exceptions_array, init_panic_handler, panic_payload_msg, LAST_EXCEPTION_MSGS,
+};
 use log::{error, info};
 use log4rs::config::{Appender, Root};
 use log4rs::filter::threshold::ThresholdFilter;
 use log4rs::Config;
 
-
 #[repr(C)]
 pub struct ExceptionsArray {
     pub items: *const StrPtr,
-    pub count: ArraySize
+    pub count: ArraySize,
 }
 
 #[no_mangle]
 pub extern "C" fn logger_check_exceptions() -> ExceptionsArray {
-    let result = std::panic::catch_unwind(|| {
-        exceptions_array()
-    });
+    let result = std::panic::catch_unwind(|| exceptions_array());
     result.unwrap_or_else(|payload| {
         let msg = panic_payload_msg(payload);
         error!("logger_check_exceptions panic with: {msg}");
@@ -29,9 +28,7 @@ pub extern "C" fn logger_check_exceptions() -> ExceptionsArray {
 
 #[no_mangle]
 pub extern "C" fn logger_clear_exceptions() {
-    let result = std::panic::catch_unwind(|| {
-        clear_exception_msgs()
-    });
+    let result = std::panic::catch_unwind(|| clear_exception_msgs());
     result.unwrap_or_else(|payload| {
         let msg = panic_payload_msg(payload);
         error!("logger_clear_exceptions panic with: {msg}");
@@ -53,20 +50,18 @@ pub enum LogLevel {
 pub struct LoggerConfiguration {
     pub file_path: StrPtr,
     pub console_level: LogLevel,
-    pub file_level: LogLevel
+    pub file_level: LogLevel,
 }
 
 #[no_mangle]
 pub extern "C" fn logger_init(logger_configuration: &LoggerConfiguration) {
-    let result = std::panic::catch_unwind(|| {
-        logger_configuration.init_logger()
-    });
+    let result = std::panic::catch_unwind(|| logger_configuration.init_logger());
 
     match result {
         Err(payload) => {
             let msg = panic_payload_msg(payload);
             append_exception_msg(format!("logger_init panic with payload: {msg}"));
-        },
+        }
         _ => {}
     }
     init_panic_handler();

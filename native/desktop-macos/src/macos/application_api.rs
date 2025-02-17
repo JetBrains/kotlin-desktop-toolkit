@@ -1,13 +1,25 @@
-use std::{cell::{Cell, OnceCell}, os::unix::thread};
 use anyhow::{anyhow, Context};
 use log::{error, info};
 use objc2::{declare_class, define_class, msg_send, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass, MainThreadOnly};
 use objc2_app_kit::{
-    NSApp, NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions, NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSEventModifierFlags, NSEventType, NSNormalWindowLevel, NSWindow, NSWindowStyleMask
+    NSApp, NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy,
+    NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions,
+    NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSEventModifierFlags, NSEventType, NSNormalWindowLevel, NSWindow,
+    NSWindowStyleMask,
 };
-use objc2_foundation::{MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
+use objc2_foundation::{
+    MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults,
+};
+use std::{
+    cell::{Cell, OnceCell},
+    os::unix::thread,
+};
 
-use crate::{common::StrPtr, logger::ffi_boundary, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}};
+use crate::{
+    common::StrPtr,
+    logger::ffi_boundary,
+    macos::events::{handle_application_did_finish_launching, handle_display_configuration_change},
+};
 
 use super::{events::EventHandler, text_operations::TextOperationHandler};
 
@@ -27,7 +39,10 @@ pub(crate) struct AppState {
 }
 
 impl AppState {
-    pub(crate) fn with<T, F>(f: F) -> T where F: FnOnce(&AppState) -> T {
+    pub(crate) fn with<T, F>(f: F) -> T
+    where
+        F: FnOnce(&AppState) -> T,
+    {
         APP_STATE.with(|app_state| {
             let app_state = app_state.get().expect("Can't access app state before initialization!"); // todo handle error
             f(app_state)
@@ -86,15 +101,15 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
         APP_STATE.with(|app_state| {
             // app_state.
-            app_state.set(AppState {
-                app,
-                app_delegate,
-                event_handler,
-                text_operation_handler,
-                mtm
-            }).map_err(|_| {
-                anyhow!("Can't initialize second time!")
-            })?;
+            app_state
+                .set(AppState {
+                    app,
+                    app_delegate,
+                    event_handler,
+                    text_operation_handler,
+                    mtm,
+                })
+                .map_err(|_| anyhow!("Can't initialize second time!"))?;
             Ok(())
         })
     });
@@ -138,9 +153,10 @@ pub extern "C" fn application_stop_event_loop() {
                 None,
                 0,
                 0,
-                0
+                0,
             )
-        }.unwrap();
+        }
+        .unwrap();
         app.postEvent_atStart(&dummy_event, true);
         Ok(())
     });
@@ -194,9 +210,7 @@ define_class!(
 impl MyNSApplication {
     #[allow(non_snake_case)]
     pub(crate) fn sharedApplication(_mtm: MainThreadMarker) -> Retained<MyNSApplication> {
-        return unsafe {
-            msg_send!(MyNSApplication::class(), sharedApplication)
-        };
+        return unsafe { msg_send!(MyNSApplication::class(), sharedApplication) };
     }
 }
 
@@ -216,7 +230,6 @@ define_class!(
     unsafe impl NSObjectProtocol for AppDelegate {}
 
     unsafe impl NSApplicationDelegate for AppDelegate {
-
         #[unsafe(method(applicationDidChangeScreenParameters:))]
         fn did_change_screen_parameters(&self, _notification: &NSNotification) {
             handle_display_configuration_change();
@@ -234,7 +247,7 @@ define_class!(
                 NSApplicationTerminateReply::TerminateNow
             } else {
                 NSApplicationTerminateReply::TerminateCancel
-            }
+            };
         }
 
         #[unsafe(method(applicationWillTerminate:))]

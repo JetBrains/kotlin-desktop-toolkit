@@ -1,18 +1,41 @@
 use core::panic;
-use std::{any::Any, borrow::{Borrow, BorrowMut}, cell::{Cell, RefCell}, ffi::{CStr, CString}, fmt::format, panic::AssertUnwindSafe};
+use std::{
+    any::Any,
+    borrow::{Borrow, BorrowMut},
+    cell::{Cell, RefCell},
+    ffi::{CStr, CString},
+    fmt::format,
+    panic::AssertUnwindSafe,
+};
 
 use anyhow::{Context, Error};
 use log::error;
-use log4rs::{append::{console::{ConsoleAppender, Target}, file::FileAppender, rolling_file::{policy::compound::{roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy}, RollingFileAppender}}, config::{Appender, Root}, encode::pattern::PatternEncoder, filter::threshold::ThresholdFilter, Config};
+use log4rs::{
+    append::{
+        console::{ConsoleAppender, Target},
+        file::FileAppender,
+        rolling_file::{
+            policy::compound::{roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy},
+            RollingFileAppender,
+        },
+    },
+    config::{Appender, Root},
+    encode::pattern::PatternEncoder,
+    filter::threshold::ThresholdFilter,
+    Config,
+};
 
 use crate::logger_api::{LogLevel, LoggerConfiguration};
-use crate::{common::{ArraySize, StrPtr}, logger_api::ExceptionsArray};
+use crate::{
+    common::{ArraySize, StrPtr},
+    logger_api::ExceptionsArray,
+};
 
 const MAX_EXCEPTIONS_COUNT: usize = 10;
 
 struct LastExceptionMessages {
     messages: [StrPtr; MAX_EXCEPTIONS_COUNT],
-    count: usize
+    count: usize,
 }
 
 impl LastExceptionMessages {
@@ -29,10 +52,10 @@ impl LastExceptionMessages {
                 Ok(msg) => {
                     self.messages[self.count] = CString::into_raw(msg);
                     self.count += 1;
-                },
+                }
                 Err(err) => {
                     error!("Can't append exception: {err}");
-                },
+                }
             }
         } else {
             error!("Can't append more exceptions we already have {MAX_EXCEPTIONS_COUNT}");
@@ -41,9 +64,7 @@ impl LastExceptionMessages {
 
     fn clear(&mut self) {
         for i in 0..self.count {
-            let msg = unsafe {
-                CString::from_raw(self.messages[i])
-            };
+            let msg = unsafe { CString::from_raw(self.messages[i]) };
             std::mem::drop(msg);
             self.messages[i] = std::ptr::null_mut();
         }
@@ -75,9 +96,7 @@ pub(crate) fn clear_exception_msgs() {
 }
 
 pub(crate) fn exceptions_array() -> ExceptionsArray {
-    LAST_EXCEPTION_MSGS.with_borrow(|last_exception_messages| {
-        last_exception_messages.exceptions_array()
-    })
+    LAST_EXCEPTION_MSGS.with_borrow(|last_exception_messages| last_exception_messages.exceptions_array())
 }
 
 impl LogLevel {
@@ -96,9 +115,7 @@ impl LogLevel {
 impl LoggerConfiguration {
     fn file_path(&self) -> anyhow::Result<&str> {
         let c_str = unsafe { CStr::from_ptr(self.file_path) };
-        c_str.to_str().with_context(|| {
-            format!("Invalid unicode in {c_str:?}")
-        })
+        c_str.to_str().with_context(|| format!("Invalid unicode in {c_str:?}"))
     }
 
     fn console_log_level(&self) -> log::LevelFilter {
@@ -113,28 +130,38 @@ impl LoggerConfiguration {
         let file_path = std::path::Path::new(self.file_path()?);
 
         let file_name = file_path
-            .file_stem().context("File expected")?
-            .to_str().context("Can't convert OS string")?;
-        let archive_pattern = file_path
-            .with_file_name(format!("{file_name}{{}}.log"));
+            .file_stem()
+            .context("File expected")?
+            .to_str()
+            .context("Can't convert OS string")?;
+        let archive_pattern = file_path.with_file_name(format!("{file_name}{{}}.log"));
 
         const TRIGGER_FILE_SIZE: u64 = 2 * 1024 * 1024; // 2Mb
         const LOG_FILE_COUNT: u32 = 3;
         let trigger = SizeTrigger::new(TRIGGER_FILE_SIZE);
         let roller = FixedWindowRoller::builder()
-            .build(archive_pattern.to_str().context("file_path contains invalid unicode")?, LOG_FILE_COUNT)
+            .build(
+                archive_pattern.to_str().context("file_path contains invalid unicode")?,
+                LOG_FILE_COUNT,
+            )
             .unwrap();
         let policy = CompoundPolicy::new(Box::new(trigger), Box::new(roller));
 
         RollingFileAppender::builder()
-            .encoder(Box::new(PatternEncoder::new("[{d(%Y%m%d %H:%M:%S%.6f)} {h({l:5})} {M}:{L}] {m}{n}")))
-            .build(file_path, Box::new(policy)).context("Failed to create file appender")
+            .encoder(Box::new(PatternEncoder::new(
+                "[{d(%Y%m%d %H:%M:%S%.6f)} {h({l:5})} {M}:{L}] {m}{n}",
+            )))
+            .build(file_path, Box::new(policy))
+            .context("Failed to create file appender")
     }
 
     fn console_appender(&self) -> ConsoleAppender {
         ConsoleAppender::builder()
-            .encoder(Box::new(PatternEncoder::new("[{d(%Y%m%d %H:%M:%S%.3f)} {h({l:5})} {M}:{L}] {m}{n}")))
-            .target(Target::Stderr).build()
+            .encoder(Box::new(PatternEncoder::new(
+                "[{d(%Y%m%d %H:%M:%S%.3f)} {h({l:5})} {M}:{L}] {m}{n}",
+            )))
+            .target(Target::Stderr)
+            .build()
     }
 
     pub(crate) fn init_logger(&self) {
@@ -151,7 +178,7 @@ impl LoggerConfiguration {
         appenders.push(
             Appender::builder()
                 .filter(Box::new(ThresholdFilter::new(console_level)))
-                .build("stderr", Box::new(console_appender))
+                .build("stderr", Box::new(console_appender)),
         );
 
         match self.file_appender() {
@@ -159,35 +186,34 @@ impl LoggerConfiguration {
                 appenders.push(
                     Appender::builder()
                         .filter(Box::new(ThresholdFilter::new(file_level)))
-                        .build("logfile", Box::new(file_appender)));
-            },
+                        .build("logfile", Box::new(file_appender)),
+                );
+            }
             Err(err) => {
                 append_exception_msg(format!("File appender creatrion failed: {err}"));
-            },
+            }
         }
 
         let appender_names: Vec<_> = appenders.iter().map(|a| a.name().to_string()).collect();
-        let config = Config::builder()
-            .appenders(appenders)
-            .build(
-                Root::builder()
-                    .appenders(appender_names)
-                    .build(std::cmp::max(console_level, file_level)),
-            );
+        let config = Config::builder().appenders(appenders).build(
+            Root::builder()
+                .appenders(appender_names)
+                .build(std::cmp::max(console_level, file_level)),
+        );
         match config {
             Ok(config) => {
                 match log4rs::init_config(config) {
                     Ok(_handle) => {
                         // todo store handler and allow to change logger severity
-                    },
+                    }
                     Err(err) => {
                         append_exception_msg(format!("Failed to init logger: {err}"));
-                    },
+                    }
                 }
-            },
+            }
             Err(err) => {
                 append_exception_msg(format!("Failed to create logger config: {err}"));
-            },
+            }
         };
     }
 }
@@ -247,7 +273,7 @@ pub(crate) fn ffi_boundary<R: PanicDefault, F: FnOnce() -> anyhow::Result<R>>(na
             let message = format!("{name:?} panic with payload: {payload_msg}");
             append_exception_msg(message); // message will be also logged by panic handler
             PanicDefault::default()
-        },
+        }
     }
 }
 

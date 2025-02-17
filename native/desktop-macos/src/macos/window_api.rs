@@ -1,12 +1,27 @@
-use core::{panic};
-use std::{ffi::{CStr, CString}, panic::{AssertUnwindSafe, UnwindSafe}};
+use core::panic;
+use std::{
+    ffi::{CStr, CString},
+    panic::{AssertUnwindSafe, UnwindSafe},
+};
 
-use objc2::{exception::{self, Exception}, rc::{autoreleasepool, Retained}};
+use objc2::{
+    exception::{self, Exception},
+    rc::{autoreleasepool, Retained},
+};
 use objc2_foundation::{MainThreadMarker, NSException, NSString};
 
-use crate::{common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr}, logger::{ffi_boundary, PanicDefault}};
+use crate::{
+    common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},
+    logger::{ffi_boundary, PanicDefault},
+};
 
-use super::{application_api::MyNSApplication, metal_api::MetalView, screen::{NSScreenExts, ScreenId}, string::{copy_to_c_string, copy_to_ns_string}, window::{NSWindowExts, Window}};
+use super::{
+    application_api::MyNSApplication,
+    metal_api::MetalView,
+    screen::{NSScreenExts, ScreenId},
+    string::{copy_to_c_string, copy_to_ns_string},
+    window::{NSWindowExts, Window},
+};
 
 pub type WindowId = i64;
 
@@ -22,7 +37,7 @@ pub struct WindowParams {
 
     pub is_full_screen_allowed: bool,
     pub use_custom_titlebar: bool,
-    pub titlebar_height: LogicalPixels
+    pub titlebar_height: LogicalPixels,
 }
 
 impl PanicDefault for *mut Window {
@@ -62,9 +77,7 @@ impl PanicDefault for WindowId {
 
 #[no_mangle]
 pub extern "C" fn window_get_window_id(window: &Window) -> WindowId {
-    ffi_boundary("window_get_window_id", || {
-        Ok(window.ns_window.window_id())
-    })
+    ffi_boundary("window_get_window_id", || Ok(window.ns_window.window_id()))
 }
 
 impl PanicDefault for ScreenId {
@@ -75,9 +88,7 @@ impl PanicDefault for ScreenId {
 
 #[no_mangle]
 pub extern "C" fn window_get_screen_id(window: &Window) -> ScreenId {
-    ffi_boundary("window_get_screen_id", || {
-        Ok(window.ns_window.screen().unwrap().screen_id())
-    })
+    ffi_boundary("window_get_screen_id", || Ok(window.ns_window.screen().unwrap().screen_id()))
 }
 
 impl PanicDefault for f64 {
@@ -88,9 +99,7 @@ impl PanicDefault for f64 {
 
 #[no_mangle]
 pub extern "C" fn window_scale_factor(window: &Window) -> f64 {
-    ffi_boundary("window_scale_factor", || {
-        Ok(window.ns_window.backingScaleFactor())
-    })
+    ffi_boundary("window_scale_factor", || Ok(window.ns_window.backingScaleFactor()))
 }
 
 #[no_mangle]
@@ -104,10 +113,7 @@ pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
 
 impl PanicDefault for LogicalPoint {
     fn default() -> Self {
-        LogicalPoint {
-            x: 0.0,
-            y: 0.0,
-        }
+        LogicalPoint { x: 0.0, y: 0.0 }
     }
 }
 
@@ -132,9 +138,7 @@ pub extern "C" fn window_get_title(window: &Window) -> StrPtr {
     ffi_boundary("window_get_title", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let title = window.ns_window.title();
-        autoreleasepool(|pool| {
-            copy_to_c_string(&title, pool)
-        })
+        autoreleasepool(|pool| copy_to_c_string(&title, pool))
     })
 }
 
@@ -148,18 +152,13 @@ pub extern "C" fn window_get_origin(window: &Window) -> LogicalPoint {
 
 impl PanicDefault for LogicalSize {
     fn default() -> Self {
-        LogicalSize {
-            width: 0.0,
-            height: 0.0,
-        }
+        LogicalSize { width: 0.0, height: 0.0 }
     }
 }
 
 #[no_mangle]
 pub extern "C" fn window_get_size(window: &Window) -> LogicalSize {
-    ffi_boundary("window_get_size", || {
-        Ok(window.ns_window.get_size())
-    })
+    ffi_boundary("window_get_size", || Ok(window.ns_window.get_size()))
 }
 
 #[no_mangle]
@@ -196,26 +195,20 @@ pub extern "C" fn window_set_content_rect(window: &Window, origin: LogicalPoint,
 
 #[no_mangle]
 pub extern "C" fn window_is_key(window: &Window) -> bool {
-    ffi_boundary("window_is_key", || {
-        Ok(window.ns_window.isKeyWindow())
-    })
+    ffi_boundary("window_is_key", || Ok(window.ns_window.isKeyWindow()))
 }
 
 #[no_mangle]
 pub extern "C" fn window_is_main(window: &Window) -> bool {
     ffi_boundary("window_is_main", || {
-        let result = unsafe {
-            window.ns_window.isMainWindow()
-        };
+        let result = unsafe { window.ns_window.isMainWindow() };
         Ok(result)
     })
 }
 
 #[no_mangle]
 pub extern "C" fn window_get_max_size(window: &Window) -> LogicalSize {
-    ffi_boundary("window_get_max_size", || {
-        Ok(window.ns_window.get_max_size())
-    })
+    ffi_boundary("window_get_max_size", || Ok(window.ns_window.get_max_size()))
 }
 
 #[no_mangle]
@@ -228,9 +221,7 @@ pub extern "C" fn window_set_max_size(window: &Window, size: LogicalSize) {
 
 #[no_mangle]
 pub extern "C" fn window_get_min_size(window: &Window) -> LogicalSize {
-    ffi_boundary("window_get_min_size", || {
-        Ok(window.ns_window.get_min_size())
-    })
+    ffi_boundary("window_get_min_size", || Ok(window.ns_window.get_min_size()))
 }
 
 #[no_mangle]
@@ -251,9 +242,7 @@ pub extern "C" fn window_toggle_full_screen(window: &Window) {
 
 #[no_mangle]
 pub extern "C" fn window_is_full_screen(window: &Window) -> bool {
-    ffi_boundary("window_is_full_screen", || {
-        Ok(window.ns_window.is_full_screen())
-    })
+    ffi_boundary("window_is_full_screen", || Ok(window.ns_window.is_full_screen()))
 }
 
 #[no_mangle]
@@ -303,7 +292,7 @@ pub enum WindowVisualEffect {
 pub enum WindowBackground {
     Transparent,
     SolidColor(Color),
-    VisualEffect(WindowVisualEffect)
+    VisualEffect(WindowVisualEffect),
 }
 
 #[no_mangle]

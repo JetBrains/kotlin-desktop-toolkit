@@ -1,5 +1,5 @@
-#[cfg(target_os = "macos")]
-mod macos;
+mod common;
 mod logger;
 mod logger_api;
-mod common;
+#[cfg(target_os = "macos")]
+mod macos;

@@ -1,10 +1,10 @@
 use objc2_app_kit::{NSApplication, NSEventModifierFlags};
 use objc2_foundation::MainThreadMarker;
 
-use crate::common::{ArraySize, StrPtr};
-use crate::logger::ffi_boundary;
 use super::keyboard::KeyModifiersSet;
 use super::{application_api::MyNSApplication, application_menu::main_menu_update_impl};
+use crate::common::{ArraySize, StrPtr};
+use crate::logger::ffi_boundary;
 
 // This file contains C API of the library
 // The symbols listed here will be exported into .h file
@@ -15,7 +15,7 @@ use super::{application_api::MyNSApplication, application_menu::main_menu_update
 #[derive(Debug)]
 pub struct AppMenuKeystroke {
     pub key: StrPtr,
-    pub modifiers: KeyModifiersSet
+    pub modifiers: KeyModifiersSet,
 }
 
 #[allow(dead_code)]
@@ -27,7 +27,7 @@ pub enum AppMenuItem {
         title: StrPtr,
         macos_provided: bool,
         keystroke: *const AppMenuKeystroke, // todo replace nullable pointers with Option<&AppMenuKeystroke> here?
-        perform: extern "C" fn()
+        perform: extern "C" fn(),
     },
     SeparatorItem,
     SubMenuItem {

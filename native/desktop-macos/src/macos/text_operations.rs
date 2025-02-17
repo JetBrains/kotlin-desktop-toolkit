@@ -4,7 +4,6 @@ use crate::common::ConstStrPtr;
 
 use super::{application_api::AppState, window_api::WindowId};
 
-
 #[repr(C)]
 #[derive(Debug, Default)]
 // For the invalid (missing) value, all values are 0
@@ -18,10 +17,10 @@ pub struct TextRange {
 pub struct TextChangedOperation {
     window_id: WindowId,
     text: ConstStrPtr,
-//    composition_range: TextRange,
-//    composition_committed_range: TextRange,
-//    composition_selected_range: TextRange,
-//    replacement_range: TextRange,
+    //composition_range: TextRange,
+    //composition_committed_range: TextRange,
+    //composition_selected_range: TextRange,
+    //replacement_range: TextRange,
 }
 
 #[repr(C)]
@@ -30,7 +29,6 @@ pub struct TextCommandOperation {
     window_id: WindowId,
     command: ConstStrPtr,
 }
-
 
 #[repr(C)]
 #[derive(Debug)]
@@ -48,10 +46,10 @@ pub(crate) fn handle_text_changed_operation(window_id: WindowId, text: &CStr) ->
         let operation = TextOperation::TextChanged(TextChangedOperation {
             window_id,
             text: text.as_ptr(),
-//            composition_range: TextRange::default(),
-//            composition_committed_range: TextRange::default(),
-//            composition_selected_range: TextRange::default(),
-//            replacement_range: TextRange::default(),
+            //composition_range: TextRange::default(),
+            //composition_committed_range: TextRange::default(),
+            //composition_selected_range: TextRange::default(),
+            //replacement_range: TextRange::default(),
         });
         Ok((state.text_operation_handler)(&operation))
     });
