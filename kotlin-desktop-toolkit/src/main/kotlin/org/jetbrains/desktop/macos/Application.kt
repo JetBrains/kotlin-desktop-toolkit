@@ -3,6 +3,7 @@ package org.jetbrains.desktop.macos
 import org.jetbrains.desktop.macos.generated.NativeApplicationCallbacks
 import org.jetbrains.desktop.macos.generated.NativeApplicationConfig
 import org.jetbrains.desktop.macos.generated.NativeEventHandler
+import org.jetbrains.desktop.macos.generated.NativeTextOperationHandler
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -110,15 +111,13 @@ public object Application {
         }
     }
 
-    private fun onTextOperation(nativeEvent: MemorySegment): Boolean {
+    private fun onTextOperation(nativeOperation: MemorySegment): Boolean {
+        val operation = TextOperation.fromNative(nativeOperation)
         return ffiUpCall(default = false) {
-            val operation = TextOperation.fromNative(nativeEvent)
-            textOperationHandler?.let {
-                it(operation)
-            } ?: run {
-                Logger.warn { "textOperationHandler is null; event: $operation was ignored!" }
-                false
-            }
+            textOperationHandler?.invoke(operation)
+        } ?: run {
+            Logger.warn { "textOperationHandler is null; event: $operation was ignored!" }
+            false
         }
     }
 
@@ -134,7 +133,7 @@ public object Application {
             NativeApplicationCallbacks.on_will_terminate.allocate(::onWillTerminate, arena),
         )
         NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
-        NativeApplicationCallbacks.text_operation_handler(callbacks, NativeEventHandler.allocate(::onTextOperation, arena))
+        NativeApplicationCallbacks.text_operation_handler(callbacks, NativeTextOperationHandler.allocate(::onTextOperation, arena))
         return callbacks
     }
 }
