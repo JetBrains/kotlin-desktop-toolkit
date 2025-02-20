@@ -1,10 +1,10 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.ExceptionsArray
+import org.jetbrains.desktop.macos.generated.NativeExceptionsArray
+import org.jetbrains.desktop.macos.generated.NativeLoggerConfiguration
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.nio.file.Path
-import org.jetbrains.desktop.macos.generated.LoggerConfiguration as NativeLoggerConfiguration
 
 public enum class LogLevel {
     Off,
@@ -21,12 +21,12 @@ public enum class LogLevel {
 
     internal fun toNative(): Int {
         return when (this) {
-            Off -> desktop_macos_h.LogLevel_Off()
-            Error -> desktop_macos_h.LogLevel_Error()
-            Warn -> desktop_macos_h.LogLevel_Warn()
-            Info -> desktop_macos_h.LogLevel_Info()
-            Debug -> desktop_macos_h.LogLevel_Debug()
-            Trace -> desktop_macos_h.LogLevel_Trace()
+            Off -> desktop_macos_h.NativeLogLevel_Off()
+            Error -> desktop_macos_h.NativeLogLevel_Error()
+            Warn -> desktop_macos_h.NativeLogLevel_Warn()
+            Info -> desktop_macos_h.NativeLogLevel_Info()
+            Debug -> desktop_macos_h.NativeLogLevel_Debug()
+            Trace -> desktop_macos_h.NativeLogLevel_Trace()
         }
     }
 }
@@ -201,12 +201,12 @@ internal class NativeError(messages: List<String>) : Error(messages.joinToString
 private fun checkExceptions(): List<String> {
     return Arena.ofConfined().use { arena ->
         val exceptionsArray = desktop_macos_h.logger_check_exceptions(arena)
-        val count = ExceptionsArray.count(exceptionsArray)
-        val items = ExceptionsArray.items(exceptionsArray)
+        val count = NativeExceptionsArray.count(exceptionsArray)
+        val items = NativeExceptionsArray.items(exceptionsArray)
 
         if (count != 0L) {
             (0 until count).map { i ->
-                val cStrPtr = items.getAtIndex(ExceptionsArray.`items$layout`(), i)
+                val cStrPtr = items.getAtIndex(NativeExceptionsArray.`items$layout`(), i)
                 cStrPtr.getUtf8String(0)
             }.toList()
         } else {

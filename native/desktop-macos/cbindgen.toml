@@ -26,3 +26,6 @@ bitflags = true
 
 [enum]
 prefix_with_name = true
+
+[export]
+prefix = "Native"

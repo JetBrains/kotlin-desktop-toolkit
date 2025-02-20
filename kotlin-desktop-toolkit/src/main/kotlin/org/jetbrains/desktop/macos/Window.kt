@@ -3,11 +3,11 @@ package org.jetbrains.desktop.macos
 import org.jetbrains.desktop.LogicalPixels
 import org.jetbrains.desktop.LogicalPoint
 import org.jetbrains.desktop.LogicalSize
+import org.jetbrains.desktop.macos.generated.NativeWindowBackground
+import org.jetbrains.desktop.macos.generated.NativeWindowParams
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
-import org.jetbrains.desktop.macos.generated.WindowBackground as NativeWindowBackground
-import org.jetbrains.desktop.macos.generated.WindowParams as NativeWindowParams
 
 public typealias WindowId = Long
 
@@ -239,14 +239,14 @@ public sealed class WindowBackground {
         val result = NativeWindowBackground.allocate(arena)
         when (this) {
             is Transparent -> {
-                NativeWindowBackground.tag(result, desktop_macos_h.WindowBackground_Transparent())
+                NativeWindowBackground.tag(result, desktop_macos_h.NativeWindowBackground_Transparent())
             }
             is SolidColor -> {
-                NativeWindowBackground.tag(result, desktop_macos_h.WindowBackground_SolidColor())
+                NativeWindowBackground.tag(result, desktop_macos_h.NativeWindowBackground_SolidColor())
                 NativeWindowBackground.solid_color(result, color.toNative(arena))
             }
             is VisualEffect -> {
-                NativeWindowBackground.tag(result, desktop_macos_h.WindowBackground_VisualEffect())
+                NativeWindowBackground.tag(result, desktop_macos_h.NativeWindowBackground_VisualEffect())
                 NativeWindowBackground.visual_effect(result, effect.toNative())
             }
         }
@@ -273,20 +273,20 @@ public enum class WindowVisualEffect {
 
     internal fun toNative(): Int {
         return when (this) {
-            TitlebarEffect -> desktop_macos_h.WindowVisualEffect_TitlebarEffect()
-            SelectionEffect -> desktop_macos_h.WindowVisualEffect_SelectionEffect()
-            MenuEffect -> desktop_macos_h.WindowVisualEffect_MenuEffect()
-            PopoverEffect -> desktop_macos_h.WindowVisualEffect_PopoverEffect()
-            SidebarEffect -> desktop_macos_h.WindowVisualEffect_SidebarEffect()
-            HeaderViewEffect -> desktop_macos_h.WindowVisualEffect_HeaderViewEffect()
-            SheetEffect -> desktop_macos_h.WindowVisualEffect_SheetEffect()
-            WindowBackgroundEffect -> desktop_macos_h.WindowVisualEffect_WindowBackgroundEffect()
-            HUDWindowEffect -> desktop_macos_h.WindowVisualEffect_HUDWindowEffect()
-            FullScreenUIEffect -> desktop_macos_h.WindowVisualEffect_FullScreenUIEffect()
-            ToolTipEffect -> desktop_macos_h.WindowVisualEffect_ToolTipEffect()
-            ContentBackgroundEffect -> desktop_macos_h.WindowVisualEffect_ContentBackgroundEffect()
-            UnderWindowBackgroundEffect -> desktop_macos_h.WindowVisualEffect_UnderWindowBackgroundEffect()
-            UnderPageBackgroundEffect -> desktop_macos_h.WindowVisualEffect_UnderPageBackgroundEffect()
+            TitlebarEffect -> desktop_macos_h.NativeWindowVisualEffect_TitlebarEffect()
+            SelectionEffect -> desktop_macos_h.NativeWindowVisualEffect_SelectionEffect()
+            MenuEffect -> desktop_macos_h.NativeWindowVisualEffect_MenuEffect()
+            PopoverEffect -> desktop_macos_h.NativeWindowVisualEffect_PopoverEffect()
+            SidebarEffect -> desktop_macos_h.NativeWindowVisualEffect_SidebarEffect()
+            HeaderViewEffect -> desktop_macos_h.NativeWindowVisualEffect_HeaderViewEffect()
+            SheetEffect -> desktop_macos_h.NativeWindowVisualEffect_SheetEffect()
+            WindowBackgroundEffect -> desktop_macos_h.NativeWindowVisualEffect_WindowBackgroundEffect()
+            HUDWindowEffect -> desktop_macos_h.NativeWindowVisualEffect_HUDWindowEffect()
+            FullScreenUIEffect -> desktop_macos_h.NativeWindowVisualEffect_FullScreenUIEffect()
+            ToolTipEffect -> desktop_macos_h.NativeWindowVisualEffect_ToolTipEffect()
+            ContentBackgroundEffect -> desktop_macos_h.NativeWindowVisualEffect_ContentBackgroundEffect()
+            UnderWindowBackgroundEffect -> desktop_macos_h.NativeWindowVisualEffect_UnderWindowBackgroundEffect()
+            UnderPageBackgroundEffect -> desktop_macos_h.NativeWindowVisualEffect_UnderPageBackgroundEffect()
         }
     }
 }

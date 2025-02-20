@@ -1,11 +1,11 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.ApplicationCallbacks
+import org.jetbrains.desktop.macos.generated.NativeApplicationCallbacks
+import org.jetbrains.desktop.macos.generated.NativeApplicationConfig
+import org.jetbrains.desktop.macos.generated.NativeEventHandler
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
-import org.jetbrains.desktop.macos.generated.ApplicationConfig as NativeApplicationConfig
-import org.jetbrains.desktop.macos.generated.EventHandler as NativeEventHandler
 
 public enum class EventHandlerResult {
     Continue,
@@ -124,11 +124,17 @@ public object Application {
 
     private fun applicationCallbacks(): MemorySegment {
         val arena = Arena.global()
-        val callbacks = ApplicationCallbacks.allocate(arena)
-        ApplicationCallbacks.on_should_terminate(callbacks, ApplicationCallbacks.on_should_terminate.allocate(::onShouldTerminate, arena))
-        ApplicationCallbacks.on_will_terminate(callbacks, ApplicationCallbacks.on_will_terminate.allocate(::onWillTerminate, arena))
-        ApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
-        ApplicationCallbacks.text_operation_handler(callbacks, NativeEventHandler.allocate(::onTextOperation, arena))
+        val callbacks = NativeApplicationCallbacks.allocate(arena)
+        NativeApplicationCallbacks.on_should_terminate(
+            callbacks,
+            NativeApplicationCallbacks.on_should_terminate.allocate(::onShouldTerminate, arena),
+        )
+        NativeApplicationCallbacks.on_will_terminate(
+            callbacks,
+            NativeApplicationCallbacks.on_will_terminate.allocate(::onWillTerminate, arena),
+        )
+        NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
+        NativeApplicationCallbacks.text_operation_handler(callbacks, NativeEventHandler.allocate(::onTextOperation, arena))
         return callbacks
     }
 }

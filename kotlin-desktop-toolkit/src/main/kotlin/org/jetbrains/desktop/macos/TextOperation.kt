@@ -1,10 +1,10 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.TextChangedOperation
-import org.jetbrains.desktop.macos.generated.TextCommandOperation
+import org.jetbrains.desktop.macos.generated.NativeTextChangedOperation
+import org.jetbrains.desktop.macos.generated.NativeTextCommandOperation
+import org.jetbrains.desktop.macos.generated.NativeTextOperation
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.MemorySegment
-import org.jetbrains.desktop.macos.generated.TextOperation as NativeTextOperation
 
 public sealed class TextOperation {
     public data class TextChanged(
@@ -28,18 +28,18 @@ public sealed class TextOperation {
     internal companion object {
         internal fun fromNative(s: MemorySegment): TextOperation {
             return when (NativeTextOperation.tag(s)) {
-                desktop_macos_h.TextOperation_TextChanged() -> {
+                desktop_macos_h.NativeTextOperation_TextChanged() -> {
                     val nativeEvent = NativeTextOperation.text_changed(s)
                     TextChanged(
-                        windowId = TextChangedOperation.window_id(nativeEvent),
-                        text = TextChangedOperation.text(nativeEvent).getUtf8String(0),
+                        windowId = NativeTextChangedOperation.window_id(nativeEvent),
+                        text = NativeTextChangedOperation.text(nativeEvent).getUtf8String(0),
                     )
                 }
-                desktop_macos_h.TextOperation_TextCommand() -> {
+                desktop_macos_h.NativeTextOperation_TextCommand() -> {
                     val nativeEvent = NativeTextOperation.text_command(s)
                     TextCommand(
-                        windowId = TextCommandOperation.window_id(nativeEvent),
-                        command = TextCommandOperation.command(nativeEvent).getUtf8String(0),
+                        windowId = NativeTextCommandOperation.window_id(nativeEvent),
+                        command = NativeTextCommandOperation.command(nativeEvent).getUtf8String(0),
                     )
                 }
                 else -> {

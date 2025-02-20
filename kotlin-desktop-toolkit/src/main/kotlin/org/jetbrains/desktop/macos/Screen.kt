@@ -2,9 +2,9 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.LogicalPoint
 import org.jetbrains.desktop.LogicalSize
-import org.jetbrains.desktop.macos.generated.DisplayLinkCallback
-import org.jetbrains.desktop.macos.generated.ScreenInfo
-import org.jetbrains.desktop.macos.generated.ScreenInfoArray
+import org.jetbrains.desktop.macos.generated.NativeDisplayLinkCallback
+import org.jetbrains.desktop.macos.generated.NativeScreenInfo
+import org.jetbrains.desktop.macos.generated.NativeScreenInfoArray
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -21,7 +21,7 @@ public class DisplayLink internal constructor(
     public companion object {
         public fun create(screenId: ScreenId, onNextFrame: () -> Unit): DisplayLink {
             val arena = Arena.ofConfined()
-            val callback = DisplayLinkCallback.allocate({
+            val callback = NativeDisplayLinkCallback.allocate({
                 ffiUpCall {
                     // todo don't execute this callback after the link was closed
                     onNextFrame()
@@ -71,13 +71,13 @@ public data class Screen(
     public companion object {
         private fun fromNative(s: MemorySegment): Screen {
             return Screen(
-                screenId = ScreenInfo.screen_id(s),
-                isPrimary = ScreenInfo.is_primary(s),
-                name = ScreenInfo.name(s).getUtf8String(0),
-                origin = LogicalPoint.fromNative(ScreenInfo.origin(s)),
-                size = LogicalSize.fromNative(ScreenInfo.size(s)),
-                scale = ScreenInfo.scale(s),
-                maximumFramesPerSecond = ScreenInfo.maximum_frames_per_second(s),
+                screenId = NativeScreenInfo.screen_id(s),
+                isPrimary = NativeScreenInfo.is_primary(s),
+                name = NativeScreenInfo.name(s).getUtf8String(0),
+                origin = LogicalPoint.fromNative(NativeScreenInfo.origin(s)),
+                size = LogicalSize.fromNative(NativeScreenInfo.size(s)),
+                scale = NativeScreenInfo.scale(s),
+                maximumFramesPerSecond = NativeScreenInfo.maximum_frames_per_second(s),
             )
         }
 
@@ -86,11 +86,11 @@ public data class Screen(
                 val screenInfoArray = ffiDownCall { desktop_macos_h.screen_list(arena) }
                 val screens = mutableListOf<Screen>()
                 try {
-                    val ptr = ScreenInfoArray.ptr(screenInfoArray)
-                    val len = ScreenInfoArray.len(screenInfoArray)
+                    val ptr = NativeScreenInfoArray.ptr(screenInfoArray)
+                    val len = NativeScreenInfoArray.len(screenInfoArray)
 
                     for (i in 0 until len) {
-                        screens.add(fromNative(ScreenInfo.asSlice(ptr, i)))
+                        screens.add(fromNative(NativeScreenInfo.asSlice(ptr, i)))
                     }
                 } finally {
                     ffiDownCall { desktop_macos_h.screen_list_drop(screenInfoArray) }

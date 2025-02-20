@@ -1,13 +1,13 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.AppMenuItem_ActionItem_Body
-import org.jetbrains.desktop.macos.generated.AppMenuItem_SubMenuItem_Body
+import org.jetbrains.desktop.macos.generated.NativeAppMenuItem
+import org.jetbrains.desktop.macos.generated.NativeAppMenuItem_NativeActionItem_Body
+import org.jetbrains.desktop.macos.generated.NativeAppMenuItem_NativeSubMenuItem_Body
+import org.jetbrains.desktop.macos.generated.NativeAppMenuKeystroke
+import org.jetbrains.desktop.macos.generated.NativeAppMenuStructure
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
-import org.jetbrains.desktop.macos.generated.AppMenuItem as NativeAppMenuItem
-import org.jetbrains.desktop.macos.generated.AppMenuKeystroke as NativeAppMenuKeystroke
-import org.jetbrains.desktop.macos.generated.AppMenuStructure as NativeAppMenuStructure
 
 /**
  * Be aware capital letter turns shift modifier on
@@ -72,16 +72,16 @@ private fun Keystroke.toNative(arena: Arena): MemorySegment = let { keystroke ->
 private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit = let { menuItem ->
     when (menuItem) {
         is AppMenuItem.Action -> {
-            NativeAppMenuItem.tag(nativeItem, desktop_macos_h.AppMenuItem_ActionItem())
+            NativeAppMenuItem.tag(nativeItem, desktop_macos_h.NativeAppMenuItem_ActionItem())
 
-            val actionItemBody = AppMenuItem_ActionItem_Body.allocate(arena)
-            AppMenuItem_ActionItem_Body.enabled(actionItemBody, menuItem.isEnabled)
-            AppMenuItem_ActionItem_Body.title(actionItemBody, arena.allocateUtf8String(menuItem.title))
-            AppMenuItem_ActionItem_Body.macos_provided(actionItemBody, menuItem.isMacOSProvided)
-            AppMenuItem_ActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)
-            AppMenuItem_ActionItem_Body.perform(
+            val actionItemBody = NativeAppMenuItem_NativeActionItem_Body.allocate(arena)
+            NativeAppMenuItem_NativeActionItem_Body.enabled(actionItemBody, menuItem.isEnabled)
+            NativeAppMenuItem_NativeActionItem_Body.title(actionItemBody, arena.allocateUtf8String(menuItem.title))
+            NativeAppMenuItem_NativeActionItem_Body.macos_provided(actionItemBody, menuItem.isMacOSProvided)
+            NativeAppMenuItem_NativeActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)
+            NativeAppMenuItem_NativeActionItem_Body.perform(
                 actionItemBody,
-                AppMenuItem_ActionItem_Body.perform.allocate(
+                NativeAppMenuItem_NativeActionItem_Body.perform.allocate(
                     {
                         ffiUpCall(menuItem.perform)
                     },
@@ -92,11 +92,11 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
         }
 
         is AppMenuItem.Separator -> {
-            NativeAppMenuItem.tag(nativeItem, desktop_macos_h.AppMenuItem_SeparatorItem())
+            NativeAppMenuItem.tag(nativeItem, desktop_macos_h.NativeAppMenuItem_SeparatorItem())
         }
 
         is AppMenuItem.SubMenu -> {
-            NativeAppMenuItem.tag(nativeItem, desktop_macos_h.AppMenuItem_SubMenuItem())
+            NativeAppMenuItem.tag(nativeItem, desktop_macos_h.NativeAppMenuItem_SubMenuItem())
 
             val itemsArray = NativeAppMenuItem.allocateArray(menuItem.items.size.toLong(), arena)
             menuItem.items.forEachIndexed { i, subMenuItem ->
@@ -104,14 +104,14 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
                 subMenuItem.toNative(subItemNative, arena)
             }
 
-            val subMenuItemBody = AppMenuItem_SubMenuItem_Body.allocate(arena)
-            AppMenuItem_SubMenuItem_Body.title(subMenuItemBody, arena.allocateUtf8String(menuItem.title))
-            AppMenuItem_SubMenuItem_Body.special_tag(
+            val subMenuItemBody = NativeAppMenuItem_NativeSubMenuItem_Body.allocate(arena)
+            NativeAppMenuItem_NativeSubMenuItem_Body.title(subMenuItemBody, arena.allocateUtf8String(menuItem.title))
+            NativeAppMenuItem_NativeSubMenuItem_Body.special_tag(
                 subMenuItemBody,
                 menuItem.specialTag?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
             )
-            AppMenuItem_SubMenuItem_Body.items_count(subMenuItemBody, menuItem.items.size.toLong())
-            AppMenuItem_SubMenuItem_Body.items(subMenuItemBody, itemsArray)
+            NativeAppMenuItem_NativeSubMenuItem_Body.items_count(subMenuItemBody, menuItem.items.size.toLong())
+            NativeAppMenuItem_NativeSubMenuItem_Body.items(subMenuItemBody, itemsArray)
 
             NativeAppMenuItem.sub_menu_item(nativeItem, subMenuItemBody)
         }

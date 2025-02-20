@@ -3,28 +3,28 @@ package org.jetbrains.desktop.macos
 import org.jetbrains.desktop.LogicalPixels
 import org.jetbrains.desktop.LogicalPoint
 import org.jetbrains.desktop.LogicalSize
-import org.jetbrains.desktop.macos.generated.KeyDownEvent
-import org.jetbrains.desktop.macos.generated.KeyUpEvent
-import org.jetbrains.desktop.macos.generated.ModifiersChangedEvent
-import org.jetbrains.desktop.macos.generated.MouseDownEvent
-import org.jetbrains.desktop.macos.generated.MouseDraggedEvent
-import org.jetbrains.desktop.macos.generated.MouseEnteredEvent
-import org.jetbrains.desktop.macos.generated.MouseExitedEvent
-import org.jetbrains.desktop.macos.generated.MouseMovedEvent
-import org.jetbrains.desktop.macos.generated.MouseUpEvent
-import org.jetbrains.desktop.macos.generated.ScrollWheelEvent
-import org.jetbrains.desktop.macos.generated.WindowCloseRequestEvent
-import org.jetbrains.desktop.macos.generated.WindowFocusChangeEvent
-import org.jetbrains.desktop.macos.generated.WindowFullScreenToggleEvent
-import org.jetbrains.desktop.macos.generated.WindowMoveEvent
-import org.jetbrains.desktop.macos.generated.WindowResizeEvent
-import org.jetbrains.desktop.macos.generated.WindowScreenChangeEvent
+import org.jetbrains.desktop.macos.generated.NativeEvent
+import org.jetbrains.desktop.macos.generated.NativeKeyDownEvent
+import org.jetbrains.desktop.macos.generated.NativeKeyUpEvent
+import org.jetbrains.desktop.macos.generated.NativeModifiersChangedEvent
+import org.jetbrains.desktop.macos.generated.NativeMouseDownEvent
+import org.jetbrains.desktop.macos.generated.NativeMouseDraggedEvent
+import org.jetbrains.desktop.macos.generated.NativeMouseEnteredEvent
+import org.jetbrains.desktop.macos.generated.NativeMouseExitedEvent
+import org.jetbrains.desktop.macos.generated.NativeMouseMovedEvent
+import org.jetbrains.desktop.macos.generated.NativeMouseUpEvent
+import org.jetbrains.desktop.macos.generated.NativeScrollWheelEvent
+import org.jetbrains.desktop.macos.generated.NativeWindowCloseRequestEvent
+import org.jetbrains.desktop.macos.generated.NativeWindowFocusChangeEvent
+import org.jetbrains.desktop.macos.generated.NativeWindowFullScreenToggleEvent
+import org.jetbrains.desktop.macos.generated.NativeWindowMoveEvent
+import org.jetbrains.desktop.macos.generated.NativeWindowResizeEvent
+import org.jetbrains.desktop.macos.generated.NativeWindowScreenChangeEvent
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
-import org.jetbrains.desktop.macos.generated.Event as NativeEvent
 
 @JvmInline
 public value class Timestamp(
@@ -182,145 +182,145 @@ public sealed class Event {
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
-        desktop_macos_h.Event_KeyDown() -> {
+        desktop_macos_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
             Event.KeyDown(
-                windowId = KeyDownEvent.window_id(nativeEvent),
-                keyCode = KeyCode.fromNative(KeyDownEvent.code(nativeEvent)),
-                characters = KeyDownEvent.characters(nativeEvent).getUtf8String(0),
-                key = KeyDownEvent.key(nativeEvent).getUtf8String(0),
-                modifiers = KeyModifiersSet(KeyDownEvent.modifiers(nativeEvent)),
-                isRepeat = KeyDownEvent.is_repeat(nativeEvent),
-                timestamp = Timestamp(KeyDownEvent.timestamp(nativeEvent)),
+                windowId = NativeKeyDownEvent.window_id(nativeEvent),
+                keyCode = KeyCode.fromNative(NativeKeyDownEvent.code(nativeEvent)),
+                characters = NativeKeyDownEvent.characters(nativeEvent).getUtf8String(0),
+                key = NativeKeyDownEvent.key(nativeEvent).getUtf8String(0),
+                modifiers = KeyModifiersSet(NativeKeyDownEvent.modifiers(nativeEvent)),
+                isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
+                timestamp = Timestamp(NativeKeyDownEvent.timestamp(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_KeyUp() -> {
+        desktop_macos_h.NativeEvent_KeyUp() -> {
             val nativeEvent = NativeEvent.key_up(s)
             Event.KeyUp(
-                windowId = KeyUpEvent.window_id(nativeEvent),
-                characters = KeyUpEvent.characters(nativeEvent).getUtf8String(0),
-                key = KeyUpEvent.key(nativeEvent).getUtf8String(0),
-                modifiers = KeyModifiersSet(KeyUpEvent.modifiers(nativeEvent)),
-                keyCode = KeyCode.fromNative(KeyUpEvent.code(nativeEvent)),
-                timestamp = Timestamp(KeyUpEvent.timestamp(nativeEvent)),
+                windowId = NativeKeyUpEvent.window_id(nativeEvent),
+                characters = NativeKeyUpEvent.characters(nativeEvent).getUtf8String(0),
+                key = NativeKeyUpEvent.key(nativeEvent).getUtf8String(0),
+                modifiers = KeyModifiersSet(NativeKeyUpEvent.modifiers(nativeEvent)),
+                keyCode = KeyCode.fromNative(NativeKeyUpEvent.code(nativeEvent)),
+                timestamp = Timestamp(NativeKeyUpEvent.timestamp(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_ModifiersChanged() -> {
+        desktop_macos_h.NativeEvent_ModifiersChanged() -> {
             val nativeEvent = NativeEvent.modifiers_changed(s)
             Event.ModifiersChanged(
-                windowId = ModifiersChangedEvent.window_id(nativeEvent),
-                modifiers = KeyModifiersSet(ModifiersChangedEvent.modifiers(nativeEvent)),
-                keyCode = KeyCode.fromNative(ModifiersChangedEvent.code(nativeEvent)),
-                timestamp = Timestamp(ModifiersChangedEvent.timestamp(nativeEvent)),
+                windowId = NativeModifiersChangedEvent.window_id(nativeEvent),
+                modifiers = KeyModifiersSet(NativeModifiersChangedEvent.modifiers(nativeEvent)),
+                keyCode = KeyCode.fromNative(NativeModifiersChangedEvent.code(nativeEvent)),
+                timestamp = Timestamp(NativeModifiersChangedEvent.timestamp(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_MouseMoved() -> {
+        desktop_macos_h.NativeEvent_MouseMoved() -> {
             val nativeEvent = NativeEvent.mouse_moved(s)
             Event.MouseMoved(
-                windowId = MouseMovedEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(MouseMovedEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(MouseMovedEvent.timestamp(nativeEvent)),
+                windowId = NativeMouseMovedEvent.window_id(nativeEvent),
+                locationInWindow = LogicalPoint.fromNative(NativeMouseMovedEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeMouseMovedEvent.timestamp(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_MouseDragged() -> {
+        desktop_macos_h.NativeEvent_MouseDragged() -> {
             val nativeEvent = NativeEvent.mouse_dragged(s)
             Event.MouseDragged(
-                windowId = MouseDraggedEvent.window_id(nativeEvent),
-                button = MouseButton(MouseDraggedEvent.button(nativeEvent)),
-                locationInWindow = LogicalPoint.fromNative(MouseDraggedEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(MouseDraggedEvent.timestamp(nativeEvent)),
+                windowId = NativeMouseDraggedEvent.window_id(nativeEvent),
+                button = MouseButton(NativeMouseDraggedEvent.button(nativeEvent)),
+                locationInWindow = LogicalPoint.fromNative(NativeMouseDraggedEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeMouseDraggedEvent.timestamp(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_MouseEntered() -> {
+        desktop_macos_h.NativeEvent_MouseEntered() -> {
             val nativeEvent = NativeEvent.mouse_entered(s)
             Event.MouseEntered(
-                windowId = MouseEnteredEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(MouseEnteredEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(MouseEnteredEvent.timestamp(nativeEvent)),
+                windowId = NativeMouseEnteredEvent.window_id(nativeEvent),
+                locationInWindow = LogicalPoint.fromNative(NativeMouseEnteredEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeMouseEnteredEvent.timestamp(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_MouseExited() -> {
+        desktop_macos_h.NativeEvent_MouseExited() -> {
             val nativeEvent = NativeEvent.mouse_exited(s)
             Event.MouseExited(
-                windowId = MouseExitedEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(MouseExitedEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(MouseExitedEvent.timestamp(nativeEvent)),
+                windowId = NativeMouseExitedEvent.window_id(nativeEvent),
+                locationInWindow = LogicalPoint.fromNative(NativeMouseExitedEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeMouseExitedEvent.timestamp(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_MouseUp() -> {
+        desktop_macos_h.NativeEvent_MouseUp() -> {
             val nativeEvent = NativeEvent.mouse_up(s)
             Event.MouseUp(
-                windowId = MouseUpEvent.window_id(nativeEvent),
-                button = MouseButton(MouseUpEvent.button(nativeEvent)),
-                locationInWindow = LogicalPoint.fromNative(MouseUpEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(MouseUpEvent.timestamp(nativeEvent)),
+                windowId = NativeMouseUpEvent.window_id(nativeEvent),
+                button = MouseButton(NativeMouseUpEvent.button(nativeEvent)),
+                locationInWindow = LogicalPoint.fromNative(NativeMouseUpEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeMouseUpEvent.timestamp(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_MouseDown() -> {
+        desktop_macos_h.NativeEvent_MouseDown() -> {
             val nativeEvent = NativeEvent.mouse_down(s)
             Event.MouseDown(
-                windowId = MouseDownEvent.window_id(nativeEvent),
-                button = MouseButton(MouseDownEvent.button(nativeEvent)),
-                locationInWindow = LogicalPoint.fromNative(MouseDownEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(MouseDownEvent.timestamp(nativeEvent)),
+                windowId = NativeMouseDownEvent.window_id(nativeEvent),
+                button = MouseButton(NativeMouseDownEvent.button(nativeEvent)),
+                locationInWindow = LogicalPoint.fromNative(NativeMouseDownEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeMouseDownEvent.timestamp(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_ScrollWheel() -> {
+        desktop_macos_h.NativeEvent_ScrollWheel() -> {
             val nativeEvent = NativeEvent.scroll_wheel(s)
             Event.ScrollWheel(
-                windowId = ScrollWheelEvent.window_id(nativeEvent),
-                scrollingDeltaX = ScrollWheelEvent.scrolling_delta_x(nativeEvent),
-                scrollingDeltaY = ScrollWheelEvent.scrolling_delta_y(nativeEvent),
-                hasPreciseScrillingDeltas = ScrollWheelEvent.has_precise_scrolling_deltas(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(ScrollWheelEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(ScrollWheelEvent.timestamp(nativeEvent)),
+                windowId = NativeScrollWheelEvent.window_id(nativeEvent),
+                scrollingDeltaX = NativeScrollWheelEvent.scrolling_delta_x(nativeEvent),
+                scrollingDeltaY = NativeScrollWheelEvent.scrolling_delta_y(nativeEvent),
+                hasPreciseScrillingDeltas = NativeScrollWheelEvent.has_precise_scrolling_deltas(nativeEvent),
+                locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
+                timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
             )
-        } desktop_macos_h.Event_WindowScreenChange() -> {
+        } desktop_macos_h.NativeEvent_WindowScreenChange() -> {
             val nativeEvent = NativeEvent.window_screen_change(s)
             Event.WindowScreenChange(
-                windowId = WindowScreenChangeEvent.window_id(nativeEvent),
-                newScreenId = WindowScreenChangeEvent.new_screen_id(nativeEvent),
+                windowId = NativeWindowScreenChangeEvent.window_id(nativeEvent),
+                newScreenId = NativeWindowScreenChangeEvent.new_screen_id(nativeEvent),
             )
         }
-        desktop_macos_h.Event_WindowResize() -> {
+        desktop_macos_h.NativeEvent_WindowResize() -> {
             val nativeEvent = NativeEvent.window_resize(s)
             Event.WindowResize(
-                windowId = WindowResizeEvent.window_id(nativeEvent),
-                size = LogicalSize.fromNative(WindowResizeEvent.size(nativeEvent)),
+                windowId = NativeWindowResizeEvent.window_id(nativeEvent),
+                size = LogicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_WindowMove() -> {
+        desktop_macos_h.NativeEvent_WindowMove() -> {
             val nativeEvent = NativeEvent.window_move(s)
             Event.WindowMove(
-                windowId = WindowMoveEvent.window_id(nativeEvent),
-                origin = LogicalPoint.fromNative(WindowMoveEvent.origin(nativeEvent)),
+                windowId = NativeWindowMoveEvent.window_id(nativeEvent),
+                origin = LogicalPoint.fromNative(NativeWindowMoveEvent.origin(nativeEvent)),
             )
         }
-        desktop_macos_h.Event_WindowFocusChange() -> {
+        desktop_macos_h.NativeEvent_WindowFocusChange() -> {
             val nativeEvent = NativeEvent.window_focus_change(s)
             Event.WindowFocusChange(
-                windowId = WindowFocusChangeEvent.window_id(nativeEvent),
-                isKeyWindow = WindowFocusChangeEvent.is_key(nativeEvent),
-                isMainWindow = WindowFocusChangeEvent.is_main(nativeEvent),
+                windowId = NativeWindowFocusChangeEvent.window_id(nativeEvent),
+                isKeyWindow = NativeWindowFocusChangeEvent.is_key(nativeEvent),
+                isMainWindow = NativeWindowFocusChangeEvent.is_main(nativeEvent),
             )
         }
-        desktop_macos_h.Event_WindowCloseRequest() -> {
+        desktop_macos_h.NativeEvent_WindowCloseRequest() -> {
             val nativeEvent = NativeEvent.window_close_request(s)
             Event.WindowCloseRequest(
-                windowId = WindowCloseRequestEvent.window_id(nativeEvent),
+                windowId = NativeWindowCloseRequestEvent.window_id(nativeEvent),
             )
         }
-        desktop_macos_h.Event_DisplayConfigurationChange() -> {
+        desktop_macos_h.NativeEvent_DisplayConfigurationChange() -> {
             Event.DisplayConfigurationChange
         }
-        desktop_macos_h.Event_ApplicationDidFinishLaunching() -> {
+        desktop_macos_h.NativeEvent_ApplicationDidFinishLaunching() -> {
             Event.ApplicationDidFinishLaunching
         }
-        desktop_macos_h.Event_WindowFullScreenToggle() -> {
+        desktop_macos_h.NativeEvent_WindowFullScreenToggle() -> {
             val nativeEvent = NativeEvent.window_full_screen_toggle(s)
             Event.WindowFullScreenToggle(
-                windowId = WindowFullScreenToggleEvent.window_id(nativeEvent),
-                isFullScreen = WindowFullScreenToggleEvent.is_full_screen(nativeEvent),
+                windowId = NativeWindowFullScreenToggleEvent.window_id(nativeEvent),
+                isFullScreen = NativeWindowFullScreenToggleEvent.is_full_screen(nativeEvent),
             )
         }
         else -> {

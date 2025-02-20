@@ -296,26 +296,26 @@ public value class KeyModifiersSet internal constructor(internal val value: Int)
             function: Boolean = false,
         ): KeyModifiersSet {
             var result = 0
-            if (capsLock) result = result or desktop_macos_h.CapsLockModifier()
-            if (shift) result = result or desktop_macos_h.ShiftModifier()
-            if (control) result = result or desktop_macos_h.ControlModifier()
-            if (option) result = result or desktop_macos_h.OptionModifier()
-            if (command) result = result or desktop_macos_h.CommandModifier()
-            if (numericPad) result = result or desktop_macos_h.NumericPadModifier()
-            if (help) result = result or desktop_macos_h.HelpModifier()
-            if (function) result = result or desktop_macos_h.FunctionModifier()
+            if (capsLock) result = result or desktop_macos_h.NativeCapsLockModifier()
+            if (shift) result = result or desktop_macos_h.NativeShiftModifier()
+            if (control) result = result or desktop_macos_h.NativeControlModifier()
+            if (option) result = result or desktop_macos_h.NativeOptionModifier()
+            if (command) result = result or desktop_macos_h.NativeCommandModifier()
+            if (numericPad) result = result or desktop_macos_h.NativeNumericPadModifier()
+            if (help) result = result or desktop_macos_h.NativeHelpModifier()
+            if (function) result = result or desktop_macos_h.NativeFunctionModifier()
             return KeyModifiersSet(result)
         }
     }
 
-    public val capsLock: Boolean get() = (value and desktop_macos_h.CapsLockModifier()) != 0
-    public val shift: Boolean get() = (value and desktop_macos_h.ShiftModifier()) != 0
-    public val control: Boolean get() = (value and desktop_macos_h.ControlModifier()) != 0
-    public val option: Boolean get() = (value and desktop_macos_h.OptionModifier()) != 0
-    public val command: Boolean get() = (value and desktop_macos_h.CommandModifier()) != 0
-    public val numericPad: Boolean get() = (value and desktop_macos_h.NumericPadModifier()) != 0
-    public val help: Boolean get() = (value and desktop_macos_h.HelpModifier()) != 0
-    public val function: Boolean get() = (value and desktop_macos_h.FunctionModifier()) != 0
+    public val capsLock: Boolean get() = (value and desktop_macos_h.NativeCapsLockModifier()) != 0
+    public val shift: Boolean get() = (value and desktop_macos_h.NativeShiftModifier()) != 0
+    public val control: Boolean get() = (value and desktop_macos_h.NativeControlModifier()) != 0
+    public val option: Boolean get() = (value and desktop_macos_h.NativeOptionModifier()) != 0
+    public val command: Boolean get() = (value and desktop_macos_h.NativeCommandModifier()) != 0
+    public val numericPad: Boolean get() = (value and desktop_macos_h.NativeNumericPadModifier()) != 0
+    public val help: Boolean get() = (value and desktop_macos_h.NativeHelpModifier()) != 0
+    public val function: Boolean get() = (value and desktop_macos_h.NativeFunctionModifier()) != 0
 
     override fun toString(): String {
         val modifiers = buildList {
