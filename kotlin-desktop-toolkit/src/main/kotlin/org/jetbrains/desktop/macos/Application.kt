@@ -66,14 +66,16 @@ public object Application {
 
     // called from native
     private fun onShouldTerminate(): Boolean {
+        Logger.info { "onShouldTerminate" }
         return ffiUpCall(default = false) {
             // todo send event to request user interaction?
-            false
+            true
         }
     }
 
     // called from native
     private fun onWillTerminate() {
+        Logger.info { "onWillTerminate" }
         // This method will never be executed because
         // the application halt is performed immediately after that
         // which means that JVM shutdown hooks might be interupted
