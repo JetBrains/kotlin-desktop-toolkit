@@ -18,6 +18,9 @@ use super::{
     keyboard::KeyModifiersSet,
 };
 
+const SPECIAL_TAG_APP_MENU: &str = "AppMenu";
+const TITLE_FOR_APP_MENU: &str = "";
+
 pub fn main_menu_update_impl(menu: AppMenuStructure) {
     let updated_menu = AppMenuStructureSafe::from_unsafe(&menu).unwrap(); // todo come up with some error handling facility
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -33,7 +36,7 @@ pub fn main_menu_update_impl(menu: AppMenuStructure) {
     unsafe {
         menu_root.setAutoenablesItems(false);
     }
-    reconcile_ns_menu_items(mtm, &menu_root, &updated_menu.items);
+    reconcile_ns_menu_items(mtm, &menu_root, true, &updated_menu.items);
 }
 
 #[derive(Debug)]
@@ -129,8 +132,12 @@ impl<'a> AppMenuItemSafe<'a> {
                     None
                 };
                 AppMenuItemSafe::SubMenu {
-                    title: unsafe { CStr::from_ptr(title) }.to_str()?,
-                    special_tag: special_tag,
+                    title: if special_tag != Some(SPECIAL_TAG_APP_MENU) {
+                        unsafe { CStr::from_ptr(title) }.to_str()?
+                    } else {
+                        TITLE_FOR_APP_MENU
+                    },
+                    special_tag,
                     items: safe_items?,
                 }
             }
@@ -170,18 +177,18 @@ impl<'a> AppMenuItemSafe<'a> {
     }
 
     fn reconcile_ns_submenu(mtm: MainThreadMarker, item: &NSMenuItem, title: &str, special_tag: Option<&str>, items: &[Self]) {
-        let ns_title = NSString::from_str(title);
-        unsafe {
-            item.setTitle(&ns_title);
-        };
         let submenu = unsafe { item.submenu() }.unwrap();
-        unsafe {
-            submenu.setTitle(&ns_title);
+        if special_tag != Some(SPECIAL_TAG_APP_MENU) {
+            let ns_title = NSString::from_str(title);
+            unsafe {
+                item.setTitle(&ns_title);
+                submenu.setTitle(&ns_title);
+            }
         }
         // If we don't provide any items for macOS filled submenus we don't want to make it empty
         // todo this check can be removed as far we already reconcile only our items
         if !(special_tag.is_some() && items.is_empty()) {
-            reconcile_ns_menu_items(mtm, &submenu, items);
+            reconcile_ns_menu_items(mtm, &submenu, false, items);
         }
     }
 
@@ -292,7 +299,7 @@ define_class!(
 
 impl MenuItemRepresenter {
     fn new(callback: Option<Callback>, mtm: MainThreadMarker) -> Retained<Self> {
-        let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars { callback: callback });
+        let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars { callback });
         unsafe { msg_send![super(obj), init] }
     }
 }
@@ -315,7 +322,7 @@ impl<'a> ItemIdentity<'a> {
     }
 }
 
-fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: &[AppMenuItemSafe<'a>]) {
+fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, is_main_menu: bool, new_items: &[AppMenuItemSafe<'a>]) {
     autoreleasepool(|pool| {
         let items_array = unsafe { menu.itemArray() };
         let menu_titles: Vec<_> = items_array.iter().map(|submenu| unsafe { submenu.title() }).collect();
@@ -325,24 +332,30 @@ fn reconcile_ns_menu_items<'a>(mtm: MainThreadMarker, menu: &NSMenu, new_items: 
         let old_item_ids: Vec<ItemIdentity> = items_array
             .iter()
             .zip(menu_titles.iter())
-            .map(|(item, title)| {
-                unsafe { item.representedObject() }
-                    .map(|it| it.downcast::<MenuItemRepresenter>())
-                    .map(|_rep_obj| {
-                        let item_id = if unsafe { item.isSeparatorItem() } {
-                            ItemIdentity::Separator
-                        } else if unsafe { item.hasSubmenu() } {
-                            ItemIdentity::SubMenu {
-                                title: unsafe { title.to_str(pool) },
-                            }
-                        } else {
-                            ItemIdentity::Action {
-                                title: unsafe { title.to_str(pool) },
-                            }
-                        };
-                        item_id
-                    })
-                    .unwrap_or(ItemIdentity::MacOSProvided)
+            .enumerate()
+            .map(|(i, (item, title))| {
+                if is_main_menu && i == 0 {
+                    // Avoid duplicating the default (macOS provided) application menu
+                    ItemIdentity::SubMenu { title: TITLE_FOR_APP_MENU }
+                } else {
+                    unsafe { item.representedObject() }
+                        .map(|it| it.downcast::<MenuItemRepresenter>())
+                        .map(|_rep_obj| {
+                            let item_id = if unsafe { item.isSeparatorItem() } {
+                                ItemIdentity::Separator
+                            } else if unsafe { item.hasSubmenu() } {
+                                ItemIdentity::SubMenu {
+                                    title: unsafe { title.to_str(pool) },
+                                }
+                            } else {
+                                ItemIdentity::Action {
+                                    title: unsafe { title.to_str(pool) },
+                                }
+                            };
+                            item_id
+                        })
+                        .unwrap_or(ItemIdentity::MacOSProvided)
+                }
             })
             .collect();
 

@@ -466,6 +466,7 @@ class ApplicationState : AutoCloseable {
                         }
                     },
                 ),
+                specialTag = "AppMenu",
             ),
             AppMenuItem.SubMenu(
                 title = "View",
@@ -579,10 +580,15 @@ fun main() {
     KotlinDesktopToolkit.init()
     Logger.info { runtimeInfo() }
     Application.init(Application.ApplicationConfig())
+    var menuSet = false
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
-        AppMenuManager.setMainMenu(state.buildMenu())
         Application.runEventLoop { event ->
+            if (!menuSet) {
+                // Emulate how the main menu is set in fleet - after the event loop has started
+                AppMenuManager.setMainMenu(state.buildMenu())
+                menuSet = true
+            }
             state.handleEvent(event)
         }
     }
