@@ -175,7 +175,9 @@ public sealed class Event {
             is WindowFocusChange -> windowId
             is WindowCloseRequest -> windowId
             is WindowFullScreenToggle -> windowId
-            else -> null
+            is ModifiersChanged -> windowId
+            ApplicationDidFinishLaunching -> null
+            DisplayConfigurationChange -> null
         }
     }
 }
