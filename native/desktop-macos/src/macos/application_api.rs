@@ -191,9 +191,8 @@ define_class!(
         // The default sendEvent turns key downs into performKeyEquivalent when
         // modifiers are down, but swallows the key up if the modifiers include
         // command.  This one makes all modifiers consistent by always sending key ups.
-        #[allow(non_snake_case)]
         #[unsafe(method(sendEvent:))]
-        fn sendEvent(&self, event: &NSEvent) {
+        fn send_event(&self, event: &NSEvent) {
             if unsafe { event.r#type() } == NSEventType::KeyUp {
                 if let Some(window) = self.keyWindow() {
                     window.sendEvent(event);

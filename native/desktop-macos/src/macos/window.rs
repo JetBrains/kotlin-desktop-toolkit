@@ -54,12 +54,13 @@ use super::{
     window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
 
-#[allow(dead_code)]
 pub(crate) struct Window {
     pub(crate) ns_window: Retained<MyNSWindow>,
+    #[allow(dead_code)]
     pub(crate) delegate: Retained<WindowDelegate>,
     pub(crate) root_view: Retained<RootView>,
     pub(crate) background_state: RefCell<WindowBackgroundState>,
+    #[allow(dead_code)]
     pub(crate) custom_titlebar: Option<CustomTitlebarCell>,
 }
 
@@ -355,14 +356,12 @@ define_class!(
 
     unsafe impl NSWindowDelegate for WindowDelegate {
         #[unsafe(method(windowDidResize:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowDidResize(&self, _notification: &NSNotification) {
+        unsafe fn window_did_resize(&self, _notification: &NSNotification) {
             handle_window_resize(&*self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidChangeScreen:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowDidChangeScreen(&self, _notification: &NSNotification) {
+        unsafe fn window_did_change_screen(&self, _notification: &NSNotification) {
             catch_panic(|| {
                 handle_window_screen_change(&*self.ivars().ns_window);
                 Ok(())
@@ -370,59 +369,54 @@ define_class!(
         }
 
         #[unsafe(method(windowDidMove:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowDidMove(&self, _notification: &NSNotification) {
+        unsafe fn window_did_move(&self, _notification: &NSNotification) {
             handle_window_move(&*self.ivars().ns_window);
         }
 
         #[unsafe(method(windowWillEnterFullScreen:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowWillEnterFullScreen(&self, _notification: &NSNotification) {
+        unsafe fn window_will_enter_full_screen(&self, _notification: &NSNotification) {
             let ivars = self.ivars();
             CustomTitlebar::before_enter_fullscreen(&ivars.custom_titlebar, &ivars.ns_window);
         }
 
         #[unsafe(method(windowDidEnterFullScreen:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowDidEnterFullScreen(&self, _notification: &NSNotification) {
+        unsafe fn window_did_enter_full_screen(&self, _notification: &NSNotification) {
             handle_window_full_screen_toggle(&*self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidExitFullScreen:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowDidExitFullScreen(&self, _notification: &NSNotification) {
+        unsafe fn window_did_exit_full_screen(&self, _notification: &NSNotification) {
             let ivars = self.ivars();
             CustomTitlebar::after_exit_fullscreen(&ivars.custom_titlebar, &ivars.ns_window);
             handle_window_full_screen_toggle(&*self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidBecomeKey:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowDidBecomeKey(&self, _notification: &NSNotification) {
+        unsafe fn window_did_become_key(&self, _notification: &NSNotification) {
+            info!("windowDidBecomeKey");
             handle_window_focus_change(&*self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidResignKey:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowDidResignKey(&self, _notification: &NSNotification) {
+        unsafe fn window_did_resign_key(&self, _notification: &NSNotification) {
+            info!("windowDidResignKey");
             handle_window_focus_change(&*self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidBecomeMain:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowDidBecomeMain(&self, _notification: &NSNotification) {
+        unsafe fn window_did_become_main(&self, _notification: &NSNotification) {
+            info!("windowDidBecomeMain");
             handle_window_focus_change(&*self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidResignMain:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowDidResignMain(&self, _notification: &NSNotification) {
+        unsafe fn window_did_resign_main(&self, _notification: &NSNotification) {
+            info!("windowDidResignMain");
             handle_window_focus_change(&*self.ivars().ns_window);
         }
 
         #[unsafe(method(windowShouldClose:))]
-        #[allow(non_snake_case)]
-        unsafe fn windowShouldClose(&self, _notification: &NSNotification) -> bool {
+        unsafe fn window_should_close(&self, _notification: &NSNotification) -> bool {
             handle_window_close_request(&*self.ivars().ns_window);
             false
         }
@@ -485,46 +479,45 @@ define_class!(
 
     unsafe impl NSObjectProtocol for RootView {}
 
-    #[allow(non_snake_case)]
     unsafe impl NSTextInputClient for RootView {
         // Handling marked text
 
         #[unsafe(method(hasMarkedText))]
-        unsafe fn hasMarkedText(&self) -> bool {
+        unsafe fn has_marked_text(&self) -> bool {
             info!("hasMarkedText");
             false  // TODO
         }
 
         #[unsafe(method(markedRange))]
-        unsafe fn markedRange(&self) -> NSRange {
+        unsafe fn marked_range(&self) -> NSRange {
             info!("markedRange");
             NSRange { location: 0, length: 0 }  // TODO
         }
 
         #[unsafe(method(selectedRange))]
-        unsafe fn selectedRange(&self) -> NSRange {
+        unsafe fn selected_range(&self) -> NSRange {
             info!("selectedRange");
             NSRange { location: 0, length: 0 }  // TODO
         }
 
         #[unsafe(method(setMarkedText:selectedRange:replacementRange:))]
-        unsafe fn setMarkedText_selectedRange_replacementRange(
+        unsafe fn set_marked_text_selected_range_replacement_range(
             &self,
             string: &AnyObject,
             selected_range: NSRange,
             replacement_range: NSRange,
         ) {
-            self.setMarkedText_selectedRange_replacementRange_impl(string, selected_range, replacement_range)
+            self.set_marked_text_selected_range_replacement_range_impl(string, selected_range, replacement_range)
         }
 
         #[unsafe(method(unmarkText))]
-        unsafe fn unmarkText(&self) {
+        unsafe fn unmark_text(&self) {
             info!("unmarkText");
             // TODO
         }
 
         #[unsafe(method_id(validAttributesForMarkedText))]
-        unsafe fn validAttributesForMarkedText(&self) -> Retained<NSArray<NSAttributedStringKey>> {
+        unsafe fn valid_attributes_for_marked_text(&self) -> Retained<NSArray<NSAttributedStringKey>> {
             info!("validAttributesForMarkedText");
             let v = vec![
                 NSString::from_str("NSFont"),
@@ -545,7 +538,7 @@ define_class!(
         // Storing text
 
         #[unsafe(method_id(attributedSubstringForProposedRange:actualRange:))]
-        unsafe fn attributedSubstringForProposedRange_actualRange(
+        unsafe fn attributed_substring_for_proposed_range_actual_range(
             &self,
             range: NSRange,
             actual_range: NSRangePointer,
@@ -556,18 +549,18 @@ define_class!(
         }
 
         #[unsafe(method(insertText:replacementRange:))]
-        unsafe fn insertText_replacementRange(
+        unsafe fn insert_text_replacement_range(
             &self,
             string: &AnyObject,
             replacement_range: NSRange,
         ) {
-            self.insertText_replacementRange_impl(string, replacement_range);
+            self.insert_text_replacement_range_impl(string, replacement_range)
         }
 
         // Getting character coordinates
 
         #[unsafe(method(firstRectForCharacterRange:actualRange:))]
-        unsafe fn firstRectForCharacterRange_actualRange(
+        unsafe fn first_rect_for_character_range_actual_range(
             &self,
             range: NSRange,
             actual_range: NSRangePointer,
@@ -578,13 +571,13 @@ define_class!(
         }
 
         #[unsafe(method(characterIndexForPoint:))]
-        unsafe fn characterIndexForPoint(&self, point: NSPoint) -> NSUInteger {
+        unsafe fn character_index_for_point(&self, point: NSPoint) -> NSUInteger {
             info!("characterIndexForPoint: {:?}", point);
             0  // TODO
         }
 
         #[unsafe(method(doCommandBySelector:))]
-        unsafe fn doCommandBySelector(&self, selector: Sel) {
+        unsafe fn do_command_by_selector(&self, selector: Sel) {
             catch_panic(|| {
                 let s = selector.name();
                 info!("doCommandBySelector: {s:?}");
@@ -595,14 +588,13 @@ define_class!(
     }
 
     impl RootView {
-        #[allow(non_snake_case)]
         #[unsafe(method(updateTrackingArea))]
-        fn updateTrackingArea(&self) {
+        fn update_tracking_area(&self) {
             catch_panic(|| {
                 let mtm = unsafe {
                     MainThreadMarker::new_unchecked()
                 };
-                self.update_tracking_area(mtm);
+                self.update_tracking_area_impl(mtm);
                 Ok(())
             });
         }
@@ -713,8 +705,7 @@ define_class!(
         }
 
         #[unsafe(method(interpretKeyEvents:))]
-        #[allow(non_snake_case)]
-        fn interpretKeyEvents(&self, event_array: &NSArray<NSEvent>) {
+        fn interpret_key_events(&self, event_array: &NSArray<NSEvent>) {
             info!("interpretKeyEvents: {:?}", event_array);
             unsafe {
                 let _: () = msg_send![super(self), interpretKeyEvents: event_array];
@@ -727,8 +718,8 @@ define_class!(
                 info!("key_down");
                 if !handle_key_event(nsevent)? {
                     unsafe {
-                        let event_array: &AnyObject = msg_send![class!(NSArray), arrayWithObject: nsevent];
-                        let _: () = msg_send!(self, interpretKeyEvents: event_array);
+                        let key_events = NSArray::arrayWithObject(nsevent);
+                        self.interpretKeyEvents(&key_events);
                     };
                 }
                 Ok(true)
@@ -743,8 +734,7 @@ define_class!(
         }
 
         #[unsafe(method(performKeyEquivalent:))]
-        #[allow(non_snake_case)]
-        fn performKeyEquivalent(&self, event: &NSEvent) -> bool {
+        fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
             info!("performKeyEquivalent: {event:?}");
             let ret: Bool = false.into();
 //            let ret = unsafe { msg_send![super(self), performKeyEquivalent: event] };
@@ -753,8 +743,7 @@ define_class!(
 
         // Needed for e.g. Ctrl+Tab event reporting
         #[unsafe(method(_wantsKeyDownForEvent:))]
-        #[allow(non_snake_case)]
-        fn wantsKeyDownForEvent(&self, event: &NSEvent) -> bool {
+        fn wants_key_down_for_event(&self, event: &NSEvent) -> bool {
             info!("_wantsKeyDownForEvent: {event:?}");
             let ret: Bool = true.into();
 //            let ret = unsafe { msg_send![super(self), _wantsKeyDownForEvent: event] };
@@ -773,21 +762,18 @@ define_class!(
         // the last one is undocumented in macos
         // please check that titlbar works as expected if you want to change some of them
         // including the case when you click inactive window title bar and starting to drag it
-        #[allow(non_snake_case)]
         #[unsafe(method(acceptsFirstMouse:))]
-        fn acceptsFirstMouse(&self, _event: Option<&NSEvent>) -> bool {
+        fn accepts_first_mouse(&self, _event: Option<&NSEvent>) -> bool {
             return true.into();
         }
 
-        #[allow(non_snake_case)]
         #[unsafe(method(acceptsFirstResponder))]
-        fn acceptsFirstResponder(&self) -> bool {
+        fn accepts_first_responder(&self) -> bool {
             return true.into();
         }
 
-        #[allow(non_snake_case)]
         #[unsafe(method(_opaqueRectForWindowMoveWhenInTitlebar))]
-        fn opaqueRectForWindowMoveWhenInTitlebar(&self) -> NSRect {
+        fn opaque_rect_for_window_move_when_in_titlebar(&self) -> NSRect {
             // for windows with non transparent tiile bar this methods doesn't have any effect
             return self.bounds();
         }
@@ -821,11 +807,11 @@ impl RootView {
             root_view.setAutoresizesSubviews(true);
             root_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
         }
-        root_view.update_tracking_area(mtm);
+        root_view.update_tracking_area_impl(mtm);
         root_view
     }
 
-    fn update_tracking_area(&self, mtm: MainThreadMarker) {
+    fn update_tracking_area_impl(&self, mtm: MainThreadMarker) {
         let rect = self.bounds();
         let options = NSTrackingAreaOptions::MouseEnteredAndExited
             | NSTrackingAreaOptions::ActiveInKeyWindow
@@ -845,8 +831,7 @@ impl RootView {
         self.ivars().tracking_area.replace(Some(tracking_area));
     }
 
-    #[allow(non_snake_case)]
-    fn insertText_replacementRange_impl(&self, string: &AnyObject, replacement_range: NSRange) {
+    fn insert_text_replacement_range_impl(&self, string: &AnyObject, replacement_range: NSRange) {
         catch_panic(|| {
             let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
             info!(
@@ -858,8 +843,12 @@ impl RootView {
         });
     }
 
-    #[allow(non_snake_case)]
-    fn setMarkedText_selectedRange_replacementRange_impl(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) {
+    fn set_marked_text_selected_range_replacement_range_impl(
+        &self,
+        string: &AnyObject,
+        selected_range: NSRange,
+        replacement_range: NSRange,
+    ) {
         catch_panic(|| {
             let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
             info!(
