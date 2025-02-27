@@ -2,7 +2,7 @@ use objc2_foundation::MainThreadMarker;
 
 use super::keyboard::KeyModifiersSet;
 use super::{application_api::MyNSApplication, application_menu::main_menu_update_impl};
-use crate::common::{ArraySize, StrPtr};
+use crate::common::{ArraySize, BorrowedStrPtr};
 use crate::logger::ffi_boundary;
 
 // This file contains C API of the library
@@ -13,7 +13,7 @@ use crate::logger::ffi_boundary;
 #[repr(C)]
 #[derive(Debug)]
 pub struct AppMenuKeystroke {
-    pub key: StrPtr,
+    pub key: BorrowedStrPtr,
     pub modifiers: KeyModifiersSet,
 }
 
@@ -23,15 +23,15 @@ pub struct AppMenuKeystroke {
 pub enum AppMenuItem<'a> {
     ActionItem {
         enabled: bool,
-        title: StrPtr,
+        title: BorrowedStrPtr,
         macos_provided: bool,
         keystroke: Option<&'a AppMenuKeystroke>,
         perform: extern "C" fn(),
     },
     SeparatorItem,
     SubMenuItem {
-        title: StrPtr,
-        special_tag: StrPtr,
+        title: BorrowedStrPtr,
+        special_tag: BorrowedStrPtr,
         items: *const AppMenuItem<'a>,
         items_count: ArraySize,
     },

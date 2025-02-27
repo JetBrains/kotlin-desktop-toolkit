@@ -3,7 +3,7 @@ use std::ffi::CString;
 
 use log::warn;
 pub type StrPtr = *mut std::ffi::c_char;
-pub type ConstStrPtr = *const std::ffi::c_char;
+pub type BorrowedStrPtr = *const std::ffi::c_char;
 
 #[repr(transparent)]
 pub struct AutoDropStrPtr(pub(crate) *const std::ffi::c_char);

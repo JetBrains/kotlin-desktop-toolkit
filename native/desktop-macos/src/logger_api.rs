@@ -1,4 +1,4 @@
-use crate::common::{ArraySize, StrPtr};
+use crate::common::{ArraySize, BorrowedStrPtr, StrPtr};
 use crate::logger::{append_exception_msg, clear_exception_msgs, exceptions_array, init_panic_handler, panic_payload_msg};
 use log::{error, info};
 
@@ -43,7 +43,7 @@ pub enum LogLevel {
 
 #[repr(C)]
 pub struct LoggerConfiguration {
-    pub file_path: StrPtr,
+    pub file_path: BorrowedStrPtr,
     pub console_level: LogLevel,
     pub file_level: LogLevel,
 }

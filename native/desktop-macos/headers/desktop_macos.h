@@ -44,8 +44,10 @@ typedef struct NativeExceptionsArray {
   NativeArraySize count;
 } NativeExceptionsArray;
 
+typedef const char *NativeBorrowedStrPtr;
+
 typedef struct NativeLoggerConfiguration {
-  NativeStrPtr file_path;
+  NativeBorrowedStrPtr file_path;
   enum NativeLogLevel console_level;
   enum NativeLogLevel file_level;
 } NativeLoggerConfiguration;
@@ -61,16 +63,14 @@ typedef uintptr_t NativeKeyModifiersSet;
 
 typedef uint16_t NativeKeyCode;
 
-typedef const char *NativeConstStrPtr;
-
 typedef double NativeTimestamp;
 
 typedef struct NativeKeyDownEvent {
   NativeWindowId window_id;
   NativeKeyModifiersSet modifiers;
   NativeKeyCode code;
-  NativeConstStrPtr characters;
-  NativeConstStrPtr key;
+  NativeBorrowedStrPtr characters;
+  NativeBorrowedStrPtr key;
   bool is_repeat;
   NativeTimestamp timestamp;
 } NativeKeyDownEvent;
@@ -79,8 +79,8 @@ typedef struct NativeKeyUpEvent {
   NativeWindowId window_id;
   NativeKeyModifiersSet modifiers;
   NativeKeyCode code;
-  NativeConstStrPtr characters;
-  NativeConstStrPtr key;
+  NativeBorrowedStrPtr characters;
+  NativeBorrowedStrPtr key;
   NativeTimestamp timestamp;
 } NativeKeyUpEvent;
 
@@ -264,12 +264,12 @@ typedef bool (*NativeEventHandler)(const struct NativeEvent*);
 
 typedef struct NativeTextCommandOperation {
   NativeWindowId window_id;
-  NativeConstStrPtr command;
+  NativeBorrowedStrPtr command;
 } NativeTextCommandOperation;
 
 typedef struct NativeTextChangedOperation {
   NativeWindowId window_id;
-  NativeConstStrPtr text;
+  NativeBorrowedStrPtr text;
 } NativeTextChangedOperation;
 
 typedef enum NativeTextOperation_Tag {
@@ -299,7 +299,7 @@ typedef struct NativeApplicationCallbacks {
 } NativeApplicationCallbacks;
 
 typedef struct NativeAppMenuKeystroke {
-  NativeStrPtr key;
+  NativeBorrowedStrPtr key;
   NativeKeyModifiersSet modifiers;
 } NativeAppMenuKeystroke;
 
@@ -311,15 +311,15 @@ typedef enum NativeAppMenuItem_Tag {
 
 typedef struct NativeAppMenuItem_NativeActionItem_Body {
   bool enabled;
-  NativeStrPtr title;
+  NativeBorrowedStrPtr title;
   bool macos_provided;
   const struct NativeAppMenuKeystroke *keystroke;
   void (*perform)(void);
 } NativeAppMenuItem_NativeActionItem_Body;
 
 typedef struct NativeAppMenuItem_NativeSubMenuItem_Body {
-  NativeStrPtr title;
-  NativeStrPtr special_tag;
+  NativeBorrowedStrPtr title;
+  NativeBorrowedStrPtr special_tag;
   const struct NativeAppMenuItem *items;
   NativeArraySize items_count;
 } NativeAppMenuItem_NativeSubMenuItem_Body;

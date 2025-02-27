@@ -3,7 +3,10 @@ use std::ffi::{CStr, CString};
 use objc2::rc::{AutoreleasePool, Retained};
 use objc2_foundation::NSString;
 
-use crate::{common::StrPtr, logger::ffi_boundary};
+use crate::{
+    common::{BorrowedStrPtr, StrPtr},
+    logger::ffi_boundary,
+};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn string_drop(str_ptr: StrPtr) {
@@ -17,7 +20,7 @@ pub extern "C" fn string_drop(str_ptr: StrPtr) {
     });
 }
 
-pub(crate) fn copy_to_ns_string(str_ptr: StrPtr) -> anyhow::Result<Retained<NSString>> {
+pub(crate) fn copy_to_ns_string(str_ptr: BorrowedStrPtr) -> anyhow::Result<Retained<NSString>> {
     let s: &str = unsafe { CStr::from_ptr(str_ptr) }.to_str()?;
     Ok(NSString::from_str(s))
 }

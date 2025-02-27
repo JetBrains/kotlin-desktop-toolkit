@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 
-use crate::common::ConstStrPtr;
+use crate::common::BorrowedStrPtr;
 
 use super::{application_api::AppState, window_api::WindowId};
 
@@ -16,7 +16,7 @@ pub struct TextRange {
 #[derive(Debug)]
 pub struct TextChangedOperation {
     window_id: WindowId,
-    text: ConstStrPtr,
+    text: BorrowedStrPtr,
     //composition_range: TextRange,
     //composition_committed_range: TextRange,
     //composition_selected_range: TextRange,
@@ -27,7 +27,7 @@ pub struct TextChangedOperation {
 #[derive(Debug)]
 pub struct TextCommandOperation {
     window_id: WindowId,
-    command: ConstStrPtr,
+    command: BorrowedStrPtr,
 }
 
 #[repr(C)]
@@ -41,7 +41,7 @@ pub enum TextOperation {
 // return true if operation was handled
 pub type TextOperationHandler = extern "C" fn(&TextOperation) -> bool;
 
-pub(crate) fn handle_text_changed_operation(window_id: WindowId, text: ConstStrPtr) -> anyhow::Result<bool> {
+pub(crate) fn handle_text_changed_operation(window_id: WindowId, text: BorrowedStrPtr) -> anyhow::Result<bool> {
     AppState::with(|state| {
         let operation = TextOperation::TextChanged(TextChangedOperation {
             window_id,

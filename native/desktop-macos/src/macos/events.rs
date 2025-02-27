@@ -7,7 +7,7 @@ use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
 use crate::{
-    common::{ConstStrPtr, LogicalPixels, LogicalPoint, LogicalSize},
+    common::{BorrowedStrPtr, LogicalPixels, LogicalPoint, LogicalSize},
     logger::{PanicDefault, ffi_boundary},
 };
 use anyhow::bail;
@@ -31,8 +31,8 @@ pub struct KeyDownEvent {
     window_id: WindowId,
     modifiers: KeyModifiersSet,
     code: KeyCode,
-    characters: ConstStrPtr,
-    key: ConstStrPtr,
+    characters: BorrowedStrPtr,
+    key: BorrowedStrPtr,
     is_repeat: bool,
     timestamp: Timestamp,
 }
@@ -43,8 +43,8 @@ pub struct KeyUpEvent {
     window_id: WindowId,
     modifiers: KeyModifiersSet,
     code: KeyCode,
-    characters: ConstStrPtr,
-    key: ConstStrPtr,
+    characters: BorrowedStrPtr,
+    key: BorrowedStrPtr,
     timestamp: Timestamp,
 }
 
