@@ -28,7 +28,7 @@ use objc2_foundation::{
 };
 
 use crate::{
-    common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},
+    common::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},
     define_objc_ref,
     logger::catch_panic,
     macos::{
@@ -285,7 +285,8 @@ impl Window {
                     }
                 }
                 self.ns_window.setOpaque(false);
-                self.ns_window.setBackgroundColor(Some(unsafe { &NSColor::clearColor() }));
+                let ns_color = unsafe { NSColor::clearColor() };
+                self.ns_window.setBackgroundColor(Some(&ns_color));
                 background_state.is_transparent = true;
             }
             WindowBackground::SolidColor(color) => {
@@ -295,7 +296,7 @@ impl Window {
                     }
                 }
                 self.ns_window.setOpaque(true);
-                let ns_color: Retained<NSColor> = From::<Color>::from(color);
+                let ns_color: Retained<NSColor> = color.into();
                 self.ns_window.setBackgroundColor(Some(&ns_color));
                 background_state.is_transparent = false;
             }
