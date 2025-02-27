@@ -104,18 +104,18 @@ pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<F
 
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
-pub struct KeyModifiersSet(u32);
+pub struct KeyModifiersSet(usize);
 
 pub(crate) const EMPTY_KEY_MODIFIERS: KeyModifiersSet = KeyModifiersSet(0);
 
 impl From<NSEventModifierFlags> for KeyModifiersSet {
     fn from(value: NSEventModifierFlags) -> Self {
-        KeyModifiersSet(value.bits() as u32)
+        Self(value.bits())
     }
 }
 
 impl From<&KeyModifiersSet> for NSEventModifierFlags {
     fn from(value: &KeyModifiersSet) -> Self {
-        NSEventModifierFlags(value.0 as usize)
+        Self(value.0)
     }
 }

@@ -57,7 +57,7 @@ typedef struct NativeApplicationConfig {
 
 typedef int64_t NativeWindowId;
 
-typedef uint32_t NativeKeyModifiersSet;
+typedef uintptr_t NativeKeyModifiersSet;
 
 typedef uint16_t NativeKeyCode;
 
