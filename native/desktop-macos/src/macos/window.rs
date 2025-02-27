@@ -33,7 +33,7 @@ use crate::{
             handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change,
         },
         string::copy_to_ns_string,
-        text_operations::{handle_text_changed_operation, handle_text_command_operation},
+        text_operations::{FirstRectForCharacterRangeOperation, GetSelectedTextRangeOperation, TextChangedOperation, TextCommandOperation},
         window_api::FileDialogType,
     },
 };
@@ -43,6 +43,7 @@ use super::{
     custom_titlebar::CustomTitlebarCell,
     metal_api::MetalView,
     screen::NSScreenExts,
+    text_operations::TextRange,
     window_api::{FileDialogCallback, FileDialogParams, WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
 
@@ -516,8 +517,7 @@ define_class!(
 
         #[unsafe(method(selectedRange))]
         unsafe fn selected_range(&self) -> NSRange {
-            info!("selectedRange");
-            NSRange { location: 0, length: 0 }  // TODO
+            self.selected_range_impl()
         }
 
         #[unsafe(method(setMarkedText:selectedRange:replacementRange:))]
@@ -585,9 +585,7 @@ define_class!(
             range: NSRange,
             actual_range: NSRangePointer,
         ) -> NSRect {
-            let actual_range = NonNull::new(actual_range);
-            info!("firstRectForCharacterRange: range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
-            NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64))  // TODO
+            self.first_rect_for_character_range_actual_range_impl(range, actual_range)
         }
 
         #[unsafe(method(characterIndexForPoint:))]
@@ -601,8 +599,7 @@ define_class!(
             catch_panic(|| {
                 let s = selector.name();
                 info!("doCommandBySelector: {s:?}");
-                let window = self.window().context("No window for view")?;
-                handle_text_command_operation(window.window_id(), s)
+                Ok(TextCommandOperation { window_id: self.window_id()?, command: BorrowedStrPtr::new(s.as_ptr()) }.get_result())
             });
         }
     }
@@ -812,7 +809,19 @@ fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttribut
     }
 }
 
+const fn ns_range_to_text_range(ns_range: NSRange) -> TextRange {
+    TextRange {
+        location: ns_range.location,
+        length: ns_range.length,
+    }
+}
+
 impl RootView {
+    fn window_id(&self) -> anyhow::Result<WindowId> {
+        let window = self.window().context("No window for view")?;
+        Ok(window.window_id())
+    }
+
     pub(crate) fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars {
@@ -847,6 +856,21 @@ impl RootView {
         self.ivars().tracking_area.replace(Some(tracking_area));
     }
 
+    fn selected_range_impl(&self) -> NSRange {
+        catch_panic(|| {
+            let data = GetSelectedTextRangeOperation {
+                window_id: self.window_id()?,
+            }
+            .get_result();
+            info!("selectedRange -> {data:?}");
+            Ok(NSRange {
+                location: data.location,
+                length: data.length,
+            })
+        })
+        .unwrap_or_default()
+    }
+
     fn insert_text_replacement_range_impl(&self, string: &AnyObject, replacement_range: NSRange) {
         catch_panic(|| {
             let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
@@ -854,9 +878,33 @@ impl RootView {
                 "insertText, marked_text={:?}, string={:?}, replacement_range={:?}",
                 ns_attributed_string, text, replacement_range
             );
-            let window = self.window().context("No window for view")?;
-            handle_text_changed_operation(window.window_id(), BorrowedStrPtr::new(text.UTF8String()))
+            let data = TextChangedOperation {
+                window_id: self.window_id()?,
+                text: BorrowedStrPtr::new(text.UTF8String()),
+                replacement_range: ns_range_to_text_range(replacement_range),
+            }
+            .get_result();
+            Ok(data)
         });
+    }
+
+    fn first_rect_for_character_range_actual_range_impl(&self, range: NSRange, actual_range: NSRangePointer) -> NSRect {
+        catch_panic(|| {
+            let window = self.window().context("No window for view")?;
+            let actual_range = NonNull::new(actual_range).map(|r| unsafe { r.read() });
+            let data = FirstRectForCharacterRangeOperation {
+                window_id: window.window_id(),
+                location: range.location,
+                length: range.length,
+            }
+            .get_result();
+            let window_size = window.frame().size;
+            let view_point = NSPoint::new(data.x, window_size.height - data.y);
+            let view_rect = NSRect::new(view_point, NSSize::new(data.w, data.h));
+            let global_rect = window.convertRectToScreen(view_rect);
+            info!("firstRectForCharacterRange: range={range:?}, actual_range={actual_range:?}\n    -> data={data:?},\n    view_rect={view_rect:?},\n    global_rect={global_rect:?}");
+            Ok(global_rect)
+        }).unwrap_or_else(NSRect::default)
     }
 
     fn set_marked_text_selected_range_replacement_range_impl(

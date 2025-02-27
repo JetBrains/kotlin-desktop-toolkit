@@ -1,5 +1,3 @@
-use std::ffi::CStr;
-
 use crate::common::BorrowedStrPtr;
 
 use super::{application_api::AppState, window_api::WindowId};
@@ -8,58 +6,101 @@ use super::{application_api::AppState, window_api::WindowId};
 #[derive(Debug, Default)]
 // For the invalid (missing) value, all values are 0
 pub struct TextRange {
-    start_offset_inclusive: i64,
-    end_offset_inclusive: i64,
+    pub(crate) location: usize,
+    pub(crate) length: usize,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct TextChangedOperation<'a> {
-    window_id: WindowId,
-    text: BorrowedStrPtr<'a>,
+    pub(crate) window_id: WindowId,
+    pub(crate) text: BorrowedStrPtr<'a>,
+    pub(crate) replacement_range: TextRange,
     //composition_range: TextRange,
     //composition_committed_range: TextRange,
     //composition_selected_range: TextRange,
-    //replacement_range: TextRange,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct TextCommandOperation<'a> {
-    window_id: WindowId,
-    command: BorrowedStrPtr<'a>,
+    pub(crate) window_id: WindowId,
+    pub(crate) command: BorrowedStrPtr<'a>,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub enum TextOperation<'a> {
-    TextCommand(TextCommandOperation<'a>),
     TextChanged(TextChangedOperation<'a>),
+    TextCommand(TextCommandOperation<'a>),
 }
 
 // return true if operation was handled
 pub type TextOperationHandler = extern "C" fn(&TextOperation) -> bool;
 
-pub(crate) fn handle_text_changed_operation(window_id: WindowId, text: BorrowedStrPtr) -> anyhow::Result<bool> {
-    AppState::with(|state| {
-        let operation = TextOperation::TextChanged(TextChangedOperation {
-            window_id,
-            text,
-            //composition_range: TextRange::default(),
-            //composition_committed_range: TextRange::default(),
-            //composition_selected_range: TextRange::default(),
-            //replacement_range: TextRange::default(),
-        });
-        Ok((state.text_operation_handler)(&operation))
-    })
+#[repr(C)]
+#[derive(Debug)]
+pub struct GetSelectedTextRangeOperation {
+    pub(crate) window_id: WindowId,
 }
 
-pub(crate) fn handle_text_command_operation(window_id: WindowId, command: &'static CStr) -> anyhow::Result<bool> {
-    AppState::with(|state| {
-        let operation = TextOperation::TextCommand(TextCommandOperation {
-            window_id,
-            command: BorrowedStrPtr::new(command.as_ptr()),
-        });
-        Ok((state.text_operation_handler)(&operation))
-    })
+#[repr(C)]
+#[derive(Debug)]
+pub struct FirstRectForCharacterRangeOperation {
+    pub(crate) window_id: WindowId,
+    pub(crate) location: usize,
+    pub(crate) length: usize,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct GetSelectedTextRangeResult {
+    pub(crate) location: usize,
+    pub(crate) length: usize,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct FirstRectForCharacterRangeResult {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) w: f64,
+    pub(crate) h: f64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct TextContextHandler {
+    get_selected_range: extern "C" fn(GetSelectedTextRangeOperation) -> GetSelectedTextRangeResult,
+    first_rect_for_character_range: extern "C" fn(FirstRectForCharacterRangeOperation) -> FirstRectForCharacterRangeResult,
+}
+
+impl TextChangedOperation<'_> {
+    pub(crate) fn get_result(self) -> bool {
+        AppState::with(|state| {
+            let operation = TextOperation::TextChanged(self);
+            (state.text_operation_handler)(&operation)
+        })
+    }
+}
+
+impl TextCommandOperation<'_> {
+    pub(crate) fn get_result(self) -> bool {
+        AppState::with(|state| {
+            let operation = TextOperation::TextCommand(self);
+            (state.text_operation_handler)(&operation)
+        })
+    }
+}
+
+impl GetSelectedTextRangeOperation {
+    pub(crate) fn get_result(self) -> GetSelectedTextRangeResult {
+        AppState::with(|state| (state.text_context_handler.get_selected_range)(self))
+    }
+}
+
+impl FirstRectForCharacterRangeOperation {
+    pub(crate) fn get_result(self) -> FirstRectForCharacterRangeResult {
+        AppState::with(|state| (state.text_context_handler.first_rect_for_character_range)(self))
+    }
 }

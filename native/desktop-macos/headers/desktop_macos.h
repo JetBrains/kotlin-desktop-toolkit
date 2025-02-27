@@ -263,40 +263,74 @@ typedef struct NativeEvent {
 
 typedef bool (*NativeEventHandler)(const struct NativeEvent*);
 
+typedef struct NativeTextRange {
+  uintptr_t location;
+  uintptr_t length;
+} NativeTextRange;
+
+typedef struct NativeTextChangedOperation {
+  NativeWindowId window_id;
+  NativeBorrowedStrPtr text;
+  struct NativeTextRange replacement_range;
+} NativeTextChangedOperation;
+
 typedef struct NativeTextCommandOperation {
   NativeWindowId window_id;
   NativeBorrowedStrPtr command;
 } NativeTextCommandOperation;
 
-typedef struct NativeTextChangedOperation {
-  NativeWindowId window_id;
-  NativeBorrowedStrPtr text;
-} NativeTextChangedOperation;
-
 typedef enum NativeTextOperation_Tag {
-  NativeTextOperation_TextCommand,
   NativeTextOperation_TextChanged,
+  NativeTextOperation_TextCommand,
 } NativeTextOperation_Tag;
 
 typedef struct NativeTextOperation {
   NativeTextOperation_Tag tag;
   union {
     struct {
-      struct NativeTextCommandOperation text_command;
+      struct NativeTextChangedOperation text_changed;
     };
     struct {
-      struct NativeTextChangedOperation text_changed;
+      struct NativeTextCommandOperation text_command;
     };
   };
 } NativeTextOperation;
 
 typedef bool (*NativeTextOperationHandler)(const struct NativeTextOperation*);
 
+typedef struct NativeGetSelectedTextRangeResult {
+  uintptr_t location;
+  uintptr_t length;
+} NativeGetSelectedTextRangeResult;
+
+typedef struct NativeGetSelectedTextRangeOperation {
+  NativeWindowId window_id;
+} NativeGetSelectedTextRangeOperation;
+
+typedef struct NativeFirstRectForCharacterRangeResult {
+  double x;
+  double y;
+  double w;
+  double h;
+} NativeFirstRectForCharacterRangeResult;
+
+typedef struct NativeFirstRectForCharacterRangeOperation {
+  NativeWindowId window_id;
+  uintptr_t location;
+  uintptr_t length;
+} NativeFirstRectForCharacterRangeOperation;
+
+typedef struct NativeTextContextHandler {
+  struct NativeGetSelectedTextRangeResult (*get_selected_range)(struct NativeGetSelectedTextRangeOperation);
+  struct NativeFirstRectForCharacterRangeResult (*first_rect_for_character_range)(struct NativeFirstRectForCharacterRangeOperation);
+} NativeTextContextHandler;
+
 typedef struct NativeApplicationCallbacks {
   bool (*on_should_terminate)(void);
   void (*on_will_terminate)(void);
   NativeEventHandler event_handler;
   NativeTextOperationHandler text_operation_handler;
+  struct NativeTextContextHandler text_context_handler;
 } NativeApplicationCallbacks;
 
 typedef struct NativeAppMenuKeystroke {

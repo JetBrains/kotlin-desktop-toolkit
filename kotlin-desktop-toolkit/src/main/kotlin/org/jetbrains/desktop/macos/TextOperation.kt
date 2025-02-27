@@ -1,15 +1,42 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.NativeTextChangedOperation
-import org.jetbrains.desktop.macos.generated.NativeTextCommandOperation
-import org.jetbrains.desktop.macos.generated.NativeTextOperation
-import org.jetbrains.desktop.macos.generated.desktop_macos_h
-import java.lang.foreign.MemorySegment
+public data class TextRange(
+    val location: Long,
+    val length: Long,
+) {
+    internal companion object
+}
+
+public data class GetSelectedRangeArgs(val windowId: WindowId) {
+    internal companion object
+}
+
+public data class GetSelectedRangeResult(val range: TextRange)
+
+public data class FirstRectForCharacterRangeArgs(
+    val windowId: WindowId,
+    val range: TextRange,
+) {
+    internal companion object
+}
+
+public data class FirstRectForCharacterRangeResult(
+    val x: Double,
+    val y: Double,
+    val w: Double,
+    val h: Double,
+)
+
+public interface TextContextHandler {
+    public fun getSelectedRange(args: GetSelectedRangeArgs): GetSelectedRangeResult?
+    public fun firstRectForCharacterRange(args: FirstRectForCharacterRangeArgs): FirstRectForCharacterRangeResult?
+}
 
 public sealed class TextOperation {
     public data class TextChanged(
         val windowId: WindowId,
         val text: String,
+        val replacementRange: TextRange,
     ) : TextOperation()
 
     public data class TextCommand(
@@ -17,35 +44,12 @@ public sealed class TextOperation {
         val command: String,
     ) : TextOperation()
 
-    public fun windowId(): WindowId? {
+    public fun windowId(): WindowId {
         return when (this) {
             is TextCommand -> windowId
             is TextChanged -> windowId
-            else -> null
         }
     }
 
-    internal companion object {
-        internal fun fromNative(s: MemorySegment): TextOperation {
-            return when (NativeTextOperation.tag(s)) {
-                desktop_macos_h.NativeTextOperation_TextChanged() -> {
-                    val nativeEvent = NativeTextOperation.text_changed(s)
-                    TextChanged(
-                        windowId = NativeTextChangedOperation.window_id(nativeEvent),
-                        text = NativeTextChangedOperation.text(nativeEvent).getUtf8String(0),
-                    )
-                }
-                desktop_macos_h.NativeTextOperation_TextCommand() -> {
-                    val nativeEvent = NativeTextOperation.text_command(s)
-                    TextCommand(
-                        windowId = NativeTextCommandOperation.window_id(nativeEvent),
-                        command = NativeTextCommandOperation.command(nativeEvent).getUtf8String(0),
-                    )
-                }
-                else -> {
-                    error("Unexpected TextOperation tag")
-                }
-            }
-        }
-    }
+    internal companion object
 }

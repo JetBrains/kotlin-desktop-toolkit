@@ -3,6 +3,7 @@ package org.jetbrains.desktop.macos
 import org.jetbrains.desktop.macos.generated.NativeApplicationCallbacks
 import org.jetbrains.desktop.macos.generated.NativeApplicationConfig
 import org.jetbrains.desktop.macos.generated.NativeEventHandler
+import org.jetbrains.desktop.macos.generated.NativeTextContextHandler
 import org.jetbrains.desktop.macos.generated.NativeTextOperationHandler
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
@@ -31,6 +32,7 @@ public object Application {
 
     private var eventHandler: EventHandler? = null
     private var textOperationHandler: TextOperationHandler? = null
+    private var textContextHandler: TextContextHandler? = null
     public lateinit var screens: AllScreens
 
     public fun init(applicationConfig: ApplicationConfig = ApplicationConfig()) {
@@ -50,6 +52,10 @@ public object Application {
 
     public fun setTextOperationHandler(textOperationHandler: TextOperationHandler) {
         this.textOperationHandler = textOperationHandler
+    }
+
+    public fun setTextContextHandler(textContextHandler: TextContextHandler) {
+        this.textContextHandler = textContextHandler
     }
 
     public fun stopEventLoop() {
@@ -123,6 +129,42 @@ public object Application {
         }
     }
 
+    private fun onTextContextGetSelectedRange(nativeArgs: MemorySegment): MemorySegment {
+        val operation = GetSelectedRangeArgs.fromNative(nativeArgs)
+        val result = ffiUpCall(default = null) {
+            textContextHandler?.getSelectedRange(operation)
+        } ?: run {
+            Logger.warn { "textContextHandler is null; event: $operation was ignored!" }
+            GetSelectedRangeResult(range = TextRange(location = 0, length = 0))
+        }
+        return result.toNative(Arena.global())
+    }
+
+    private fun onTextContextFirstRectForCharacterRange(nativeArgs: MemorySegment): MemorySegment {
+        val operation = FirstRectForCharacterRangeArgs.fromNative(nativeArgs)
+        val result = ffiUpCall(default = null) {
+            textContextHandler?.firstRectForCharacterRange(operation)
+        } ?: run {
+            Logger.warn { "textContextHandler is null; event: $operation was ignored!" }
+            FirstRectForCharacterRangeResult(x = 0.0, y = 0.0, w = 0.0, h = 0.0)
+        }
+        return result.toNative(Arena.global())
+    }
+
+    private fun textContextCallbacks(): MemorySegment {
+        val arena = Arena.global()
+        val textContextHandler = NativeTextContextHandler.allocate(arena)
+        NativeTextContextHandler.get_selected_range(
+            textContextHandler,
+            NativeTextContextHandler.get_selected_range.allocate(::onTextContextGetSelectedRange, arena),
+        )
+        NativeTextContextHandler.first_rect_for_character_range(
+            textContextHandler,
+            NativeTextContextHandler.first_rect_for_character_range.allocate(::onTextContextFirstRectForCharacterRange, arena),
+        )
+        return textContextHandler
+    }
+
     private fun applicationCallbacks(): MemorySegment {
         val arena = Arena.global()
         val callbacks = NativeApplicationCallbacks.allocate(arena)
@@ -136,6 +178,7 @@ public object Application {
         )
         NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
         NativeApplicationCallbacks.text_operation_handler(callbacks, NativeTextOperationHandler.allocate(::onTextOperation, arena))
+        NativeApplicationCallbacks.text_context_handler(callbacks, textContextCallbacks())
         return callbacks
     }
 }

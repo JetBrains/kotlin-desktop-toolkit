@@ -4,9 +4,18 @@ import org.jetbrains.desktop.LogicalPoint
 import org.jetbrains.desktop.LogicalSize
 import org.jetbrains.desktop.PhysicalSize
 import org.jetbrains.desktop.macos.generated.NativeColor
+import org.jetbrains.desktop.macos.generated.NativeFirstRectForCharacterRangeOperation
+import org.jetbrains.desktop.macos.generated.NativeFirstRectForCharacterRangeResult
+import org.jetbrains.desktop.macos.generated.NativeGetSelectedTextRangeOperation
+import org.jetbrains.desktop.macos.generated.NativeGetSelectedTextRangeResult
 import org.jetbrains.desktop.macos.generated.NativeLogicalPoint
 import org.jetbrains.desktop.macos.generated.NativeLogicalSize
 import org.jetbrains.desktop.macos.generated.NativePhysicalSize
+import org.jetbrains.desktop.macos.generated.NativeTextChangedOperation
+import org.jetbrains.desktop.macos.generated.NativeTextCommandOperation
+import org.jetbrains.desktop.macos.generated.NativeTextOperation
+import org.jetbrains.desktop.macos.generated.NativeTextRange
+import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
@@ -64,4 +73,65 @@ internal fun Color.toNative(arena: Arena): MemorySegment {
     NativeColor.blue(result, blue)
     NativeColor.alpha(result, alpha)
     return result
+}
+
+internal fun TextRange.Companion.fromNative(s: MemorySegment): TextRange {
+    return TextRange(
+        location = NativeTextRange.location(s),
+        length = NativeTextRange.length(s),
+    )
+}
+
+internal fun TextOperation.Companion.fromNative(s: MemorySegment): TextOperation {
+    return when (NativeTextOperation.tag(s)) {
+        desktop_macos_h.NativeTextOperation_TextChanged() -> {
+            val nativeEvent = NativeTextOperation.text_changed(s)
+            val nativeReplacementRange = NativeTextChangedOperation.replacement_range(nativeEvent)
+            TextOperation.TextChanged(
+                windowId = NativeTextChangedOperation.window_id(nativeEvent),
+                text = NativeTextChangedOperation.text(nativeEvent).getUtf8String(0),
+                replacementRange = TextRange.fromNative(nativeReplacementRange),
+            )
+        }
+        desktop_macos_h.NativeTextOperation_TextCommand() -> {
+            val nativeEvent = NativeTextOperation.text_command(s)
+            TextOperation.TextCommand(
+                windowId = NativeTextCommandOperation.window_id(nativeEvent),
+                command = NativeTextCommandOperation.command(nativeEvent).getUtf8String(0),
+            )
+        }
+        else -> {
+            error("Unexpected TextOperation tag")
+        }
+    }
+}
+
+internal fun GetSelectedRangeArgs.Companion.fromNative(s: MemorySegment): GetSelectedRangeArgs {
+    return GetSelectedRangeArgs(windowId = NativeGetSelectedTextRangeOperation.window_id(s))
+}
+
+internal fun GetSelectedRangeResult.toNative(arena: Arena): MemorySegment {
+    return NativeGetSelectedTextRangeResult.allocate(arena).also {
+        NativeGetSelectedTextRangeResult.location(it, this.range.location)
+        NativeGetSelectedTextRangeResult.length(it, this.range.length)
+    }
+}
+
+internal fun FirstRectForCharacterRangeArgs.Companion.fromNative(s: MemorySegment): FirstRectForCharacterRangeArgs {
+    return FirstRectForCharacterRangeArgs(
+        windowId = NativeFirstRectForCharacterRangeOperation.window_id(s),
+        range = TextRange(
+            location = NativeFirstRectForCharacterRangeOperation.location(s),
+            length = NativeFirstRectForCharacterRangeOperation.length(s),
+        ),
+    )
+}
+
+internal fun FirstRectForCharacterRangeResult.toNative(arena: Arena): MemorySegment {
+    return NativeFirstRectForCharacterRangeResult.allocate(arena).also {
+        NativeFirstRectForCharacterRangeResult.x(it, this.x)
+        NativeFirstRectForCharacterRangeResult.y(it, this.y)
+        NativeFirstRectForCharacterRangeResult.w(it, this.w)
+        NativeFirstRectForCharacterRangeResult.h(it, this.h)
+    }
 }

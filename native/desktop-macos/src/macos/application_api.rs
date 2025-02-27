@@ -13,7 +13,10 @@ use crate::{
     macos::events::{handle_application_did_finish_launching, handle_display_configuration_change},
 };
 
-use super::{events::EventHandler, text_operations::TextOperationHandler};
+use super::{
+    events::EventHandler,
+    text_operations::{TextContextHandler, TextOperationHandler},
+};
 
 thread_local! {
     pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
@@ -28,6 +31,7 @@ pub(crate) struct AppState {
     pub(crate) event_handler: EventHandler,
     pub(crate) mtm: MainThreadMarker,
     pub(crate) text_operation_handler: TextOperationHandler,
+    pub(crate) text_context_handler: TextContextHandler,
 }
 
 impl AppState {
@@ -51,6 +55,7 @@ pub struct ApplicationCallbacks {
     on_will_terminate: extern "C" fn(),
     event_handler: EventHandler,
     text_operation_handler: TextOperationHandler,
+    text_context_handler: TextContextHandler,
 }
 
 #[repr(C)]
@@ -89,6 +94,7 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
         let event_handler = callbacks.event_handler;
         let text_operation_handler = callbacks.text_operation_handler;
+        let text_context_handler = callbacks.text_context_handler;
         let app_delegate = AppDelegate::new(mtm, callbacks);
         app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
         APP_STATE.with(|app_state| {
@@ -100,6 +106,7 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
                     event_handler,
                     mtm,
                     text_operation_handler,
+                    text_context_handler,
                 })
                 .map_err(|_| anyhow!("Can't initialize second time!"))?;
             Ok(())
