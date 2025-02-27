@@ -41,11 +41,11 @@ pub enum TextOperation {
 // return true if operation was handled
 pub type TextOperationHandler = extern "C" fn(&TextOperation) -> bool;
 
-pub(crate) fn handle_text_changed_operation(window_id: WindowId, text: &CStr) -> anyhow::Result<bool> {
+pub(crate) fn handle_text_changed_operation(window_id: WindowId, text: ConstStrPtr) -> anyhow::Result<bool> {
     AppState::with(|state| {
         let operation = TextOperation::TextChanged(TextChangedOperation {
             window_id,
-            text: text.as_ptr(),
+            text,
             //composition_range: TextRange::default(),
             //composition_committed_range: TextRange::default(),
             //composition_selected_range: TextRange::default(),

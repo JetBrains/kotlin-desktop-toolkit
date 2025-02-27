@@ -1,6 +1,5 @@
 use std::{
     cell::{Cell, RefCell},
-    ffi::CString,
     ptr::NonNull,
     rc::Rc,
 };
@@ -9,7 +8,7 @@ use anyhow::{Context, Ok};
 use log::info;
 use objc2::{
     DeclaredClass, MainThreadOnly, define_class, msg_send,
-    rc::{Retained, autoreleasepool},
+    rc::Retained,
     runtime::{AnyObject, Bool, ProtocolObject, Sel},
 };
 use objc2_app_kit::{
@@ -770,20 +769,16 @@ define_class!(
     }
 );
 
-fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttributedString>, CString), anyhow::Error> {
-    autoreleasepool(|pool| {
-        if let Some(ns_attributed_string) = string.downcast_ref::<NSAttributedString>() {
-            let ns_string = ns_attributed_string.string();
-            let text = CString::new(unsafe { ns_string.to_str(pool) }).with_context(|| format!("{ns_string:?}"))?;
-            Ok((Some(ns_attributed_string), text))
-        } else if let Some(ns_string) = string.downcast_ref::<NSString>() {
-            let text = CString::new(unsafe { ns_string.to_str(pool) }).with_context(|| format!("{ns_string:?}"))?;
-            Ok((None, text))
-        } else {
-            // This method is guaranteed to get either a `NSString` or a `NSAttributedString`.
-            panic!("unexpected text {string:?}")
-        }
-    })
+fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttributedString>, Retained<NSString>), anyhow::Error> {
+    if let Some(ns_attributed_string) = string.downcast_ref::<NSAttributedString>() {
+        let text = ns_attributed_string.string();
+        Ok((Some(ns_attributed_string), text))
+    } else if let Some(text) = string.downcast_ref::<NSString>() {
+        Ok((None, text.into()))
+    } else {
+        // This method is guaranteed to get either a `NSString` or a `NSAttributedString`.
+        panic!("unexpected text {string:?}")
+    }
 }
 
 impl RootView {
@@ -829,7 +824,7 @@ impl RootView {
                 ns_attributed_string, text, replacement_range
             );
             let window = self.window().context("No window for view")?;
-            handle_text_changed_operation(window.window_id(), &text)
+            handle_text_changed_operation(window.window_id(), text.UTF8String())
         });
     }
 
