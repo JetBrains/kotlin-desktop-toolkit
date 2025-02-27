@@ -319,7 +319,7 @@ typedef struct NativeAppMenuItem_NativeActionItem_Body {
 
 typedef struct NativeAppMenuItem_NativeSubMenuItem_Body {
   NativeBorrowedStrPtr title;
-  NativeBorrowedStrPtr special_tag;
+  const char *special_tag;
   const struct NativeAppMenuItem *items;
   NativeArraySize items_count;
 } NativeAppMenuItem_NativeSubMenuItem_Body;

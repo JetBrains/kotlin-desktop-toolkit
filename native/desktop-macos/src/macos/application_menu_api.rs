@@ -31,7 +31,7 @@ pub enum AppMenuItem<'a> {
     SeparatorItem,
     SubMenuItem {
         title: BorrowedStrPtr,
-        special_tag: BorrowedStrPtr,
+        special_tag: Option<&'a std::ffi::c_char>,
         items: *const AppMenuItem<'a>,
         items_count: ArraySize,
     },

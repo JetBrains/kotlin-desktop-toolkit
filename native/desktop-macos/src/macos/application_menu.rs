@@ -134,10 +134,10 @@ impl AppMenuItemSafe {
                     unsafe { slice::from_raw_parts(items, items_count) }
                 };
                 let safe_items: Result<Vec<_>> = items.iter().map(|e| Self::from_unsafe(e, special_tags)).collect();
-                let special_tag = if special_tag.is_null() {
-                    None
-                } else {
+                let special_tag = if let Some(special_tag) = special_tag {
                     Some(copy_to_ns_string(special_tag)?)
+                } else {
+                    None
                 };
                 let title = match &special_tag {
                     Some(v) if v == &special_tags.app_menu => special_tags.title_for_app_menu.clone(),
