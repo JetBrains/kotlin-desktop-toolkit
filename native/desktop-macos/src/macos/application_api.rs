@@ -8,7 +8,9 @@ use objc2_foundation::{MainThreadMarker, NSData, NSNotification, NSObject, NSObj
 use std::cell::OnceCell;
 
 use crate::{
-    common::RustAllocatedStrPtr, logger::ffi_boundary, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}
+    common::RustAllocatedStrPtr,
+    logger::ffi_boundary,
+    macos::events::{handle_application_did_finish_launching, handle_display_configuration_change},
 };
 
 use super::{events::EventHandler, string::copy_to_c_string, text_operations::TextOperationHandler};
@@ -169,7 +171,7 @@ pub extern "C" fn application_get_name() -> RustAllocatedStrPtr {
     ffi_boundary("application_name", || {
         match unsafe { NSRunningApplication::currentApplication().localizedName() } {
             Some(name) => copy_to_c_string(&name),
-            None => Ok(RustAllocatedStrPtr::null())
+            None => Ok(RustAllocatedStrPtr::null()),
         }
     })
 }
