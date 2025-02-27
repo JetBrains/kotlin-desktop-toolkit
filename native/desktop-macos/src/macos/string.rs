@@ -4,12 +4,12 @@ use objc2::rc::{AutoreleasePool, Retained};
 use objc2_foundation::NSString;
 
 use crate::{
-    common::{BorrowedStrPtr, StrPtr},
+    common::{BorrowedStrPtr, RustAllocatedStrPtr},
     logger::ffi_boundary,
 };
 
 #[unsafe(no_mangle)]
-pub extern "C" fn string_drop(str_ptr: StrPtr) {
+pub extern "C" fn string_drop(str_ptr: RustAllocatedStrPtr) {
     ffi_boundary("string_drop", || {
         let s = unsafe {
             assert!(!str_ptr.is_null());
@@ -26,7 +26,7 @@ pub(crate) fn copy_to_ns_string(str_ptr: BorrowedStrPtr) -> anyhow::Result<Retai
 }
 
 // Be aware, now you have to release this memory at some point
-pub(crate) fn copy_to_c_string(ns_string: &NSString, pool: AutoreleasePool) -> anyhow::Result<StrPtr> {
+pub(crate) fn copy_to_c_string(ns_string: &NSString, pool: AutoreleasePool) -> anyhow::Result<RustAllocatedStrPtr> {
     let s: &str = unsafe { ns_string.to_str(pool) };
     Ok(CString::new(s)?.into_raw())
 }

@@ -2,7 +2,7 @@ use core::slice;
 use std::ffi::CString;
 
 use log::warn;
-pub type StrPtr = *mut std::ffi::c_char;
+pub type RustAllocatedStrPtr = *mut std::ffi::c_char;
 pub type BorrowedStrPtr = *const std::ffi::c_char;
 
 #[repr(transparent)]

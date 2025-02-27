@@ -23,14 +23,14 @@ use log4rs::{
 
 use crate::logger_api::{LogLevel, LoggerConfiguration};
 use crate::{
-    common::{ArraySize, StrPtr},
+    common::{ArraySize, RustAllocatedStrPtr},
     logger_api::ExceptionsArray,
 };
 
 const MAX_EXCEPTIONS_COUNT: usize = 10;
 
 struct LastExceptionMessages {
-    messages: [StrPtr; MAX_EXCEPTIONS_COUNT],
+    messages: [RustAllocatedStrPtr; MAX_EXCEPTIONS_COUNT],
     count: usize,
 }
 

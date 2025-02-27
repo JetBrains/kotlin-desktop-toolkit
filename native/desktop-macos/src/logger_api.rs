@@ -1,10 +1,10 @@
-use crate::common::{ArraySize, BorrowedStrPtr, StrPtr};
+use crate::common::{ArraySize, BorrowedStrPtr, RustAllocatedStrPtr};
 use crate::logger::{append_exception_msg, clear_exception_msgs, exceptions_array, init_panic_handler, panic_payload_msg};
 use log::{error, info};
 
 #[repr(C)]
 pub struct ExceptionsArray {
-    pub items: *const StrPtr,
+    pub items: *const RustAllocatedStrPtr,
     pub count: ArraySize,
 }
 

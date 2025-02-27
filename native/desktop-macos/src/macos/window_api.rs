@@ -2,7 +2,7 @@ use objc2::rc::autoreleasepool;
 use objc2_foundation::MainThreadMarker;
 
 use crate::{
-    common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},
+    common::{BorrowedStrPtr, Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, RustAllocatedStrPtr},
     logger::{PanicDefault, ffi_boundary},
 };
 
@@ -20,7 +20,7 @@ pub type WindowId = i64;
 pub struct WindowParams {
     pub origin: LogicalPoint,
     pub size: LogicalSize,
-    pub title: StrPtr,
+    pub title: RustAllocatedStrPtr,
 
     pub is_resizable: bool,
     pub is_closable: bool,
@@ -109,7 +109,7 @@ impl PanicDefault for LogicalPoint {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_set_title(window: &Window, new_title: StrPtr) {
+pub extern "C" fn window_set_title(window: &Window, new_title: BorrowedStrPtr) {
     ffi_boundary("window_set_title", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let new_title = copy_to_ns_string(new_title)?;
@@ -118,14 +118,14 @@ pub extern "C" fn window_set_title(window: &Window, new_title: StrPtr) {
     });
 }
 
-impl PanicDefault for StrPtr {
+impl PanicDefault for RustAllocatedStrPtr {
     fn default() -> Self {
         std::ptr::null_mut()
     }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_get_title(window: &Window) -> StrPtr {
+pub extern "C" fn window_get_title(window: &Window) -> RustAllocatedStrPtr {
     ffi_boundary("window_get_title", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let title = window.ns_window.title();

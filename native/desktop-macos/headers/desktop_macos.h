@@ -35,12 +35,12 @@ typedef struct NativeMetalView NativeMetalView;
 
 typedef struct NativeWindow NativeWindow;
 
-typedef char *NativeStrPtr;
+typedef char *NativeRustAllocatedStrPtr;
 
 typedef uintptr_t NativeArraySize;
 
 typedef struct NativeExceptionsArray {
-  const NativeStrPtr *items;
+  const NativeRustAllocatedStrPtr *items;
   NativeArraySize count;
 } NativeExceptionsArray;
 
@@ -376,7 +376,7 @@ typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
 typedef struct NativeWindowParams {
   struct NativeLogicalPoint origin;
   struct NativeLogicalSize size;
-  NativeStrPtr title;
+  NativeRustAllocatedStrPtr title;
   bool is_resizable;
   bool is_closable;
   bool is_miniaturizable;
@@ -482,7 +482,7 @@ void screen_list_drop(NativeScreenInfoArray arr);
 
 NativeScreenId screen_get_main_screen_id(void);
 
-void string_drop(NativeStrPtr str_ptr);
+void string_drop(NativeRustAllocatedStrPtr str_ptr);
 
 struct NativeWindow *window_create(const struct NativeWindowParams *params);
 
@@ -496,9 +496,9 @@ double window_scale_factor(const struct NativeWindow *window);
 
 void window_attach_layer(const struct NativeWindow *window, const struct NativeMetalView *layer);
 
-void window_set_title(const struct NativeWindow *window, NativeStrPtr new_title);
+void window_set_title(const struct NativeWindow *window, NativeBorrowedStrPtr new_title);
 
-NativeStrPtr window_get_title(const struct NativeWindow *window);
+NativeRustAllocatedStrPtr window_get_title(const struct NativeWindow *window);
 
 struct NativeLogicalPoint window_get_origin(const struct NativeWindow *window);
 
