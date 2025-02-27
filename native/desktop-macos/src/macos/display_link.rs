@@ -1,7 +1,7 @@
 use std::{ffi::c_void, ptr::addr_of};
 
 use super::screen::ScreenId;
-use crate::logger::{ffi_boundary, PanicDefault};
+use crate::logger::{PanicDefault, ffi_boundary};
 use anyhow::Result;
 use dispatch_sys::{
     _dispatch_main_q, _dispatch_source_type_data_add, dispatch_object_t, dispatch_queue_t, dispatch_resume, dispatch_set_context,
@@ -160,7 +160,7 @@ mod display_link_sys {
     pub type CGDirectDisplayID = u32;
 
     use anyhow::Result;
-    use foreign_types::{foreign_type, ForeignType};
+    use foreign_types::{ForeignType, foreign_type};
     use std::{
         ffi::c_void,
         fmt::{self, Debug, Formatter},

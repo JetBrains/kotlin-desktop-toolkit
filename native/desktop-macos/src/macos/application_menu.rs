@@ -1,12 +1,12 @@
 use core::slice;
 use std::ffi::CStr;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 use objc2::{
-    define_class, msg_send,
-    rc::{autoreleasepool, Retained},
-    sel, DeclaredClass, MainThreadOnly,
+    DeclaredClass, MainThreadOnly, define_class, msg_send,
+    rc::{Retained, autoreleasepool},
+    sel,
 };
 use objc2_app_kit::{NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSString};

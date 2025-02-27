@@ -5,9 +5,9 @@ use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
 use objc2_foundation::{MainThreadMarker, NSString};
 use objc2_metal::{MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};
-use objc2_quartz_core::{kCAGravityTopLeft, CAAutoresizingMask, CAMetalDrawable, CAMetalLayer};
+use objc2_quartz_core::{CAAutoresizingMask, CAMetalDrawable, CAMetalLayer, kCAGravityTopLeft};
 
-use crate::logger::{ffi_boundary, PanicDefault};
+use crate::logger::{PanicDefault, ffi_boundary};
 use crate::{common::PhysicalSize, define_objc_ref};
 
 #[repr(transparent)]
@@ -110,7 +110,7 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> *mut MetalView {
             layer.setPresentsWithTransaction(true);
 
             layer.setContentsGravity(kCAGravityTopLeft); // from JWM
-                                                         // fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
+            // fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
         }
 
         let layer_view = unsafe { NSView::new(mtm) };
@@ -119,7 +119,7 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> *mut MetalView {
 
             layer_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::DuringViewResize);
             layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
-                                                                                                        // layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
+            // layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
             layer_view.setLayer(Some(&layer));
         }
 

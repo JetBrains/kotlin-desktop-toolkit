@@ -1,6 +1,6 @@
 use std::ffi::CString;
 
-use anyhow::{bail, Context, Ok};
+use anyhow::{Context, Ok, bail};
 use objc2::rc::autoreleasepool;
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
 

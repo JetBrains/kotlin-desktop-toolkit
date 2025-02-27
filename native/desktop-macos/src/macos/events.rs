@@ -9,13 +9,13 @@ use objc2_foundation::MainThreadMarker;
 
 use crate::{
     common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
-    logger::{ffi_boundary, PanicDefault},
+    logger::{PanicDefault, ffi_boundary},
 };
 use anyhow::bail;
 
 use super::{
     application_api::AppState,
-    keyboard::{unpack_flags_changed_event, unpack_key_event, KeyCode, KeyModifiersSet, EMPTY_KEY_MODIFIERS},
+    keyboard::{EMPTY_KEY_MODIFIERS, KeyCode, KeyModifiersSet, unpack_flags_changed_event, unpack_key_event},
     mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt},
     screen::{NSScreenExts, ScreenId},
     window::NSWindowExts,

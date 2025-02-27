@@ -8,10 +8,9 @@ use std::{
 use anyhow::{Context, Ok};
 use log::info;
 use objc2::{
-    define_class, msg_send,
-    rc::{autoreleasepool, Retained},
+    DeclaredClass, MainThreadOnly, define_class, msg_send,
+    rc::{Retained, autoreleasepool},
     runtime::{AnyObject, Bool, ProtocolObject, Sel},
-    DeclaredClass, MainThreadOnly,
 };
 use objc2_app_kit::{
     NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea,

@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use log::info;
-use objc2::{define_class, msg_send, rc::Retained, runtime::ProtocolObject, ClassType, DeclaredClass, MainThreadOnly};
+use objc2::{ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
     NSEventType,

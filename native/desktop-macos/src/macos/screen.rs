@@ -3,13 +3,13 @@ use std::ffi::CString;
 
 use anyhow::Context;
 use log::warn;
-use objc2::rc::{autoreleasepool, Retained};
+use objc2::rc::{Retained, autoreleasepool};
 use objc2_app_kit::NSScreen;
 use objc2_foundation::{MainThreadMarker, NSNumber, NSString};
 
 use crate::{
     common::{ArraySize, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},
-    logger::{ffi_boundary, PanicDefault},
+    logger::{PanicDefault, ffi_boundary},
 };
 
 use super::string::copy_to_c_string;

@@ -8,17 +8,17 @@ use std::{
 use anyhow::Context;
 use log::error;
 use log4rs::{
+    Config,
     append::{
         console::{ConsoleAppender, Target},
         rolling_file::{
-            policy::compound::{roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger, CompoundPolicy},
             RollingFileAppender,
+            policy::compound::{CompoundPolicy, roll::fixed_window::FixedWindowRoller, trigger::size::SizeTrigger},
         },
     },
     config::{Appender, Root},
     encode::pattern::PatternEncoder,
     filter::threshold::ThresholdFilter,
-    Config,
 };
 
 use crate::logger_api::{LogLevel, LoggerConfiguration};

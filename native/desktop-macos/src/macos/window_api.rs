@@ -3,7 +3,7 @@ use objc2_foundation::MainThreadMarker;
 
 use crate::{
     common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},
-    logger::{ffi_boundary, PanicDefault},
+    logger::{PanicDefault, ffi_boundary},
 };
 
 use super::{

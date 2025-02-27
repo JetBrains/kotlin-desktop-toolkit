@@ -2,7 +2,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use anyhow::{ensure, Context};
+use anyhow::{Context, ensure};
 use objc2::rc::Retained;
 use objc2_app_kit::{NSButton, NSLayoutConstraint, NSView, NSWindow, NSWindowButton};
 use objc2_foundation::NSArray;
