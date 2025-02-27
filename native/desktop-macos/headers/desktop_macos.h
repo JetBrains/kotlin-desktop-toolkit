@@ -61,14 +61,16 @@ typedef uintptr_t NativeKeyModifiersSet;
 
 typedef uint16_t NativeKeyCode;
 
+typedef const char *NativeConstStrPtr;
+
 typedef double NativeTimestamp;
 
 typedef struct NativeKeyDownEvent {
   NativeWindowId window_id;
   NativeKeyModifiersSet modifiers;
   NativeKeyCode code;
-  NativeStrPtr characters;
-  NativeStrPtr key;
+  NativeConstStrPtr characters;
+  NativeConstStrPtr key;
   bool is_repeat;
   NativeTimestamp timestamp;
 } NativeKeyDownEvent;
@@ -77,8 +79,8 @@ typedef struct NativeKeyUpEvent {
   NativeWindowId window_id;
   NativeKeyModifiersSet modifiers;
   NativeKeyCode code;
-  NativeStrPtr characters;
-  NativeStrPtr key;
+  NativeConstStrPtr characters;
+  NativeConstStrPtr key;
   NativeTimestamp timestamp;
 } NativeKeyUpEvent;
 
@@ -259,8 +261,6 @@ typedef struct NativeEvent {
 } NativeEvent;
 
 typedef bool (*NativeEventHandler)(const struct NativeEvent*);
-
-typedef const char *NativeConstStrPtr;
 
 typedef struct NativeTextCommandOperation {
   NativeWindowId window_id;

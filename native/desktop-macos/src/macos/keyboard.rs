@@ -1,8 +1,7 @@
-use std::ffi::CString;
-
 use anyhow::{Context, Ok, bail};
-use objc2::rc::autoreleasepool;
+use objc2::rc::Retained;
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
+use objc2_foundation::NSString;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -23,60 +22,54 @@ pub(crate) struct KeyEventInfo {
     // It may contain codepoint constants listed in this file,
     // e.g. for F1 it will be value of `NSF1FunctionKey` constant
     // For dead keys it will be empty
-    pub(crate) chars: CString,
+    pub(crate) chars: Retained<NSString>,
 
     // Can be considered as a name of the key
     // Depends on keyboard layout but ignores modifiers
     // For keys that depend on keyboard layout it will be the symbol typed for default layer
     // For functional keys it will try to produce some meaningful codepoint, but not the same as for `characters`
     // For dead keys it will produce text from deafult layer
-    pub(crate) key: CString,
+    pub(crate) key: Retained<NSString>,
 
     pub(crate) modifiers: KeyModifiersSet,
 }
 
 pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInfo> {
-    autoreleasepool(|pool| {
-        let is_press = match unsafe { ns_event.r#type() } {
-            NSEventType::KeyDown => true,
-            NSEventType::KeyUp => false,
-            _ => bail!("Unexpected type of event {:?}", ns_event),
-        };
+    let is_press = match unsafe { ns_event.r#type() } {
+        NSEventType::KeyDown => true,
+        NSEventType::KeyUp => false,
+        _ => bail!("Unexpected type of event {:?}", ns_event),
+    };
 
-        let is_repeat = unsafe { ns_event.isARepeat() };
-        let code = unsafe { ns_event.keyCode() };
+    let is_repeat = unsafe { ns_event.isARepeat() };
+    let code = unsafe { ns_event.keyCode() };
 
-        let chars = unsafe { ns_event.characters() }.with_context(|| format!("No characters field in {ns_event:?}"))?;
+    let chars = unsafe { ns_event.characters() }.with_context(|| format!("No characters field in {ns_event:?}"))?;
 
-        let key = unsafe { ns_event.charactersByApplyingModifiers(NSEventModifierFlags::empty()) }
-            .with_context(|| format!("Event contains invalid data: {ns_event:?}"))?;
+    let key = unsafe { ns_event.charactersByApplyingModifiers(NSEventModifierFlags::empty()) }
+        .with_context(|| format!("Event contains invalid data: {ns_event:?}"))?;
 
-        // though we apply the same modifiers, it's not the same as characters
-        // there are number of differences:
-        // * for dead keys `characters` will be empty, but this string will contain symbol representing the key
-        // * for for keys like F1..F12 characters will contain codepoints from private use area defined in `KeyCodePoints`,
-        // but this function will try to return some meaniingful code points
-        // * for all F1..F16 keys this function will return the same codepoint: \u{10} for F17 it will be empty line
-        //let _with_modifiers = unsafe {
-        //    ns_event.charactersByApplyingModifiers(ns_event.modifierFlags())
-        //}.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
+    // though we apply the same modifiers, it's not the same as characters
+    // there are number of differences:
+    // * for dead keys `characters` will be empty, but this string will contain symbol representing the key
+    // * for for keys like F1..F12 characters will contain codepoints from private use area defined in `KeyCodePoints`,
+    // but this function will try to return some meaniingful code points
+    // * for all F1..F16 keys this function will return the same codepoint: \u{10} for F17 it will be empty line
+    //let _with_modifiers = unsafe {
+    //    ns_event.charactersByApplyingModifiers(ns_event.modifierFlags())
+    //}.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
+    let modifiers = unsafe { ns_event.modifierFlags() }.into();
 
-        let chars = CString::new(unsafe { chars.to_str(pool) }).unwrap_or_default(/* to handle e.g. Ctrl+Space */);
-        let key = CString::new(unsafe { key.to_str(pool) }).with_context(|| format!("{key:?}"))?;
-
-        let modifiers = unsafe { ns_event.modifierFlags() }.into();
-
-        // todo unpack modifiers
-        let key_info = KeyEventInfo {
-            is_press,
-            is_repeat,
-            code: KeyCode(code),
-            chars,
-            key,
-            modifiers,
-        };
-        Ok(key_info)
-    })
+    // todo unpack modifiers
+    let key_info = KeyEventInfo {
+        is_press,
+        is_repeat,
+        code: KeyCode(code),
+        chars,
+        key,
+        modifiers,
+    };
+    Ok(key_info)
 }
 
 #[derive(Debug)]

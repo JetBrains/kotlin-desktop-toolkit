@@ -1,14 +1,13 @@
 #![allow(clippy::let_and_return)]
 
 use core::f64;
-use std::ffi::CString;
 
 use log::info;
 use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
 use crate::{
-    common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
+    common::{ConstStrPtr, LogicalPixels, LogicalPoint, LogicalSize},
     logger::{PanicDefault, ffi_boundary},
 };
 use anyhow::bail;
@@ -32,17 +31,10 @@ pub struct KeyDownEvent {
     window_id: WindowId,
     modifiers: KeyModifiersSet,
     code: KeyCode,
-    characters: StrPtr,
-    key: StrPtr,
+    characters: ConstStrPtr,
+    key: ConstStrPtr,
     is_repeat: bool,
     timestamp: Timestamp,
-}
-
-impl Drop for KeyDownEvent {
-    fn drop(&mut self) {
-        std::mem::drop(unsafe { CString::from_raw(self.characters) });
-        std::mem::drop(unsafe { CString::from_raw(self.key) });
-    }
 }
 
 #[repr(C)]
@@ -51,16 +43,9 @@ pub struct KeyUpEvent {
     window_id: WindowId,
     modifiers: KeyModifiersSet,
     code: KeyCode,
-    characters: StrPtr,
-    key: StrPtr,
+    characters: ConstStrPtr,
+    key: ConstStrPtr,
     timestamp: Timestamp,
-}
-
-impl Drop for KeyUpEvent {
-    fn drop(&mut self) {
-        std::mem::drop(unsafe { CString::from_raw(self.characters) });
-        std::mem::drop(unsafe { CString::from_raw(self.key) });
-    }
 }
 
 #[repr(C)]
@@ -268,30 +253,25 @@ impl NSEventExt for NSEvent {
 
 pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
     let handled = AppState::with(|state| {
+        let key_info = unpack_key_event(ns_event)?;
         let event = match unsafe { ns_event.r#type() } {
-            NSEventType::KeyDown => {
-                let key_info = unpack_key_event(ns_event)?;
-                Event::KeyDown(KeyDownEvent {
-                    window_id: ns_event.window_id(),
-                    code: key_info.code,
-                    is_repeat: key_info.is_repeat,
-                    characters: key_info.chars.into_raw(),
-                    key: key_info.key.into_raw(),
-                    modifiers: key_info.modifiers,
-                    timestamp: unsafe { ns_event.timestamp() },
-                })
-            }
-            NSEventType::KeyUp => {
-                let key_info = unpack_key_event(ns_event)?;
-                Event::KeyUp(KeyUpEvent {
-                    window_id: ns_event.window_id(),
-                    code: key_info.code,
-                    characters: key_info.chars.into_raw(),
-                    key: key_info.key.into_raw(),
-                    modifiers: key_info.modifiers,
-                    timestamp: unsafe { ns_event.timestamp() },
-                })
-            }
+            NSEventType::KeyDown => Event::KeyDown(KeyDownEvent {
+                window_id: ns_event.window_id(),
+                code: key_info.code,
+                is_repeat: key_info.is_repeat,
+                characters: key_info.chars.UTF8String(),
+                key: key_info.chars.UTF8String(),
+                modifiers: key_info.modifiers,
+                timestamp: unsafe { ns_event.timestamp() },
+            }),
+            NSEventType::KeyUp => Event::KeyUp(KeyUpEvent {
+                window_id: ns_event.window_id(),
+                code: key_info.code,
+                characters: key_info.chars.UTF8String(),
+                key: key_info.chars.UTF8String(),
+                modifiers: key_info.modifiers,
+                timestamp: unsafe { ns_event.timestamp() },
+            }),
             _ => bail!("Unexpected type of event {:?}", ns_event),
         };
         Ok((state.event_handler)(&event))
