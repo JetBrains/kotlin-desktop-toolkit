@@ -110,8 +110,8 @@ impl From<NSEventModifierFlags> for KeyModifiersSet {
     }
 }
 
-impl From<&KeyModifiersSet> for NSEventModifierFlags {
-    fn from(value: &KeyModifiersSet) -> Self {
+impl From<KeyModifiersSet> for NSEventModifierFlags {
+    fn from(value: KeyModifiersSet) -> Self {
         Self(value.0)
     }
 }
