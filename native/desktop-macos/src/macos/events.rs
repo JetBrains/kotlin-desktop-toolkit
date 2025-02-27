@@ -17,7 +17,7 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use super::{
     application_api::AppState,
-    keyboard::{unpack_flags_changed_event, unpack_key_event, EmptyKeyModifiers, KeyCode, KeyModifiersSet},
+    keyboard::{unpack_flags_changed_event, unpack_key_event, KeyCode, KeyModifiersSet, EMPTY_KEY_MODIFIERS},
     mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt},
     screen::{NSScreenExts, ScreenId},
     window::NSWindowExts,
@@ -215,7 +215,7 @@ extern "C" fn events_pressed_mouse_buttons() -> MouseButtonsSet {
 
 impl PanicDefault for KeyModifiersSet {
     fn default() -> Self {
-        EmptyKeyModifiers
+        EMPTY_KEY_MODIFIERS
     }
 }
 

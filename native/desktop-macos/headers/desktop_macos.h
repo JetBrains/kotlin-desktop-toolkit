@@ -3,309 +3,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define NativeCapsLockModifier (1 << 16)
-
-#define NativeShiftModifier (1 << 17)
-
-#define NativeControlModifier (1 << 18)
-
-#define NativeOptionModifier (1 << 19)
-
-#define NativeCommandModifier (1 << 20)
-
-#define NativeNumericPadModifier (1 << 21)
-
-#define NativeHelpModifier (1 << 22)
-
-#define NativeFunctionModifier (1 << 23)
-
-#define NativeEnterCharacter 3
-
-#define NativeBackspaceCharacter 8
-
-#define NativeTabCharacter 9
-
-#define NativeNewlineCharacter 10
-
-#define NativeFormFeedCharacter 12
-
-#define NativeCarriageReturnCharacter 13
-
-#define NativeBackTabCharacter 25
-
-#define NativeDeleteCharacter 127
-
-#define NativeLineSeparatorCharacter 8232
-
-#define NativeParagraphSeparatorCharacter 8233
-
-#define NativeUpArrowFunctionKey 63232
-
-#define NativeDownArrowFunctionKey 63233
-
-#define NativeLeftArrowFunctionKey 63234
-
-#define NativeRightArrowFunctionKey 63235
-
-#define NativeF1FunctionKey 63236
-
-#define NativeF2FunctionKey 63237
-
-#define NativeF3FunctionKey 63238
-
-#define NativeF4FunctionKey 63239
-
-#define NativeF5FunctionKey 63240
-
-#define NativeF6FunctionKey 63241
-
-#define NativeF7FunctionKey 63242
-
-#define NativeF8FunctionKey 63243
-
-#define NativeF9FunctionKey 63244
-
-#define NativeF10FunctionKey 63245
-
-#define NativeF11FunctionKey 63246
-
-#define NativeF12FunctionKey 63247
-
-#define NativeF13FunctionKey 63248
-
-#define NativeF14FunctionKey 63249
-
-#define NativeF15FunctionKey 63250
-
-#define NativeF16FunctionKey 63251
-
-#define NativeF17FunctionKey 63252
-
-#define NativeF18FunctionKey 63253
-
-#define NativeF19FunctionKey 63254
-
-#define NativeF20FunctionKey 63255
-
-#define NativeF21FunctionKey 63256
-
-#define NativeF22FunctionKey 63257
-
-#define NativeF23FunctionKey 63258
-
-#define NativeF24FunctionKey 63259
-
-#define NativeF25FunctionKey 63260
-
-#define NativeF26FunctionKey 63261
-
-#define NativeF27FunctionKey 63262
-
-#define NativeF28FunctionKey 63263
-
-#define NativeF29FunctionKey 63264
-
-#define NativeF30FunctionKey 63265
-
-#define NativeF31FunctionKey 63266
-
-#define NativeF32FunctionKey 63267
-
-#define NativeF33FunctionKey 63268
-
-#define NativeF34FunctionKey 63269
-
-#define NativeF35FunctionKey 63270
-
-#define NativeInsertFunctionKey 63271
-
-#define NativeDeleteFunctionKey 63272
-
-#define NativeHomeFunctionKey 63273
-
-#define NativeBeginFunctionKey 63274
-
-#define NativeEndFunctionKey 63275
-
-#define NativePageUpFunctionKey 63276
-
-#define NativePageDownFunctionKey 63277
-
-#define NativePrintScreenFunctionKey 63278
-
-#define NativeScrollLockFunctionKey 63279
-
-#define NativePauseFunctionKey 63280
-
-#define NativeSysReqFunctionKey 63281
-
-#define NativeBreakFunctionKey 63282
-
-#define NativeResetFunctionKey 63283
-
-#define NativeStopFunctionKey 63284
-
-#define NativeMenuFunctionKey 63285
-
-#define NativeUserFunctionKey 63286
-
-#define NativeSystemFunctionKey 63287
-
-#define NativePrintFunctionKey 63288
-
-#define NativeClearLineFunctionKey 63289
-
-#define NativeClearDisplayFunctionKey 63290
-
-#define NativeInsertLineFunctionKey 63291
-
-#define NativeDeleteLineFunctionKey 63292
-
-#define NativeInsertCharFunctionKey 63293
-
-#define NativeDeleteCharFunctionKey 63294
-
-#define NativePrevFunctionKey 63295
-
-#define NativeNextFunctionKey 63296
-
-#define NativeSelectFunctionKey 63297
-
-#define NativeExecuteFunctionKey 63298
-
-#define NativeUndoFunctionKey 63299
-
-#define NativeRedoFunctionKey 63300
-
-#define NativeFindFunctionKey 63301
-
-#define NativeHelpFunctionKey 63302
-
-#define NativeModeSwitchFunctionKey 63303
-
-typedef enum NativeKeyCode {
-  NativeKeyCode_VK_ANSI_A = 0,
-  NativeKeyCode_VK_ANSI_S = 1,
-  NativeKeyCode_VK_ANSI_D = 2,
-  NativeKeyCode_VK_ANSI_F = 3,
-  NativeKeyCode_VK_ANSI_H = 4,
-  NativeKeyCode_VK_ANSI_G = 5,
-  NativeKeyCode_VK_ANSI_Z = 6,
-  NativeKeyCode_VK_ANSI_X = 7,
-  NativeKeyCode_VK_ANSI_C = 8,
-  NativeKeyCode_VK_ANSI_V = 9,
-  NativeKeyCode_VK_ANSI_B = 11,
-  NativeKeyCode_VK_ANSI_Q = 12,
-  NativeKeyCode_VK_ANSI_W = 13,
-  NativeKeyCode_VK_ANSI_E = 14,
-  NativeKeyCode_VK_ANSI_R = 15,
-  NativeKeyCode_VK_ANSI_Y = 16,
-  NativeKeyCode_VK_ANSI_T = 17,
-  NativeKeyCode_VK_ANSI_1 = 18,
-  NativeKeyCode_VK_ANSI_2 = 19,
-  NativeKeyCode_VK_ANSI_3 = 20,
-  NativeKeyCode_VK_ANSI_4 = 21,
-  NativeKeyCode_VK_ANSI_6 = 22,
-  NativeKeyCode_VK_ANSI_5 = 23,
-  NativeKeyCode_VK_ANSI_Equal = 24,
-  NativeKeyCode_VK_ANSI_9 = 25,
-  NativeKeyCode_VK_ANSI_7 = 26,
-  NativeKeyCode_VK_ANSI_Minus = 27,
-  NativeKeyCode_VK_ANSI_8 = 28,
-  NativeKeyCode_VK_ANSI_0 = 29,
-  NativeKeyCode_VK_ANSI_RightBracket = 30,
-  NativeKeyCode_VK_ANSI_O = 31,
-  NativeKeyCode_VK_ANSI_U = 32,
-  NativeKeyCode_VK_ANSI_LeftBracket = 33,
-  NativeKeyCode_VK_ANSI_I = 34,
-  NativeKeyCode_VK_ANSI_P = 35,
-  NativeKeyCode_VK_ANSI_L = 37,
-  NativeKeyCode_VK_ANSI_J = 38,
-  NativeKeyCode_VK_ANSI_Quote = 39,
-  NativeKeyCode_VK_ANSI_K = 40,
-  NativeKeyCode_VK_ANSI_Semicolon = 41,
-  NativeKeyCode_VK_ANSI_Backslash = 42,
-  NativeKeyCode_VK_ANSI_Comma = 43,
-  NativeKeyCode_VK_ANSI_Slash = 44,
-  NativeKeyCode_VK_ANSI_N = 45,
-  NativeKeyCode_VK_ANSI_M = 46,
-  NativeKeyCode_VK_ANSI_Period = 47,
-  NativeKeyCode_VK_ANSI_Grave = 50,
-  NativeKeyCode_VK_ANSI_KeypadDecimal = 65,
-  NativeKeyCode_VK_ANSI_KeypadMultiply = 67,
-  NativeKeyCode_VK_ANSI_KeypadPlus = 69,
-  NativeKeyCode_VK_ANSI_KeypadClear = 71,
-  NativeKeyCode_VK_ANSI_KeypadDivide = 75,
-  NativeKeyCode_VK_ANSI_KeypadEnter = 76,
-  NativeKeyCode_VK_ANSI_KeypadMinus = 78,
-  NativeKeyCode_VK_ANSI_KeypadEquals = 81,
-  NativeKeyCode_VK_ANSI_Keypad0 = 82,
-  NativeKeyCode_VK_ANSI_Keypad1 = 83,
-  NativeKeyCode_VK_ANSI_Keypad2 = 84,
-  NativeKeyCode_VK_ANSI_Keypad3 = 85,
-  NativeKeyCode_VK_ANSI_Keypad4 = 86,
-  NativeKeyCode_VK_ANSI_Keypad5 = 87,
-  NativeKeyCode_VK_ANSI_Keypad6 = 88,
-  NativeKeyCode_VK_ANSI_Keypad7 = 89,
-  NativeKeyCode_VK_ANSI_Keypad8 = 91,
-  NativeKeyCode_VK_ANSI_Keypad9 = 92,
-  NativeKeyCode_VK_Return = 36,
-  NativeKeyCode_VK_Tab = 48,
-  NativeKeyCode_VK_Space = 49,
-  NativeKeyCode_VK_Delete = 51,
-  NativeKeyCode_VK_Escape = 53,
-  NativeKeyCode_VK_Command = 55,
-  NativeKeyCode_VK_Shift = 56,
-  NativeKeyCode_VK_CapsLock = 57,
-  NativeKeyCode_VK_Option = 58,
-  NativeKeyCode_VK_Control = 59,
-  NativeKeyCode_VK_RightCommand = 54,
-  NativeKeyCode_VK_RightShift = 60,
-  NativeKeyCode_VK_RightOption = 61,
-  NativeKeyCode_VK_RightControl = 62,
-  NativeKeyCode_VK_Function = 63,
-  NativeKeyCode_VK_F17 = 64,
-  NativeKeyCode_VK_VolumeUp = 72,
-  NativeKeyCode_VK_VolumeDown = 73,
-  NativeKeyCode_VK_Mute = 74,
-  NativeKeyCode_VK_F18 = 79,
-  NativeKeyCode_VK_F19 = 80,
-  NativeKeyCode_VK_F20 = 90,
-  NativeKeyCode_VK_F5 = 96,
-  NativeKeyCode_VK_F6 = 97,
-  NativeKeyCode_VK_F7 = 98,
-  NativeKeyCode_VK_F3 = 99,
-  NativeKeyCode_VK_F8 = 100,
-  NativeKeyCode_VK_F9 = 101,
-  NativeKeyCode_VK_F11 = 103,
-  NativeKeyCode_VK_F13 = 105,
-  NativeKeyCode_VK_F16 = 106,
-  NativeKeyCode_VK_F14 = 107,
-  NativeKeyCode_VK_F10 = 109,
-  NativeKeyCode_VK_ContextualMenu = 110,
-  NativeKeyCode_VK_F12 = 111,
-  NativeKeyCode_VK_F15 = 113,
-  NativeKeyCode_VK_Help = 114,
-  NativeKeyCode_VK_Home = 115,
-  NativeKeyCode_VK_PageUp = 116,
-  NativeKeyCode_VK_ForwardDelete = 117,
-  NativeKeyCode_VK_F4 = 118,
-  NativeKeyCode_VK_End = 119,
-  NativeKeyCode_VK_F2 = 120,
-  NativeKeyCode_VK_PageDown = 121,
-  NativeKeyCode_VK_F1 = 122,
-  NativeKeyCode_VK_LeftArrow = 123,
-  NativeKeyCode_VK_RightArrow = 124,
-  NativeKeyCode_VK_DownArrow = 125,
-  NativeKeyCode_VK_UpArrow = 126,
-  NativeKeyCode_VK_ISO_Section = 10,
-  NativeKeyCode_VK_JIS_Yen = 93,
-  NativeKeyCode_VK_JIS_Underscore = 94,
-  NativeKeyCode_VK_JIS_KeypadComma = 95,
-  NativeKeyCode_VK_JIS_Eisu = 102,
-  NativeKeyCode_VK_JIS_Kana = 104,
-} NativeKeyCode;
-
 typedef enum NativeLogLevel {
   NativeLogLevel_Off,
   NativeLogLevel_Error,
@@ -362,12 +59,14 @@ typedef int64_t NativeWindowId;
 
 typedef uint32_t NativeKeyModifiersSet;
 
+typedef uint16_t NativeKeyCode;
+
 typedef double NativeTimestamp;
 
 typedef struct NativeKeyDownEvent {
   NativeWindowId window_id;
   NativeKeyModifiersSet modifiers;
-  enum NativeKeyCode code;
+  NativeKeyCode code;
   NativeStrPtr characters;
   NativeStrPtr key;
   bool is_repeat;
@@ -377,7 +76,7 @@ typedef struct NativeKeyDownEvent {
 typedef struct NativeKeyUpEvent {
   NativeWindowId window_id;
   NativeKeyModifiersSet modifiers;
-  enum NativeKeyCode code;
+  NativeKeyCode code;
   NativeStrPtr characters;
   NativeStrPtr key;
   NativeTimestamp timestamp;
@@ -386,7 +85,7 @@ typedef struct NativeKeyUpEvent {
 typedef struct NativeModifiersChangedEvent {
   NativeWindowId window_id;
   NativeKeyModifiersSet modifiers;
-  enum NativeKeyCode code;
+  NativeKeyCode code;
   NativeTimestamp timestamp;
 } NativeModifiersChangedEvent;
 
@@ -706,12 +405,6 @@ typedef struct NativeWindowBackground {
     };
   };
 } NativeWindowBackground;
-
-#define NativeLeftMouseButton 0
-
-#define NativeRightMouseButton 1
-
-#define NativeMiddleMouseButton 2
 
 struct NativeExceptionsArray logger_check_exceptions(void);
 

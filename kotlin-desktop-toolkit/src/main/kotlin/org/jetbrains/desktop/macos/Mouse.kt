@@ -1,13 +1,11 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.desktop_macos_h
-
 @JvmInline
 public value class MouseButton internal constructor(public val value: Int) {
     public companion object {
-        public val LEFT: MouseButton = MouseButton(desktop_macos_h.NativeLeftMouseButton())
-        public val RIGHT: MouseButton = MouseButton(desktop_macos_h.NativeRightMouseButton())
-        public val MIDDLE: MouseButton = MouseButton(desktop_macos_h.NativeMiddleMouseButton())
+        public val LEFT: MouseButton = MouseButton(0)
+        public val RIGHT: MouseButton = MouseButton(1)
+        public val MIDDLE: MouseButton = MouseButton(2)
     }
 
     override fun toString(): String {

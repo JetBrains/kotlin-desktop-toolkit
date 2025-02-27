@@ -1,9 +1,6 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.desktop_macos_h
-
 /*  MacOSX15.2
-* 🚨🚨🚨 This code should be aligned with `typedef enum KeyCode` in .h file 🚨🚨🚨
 *  Summary:
 *    Virtual keycodes
 *
@@ -148,9 +145,8 @@ public value class KeyCode internal constructor(private val value: String) {
         public val JIS_Eisu: KeyCode = KeyCode("JIS_Eisu")
         public val JIS_Kana: KeyCode = KeyCode("JIS_Kana")
 
-        // This function should be in sync with typedef enum KeyCode
-        internal fun fromNative(code: Int): KeyCode {
-            return when (code) {
+        internal fun fromNative(code: Short): KeyCode {
+            return when (code.toInt()) {
                 0 -> ANSI_A
                 1 -> ANSI_S
                 2 -> ANSI_D
@@ -281,9 +277,21 @@ public value class KeyCode internal constructor(private val value: String) {
     }
 }
 
+// `NSEventModifierFlags` constants
+private object KeyModifiers {
+    const val CAPS_LOCK: Long = 1 shl 16
+    const val SHIFT: Long = 1 shl 17
+    const val CONTROL: Long = 1 shl 18
+    const val OPTION: Long = 1 shl 19
+    const val COMMAND: Long = 1 shl 20
+    const val NUMERIC_PAD: Long = 1 shl 21
+    const val HELP: Long = 1 shl 22
+    const val FUNCTION: Long = 1 shl 23
+}
+
 @Suppress("MemberVisibilityCanBePrivate")
 @JvmInline
-public value class KeyModifiersSet internal constructor(internal val value: Int) {
+public value class KeyModifiersSet internal constructor(internal val value: Long) {
     public companion object {
         public fun create(
             capsLock: Boolean = false,
@@ -295,27 +303,27 @@ public value class KeyModifiersSet internal constructor(internal val value: Int)
             help: Boolean = false,
             function: Boolean = false,
         ): KeyModifiersSet {
-            var result = 0
-            if (capsLock) result = result or desktop_macos_h.NativeCapsLockModifier()
-            if (shift) result = result or desktop_macos_h.NativeShiftModifier()
-            if (control) result = result or desktop_macos_h.NativeControlModifier()
-            if (option) result = result or desktop_macos_h.NativeOptionModifier()
-            if (command) result = result or desktop_macos_h.NativeCommandModifier()
-            if (numericPad) result = result or desktop_macos_h.NativeNumericPadModifier()
-            if (help) result = result or desktop_macos_h.NativeHelpModifier()
-            if (function) result = result or desktop_macos_h.NativeFunctionModifier()
+            var result = 0L
+            if (capsLock) result = result or KeyModifiers.CAPS_LOCK
+            if (shift) result = result or KeyModifiers.SHIFT
+            if (control) result = result or KeyModifiers.CONTROL
+            if (option) result = result or KeyModifiers.OPTION
+            if (command) result = result or KeyModifiers.COMMAND
+            if (numericPad) result = result or KeyModifiers.NUMERIC_PAD
+            if (help) result = result or KeyModifiers.HELP
+            if (function) result = result or KeyModifiers.FUNCTION
             return KeyModifiersSet(result)
         }
     }
 
-    public val capsLock: Boolean get() = (value and desktop_macos_h.NativeCapsLockModifier()) != 0
-    public val shift: Boolean get() = (value and desktop_macos_h.NativeShiftModifier()) != 0
-    public val control: Boolean get() = (value and desktop_macos_h.NativeControlModifier()) != 0
-    public val option: Boolean get() = (value and desktop_macos_h.NativeOptionModifier()) != 0
-    public val command: Boolean get() = (value and desktop_macos_h.NativeCommandModifier()) != 0
-    public val numericPad: Boolean get() = (value and desktop_macos_h.NativeNumericPadModifier()) != 0
-    public val help: Boolean get() = (value and desktop_macos_h.NativeHelpModifier()) != 0
-    public val function: Boolean get() = (value and desktop_macos_h.NativeFunctionModifier()) != 0
+    public val capsLock: Boolean get() = (value and KeyModifiers.CAPS_LOCK) != 0L
+    public val shift: Boolean get() = (value and KeyModifiers.SHIFT) != 0L
+    public val control: Boolean get() = (value and KeyModifiers.CONTROL) != 0L
+    public val option: Boolean get() = (value and KeyModifiers.OPTION) != 0L
+    public val command: Boolean get() = (value and KeyModifiers.COMMAND) != 0L
+    public val numericPad: Boolean get() = (value and KeyModifiers.NUMERIC_PAD) != 0L
+    public val help: Boolean get() = (value and KeyModifiers.HELP) != 0L
+    public val function: Boolean get() = (value and KeyModifiers.FUNCTION) != 0L
 
     override fun toString(): String {
         val modifiers = buildList {

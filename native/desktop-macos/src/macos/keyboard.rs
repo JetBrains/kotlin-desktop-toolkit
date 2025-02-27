@@ -8,6 +8,10 @@ use objc2::rc::{autoreleasepool, Retained};
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
 use objc2_foundation::NSString;
 
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct KeyCode(u16);
+
 #[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct KeyEventInfo {
@@ -45,7 +49,6 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
 
         let is_repeat = unsafe { ns_event.isARepeat() };
         let code = unsafe { ns_event.keyCode() };
-        let code = KeyCode::from_u16(code).with_context(|| format!("Event with unexpected key code: {ns_event:?}"))?;
 
         let chars = unsafe { ns_event.characters() }.with_context(|| format!("No characters field in {ns_event:?}"))?;
 
@@ -71,7 +74,7 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
         let key_info = KeyEventInfo {
             is_press,
             is_repeat,
-            code,
+            code: KeyCode(code),
             chars,
             key,
             modifiers,
@@ -92,34 +95,18 @@ pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<F
     }
     let modifiers = unsafe { ns_event.modifierFlags() }.into();
     let code = unsafe { ns_event.keyCode() };
-    let code = KeyCode::from_u16(code).with_context(|| format!("Event with unexpected key code: {ns_event:?}"))?;
 
-    Ok(FlagsChangedInfo { modifiers, code })
+    Ok(FlagsChangedInfo {
+        modifiers,
+        code: KeyCode(code),
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct KeyModifiersSet(u32);
 
-#[allow(non_upper_case_globals)]
-pub(crate) const EmptyKeyModifiers: KeyModifiersSet = KeyModifiersSet(0);
-
-#[allow(dead_code)]
-#[allow(non_upper_case_globals)]
-pub mod key_modifiers {
-    use objc2_app_kit::NSEventModifierFlags;
-
-    // This valuse are basically `NSEventModifierFlags` constants
-    // we copyied it here because it need to be real comp time constant
-    pub const CapsLockModifier: u32 = 1 << 16;
-    pub const ShiftModifier: u32 = 1 << 17;
-    pub const ControlModifier: u32 = 1 << 18;
-    pub const OptionModifier: u32 = 1 << 19;
-    pub const CommandModifier: u32 = 1 << 20;
-    pub const NumericPadModifier: u32 = 1 << 21;
-    pub const HelpModifier: u32 = 1 << 22;
-    pub const FunctionModifier: u32 = 1 << 23;
-}
+pub(crate) const EMPTY_KEY_MODIFIERS: KeyModifiersSet = KeyModifiersSet(0);
 
 impl From<NSEventModifierFlags> for KeyModifiersSet {
     fn from(value: NSEventModifierFlags) -> Self {
@@ -131,238 +118,4 @@ impl From<&KeyModifiersSet> for NSEventModifierFlags {
     fn from(value: &KeyModifiersSet) -> Self {
         NSEventModifierFlags(value.0 as usize)
     }
-}
-
-#[allow(dead_code)]
-#[allow(non_upper_case_globals)]
-pub mod codepoint_constants {
-    pub const EnterCharacter: u32 = 0x0003;
-    pub const BackspaceCharacter: u32 = 0x0008;
-    pub const TabCharacter: u32 = 0x0009;
-    pub const NewlineCharacter: u32 = 0x000a;
-    pub const FormFeedCharacter: u32 = 0x000c;
-    pub const CarriageReturnCharacter: u32 = 0x000d;
-    pub const BackTabCharacter: u32 = 0x0019;
-    pub const DeleteCharacter: u32 = 0x007f;
-    pub const LineSeparatorCharacter: u32 = 0x2028;
-    pub const ParagraphSeparatorCharacter: u32 = 0x2029;
-
-    pub const UpArrowFunctionKey: u32 = 0xF700;
-    pub const DownArrowFunctionKey: u32 = 0xF701;
-    pub const LeftArrowFunctionKey: u32 = 0xF702;
-    pub const RightArrowFunctionKey: u32 = 0xF703;
-    pub const F1FunctionKey: u32 = 0xF704;
-    pub const F2FunctionKey: u32 = 0xF705;
-    pub const F3FunctionKey: u32 = 0xF706;
-    pub const F4FunctionKey: u32 = 0xF707;
-    pub const F5FunctionKey: u32 = 0xF708;
-    pub const F6FunctionKey: u32 = 0xF709;
-    pub const F7FunctionKey: u32 = 0xF70A;
-    pub const F8FunctionKey: u32 = 0xF70B;
-    pub const F9FunctionKey: u32 = 0xF70C;
-    pub const F10FunctionKey: u32 = 0xF70D;
-    pub const F11FunctionKey: u32 = 0xF70E;
-    pub const F12FunctionKey: u32 = 0xF70F;
-    pub const F13FunctionKey: u32 = 0xF710;
-    pub const F14FunctionKey: u32 = 0xF711;
-    pub const F15FunctionKey: u32 = 0xF712;
-    pub const F16FunctionKey: u32 = 0xF713;
-    pub const F17FunctionKey: u32 = 0xF714;
-    pub const F18FunctionKey: u32 = 0xF715;
-    pub const F19FunctionKey: u32 = 0xF716;
-    pub const F20FunctionKey: u32 = 0xF717;
-    pub const F21FunctionKey: u32 = 0xF718;
-    pub const F22FunctionKey: u32 = 0xF719;
-    pub const F23FunctionKey: u32 = 0xF71A;
-    pub const F24FunctionKey: u32 = 0xF71B;
-    pub const F25FunctionKey: u32 = 0xF71C;
-    pub const F26FunctionKey: u32 = 0xF71D;
-    pub const F27FunctionKey: u32 = 0xF71E;
-    pub const F28FunctionKey: u32 = 0xF71F;
-    pub const F29FunctionKey: u32 = 0xF720;
-    pub const F30FunctionKey: u32 = 0xF721;
-    pub const F31FunctionKey: u32 = 0xF722;
-    pub const F32FunctionKey: u32 = 0xF723;
-    pub const F33FunctionKey: u32 = 0xF724;
-    pub const F34FunctionKey: u32 = 0xF725;
-    pub const F35FunctionKey: u32 = 0xF726;
-    pub const InsertFunctionKey: u32 = 0xF727;
-    pub const DeleteFunctionKey: u32 = 0xF728;
-    pub const HomeFunctionKey: u32 = 0xF729;
-    pub const BeginFunctionKey: u32 = 0xF72A;
-    pub const EndFunctionKey: u32 = 0xF72B;
-    pub const PageUpFunctionKey: u32 = 0xF72C;
-    pub const PageDownFunctionKey: u32 = 0xF72D;
-    pub const PrintScreenFunctionKey: u32 = 0xF72E;
-    pub const ScrollLockFunctionKey: u32 = 0xF72F;
-    pub const PauseFunctionKey: u32 = 0xF730;
-    pub const SysReqFunctionKey: u32 = 0xF731;
-    pub const BreakFunctionKey: u32 = 0xF732;
-    pub const ResetFunctionKey: u32 = 0xF733;
-    pub const StopFunctionKey: u32 = 0xF734;
-    pub const MenuFunctionKey: u32 = 0xF735;
-    pub const UserFunctionKey: u32 = 0xF736;
-    pub const SystemFunctionKey: u32 = 0xF737;
-    pub const PrintFunctionKey: u32 = 0xF738;
-    pub const ClearLineFunctionKey: u32 = 0xF739;
-    pub const ClearDisplayFunctionKey: u32 = 0xF73A;
-    pub const InsertLineFunctionKey: u32 = 0xF73B;
-    pub const DeleteLineFunctionKey: u32 = 0xF73C;
-    pub const InsertCharFunctionKey: u32 = 0xF73D;
-    pub const DeleteCharFunctionKey: u32 = 0xF73E;
-    pub const PrevFunctionKey: u32 = 0xF73F;
-    pub const NextFunctionKey: u32 = 0xF740;
-    pub const SelectFunctionKey: u32 = 0xF741;
-    pub const ExecuteFunctionKey: u32 = 0xF742;
-    pub const UndoFunctionKey: u32 = 0xF743;
-    pub const RedoFunctionKey: u32 = 0xF744;
-    pub const FindFunctionKey: u32 = 0xF745;
-    pub const HelpFunctionKey: u32 = 0xF746;
-    pub const ModeSwitchFunctionKey: u32 = 0xF747;
-}
-
-/*  MacOSX15.2
- *  Summary:
- *    Virtual keycodes
- *
- *  Discussion:
- *    These constants are the virtual keycodes defined originally in
- *    Inside Mac Volume V, pg. V-191. They identify physical keys on a
- *    keyboard. Those constants with "ANSI" in the name are labeled
- *    according to the key position on an ANSI-standard US keyboard.
- *    For example, kVK_ANSI_A indicates the virtual keycode for the key
- *    with the letter 'A' in the US keyboard layout. Other keyboard
- *    layouts may have the 'A' key label on a different physical key;
- *    in this case, pressing 'A' will generate a different virtual
- *    keycode.
- */
-#[derive(Debug, Clone, Copy, FromPrimitive, ToPrimitive)]
-#[repr(C)]
-#[allow(non_camel_case_types)]
-pub enum KeyCode {
-    VK_ANSI_A = 0x00,
-    VK_ANSI_S = 0x01,
-    VK_ANSI_D = 0x02,
-    VK_ANSI_F = 0x03,
-    VK_ANSI_H = 0x04,
-    VK_ANSI_G = 0x05,
-    VK_ANSI_Z = 0x06,
-    VK_ANSI_X = 0x07,
-    VK_ANSI_C = 0x08,
-    VK_ANSI_V = 0x09,
-    VK_ANSI_B = 0x0B,
-    VK_ANSI_Q = 0x0C,
-    VK_ANSI_W = 0x0D,
-    VK_ANSI_E = 0x0E,
-    VK_ANSI_R = 0x0F,
-    VK_ANSI_Y = 0x10,
-    VK_ANSI_T = 0x11,
-    VK_ANSI_1 = 0x12,
-    VK_ANSI_2 = 0x13,
-    VK_ANSI_3 = 0x14,
-    VK_ANSI_4 = 0x15,
-    VK_ANSI_6 = 0x16,
-    VK_ANSI_5 = 0x17,
-    VK_ANSI_Equal = 0x18,
-    VK_ANSI_9 = 0x19,
-    VK_ANSI_7 = 0x1A,
-    VK_ANSI_Minus = 0x1B,
-    VK_ANSI_8 = 0x1C,
-    VK_ANSI_0 = 0x1D,
-    VK_ANSI_RightBracket = 0x1E,
-    VK_ANSI_O = 0x1F,
-    VK_ANSI_U = 0x20,
-    VK_ANSI_LeftBracket = 0x21,
-    VK_ANSI_I = 0x22,
-    VK_ANSI_P = 0x23,
-    VK_ANSI_L = 0x25,
-    VK_ANSI_J = 0x26,
-    VK_ANSI_Quote = 0x27,
-    VK_ANSI_K = 0x28,
-    VK_ANSI_Semicolon = 0x29,
-    VK_ANSI_Backslash = 0x2A,
-    VK_ANSI_Comma = 0x2B,
-    VK_ANSI_Slash = 0x2C,
-    VK_ANSI_N = 0x2D,
-    VK_ANSI_M = 0x2E,
-    VK_ANSI_Period = 0x2F,
-    VK_ANSI_Grave = 0x32,
-    VK_ANSI_KeypadDecimal = 0x41,
-    VK_ANSI_KeypadMultiply = 0x43,
-    VK_ANSI_KeypadPlus = 0x45,
-    VK_ANSI_KeypadClear = 0x47,
-    VK_ANSI_KeypadDivide = 0x4B,
-    VK_ANSI_KeypadEnter = 0x4C,
-    VK_ANSI_KeypadMinus = 0x4E,
-    VK_ANSI_KeypadEquals = 0x51,
-    VK_ANSI_Keypad0 = 0x52,
-    VK_ANSI_Keypad1 = 0x53,
-    VK_ANSI_Keypad2 = 0x54,
-    VK_ANSI_Keypad3 = 0x55,
-    VK_ANSI_Keypad4 = 0x56,
-    VK_ANSI_Keypad5 = 0x57,
-    VK_ANSI_Keypad6 = 0x58,
-    VK_ANSI_Keypad7 = 0x59,
-    VK_ANSI_Keypad8 = 0x5B,
-    VK_ANSI_Keypad9 = 0x5C,
-
-    /* keycodes for keys that are independent of keyboard layout*/
-    VK_Return = 0x24,
-    VK_Tab = 0x30,
-    VK_Space = 0x31,
-    VK_Delete = 0x33,
-    VK_Escape = 0x35,
-    VK_Command = 0x37,
-    VK_Shift = 0x38,
-    VK_CapsLock = 0x39,
-    VK_Option = 0x3A,
-    VK_Control = 0x3B,
-    VK_RightCommand = 0x36,
-    VK_RightShift = 0x3C,
-    VK_RightOption = 0x3D,
-    VK_RightControl = 0x3E,
-    VK_Function = 0x3F,
-    VK_F17 = 0x40,
-    VK_VolumeUp = 0x48,
-    VK_VolumeDown = 0x49,
-    VK_Mute = 0x4A,
-    VK_F18 = 0x4F,
-    VK_F19 = 0x50,
-    VK_F20 = 0x5A,
-    VK_F5 = 0x60,
-    VK_F6 = 0x61,
-    VK_F7 = 0x62,
-    VK_F3 = 0x63,
-    VK_F8 = 0x64,
-    VK_F9 = 0x65,
-    VK_F11 = 0x67,
-    VK_F13 = 0x69,
-    VK_F16 = 0x6A,
-    VK_F14 = 0x6B,
-    VK_F10 = 0x6D,
-    VK_ContextualMenu = 0x6E,
-    VK_F12 = 0x6F,
-    VK_F15 = 0x71,
-    VK_Help = 0x72,
-    VK_Home = 0x73,
-    VK_PageUp = 0x74,
-    VK_ForwardDelete = 0x75,
-    VK_F4 = 0x76,
-    VK_End = 0x77,
-    VK_F2 = 0x78,
-    VK_PageDown = 0x79,
-    VK_F1 = 0x7A,
-    VK_LeftArrow = 0x7B,
-    VK_RightArrow = 0x7C,
-    VK_DownArrow = 0x7D,
-    VK_UpArrow = 0x7E,
-
-    /* ISO keyboards only*/
-    VK_ISO_Section = 0x0A,
-
-    VK_JIS_Yen = 0x5D,
-    VK_JIS_Underscore = 0x5E,
-    VK_JIS_KeypadComma = 0x5F,
-    VK_JIS_Eisu = 0x66,
-    VK_JIS_Kana = 0x68,
 }

@@ -48,16 +48,6 @@ impl NSMouseEventExt for NSEvent {
 #[repr(transparent)]
 pub struct MouseButton(u32);
 
-#[allow(dead_code)]
-#[allow(non_upper_case_globals)]
-pub mod mouse_buttons {
-    use super::MouseButton;
-
-    pub const LeftMouseButton: MouseButton = MouseButton(0);
-    pub const RightMouseButton: MouseButton = MouseButton(1);
-    pub const MiddleMouseButton: MouseButton = MouseButton(2);
-}
-
 #[derive(Debug)]
 #[repr(transparent)]
 pub struct MouseButtonsSet(u32);
