@@ -1,5 +1,5 @@
 use anyhow::Context;
-use objc2::rc::{Retained, autoreleasepool};
+use objc2::rc::Retained;
 use objc2_app_kit::NSScreen;
 use objc2_foundation::{MainThreadMarker, NSNumber, NSString};
 
@@ -41,26 +41,24 @@ type ScreenInfoArray = AutoDropArray<ScreenInfo>;
 pub extern "C" fn screen_list() -> ScreenInfoArray {
     ffi_boundary("screen_list", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let screen_infos: Box<_> = autoreleasepool(|pool| {
-            NSScreen::screens(mtm)
-                .iter()
-                .enumerate()
-                .map(|(num, screen)| {
-                    let name = unsafe { screen.localizedName() };
-                    let rect = screen.rect(mtm).unwrap();
-                    ScreenInfo {
-                        screen_id: screen.screen_id(),
-                        // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
-                        is_primary: num == 0,
-                        name: AutoDropStrPtr(copy_to_c_string(&name, pool).unwrap()),
-                        origin: rect.origin,
-                        size: rect.size,
-                        scale: screen.backingScaleFactor(),
-                        maximum_frames_per_second: unsafe { screen.maximumFramesPerSecond() }.try_into().unwrap(),
-                    }
-                })
-                .collect()
-        });
+        let screen_infos: Box<_> = NSScreen::screens(mtm)
+            .iter()
+            .enumerate()
+            .map(|(num, screen)| {
+                let name = unsafe { screen.localizedName() };
+                let rect = screen.rect(mtm).unwrap();
+                ScreenInfo {
+                    screen_id: screen.screen_id(),
+                    // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
+                    is_primary: num == 0,
+                    name: AutoDropStrPtr(copy_to_c_string(&name).unwrap()),
+                    origin: rect.origin,
+                    size: rect.size,
+                    scale: screen.backingScaleFactor(),
+                    maximum_frames_per_second: unsafe { screen.maximumFramesPerSecond() }.try_into().unwrap(),
+                }
+            })
+            .collect();
         Ok(ScreenInfoArray::new(screen_infos))
     })
 }

@@ -1,6 +1,7 @@
-use std::ffi::{CStr, CString};
+use std::{ffi::CString, ptr::NonNull};
 
-use objc2::rc::{AutoreleasePool, Retained};
+use anyhow::Context;
+use objc2::rc::Retained;
 use objc2_foundation::NSString;
 
 use crate::{
@@ -20,13 +21,15 @@ pub extern "C" fn string_drop(str_ptr: RustAllocatedStrPtr) {
     });
 }
 
-pub(crate) fn copy_to_ns_string(str_ptr: BorrowedStrPtr) -> anyhow::Result<Retained<NSString>> {
-    let s: &str = unsafe { CStr::from_ptr(str_ptr) }.to_str()?;
-    Ok(NSString::from_str(s))
+pub(crate) fn copy_to_ns_string(s: BorrowedStrPtr) -> anyhow::Result<Retained<NSString>> {
+    let ptr = NonNull::new(s.cast_mut()).context("Null pointer")?;
+    unsafe { NSString::stringWithUTF8String(ptr) }.context("stringWithUTF8String failed")
 }
 
 // Be aware, now you have to release this memory at some point
-pub(crate) fn copy_to_c_string(ns_string: &NSString, pool: AutoreleasePool) -> anyhow::Result<RustAllocatedStrPtr> {
-    let s: &str = unsafe { ns_string.to_str(pool) };
-    Ok(CString::new(s)?.into_raw())
+pub(crate) fn copy_to_c_string(ns_string: &NSString) -> anyhow::Result<RustAllocatedStrPtr> {
+    let data: *const u8 = ns_string.UTF8String().cast();
+    let len = ns_string.length();
+    let slice = unsafe { std::slice::from_raw_parts(data, len) };
+    Ok(CString::new(slice)?.into_raw())
 }

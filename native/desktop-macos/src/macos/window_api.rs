@@ -1,4 +1,3 @@
-use objc2::rc::autoreleasepool;
 use objc2_foundation::MainThreadMarker;
 
 use crate::{
@@ -129,7 +128,7 @@ pub extern "C" fn window_get_title(window: &Window) -> RustAllocatedStrPtr {
     ffi_boundary("window_get_title", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let title = window.ns_window.title();
-        autoreleasepool(|pool| copy_to_c_string(&title, pool))
+        copy_to_c_string(&title)
     })
 }
 
