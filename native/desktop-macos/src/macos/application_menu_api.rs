@@ -21,27 +21,27 @@ pub struct AppMenuKeystroke {
 #[allow(dead_code)]
 #[repr(C)]
 #[derive(Debug)]
-pub enum AppMenuItem {
+pub enum AppMenuItem<'a> {
     ActionItem {
         enabled: bool,
         title: StrPtr,
         macos_provided: bool,
-        keystroke: *const AppMenuKeystroke, // todo replace nullable pointers with Option<&AppMenuKeystroke> here?
+        keystroke: Option<&'a AppMenuKeystroke>,
         perform: extern "C" fn(),
     },
     SeparatorItem,
     SubMenuItem {
         title: StrPtr,
         special_tag: StrPtr,
-        items: *const AppMenuItem,
+        items: *const AppMenuItem<'a>,
         items_count: ArraySize,
     },
 }
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct AppMenuStructure {
-    pub items: *const AppMenuItem,
+pub struct AppMenuStructure<'a> {
+    pub items: *const AppMenuItem<'a>,
     pub items_count: ArraySize,
 }
 

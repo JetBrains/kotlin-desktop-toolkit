@@ -94,8 +94,7 @@ impl<'a> AppMenuItemSafe<'a> {
                 keystroke,
                 perform,
             } => {
-                let keystroke = if !keystroke.is_null() {
-                    let keystroke = unsafe { &*keystroke };
+                let keystroke = if let Some(keystroke) = keystroke {
                     Some(AppMenuKeystrokeSafe {
                         key: unsafe { CStr::from_ptr(keystroke.key) }.to_str()?,
                         modifiers: &keystroke.modifiers,
