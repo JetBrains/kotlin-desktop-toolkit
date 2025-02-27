@@ -27,24 +27,24 @@ pub type Timestamp = f64;
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct KeyDownEvent {
+pub struct KeyDownEvent<'a> {
     window_id: WindowId,
     modifiers: KeyModifiersSet,
     code: KeyCode,
-    characters: BorrowedStrPtr,
-    key: BorrowedStrPtr,
+    characters: BorrowedStrPtr<'a>,
+    key: BorrowedStrPtr<'a>,
     is_repeat: bool,
     timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct KeyUpEvent {
+pub struct KeyUpEvent<'a> {
     window_id: WindowId,
     modifiers: KeyModifiersSet,
     code: KeyCode,
-    characters: BorrowedStrPtr,
-    key: BorrowedStrPtr,
+    characters: BorrowedStrPtr<'a>,
+    key: BorrowedStrPtr<'a>,
     timestamp: Timestamp,
 }
 
@@ -163,10 +163,9 @@ pub struct WindowFullScreenToggleEvent {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(dead_code)]
-pub enum Event {
-    KeyDown(KeyDownEvent),
-    KeyUp(KeyUpEvent),
+pub enum Event<'a> {
+    KeyDown(KeyDownEvent<'a>),
+    KeyUp(KeyUpEvent<'a>),
     ModifiersChanged(ModifiersChangedEvent),
     MouseMoved(MouseMovedEvent),
     MouseDragged(MouseDraggedEvent),
@@ -259,16 +258,16 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                 window_id: ns_event.window_id(),
                 code: key_info.code,
                 is_repeat: key_info.is_repeat,
-                characters: key_info.chars.UTF8String(),
-                key: key_info.chars.UTF8String(),
+                characters: BorrowedStrPtr::new(key_info.chars.UTF8String()),
+                key: BorrowedStrPtr::new(key_info.chars.UTF8String()),
                 modifiers: key_info.modifiers,
                 timestamp: unsafe { ns_event.timestamp() },
             }),
             NSEventType::KeyUp => Event::KeyUp(KeyUpEvent {
                 window_id: ns_event.window_id(),
                 code: key_info.code,
-                characters: key_info.chars.UTF8String(),
-                key: key_info.chars.UTF8String(),
+                characters: BorrowedStrPtr::new(key_info.chars.UTF8String()),
+                key: BorrowedStrPtr::new(key_info.chars.UTF8String()),
                 modifiers: key_info.modifiers,
                 timestamp: unsafe { ns_event.timestamp() },
             }),

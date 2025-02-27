@@ -1,26 +1,27 @@
 use objc2_foundation::MainThreadMarker;
 
 use crate::{
-    common::{BorrowedStrPtr, Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, RustAllocatedStrPtr},
+    common::{BorrowedStrPtr, Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, RustAllocatedRawPtr, RustAllocatedStrPtr},
     logger::{PanicDefault, ffi_boundary},
 };
 
 use super::{
     application_api::MyNSApplication,
-    metal_api::MetalViewPtr,
+    metal_api::{MetalView, MetalViewPtr},
     screen::{NSScreenExts, ScreenId},
     string::{copy_to_c_string, copy_to_ns_string},
     window::{NSWindowExts, Window},
 };
 
 pub type WindowId = i64;
-type WindowPtr = *const Window;
+
+pub type WindowPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
 
 #[repr(C)]
-pub struct WindowParams {
+pub struct WindowParams<'a> {
     pub origin: LogicalPoint,
     pub size: LogicalSize,
-    pub title: BorrowedStrPtr,
+    pub title: BorrowedStrPtr<'a>,
 
     pub is_resizable: bool,
     pub is_closable: bool,
@@ -32,24 +33,20 @@ pub struct WindowParams {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_create(params: &WindowParams) -> WindowPtr {
+pub extern "C" fn window_create(params: &WindowParams) -> WindowPtr<'static> {
     let window = ffi_boundary("window_create", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         Ok(Some(Window::new(mtm, params)?))
     });
-    window.map_or(std::ptr::null(), |v| Box::into_raw(Box::new(v)))
+    WindowPtr::from_value(window)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_drop(window_ptr: WindowPtr) {
     ffi_boundary("window_drop", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let window: Box<Window> = unsafe {
-            assert!(!window_ptr.is_null());
-            Box::from_raw(window_ptr.cast_mut())
-        };
+        let window = unsafe { window_ptr.to_owned::<Window>() };
         window.ns_window.close();
-        std::mem::drop(window);
         Ok(())
     });
 }
@@ -63,7 +60,7 @@ impl PanicDefault for WindowId {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
     ffi_boundary("window_get_window_id", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.window_id())
     })
 }
@@ -77,7 +74,7 @@ impl PanicDefault for ScreenId {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_screen_id(window_ptr: WindowPtr) -> ScreenId {
     ffi_boundary("window_get_screen_id", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.screen().unwrap().screen_id())
     })
 }
@@ -91,7 +88,7 @@ impl PanicDefault for f64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_scale_factor(window_ptr: WindowPtr) -> f64 {
     ffi_boundary("window_scale_factor", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.backingScaleFactor())
     })
 }
@@ -100,9 +97,9 @@ pub extern "C" fn window_scale_factor(window_ptr: WindowPtr) -> f64 {
 pub extern "C" fn window_attach_layer(window_ptr: WindowPtr, layer_ptr: MetalViewPtr) {
     ffi_boundary("window_attach_layer", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let window = unsafe { window_ptr.read() };
-        let layer = unsafe { layer_ptr.read() };
-        window.attach_layer(&layer);
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let layer = unsafe { layer_ptr.borrow::<MetalView>() };
+        window.attach_layer(layer);
         Ok(())
     });
 }
@@ -117,8 +114,8 @@ impl PanicDefault for LogicalPoint {
 pub extern "C" fn window_set_title(window_ptr: WindowPtr, new_title: BorrowedStrPtr) {
     ffi_boundary("window_set_title", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let window = unsafe { window_ptr.read() };
-        let new_title = copy_to_ns_string(new_title)?;
+        let new_title = copy_to_ns_string(&new_title)?;
+        let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.setTitle(&new_title);
         Ok(())
     });
@@ -126,7 +123,7 @@ pub extern "C" fn window_set_title(window_ptr: WindowPtr, new_title: BorrowedStr
 
 impl PanicDefault for RustAllocatedStrPtr {
     fn default() -> Self {
-        std::ptr::null_mut()
+        Self::null()
     }
 }
 
@@ -134,9 +131,9 @@ impl PanicDefault for RustAllocatedStrPtr {
 pub extern "C" fn window_get_title(window_ptr: WindowPtr) -> RustAllocatedStrPtr {
     ffi_boundary("window_get_title", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         let title = window.ns_window.title();
-        copy_to_c_string(&title)
+        Ok(copy_to_c_string(&title)?)
     })
 }
 
@@ -144,7 +141,7 @@ pub extern "C" fn window_get_title(window_ptr: WindowPtr) -> RustAllocatedStrPtr
 pub extern "C" fn window_get_origin(window_ptr: WindowPtr) -> LogicalPoint {
     ffi_boundary("window_get_origin", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.get_origin(mtm)
     })
 }
@@ -158,7 +155,7 @@ impl PanicDefault for LogicalSize {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_size(window_ptr: WindowPtr) -> LogicalSize {
     ffi_boundary("window_get_size", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.get_size())
     })
 }
@@ -167,7 +164,7 @@ pub extern "C" fn window_get_size(window_ptr: WindowPtr) -> LogicalSize {
 pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: LogicalPoint, size: LogicalSize, animate: bool) {
     ffi_boundary("window_set_rect", || {
         let mtm = MainThreadMarker::new().unwrap();
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.set_rect(&LogicalRect::new(origin, size), animate, mtm)
     });
 }
@@ -176,7 +173,7 @@ pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: LogicalPoint, s
 pub extern "C" fn window_get_content_origin(window_ptr: WindowPtr) -> LogicalPoint {
     ffi_boundary("window_get_content_origin", || {
         let mtm = MainThreadMarker::new().unwrap();
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.get_content_rect(mtm)?.origin)
     })
 }
@@ -185,7 +182,7 @@ pub extern "C" fn window_get_content_origin(window_ptr: WindowPtr) -> LogicalPoi
 pub extern "C" fn window_get_content_size(window_ptr: WindowPtr) -> LogicalSize {
     ffi_boundary("window_get_content_size", || {
         let mtm = MainThreadMarker::new().unwrap();
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.get_content_rect(mtm)?.size)
     })
 }
@@ -194,23 +191,21 @@ pub extern "C" fn window_get_content_size(window_ptr: WindowPtr) -> LogicalSize 
 pub extern "C" fn window_set_content_rect(window_ptr: WindowPtr, origin: LogicalPoint, size: LogicalSize, animate: bool) {
     ffi_boundary("window_set_content_rect", || {
         let mtm = MainThreadMarker::new().unwrap();
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.set_content_rect(&LogicalRect::new(origin, size), animate, mtm)
     });
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_is_key(window_ptr: WindowPtr) -> bool {
-    ffi_boundary("window_is_key", || {
-        let window = unsafe { window_ptr.read() };
-        Ok(window.ns_window.isKeyWindow())
-    })
+    let window = unsafe { window_ptr.borrow::<Window>() };
+    ffi_boundary("window_is_key", || Ok(window.ns_window.isKeyWindow()))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_is_main(window_ptr: WindowPtr) -> bool {
     ffi_boundary("window_is_main", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         let result = unsafe { window.ns_window.isMainWindow() };
         Ok(result)
     })
@@ -219,7 +214,7 @@ pub extern "C" fn window_is_main(window_ptr: WindowPtr) -> bool {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_max_size(window_ptr: WindowPtr) -> LogicalSize {
     ffi_boundary("window_get_max_size", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.get_max_size())
     })
 }
@@ -227,7 +222,7 @@ pub extern "C" fn window_get_max_size(window_ptr: WindowPtr) -> LogicalSize {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_max_size(window_ptr: WindowPtr, size: LogicalSize) {
     ffi_boundary("window_set_max_size", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.set_max_size(size);
         Ok(())
     });
@@ -236,7 +231,7 @@ pub extern "C" fn window_set_max_size(window_ptr: WindowPtr, size: LogicalSize) 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_min_size(window_ptr: WindowPtr) -> LogicalSize {
     ffi_boundary("window_get_min_size", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.get_min_size())
     })
 }
@@ -244,7 +239,7 @@ pub extern "C" fn window_get_min_size(window_ptr: WindowPtr) -> LogicalSize {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) {
     ffi_boundary("window_set_min_size", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.set_min_size(size);
         Ok(())
     });
@@ -253,7 +248,7 @@ pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_toggle_full_screen(window_ptr: WindowPtr) {
     ffi_boundary("window_toggle_full_screen", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.toggleFullScreen(None);
         Ok(())
     });
@@ -262,7 +257,7 @@ pub extern "C" fn window_toggle_full_screen(window_ptr: WindowPtr) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_is_full_screen(window_ptr: WindowPtr) -> bool {
     ffi_boundary("window_is_full_screen", || {
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.is_full_screen())
     })
 }
@@ -273,7 +268,7 @@ pub extern "C" fn window_start_drag(window_ptr: WindowPtr) {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
         if let Some(event) = app.currentEvent() {
-            let window = unsafe { window_ptr.read() };
+            let window = unsafe { window_ptr.borrow::<Window>() };
             window.ns_window.performWindowDragWithEvent(&event);
         }
         Ok(())
@@ -285,7 +280,7 @@ pub extern "C" fn window_invalidate_shadow(window_ptr: WindowPtr) {
     ffi_boundary("window_invalidate_shadow", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         unsafe {
-            let window = window_ptr.read();
+            let window = window_ptr.borrow::<Window>();
             window.ns_window.invalidateShadow();
         }
         Ok(())
@@ -311,7 +306,6 @@ pub enum WindowVisualEffect {
     UnderPageBackgroundEffect,
 }
 
-#[allow(dead_code)]
 #[repr(C)]
 pub enum WindowBackground {
     Transparent,
@@ -323,7 +317,7 @@ pub enum WindowBackground {
 pub extern "C" fn window_set_background(window_ptr: WindowPtr, background: WindowBackground) {
     ffi_boundary("window_set_background", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let window = unsafe { window_ptr.read() };
+        let window = unsafe { window_ptr.borrow::<Window>() };
         window.set_background(mtm, background).unwrap();
         Ok(())
     });

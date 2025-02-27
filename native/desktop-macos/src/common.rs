@@ -1,16 +1,106 @@
 use core::slice;
-use std::ffi::CString;
+use std::{
+    ffi::{CStr, CString, NulError},
+    marker::PhantomData,
+    ptr::NonNull,
+};
 
+use anyhow::Context;
 use log::warn;
-pub type RustAllocatedStrPtr = *mut std::ffi::c_char;
-pub type BorrowedStrPtr = *const std::ffi::c_char;
+
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+struct GenericRawPtr<'a, T> {
+    ptr: *const T,
+    phantom: PhantomData<&'a T>,
+}
 
 #[repr(transparent)]
-pub struct AutoDropStrPtr(pub(crate) *const std::ffi::c_char);
+pub struct RustAllocatedRawPtr<'a, T>(GenericRawPtr<'a, T>);
+
+impl<T> RustAllocatedRawPtr<'_, T> {
+    pub(crate) fn from_value<R>(value: Option<R>) -> Self {
+        Self(GenericRawPtr {
+            ptr: value.map_or(std::ptr::null(), |v| Box::into_raw(Box::new(v)).cast_const()).cast(),
+            phantom: PhantomData,
+        })
+    }
+
+    #[allow(clippy::unnecessary_box_returns)]
+    pub(crate) unsafe fn to_owned<R>(&self) -> Box<R> {
+        assert!(!self.0.ptr.is_null());
+        let ptr = self.0.ptr.cast_mut().cast::<R>();
+        unsafe { Box::from_raw(ptr) }
+    }
+
+    pub(crate) unsafe fn borrow<R>(&self) -> &R {
+        Box::leak(unsafe { self.to_owned() })
+    }
+
+    pub(crate) unsafe fn borrow_mut<R>(&mut self) -> &mut R {
+        Box::leak(unsafe { self.to_owned() })
+    }
+}
+
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct BorrowedStrPtr<'a>(GenericRawPtr<'a, std::ffi::c_char>);
+
+impl BorrowedStrPtr<'_> {
+    pub(crate) const fn new<R>(ptr: *const R) -> Self {
+        Self(GenericRawPtr {
+            ptr: ptr.cast(),
+            phantom: PhantomData,
+        })
+    }
+
+    pub(crate) const fn as_non_null(&self) -> Option<NonNull<std::ffi::c_char>> {
+        NonNull::new(self.0.ptr.cast_mut())
+    }
+
+    pub(crate) fn as_str(&self) -> anyhow::Result<&str> {
+        assert!(!self.0.ptr.is_null());
+        let c_str = unsafe { CStr::from_ptr(self.0.ptr) };
+        c_str.to_str().with_context(|| format!("Invalid unicode in {c_str:?}"))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct RustAllocatedStrPtr(GenericRawPtr<'static, std::ffi::c_char>);
+
+impl RustAllocatedStrPtr {
+    pub(crate) const fn null() -> Self {
+        Self(GenericRawPtr {
+            ptr: std::ptr::null(),
+            phantom: PhantomData,
+        })
+    }
+
+    pub(crate) fn allocate(data: &[u8]) -> Result<Self, NulError> {
+        Ok(Self(GenericRawPtr {
+            ptr: CString::new(data)?.into_raw(),
+            phantom: PhantomData,
+        }))
+    }
+
+    pub(crate) fn deallocate(&mut self) {
+        assert!(!self.0.ptr.is_null());
+        let _s = unsafe { CString::from_raw(self.0.ptr.cast_mut()) };
+        self.0.ptr = std::ptr::null();
+    }
+
+    pub(crate) const fn to_auto_drop(self) -> AutoDropStrPtr {
+        AutoDropStrPtr(self)
+    }
+}
+
+#[repr(transparent)]
+pub struct AutoDropStrPtr(RustAllocatedStrPtr);
 
 impl Drop for AutoDropStrPtr {
     fn drop(&mut self) {
-        let _s = unsafe { CString::from_raw(self.0.cast_mut()) };
+        self.0.deallocate();
     }
 }
 

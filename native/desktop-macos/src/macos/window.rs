@@ -22,7 +22,7 @@ use objc2_foundation::{
 };
 
 use crate::{
-    common::{LogicalPoint, LogicalRect, LogicalSize},
+    common::{BorrowedStrPtr, LogicalPoint, LogicalRect, LogicalSize},
     logger::catch_panic,
     macos::{
         custom_titlebar::CustomTitlebar,
@@ -219,7 +219,7 @@ impl Window {
             // https://developer.apple.com/library/archive/documentation/General/Conceptual/MOSXAppProgrammingGuide/FullScreenApp/FullScreenApp.html#:~:text=Full%2Dscreen%20support%20in%20NSApplication,is%20also%20key%2Dvalue%20observable.
             ns_window.setCollectionBehavior(collection_behaviour);
         }
-        ns_window.setTitle(&copy_to_ns_string(params.title).unwrap());
+        ns_window.setTitle(&copy_to_ns_string(&params.title).unwrap());
         unsafe {
             ns_window.setReleasedWhenClosed(false);
         }
@@ -824,7 +824,7 @@ impl RootView {
                 ns_attributed_string, text, replacement_range
             );
             let window = self.window().context("No window for view")?;
-            handle_text_changed_operation(window.window_id(), text.UTF8String())
+            handle_text_changed_operation(window.window_id(), BorrowedStrPtr::new(text.UTF8String()))
         });
     }
 

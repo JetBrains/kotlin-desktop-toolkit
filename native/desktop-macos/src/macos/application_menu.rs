@@ -7,6 +7,8 @@ use objc2::{DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained,
 use objc2_app_kit::{NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSString};
 
+use crate::common::BorrowedStrPtr;
+
 use super::{
     application_api::MyNSApplication,
     application_menu_api::{AppMenuItem, AppMenuStructure},
@@ -99,14 +101,14 @@ impl AppMenuItemSafe {
         let safe_item = match item {
             &AppMenuItem::ActionItem {
                 enabled,
-                title,
+                ref title,
                 macos_provided,
                 keystroke,
                 perform,
             } => {
                 let keystroke = if let Some(keystroke) = keystroke {
                     Some(AppMenuKeystrokeSafe {
-                        key: copy_to_ns_string(keystroke.key)?,
+                        key: copy_to_ns_string(&keystroke.key)?,
                         modifiers: keystroke.modifiers,
                     })
                 } else {
@@ -122,7 +124,7 @@ impl AppMenuItemSafe {
             }
             AppMenuItem::SeparatorItem => Self::Separator,
             sub_menu @ &AppMenuItem::SubMenuItem {
-                title,
+                ref title,
                 special_tag,
                 items,
                 items_count,
@@ -135,7 +137,7 @@ impl AppMenuItemSafe {
                 };
                 let safe_items: Result<Vec<_>> = items.iter().map(|e| Self::from_unsafe(e, special_tags)).collect();
                 let special_tag = if let Some(special_tag) = special_tag {
-                    Some(copy_to_ns_string(special_tag)?)
+                    Some(copy_to_ns_string(&BorrowedStrPtr::new(special_tag))?)
                 } else {
                     None
                 };

@@ -1,9 +1,4 @@
-use std::{
-    any::Any,
-    cell::RefCell,
-    ffi::{CStr, CString},
-    panic::AssertUnwindSafe,
-};
+use std::{any::Any, cell::RefCell, panic::AssertUnwindSafe};
 
 use anyhow::Context;
 use log::error;
@@ -37,7 +32,7 @@ struct LastExceptionMessages {
 impl LastExceptionMessages {
     const fn new() -> Self {
         Self {
-            messages: [std::ptr::null_mut(); MAX_EXCEPTIONS_COUNT],
+            messages: [RustAllocatedStrPtr::null(); MAX_EXCEPTIONS_COUNT],
             count: 0,
         }
     }
@@ -45,9 +40,9 @@ impl LastExceptionMessages {
     #[allow(clippy::needless_pass_by_value)]
     fn append(&mut self, msg: String) {
         if self.count < MAX_EXCEPTIONS_COUNT {
-            match CString::new(msg) {
+            match RustAllocatedStrPtr::allocate(msg.as_bytes()) {
                 Ok(msg) => {
-                    self.messages[self.count] = CString::into_raw(msg);
+                    self.messages[self.count] = msg;
                     self.count += 1;
                 }
                 Err(err) => {
@@ -61,9 +56,8 @@ impl LastExceptionMessages {
 
     fn clear(&mut self) {
         for i in 0..self.count {
-            let msg = unsafe { CString::from_raw(self.messages[i]) };
-            std::mem::drop(msg);
-            self.messages[i] = std::ptr::null_mut();
+            self.messages[i].deallocate();
+            self.messages[i] = RustAllocatedStrPtr::null();
         }
         self.count = 0;
     }
@@ -109,10 +103,9 @@ impl LogLevel {
     }
 }
 
-impl LoggerConfiguration {
+impl LoggerConfiguration<'_> {
     fn file_path(&self) -> anyhow::Result<&str> {
-        let c_str = unsafe { CStr::from_ptr(self.file_path) };
-        c_str.to_str().with_context(|| format!("Invalid unicode in {c_str:?}"))
+        self.file_path.as_str()
     }
 
     const fn console_log_level(&self) -> log::LevelFilter {

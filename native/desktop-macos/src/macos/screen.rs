@@ -51,7 +51,7 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
                     screen_id: screen.screen_id(),
                     // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
                     is_primary: num == 0,
-                    name: AutoDropStrPtr(copy_to_c_string(&name).unwrap()),
+                    name: copy_to_c_string(&name).unwrap().to_auto_drop(),
                     origin: rect.origin,
                     size: rect.size,
                     scale: screen.backingScaleFactor(),

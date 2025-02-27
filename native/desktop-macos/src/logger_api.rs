@@ -30,7 +30,6 @@ pub extern "C" fn logger_clear_exceptions() {
     });
 }
 
-#[allow(dead_code)]
 #[repr(C)]
 pub enum LogLevel {
     Off,
@@ -42,8 +41,8 @@ pub enum LogLevel {
 }
 
 #[repr(C)]
-pub struct LoggerConfiguration {
-    pub file_path: BorrowedStrPtr,
+pub struct LoggerConfiguration<'a> {
+    pub file_path: BorrowedStrPtr<'a>,
     pub console_level: LogLevel,
     pub file_level: LogLevel,
 }

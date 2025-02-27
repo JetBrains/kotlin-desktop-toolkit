@@ -1,7 +1,10 @@
 use std::{ffi::c_void, ptr::addr_of};
 
 use super::screen::ScreenId;
-use crate::logger::{PanicDefault, ffi_boundary};
+use crate::{
+    common::RustAllocatedRawPtr,
+    logger::{PanicDefault, ffi_boundary},
+};
 use anyhow::Result;
 use dispatch_sys::{
     _dispatch_main_q, _dispatch_source_type_data_add, dispatch_object_t, dispatch_queue_t, dispatch_resume, dispatch_set_context,
@@ -12,34 +15,29 @@ use display_link_sys::CGDirectDisplayID;
 use objc2_foundation::MainThreadMarker;
 
 pub type DisplayLinkCallback = extern "C" fn();
-
-type DisplayLinkPtr = *mut DisplayLink;
+pub type DisplayLinkPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
 
 #[unsafe(no_mangle)]
-pub extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLinkCallback) -> DisplayLinkPtr {
+pub extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLinkCallback) -> DisplayLinkPtr<'static> {
     let display_link = ffi_boundary("display_link_create", || {
         let _mtm = MainThreadMarker::new().unwrap();
         Ok(Some(DisplayLink::new(screen_id, on_next_frame).unwrap()))
     });
-    display_link.map_or(std::ptr::null_mut(), |v| Box::into_raw(Box::new(v)))
+    DisplayLinkPtr::from_value(display_link)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn display_link_drop(display_link_ptr: DisplayLinkPtr) {
     ffi_boundary("display_link_drop", || {
-        let display_link: Box<DisplayLink> = unsafe {
-            assert!(!display_link_ptr.is_null());
-            Box::from_raw(display_link_ptr)
-        };
-        std::mem::drop(display_link);
+        let _display_link = unsafe { display_link_ptr.to_owned::<DisplayLink>() };
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn display_link_set_running(display_link_ptr: DisplayLinkPtr, value: bool) {
+pub extern "C" fn display_link_set_running(mut display_link_ptr: DisplayLinkPtr, value: bool) {
     ffi_boundary("display_link_set_running", || {
-        let display_link = unsafe { &mut display_link_ptr.read() };
+        let display_link = unsafe { display_link_ptr.borrow_mut::<DisplayLink>() };
         if value != display_link.is_running() {
             if value {
                 display_link.start().unwrap();
@@ -58,9 +56,9 @@ impl PanicDefault for bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn display_link_is_running(display_link_ptr: DisplayLinkPtr) -> bool {
+pub extern "C" fn display_link_is_running(mut display_link_ptr: DisplayLinkPtr) -> bool {
     ffi_boundary("display_link_is_running", || {
-        let display_link = unsafe { &mut display_link_ptr.read() };
+        let display_link = unsafe { display_link_ptr.borrow_mut::<DisplayLink>() };
         Ok(display_link.is_running())
     })
 }

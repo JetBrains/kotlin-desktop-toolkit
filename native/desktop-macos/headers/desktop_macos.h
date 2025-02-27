@@ -29,13 +29,9 @@ typedef enum NativeWindowVisualEffect {
   NativeWindowVisualEffect_UnderPageBackgroundEffect,
 } NativeWindowVisualEffect;
 
-typedef struct NativeDisplayLink NativeDisplayLink;
+typedef const char *NativeGenericRawPtr_c_char;
 
-typedef struct NativeMetalView NativeMetalView;
-
-typedef struct NativeWindow NativeWindow;
-
-typedef char *NativeRustAllocatedStrPtr;
+typedef NativeGenericRawPtr_c_char NativeRustAllocatedStrPtr;
 
 typedef uintptr_t NativeArraySize;
 
@@ -44,7 +40,7 @@ typedef struct NativeExceptionsArray {
   NativeArraySize count;
 } NativeExceptionsArray;
 
-typedef const char *NativeBorrowedStrPtr;
+typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
 typedef struct NativeLoggerConfiguration {
   NativeBorrowedStrPtr file_path;
@@ -337,7 +333,11 @@ typedef struct NativeAppMenuStructure {
   NativeArraySize items_count;
 } NativeAppMenuStructure;
 
-typedef struct NativeDisplayLink *NativeDisplayLinkPtr;
+typedef const void *NativeGenericRawPtr_c_void;
+
+typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr_c_void;
+
+typedef NativeRustAllocatedRawPtr_c_void NativeDisplayLinkPtr;
 
 typedef void (*NativeDisplayLinkCallback)(void);
 
@@ -347,7 +347,7 @@ typedef void *NativeMetalDeviceRef;
 
 typedef void *NativeMetalCommandQueueRef;
 
-typedef const struct NativeMetalView *NativeMetalViewPtr;
+typedef NativeRustAllocatedRawPtr_c_void NativeMetalViewPtr;
 
 typedef double NativePhysicalPixels;
 
@@ -358,7 +358,7 @@ typedef struct NativePhysicalSize {
 
 typedef void *NativeMetalTextureRef;
 
-typedef const char *NativeAutoDropStrPtr;
+typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
 
 typedef struct NativeScreenInfo {
   NativeScreenId screen_id;
@@ -377,7 +377,7 @@ typedef struct NativeAutoDropArray_ScreenInfo {
 
 typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
 
-typedef const struct NativeWindow *NativeWindowPtr;
+typedef NativeRustAllocatedRawPtr_c_void NativeWindowPtr;
 
 typedef struct NativeWindowParams {
   struct NativeLogicalPoint origin;

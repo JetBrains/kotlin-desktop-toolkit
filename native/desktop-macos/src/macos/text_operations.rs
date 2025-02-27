@@ -14,9 +14,9 @@ pub struct TextRange {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct TextChangedOperation {
+pub struct TextChangedOperation<'a> {
     window_id: WindowId,
-    text: BorrowedStrPtr,
+    text: BorrowedStrPtr<'a>,
     //composition_range: TextRange,
     //composition_committed_range: TextRange,
     //composition_selected_range: TextRange,
@@ -25,17 +25,16 @@ pub struct TextChangedOperation {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct TextCommandOperation {
+pub struct TextCommandOperation<'a> {
     window_id: WindowId,
-    command: BorrowedStrPtr,
+    command: BorrowedStrPtr<'a>,
 }
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(dead_code)]
-pub enum TextOperation {
-    TextCommand(TextCommandOperation),
-    TextChanged(TextChangedOperation),
+pub enum TextOperation<'a> {
+    TextCommand(TextCommandOperation<'a>),
+    TextChanged(TextChangedOperation<'a>),
 }
 
 // return true if operation was handled
@@ -59,7 +58,7 @@ pub(crate) fn handle_text_command_operation(window_id: WindowId, command: &'stat
     AppState::with(|state| {
         let operation = TextOperation::TextCommand(TextCommandOperation {
             window_id,
-            command: command.as_ptr(),
+            command: BorrowedStrPtr::new(command.as_ptr()),
         });
         Ok((state.text_operation_handler)(&operation))
     })

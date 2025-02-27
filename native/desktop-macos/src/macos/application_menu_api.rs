@@ -12,25 +12,24 @@ use crate::logger::ffi_boundary;
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct AppMenuKeystroke {
-    pub key: BorrowedStrPtr,
+pub struct AppMenuKeystroke<'a> {
+    pub key: BorrowedStrPtr<'a>,
     pub modifiers: KeyModifiersSet,
 }
 
-#[allow(dead_code)]
 #[repr(C)]
 #[derive(Debug)]
 pub enum AppMenuItem<'a> {
     ActionItem {
         enabled: bool,
-        title: BorrowedStrPtr,
+        title: BorrowedStrPtr<'a>,
         macos_provided: bool,
-        keystroke: Option<&'a AppMenuKeystroke>,
+        keystroke: Option<&'a AppMenuKeystroke<'a>>,
         perform: extern "C" fn(),
     },
     SeparatorItem,
     SubMenuItem {
-        title: BorrowedStrPtr,
+        title: BorrowedStrPtr<'a>,
         special_tag: Option<&'a std::ffi::c_char>,
         items: *const AppMenuItem<'a>,
         items_count: ArraySize,
