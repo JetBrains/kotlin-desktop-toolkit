@@ -419,7 +419,7 @@ class ApplicationState : AutoCloseable {
     }
 
     fun handleEvent(event: Event): EventHandlerResult {
-//        logEvents(event)
+        logEvents(event)
         val eventWindowId = event.windowId()
 
         return when (event) {

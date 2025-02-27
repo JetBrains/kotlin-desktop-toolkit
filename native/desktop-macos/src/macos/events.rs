@@ -2,6 +2,7 @@
 
 use core::f64;
 
+use log::info;
 use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
@@ -272,7 +273,9 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
             }),
             _ => bail!("Unexpected type of event {:?}", ns_event),
         };
-        Ok((state.event_handler)(&event))
+        let res = (state.event_handler)(&event);
+        info!("handle_key_event: {ns_event:?} -> {res}");
+        Ok(res)
     });
     handled
 }

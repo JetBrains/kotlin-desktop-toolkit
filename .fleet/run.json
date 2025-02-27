@@ -1,0 +1,10 @@
+{
+    "configurations": [
+        {
+            "type": "cargo",
+            "name": "build",
+            "cargoArgs": ["build"],
+            "workingDir": "native/"
+        }
+    ]
+}

@@ -56,6 +56,12 @@ abstract class SkikoWindow(
                 updateDisplayLink(screenId = event.newScreenId)
                 EventHandlerResult.Continue
             }
+//            is Event.KeyUp -> {
+//                EventHandlerResult.Stop
+//            }
+//            is Event.KeyDown -> {
+//                EventHandlerResult.Stop
+//            }
             else -> EventHandlerResult.Continue
         }
     }
