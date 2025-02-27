@@ -133,7 +133,7 @@ pub extern "C" fn window_get_title(window_ptr: WindowPtr) -> RustAllocatedStrPtr
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         let title = window.ns_window.title();
-        Ok(copy_to_c_string(&title)?)
+        copy_to_c_string(&title)
     })
 }
 

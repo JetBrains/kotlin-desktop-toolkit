@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn string_drop(mut str_ptr: RustAllocatedStrPtr) {
+pub extern "C" fn string_drop(mut str_ptr: RustAllocatedStrPtr) {
     ffi_boundary("string_drop", || {
         str_ptr.deallocate();
         Ok(())

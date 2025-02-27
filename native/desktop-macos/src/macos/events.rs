@@ -2,7 +2,6 @@
 
 use core::f64;
 
-use log::info;
 use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
