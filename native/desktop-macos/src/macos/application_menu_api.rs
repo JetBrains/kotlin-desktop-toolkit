@@ -43,7 +43,7 @@ pub enum ActionMenuItemSpecialTag {
 pub enum ActionItemState {
     On,
     Off,
-    Mixed
+    Mixed,
 }
 
 #[repr(C)]

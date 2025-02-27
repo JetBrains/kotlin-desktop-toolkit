@@ -23,7 +23,7 @@ use objc2_foundation::{
 };
 
 use crate::{
-    common::{LogicalPoint, LogicalRect, LogicalSize},
+    common::{BorrowedStrPtr, LogicalPoint, LogicalRect, LogicalSize},
     logger::catch_panic,
     macos::{
         custom_titlebar::CustomTitlebar,
@@ -34,7 +34,7 @@ use crate::{
         },
         keyboard::unpack_key_event,
         string::{borrow_ns_string, copy_to_ns_string},
-        text_operations::{handle_text_changed_operation, handle_text_command_operation},
+        text_operations::{TextChangedOperation, TextCommandOperation},
     },
 };
 
@@ -774,6 +774,11 @@ fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttribut
 }
 
 impl RootView {
+    fn window_id(&self) -> anyhow::Result<WindowId> {
+        let window = self.window().context("No window for view")?;
+        Ok(window.window_id())
+    }
+
     pub(crate) fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars::default());
@@ -849,10 +854,14 @@ impl RootView {
                 debug!("Ignoring the noop: selector, forwarding the raw event");
                 return Ok(());
             }
-            let window = self.window().context("No window for view")?;
             let key_event_info = self.ivars().current_key_down_event.take();
             let original_event = key_event_info.as_ref().map(KeyDownEvent::from_key_event_info);
-            let handled = handle_text_command_operation(window.window_id(), original_event, s)?;
+            let handled = TextCommandOperation {
+                window_id: self.window_id()?,
+                original_event: original_event.as_ref(),
+                command: BorrowedStrPtr::new(s),
+            }
+            .run();
             if !handled {
                 self.ivars().current_key_down_event.set(key_event_info);
             }
@@ -868,10 +877,14 @@ impl RootView {
                 ns_attributed_string, text, replacement_range
             );
 
-            let window = self.window().context("No window for view")?;
             let key_event_info = self.ivars().current_key_down_event.take();
             let original_event = key_event_info.as_ref().map(KeyDownEvent::from_key_event_info);
-            let handled = handle_text_changed_operation(window.window_id(), original_event, borrow_ns_string(&text))?;
+            let handled = TextChangedOperation {
+                window_id: self.window_id()?,
+                original_event: original_event.as_ref(),
+                text: borrow_ns_string(&text),
+            }
+            .run();
             if !handled {
                 self.ivars().current_key_down_event.set(key_event_info);
             }
