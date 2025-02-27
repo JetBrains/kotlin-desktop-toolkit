@@ -1,6 +1,50 @@
+use core::slice;
+use std::ffi::CString;
+
+use log::warn;
 pub type StrPtr = *mut std::ffi::c_char;
 pub type ConstStrPtr = *const std::ffi::c_char;
+
+#[repr(transparent)]
+pub struct AutoDropStrPtr(pub(crate) *const std::ffi::c_char);
+
+impl Drop for AutoDropStrPtr {
+    fn drop(&mut self) {
+        let _s = unsafe { CString::from_raw(self.0.cast_mut()) };
+    }
+}
+
 pub type ArraySize = usize;
+
+#[repr(C)]
+pub struct AutoDropArray<T> {
+    pub ptr: *const T,
+    pub len: ArraySize,
+}
+
+impl<T> AutoDropArray<T> {
+    pub(crate) fn new(array: Box<[T]>) -> Self {
+        let array = Box::leak(array);
+        Self {
+            ptr: array.as_ptr(),
+            len: array.len(),
+        }
+    }
+}
+
+impl<T> Drop for AutoDropArray<T> {
+    fn drop(&mut self) {
+        if self.ptr.is_null() {
+            warn!("Got null pointer in AutoDropArray");
+        } else {
+            let array = unsafe {
+                let s = slice::from_raw_parts_mut(self.ptr.cast_mut(), self.len);
+                Box::from_raw(s)
+            };
+            std::mem::drop(array);
+        }
+    }
+}
 
 // ffi ready analog of &[T]
 //#[repr(C)]

@@ -354,20 +354,24 @@ typedef struct NativePhysicalSize {
 
 typedef void *NativeMetalTextureRef;
 
+typedef const char *NativeAutoDropStrPtr;
+
 typedef struct NativeScreenInfo {
   NativeScreenId screen_id;
   bool is_primary;
-  NativeStrPtr name;
+  NativeAutoDropStrPtr name;
   struct NativeLogicalPoint origin;
   struct NativeLogicalSize size;
   double scale;
   uint32_t maximum_frames_per_second;
 } NativeScreenInfo;
 
-typedef struct NativeScreenInfoArray {
-  struct NativeScreenInfo *ptr;
+typedef struct NativeAutoDropArray_ScreenInfo {
+  const struct NativeScreenInfo *ptr;
   NativeArraySize len;
-} NativeScreenInfoArray;
+} NativeAutoDropArray_ScreenInfo;
+
+typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
 
 typedef struct NativeWindowParams {
   struct NativeLogicalPoint origin;
@@ -472,9 +476,9 @@ NativeMetalTextureRef metal_view_next_texture(const struct NativeMetalView *view
 
 void metal_deref_texture(NativeMetalTextureRef texture);
 
-struct NativeScreenInfoArray screen_list(void);
+NativeScreenInfoArray screen_list(void);
 
-void screen_list_drop(struct NativeScreenInfoArray arr);
+void screen_list_drop(NativeScreenInfoArray arr);
 
 NativeScreenId screen_get_main_screen_id(void);
 

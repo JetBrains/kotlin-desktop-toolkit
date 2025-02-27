@@ -1,14 +1,10 @@
-use core::slice;
-use std::ffi::CString;
-
 use anyhow::Context;
-use log::warn;
 use objc2::rc::{Retained, autoreleasepool};
 use objc2_app_kit::NSScreen;
 use objc2_foundation::{MainThreadMarker, NSNumber, NSString};
 
 use crate::{
-    common::{ArraySize, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},
+    common::{AutoDropArray, AutoDropStrPtr, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize},
     logger::{PanicDefault, ffi_boundary},
 };
 
@@ -20,7 +16,7 @@ pub type ScreenId = u32;
 pub struct ScreenInfo {
     pub screen_id: ScreenId,
     pub is_primary: bool,
-    pub name: StrPtr,
+    pub name: AutoDropStrPtr,
     // relative to primary screen
     pub origin: LogicalPoint,
     pub size: LogicalSize,
@@ -30,44 +26,7 @@ pub struct ScreenInfo {
     // todo stable uuid?
 }
 
-impl Drop for ScreenInfo {
-    fn drop(&mut self) {
-        let name = unsafe { CString::from_raw(self.name) };
-        std::mem::drop(name);
-    }
-}
-
-#[repr(C)]
-pub struct ScreenInfoArray {
-    pub ptr: *mut ScreenInfo,
-    pub len: ArraySize,
-}
-
-impl ScreenInfoArray {
-    fn new(screen_infos: Vec<ScreenInfo>) -> Self {
-        let screen_infos = Vec::leak(screen_infos);
-        Self {
-            ptr: screen_infos.as_mut_ptr(),
-            len: screen_infos.len(),
-        }
-    }
-}
-
-impl Drop for ScreenInfoArray {
-    fn drop(&mut self) {
-        if self.ptr.is_null() {
-            warn!("Got null pointer in ScreenInfoArray");
-        } else {
-            let screen_infos = unsafe {
-                let s = slice::from_raw_parts_mut(self.ptr, self.len);
-                Box::from_raw(s)
-            };
-            std::mem::drop(screen_infos);
-        }
-    }
-}
-
-impl PanicDefault for ScreenInfoArray {
+impl<T> PanicDefault for AutoDropArray<T> {
     fn default() -> Self {
         Self {
             ptr: std::ptr::null_mut(),
@@ -76,11 +35,13 @@ impl PanicDefault for ScreenInfoArray {
     }
 }
 
+type ScreenInfoArray = AutoDropArray<ScreenInfo>;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn screen_list() -> ScreenInfoArray {
     ffi_boundary("screen_list", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let screen_infos: Vec<_> = autoreleasepool(|pool| {
+        let screen_infos: Box<_> = autoreleasepool(|pool| {
             NSScreen::screens(mtm)
                 .iter()
                 .enumerate()
@@ -91,7 +52,7 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
                         screen_id: screen.screen_id(),
                         // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
                         is_primary: num == 0,
-                        name: copy_to_c_string(&name, pool).unwrap(),
+                        name: AutoDropStrPtr(copy_to_c_string(&name, pool).unwrap()),
                         origin: rect.origin,
                         size: rect.size,
                         scale: screen.backingScaleFactor(),
