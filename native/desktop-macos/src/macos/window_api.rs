@@ -31,19 +31,13 @@ pub struct WindowParams {
     pub titlebar_height: LogicalPixels,
 }
 
-impl PanicDefault for WindowPtr {
-    fn default() -> Self {
-        std::ptr::null_mut()
-    }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn window_create(params: &WindowParams) -> WindowPtr {
-    ffi_boundary("window_create", || {
+    let window = ffi_boundary("window_create", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let window = Window::new(mtm, params)?;
-        Ok(Box::into_raw(Box::new(window)).cast_const())
-    })
+        Ok(Some(Window::new(mtm, params)?))
+    });
+    window.map_or(std::ptr::null(), |v| Box::into_raw(Box::new(v)))
 }
 
 #[unsafe(no_mangle)]

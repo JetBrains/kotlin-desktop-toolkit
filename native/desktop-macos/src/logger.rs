@@ -250,6 +250,12 @@ impl PanicDefault for () {
     fn default() -> Self {}
 }
 
+impl<T> PanicDefault for Option<T> {
+    fn default() -> Self {
+        None
+    }
+}
+
 // We wrap body of API functions that we expose with this function, e.g. see `application_init`
 // It prevents Rust panic from crossing the border
 // This function ignores [`UnwindSafe`] which means that in case of panic

@@ -85,15 +85,9 @@ impl MetalView {
 
 pub type MetalViewPtr = *const MetalView;
 
-impl PanicDefault for MetalViewPtr {
-    fn default() -> Self {
-        std::ptr::null_mut()
-    }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> MetalViewPtr {
-    ffi_boundary("metal_create_view", || {
+    let metal_view = ffi_boundary("metal_create_view", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let device = unsafe { device.retain() };
         let layer = unsafe { CAMetalLayer::new() };
@@ -127,13 +121,13 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> MetalViewPtr {
 
         layer_view.setWantsLayer(true);
 
-        Ok(Box::into_raw(Box::new(MetalView {
+        Ok(Some(MetalView {
             ns_view: layer_view,
             layer,
             drawable: Cell::new(None),
         }))
-        .cast_const())
-    })
+    });
+    metal_view.map_or(std::ptr::null(), |v| Box::into_raw(Box::new(v)))
 }
 
 #[unsafe(no_mangle)]

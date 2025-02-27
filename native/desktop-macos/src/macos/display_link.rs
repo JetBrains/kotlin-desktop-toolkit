@@ -20,19 +20,14 @@ pub struct DisplayLinkBox {
 
 type DisplayLinkPtr = *mut DisplayLinkBox;
 
-impl PanicDefault for DisplayLinkPtr {
-    fn default() -> Self {
-        std::ptr::null_mut()
-    }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLinkCallback) -> DisplayLinkPtr {
-    ffi_boundary("display_link_create", || {
+    let display_link_box = ffi_boundary("display_link_create", || {
         let _mtm = MainThreadMarker::new().unwrap();
         let display_link = DisplayLink::new(screen_id, on_next_frame).unwrap();
-        Ok(Box::into_raw(Box::new(DisplayLinkBox { display_link })))
-    })
+        Ok(Some(DisplayLinkBox { display_link }))
+    });
+    display_link_box.map_or(std::ptr::null_mut(), |v| Box::into_raw(Box::new(v)))
 }
 
 #[unsafe(no_mangle)]
