@@ -5,7 +5,7 @@ use objc2_foundation::NSString;
 
 use crate::{common::StrPtr, logger::ffi_boundary};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn string_drop(str_ptr: StrPtr) {
     ffi_boundary("string_drop", || {
         let s = unsafe {

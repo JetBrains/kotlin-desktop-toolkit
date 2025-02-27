@@ -8,7 +8,7 @@ pub struct ExceptionsArray {
     pub count: ArraySize,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn logger_check_exceptions() -> ExceptionsArray {
     let result = std::panic::catch_unwind(exceptions_array);
     result.unwrap_or_else(|payload| {
@@ -21,7 +21,7 @@ pub extern "C" fn logger_check_exceptions() -> ExceptionsArray {
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn logger_clear_exceptions() {
     let result = std::panic::catch_unwind(clear_exception_msgs);
     result.unwrap_or_else(|payload| {
@@ -48,7 +48,7 @@ pub struct LoggerConfiguration {
     pub file_level: LogLevel,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn logger_init(logger_configuration: &LoggerConfiguration) {
     let result = std::panic::catch_unwind(|| logger_configuration.init_logger());
 

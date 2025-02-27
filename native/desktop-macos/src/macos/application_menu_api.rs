@@ -44,7 +44,7 @@ pub struct AppMenuStructure<'a> {
     pub items_count: ArraySize,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
     ffi_boundary("main_menu_update", || {
         main_menu_update_impl(&menu);
@@ -52,7 +52,7 @@ pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn main_menu_set_none() {
     ffi_boundary("main_menu_set_none", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();

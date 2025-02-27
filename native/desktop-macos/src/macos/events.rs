@@ -206,7 +206,7 @@ impl PanicDefault for MouseButtonsSet {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn events_pressed_mouse_buttons() -> MouseButtonsSet {
     ffi_boundary("events_pressed_mouse_buttons", || Ok(NSEvent::pressed_mouse_buttons()))
 }
@@ -217,12 +217,12 @@ impl PanicDefault for KeyModifiersSet {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn events_pressed_modifiers() -> KeyModifiersSet {
     ffi_boundary("events_pressed_modifiers", || Ok(NSEvent::pressed_modifiers()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn events_cursor_location_in_screen() -> LogicalPoint {
     ffi_boundary("events_cursor_location_in_screen", || {
         let mtm = MainThreadMarker::new().unwrap();

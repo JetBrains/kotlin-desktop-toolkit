@@ -557,7 +557,7 @@ define_class!(
             actual_range: NSRangePointer,
         ) -> NSRect {
             let actual_range = NonNull::new(actual_range);
-            info!("firstRectForCharacterRange: range={:?}, actual_range={:?}", range, actual_range.map(|r| r.read()));
+            info!("firstRectForCharacterRange: range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
             NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64))  // TODO
         }
 

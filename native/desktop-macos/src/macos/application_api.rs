@@ -60,7 +60,7 @@ pub struct ApplicationConfig {
     pub disable_character_palette_menu_item: bool,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: ApplicationCallbacks) {
     ffi_boundary("application_init", || {
         info!("Application Init");
@@ -107,7 +107,7 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn application_shutdown() {
     ffi_boundary("application_shutdown", || {
         // todo
@@ -115,7 +115,7 @@ pub extern "C" fn application_shutdown() {
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn application_run_event_loop() {
     ffi_boundary("application_run_event_loop", || {
         info!("Start event loop");
@@ -126,7 +126,7 @@ pub extern "C" fn application_run_event_loop() {
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn application_stop_event_loop() {
     ffi_boundary("application_stop_event_loop", || {
         info!("Stop event loop");
@@ -154,7 +154,7 @@ pub extern "C" fn application_stop_event_loop() {
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn application_request_termination() {
     ffi_boundary("application_request_termination", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();

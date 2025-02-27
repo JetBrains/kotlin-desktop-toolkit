@@ -76,7 +76,7 @@ impl PanicDefault for ScreenInfoArray {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn screen_list() -> ScreenInfoArray {
     ffi_boundary("screen_list", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -104,7 +104,7 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
     ffi_boundary("screen_list_drop", || {
         std::mem::drop(arr);
@@ -112,7 +112,7 @@ pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn screen_get_main_screen_id() -> ScreenId {
     ffi_boundary("screen_get_main_screen_id", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();

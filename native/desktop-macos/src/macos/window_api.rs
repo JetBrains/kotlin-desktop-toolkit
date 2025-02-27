@@ -37,7 +37,7 @@ impl PanicDefault for *mut Window {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_create(params: &WindowParams) -> *mut Window {
     ffi_boundary("window_create", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -46,7 +46,7 @@ pub extern "C" fn window_create(params: &WindowParams) -> *mut Window {
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_drop(window: *mut Window) {
     ffi_boundary("window_drop", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -66,7 +66,7 @@ impl PanicDefault for WindowId {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_window_id(window: &Window) -> WindowId {
     ffi_boundary("window_get_window_id", || Ok(window.ns_window.window_id()))
 }
@@ -77,7 +77,7 @@ impl PanicDefault for ScreenId {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_screen_id(window: &Window) -> ScreenId {
     ffi_boundary("window_get_screen_id", || Ok(window.ns_window.screen().unwrap().screen_id()))
 }
@@ -88,12 +88,12 @@ impl PanicDefault for f64 {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_scale_factor(window: &Window) -> f64 {
     ffi_boundary("window_scale_factor", || Ok(window.ns_window.backingScaleFactor()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
     ffi_boundary("window_attach_layer", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -108,7 +108,7 @@ impl PanicDefault for LogicalPoint {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_title(window: &Window, new_title: StrPtr) {
     ffi_boundary("window_set_title", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -124,7 +124,7 @@ impl PanicDefault for StrPtr {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_title(window: &Window) -> StrPtr {
     ffi_boundary("window_get_title", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -133,7 +133,7 @@ pub extern "C" fn window_get_title(window: &Window) -> StrPtr {
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_origin(window: &Window) -> LogicalPoint {
     ffi_boundary("window_get_origin", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -147,12 +147,12 @@ impl PanicDefault for LogicalSize {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_size(window: &Window) -> LogicalSize {
     ffi_boundary("window_get_size", || Ok(window.ns_window.get_size()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_rect(window: &Window, origin: LogicalPoint, size: LogicalSize, animate: bool) {
     ffi_boundary("window_set_rect", || {
         let mtm = MainThreadMarker::new().unwrap();
@@ -160,7 +160,7 @@ pub extern "C" fn window_set_rect(window: &Window, origin: LogicalPoint, size: L
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_content_origin(window: &Window) -> LogicalPoint {
     ffi_boundary("window_get_content_origin", || {
         let mtm = MainThreadMarker::new().unwrap();
@@ -168,7 +168,7 @@ pub extern "C" fn window_get_content_origin(window: &Window) -> LogicalPoint {
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_content_size(window: &Window) -> LogicalSize {
     ffi_boundary("window_get_content_size", || {
         let mtm = MainThreadMarker::new().unwrap();
@@ -176,7 +176,7 @@ pub extern "C" fn window_get_content_size(window: &Window) -> LogicalSize {
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_content_rect(window: &Window, origin: LogicalPoint, size: LogicalSize, animate: bool) {
     ffi_boundary("window_set_content_rect", || {
         let mtm = MainThreadMarker::new().unwrap();
@@ -184,12 +184,12 @@ pub extern "C" fn window_set_content_rect(window: &Window, origin: LogicalPoint,
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_is_key(window: &Window) -> bool {
     ffi_boundary("window_is_key", || Ok(window.ns_window.isKeyWindow()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_is_main(window: &Window) -> bool {
     ffi_boundary("window_is_main", || {
         let result = unsafe { window.ns_window.isMainWindow() };
@@ -197,12 +197,12 @@ pub extern "C" fn window_is_main(window: &Window) -> bool {
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_max_size(window: &Window) -> LogicalSize {
     ffi_boundary("window_get_max_size", || Ok(window.ns_window.get_max_size()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_max_size(window: &Window, size: LogicalSize) {
     ffi_boundary("window_set_max_size", || {
         window.ns_window.set_max_size(size);
@@ -210,12 +210,12 @@ pub extern "C" fn window_set_max_size(window: &Window, size: LogicalSize) {
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_min_size(window: &Window) -> LogicalSize {
     ffi_boundary("window_get_min_size", || Ok(window.ns_window.get_min_size()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_min_size(window: &Window, size: LogicalSize) {
     ffi_boundary("window_set_min_size", || {
         window.ns_window.set_min_size(size);
@@ -223,7 +223,7 @@ pub extern "C" fn window_set_min_size(window: &Window, size: LogicalSize) {
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_toggle_full_screen(window: &Window) {
     ffi_boundary("window_toggle_full_screen", || {
         window.ns_window.toggleFullScreen(None);
@@ -231,12 +231,12 @@ pub extern "C" fn window_toggle_full_screen(window: &Window) {
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_is_full_screen(window: &Window) -> bool {
     ffi_boundary("window_is_full_screen", || Ok(window.ns_window.is_full_screen()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_start_drag(window: &Window) {
     ffi_boundary("window_start_drag", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -248,7 +248,7 @@ pub extern "C" fn window_start_drag(window: &Window) {
     });
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_invalidate_shadow(window: &Window) {
     ffi_boundary("window_invalidate_shadow", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -286,7 +286,7 @@ pub enum WindowBackground {
     VisualEffect(WindowVisualEffect),
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_background(window: &Window, background: WindowBackground) {
     ffi_boundary("window_set_background", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
