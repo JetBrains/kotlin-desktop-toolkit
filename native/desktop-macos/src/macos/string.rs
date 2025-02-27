@@ -1,6 +1,5 @@
 use std::ffi::{CStr, CString};
 
-use anyhow::Context;
 use objc2::rc::{AutoreleasePool, Retained};
 use objc2_foundation::NSString;
 

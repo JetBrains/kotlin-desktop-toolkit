@@ -1,15 +1,11 @@
-use core::{panic, slice};
-use std::ffi::{c_void, CStr, CString};
+use core::slice;
+use std::ffi::CString;
 
 use anyhow::Context;
 use log::warn;
-use objc2::{
-    rc::{autoreleasepool, Retained},
-    runtime::Bool,
-    ClassType,
-};
-use objc2_app_kit::{NSApplication, NSScreen};
-use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSNumber, NSObjectNSKeyValueObserverRegistration, NSString};
+use objc2::rc::{autoreleasepool, Retained};
+use objc2_app_kit::NSScreen;
+use objc2_foundation::{MainThreadMarker, NSNumber, NSString};
 
 use crate::{
     common::{ArraySize, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},

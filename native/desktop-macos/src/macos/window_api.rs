@@ -1,14 +1,5 @@
-use core::panic;
-use std::{
-    ffi::{CStr, CString},
-    panic::{AssertUnwindSafe, UnwindSafe},
-};
-
-use objc2::{
-    exception::{self, Exception},
-    rc::{autoreleasepool, Retained},
-};
-use objc2_foundation::{MainThreadMarker, NSException, NSString};
+use objc2::rc::autoreleasepool;
+use objc2_foundation::MainThreadMarker;
 
 use crate::{
     common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},

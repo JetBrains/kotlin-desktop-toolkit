@@ -1,12 +1,8 @@
 use std::ffi::CString;
 
-use anyhow::{bail, Context, Error, Ok};
-use log::{error, info};
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::FromPrimitive;
-use objc2::rc::{autoreleasepool, Retained};
+use anyhow::{bail, Context, Ok};
+use objc2::rc::autoreleasepool;
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
-use objc2_foundation::NSString;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]

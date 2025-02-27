@@ -1,22 +1,14 @@
-use anyhow::{anyhow, Context};
-use log::{error, info};
-use objc2::{declare_class, define_class, msg_send, rc::Retained, runtime::ProtocolObject, sel, ClassType, DeclaredClass, MainThreadOnly};
+use anyhow::anyhow;
+use log::info;
+use objc2::{define_class, msg_send, rc::Retained, runtime::ProtocolObject, ClassType, DeclaredClass, MainThreadOnly};
 use objc2_app_kit::{
-    NSApp, NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy,
-    NSApplicationDelegate, NSApplicationDidChangeScreenParametersNotification, NSApplicationPresentationOptions,
-    NSApplicationTerminateReply, NSBackingStoreType, NSEvent, NSEventModifierFlags, NSEventType, NSNormalWindowLevel, NSWindow,
-    NSWindowStyleMask,
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
+    NSEventType,
 };
-use objc2_foundation::{
-    MainThreadMarker, NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults,
-};
-use std::{
-    cell::{Cell, OnceCell},
-    os::unix::thread,
-};
+use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
+use std::cell::OnceCell;
 
 use crate::{
-    common::StrPtr,
     logger::ffi_boundary,
     macos::events::{handle_application_did_finish_launching, handle_display_configuration_change},
 };

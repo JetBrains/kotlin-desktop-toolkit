@@ -1,11 +1,6 @@
 use crate::common::{ArraySize, StrPtr};
-use crate::logger::{
-    append_exception_msg, clear_exception_msgs, exceptions_array, init_panic_handler, panic_payload_msg, LAST_EXCEPTION_MSGS,
-};
+use crate::logger::{append_exception_msg, clear_exception_msgs, exceptions_array, init_panic_handler, panic_payload_msg};
 use log::{error, info};
-use log4rs::config::{Appender, Root};
-use log4rs::filter::threshold::ThresholdFilter;
-use log4rs::Config;
 
 #[repr(C)]
 pub struct ExceptionsArray {

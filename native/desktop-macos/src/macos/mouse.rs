@@ -1,8 +1,5 @@
-use anyhow::bail;
-use log::{info, warn};
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::FromPrimitive;
-use objc2_app_kit::{NSEvent, NSEventSubtype, NSEventType};
+use log::warn;
+use objc2_app_kit::{NSEvent, NSEventType};
 
 pub(crate) trait NSMouseEventExt {
     fn me(&self) -> &NSEvent;

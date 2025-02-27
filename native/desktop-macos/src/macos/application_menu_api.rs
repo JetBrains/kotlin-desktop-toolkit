@@ -1,4 +1,3 @@
-use objc2_app_kit::{NSApplication, NSEventModifierFlags};
 use objc2_foundation::MainThreadMarker;
 
 use super::keyboard::KeyModifiersSet;

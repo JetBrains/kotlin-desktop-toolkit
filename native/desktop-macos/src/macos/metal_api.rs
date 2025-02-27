@@ -1,8 +1,7 @@
 use std::{cell::Cell, ffi::c_void};
 
 use anyhow::Context;
-use log::info;
-use objc2::{rc::Retained, runtime::ProtocolObject, ClassType};
+use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
 use objc2_foundation::{MainThreadMarker, NSString};
 use objc2_metal::{MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};

@@ -1,45 +1,38 @@
 use std::{
-    borrow::{Borrow, BorrowMut},
     cell::{Cell, RefCell},
-    ffi::{c_void, CStr, CString},
+    ffi::CString,
     ptr::NonNull,
     rc::Rc,
 };
 
-use anyhow::{ensure, Context, Ok};
-use bitflags::Flags;
-use log::{error, info};
+use anyhow::{Context, Ok};
+use log::info;
 use objc2::{
-    class, declare_class, define_class, extern_protocol, msg_send,
+    define_class, msg_send,
     rc::{autoreleasepool, Retained},
     runtime::{AnyObject, Bool, ProtocolObject, Sel},
-    sel, ClassType, DeclaredClass, MainThreadOnly,
+    DeclaredClass, MainThreadOnly,
 };
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSBackingStoreType, NSButton, NSColor, NSEvent, NSEventModifierFlags, NSLayoutConstraint,
-    NSNormalWindowLevel, NSScreen, NSStandardKeyBindingResponding, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
-    NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowButton,
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea,
+    NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
     NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility,
 };
 use objc2_foundation::{
-    MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSCopying, NSMutableArray, NSMutableAttributedString,
-    NSNotification, NSNumber, NSObject, NSObjectNSComparisonMethods, NSObjectProtocol, NSPoint, NSRange, NSRangePointer, NSRect, NSSize,
-    NSString, NSUInteger,
+    MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
+    NSRangePointer, NSRect, NSSize, NSString, NSUInteger,
 };
 
 use crate::{
-    common::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, StrPtr},
-    define_objc_ref,
+    common::{LogicalPoint, LogicalRect, LogicalSize},
     logger::catch_panic,
     macos::{
-        application_api::AppState,
         custom_titlebar::CustomTitlebar,
         events::{
             handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
             handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_close_request, handle_window_focus_change,
             handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change,
         },
-        keyboard::unpack_key_event,
         string::copy_to_ns_string,
         text_operations::{handle_text_changed_operation, handle_text_command_operation},
     },
@@ -48,9 +41,8 @@ use crate::{
 use super::{
     application_api::MyNSApplication,
     custom_titlebar::CustomTitlebarCell,
-    events::{Event, MouseMovedEvent},
     metal_api::MetalView,
-    screen::{self, NSScreenExts, ScreenId},
+    screen::NSScreenExts,
     window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
 

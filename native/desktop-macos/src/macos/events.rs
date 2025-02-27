@@ -1,19 +1,15 @@
 use core::f64;
-use std::{
-    any::Any,
-    ffi::{CStr, CString},
-};
+use std::ffi::CString;
 
-use log::{debug, info};
-use objc2_app_kit::{NSEvent, NSEventPhase, NSEventType, NSScreen, NSWindow};
+use log::info;
+use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
 use crate::{
     common::{LogicalPixels, LogicalPoint, LogicalSize, StrPtr},
     logger::{ffi_boundary, PanicDefault},
-    macos::window,
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::bail;
 
 use super::{
     application_api::AppState,
