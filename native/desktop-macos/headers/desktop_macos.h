@@ -3,6 +3,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum NativeFileDialogType {
+  NativeFileDialogType_File,
+  NativeFileDialogType_Directory,
+} NativeFileDialogType;
+
 typedef enum NativeLogLevel {
   NativeLogLevel_Off,
   NativeLogLevel_Error,
@@ -391,6 +396,13 @@ typedef struct NativeWindowParams {
   NativeLogicalPixels titlebar_height;
 } NativeWindowParams;
 
+typedef struct NativeFileDialogParams {
+  enum NativeFileDialogType dialog_type;
+  bool allow_multiple_selection;
+} NativeFileDialogParams;
+
+typedef void (*NativeFileDialogCallback)(const char*);
+
 typedef struct NativeColor {
   double red;
   double green;
@@ -539,6 +551,10 @@ void window_set_min_size(NativeWindowPtr window_ptr, struct NativeLogicalSize si
 void window_toggle_full_screen(NativeWindowPtr window_ptr);
 
 bool window_is_full_screen(NativeWindowPtr window_ptr);
+
+void window_open_file_dialog(NativeWindowPtr window_ptr,
+                             struct NativeFileDialogParams params,
+                             NativeFileDialogCallback callback);
 
 void window_start_drag(NativeWindowPtr window_ptr);
 

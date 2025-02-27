@@ -11,6 +11,8 @@ import org.jetbrains.desktop.macos.AppMenuStructure
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
+import org.jetbrains.desktop.macos.FileDialogParams
+import org.jetbrains.desktop.macos.FileDialogType
 import org.jetbrains.desktop.macos.KeyModifiersSet
 import org.jetbrains.desktop.macos.Keystroke
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
@@ -450,6 +452,17 @@ class ApplicationState : AutoCloseable {
                     "New Window",
                     keystroke = Keystroke(key = "n", modifiers = KeyModifiersSet.create(command = true)),
                     perform = { createWindow(useCustomTitlebar = true) },
+                ),
+                AppMenuItem.Action(
+                    "Open...",
+                    keystroke = Keystroke(key = "o", modifiers = KeyModifiersSet.create(command = true, shift = true)),
+                    perform = {
+                        mainWindow()?.window?.let {
+                            it.openFileDialog(FileDialogParams(dialogType = FileDialogType.Directory)) { path ->
+                                println("openFileDialog callback received $path")
+                            }
+                        }
+                    },
                 ),
                 AppMenuItem.Action(
                     "New Titled Window",

@@ -12,9 +12,10 @@ use objc2::{
     runtime::{AnyObject, Bool, ProtocolObject, Sel},
 };
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea,
-    NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
-    NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility,
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSModalResponse, NSNormalWindowLevel, NSOpenPanel, NSScreen,
+    NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
+    NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode,
+    NSWindowStyleMask, NSWindowTitleVisibility,
 };
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
@@ -33,6 +34,7 @@ use crate::{
         },
         string::copy_to_ns_string,
         text_operations::{handle_text_changed_operation, handle_text_command_operation},
+        window_api::FileDialogType,
     },
 };
 
@@ -41,7 +43,7 @@ use super::{
     custom_titlebar::CustomTitlebarCell,
     metal_api::MetalView,
     screen::NSScreenExts,
-    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
+    window_api::{FileDialogCallback, FileDialogParams, WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
 
 pub(crate) struct Window {
@@ -325,6 +327,35 @@ impl Window {
         unsafe {
             layer.ns_view.setFrameSize(content_view.frame().size);
             content_view.addSubview_positioned_relativeTo(&layer.ns_view, NSWindowOrderingMode::Below, Some(&self.root_view));
+        }
+    }
+
+    pub(crate) fn open_file_dialog(&self, mtm: MainThreadMarker, params: FileDialogParams, callback: FileDialogCallback) {
+        const NSMODAL_RESPONSE_OK: NSModalResponse = 1;
+
+        let panel = unsafe { NSOpenPanel::new(mtm) };
+        let res = unsafe {
+            panel.setAllowsMultipleSelection(params.allow_multiple_selection);
+            match params.dialog_type {
+                FileDialogType::Directory => {
+                    panel.setCanChooseDirectories(true);
+                    panel.setCanChooseFiles(false);
+                }
+                FileDialogType::File => {
+                    panel.setCanChooseDirectories(false);
+                    panel.setCanChooseFiles(true);
+                }
+            }
+            panel.runModal() == NSMODAL_RESPONSE_OK
+        };
+        if let Some(path) = res
+            .then_some(())
+            .and_then(|_| unsafe { panel.URL() })
+            .and_then(|url| unsafe { url.path() })
+        {
+            callback(path.UTF8String());
+        } else {
+            callback(std::ptr::null());
         }
     }
 }

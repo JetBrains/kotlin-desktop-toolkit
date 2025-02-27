@@ -262,6 +262,18 @@ pub extern "C" fn window_is_full_screen(window_ptr: WindowPtr) -> bool {
     })
 }
 
+pub type FileDialogCallback = extern "C" fn(*const std::ffi::c_char);
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_open_file_dialog(window_ptr: WindowPtr, params: FileDialogParams, callback: FileDialogCallback) {
+    ffi_boundary("window_open_file_dialog", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        window.open_file_dialog(mtm, params, callback);
+        Ok(())
+    })
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn window_start_drag(window_ptr: WindowPtr) {
     ffi_boundary("window_start_drag", || {
@@ -321,4 +333,16 @@ pub extern "C" fn window_set_background(window_ptr: WindowPtr, background: Windo
         window.set_background(mtm, background).unwrap();
         Ok(())
     });
+}
+
+#[repr(C)]
+pub enum FileDialogType {
+    File,
+    Directory,
+}
+
+#[repr(C)]
+pub struct FileDialogParams {
+    pub dialog_type: FileDialogType,
+    pub allow_multiple_selection: bool,
 }
