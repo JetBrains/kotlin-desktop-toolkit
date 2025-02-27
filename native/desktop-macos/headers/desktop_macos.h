@@ -376,7 +376,7 @@ typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
 typedef struct NativeWindowParams {
   struct NativeLogicalPoint origin;
   struct NativeLogicalSize size;
-  NativeRustAllocatedStrPtr title;
+  NativeBorrowedStrPtr title;
   bool is_resizable;
   bool is_closable;
   bool is_miniaturizable;

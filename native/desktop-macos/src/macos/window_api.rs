@@ -19,7 +19,7 @@ pub type WindowId = i64;
 pub struct WindowParams {
     pub origin: LogicalPoint,
     pub size: LogicalSize,
-    pub title: RustAllocatedStrPtr,
+    pub title: BorrowedStrPtr,
 
     pub is_resizable: bool,
     pub is_closable: bool,
