@@ -57,7 +57,7 @@ pub extern "C" fn window_drop(window: *mut Window) {
         window.ns_window.close();
         std::mem::drop(window);
         Ok(())
-    })
+    });
 }
 
 impl PanicDefault for WindowId {
@@ -99,12 +99,12 @@ pub extern "C" fn window_attach_layer(window: &Window, layer: &MetalView) {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         window.attach_layer(layer);
         Ok(())
-    })
+    });
 }
 
 impl PanicDefault for LogicalPoint {
     fn default() -> Self {
-        LogicalPoint { x: 0.0, y: 0.0 }
+        Self { x: 0.0, y: 0.0 }
     }
 }
 
@@ -115,7 +115,7 @@ pub extern "C" fn window_set_title(window: &Window, new_title: StrPtr) {
         let new_title = copy_to_ns_string(new_title)?;
         window.ns_window.setTitle(&new_title);
         Ok(())
-    })
+    });
 }
 
 impl PanicDefault for StrPtr {
@@ -143,7 +143,7 @@ pub extern "C" fn window_get_origin(window: &Window) -> LogicalPoint {
 
 impl PanicDefault for LogicalSize {
     fn default() -> Self {
-        LogicalSize { width: 0.0, height: 0.0 }
+        Self { width: 0.0, height: 0.0 }
     }
 }
 
@@ -157,7 +157,7 @@ pub extern "C" fn window_set_rect(window: &Window, origin: LogicalPoint, size: L
     ffi_boundary("window_set_rect", || {
         let mtm = MainThreadMarker::new().unwrap();
         window.ns_window.set_rect(&LogicalRect::new(origin, size), animate, mtm)
-    })
+    });
 }
 
 #[no_mangle]
@@ -181,7 +181,7 @@ pub extern "C" fn window_set_content_rect(window: &Window, origin: LogicalPoint,
     ffi_boundary("window_set_content_rect", || {
         let mtm = MainThreadMarker::new().unwrap();
         window.ns_window.set_content_rect(&LogicalRect::new(origin, size), animate, mtm)
-    })
+    });
 }
 
 #[no_mangle]
@@ -207,7 +207,7 @@ pub extern "C" fn window_set_max_size(window: &Window, size: LogicalSize) {
     ffi_boundary("window_set_max_size", || {
         window.ns_window.set_max_size(size);
         Ok(())
-    })
+    });
 }
 
 #[no_mangle]
@@ -220,7 +220,7 @@ pub extern "C" fn window_set_min_size(window: &Window, size: LogicalSize) {
     ffi_boundary("window_set_min_size", || {
         window.ns_window.set_min_size(size);
         Ok(())
-    })
+    });
 }
 
 #[no_mangle]
@@ -228,7 +228,7 @@ pub extern "C" fn window_toggle_full_screen(window: &Window) {
     ffi_boundary("window_toggle_full_screen", || {
         window.ns_window.toggleFullScreen(None);
         Ok(())
-    })
+    });
 }
 
 #[no_mangle]
@@ -245,7 +245,7 @@ pub extern "C" fn window_start_drag(window: &Window) {
             window.ns_window.performWindowDragWithEvent(&event);
         }
         Ok(())
-    })
+    });
 }
 
 #[no_mangle]
@@ -256,7 +256,7 @@ pub extern "C" fn window_invalidate_shadow(window: &Window) {
             window.ns_window.invalidateShadow();
         }
         Ok(())
-    })
+    });
 }
 
 #[derive(Debug)]
@@ -292,5 +292,5 @@ pub extern "C" fn window_set_background(window: &Window, background: WindowBackg
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         window.set_background(mtm, background).unwrap();
         Ok(())
-    })
+    });
 }

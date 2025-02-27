@@ -18,7 +18,7 @@ define_objc_ref!(MetalDeviceRef, ProtocolObject<dyn MTLDevice>);
 
 impl PanicDefault for MetalDeviceRef {
     fn default() -> Self {
-        MetalDeviceRef { ptr: std::ptr::null_mut() }
+        Self { ptr: std::ptr::null_mut() }
     }
 }
 
@@ -37,7 +37,7 @@ pub extern "C" fn metal_deref_device(device: MetalDeviceRef) {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         unsafe { device.consume() };
         Ok(())
-    })
+    });
 }
 
 #[repr(transparent)]
@@ -48,7 +48,7 @@ define_objc_ref!(MetalCommandQueueRef, ProtocolObject<dyn MTLCommandQueue>);
 
 impl PanicDefault for MetalCommandQueueRef {
     fn default() -> Self {
-        MetalCommandQueueRef { ptr: std::ptr::null_mut() }
+        Self { ptr: std::ptr::null_mut() }
     }
 }
 
@@ -68,7 +68,7 @@ pub extern "C" fn metal_deref_command_queue(queue: MetalCommandQueueRef) {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         unsafe { queue.consume() };
         Ok(())
-    })
+    });
 }
 
 pub struct MetalView {
@@ -78,8 +78,8 @@ pub struct MetalView {
 }
 
 impl MetalView {
-    pub(crate) fn ns_view(&self) -> anyhow::Result<&NSView> {
-        Ok(&self.ns_view)
+    pub(crate) fn ns_view(&self) -> &NSView {
+        &self.ns_view
     }
 }
 
@@ -142,7 +142,7 @@ pub extern "C" fn metal_drop_view(view: *mut MetalView) {
             Box::from_raw(view)
         });
         Ok(())
-    })
+    });
 }
 
 #[no_mangle]
@@ -150,7 +150,7 @@ pub extern "C" fn metal_view_set_is_opaque(view: &MetalView, value: bool) {
     ffi_boundary("metal_view_set_is_opaque", || {
         view.layer.setOpaque(value);
         Ok(())
-    })
+    });
 }
 
 #[no_mangle]
@@ -182,12 +182,12 @@ pub extern "C" fn metal_view_present(view: &MetalView, queue: MetalCommandQueueR
             }
         }
         Ok(())
-    })
+    });
 }
 
 impl PanicDefault for PhysicalSize {
     fn default() -> Self {
-        PhysicalSize { width: 0.0, height: 0.0 }
+        Self { width: 0.0, height: 0.0 }
     }
 }
 
@@ -195,7 +195,7 @@ impl PanicDefault for PhysicalSize {
 pub extern "C" fn metal_view_get_texture_size(view: &MetalView) -> PhysicalSize {
     ffi_boundary("metal_view_get_texture_size", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let ns_view = view.ns_view().unwrap();
+        let ns_view = view.ns_view();
         let view_size = unsafe { ns_view.convertSizeToBacking(ns_view.bounds().size) };
         Ok(view_size.into())
     })
@@ -209,7 +209,7 @@ define_objc_ref!(MetalTextureRef, ProtocolObject<dyn MTLTexture>);
 
 impl PanicDefault for MetalTextureRef {
     fn default() -> Self {
-        MetalTextureRef { ptr: std::ptr::null_mut() }
+        Self { ptr: std::ptr::null_mut() }
     }
 }
 
@@ -217,12 +217,13 @@ impl PanicDefault for MetalTextureRef {
 pub extern "C" fn metal_view_next_texture(view: &MetalView) -> MetalTextureRef {
     ffi_boundary("metal_view_next_texture", || {
         unsafe {
-            let ns_view = view.ns_view().unwrap();
+            const SCALE_DIFF_TOLERANCE: f64 = 0.001;
+            let ns_view = view.ns_view();
             let view_size = ns_view.bounds().size;
             let drawable_size = view.layer.drawableSize();
             let new_drawable_size = ns_view.convertSizeToBacking(view_size);
             let scale = new_drawable_size.width / view_size.width;
-            if new_drawable_size != drawable_size || view.layer.contentsScale() != scale {
+            if new_drawable_size != drawable_size || (view.layer.contentsScale() - scale).abs() > SCALE_DIFF_TOLERANCE {
                 view.layer.setDrawableSize(new_drawable_size);
                 view.layer.setContentsScale(scale);
             }
@@ -239,5 +240,5 @@ pub extern "C" fn metal_deref_texture(texture: MetalTextureRef) {
     ffi_boundary("metal_deref_texture", || {
         unsafe { texture.consume() };
         Ok(())
-    })
+    });
 }

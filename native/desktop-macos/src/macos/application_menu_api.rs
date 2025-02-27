@@ -47,7 +47,7 @@ pub struct AppMenuStructure<'a> {
 #[no_mangle]
 pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
     ffi_boundary("main_menu_update", || {
-        main_menu_update_impl(menu);
+        main_menu_update_impl(&menu);
         Ok(())
     });
 }

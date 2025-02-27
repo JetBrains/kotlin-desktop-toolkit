@@ -64,20 +64,20 @@ pub(crate) struct WindowBackgroundState {
 impl From<WindowVisualEffect> for NSVisualEffectMaterial {
     fn from(value: WindowVisualEffect) -> Self {
         match value {
-            WindowVisualEffect::TitlebarEffect => NSVisualEffectMaterial::Titlebar,
-            WindowVisualEffect::SelectionEffect => NSVisualEffectMaterial::Selection,
-            WindowVisualEffect::MenuEffect => NSVisualEffectMaterial::Menu,
-            WindowVisualEffect::PopoverEffect => NSVisualEffectMaterial::Popover,
-            WindowVisualEffect::SidebarEffect => NSVisualEffectMaterial::Sidebar,
-            WindowVisualEffect::HeaderViewEffect => NSVisualEffectMaterial::HeaderView,
-            WindowVisualEffect::SheetEffect => NSVisualEffectMaterial::Sheet,
-            WindowVisualEffect::WindowBackgroundEffect => NSVisualEffectMaterial::WindowBackground,
-            WindowVisualEffect::HUDWindowEffect => NSVisualEffectMaterial::HUDWindow,
-            WindowVisualEffect::FullScreenUIEffect => NSVisualEffectMaterial::FullScreenUI,
-            WindowVisualEffect::ToolTipEffect => NSVisualEffectMaterial::ToolTip,
-            WindowVisualEffect::ContentBackgroundEffect => NSVisualEffectMaterial::ContentBackground,
-            WindowVisualEffect::UnderWindowBackgroundEffect => NSVisualEffectMaterial::UnderWindowBackground,
-            WindowVisualEffect::UnderPageBackgroundEffect => NSVisualEffectMaterial::UnderPageBackground,
+            WindowVisualEffect::TitlebarEffect => Self::Titlebar,
+            WindowVisualEffect::SelectionEffect => Self::Selection,
+            WindowVisualEffect::MenuEffect => Self::Menu,
+            WindowVisualEffect::PopoverEffect => Self::Popover,
+            WindowVisualEffect::SidebarEffect => Self::Sidebar,
+            WindowVisualEffect::HeaderViewEffect => Self::HeaderView,
+            WindowVisualEffect::SheetEffect => Self::Sheet,
+            WindowVisualEffect::WindowBackgroundEffect => Self::WindowBackground,
+            WindowVisualEffect::HUDWindowEffect => Self::HUDWindow,
+            WindowVisualEffect::FullScreenUIEffect => Self::FullScreenUI,
+            WindowVisualEffect::ToolTipEffect => Self::ToolTip,
+            WindowVisualEffect::ContentBackgroundEffect => Self::ContentBackground,
+            WindowVisualEffect::UnderWindowBackgroundEffect => Self::UnderWindowBackground,
+            WindowVisualEffect::UnderPageBackgroundEffect => Self::UnderPageBackground,
         }
     }
 }
@@ -104,13 +104,13 @@ pub(crate) trait NSWindowExts {
         let window_frame = ns_window.frame();
         let content_frame = ns_window.contentRectForFrameRect(window_frame);
         let screen_height = NSScreen::primary(mtm)?.height();
-        return Ok(LogicalRect::from_macos_coords(content_frame, screen_height));
+        Ok(LogicalRect::from_macos_coords(content_frame, screen_height))
     }
 
     fn set_rect(&self, rect: &LogicalRect, animate: bool, mtm: MainThreadMarker) -> anyhow::Result<()> {
         let screen_height = NSScreen::primary(mtm)?.height();
         unsafe {
-            let frame = rect.to_macos_coords(screen_height);
+            let frame = rect.as_macos_coords(screen_height);
             self.me().setFrame_display_animate(frame, true, animate);
         }
         Ok(())
@@ -119,7 +119,7 @@ pub(crate) trait NSWindowExts {
     fn set_content_rect(&self, rect: &LogicalRect, animate: bool, mtm: MainThreadMarker) -> anyhow::Result<()> {
         let ns_window = self.me();
         let screen_height = NSScreen::primary(mtm)?.height();
-        let content_frame = LogicalRect::to_macos_coords(rect, screen_height);
+        let content_frame = rect.as_macos_coords(screen_height);
         let window_frame = unsafe { ns_window.frameRectForContentRect(content_frame) };
         unsafe {
             self.me().setFrame_display_animate(window_frame, true, animate);
@@ -136,15 +136,15 @@ pub(crate) trait NSWindowExts {
     }
 
     fn get_max_size(&self) -> LogicalSize {
-        return unsafe { self.me().maxSize().into() };
+        unsafe { self.me().maxSize().into() }
     }
 
     fn get_min_size(&self) -> LogicalSize {
-        return unsafe { self.me().minSize().into() };
+        unsafe { self.me().minSize().into() }
     }
 
     fn is_full_screen(&self) -> bool {
-        return self.me().styleMask().contains(NSWindowStyleMask::FullScreen);
+        self.me().styleMask().contains(NSWindowStyleMask::FullScreen)
     }
 }
 
@@ -155,7 +155,7 @@ impl NSWindowExts for NSWindow {
 }
 
 impl Window {
-    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams) -> anyhow::Result<Window> {
+    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams) -> anyhow::Result<Self> {
         /*
         see doc: https://developer.apple.com/documentation/appkit/nswindow/stylemask-swift.struct/resizable?language=objc
 
@@ -193,16 +193,14 @@ impl Window {
             .height;
 
         // Window rect is relative to primary screen
-        let frame = LogicalRect::new(params.origin, params.size).to_macos_coords(screen_height);
+        let frame = LogicalRect::new(params.origin, params.size).as_macos_coords(screen_height);
         let content_rect = unsafe { NSWindow::contentRectForFrameRect_styleMask(frame, style, mtm) };
         let ns_window = MyNSWindow::new(mtm, content_rect, style);
         let custom_titlebar = if params.use_custom_titlebar {
             ns_window.setTitlebarAppearsTransparent(true);
             ns_window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
             // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
-            let titlebar = Rc::new(RefCell::new(
-                unsafe { CustomTitlebar::init_custom_titlebar(params.titlebar_height) }.unwrap(),
-            ));
+            let titlebar = Rc::new(RefCell::new(CustomTitlebar::init_custom_titlebar(params.titlebar_height)));
             unsafe {
                 // we assume the window isn't full screen
                 (*titlebar).borrow_mut().activate(&ns_window).unwrap();
@@ -251,20 +249,20 @@ impl Window {
         }
 
         ns_window.setContentView(Some(&container));
-        assert!(ns_window.makeFirstResponder(Some(&root_view)) == true); // todo remove assert
+        assert!(ns_window.makeFirstResponder(Some(&root_view))); // todo remove assert
 
         let window_background = RefCell::new(WindowBackgroundState {
             is_transparent: false,
             substrate: None,
         });
 
-        return Ok(Window {
+        Ok(Self {
             ns_window,
             delegate,
             root_view,
             custom_titlebar,
             background_state: window_background,
-        });
+        })
     }
 
     pub(crate) fn set_background(&self, mtm: MainThreadMarker, background: WindowBackground) -> anyhow::Result<()> {
@@ -350,20 +348,20 @@ define_class!(
     unsafe impl NSWindowDelegate for WindowDelegate {
         #[unsafe(method(windowDidResize:))]
         unsafe fn window_did_resize(&self, _notification: &NSNotification) {
-            handle_window_resize(&*self.ivars().ns_window);
+            handle_window_resize(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidChangeScreen:))]
         unsafe fn window_did_change_screen(&self, _notification: &NSNotification) {
             catch_panic(|| {
-                handle_window_screen_change(&*self.ivars().ns_window);
+                handle_window_screen_change(&self.ivars().ns_window);
                 Ok(())
             });
         }
 
         #[unsafe(method(windowDidMove:))]
         unsafe fn window_did_move(&self, _notification: &NSNotification) {
-            handle_window_move(&*self.ivars().ns_window);
+            handle_window_move(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowWillEnterFullScreen:))]
@@ -374,43 +372,43 @@ define_class!(
 
         #[unsafe(method(windowDidEnterFullScreen:))]
         unsafe fn window_did_enter_full_screen(&self, _notification: &NSNotification) {
-            handle_window_full_screen_toggle(&*self.ivars().ns_window);
+            handle_window_full_screen_toggle(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidExitFullScreen:))]
         unsafe fn window_did_exit_full_screen(&self, _notification: &NSNotification) {
             let ivars = self.ivars();
             CustomTitlebar::after_exit_fullscreen(&ivars.custom_titlebar, &ivars.ns_window);
-            handle_window_full_screen_toggle(&*self.ivars().ns_window);
+            handle_window_full_screen_toggle(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidBecomeKey:))]
         unsafe fn window_did_become_key(&self, _notification: &NSNotification) {
             info!("windowDidBecomeKey");
-            handle_window_focus_change(&*self.ivars().ns_window);
+            handle_window_focus_change(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidResignKey:))]
         unsafe fn window_did_resign_key(&self, _notification: &NSNotification) {
             info!("windowDidResignKey");
-            handle_window_focus_change(&*self.ivars().ns_window);
+            handle_window_focus_change(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidBecomeMain:))]
         unsafe fn window_did_become_main(&self, _notification: &NSNotification) {
             info!("windowDidBecomeMain");
-            handle_window_focus_change(&*self.ivars().ns_window);
+            handle_window_focus_change(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidResignMain:))]
         unsafe fn window_did_resign_main(&self, _notification: &NSNotification) {
             info!("windowDidResignMain");
-            handle_window_focus_change(&*self.ivars().ns_window);
+            handle_window_focus_change(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowShouldClose:))]
         unsafe fn window_should_close(&self, _notification: &NSNotification) -> bool {
-            handle_window_close_request(&*self.ivars().ns_window);
+            handle_window_close_request(&self.ivars().ns_window);
             false
         }
     }
@@ -500,7 +498,7 @@ define_class!(
             selected_range: NSRange,
             replacement_range: NSRange,
         ) {
-            self.set_marked_text_selected_range_replacement_range_impl(string, selected_range, replacement_range)
+            self.set_marked_text_selected_range_replacement_range_impl(string, selected_range, replacement_range);
         }
 
         #[unsafe(method(unmarkText))]
@@ -537,7 +535,7 @@ define_class!(
             actual_range: NSRangePointer,
         ) -> Option<Retained<NSAttributedString>> {
             let actual_range = NonNull::new(actual_range);
-            info!("attributedSubstringForProposedRange, range={:?}, actual_range={:?}", range, actual_range.map(|r| r.read()));
+            info!("attributedSubstringForProposedRange, range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
             None  // TODO
         }
 
@@ -547,7 +545,7 @@ define_class!(
             string: &AnyObject,
             replacement_range: NSRange,
         ) {
-            self.insert_text_replacement_range_impl(string, replacement_range)
+            self.insert_text_replacement_range_impl(string, replacement_range);
         }
 
         // Getting character coordinates
@@ -843,9 +841,10 @@ impl RootView {
         replacement_range: NSRange,
     ) {
         catch_panic(|| {
+            let window = self.window().context("No window for view")?;
             let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
             info!(
-                "setMarkedText, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
+                "setMarkedText, window={window:?}, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
                 ns_attributed_string, text, selected_range, replacement_range
             );
             Ok(())

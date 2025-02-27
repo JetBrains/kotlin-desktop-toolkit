@@ -42,7 +42,7 @@ pub enum TextOperation {
 pub type TextOperationHandler = extern "C" fn(&TextOperation) -> bool;
 
 pub(crate) fn handle_text_changed_operation(window_id: WindowId, text: &CStr) -> anyhow::Result<bool> {
-    let handled = AppState::with(|state| {
+    AppState::with(|state| {
         let operation = TextOperation::TextChanged(TextChangedOperation {
             window_id,
             text: text.as_ptr(),
@@ -52,17 +52,15 @@ pub(crate) fn handle_text_changed_operation(window_id: WindowId, text: &CStr) ->
             //replacement_range: TextRange::default(),
         });
         Ok((state.text_operation_handler)(&operation))
-    });
-    handled
+    })
 }
 
 pub(crate) fn handle_text_command_operation(window_id: WindowId, command: &'static CStr) -> anyhow::Result<bool> {
-    let handled = AppState::with(|state| {
+    AppState::with(|state| {
         let operation = TextOperation::TextCommand(TextCommandOperation {
             window_id,
             command: command.as_ptr(),
         });
         Ok((state.text_operation_handler)(&operation))
-    });
-    handled
+    })
 }

@@ -37,7 +37,7 @@ typedef struct NativeWindow NativeWindow;
 
 typedef char *NativeStrPtr;
 
-typedef int64_t NativeArraySize;
+typedef uintptr_t NativeArraySize;
 
 typedef struct NativeExceptionsArray {
   const NativeStrPtr *items;

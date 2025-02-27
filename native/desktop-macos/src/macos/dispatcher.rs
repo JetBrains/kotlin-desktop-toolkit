@@ -10,6 +10,7 @@ pub extern "C" fn dispatcher_is_main_thread() -> bool {
 #[no_mangle]
 pub extern "C" fn dispatcher_main_exec_async(f: extern "C" fn()) {
     ffi_boundary("dispatcher_main_exec_async", || {
+        #[allow(clippy::redundant_closure)]
         dispatch2::Queue::main().exec_async(move || f());
         Ok(())
     });

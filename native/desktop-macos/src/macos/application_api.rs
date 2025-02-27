@@ -33,7 +33,7 @@ pub(crate) struct AppState {
 impl AppState {
     pub(crate) fn with<T, F>(f: F) -> T
     where
-        F: FnOnce(&AppState) -> T,
+        F: FnOnce(&Self) -> T,
     {
         APP_STATE.with(|app_state| {
             let app_state = app_state.get().expect("Can't access app state before initialization!"); // todo handle error
@@ -98,8 +98,8 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
                     app,
                     app_delegate,
                     event_handler,
-                    text_operation_handler,
                     mtm,
+                    text_operation_handler,
                 })
                 .map_err(|_| anyhow!("Can't initialize second time!"))?;
             Ok(())
@@ -200,8 +200,8 @@ define_class!(
 
 impl MyNSApplication {
     #[allow(non_snake_case)]
-    pub(crate) fn sharedApplication(_mtm: MainThreadMarker) -> Retained<MyNSApplication> {
-        return unsafe { msg_send!(MyNSApplication::class(), sharedApplication) };
+    pub(crate) fn sharedApplication(_mtm: MainThreadMarker) -> Retained<Self> {
+        unsafe { msg_send!(Self::class(), sharedApplication) }
     }
 }
 

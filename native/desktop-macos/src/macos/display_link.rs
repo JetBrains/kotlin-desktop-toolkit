@@ -56,7 +56,7 @@ extern "C" fn display_link_set_running(display_link: &mut DisplayLinkBox, value:
             }
         }
         Ok(())
-    })
+    });
 }
 
 impl PanicDefault for bool {
@@ -78,7 +78,7 @@ pub struct DisplayLink {
 }
 
 impl DisplayLink {
-    pub fn new(display_id: CGDirectDisplayID, callback: unsafe extern "C" fn()) -> Result<DisplayLink> {
+    pub fn new(display_id: CGDirectDisplayID, callback: unsafe extern "C" fn()) -> Result<Self> {
         unsafe extern "C" fn display_link_callback(
             _display_link_out: *mut display_link_sys::CVDisplayLink,
             _current_time: *const display_link_sys::CVTimeStamp,
@@ -88,13 +88,15 @@ impl DisplayLink {
             frame_requests: *mut c_void,
         ) -> i32 {
             let frame_requests = frame_requests as dispatch_source_t;
-            dispatch_source_merge_data(frame_requests, 1);
+            unsafe { dispatch_source_merge_data(frame_requests, 1) };
             0
         }
 
         unsafe extern "C" fn callback_impl(callback: *mut c_void) {
-            let callback: unsafe extern "C" fn() = std::mem::transmute(callback);
-            callback()
+            unsafe {
+                let callback: unsafe extern "C" fn() = std::mem::transmute(callback);
+                callback();
+            }
         }
 
         unsafe {
@@ -104,7 +106,7 @@ impl DisplayLink {
 
             dispatch_resume(dispatch_sys::dispatch_object_t { _ds: frame_requests });
 
-            let display_link = display_link_sys::DisplayLink::new(display_id, display_link_callback, frame_requests as *mut c_void)?;
+            let display_link = display_link_sys::DisplayLink::new(display_id, display_link_callback, frame_requests.cast::<c_void>())?;
 
             Ok(Self {
                 display_link,
@@ -114,7 +116,7 @@ impl DisplayLink {
     }
 
     pub fn is_running(&mut self) -> bool {
-        unsafe { return self.display_link.is_running() }
+        unsafe { self.display_link.is_running() }
     }
 
     pub fn start(&mut self) -> Result<()> {
@@ -153,7 +155,7 @@ mod display_link_sys {
     //! Derived from display-link crate under the following license:
     //! <https://github.com/BrainiumLLC/display-link/blob/master/LICENSE-MIT>
     //! Apple docs: [CVDisplayLink](https://developer.apple.com/documentation/corevideo/cvdisplaylinkoutputcallback?language=objc)
-    #![allow(dead_code, non_upper_case_globals)]
+    #![allow(clippy::mixed_attributes_style, dead_code, non_upper_case_globals)]
 
     pub type CGDirectDisplayID = u32;
 
@@ -183,7 +185,7 @@ mod display_link_sys {
 
     #[repr(C)]
     #[derive(Clone, Copy)]
-    pub(crate) struct CVTimeStamp {
+    pub struct CVTimeStamp {
         pub version: u32,
         pub video_time_scale: i32,
         pub video_time: i64,
@@ -209,7 +211,7 @@ mod display_link_sys {
 
     #[repr(C)]
     #[derive(Clone, Copy, Default)]
-    pub(crate) struct CVSMPTETime {
+    pub struct CVSMPTETime {
         pub subframes: i16,
         pub subframe_divisor: i16,
         pub counter: u32,
@@ -272,47 +274,49 @@ mod display_link_sys {
     impl DisplayLink {
         /// Apple docs: [CVDisplayLinkCreateWithCGDisplay](https://developer.apple.com/documentation/corevideo/1456981-cvdisplaylinkcreatewithcgdisplay?language=objc)
         pub unsafe fn new(display_id: CGDirectDisplayID, callback: CVDisplayLinkOutputCallback, user_info: *mut c_void) -> Result<Self> {
-            let mut display_link: *mut CVDisplayLink = 0 as _;
+            unsafe {
+                let mut display_link: *mut CVDisplayLink = 0 as _;
 
-            let code = CVDisplayLinkCreateWithActiveCGDisplays(&mut display_link);
-            anyhow::ensure!(code == 0, "could not create display link, code: {}", code);
+                let code = CVDisplayLinkCreateWithActiveCGDisplays(&mut display_link);
+                anyhow::ensure!(code == 0, "could not create display link, code: {}", code);
 
-            let mut display_link = DisplayLink::from_ptr(display_link);
+                let mut display_link = Self::from_ptr(display_link);
 
-            let code = CVDisplayLinkSetOutputCallback(&mut display_link, callback, user_info);
-            anyhow::ensure!(code == 0, "could not set output callback, code: {}", code);
+                let code = CVDisplayLinkSetOutputCallback(&mut display_link, callback, user_info);
+                anyhow::ensure!(code == 0, "could not set output callback, code: {}", code);
 
-            let code = CVDisplayLinkSetCurrentCGDisplay(&mut display_link, display_id);
-            anyhow::ensure!(code == 0, "could not assign display to display link, code: {}", code);
+                let code = CVDisplayLinkSetCurrentCGDisplay(&mut display_link, display_id);
+                anyhow::ensure!(code == 0, "could not assign display to display link, code: {}", code);
 
-            Ok(display_link)
+                Ok(display_link)
+            }
         }
     }
 
     impl DisplayLinkRef {
         /// Apple docs: [CVDisplayLinkStart](https://developer.apple.com/documentation/corevideo/1457193-cvdisplaylinkstart?language=objc)
         pub unsafe fn start(&mut self) -> Result<()> {
-            let code = CVDisplayLinkStart(self);
+            let code = unsafe { CVDisplayLinkStart(self) };
             anyhow::ensure!(code == 0, "could not start display link, code: {}", code);
             Ok(())
         }
 
         /// Apple docs: [CVDisplayLinkStop](https://developer.apple.com/documentation/corevideo/1457281-cvdisplaylinkstop?language=objc)
         pub unsafe fn stop(&mut self) -> Result<()> {
-            let code = CVDisplayLinkStop(self);
+            let code = unsafe { CVDisplayLinkStop(self) };
             anyhow::ensure!(code == 0, "could not stop display link, code: {}", code);
             Ok(())
         }
 
         /// Apple docs: [CVDisplayLinkIsRunning](https://developer.apple.com/documentation/corevideo/cvdisplaylinkisrunning(_:)?language=objc)
         pub unsafe fn is_running(&mut self) -> bool {
-            return CVDisplayLinkIsRunning(self);
+            unsafe { CVDisplayLinkIsRunning(self) }
         }
     }
 }
 
 fn dispatch_get_main_queue() -> dispatch_queue_t {
-    addr_of!(_dispatch_main_q) as *const _ as dispatch_queue_t
+    addr_of!(_dispatch_main_q).cast_mut()
 }
 
 /// cbindgen:ignore

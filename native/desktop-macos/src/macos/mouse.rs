@@ -18,7 +18,7 @@ pub(crate) trait NSMouseEventExt {
             | NSEventType::RightMouseDragged
             | NSEventType::OtherMouseDragged => {
                 let button_number = unsafe { me.buttonNumber() };
-                let button = button_number.try_into().map(|button| MouseButton(button)).ok();
+                let button = button_number.try_into().map(MouseButton).ok();
                 if button.is_none() {
                     warn!("Ignored mouse button: {me:?}");
                 }

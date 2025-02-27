@@ -14,7 +14,7 @@ pub extern "C" fn string_drop(str_ptr: StrPtr) {
         };
         std::mem::drop(s);
         Ok(())
-    })
+    });
 }
 
 pub(crate) fn copy_to_ns_string(str_ptr: StrPtr) -> anyhow::Result<Retained<NSString>> {

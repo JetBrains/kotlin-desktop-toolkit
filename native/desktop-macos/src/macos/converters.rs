@@ -6,7 +6,7 @@ use crate::common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize
 
 impl From<NSSize> for LogicalSize {
     fn from(value: NSSize) -> Self {
-        LogicalSize {
+        Self {
             width: value.width,
             height: value.height,
         }
@@ -15,7 +15,7 @@ impl From<NSSize> for LogicalSize {
 
 impl From<NSSize> for PhysicalSize {
     fn from(value: NSSize) -> Self {
-        PhysicalSize {
+        Self {
             width: value.width,
             height: value.height,
         }
@@ -24,7 +24,7 @@ impl From<NSSize> for PhysicalSize {
 
 impl From<NSPoint> for PhysicalPoint {
     fn from(value: NSPoint) -> Self {
-        PhysicalPoint { x: value.x, y: value.y }
+        Self { x: value.x, y: value.y }
     }
 }
 
@@ -34,17 +34,17 @@ impl From<PhysicalPoint> for NSPoint {
     }
 }
 
-#[allow(dead_code)]
 impl LogicalPoint {
-    pub(crate) fn to_macos_coords(&self, height: LogicalPixels) -> NSPoint {
+    #[allow(dead_code)]
+    pub(crate) fn as_macos_coords(&self, height: LogicalPixels) -> NSPoint {
         NSPoint {
             x: self.x,
             y: height - self.y,
         }
     }
 
-    pub(crate) fn from_macos_coords(value: NSPoint, height: LogicalPixels) -> LogicalPoint {
-        LogicalPoint {
+    pub(crate) fn from_macos_coords(value: NSPoint, height: LogicalPixels) -> Self {
+        Self {
             x: value.x,
             y: height - value.y,
         }
@@ -70,7 +70,7 @@ impl From<PhysicalSize> for NSSize {
 }
 
 impl LogicalRect {
-    pub(crate) fn to_macos_coords(&self, height: LogicalPixels) -> NSRect {
+    pub(crate) fn as_macos_coords(&self, height: LogicalPixels) -> NSRect {
         let origin = NSPoint {
             x: self.origin.x,
             y: height - (self.origin.y + self.size.height),
@@ -81,12 +81,12 @@ impl LogicalRect {
         }
     }
 
-    pub(crate) fn from_macos_coords(value: NSRect, height: LogicalPixels) -> LogicalRect {
+    pub(crate) fn from_macos_coords(value: NSRect, height: LogicalPixels) -> Self {
         let origin = LogicalPoint {
             x: value.origin.x,
             y: height - (value.origin.y + value.size.height),
         };
-        LogicalRect {
+        Self {
             origin,
             size: value.size.into(),
         }

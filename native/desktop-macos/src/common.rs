@@ -1,6 +1,6 @@
-pub(crate) type StrPtr = *mut std::ffi::c_char;
-pub(crate) type ConstStrPtr = *const std::ffi::c_char;
-pub(crate) type ArraySize = i64;
+pub type StrPtr = *mut std::ffi::c_char;
+pub type ConstStrPtr = *const std::ffi::c_char;
+pub type ArraySize = usize;
 
 // ffi ready analog of &[T]
 //#[repr(C)]
@@ -41,15 +41,15 @@ pub struct LogicalPoint {
 }
 
 #[derive(Debug)]
-pub(crate) struct LogicalRect {
+pub struct LogicalRect {
     // the point closest to coordinates origin
     pub(crate) origin: LogicalPoint,
     pub(crate) size: LogicalSize,
 }
 
 impl LogicalRect {
-    pub(crate) fn new(origin: LogicalPoint, size: LogicalSize) -> Self {
-        return LogicalRect { origin, size };
+    pub(crate) const fn new(origin: LogicalPoint, size: LogicalSize) -> Self {
+        Self { origin, size }
     }
 }
 
@@ -69,16 +69,16 @@ macro_rules! define_objc_ref {
         impl $name {
             pub(crate) fn new(obj: Retained<$otype>) -> Self {
                 return Self {
-                    ptr: Retained::into_raw(obj) as *mut c_void,
+                    ptr: Retained::into_raw(obj).cast::<c_void>(),
                 };
             }
 
             pub(crate) unsafe fn retain(&self) -> Retained<$otype> {
-                return Retained::retain(self.ptr as *mut $otype).unwrap();
+                return unsafe { Retained::retain(self.ptr.cast::<$otype>()) }.unwrap();
             }
 
             pub(crate) unsafe fn consume(self) -> Retained<$otype> {
-                return Retained::from_raw(self.ptr as *mut $otype).unwrap();
+                return unsafe { Retained::from_raw(self.ptr.cast::<$otype>()) }.unwrap();
             }
         }
     };

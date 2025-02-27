@@ -1,3 +1,5 @@
+#![allow(clippy::let_and_return)]
+
 use core::f64;
 use std::ffi::CString;
 
@@ -254,7 +256,7 @@ trait NSEventExt {
     }
 
     fn pressed_modifiers() -> KeyModifiersSet {
-        unsafe { NSEvent::modifierFlags_class() }.try_into().unwrap()
+        unsafe { NSEvent::modifierFlags_class() }.into()
     }
 }
 

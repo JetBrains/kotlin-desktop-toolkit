@@ -46,30 +46,30 @@ pub struct ScreenInfoArray {
 impl ScreenInfoArray {
     fn new(screen_infos: Vec<ScreenInfo>) -> Self {
         let screen_infos = Vec::leak(screen_infos);
-        return ScreenInfoArray {
+        Self {
             ptr: screen_infos.as_mut_ptr(),
-            len: screen_infos.len().try_into().unwrap(),
-        };
+            len: screen_infos.len(),
+        }
     }
 }
 
 impl Drop for ScreenInfoArray {
     fn drop(&mut self) {
-        if !self.ptr.is_null() {
+        if self.ptr.is_null() {
+            warn!("Got null pointer in ScreenInfoArray");
+        } else {
             let screen_infos = unsafe {
-                let s = slice::from_raw_parts_mut(self.ptr, self.len.try_into().unwrap());
+                let s = slice::from_raw_parts_mut(self.ptr, self.len);
                 Box::from_raw(s)
             };
             std::mem::drop(screen_infos);
-        } else {
-            warn!("Got null pointer in ScreenInfoArray")
         }
     }
 }
 
 impl PanicDefault for ScreenInfoArray {
     fn default() -> Self {
-        ScreenInfoArray {
+        Self {
             ptr: std::ptr::null_mut(),
             len: 0,
         }
@@ -109,7 +109,7 @@ pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
     ffi_boundary("screen_list_drop", || {
         std::mem::drop(arr);
         Ok(())
-    })
+    });
 }
 
 #[no_mangle]
@@ -135,7 +135,7 @@ pub(crate) trait NSScreenExts {
             .unwrap();
         let screen_id: Retained<NSNumber> = Retained::downcast(screen_id).unwrap();
 
-        return screen_id.unsignedIntValue();
+        screen_id.unsignedIntValue()
     }
 
     #[allow(dead_code)]
@@ -156,6 +156,6 @@ pub(crate) trait NSScreenExts {
 
 impl NSScreenExts for NSScreen {
     fn me(&self) -> &NSScreen {
-        return self;
+        self
     }
 }
