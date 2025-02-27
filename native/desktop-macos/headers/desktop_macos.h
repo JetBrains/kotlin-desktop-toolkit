@@ -337,6 +337,8 @@ typedef struct NativeAppMenuStructure {
   NativeArraySize items_count;
 } NativeAppMenuStructure;
 
+typedef struct NativeDisplayLinkBox *NativeDisplayLinkPtr;
+
 typedef void (*NativeDisplayLinkCallback)(void);
 
 typedef uint32_t NativeMouseButtonsSet;
@@ -344,6 +346,8 @@ typedef uint32_t NativeMouseButtonsSet;
 typedef void *NativeMetalDeviceRef;
 
 typedef void *NativeMetalCommandQueueRef;
+
+typedef const struct NativeMetalView *NativeMetalViewPtr;
 
 typedef double NativePhysicalPixels;
 
@@ -372,6 +376,8 @@ typedef struct NativeAutoDropArray_ScreenInfo {
 } NativeAutoDropArray_ScreenInfo;
 
 typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
+
+typedef const struct NativeWindow *NativeWindowPtr;
 
 typedef struct NativeWindowParams {
   struct NativeLogicalPoint origin;
@@ -435,14 +441,14 @@ bool dispatcher_is_main_thread(void);
 
 void dispatcher_main_exec_async(void (*f)(void));
 
-struct NativeDisplayLinkBox *display_link_create(NativeScreenId screen_id,
-                                                 NativeDisplayLinkCallback on_next_frame);
+NativeDisplayLinkPtr display_link_create(NativeScreenId screen_id,
+                                         NativeDisplayLinkCallback on_next_frame);
 
-void display_link_drop(struct NativeDisplayLinkBox *display_link);
+void display_link_drop(NativeDisplayLinkPtr display_link_ptr);
 
-void display_link_set_running(struct NativeDisplayLinkBox *display_link, bool value);
+void display_link_set_running(NativeDisplayLinkPtr display_link_ptr, bool value);
 
-bool display_link_is_running(struct NativeDisplayLinkBox *display_link);
+bool display_link_is_running(NativeDisplayLinkPtr display_link_ptr);
 
 NativeMouseButtonsSet events_pressed_mouse_buttons(void);
 
@@ -458,21 +464,21 @@ NativeMetalCommandQueueRef metal_create_command_queue(NativeMetalDeviceRef devic
 
 void metal_deref_command_queue(NativeMetalCommandQueueRef queue);
 
-struct NativeMetalView *metal_create_view(NativeMetalDeviceRef device);
+NativeMetalViewPtr metal_create_view(NativeMetalDeviceRef device);
 
-void metal_drop_view(struct NativeMetalView *view);
+void metal_drop_view(NativeMetalViewPtr view_ptr);
 
-void metal_view_set_is_opaque(const struct NativeMetalView *view, bool value);
+void metal_view_set_is_opaque(NativeMetalViewPtr view_ptr, bool value);
 
-bool metal_view_get_is_opaque(const struct NativeMetalView *view);
+bool metal_view_get_is_opaque(NativeMetalViewPtr view_ptr);
 
-void metal_view_present(const struct NativeMetalView *view,
+void metal_view_present(NativeMetalViewPtr view_ptr,
                         NativeMetalCommandQueueRef queue,
                         bool wait_for_ca_transaction);
 
-struct NativePhysicalSize metal_view_get_texture_size(const struct NativeMetalView *view);
+struct NativePhysicalSize metal_view_get_texture_size(NativeMetalViewPtr view_ptr);
 
-NativeMetalTextureRef metal_view_next_texture(const struct NativeMetalView *view);
+NativeMetalTextureRef metal_view_next_texture(NativeMetalViewPtr view_ptr);
 
 void metal_deref_texture(NativeMetalTextureRef texture);
 
@@ -484,59 +490,58 @@ NativeScreenId screen_get_main_screen_id(void);
 
 void string_drop(NativeRustAllocatedStrPtr str_ptr);
 
-struct NativeWindow *window_create(const struct NativeWindowParams *params);
+NativeWindowPtr window_create(const struct NativeWindowParams *params);
 
-void window_drop(struct NativeWindow *window);
+void window_drop(NativeWindowPtr window_ptr);
 
-NativeWindowId window_get_window_id(const struct NativeWindow *window);
+NativeWindowId window_get_window_id(NativeWindowPtr window_ptr);
 
-NativeScreenId window_get_screen_id(const struct NativeWindow *window);
+NativeScreenId window_get_screen_id(NativeWindowPtr window_ptr);
 
-double window_scale_factor(const struct NativeWindow *window);
+double window_scale_factor(NativeWindowPtr window_ptr);
 
-void window_attach_layer(const struct NativeWindow *window, const struct NativeMetalView *layer);
+void window_attach_layer(NativeWindowPtr window_ptr, NativeMetalViewPtr layer_ptr);
 
-void window_set_title(const struct NativeWindow *window, NativeBorrowedStrPtr new_title);
+void window_set_title(NativeWindowPtr window_ptr, NativeBorrowedStrPtr new_title);
 
-NativeRustAllocatedStrPtr window_get_title(const struct NativeWindow *window);
+NativeRustAllocatedStrPtr window_get_title(NativeWindowPtr window_ptr);
 
-struct NativeLogicalPoint window_get_origin(const struct NativeWindow *window);
+struct NativeLogicalPoint window_get_origin(NativeWindowPtr window_ptr);
 
-struct NativeLogicalSize window_get_size(const struct NativeWindow *window);
+struct NativeLogicalSize window_get_size(NativeWindowPtr window_ptr);
 
-void window_set_rect(const struct NativeWindow *window,
+void window_set_rect(NativeWindowPtr window_ptr,
                      struct NativeLogicalPoint origin,
                      struct NativeLogicalSize size,
                      bool animate);
 
-struct NativeLogicalPoint window_get_content_origin(const struct NativeWindow *window);
+struct NativeLogicalPoint window_get_content_origin(NativeWindowPtr window_ptr);
 
-struct NativeLogicalSize window_get_content_size(const struct NativeWindow *window);
+struct NativeLogicalSize window_get_content_size(NativeWindowPtr window_ptr);
 
-void window_set_content_rect(const struct NativeWindow *window,
+void window_set_content_rect(NativeWindowPtr window_ptr,
                              struct NativeLogicalPoint origin,
                              struct NativeLogicalSize size,
                              bool animate);
 
-bool window_is_key(const struct NativeWindow *window);
+bool window_is_key(NativeWindowPtr window_ptr);
 
-bool window_is_main(const struct NativeWindow *window);
+bool window_is_main(NativeWindowPtr window_ptr);
 
-struct NativeLogicalSize window_get_max_size(const struct NativeWindow *window);
+struct NativeLogicalSize window_get_max_size(NativeWindowPtr window_ptr);
 
-void window_set_max_size(const struct NativeWindow *window, struct NativeLogicalSize size);
+void window_set_max_size(NativeWindowPtr window_ptr, struct NativeLogicalSize size);
 
-struct NativeLogicalSize window_get_min_size(const struct NativeWindow *window);
+struct NativeLogicalSize window_get_min_size(NativeWindowPtr window_ptr);
 
-void window_set_min_size(const struct NativeWindow *window, struct NativeLogicalSize size);
+void window_set_min_size(NativeWindowPtr window_ptr, struct NativeLogicalSize size);
 
-void window_toggle_full_screen(const struct NativeWindow *window);
+void window_toggle_full_screen(NativeWindowPtr window_ptr);
 
-bool window_is_full_screen(const struct NativeWindow *window);
+bool window_is_full_screen(NativeWindowPtr window_ptr);
 
-void window_start_drag(const struct NativeWindow *window);
+void window_start_drag(NativeWindowPtr window_ptr);
 
-void window_invalidate_shadow(const struct NativeWindow *window);
+void window_invalidate_shadow(NativeWindowPtr window_ptr);
 
-void window_set_background(const struct NativeWindow *window,
-                           struct NativeWindowBackground background);
+void window_set_background(NativeWindowPtr window_ptr, struct NativeWindowBackground background);

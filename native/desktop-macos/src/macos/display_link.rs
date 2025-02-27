@@ -14,18 +14,20 @@ use objc2_foundation::MainThreadMarker;
 pub type DisplayLinkCallback = extern "C" fn();
 
 #[allow(dead_code)]
-struct DisplayLinkBox {
+pub struct DisplayLinkBox {
     display_link: DisplayLink, // we need it for drop
 }
 
-impl PanicDefault for *mut DisplayLinkBox {
+type DisplayLinkPtr = *mut DisplayLinkBox;
+
+impl PanicDefault for DisplayLinkPtr {
     fn default() -> Self {
         std::ptr::null_mut()
     }
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLinkCallback) -> *mut DisplayLinkBox {
+pub extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLinkCallback) -> DisplayLinkPtr {
     ffi_boundary("display_link_create", || {
         let _mtm = MainThreadMarker::new().unwrap();
         let display_link = DisplayLink::new(screen_id, on_next_frame).unwrap();
@@ -34,11 +36,11 @@ extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLin
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn display_link_drop(display_link: *mut DisplayLinkBox) {
+pub extern "C" fn display_link_drop(display_link_ptr: DisplayLinkPtr) {
     ffi_boundary("display_link_drop", || {
         let display_link: Box<DisplayLinkBox> = unsafe {
-            assert!(!display_link.is_null());
-            Box::from_raw(display_link)
+            assert!(!display_link_ptr.is_null());
+            Box::from_raw(display_link_ptr)
         };
         std::mem::drop(display_link);
         Ok(())
@@ -46,13 +48,14 @@ extern "C" fn display_link_drop(display_link: *mut DisplayLinkBox) {
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn display_link_set_running(display_link: &mut DisplayLinkBox, value: bool) {
+pub extern "C" fn display_link_set_running(display_link_ptr: DisplayLinkPtr, value: bool) {
     ffi_boundary("display_link_set_running", || {
-        if value != display_link.display_link.is_running() {
+        let display_link = unsafe { &mut display_link_ptr.read().display_link };
+        if value != display_link.is_running() {
             if value {
-                display_link.display_link.start().unwrap();
+                display_link.start().unwrap();
             } else {
-                display_link.display_link.stop().unwrap();
+                display_link.stop().unwrap();
             }
         }
         Ok(())
@@ -66,8 +69,11 @@ impl PanicDefault for bool {
 }
 
 #[unsafe(no_mangle)]
-extern "C" fn display_link_is_running(display_link: &mut DisplayLinkBox) -> bool {
-    ffi_boundary("display_link_is_running", || Ok(display_link.display_link.is_running()))
+pub extern "C" fn display_link_is_running(display_link_ptr: DisplayLinkPtr) -> bool {
+    ffi_boundary("display_link_is_running", || {
+        let display_link = unsafe { &mut display_link_ptr.read().display_link };
+        Ok(display_link.is_running())
+    })
 }
 
 // derived from https://github.com/zed-industries/zed/blob/7425d242bc91d054df3c05f2b88307cfb3e9132f/crates/gpui/src/platform/mac/display_link.rs#L25

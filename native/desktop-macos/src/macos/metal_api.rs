@@ -83,14 +83,16 @@ impl MetalView {
     }
 }
 
-impl PanicDefault for *mut MetalView {
+pub type MetalViewPtr = *const MetalView;
+
+impl PanicDefault for MetalViewPtr {
     fn default() -> Self {
         std::ptr::null_mut()
     }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> *mut MetalView {
+pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> MetalViewPtr {
     ffi_boundary("metal_create_view", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let device = unsafe { device.retain() };
@@ -129,39 +131,45 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> *mut MetalView {
             ns_view: layer_view,
             layer,
             drawable: Cell::new(None),
-        })))
+        }))
+        .cast_const())
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn metal_drop_view(view: *mut MetalView) {
+pub extern "C" fn metal_drop_view(view_ptr: MetalViewPtr) {
     ffi_boundary("metal_drop_view", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         std::mem::drop(unsafe {
-            assert!(!view.is_null());
-            Box::from_raw(view)
+            assert!(!view_ptr.is_null());
+            Box::from_raw(view_ptr.cast_mut())
         });
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn metal_view_set_is_opaque(view: &MetalView, value: bool) {
+pub extern "C" fn metal_view_set_is_opaque(view_ptr: MetalViewPtr, value: bool) {
     ffi_boundary("metal_view_set_is_opaque", || {
+        let view = unsafe { view_ptr.read() };
         view.layer.setOpaque(value);
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn metal_view_get_is_opaque(view: &MetalView) -> bool {
-    ffi_boundary("metal_view_get_is_opaque", || Ok(view.layer.isOpaque()))
+pub extern "C" fn metal_view_get_is_opaque(view_ptr: MetalViewPtr) -> bool {
+    ffi_boundary("metal_view_get_is_opaque", || {
+        let view = unsafe { view_ptr.read() };
+        Ok(view.layer.isOpaque())
+    })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn metal_view_present(view: &MetalView, queue: MetalCommandQueueRef, wait_for_ca_transaction: bool) {
+pub extern "C" fn metal_view_present(view_ptr: MetalViewPtr, queue: MetalCommandQueueRef, wait_for_ca_transaction: bool) {
     ffi_boundary("metal_view_present", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let view = unsafe { view_ptr.read() };
         if let Some(drawable) = view.drawable.replace(None) {
             let queue = unsafe { queue.retain() };
             let command_buffer = queue.commandBuffer().unwrap();
@@ -192,9 +200,10 @@ impl PanicDefault for PhysicalSize {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn metal_view_get_texture_size(view: &MetalView) -> PhysicalSize {
+pub extern "C" fn metal_view_get_texture_size(view_ptr: MetalViewPtr) -> PhysicalSize {
     ffi_boundary("metal_view_get_texture_size", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let view = unsafe { view_ptr.read() };
         let ns_view = view.ns_view();
         let view_size = unsafe { ns_view.convertSizeToBacking(ns_view.bounds().size) };
         Ok(view_size.into())
@@ -214,8 +223,9 @@ impl PanicDefault for MetalTextureRef {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn metal_view_next_texture(view: &MetalView) -> MetalTextureRef {
+pub extern "C" fn metal_view_next_texture(view_ptr: MetalViewPtr) -> MetalTextureRef {
     ffi_boundary("metal_view_next_texture", || {
+        let view = unsafe { view_ptr.read() };
         unsafe {
             const SCALE_DIFF_TOLERANCE: f64 = 0.001;
             let ns_view = view.ns_view();
