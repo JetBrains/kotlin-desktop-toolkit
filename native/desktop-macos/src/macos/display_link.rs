@@ -13,27 +13,21 @@ use objc2_foundation::MainThreadMarker;
 
 pub type DisplayLinkCallback = extern "C" fn();
 
-#[allow(dead_code)]
-pub struct DisplayLinkBox {
-    display_link: DisplayLink, // we need it for drop
-}
-
-type DisplayLinkPtr = *mut DisplayLinkBox;
+type DisplayLinkPtr = *mut DisplayLink;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLinkCallback) -> DisplayLinkPtr {
-    let display_link_box = ffi_boundary("display_link_create", || {
+    let display_link = ffi_boundary("display_link_create", || {
         let _mtm = MainThreadMarker::new().unwrap();
-        let display_link = DisplayLink::new(screen_id, on_next_frame).unwrap();
-        Ok(Some(DisplayLinkBox { display_link }))
+        Ok(Some(DisplayLink::new(screen_id, on_next_frame).unwrap()))
     });
-    display_link_box.map_or(std::ptr::null_mut(), |v| Box::into_raw(Box::new(v)))
+    display_link.map_or(std::ptr::null_mut(), |v| Box::into_raw(Box::new(v)))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn display_link_drop(display_link_ptr: DisplayLinkPtr) {
     ffi_boundary("display_link_drop", || {
-        let display_link: Box<DisplayLinkBox> = unsafe {
+        let display_link: Box<DisplayLink> = unsafe {
             assert!(!display_link_ptr.is_null());
             Box::from_raw(display_link_ptr)
         };
@@ -45,7 +39,7 @@ pub extern "C" fn display_link_drop(display_link_ptr: DisplayLinkPtr) {
 #[unsafe(no_mangle)]
 pub extern "C" fn display_link_set_running(display_link_ptr: DisplayLinkPtr, value: bool) {
     ffi_boundary("display_link_set_running", || {
-        let display_link = unsafe { &mut display_link_ptr.read().display_link };
+        let display_link = unsafe { &mut display_link_ptr.read() };
         if value != display_link.is_running() {
             if value {
                 display_link.start().unwrap();
@@ -66,7 +60,7 @@ impl PanicDefault for bool {
 #[unsafe(no_mangle)]
 pub extern "C" fn display_link_is_running(display_link_ptr: DisplayLinkPtr) -> bool {
     ffi_boundary("display_link_is_running", || {
-        let display_link = unsafe { &mut display_link_ptr.read().display_link };
+        let display_link = unsafe { &mut display_link_ptr.read() };
         Ok(display_link.is_running())
     })
 }

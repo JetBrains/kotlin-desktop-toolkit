@@ -29,7 +29,7 @@ typedef enum NativeWindowVisualEffect {
   NativeWindowVisualEffect_UnderPageBackgroundEffect,
 } NativeWindowVisualEffect;
 
-typedef struct NativeDisplayLinkBox NativeDisplayLinkBox;
+typedef struct NativeDisplayLink NativeDisplayLink;
 
 typedef struct NativeMetalView NativeMetalView;
 
@@ -337,7 +337,7 @@ typedef struct NativeAppMenuStructure {
   NativeArraySize items_count;
 } NativeAppMenuStructure;
 
-typedef struct NativeDisplayLinkBox *NativeDisplayLinkPtr;
+typedef struct NativeDisplayLink *NativeDisplayLinkPtr;
 
 typedef void (*NativeDisplayLinkCallback)(void);
 
