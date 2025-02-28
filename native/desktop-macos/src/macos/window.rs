@@ -34,7 +34,6 @@ use crate::{
         },
         string::copy_to_ns_string,
         text_operations::{handle_text_changed_operation, handle_text_command_operation},
-        window_api::FileDialogType,
     },
 };
 
@@ -335,17 +334,9 @@ impl Window {
 
         let panel = unsafe { NSOpenPanel::new(mtm) };
         let res = unsafe {
+            panel.setCanChooseFiles(params.allow_file);
+            panel.setCanChooseDirectories(params.allow_folder);
             panel.setAllowsMultipleSelection(params.allow_multiple_selection);
-            match params.dialog_type {
-                FileDialogType::Directory => {
-                    panel.setCanChooseDirectories(true);
-                    panel.setCanChooseFiles(false);
-                }
-                FileDialogType::File => {
-                    panel.setCanChooseDirectories(false);
-                    panel.setCanChooseFiles(true);
-                }
-            }
             panel.runModal() == NSMODAL_RESPONSE_OK
         };
         if let Some(path) = res

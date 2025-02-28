@@ -242,8 +242,9 @@ public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desk
                     callback(path)
                 }, arena)
                 val nativeParams = NativeFileDialogParams.allocate(arena)
+                NativeFileDialogParams.allow_file(nativeParams, params.allowFile)
+                NativeFileDialogParams.allow_folder(nativeParams, params.allowFolder)
                 NativeFileDialogParams.allow_multiple_selection(nativeParams, params.allowMultipleSelection)
-                NativeFileDialogParams.dialog_type(nativeParams, params.dialogType.toNative())
 
                 desktop_macos_h.window_open_file_dialog(pointer, nativeParams, nativeCallback)
             }
@@ -313,20 +314,8 @@ public enum class WindowVisualEffect {
     }
 }
 
-public enum class FileDialogType {
-    File,
-    Directory,
-    ;
-
-    internal fun toNative(): Int {
-        return when (this) {
-            File -> desktop_macos_h.NativeFileDialogType_File()
-            Directory -> desktop_macos_h.NativeFileDialogType_Directory()
-        }
-    }
-}
-
 public data class FileDialogParams(
-    val dialogType: FileDialogType,
+    val allowFile: Boolean = true,
+    val allowFolder: Boolean = true,
     val allowMultipleSelection: Boolean = false,
 )

@@ -3,11 +3,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef enum NativeFileDialogType {
-  NativeFileDialogType_File,
-  NativeFileDialogType_Directory,
-} NativeFileDialogType;
-
 typedef enum NativeLogLevel {
   NativeLogLevel_Off,
   NativeLogLevel_Error,
@@ -397,7 +392,8 @@ typedef struct NativeWindowParams {
 } NativeWindowParams;
 
 typedef struct NativeFileDialogParams {
-  enum NativeFileDialogType dialog_type;
+  bool allow_file;
+  bool allow_folder;
   bool allow_multiple_selection;
 } NativeFileDialogParams;
 

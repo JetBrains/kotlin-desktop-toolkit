@@ -336,13 +336,8 @@ pub extern "C" fn window_set_background(window_ptr: WindowPtr, background: Windo
 }
 
 #[repr(C)]
-pub enum FileDialogType {
-    File,
-    Directory,
-}
-
-#[repr(C)]
 pub struct FileDialogParams {
-    pub dialog_type: FileDialogType,
+    pub allow_file: bool,
+    pub allow_folder: bool,
     pub allow_multiple_selection: bool,
 }

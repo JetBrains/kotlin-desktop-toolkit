@@ -12,7 +12,6 @@ import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.FileDialogParams
-import org.jetbrains.desktop.macos.FileDialogType
 import org.jetbrains.desktop.macos.KeyModifiersSet
 import org.jetbrains.desktop.macos.Keystroke
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
@@ -458,7 +457,7 @@ class ApplicationState : AutoCloseable {
                     keystroke = Keystroke(key = "o", modifiers = KeyModifiersSet.create(command = true, shift = true)),
                     perform = {
                         mainWindow()?.window?.let {
-                            it.openFileDialog(FileDialogParams(dialogType = FileDialogType.Directory)) { path ->
+                            it.openFileDialog(FileDialogParams()) { path ->
                                 println("openFileDialog callback received $path")
                             }
                         }
