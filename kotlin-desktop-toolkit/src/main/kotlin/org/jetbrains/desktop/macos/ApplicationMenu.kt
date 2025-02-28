@@ -22,18 +22,63 @@ public sealed class AppMenuItem {
         val title: String,
         val isEnabled: Boolean = true,
         val keystroke: Keystroke? = null,
+        val specialTag: SpecialTag = SpecialTag.None,
         val isMacOSProvided: Boolean = false,
         val perform: () -> Unit = {},
-    ) : AppMenuItem()
+    ) : AppMenuItem() {
+        public enum class SpecialTag {
+            None,
+            Undo,
+            Redo,
+            Cut,
+            Copy,
+            Paste,
+            Delete,
+            ;
+
+            internal fun toNative(): Int {
+                return when (this) {
+                    None -> desktop_macos_h.NativeActionMenuItemSpecialTag_None()
+                    Undo -> desktop_macos_h.NativeActionMenuItemSpecialTag_Undo()
+                    Redo -> desktop_macos_h.NativeActionMenuItemSpecialTag_Redo()
+                    Cut -> desktop_macos_h.NativeActionMenuItemSpecialTag_Cut()
+                    Copy -> desktop_macos_h.NativeActionMenuItemSpecialTag_Copy()
+                    Paste -> desktop_macos_h.NativeActionMenuItemSpecialTag_Paste()
+                    Delete -> desktop_macos_h.NativeActionMenuItemSpecialTag_Delete()
+                }
+            }
+        }
+    }
 
     public data object Separator : AppMenuItem()
 
     public class SubMenu(
         public val title: String,
         public val items: List<AppMenuItem>,
-        public val specialTag: String? = null,
+        public val specialTag: SpecialTag = SpecialTag.None,
     ) : AppMenuItem() {
-        public constructor(title: String, vararg items: AppMenuItem, specialTag: String? = null) : this(title, items.toList(), specialTag)
+        public enum class SpecialTag {
+            None,
+            AppMenu,
+            Window,
+            Services,
+            ;
+
+            internal fun toNative(): Int {
+                return when (this) {
+                    None -> desktop_macos_h.NativeSubMenuItemSpecialTag_None()
+                    AppMenu -> desktop_macos_h.NativeSubMenuItemSpecialTag_AppMenu()
+                    Window -> desktop_macos_h.NativeSubMenuItemSpecialTag_Window()
+                    Services -> desktop_macos_h.NativeSubMenuItemSpecialTag_Services()
+                }
+            }
+        }
+
+        public constructor(title: String, vararg items: AppMenuItem, specialTag: SpecialTag = SpecialTag.None) : this(
+            title,
+            items.toList(),
+            specialTag,
+        )
     }
 }
 
@@ -77,6 +122,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             val actionItemBody = NativeAppMenuItem_NativeActionItem_Body.allocate(arena)
             NativeAppMenuItem_NativeActionItem_Body.enabled(actionItemBody, menuItem.isEnabled)
             NativeAppMenuItem_NativeActionItem_Body.title(actionItemBody, arena.allocateUtf8String(menuItem.title))
+            NativeAppMenuItem_NativeActionItem_Body.special_tag(actionItemBody, menuItem.specialTag.toNative())
             NativeAppMenuItem_NativeActionItem_Body.macos_provided(actionItemBody, menuItem.isMacOSProvided)
             NativeAppMenuItem_NativeActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)
             NativeAppMenuItem_NativeActionItem_Body.perform(
@@ -106,10 +152,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
 
             val subMenuItemBody = NativeAppMenuItem_NativeSubMenuItem_Body.allocate(arena)
             NativeAppMenuItem_NativeSubMenuItem_Body.title(subMenuItemBody, arena.allocateUtf8String(menuItem.title))
-            NativeAppMenuItem_NativeSubMenuItem_Body.special_tag(
-                subMenuItemBody,
-                menuItem.specialTag?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
-            )
+            NativeAppMenuItem_NativeSubMenuItem_Body.special_tag(subMenuItemBody, menuItem.specialTag.toNative())
             NativeAppMenuItem_NativeSubMenuItem_Body.items_count(subMenuItemBody, menuItem.items.size.toLong())
             NativeAppMenuItem_NativeSubMenuItem_Body.items(subMenuItemBody, itemsArray)
 

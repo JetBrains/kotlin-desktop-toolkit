@@ -18,11 +18,33 @@ pub struct AppMenuKeystroke<'a> {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SubMenuItemSpecialTag {
+    None,
+    AppMenu,
+    Window,
+    Services,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ActionMenuItemSpecialTag {
+    None,
+    Undo,
+    Redo,
+    Cut,
+    Copy,
+    Paste,
+    Delete,
+}
+
+#[repr(C)]
 #[derive(Debug)]
 pub enum AppMenuItem<'a> {
     ActionItem {
         enabled: bool,
         title: BorrowedStrPtr<'a>,
+        special_tag: ActionMenuItemSpecialTag,
         macos_provided: bool,
         keystroke: Option<&'a AppMenuKeystroke<'a>>,
         perform: extern "C" fn(),
@@ -30,7 +52,7 @@ pub enum AppMenuItem<'a> {
     SeparatorItem,
     SubMenuItem {
         title: BorrowedStrPtr<'a>,
-        special_tag: Option<&'a std::ffi::c_char>,
+        special_tag: SubMenuItemSpecialTag,
         items: *const AppMenuItem<'a>,
         items_count: ArraySize,
     },

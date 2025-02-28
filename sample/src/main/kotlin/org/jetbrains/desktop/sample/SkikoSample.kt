@@ -478,7 +478,7 @@ class ApplicationState : AutoCloseable {
                         }
                     },
                 ),
-                specialTag = "AppMenu",
+                specialTag = AppMenuItem.SubMenu.SpecialTag.AppMenu,
             ),
             AppMenuItem.SubMenu(
                 title = "View",
@@ -498,7 +498,7 @@ class ApplicationState : AutoCloseable {
                     keystroke = Keystroke(key = "f", modifiers = KeyModifiersSet.create(command = true, control = true)),
                     perform = { mainWindow()?.window?.toggleFullScreen() },
                 ),
-                specialTag = "View",
+//                specialTag = "View",
             ),
             AppMenuItem.SubMenu(
                 title = "Animation",
@@ -574,7 +574,7 @@ class ApplicationState : AutoCloseable {
                         }
                     },
                 ),
-                specialTag = "Window",
+                specialTag = AppMenuItem.SubMenu.SpecialTag.Window,
             ),
         )
     }

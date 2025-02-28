@@ -33,11 +33,11 @@ fun buildAppMenu(): AppMenuStructure {
         AppMenuItem.SubMenu(
             title = "App", // Ignored
             AppMenuItem.Action("App menu item1", false),
-            AppMenuItem.SubMenu("Services", specialTag = "Services"),
+            AppMenuItem.SubMenu("Services", specialTag = AppMenuItem.SubMenu.SpecialTag.Services),
             AppMenuItem.Separator,
             AppMenuItem.Action("App menu item2", true),
             AppMenuItem.SubMenu(title = "Empty Submenu"),
-            specialTag = "AppMenu",
+            specialTag = AppMenuItem.SubMenu.SpecialTag.AppMenu,
         ),
         AppMenuItem.SubMenu(
             title = "File",
@@ -147,7 +147,7 @@ fun buildAppMenu(): AppMenuStructure {
                     add(AppMenuItem.Action("Last Flickering Item", true))
                 }
             },
-            specialTag = "Window",
+            specialTag = AppMenuItem.SubMenu.SpecialTag.Window,
         ),
         AppMenuItem.SubMenu(
             title = "Help",

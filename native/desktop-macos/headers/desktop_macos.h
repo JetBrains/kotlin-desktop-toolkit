@@ -3,6 +3,16 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum NativeActionMenuItemSpecialTag {
+  NativeActionMenuItemSpecialTag_None,
+  NativeActionMenuItemSpecialTag_Undo,
+  NativeActionMenuItemSpecialTag_Redo,
+  NativeActionMenuItemSpecialTag_Cut,
+  NativeActionMenuItemSpecialTag_Copy,
+  NativeActionMenuItemSpecialTag_Paste,
+  NativeActionMenuItemSpecialTag_Delete,
+} NativeActionMenuItemSpecialTag;
+
 typedef enum NativeLogLevel {
   NativeLogLevel_Off,
   NativeLogLevel_Error,
@@ -11,6 +21,13 @@ typedef enum NativeLogLevel {
   NativeLogLevel_Debug,
   NativeLogLevel_Trace,
 } NativeLogLevel;
+
+typedef enum NativeSubMenuItemSpecialTag {
+  NativeSubMenuItemSpecialTag_None,
+  NativeSubMenuItemSpecialTag_AppMenu,
+  NativeSubMenuItemSpecialTag_Window,
+  NativeSubMenuItemSpecialTag_Services,
+} NativeSubMenuItemSpecialTag;
 
 typedef enum NativeWindowVisualEffect {
   NativeWindowVisualEffect_TitlebarEffect,
@@ -308,6 +325,7 @@ typedef enum NativeAppMenuItem_Tag {
 typedef struct NativeAppMenuItem_NativeActionItem_Body {
   bool enabled;
   NativeBorrowedStrPtr title;
+  enum NativeActionMenuItemSpecialTag special_tag;
   bool macos_provided;
   const struct NativeAppMenuKeystroke *keystroke;
   void (*perform)(void);
@@ -315,7 +333,7 @@ typedef struct NativeAppMenuItem_NativeActionItem_Body {
 
 typedef struct NativeAppMenuItem_NativeSubMenuItem_Body {
   NativeBorrowedStrPtr title;
-  const char *special_tag;
+  enum NativeSubMenuItemSpecialTag special_tag;
   const struct NativeAppMenuItem *items;
   NativeArraySize items_count;
 } NativeAppMenuItem_NativeSubMenuItem_Body;
