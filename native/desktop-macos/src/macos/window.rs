@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Ok};
-use log::{debug, info};
+use log::debug;
 use objc2::{
     DeclaredClass, MainThreadOnly, define_class, msg_send,
     rc::Retained,
@@ -406,25 +406,25 @@ define_class!(
 
         #[unsafe(method(windowDidBecomeKey:))]
         unsafe fn window_did_become_key(&self, _notification: &NSNotification) {
-            info!("windowDidBecomeKey");
+            debug!("windowDidBecomeKey");
             handle_window_focus_change(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidResignKey:))]
         unsafe fn window_did_resign_key(&self, _notification: &NSNotification) {
-            info!("windowDidResignKey");
+            debug!("windowDidResignKey");
             handle_window_focus_change(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidBecomeMain:))]
         unsafe fn window_did_become_main(&self, _notification: &NSNotification) {
-            info!("windowDidBecomeMain");
+            debug!("windowDidBecomeMain");
             handle_window_focus_change(&self.ivars().ns_window);
         }
 
         #[unsafe(method(windowDidResignMain:))]
         unsafe fn window_did_resign_main(&self, _notification: &NSNotification) {
-            info!("windowDidResignMain");
+            debug!("windowDidResignMain");
             handle_window_focus_change(&self.ivars().ns_window);
         }
 
@@ -498,19 +498,19 @@ define_class!(
 
         #[unsafe(method(hasMarkedText))]
         unsafe fn has_marked_text(&self) -> bool {
-            info!("hasMarkedText");
+            debug!("hasMarkedText");
             false  // TODO
         }
 
         #[unsafe(method(markedRange))]
         unsafe fn marked_range(&self) -> NSRange {
-            info!("markedRange");
+            debug!("markedRange");
             NSRange { location: 0, length: 0 }  // TODO
         }
 
         #[unsafe(method(selectedRange))]
         unsafe fn selected_range(&self) -> NSRange {
-            info!("selectedRange");
+            debug!("selectedRange");
             NSRange { location: 0, length: 0 }  // TODO
         }
 
@@ -526,13 +526,12 @@ define_class!(
 
         #[unsafe(method(unmarkText))]
         unsafe fn unmark_text(&self) {
-            info!("unmarkText");
-            // TODO
+            self.unmark_text_impl();
         }
 
         #[unsafe(method_id(validAttributesForMarkedText))]
         unsafe fn valid_attributes_for_marked_text(&self) -> Retained<NSArray<NSAttributedStringKey>> {
-            info!("validAttributesForMarkedText");
+            debug!("validAttributesForMarkedText");
             let v = vec![
                 NSString::from_str("NSFont"),
                 NSString::from_str("NSUnderline"),
@@ -558,7 +557,7 @@ define_class!(
             actual_range: NSRangePointer,
         ) -> Option<Retained<NSAttributedString>> {
             let actual_range = NonNull::new(actual_range);
-            info!("attributedSubstringForProposedRange, range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
+            debug!("attributedSubstringForProposedRange, range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
             None  // TODO
         }
 
@@ -580,13 +579,13 @@ define_class!(
             actual_range: NSRangePointer,
         ) -> NSRect {
             let actual_range = NonNull::new(actual_range);
-            info!("firstRectForCharacterRange: range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
+            debug!("firstRectForCharacterRange: range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
             NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64))  // TODO
         }
 
         #[unsafe(method(characterIndexForPoint:))]
         unsafe fn character_index_for_point(&self, point: NSPoint) -> NSUInteger {
-            info!("characterIndexForPoint: {:?}", point);
+            debug!("characterIndexForPoint: {:?}", point);
             0  // TODO
         }
 
@@ -721,6 +720,13 @@ define_class!(
             }
         }
 
+        // Needed for e.g. Ctrl+Tab event reporting
+        #[unsafe(method(_wantsKeyDownForEvent:))]
+        fn wants_key_down_for_event(&self, event: &NSEvent) -> bool {
+            debug!("_wantsKeyDownForEvent: {event:?}");
+            return true.into();
+        }
+
         #[unsafe(method(keyDown:))]
         fn key_down(&self, nsevent: &NSEvent) {
             self.key_down_impl(nsevent);
@@ -815,32 +821,9 @@ impl RootView {
     }
 
     fn perform_key_equivalent_impl(&self, ns_event: &NSEvent) -> Bool {
-        catch_panic(|| {
-            debug!("performKeyEquivalent: {ns_event:?}");
-            let ret: Bool = unsafe { msg_send![super(self), performKeyEquivalent: ns_event] };
-            if ret.is_true() {
-                debug!("performKeyEquivalent: handled by system");
-                self.ivars().key_event_handled.set(Some(true));
-                Ok(ret)
-            } else {
-                self.ivars().key_event_handled.set(Some(false));
-                debug!("performKeyEquivalent: calling interpretKeyEvents");
-                unsafe {
-                    let key_events = NSArray::arrayWithObject(ns_event);
-                    self.interpretKeyEvents(&key_events);
-                };
-                if self.ivars().key_event_handled.get() == Some(true) {
-                    Ok(true.into())
-                } else {
-                    debug!("performKeyEquivalent: transforming into keyDown event");
-                    let key_info = unpack_key_event(ns_event)?;
-                    let handled = handle_key_event(&to_key_down_event(&key_info))?;
-                    self.ivars().key_event_handled.set(Some(handled));
-                    Ok(handled.into())
-                }
-            }
-        })
-        .unwrap_or(false.into())
+        let ret: Bool = unsafe { msg_send![super(self), performKeyEquivalent: ns_event] };
+        debug!("performKeyEquivalent -> {}", ret.as_bool());
+        ret
     }
 
     fn key_down_impl(&self, ns_event: &NSEvent) {
@@ -890,7 +873,7 @@ impl RootView {
     fn insert_text_replacement_range_impl(&self, string: &AnyObject, replacement_range: NSRange) {
         catch_panic(|| {
             let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-            info!(
+            debug!(
                 "insertText, marked_text={:?}, string={:?}, replacement_range={:?}",
                 ns_attributed_string, text, replacement_range
             );
@@ -909,13 +892,20 @@ impl RootView {
         replacement_range: NSRange,
     ) {
         catch_panic(|| {
+            self.ivars().key_event_handled.set(Some(true));
             let window = self.window().context("No window for view")?;
             let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-            info!(
+            debug!(
                 "setMarkedText, window={window:?}, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
                 ns_attributed_string, text, selected_range, replacement_range
             );
             Ok(())
         });
+    }
+
+    fn unmark_text_impl(&self) {
+        debug!("unmarkText");
+        self.ivars().key_event_handled.set(Some(true));
+        // TODO
     }
 }

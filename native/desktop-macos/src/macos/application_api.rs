@@ -179,21 +179,9 @@ define_class!(
     unsafe impl NSObjectProtocol for MyNSApplication {}
 
     impl MyNSApplication {
-        // https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
-        // The default sendEvent turns key downs into performKeyEquivalent when
-        // modifiers are down, but swallows the key up if the modifiers include
-        // command.  This one makes all modifiers consistent by always sending key ups.
         #[unsafe(method(sendEvent:))]
         fn send_event(&self, event: &NSEvent) {
-            if unsafe { event.r#type() } == NSEventType::KeyUp {
-                if let Some(window) = self.keyWindow() {
-                    window.sendEvent(event);
-                    return;
-                }
-            }
-            unsafe {
-                let _:() = msg_send![super(self), sendEvent: event];
-            }
+            self.send_event_impl(event);
         }
     }
 );
@@ -202,6 +190,24 @@ impl MyNSApplication {
     #[allow(non_snake_case)]
     pub(crate) fn sharedApplication(_mtm: MainThreadMarker) -> Retained<Self> {
         unsafe { msg_send!(Self::class(), sharedApplication) }
+    }
+
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=1299553
+    // The default sendEvent turns key downs into performKeyEquivalent when
+    // modifiers are down, but swallows the key up if the modifiers include
+    // command.  This one makes all modifiers consistent by always sending key ups.
+    fn send_event_impl(&self, event: &NSEvent) {
+        match unsafe { event.r#type() } {
+            NSEventType::KeyUp => {
+                let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+                if let Some(window) = unsafe { event.window(mtm) } {
+                    window.sendEvent(event);
+                    return;
+                }
+            }
+            _ => {}
+        }
+        let _: () = unsafe { msg_send![super(self), sendEvent: event] };
     }
 }
 
