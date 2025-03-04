@@ -15,6 +15,7 @@ import org.jetbrains.desktop.macos.FileDialogParams
 import org.jetbrains.desktop.macos.KeyModifiersSet
 import org.jetbrains.desktop.macos.Keystroke
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
+import org.jetbrains.desktop.macos.LogLevel
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
@@ -589,7 +590,7 @@ class ApplicationState : AutoCloseable {
 }
 
 fun main() {
-    KotlinDesktopToolkit.init()
+    KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     Logger.info { runtimeInfo() }
     Application.init(Application.ApplicationConfig())
     var menuSet = false

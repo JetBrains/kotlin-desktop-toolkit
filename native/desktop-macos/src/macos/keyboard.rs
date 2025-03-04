@@ -1,16 +1,18 @@
 use anyhow::{Context, Ok, bail};
 use objc2::rc::Retained;
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
-use objc2_foundation::NSString;
+use objc2_foundation::{NSString, NSTimeInterval};
+
+use super::window_api::WindowId;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct KeyCode(u16);
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct KeyEventInfo {
-    pub(crate) is_press: bool,
+    pub(crate) window_id: WindowId,
+
     pub(crate) is_repeat: bool,
 
     // Represents physical key location
@@ -29,18 +31,16 @@ pub(crate) struct KeyEventInfo {
     // For keys that depend on keyboard layout it will be the symbol typed for default layer
     // For functional keys it will try to produce some meaningful codepoint, but not the same as for `characters`
     // For dead keys it will produce text from deafult layer
+    #[allow(dead_code)]
     pub(crate) key: Retained<NSString>,
 
     pub(crate) modifiers: KeyModifiersSet,
+
+    pub(crate) timestamp: NSTimeInterval,
 }
 
 pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInfo> {
-    let is_press = match unsafe { ns_event.r#type() } {
-        NSEventType::KeyDown => true,
-        NSEventType::KeyUp => false,
-        _ => bail!("Unexpected type of event {:?}", ns_event),
-    };
-
+    let window_id = unsafe { ns_event.windowNumber() as WindowId };
     let is_repeat = unsafe { ns_event.isARepeat() };
     let code = unsafe { ns_event.keyCode() };
 
@@ -60,14 +60,17 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
     //}.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
     let modifiers = unsafe { ns_event.modifierFlags() }.into();
 
+    let timestamp = unsafe { ns_event.timestamp() };
+
     // todo unpack modifiers
     let key_info = KeyEventInfo {
-        is_press,
+        window_id,
         is_repeat,
         code: KeyCode(code),
         chars,
         key,
         modifiers,
+        timestamp,
     };
     Ok(key_info)
 }

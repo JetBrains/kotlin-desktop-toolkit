@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Ok};
-use log::info;
+use log::{debug, info};
 use objc2::{
     DeclaredClass, MainThreadOnly, define_class, msg_send,
     rc::Retained,
@@ -30,8 +30,9 @@ use crate::{
         events::{
             handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
             handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_close_request, handle_window_focus_change,
-            handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change,
+            handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change, to_key_down_event,
         },
+        keyboard::unpack_key_event,
         string::copy_to_ns_string,
         text_operations::{handle_text_changed_operation, handle_text_command_operation},
     },
@@ -40,6 +41,7 @@ use crate::{
 use super::{
     application_api::MyNSApplication,
     custom_titlebar::CustomTitlebarCell,
+    events::to_key_up_event,
     metal_api::MetalView,
     screen::NSScreenExts,
     window_api::{FileDialogCallback, FileDialogParams, WindowBackground, WindowId, WindowParams, WindowVisualEffect},
@@ -480,6 +482,7 @@ impl MyNSWindow {
 
 pub(crate) struct RootViewIvars {
     tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
+    key_event_handled: Cell<Option<bool>>,
 }
 
 define_class!(
@@ -589,12 +592,7 @@ define_class!(
 
         #[unsafe(method(doCommandBySelector:))]
         unsafe fn do_command_by_selector(&self, selector: Sel) {
-            catch_panic(|| {
-                let s = selector.name();
-                info!("doCommandBySelector: {s:?}");
-                let window = self.window().context("No window for view")?;
-                handle_text_command_operation(window.window_id(), s)
-            });
+            self.do_command_by_selector_impl(selector);
         }
     }
 
@@ -717,7 +715,7 @@ define_class!(
 
         #[unsafe(method(interpretKeyEvents:))]
         fn interpret_key_events(&self, event_array: &NSArray<NSEvent>) {
-            info!("interpretKeyEvents: {:?}", event_array);
+            debug!("interpretKeyEvents: {:?}", event_array);
             unsafe {
                 let _: () = msg_send![super(self), interpretKeyEvents: event_array];
             }
@@ -725,40 +723,17 @@ define_class!(
 
         #[unsafe(method(keyDown:))]
         fn key_down(&self, nsevent: &NSEvent) {
-            catch_panic(|| {
-                info!("key_down");
-                if !handle_key_event(nsevent)? {
-                    unsafe {
-                        let key_events = NSArray::arrayWithObject(nsevent);
-                        self.interpretKeyEvents(&key_events);
-                    };
-                }
-                Ok(true)
-            });
+            self.key_down_impl(nsevent);
         }
 
         #[unsafe(method(keyUp:))]
-        fn key_up(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_key_event(event)
-            });
+        fn key_up(&self, nsevent: &NSEvent) {
+            self.key_up_impl(nsevent);
         }
 
         #[unsafe(method(performKeyEquivalent:))]
         fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
-            info!("performKeyEquivalent: {event:?}");
-            let ret: Bool = false.into();
-//            let ret = unsafe { msg_send![super(self), performKeyEquivalent: event] };
-            return ret;
-        }
-
-        // Needed for e.g. Ctrl+Tab event reporting
-        #[unsafe(method(_wantsKeyDownForEvent:))]
-        fn wants_key_down_for_event(&self, event: &NSEvent) -> bool {
-            info!("_wantsKeyDownForEvent: {event:?}");
-            let ret: Bool = true.into();
-//            let ret = unsafe { msg_send![super(self), _wantsKeyDownForEvent: event] };
-            return ret;
+            return self.perform_key_equivalent_impl(event);
         }
 
         #[unsafe(method(flagsChanged:))]
@@ -808,6 +783,7 @@ impl RootView {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars {
             tracking_area: Cell::new(None),
+            key_event_handled: Cell::new(None),
         });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {
@@ -838,6 +814,79 @@ impl RootView {
         self.ivars().tracking_area.replace(Some(tracking_area));
     }
 
+    fn perform_key_equivalent_impl(&self, ns_event: &NSEvent) -> Bool {
+        catch_panic(|| {
+            debug!("performKeyEquivalent: {ns_event:?}");
+            let ret: Bool = unsafe { msg_send![super(self), performKeyEquivalent: ns_event] };
+            if ret.is_true() {
+                debug!("performKeyEquivalent: handled by system");
+                self.ivars().key_event_handled.set(Some(true));
+                Ok(ret)
+            } else {
+                self.ivars().key_event_handled.set(Some(false));
+                debug!("performKeyEquivalent: calling interpretKeyEvents");
+                unsafe {
+                    let key_events = NSArray::arrayWithObject(ns_event);
+                    self.interpretKeyEvents(&key_events);
+                };
+                if self.ivars().key_event_handled.get() == Some(true) {
+                    Ok(true.into())
+                } else {
+                    debug!("performKeyEquivalent: transforming into keyDown event");
+                    let key_info = unpack_key_event(ns_event)?;
+                    let handled = handle_key_event(&to_key_down_event(&key_info))?;
+                    self.ivars().key_event_handled.set(Some(handled));
+                    Ok(handled.into())
+                }
+            }
+        })
+        .unwrap_or(false.into())
+    }
+
+    fn key_down_impl(&self, ns_event: &NSEvent) {
+        catch_panic(|| {
+            // Ignore in case it was already handled in `performKeyEquivalent`.
+            if self.ivars().key_event_handled.get().is_some() {
+                debug!("keyDown: already tried handling the event, ignoring");
+                Ok(())
+            } else {
+                debug!("keyDown start: {ns_event:?}");
+                // First check if the key would be handled by the system (e.g. interacting with the input method popup)
+                unsafe {
+                    let key_events = NSArray::arrayWithObject(ns_event);
+                    self.interpretKeyEvents(&key_events);
+                };
+
+                // Otherwise, if it was not handled in `doCommandBySelector` or `insertText`, forward the event to application.
+                if self.ivars().key_event_handled.get() == Some(true) {
+                    debug!("keyDown: not forwarding event to app");
+                } else {
+                    debug!("keyDown: forwarding event to app");
+                    let _ = handle_key_event(&to_key_down_event(&unpack_key_event(ns_event)?))?;
+                }
+                Ok(())
+            }
+        });
+        // Reset the flag
+        self.ivars().key_event_handled.set(None);
+        debug!("keyDown end");
+    }
+
+    fn key_up_impl(&self, ns_event: &NSEvent) {
+        debug!("keyUp: {ns_event:?}");
+        catch_panic(|| handle_key_event(&to_key_up_event(&unpack_key_event(ns_event)?)));
+    }
+
+    fn do_command_by_selector_impl(&self, selector: Sel) {
+        catch_panic(|| {
+            let s = selector.name();
+            let window = self.window().context("No window for view")?;
+            let handled = handle_text_command_operation(window.window_id(), s)?;
+            self.ivars().key_event_handled.set(Some(handled));
+            Ok(handled)
+        });
+    }
+
     fn insert_text_replacement_range_impl(&self, string: &AnyObject, replacement_range: NSRange) {
         catch_panic(|| {
             let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
@@ -845,8 +894,11 @@ impl RootView {
                 "insertText, marked_text={:?}, string={:?}, replacement_range={:?}",
                 ns_attributed_string, text, replacement_range
             );
+
             let window = self.window().context("No window for view")?;
-            handle_text_changed_operation(window.window_id(), BorrowedStrPtr::new(text.UTF8String()))
+            let handled = handle_text_changed_operation(window.window_id(), BorrowedStrPtr::new(text.UTF8String()))?;
+            self.ivars().key_event_handled.set(Some(handled));
+            Ok(handled)
         });
     }
 

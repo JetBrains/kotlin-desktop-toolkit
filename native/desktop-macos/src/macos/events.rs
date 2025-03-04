@@ -2,18 +2,17 @@
 
 use core::f64;
 
-use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
+use objc2_app_kit::{NSEvent, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
 use crate::{
     common::{BorrowedStrPtr, LogicalPixels, LogicalPoint, LogicalSize},
     logger::{PanicDefault, ffi_boundary},
 };
-use anyhow::bail;
 
 use super::{
     application_api::AppState,
-    keyboard::{EMPTY_KEY_MODIFIERS, KeyCode, KeyModifiersSet, unpack_flags_changed_event, unpack_key_event},
+    keyboard::{EMPTY_KEY_MODIFIERS, KeyCode, KeyEventInfo, KeyModifiersSet, unpack_flags_changed_event},
     mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt},
     screen::{NSScreenExts, ScreenId},
     window::NSWindowExts,
@@ -249,30 +248,34 @@ impl NSEventExt for NSEvent {
     }
 }
 
-pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
+pub(crate) fn to_key_down_event(key_info: &KeyEventInfo) -> Event {
+    Event::KeyDown(KeyDownEvent {
+        window_id: key_info.window_id,
+        code: key_info.code,
+        is_repeat: key_info.is_repeat,
+        characters: BorrowedStrPtr::new(key_info.chars.UTF8String()),
+        key: BorrowedStrPtr::new(key_info.chars.UTF8String()),
+        modifiers: key_info.modifiers,
+        timestamp: key_info.timestamp,
+    })
+}
+
+pub(crate) fn to_key_up_event(key_info: &KeyEventInfo) -> Event {
+    Event::KeyUp(KeyUpEvent {
+        window_id: key_info.window_id,
+        code: key_info.code,
+        characters: BorrowedStrPtr::new(key_info.chars.UTF8String()),
+        key: BorrowedStrPtr::new(key_info.chars.UTF8String()),
+        modifiers: key_info.modifiers,
+        timestamp: key_info.timestamp,
+    })
+}
+
+pub(crate) fn handle_key_event(event: &Event) -> anyhow::Result<bool> {
     let handled = AppState::with(|state| {
-        let key_info = unpack_key_event(ns_event)?;
-        let event = match unsafe { ns_event.r#type() } {
-            NSEventType::KeyDown => Event::KeyDown(KeyDownEvent {
-                window_id: ns_event.window_id(),
-                code: key_info.code,
-                is_repeat: key_info.is_repeat,
-                characters: BorrowedStrPtr::new(key_info.chars.UTF8String()),
-                key: BorrowedStrPtr::new(key_info.chars.UTF8String()),
-                modifiers: key_info.modifiers,
-                timestamp: unsafe { ns_event.timestamp() },
-            }),
-            NSEventType::KeyUp => Event::KeyUp(KeyUpEvent {
-                window_id: ns_event.window_id(),
-                code: key_info.code,
-                characters: BorrowedStrPtr::new(key_info.chars.UTF8String()),
-                key: BorrowedStrPtr::new(key_info.chars.UTF8String()),
-                modifiers: key_info.modifiers,
-                timestamp: unsafe { ns_event.timestamp() },
-            }),
-            _ => bail!("Unexpected type of event {:?}", ns_event),
-        };
-        Ok((state.event_handler)(&event))
+        let res = (state.event_handler)(&event);
+        //debug!("handle_key_event: {event:?} -> {res}");
+        Ok(res)
     });
     handled
 }
