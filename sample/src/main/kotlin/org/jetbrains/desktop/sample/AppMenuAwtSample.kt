@@ -37,7 +37,7 @@ fun main() {
     thread {
         while (true) {
             GrandCentralDispatch.dispatchOnMainSync {
-                AppMenuManager.setMainMenuToNone()
+//                AppMenuManager.setMainMenuToNone()
                 AppMenuManager.setMainMenu(buildAppMenu())
             }
             Thread.sleep(1000)

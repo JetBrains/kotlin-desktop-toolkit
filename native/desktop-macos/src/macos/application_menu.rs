@@ -175,11 +175,7 @@ impl AppMenuItemSafe {
                 }
             }
         }
-        // If we don't provide any items for macOS filled submenus we don't want to make it empty
-        // todo this check can be removed as far we already reconcile only our items
-        if !(special_tag != SubMenuItemSpecialTag::None && items.is_empty()) {
-            reconcile_ns_menu_items(mtm, &submenu, false, items);
-        }
+        reconcile_ns_menu_items(mtm, &submenu, false, items);
     }
 
     fn reconcile_ns_menu_item(&self, mtm: MainThreadMarker, item: &NSMenuItem) {
