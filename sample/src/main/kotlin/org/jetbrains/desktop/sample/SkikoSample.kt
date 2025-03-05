@@ -593,14 +593,11 @@ fun main() {
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     Logger.info { runtimeInfo() }
     Application.init(Application.ApplicationConfig())
-    var menuSet = false
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
         Application.runEventLoop { event ->
-            if (!menuSet) {
-                // Emulate how the main menu is set in fleet - after the event loop has started
+            if (event is Event.ApplicationDidFinishLaunching) {
                 AppMenuManager.setMainMenu(state.buildMenu())
-                menuSet = true
             }
             state.handleEvent(event)
         }
