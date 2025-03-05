@@ -3,17 +3,16 @@ use log::info;
 use objc2::{ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
-    NSEventType,
+    NSEventType, NSRunningApplication,
 };
 use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
 use std::cell::OnceCell;
 
 use crate::{
-    logger::ffi_boundary,
-    macos::events::{handle_application_did_finish_launching, handle_display_configuration_change},
+    common::RustAllocatedStrPtr, logger::ffi_boundary, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}
 };
 
-use super::{events::EventHandler, text_operations::TextOperationHandler};
+use super::{events::EventHandler, string::copy_to_c_string, text_operations::TextOperationHandler};
 
 thread_local! {
     pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
@@ -164,6 +163,48 @@ pub extern "C" fn application_request_termination() {
         }
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_get_name() -> RustAllocatedStrPtr {
+    ffi_boundary("application_name", || {
+        match unsafe { NSRunningApplication::currentApplication().localizedName() } {
+            Some(name) => copy_to_c_string(&name),
+            None => Ok(RustAllocatedStrPtr::null())
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_hide() {
+    ffi_boundary("application_hide", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        app.hide(None);
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_hide_other_applications() {
+    ffi_boundary("application_hide_other_applications", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        app.hideOtherApplications(None);
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_unhide_all_applications() {
+    ffi_boundary("application_unhide_all_applications", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        unsafe {
+            app.unhideAllApplications(None);
+        }
+        Ok(())
+    })
 }
 
 #[derive(Debug)]

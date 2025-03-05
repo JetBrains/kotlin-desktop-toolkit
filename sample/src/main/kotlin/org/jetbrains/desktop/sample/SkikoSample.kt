@@ -469,6 +469,27 @@ class ApplicationState : AutoCloseable {
                     keystroke = Keystroke(key = "n", modifiers = KeyModifiersSet.create(command = true, shift = true)),
                     perform = { createWindow(useCustomTitlebar = false) },
                 ),
+                AppMenuItem.Separator,
+                AppMenuItem.Action(
+                    "Hide ${Application.name}",
+                    keystroke = Keystroke(key = "h", modifiers = KeyModifiersSet.create(command = true)),
+                    perform = {
+                        Application.hide()
+                    },
+                ),
+                AppMenuItem.Action(
+                    "Hide Others",
+                    keystroke = Keystroke(key = "h", modifiers = KeyModifiersSet.create(command = true, option = true)),
+                    perform = {
+                        Application.hideOtherApplications()
+                    },
+                ),
+                AppMenuItem.Action(
+                    "Show All",
+                    perform = {
+                        Application.unhideAllApplications()
+                    },
+                ),
                 AppMenuItem.Action(
                     "Quit",
                     keystroke = Keystroke(key = "q", modifiers = KeyModifiersSet.create(command = true)),

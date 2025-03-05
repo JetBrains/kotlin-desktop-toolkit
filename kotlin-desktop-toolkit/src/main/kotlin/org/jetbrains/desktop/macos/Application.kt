@@ -64,6 +64,34 @@ public object Application {
         }
     }
 
+    public val name: String
+        get() {
+            val name = ffiDownCall { desktop_macos_h.application_get_name() }
+            return try {
+                name.getUtf8String(0)
+            } finally {
+                ffiDownCall { desktop_macos_h.string_drop(name) }
+            }
+        }
+
+    public fun hide() {
+        ffiDownCall {
+            desktop_macos_h.application_hide()
+        }
+    }
+
+    public fun hideOtherApplications() {
+        ffiDownCall {
+            desktop_macos_h.application_hide_other_applications()
+        }
+    }
+
+    public fun unhideAllApplications() {
+        ffiDownCall {
+            desktop_macos_h.application_unhide_all_applications()
+        }
+    }
+
     // called from native
     private fun onShouldTerminate(): Boolean {
         Logger.info { "onShouldTerminate" }
