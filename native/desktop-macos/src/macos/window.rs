@@ -9,7 +9,7 @@ use log::debug;
 use objc2::{
     DeclaredClass, MainThreadOnly, define_class, msg_send,
     rc::Retained,
-    runtime::{AnyObject, Bool, ProtocolObject, Sel},
+    runtime::{AnyObject, ProtocolObject, Sel},
 };
 use objc2_app_kit::{
     NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen,
@@ -46,6 +46,8 @@ use super::{
     screen::NSScreenExts,
     window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
+
+const DEFAULT_NS_RANGE: NSRange = NSRange { location: 0, length: 0 };
 
 pub(crate) struct Window {
     pub(crate) ns_window: Retained<MyNSWindow>,
@@ -459,9 +461,11 @@ impl MyNSWindow {
     }
 }
 
+#[derive(Default)]
 pub(crate) struct RootViewIvars {
     tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
     key_event_handled: Cell<Option<bool>>,
+    marked_text_range: Cell<Option<NSRange>>,
 }
 
 define_class!(
@@ -477,20 +481,17 @@ define_class!(
 
         #[unsafe(method(hasMarkedText))]
         unsafe fn has_marked_text(&self) -> bool {
-            debug!("hasMarkedText");
-            false  // TODO
+            self.has_marked_text_impl()
         }
 
         #[unsafe(method(markedRange))]
         unsafe fn marked_range(&self) -> NSRange {
-            debug!("markedRange");
-            NSRange { location: 0, length: 0 }  // TODO
+            self.marked_range_impl()
         }
 
         #[unsafe(method(selectedRange))]
         unsafe fn selected_range(&self) -> NSRange {
-            debug!("selectedRange");
-            NSRange { location: 0, length: 0 }  // TODO
+            self.selected_range_impl()
         }
 
         #[unsafe(method(setMarkedText:selectedRange:replacementRange:))]
@@ -691,14 +692,6 @@ define_class!(
             });
         }
 
-        #[unsafe(method(interpretKeyEvents:))]
-        fn interpret_key_events(&self, event_array: &NSArray<NSEvent>) {
-            debug!("interpretKeyEvents: {:?}", event_array);
-            unsafe {
-                let _: () = msg_send![super(self), interpretKeyEvents: event_array];
-            }
-        }
-
         // Needed for e.g. Ctrl+Tab event reporting
         #[unsafe(method(_wantsKeyDownForEvent:))]
         fn wants_key_down_for_event(&self, event: &NSEvent) -> bool {
@@ -714,11 +707,6 @@ define_class!(
         #[unsafe(method(keyUp:))]
         fn key_up(&self, nsevent: &NSEvent) {
             self.key_up_impl(nsevent);
-        }
-
-        #[unsafe(method(performKeyEquivalent:))]
-        fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
-            return self.perform_key_equivalent_impl(event);
         }
 
         #[unsafe(method(flagsChanged:))]
@@ -766,10 +754,7 @@ fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttribut
 impl RootView {
     pub(crate) fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = mtm.alloc();
-        let this = this.set_ivars(RootViewIvars {
-            tracking_area: Cell::new(None),
-            key_event_handled: Cell::new(None),
-        });
+        let this = this.set_ivars(RootViewIvars::default());
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {
             root_view.setAutoresizesSubviews(true);
@@ -799,35 +784,28 @@ impl RootView {
         self.ivars().tracking_area.replace(Some(tracking_area));
     }
 
-    fn perform_key_equivalent_impl(&self, ns_event: &NSEvent) -> Bool {
-        let ret: Bool = unsafe { msg_send![super(self), performKeyEquivalent: ns_event] };
-        debug!("performKeyEquivalent -> {}", ret.as_bool());
-        ret
-    }
-
     fn key_down_impl(&self, ns_event: &NSEvent) {
         catch_panic(|| {
-            // Ignore in case it was already handled in `performKeyEquivalent`.
-            if self.ivars().key_event_handled.get().is_some() {
-                debug!("keyDown: already tried handling the event, ignoring");
-                Ok(())
-            } else {
-                debug!("keyDown start: {ns_event:?}");
-                // First check if the key would be handled by the system (e.g. interacting with the input method popup)
-                unsafe {
-                    let key_events = NSArray::arrayWithObject(ns_event);
-                    self.interpretKeyEvents(&key_events);
-                };
-
-                // Otherwise, if it was not handled in `doCommandBySelector` or `insertText`, forward the event to application.
-                if self.ivars().key_event_handled.get() == Some(true) {
-                    debug!("keyDown: not forwarding event to app");
+            let key_event_info = unpack_key_event(ns_event)?;
+            debug!("keyDown start, calling interpretKeyEvents with {key_event_info:?}");
+            let had_marked_text = self.has_marked_text_impl();
+            self.ivars().key_event_handled.set(Some(false));
+            unsafe {
+                let key_events = NSArray::arrayWithObject(ns_event);
+                self.interpretKeyEvents(&key_events);
+            };
+            if self.ivars().key_event_handled.take() == Some(false) {
+                if self.has_marked_text_impl() || had_marked_text {
+                    debug!("keyDown: has/had marked text, not forwarding");
                 } else {
-                    debug!("keyDown: forwarding event to app");
-                    let _ = handle_key_event(&to_key_down_event(&unpack_key_event(ns_event)?))?;
+                    debug!("keyDown: forwarding");
+                    let handled = handle_key_event(&to_key_down_event(&key_event_info))?;
+                    debug!("keyDown: handled = {handled}");
                 }
-                Ok(())
+            } else {
+                debug!("keyDown: handled by interpretKeyEvents, not forwarding");
             }
+            Ok(())
         });
         // Reset the flag
         self.ivars().key_event_handled.set(None);
@@ -835,13 +813,22 @@ impl RootView {
     }
 
     fn key_up_impl(&self, ns_event: &NSEvent) {
-        debug!("keyUp: {ns_event:?}");
-        catch_panic(|| handle_key_event(&to_key_up_event(&unpack_key_event(ns_event)?)));
+        catch_panic(|| {
+            let key_event_info = unpack_key_event(ns_event)?;
+            debug!("keyUp: {key_event_info:?}");
+            let handled = handle_key_event(&to_key_up_event(&key_event_info))?;
+            debug!("keyUp: handled = {handled}");
+            Ok(())
+        });
     }
 
     fn do_command_by_selector_impl(&self, selector: Sel) {
         catch_panic(|| {
             let s = selector.name();
+            if s == c"noop:" {
+                debug!("Ignoring the noop: selector, forwarding the raw event");
+                return Ok(false);
+            }
             let window = self.window().context("No window for view")?;
             let handled = handle_text_command_operation(window.window_id(), s)?;
             self.ivars().key_event_handled.set(Some(handled));
@@ -860,8 +847,25 @@ impl RootView {
             let window = self.window().context("No window for view")?;
             let handled = handle_text_changed_operation(window.window_id(), borrow_ns_string(&text))?;
             self.ivars().key_event_handled.set(Some(handled));
+            self.ivars().marked_text_range.set(None);
             Ok(handled)
         });
+    }
+
+    fn has_marked_text_impl(&self) -> bool {
+        let ret = self.ivars().marked_text_range.get().is_some();
+        debug!("hasMarkedText: {ret}");
+        ret
+    }
+
+    fn marked_range_impl(&self) -> NSRange {
+        debug!("markedRange");
+        self.ivars().marked_text_range.get().unwrap_or(DEFAULT_NS_RANGE)
+    }
+
+    fn selected_range_impl(&self) -> NSRange {
+        debug!("selectedRange");
+        DEFAULT_NS_RANGE // TODO
     }
 
     fn set_marked_text_selected_range_replacement_range_impl(
@@ -872,6 +876,7 @@ impl RootView {
     ) {
         catch_panic(|| {
             self.ivars().key_event_handled.set(Some(true));
+            self.ivars().marked_text_range.set(Some(selected_range));
             let window = self.window().context("No window for view")?;
             let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
             debug!(
@@ -885,6 +890,7 @@ impl RootView {
     fn unmark_text_impl(&self) {
         debug!("unmarkText");
         self.ivars().key_event_handled.set(Some(true));
+        self.ivars().marked_text_range.set(None);
         // TODO
     }
 }

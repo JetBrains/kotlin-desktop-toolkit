@@ -630,6 +630,15 @@ fun main() {
     }
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
+        Application.setTextOperationHandler { textOperation ->
+            if (textOperation is TextOperation.TextCommand) {
+                Logger.debug { "TextOperationHandler received $textOperation , ignoring" }
+                false
+            } else {
+                Logger.debug { "TextOperationHandler received $textOperation" }
+                true
+            }
+        }
         Application.runEventLoop { event ->
             if (event is Event.ApplicationDidFinishLaunching) {
                 Files.readAllBytes(Path.of("resources/jb-logo.png")).let { iconBytes ->
