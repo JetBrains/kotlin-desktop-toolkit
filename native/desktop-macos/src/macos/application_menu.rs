@@ -46,7 +46,7 @@ enum AppMenuItemSafe {
     Action {
         enabled: bool,
         macos_provided: bool,
-        title: Option<Retained<NSString>>,
+        title: Retained<NSString>,
         special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<AppMenuKeystrokeSafe>,
         perform: Callback,
@@ -99,7 +99,7 @@ impl AppMenuItemSafe {
                 Self::Action {
                     enabled,
                     macos_provided,
-                    title: Some(copy_to_ns_string(title)?),
+                    title: copy_to_ns_string(title)?,
                     special_tag,
                     keystroke,
                     perform,
@@ -138,16 +138,14 @@ impl AppMenuItemSafe {
         item: &NSMenuItem,
         enabled: bool,
         macos_provided: bool,
-        title: &Option<Retained<NSString>>,
-        special_tag: ActionMenuItemSpecialTag,
+        title: &Retained<NSString>,
+        _special_tag: ActionMenuItemSpecialTag,
         keystroke: &Option<AppMenuKeystrokeSafe>,
         perform: Callback,
         mtm: MainThreadMarker,
     ) {
         unsafe {
-            if let Some(title) = title {
-                item.setTitle(title);
-            }
+            item.setTitle(title);
             item.setEnabled(enabled);
             if macos_provided {
                 item.setHidden(false);
@@ -303,7 +301,7 @@ impl MenuItemRepresenter {
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 enum ItemIdentity<'a> {
-    Action { title: Option<&'a Retained<NSString>> },
+    Action { title: &'a Retained<NSString> },
     Separator,
     SubMenu { title: Option<&'a Retained<NSString>> },
     MacOSProvided,
@@ -312,7 +310,7 @@ enum ItemIdentity<'a> {
 impl<'a> ItemIdentity<'a> {
     fn new(item: &'a AppMenuItemSafe) -> Self {
         match item {
-            AppMenuItemSafe::Action { title, .. } => Self::Action { title: title.as_ref() },
+            AppMenuItemSafe::Action { title, .. } => Self::Action { title: title },
             AppMenuItemSafe::Separator => Self::Separator,
             AppMenuItemSafe::SubMenu { title, .. } => Self::SubMenu { title: title.as_ref() },
         }
@@ -344,7 +342,7 @@ fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_main_menu: b
                         } else if unsafe { item.hasSubmenu() } {
                             ItemIdentity::SubMenu { title: Some(title) }
                         } else {
-                            ItemIdentity::Action { title: Some(title) }
+                            ItemIdentity::Action { title: title }
                         }
                     })
             }
@@ -493,11 +491,11 @@ mod tests {
         let mut shift: isize = 0;
         for operation in operations {
             match operation {
-                Operation::Insert { position, item_idx } => {
+                Operation::Insert { position, item_idx: _ } => {
                     *position = (*position as isize + shift).try_into().unwrap();
                     shift += 1;
                 }
-                Operation::Reconcile { position, item_idx } => {
+                Operation::Reconcile { position, item_idx: _ } => {
                     *position = (*position as isize + shift).try_into().unwrap();
                 }
                 Operation::Remove { position } => {
