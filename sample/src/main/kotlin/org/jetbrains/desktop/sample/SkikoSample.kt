@@ -20,6 +20,7 @@ import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.Screen
+import org.jetbrains.desktop.macos.TextOperation
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
 import org.jetbrains.desktop.macos.WindowVisualEffect
@@ -624,6 +625,15 @@ fun main() {
     Application.init(Application.ApplicationConfig())
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
+        Application.setTextOperationHandler { textOperation ->
+            if (textOperation is TextOperation.TextCommand) {
+                Logger.debug { "TextOperationHandler received $textOperation , ignoring" }
+                false
+            } else {
+                Logger.debug { "TextOperationHandler received $textOperation" }
+                true
+            }
+        }
         Application.runEventLoop { event ->
             if (event is Event.ApplicationDidFinishLaunching) {
                 AppMenuManager.setMainMenu(state.buildMenu())
