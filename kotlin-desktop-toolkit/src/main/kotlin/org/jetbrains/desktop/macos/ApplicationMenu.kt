@@ -58,7 +58,7 @@ public sealed class AppMenuItem {
     ) : AppMenuItem() {
         public enum class SpecialTag {
             None,
-            AppMenu,
+            AppNameMenu,
             Window,
             Services,
             ;
@@ -66,7 +66,7 @@ public sealed class AppMenuItem {
             internal fun toNative(): Int {
                 return when (this) {
                     None -> desktop_macos_h.NativeSubMenuItemSpecialTag_None()
-                    AppMenu -> desktop_macos_h.NativeSubMenuItemSpecialTag_AppNameMenu()
+                    AppNameMenu -> desktop_macos_h.NativeSubMenuItemSpecialTag_AppNameMenu()
                     Window -> desktop_macos_h.NativeSubMenuItemSpecialTag_Window()
                     Services -> desktop_macos_h.NativeSubMenuItemSpecialTag_Services()
                 }

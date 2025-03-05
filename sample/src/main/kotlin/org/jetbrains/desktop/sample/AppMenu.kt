@@ -37,7 +37,7 @@ fun buildAppMenu(): AppMenuStructure {
             AppMenuItem.Separator,
             AppMenuItem.Action("App menu item2", true),
             AppMenuItem.SubMenu(title = "Empty Submenu"),
-            specialTag = AppMenuItem.SubMenu.SpecialTag.AppMenu,
+            specialTag = AppMenuItem.SubMenu.SpecialTag.AppNameMenu,
         ),
         AppMenuItem.SubMenu(
             title = "File",

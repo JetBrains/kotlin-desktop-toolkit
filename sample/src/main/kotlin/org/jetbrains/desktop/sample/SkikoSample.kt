@@ -479,7 +479,7 @@ class ApplicationState : AutoCloseable {
                         }
                     },
                 ),
-                specialTag = AppMenuItem.SubMenu.SpecialTag.AppMenu,
+                specialTag = AppMenuItem.SubMenu.SpecialTag.AppNameMenu,
             ),
             AppMenuItem.SubMenu(
                 title = "View",
