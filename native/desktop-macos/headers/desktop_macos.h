@@ -283,11 +283,13 @@ typedef bool (*NativeEventHandler)(const struct NativeEvent*);
 
 typedef struct NativeTextCommandOperation {
   NativeWindowId window_id;
+  const struct NativeKeyDownEvent *original_event;
   NativeBorrowedStrPtr command;
 } NativeTextCommandOperation;
 
 typedef struct NativeTextChangedOperation {
   NativeWindowId window_id;
+  const struct NativeKeyDownEvent *original_event;
   NativeBorrowedStrPtr text;
 } NativeTextChangedOperation;
 
