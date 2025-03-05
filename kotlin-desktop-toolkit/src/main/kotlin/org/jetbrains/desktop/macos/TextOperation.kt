@@ -9,11 +9,13 @@ import java.lang.foreign.MemorySegment
 public sealed class TextOperation {
     public data class TextChanged(
         val windowId: WindowId,
+        val originalEvent: Event.KeyDown?,
         val text: String,
     ) : TextOperation()
 
     public data class TextCommand(
         val windowId: WindowId,
+        val originalEvent: Event.KeyDown?,
         val command: String,
     ) : TextOperation()
 
@@ -32,6 +34,7 @@ public sealed class TextOperation {
                     val nativeEvent = NativeTextOperation.text_changed(s)
                     TextChanged(
                         windowId = NativeTextChangedOperation.window_id(nativeEvent),
+                        originalEvent = Event.KeyDown.fromNative(NativeTextChangedOperation.original_event(nativeEvent)),
                         text = NativeTextChangedOperation.text(nativeEvent).getUtf8String(0),
                     )
                 }
@@ -39,6 +42,7 @@ public sealed class TextOperation {
                     val nativeEvent = NativeTextOperation.text_command(s)
                     TextCommand(
                         windowId = NativeTextCommandOperation.window_id(nativeEvent),
+                        originalEvent = Event.KeyDown.fromNative(NativeTextCommandOperation.original_event(nativeEvent)),
                         command = NativeTextCommandOperation.command(nativeEvent).getUtf8String(0),
                     )
                 }

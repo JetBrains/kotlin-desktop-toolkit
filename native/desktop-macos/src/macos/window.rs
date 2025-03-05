@@ -41,7 +41,8 @@ use crate::{
 use super::{
     application_api::MyNSApplication,
     custom_titlebar::CustomTitlebarCell,
-    events::to_key_up_event,
+    events::{KeyDownEvent, to_key_up_event},
+    keyboard::KeyEventInfo,
     metal_api::MetalView,
     screen::NSScreenExts,
     window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
@@ -464,7 +465,7 @@ impl MyNSWindow {
 #[derive(Default)]
 pub(crate) struct RootViewIvars {
     tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
-    key_event_handled: Cell<Option<bool>>,
+    current_key_down_event: Cell<Option<KeyEventInfo>>,
     marked_text_range: Cell<Option<NSRange>>,
 }
 
@@ -789,12 +790,12 @@ impl RootView {
             let key_event_info = unpack_key_event(ns_event)?;
             debug!("keyDown start, calling interpretKeyEvents with {key_event_info:?}");
             let had_marked_text = self.has_marked_text_impl();
-            self.ivars().key_event_handled.set(Some(false));
+            self.ivars().current_key_down_event.set(Some(key_event_info));
             unsafe {
                 let key_events = NSArray::arrayWithObject(ns_event);
                 self.interpretKeyEvents(&key_events);
             };
-            if self.ivars().key_event_handled.take() == Some(false) {
+            if let Some(key_event_info) = self.ivars().current_key_down_event.take() {
                 if self.has_marked_text_impl() || had_marked_text {
                     debug!("keyDown: has/had marked text, not forwarding");
                 } else {
@@ -807,8 +808,6 @@ impl RootView {
             }
             Ok(())
         });
-        // Reset the flag
-        self.ivars().key_event_handled.set(None);
         debug!("keyDown end");
     }
 
@@ -827,12 +826,16 @@ impl RootView {
             let s = selector.name();
             if s == c"noop:" {
                 debug!("Ignoring the noop: selector, forwarding the raw event");
-                return Ok(false);
+                return Ok(());
             }
             let window = self.window().context("No window for view")?;
-            let handled = handle_text_command_operation(window.window_id(), s)?;
-            self.ivars().key_event_handled.set(Some(handled));
-            Ok(handled)
+            let key_event_info = self.ivars().current_key_down_event.take();
+            let original_event = key_event_info.as_ref().map(KeyDownEvent::from_key_event_info);
+            let handled = handle_text_command_operation(window.window_id(), original_event, s)?;
+            if !handled {
+                self.ivars().current_key_down_event.set(key_event_info);
+            }
+            Ok(())
         });
     }
 
@@ -845,10 +848,14 @@ impl RootView {
             );
 
             let window = self.window().context("No window for view")?;
-            let handled = handle_text_changed_operation(window.window_id(), borrow_ns_string(&text))?;
-            self.ivars().key_event_handled.set(Some(handled));
+            let key_event_info = self.ivars().current_key_down_event.take();
+            let original_event = key_event_info.as_ref().map(KeyDownEvent::from_key_event_info);
+            let handled = handle_text_changed_operation(window.window_id(), original_event, borrow_ns_string(&text))?;
+            if !handled {
+                self.ivars().current_key_down_event.set(key_event_info);
+            }
             self.ivars().marked_text_range.set(None);
-            Ok(handled)
+            Ok(())
         });
     }
 
@@ -875,7 +882,7 @@ impl RootView {
         replacement_range: NSRange,
     ) {
         catch_panic(|| {
-            self.ivars().key_event_handled.set(Some(true));
+            self.ivars().current_key_down_event.set(None);
             self.ivars().marked_text_range.set(Some(selected_range));
             let window = self.window().context("No window for view")?;
             let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
@@ -889,7 +896,7 @@ impl RootView {
 
     fn unmark_text_impl(&self) {
         debug!("unmarkText");
-        self.ivars().key_event_handled.set(Some(true));
+        self.ivars().current_key_down_event.set(None);
         self.ivars().marked_text_range.set(None);
         // TODO
     }

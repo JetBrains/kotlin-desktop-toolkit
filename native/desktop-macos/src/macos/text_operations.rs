@@ -2,7 +2,7 @@ use std::ffi::CStr;
 
 use crate::common::BorrowedStrPtr;
 
-use super::{application_api::AppState, window_api::WindowId};
+use super::{application_api::AppState, events::KeyDownEvent, window_api::WindowId};
 
 #[repr(C)]
 #[derive(Debug, Default)]
@@ -16,6 +16,7 @@ pub struct TextRange {
 #[derive(Debug)]
 pub struct TextChangedOperation<'a> {
     window_id: WindowId,
+    original_event: Option<&'a KeyDownEvent<'a>>,
     text: BorrowedStrPtr<'a>,
     //composition_range: TextRange,
     //composition_committed_range: TextRange,
@@ -27,6 +28,7 @@ pub struct TextChangedOperation<'a> {
 #[derive(Debug)]
 pub struct TextCommandOperation<'a> {
     window_id: WindowId,
+    original_event: Option<&'a KeyDownEvent<'a>>,
     command: BorrowedStrPtr<'a>,
 }
 
@@ -40,10 +42,15 @@ pub enum TextOperation<'a> {
 // return true if operation was handled
 pub type TextOperationHandler = extern "C" fn(&TextOperation) -> bool;
 
-pub(crate) fn handle_text_changed_operation(window_id: WindowId, text: BorrowedStrPtr) -> anyhow::Result<bool> {
+pub(crate) fn handle_text_changed_operation(
+    window_id: WindowId,
+    original_event: Option<KeyDownEvent>,
+    text: BorrowedStrPtr,
+) -> anyhow::Result<bool> {
     AppState::with(|state| {
         let operation = TextOperation::TextChanged(TextChangedOperation {
             window_id,
+            original_event: original_event.as_ref(),
             text,
             //composition_range: TextRange::default(),
             //composition_committed_range: TextRange::default(),
@@ -54,10 +61,15 @@ pub(crate) fn handle_text_changed_operation(window_id: WindowId, text: BorrowedS
     })
 }
 
-pub(crate) fn handle_text_command_operation(window_id: WindowId, command: &'static CStr) -> anyhow::Result<bool> {
+pub(crate) fn handle_text_command_operation(
+    window_id: WindowId,
+    original_event: Option<KeyDownEvent>,
+    command: &'static CStr,
+) -> anyhow::Result<bool> {
     AppState::with(|state| {
         let operation = TextOperation::TextCommand(TextCommandOperation {
             window_id,
+            original_event: original_event.as_ref(),
             command: BorrowedStrPtr::new(command),
         });
         Ok((state.text_operation_handler)(&operation))

@@ -60,7 +60,24 @@ public sealed class Event {
         val modifiers: KeyModifiersSet,
         val isRepeat: Boolean,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event() {
+        internal companion object {
+            internal fun fromNative(nativeEvent: MemorySegment): KeyDown? {
+                if (nativeEvent == MemorySegment.NULL) {
+                    return null
+                }
+                return KeyDown(
+                    windowId = NativeKeyDownEvent.window_id(nativeEvent),
+                    keyCode = KeyCode.fromNative(NativeKeyDownEvent.code(nativeEvent)),
+                    characters = NativeKeyDownEvent.characters(nativeEvent).getUtf8String(0),
+                    key = NativeKeyDownEvent.key(nativeEvent).getUtf8String(0),
+                    modifiers = KeyModifiersSet(NativeKeyDownEvent.modifiers(nativeEvent)),
+                    isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
+                    timestamp = Timestamp(NativeKeyDownEvent.timestamp(nativeEvent)),
+                )
+            }
+        }
+    }
 
     public data class KeyUp(
         val windowId: WindowId,
@@ -185,16 +202,7 @@ public sealed class Event {
 internal fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
         desktop_macos_h.NativeEvent_KeyDown() -> {
-            val nativeEvent = NativeEvent.key_down(s)
-            Event.KeyDown(
-                windowId = NativeKeyDownEvent.window_id(nativeEvent),
-                keyCode = KeyCode.fromNative(NativeKeyDownEvent.code(nativeEvent)),
-                characters = NativeKeyDownEvent.characters(nativeEvent).getUtf8String(0),
-                key = NativeKeyDownEvent.key(nativeEvent).getUtf8String(0),
-                modifiers = KeyModifiersSet(NativeKeyDownEvent.modifiers(nativeEvent)),
-                isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
-                timestamp = Timestamp(NativeKeyDownEvent.timestamp(nativeEvent)),
-            )
+            Event.KeyDown.fromNative(NativeEvent.key_down(s))!!
         }
         desktop_macos_h.NativeEvent_KeyUp() -> {
             val nativeEvent = NativeEvent.key_up(s)
