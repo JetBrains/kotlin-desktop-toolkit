@@ -53,8 +53,10 @@ public sealed class AppMenuItem {
     public enum class ActionItemState {
         // Draw check mark
         On,
+
         // Draw nothing
         Off,
+
         // Draw minus sign
         Mixed,
         ;
