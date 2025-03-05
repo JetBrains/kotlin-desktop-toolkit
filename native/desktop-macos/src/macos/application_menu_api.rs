@@ -45,7 +45,6 @@ pub enum AppMenuItem<'a> {
         enabled: bool,
         title: BorrowedStrPtr<'a>,
         special_tag: ActionMenuItemSpecialTag,
-        macos_provided: bool,
         keystroke: Option<&'a AppMenuKeystroke<'a>>,
         perform: extern "C" fn(),
     },

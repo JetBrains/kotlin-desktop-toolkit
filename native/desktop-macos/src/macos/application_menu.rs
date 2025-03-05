@@ -45,7 +45,6 @@ type Callback = extern "C" fn();
 enum AppMenuItemSafe {
     Action {
         enabled: bool,
-        macos_provided: bool,
         title: Retained<NSString>,
         special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<AppMenuKeystrokeSafe>,
@@ -84,7 +83,6 @@ impl AppMenuItemSafe {
                 enabled,
                 ref title,
                 special_tag,
-                macos_provided,
                 keystroke,
                 perform,
             } => {
@@ -98,7 +96,6 @@ impl AppMenuItemSafe {
                 };
                 Self::Action {
                     enabled,
-                    macos_provided,
                     title: copy_to_ns_string(title)?,
                     special_tag,
                     keystroke,
@@ -137,7 +134,6 @@ impl AppMenuItemSafe {
     fn reconcile_action(
         item: &NSMenuItem,
         enabled: bool,
-        macos_provided: bool,
         title: &Retained<NSString>,
         _special_tag: ActionMenuItemSpecialTag,
         keystroke: &Option<AppMenuKeystrokeSafe>,
@@ -147,9 +143,6 @@ impl AppMenuItemSafe {
         unsafe {
             item.setTitle(title);
             item.setEnabled(enabled);
-            if macos_provided {
-                item.setHidden(false);
-            }
 
             let representer = MenuItemRepresenter::new(Some(perform), mtm);
             item.setTarget(Some(&representer));
@@ -195,11 +188,10 @@ impl AppMenuItemSafe {
                 enabled,
                 title,
                 special_tag,
-                macos_provided,
                 keystroke,
                 perform,
             } => {
-                Self::reconcile_action(item, *enabled, *macos_provided, title, *special_tag, keystroke, *perform, mtm);
+                Self::reconcile_action(item, *enabled, title, *special_tag, keystroke, *perform, mtm);
             }
             Self::Separator => {
                 assert!(unsafe { item.isSeparatorItem() });
@@ -216,17 +208,12 @@ impl AppMenuItemSafe {
                 enabled,
                 ref title,
                 special_tag,
-                macos_provided,
                 ref keystroke,
                 perform,
             } => {
-                if macos_provided {
-                    None
-                } else {
-                    let item = NSMenuItem::new(mtm);
-                    Self::reconcile_action(&item, enabled, macos_provided, title, special_tag, keystroke, perform, mtm);
-                    Some(item)
-                }
+                let item = NSMenuItem::new(mtm);
+                Self::reconcile_action(&item, enabled, title, special_tag, keystroke, perform, mtm);
+                Some(item)
             }
             Self::Separator => {
                 let item = NSMenuItem::separatorItem(mtm);

@@ -23,7 +23,6 @@ public sealed class AppMenuItem {
         val isEnabled: Boolean = true,
         val keystroke: Keystroke? = null,
         val specialTag: SpecialTag = SpecialTag.None,
-        val isMacOSProvided: Boolean = false,
         val perform: () -> Unit = {},
     ) : AppMenuItem() {
         public enum class SpecialTag {
@@ -123,7 +122,6 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             NativeAppMenuItem_NativeActionItem_Body.enabled(actionItemBody, menuItem.isEnabled)
             NativeAppMenuItem_NativeActionItem_Body.title(actionItemBody, arena.allocateUtf8String(menuItem.title))
             NativeAppMenuItem_NativeActionItem_Body.special_tag(actionItemBody, menuItem.specialTag.toNative())
-            NativeAppMenuItem_NativeActionItem_Body.macos_provided(actionItemBody, menuItem.isMacOSProvided)
             NativeAppMenuItem_NativeActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)
             NativeAppMenuItem_NativeActionItem_Body.perform(
                 actionItemBody,

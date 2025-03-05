@@ -326,7 +326,6 @@ typedef struct NativeAppMenuItem_NativeActionItem_Body {
   bool enabled;
   NativeBorrowedStrPtr title;
   enum NativeActionMenuItemSpecialTag special_tag;
-  bool macos_provided;
   const struct NativeAppMenuKeystroke *keystroke;
   void (*perform)(void);
 } NativeAppMenuItem_NativeActionItem_Body;
