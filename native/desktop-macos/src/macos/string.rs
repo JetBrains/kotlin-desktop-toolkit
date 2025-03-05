@@ -1,3 +1,5 @@
+use std::ffi::CStr;
+
 use anyhow::Context;
 use objc2::rc::Retained;
 use objc2_foundation::NSString;
@@ -13,6 +15,11 @@ pub extern "C" fn string_drop(mut str_ptr: RustAllocatedStrPtr) {
         str_ptr.deallocate();
         Ok(())
     });
+}
+
+pub(crate) fn borrow_ns_string<'a>(s: &'a NSString) -> BorrowedStrPtr<'a> {
+    let c_str = unsafe { CStr::from_ptr(s.UTF8String()) };
+    BorrowedStrPtr::new(c_str)
 }
 
 pub(crate) fn copy_to_ns_string(s: &BorrowedStrPtr) -> anyhow::Result<Retained<NSString>> {

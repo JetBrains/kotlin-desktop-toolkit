@@ -23,7 +23,7 @@ use objc2_foundation::{
 };
 
 use crate::{
-    common::{BorrowedStrPtr, LogicalPoint, LogicalRect, LogicalSize},
+    common::{LogicalPoint, LogicalRect, LogicalSize},
     logger::catch_panic,
     macos::{
         custom_titlebar::CustomTitlebar,
@@ -33,7 +33,7 @@ use crate::{
             handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change, to_key_down_event,
         },
         keyboard::unpack_key_event,
-        string::copy_to_ns_string,
+        string::{borrow_ns_string, copy_to_ns_string},
         text_operations::{handle_text_changed_operation, handle_text_command_operation},
     },
 };
@@ -879,7 +879,7 @@ impl RootView {
             );
 
             let window = self.window().context("No window for view")?;
-            let handled = handle_text_changed_operation(window.window_id(), BorrowedStrPtr::new(text.UTF8String()))?;
+            let handled = handle_text_changed_operation(window.window_id(), borrow_ns_string(&text))?;
             self.ivars().key_event_handled.set(Some(handled));
             Ok(handled)
         });

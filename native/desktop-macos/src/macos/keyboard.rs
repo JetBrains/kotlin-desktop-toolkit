@@ -94,9 +94,15 @@ pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<F
     })
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct KeyModifiersSet(usize);
+
+impl std::fmt::Debug for KeyModifiersSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "KeyModifiersSet({:#b})", self.0)
+    }
+}
 
 pub(crate) const EMPTY_KEY_MODIFIERS: KeyModifiersSet = KeyModifiersSet(0);
 

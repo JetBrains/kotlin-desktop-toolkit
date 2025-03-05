@@ -15,6 +15,7 @@ use super::{
     keyboard::{EMPTY_KEY_MODIFIERS, KeyCode, KeyEventInfo, KeyModifiersSet, unpack_flags_changed_event},
     mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt},
     screen::{NSScreenExts, ScreenId},
+    string::borrow_ns_string,
     window::NSWindowExts,
     window_api::WindowId,
 };
@@ -33,6 +34,20 @@ pub struct KeyDownEvent<'a> {
     key: BorrowedStrPtr<'a>,
     is_repeat: bool,
     timestamp: Timestamp,
+}
+
+impl<'a> KeyDownEvent<'a> {
+    pub(crate) fn from_key_event_info(key_info: &'a KeyEventInfo) -> KeyDownEvent<'a> {
+        Self {
+            window_id: key_info.window_id,
+            code: key_info.code,
+            is_repeat: key_info.is_repeat,
+            characters: borrow_ns_string(&key_info.chars),
+            key: borrow_ns_string(&key_info.chars),
+            modifiers: key_info.modifiers,
+            timestamp: key_info.timestamp,
+        }
+    }
 }
 
 #[repr(C)]
@@ -249,23 +264,15 @@ impl NSEventExt for NSEvent {
 }
 
 pub(crate) fn to_key_down_event(key_info: &KeyEventInfo) -> Event {
-    Event::KeyDown(KeyDownEvent {
-        window_id: key_info.window_id,
-        code: key_info.code,
-        is_repeat: key_info.is_repeat,
-        characters: BorrowedStrPtr::new(key_info.chars.UTF8String()),
-        key: BorrowedStrPtr::new(key_info.chars.UTF8String()),
-        modifiers: key_info.modifiers,
-        timestamp: key_info.timestamp,
-    })
+    Event::KeyDown(KeyDownEvent::from_key_event_info(key_info))
 }
 
 pub(crate) fn to_key_up_event(key_info: &KeyEventInfo) -> Event {
     Event::KeyUp(KeyUpEvent {
         window_id: key_info.window_id,
         code: key_info.code,
-        characters: BorrowedStrPtr::new(key_info.chars.UTF8String()),
-        key: BorrowedStrPtr::new(key_info.chars.UTF8String()),
+        characters: borrow_ns_string(&key_info.chars),
+        key: borrow_ns_string(&key_info.chars),
         modifiers: key_info.modifiers,
         timestamp: key_info.timestamp,
     })

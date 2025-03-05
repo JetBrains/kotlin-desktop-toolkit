@@ -42,14 +42,13 @@ impl<T> RustAllocatedRawPtr<'_, T> {
     }
 }
 
-#[derive(Debug)]
 #[repr(transparent)]
 pub struct BorrowedStrPtr<'a>(GenericRawPtr<'a, std::ffi::c_char>);
 
 impl BorrowedStrPtr<'_> {
-    pub(crate) const fn new<R>(ptr: *const R) -> Self {
+    pub(crate) const fn new(s: &CStr) -> Self {
         Self(GenericRawPtr {
-            ptr: ptr.cast(),
+            ptr: s.as_ptr(),
             phantom: PhantomData,
         })
     }
@@ -62,6 +61,12 @@ impl BorrowedStrPtr<'_> {
         assert!(!self.0.ptr.is_null());
         let c_str = unsafe { CStr::from_ptr(self.0.ptr) };
         c_str.to_str().with_context(|| format!("Invalid unicode in {c_str:?}"))
+    }
+}
+
+impl<'a> std::fmt::Debug for BorrowedStrPtr<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.as_str())
     }
 }
 

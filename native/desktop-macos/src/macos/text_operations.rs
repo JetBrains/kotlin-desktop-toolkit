@@ -58,7 +58,7 @@ pub(crate) fn handle_text_command_operation(window_id: WindowId, command: &'stat
     AppState::with(|state| {
         let operation = TextOperation::TextCommand(TextCommandOperation {
             window_id,
-            command: BorrowedStrPtr::new(command.as_ptr()),
+            command: BorrowedStrPtr::new(command),
         });
         Ok((state.text_operation_handler)(&operation))
     })
