@@ -24,7 +24,7 @@ typedef enum NativeLogLevel {
 
 typedef enum NativeSubMenuItemSpecialTag {
   NativeSubMenuItemSpecialTag_None,
-  NativeSubMenuItemSpecialTag_AppMenu,
+  NativeSubMenuItemSpecialTag_AppNameMenu,
   NativeSubMenuItemSpecialTag_Window,
   NativeSubMenuItemSpecialTag_Services,
 } NativeSubMenuItemSpecialTag;

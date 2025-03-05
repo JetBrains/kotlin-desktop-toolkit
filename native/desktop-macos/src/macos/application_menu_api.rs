@@ -21,7 +21,7 @@ pub struct AppMenuKeystroke<'a> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SubMenuItemSpecialTag {
     None,
-    AppMenu,
+    AppNameMenu,
     Window,
     Services,
 }

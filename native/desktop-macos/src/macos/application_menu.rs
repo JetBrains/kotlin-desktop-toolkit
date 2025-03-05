@@ -13,8 +13,6 @@ use super::{
     string::copy_to_ns_string,
 };
 
-const TITLE_FOR_APP_MENU: Option<Retained<NSString>> = None;
-
 pub fn main_menu_update_impl(menu: &AppMenuStructure) {
     let updated_menu = AppMenuStructureSafe::from_unsafe(menu).unwrap(); // todo come up with some error handling facility
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
@@ -52,7 +50,7 @@ enum AppMenuItemSafe {
     },
     Separator,
     SubMenu {
-        title: Option<Retained<NSString>>,
+        title: Retained<NSString>,
         special_tag: SubMenuItemSpecialTag,
         items: Vec<AppMenuItemSafe>,
     },
@@ -116,13 +114,8 @@ impl AppMenuItemSafe {
                     unsafe { slice::from_raw_parts(items, items_count) }
                 };
                 let safe_items: Result<Vec<_>> = items.iter().map(|e| Self::from_unsafe(e)).collect();
-                let title: Option<Retained<NSString>> = if special_tag == SubMenuItemSpecialTag::AppMenu {
-                    TITLE_FOR_APP_MENU
-                } else {
-                    Some(copy_to_ns_string(title)?)
-                };
                 Self::SubMenu {
-                    title,
+                    title: copy_to_ns_string(title)?,
                     special_tag,
                     items: safe_items?,
                 }
@@ -162,17 +155,15 @@ impl AppMenuItemSafe {
     fn reconcile_ns_submenu(
         mtm: MainThreadMarker,
         item: &NSMenuItem,
-        title: &Option<Retained<NSString>>,
+        title: &Retained<NSString>,
         special_tag: SubMenuItemSpecialTag,
         items: &[Self],
     ) {
         let submenu = unsafe { item.submenu() }.unwrap();
-        if special_tag != SubMenuItemSpecialTag::AppMenu {
-            if let Some(title) = title {
-                unsafe {
-                    item.setTitle(title);
-                    submenu.setTitle(title);
-                }
+        if special_tag != SubMenuItemSpecialTag::AppNameMenu {
+            unsafe {
+                item.setTitle(title);
+                submenu.setTitle(title);
             }
         }
         reconcile_ns_menu_items(mtm, &submenu, false, items);
@@ -286,7 +277,8 @@ impl MenuItemRepresenter {
 enum ItemIdentity<'a> {
     Action { title: &'a Retained<NSString> },
     Separator,
-    SubMenu { title: Option<&'a Retained<NSString>> },
+    AppNameSubMenu,
+    SubMenu { title: &'a Retained<NSString> },
     MacOSProvided,
 }
 
@@ -295,12 +287,13 @@ impl<'a> ItemIdentity<'a> {
         match item {
             AppMenuItemSafe::Action { title, .. } => Self::Action { title: title },
             AppMenuItemSafe::Separator => Self::Separator,
-            AppMenuItemSafe::SubMenu { title, .. } => Self::SubMenu { title: title.as_ref() },
+            AppMenuItemSafe::SubMenu { special_tag: SubMenuItemSpecialTag::AppNameMenu, .. } => Self::AppNameSubMenu,
+            AppMenuItemSafe::SubMenu { title, .. } => Self::SubMenu { title: title },
         }
     }
 }
 
-fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_main_menu: bool, new_items: &[AppMenuItemSafe]) {
+fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_top_level: bool, new_items: &[AppMenuItemSafe]) {
     let items_array = unsafe { menu.itemArray() };
     let menu_titles: Vec<_> = items_array.iter().map(|submenu| unsafe { submenu.title() }).collect();
 
@@ -311,11 +304,9 @@ fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_main_menu: b
         .zip(menu_titles.iter())
         .enumerate()
         .map(|(i, (item, title))| {
-            if is_main_menu && i == 0 {
-                // Avoid duplicating the default (macOS provided) application menu
-                ItemIdentity::SubMenu {
-                    title: TITLE_FOR_APP_MENU.as_ref(),
-                }
+            if is_top_level && i == 0 {
+                // the first item in top level menu is always item wiht the app name
+                ItemIdentity::AppNameSubMenu
             } else {
                 unsafe { item.representedObject() }
                     .map(Retained::downcast::<MenuItemRepresenter>)
@@ -323,7 +314,7 @@ fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_main_menu: b
                         if unsafe { item.isSeparatorItem() } {
                             ItemIdentity::Separator
                         } else if unsafe { item.hasSubmenu() } {
-                            ItemIdentity::SubMenu { title: Some(title) }
+                            ItemIdentity::SubMenu { title: title }
                         } else {
                             ItemIdentity::Action { title: title }
                         }
