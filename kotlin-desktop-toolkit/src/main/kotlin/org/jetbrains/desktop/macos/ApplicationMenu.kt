@@ -21,6 +21,7 @@ public sealed class AppMenuItem {
     public data class Action(
         val title: String,
         val isEnabled: Boolean = true,
+        val state: ActionItemState = ActionItemState.Off,
         val keystroke: Keystroke? = null,
         val specialTag: SpecialTag = SpecialTag.None,
         val perform: () -> Unit = {},
@@ -45,6 +46,24 @@ public sealed class AppMenuItem {
                     Paste -> desktop_macos_h.NativeActionMenuItemSpecialTag_Paste()
                     Delete -> desktop_macos_h.NativeActionMenuItemSpecialTag_Delete()
                 }
+            }
+        }
+    }
+
+    public enum class ActionItemState {
+        // Draw check mark
+        On,
+        // Draw nothing
+        Off,
+        // Draw minus sign
+        Mixed,
+        ;
+
+        internal fun toNative(): Int {
+            return when (this) {
+                On -> desktop_macos_h.NativeActionItemState_On()
+                Off -> desktop_macos_h.NativeActionItemState_Off()
+                Mixed -> desktop_macos_h.NativeActionItemState_Mixed()
             }
         }
     }
@@ -120,6 +139,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
 
             val actionItemBody = NativeAppMenuItem_NativeActionItem_Body.allocate(arena)
             NativeAppMenuItem_NativeActionItem_Body.enabled(actionItemBody, menuItem.isEnabled)
+            NativeAppMenuItem_NativeActionItem_Body.state(actionItemBody, menuItem.state.toNative())
             NativeAppMenuItem_NativeActionItem_Body.title(actionItemBody, arena.allocateUtf8String(menuItem.title))
             NativeAppMenuItem_NativeActionItem_Body.special_tag(actionItemBody, menuItem.specialTag.toNative())
             NativeAppMenuItem_NativeActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)

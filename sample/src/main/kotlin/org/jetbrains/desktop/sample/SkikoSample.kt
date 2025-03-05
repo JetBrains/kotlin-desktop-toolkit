@@ -433,6 +433,10 @@ class ApplicationState : AutoCloseable {
                 }
                 EventHandlerResult.Stop
             }
+            is Event.WindowFullScreenToggle -> {
+                AppMenuManager.setMainMenu(buildMenu())
+                EventHandlerResult.Continue
+            }
             else -> {
                 val window = windows.find {
                     it.window.windowId() == eventWindowId
@@ -517,6 +521,10 @@ class ApplicationState : AutoCloseable {
                 ),
                 AppMenuItem.Action(
                     title = "Toggle Full Screen",
+                    state = when (mainWindow()?.window?.isFullScreen) {
+                        true -> AppMenuItem.ActionItemState.On
+                        else -> AppMenuItem.ActionItemState.Off
+                    },
                     keystroke = Keystroke(key = "f", modifiers = KeyModifiersSet.create(command = true, control = true)),
                     perform = { mainWindow()?.window?.toggleFullScreen() },
                 ),

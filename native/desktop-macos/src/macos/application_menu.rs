@@ -3,12 +3,12 @@ use core::slice;
 use anyhow::{Result, anyhow};
 
 use objc2::{DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, sel};
-use objc2_app_kit::{NSEventModifierFlags, NSMenu, NSMenuItem};
+use objc2_app_kit::{NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSString};
 
 use super::{
     application_api::MyNSApplication,
-    application_menu_api::{ActionMenuItemSpecialTag, AppMenuItem, AppMenuStructure, SubMenuItemSpecialTag},
+    application_menu_api::{ActionItemState, ActionMenuItemSpecialTag, AppMenuItem, AppMenuStructure, SubMenuItemSpecialTag},
     keyboard::KeyModifiersSet,
     string::copy_to_ns_string,
 };
@@ -43,6 +43,7 @@ type Callback = extern "C" fn();
 enum AppMenuItemSafe {
     Action {
         enabled: bool,
+        state: ActionItemState,
         title: Retained<NSString>,
         special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<AppMenuKeystrokeSafe>,
@@ -79,6 +80,7 @@ impl AppMenuItemSafe {
         let safe_item = match item {
             &AppMenuItem::ActionItem {
                 enabled,
+                state,
                 ref title,
                 special_tag,
                 keystroke,
@@ -94,6 +96,7 @@ impl AppMenuItemSafe {
                 };
                 Self::Action {
                     enabled,
+                    state,
                     title: copy_to_ns_string(title)?,
                     special_tag,
                     keystroke,
@@ -127,6 +130,7 @@ impl AppMenuItemSafe {
     fn reconcile_action(
         item: &NSMenuItem,
         enabled: bool,
+        state: ActionItemState,
         title: &Retained<NSString>,
         _special_tag: ActionMenuItemSpecialTag,
         keystroke: &Option<AppMenuKeystrokeSafe>,
@@ -136,6 +140,12 @@ impl AppMenuItemSafe {
         unsafe {
             item.setTitle(title);
             item.setEnabled(enabled);
+            let state = match state {
+                ActionItemState::On => NSControlStateValueOn,
+                ActionItemState::Off => NSControlStateValueOff,
+                ActionItemState::Mixed => NSControlStateValueMixed,
+            };
+            item.setState(state);
 
             let representer = MenuItemRepresenter::new(Some(perform), mtm);
             item.setTarget(Some(&representer));
@@ -173,12 +183,13 @@ impl AppMenuItemSafe {
         match self {
             Self::Action {
                 enabled,
+                state,
                 title,
                 special_tag,
                 keystroke,
                 perform,
             } => {
-                Self::reconcile_action(item, *enabled, title, *special_tag, keystroke, *perform, mtm);
+                Self::reconcile_action(item, *enabled, *state, title, *special_tag, keystroke, *perform, mtm);
             }
             Self::Separator => {
                 assert!(unsafe { item.isSeparatorItem() });
@@ -193,13 +204,14 @@ impl AppMenuItemSafe {
         match self {
             &Self::Action {
                 enabled,
+                state,
                 ref title,
                 special_tag,
                 ref keystroke,
                 perform,
             } => {
                 let item = NSMenuItem::new(mtm);
-                Self::reconcile_action(&item, enabled, title, special_tag, keystroke, perform, mtm);
+                Self::reconcile_action(&item, enabled, state, title, special_tag, keystroke, perform, mtm);
                 Some(item)
             }
             Self::Separator => {

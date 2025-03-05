@@ -3,6 +3,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum NativeActionItemState {
+  NativeActionItemState_On,
+  NativeActionItemState_Off,
+  NativeActionItemState_Mixed,
+} NativeActionItemState;
+
 typedef enum NativeActionMenuItemSpecialTag {
   NativeActionMenuItemSpecialTag_None,
   NativeActionMenuItemSpecialTag_Undo,
@@ -324,6 +330,7 @@ typedef enum NativeAppMenuItem_Tag {
 
 typedef struct NativeAppMenuItem_NativeActionItem_Body {
   bool enabled;
+  enum NativeActionItemState state;
   NativeBorrowedStrPtr title;
   enum NativeActionMenuItemSpecialTag special_tag;
   const struct NativeAppMenuKeystroke *keystroke;

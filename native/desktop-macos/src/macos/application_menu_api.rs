@@ -39,10 +39,19 @@ pub enum ActionMenuItemSpecialTag {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActionItemState {
+    On,
+    Off,
+    Mixed
+}
+
+#[repr(C)]
 #[derive(Debug)]
 pub enum AppMenuItem<'a> {
     ActionItem {
         enabled: bool,
+        state: ActionItemState,
         title: BorrowedStrPtr<'a>,
         special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<&'a AppMenuKeystroke<'a>>,
