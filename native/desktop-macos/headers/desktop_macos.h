@@ -76,7 +76,7 @@ typedef struct NativeApplicationConfig {
   bool disable_character_palette_menu_item;
 } NativeApplicationConfig;
 
-typedef int64_t NativeWindowId;
+typedef intptr_t NativeWindowId;
 
 typedef uintptr_t NativeKeyModifiersSet;
 

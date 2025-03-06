@@ -87,7 +87,7 @@ pub(crate) trait NSWindowExts {
     fn me(&self) -> &NSWindow;
 
     fn window_id(&self) -> WindowId {
-        unsafe { self.me().windowNumber() as WindowId }
+        unsafe { self.me().windowNumber() }
     }
 
     fn get_size(&self) -> LogicalSize {

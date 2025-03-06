@@ -40,7 +40,7 @@ pub(crate) struct KeyEventInfo {
 }
 
 pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInfo> {
-    let window_id = unsafe { ns_event.windowNumber() as WindowId };
+    let window_id = unsafe { ns_event.windowNumber() };
     let is_repeat = unsafe { ns_event.isARepeat() };
     let code = unsafe { ns_event.keyCode() };
 
