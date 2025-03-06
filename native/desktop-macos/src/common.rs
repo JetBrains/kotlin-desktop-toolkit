@@ -141,13 +141,6 @@ impl<T> Drop for AutoDropArray<T> {
     }
 }
 
-// ffi ready analog of &[T]
-//#[repr(C)]
-//pub struct Array<T> {
-//    pub arr: *mut T,
-//    pub len: ArraySize,
-//}
-
 pub type PhysicalPixels = f64;
 pub type LogicalPixels = f64;
 
