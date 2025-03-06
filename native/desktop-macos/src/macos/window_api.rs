@@ -269,9 +269,9 @@ pub extern "C" fn window_open_file_dialog(window_ptr: WindowPtr, params: FileDia
     ffi_boundary("window_open_file_dialog", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
-        window.open_file_dialog(mtm, params, callback);
+        window.open_file_dialog(mtm, &params, callback);
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]

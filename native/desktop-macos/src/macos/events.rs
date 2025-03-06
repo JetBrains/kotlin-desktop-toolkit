@@ -37,7 +37,7 @@ pub struct KeyDownEvent<'a> {
 }
 
 impl<'a> KeyDownEvent<'a> {
-    pub(crate) fn from_key_event_info(key_info: &'a KeyEventInfo) -> KeyDownEvent<'a> {
+    pub(crate) fn from_key_event_info(key_info: &'a KeyEventInfo) -> Self {
         Self {
             window_id: key_info.window_id,
             code: key_info.code,
@@ -280,7 +280,7 @@ pub(crate) fn to_key_up_event(key_info: &KeyEventInfo) -> Event {
 
 pub(crate) fn handle_key_event(event: &Event) -> anyhow::Result<bool> {
     let handled = AppState::with(|state| {
-        let res = (state.event_handler)(&event);
+        let res = (state.event_handler)(event);
         //debug!("handle_key_event: {event:?} -> {res}");
         Ok(res)
     });

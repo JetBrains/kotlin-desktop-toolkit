@@ -200,7 +200,7 @@ impl AppMenuItemSafe {
         }
     }
 
-    fn create_ns_menu_item(&self, mtm: MainThreadMarker) -> Option<Retained<NSMenuItem>> {
+    fn create_ns_menu_item(&self, mtm: MainThreadMarker) -> Retained<NSMenuItem> {
         match self {
             &Self::Action {
                 enabled,
@@ -212,7 +212,7 @@ impl AppMenuItemSafe {
             } => {
                 let item = NSMenuItem::new(mtm);
                 Self::reconcile_action(&item, enabled, state, title, special_tag, keystroke, perform, mtm);
-                Some(item)
+                item
             }
             Self::Separator => {
                 let item = NSMenuItem::separatorItem(mtm);
@@ -221,7 +221,7 @@ impl AppMenuItemSafe {
                     item.setTarget(Some(&representer));
                     item.setRepresentedObject(Some(&representer));
                 };
-                Some(item)
+                item
             }
             Self::SubMenu { title, special_tag, items } => {
                 let item = NSMenuItem::new(mtm);
@@ -247,7 +247,7 @@ impl AppMenuItemSafe {
                     _ => {}
                 }
                 Self::reconcile_ns_submenu(mtm, &item, title, *special_tag, items);
-                Some(item)
+                item
             }
         }
     }
@@ -295,12 +295,12 @@ enum ItemIdentity<'a> {
 }
 
 impl<'a> ItemIdentity<'a> {
-    fn new(item: &'a AppMenuItemSafe) -> Self {
+    const fn new(item: &'a AppMenuItemSafe) -> Self {
         match item {
-            AppMenuItemSafe::Action { title, .. } => Self::Action { title: title },
+            AppMenuItemSafe::Action { title, .. } => Self::Action { title },
             AppMenuItemSafe::Separator => Self::Separator,
             AppMenuItemSafe::SubMenu { special_tag: SubMenuItemSpecialTag::AppNameMenu, .. } => Self::AppNameSubMenu,
-            AppMenuItemSafe::SubMenu { title, .. } => Self::SubMenu { title: title },
+            AppMenuItemSafe::SubMenu { title, .. } => Self::SubMenu { title },
         }
     }
 }
@@ -326,9 +326,9 @@ fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_top_level: b
                         if unsafe { item.isSeparatorItem() } {
                             ItemIdentity::Separator
                         } else if unsafe { item.hasSubmenu() } {
-                            ItemIdentity::SubMenu { title: title }
+                            ItemIdentity::SubMenu { title }
                         } else {
-                            ItemIdentity::Action { title: title }
+                            ItemIdentity::Action { title }
                         }
                     })
             }
@@ -351,12 +351,11 @@ fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_top_level: b
     for op in operations {
         match op {
             Operation::Insert { position, item_idx } => {
-                if let Some(new_ns_menu_item) = new_items[item_idx].create_ns_menu_item(mtm) {
-                    unsafe {
-                        menu.insertItem_atIndex(&new_ns_menu_item, position as isize + position_shift);
-                    }
-                    position_shift += 1;
+                let new_ns_menu_item = new_items[item_idx].create_ns_menu_item(mtm);
+                unsafe {
+                    menu.insertItem_atIndex(&new_ns_menu_item, position as isize + position_shift);
                 }
+                position_shift += 1;
             }
             Operation::Reconcile { position, item_idx } => {
                 let ns_menu_item = unsafe { menu.itemAtIndex(position as isize + position_shift).unwrap() };

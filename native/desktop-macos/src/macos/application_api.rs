@@ -182,7 +182,7 @@ pub extern "C" fn application_hide() {
         let app = MyNSApplication::sharedApplication(mtm);
         app.hide(None);
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -192,7 +192,7 @@ pub extern "C" fn application_hide_other_applications() {
         let app = MyNSApplication::sharedApplication(mtm);
         app.hideOtherApplications(None);
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -204,7 +204,7 @@ pub extern "C" fn application_unhide_all_applications() {
             app.unhideAllApplications(None);
         }
         Ok(())
-    })
+    });
 }
 
 #[derive(Debug)]
@@ -238,15 +238,12 @@ impl MyNSApplication {
     // modifiers are down, but swallows the key up if the modifiers include
     // command.  This one makes all modifiers consistent by always sending key ups.
     fn send_event_impl(&self, event: &NSEvent) {
-        match unsafe { event.r#type() } {
-            NSEventType::KeyUp => {
-                let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-                if let Some(window) = unsafe { event.window(mtm) } {
-                    window.sendEvent(event);
-                    return;
-                }
+        if unsafe { event.r#type() } == NSEventType::KeyUp {
+            let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+            if let Some(window) = unsafe { event.window(mtm) } {
+                window.sendEvent(event);
+                return;
             }
-            _ => {}
         }
         let _: () = unsafe { msg_send![super(self), sendEvent: event] };
     }
