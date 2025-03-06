@@ -13,7 +13,7 @@ use super::{
     window::{NSWindowExts, Window},
 };
 
-pub type WindowId = i64;
+pub type WindowId = isize;
 
 pub type WindowPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
 
