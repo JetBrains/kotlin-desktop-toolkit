@@ -27,13 +27,13 @@ pub type Timestamp = f64;
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyDownEvent<'a> {
-    window_id: WindowId,
-    modifiers: KeyModifiersSet,
-    code: KeyCode,
-    characters: BorrowedStrPtr<'a>,
-    key: BorrowedStrPtr<'a>,
-    is_repeat: bool,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub modifiers: KeyModifiersSet,
+    pub code: KeyCode,
+    pub characters: BorrowedStrPtr<'a>,
+    pub key: BorrowedStrPtr<'a>,
+    pub is_repeat: bool,
+    pub timestamp: Timestamp,
 }
 
 impl<'a> KeyDownEvent<'a> {
@@ -53,125 +53,125 @@ impl<'a> KeyDownEvent<'a> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyUpEvent<'a> {
-    window_id: WindowId,
-    modifiers: KeyModifiersSet,
-    code: KeyCode,
-    characters: BorrowedStrPtr<'a>,
-    key: BorrowedStrPtr<'a>,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub modifiers: KeyModifiersSet,
+    pub code: KeyCode,
+    pub characters: BorrowedStrPtr<'a>,
+    pub key: BorrowedStrPtr<'a>,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct ModifiersChangedEvent {
-    window_id: WindowId,
-    modifiers: KeyModifiersSet,
-    code: KeyCode,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub modifiers: KeyModifiersSet,
+    pub code: KeyCode,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseMovedEvent {
-    window_id: WindowId,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseDraggedEvent {
-    window_id: WindowId,
-    button: MouseButton,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub button: MouseButton,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseEnteredEvent {
-    window_id: WindowId,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseExitedEvent {
-    window_id: WindowId,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseDownEvent {
-    window_id: WindowId,
-    button: MouseButton,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub button: MouseButton,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseUpEvent {
-    window_id: WindowId,
-    button: MouseButton,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub button: MouseButton,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct ScrollWheelEvent {
-    window_id: WindowId,
-    scrolling_delta_x: LogicalPixels,
-    scrolling_delta_y: LogicalPixels,
-    has_precise_scrolling_deltas: bool,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub scrolling_delta_x: LogicalPixels,
+    pub scrolling_delta_y: LogicalPixels,
+    pub has_precise_scrolling_deltas: bool,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowScreenChangeEvent {
-    window_id: WindowId,
-    new_screen_id: ScreenId,
+    pub window_id: WindowId,
+    pub new_screen_id: ScreenId,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowResizeEvent {
-    window_id: WindowId,
-    size: LogicalSize,
+    pub window_id: WindowId,
+    pub size: LogicalSize,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowMoveEvent {
-    window_id: WindowId,
-    origin: LogicalPoint,
+    pub window_id: WindowId,
+    pub origin: LogicalPoint,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowFocusChangeEvent {
-    window_id: WindowId,
-    is_key: bool,
-    is_main: bool,
+    pub window_id: WindowId,
+    pub is_key: bool,
+    pub is_main: bool,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowCloseRequestEvent {
-    window_id: WindowId,
+    pub window_id: WindowId,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowFullScreenToggleEvent {
-    window_id: WindowId,
-    is_full_screen: bool,
+    pub window_id: WindowId,
+    pub is_full_screen: bool,
 }
 
 #[repr(C)]

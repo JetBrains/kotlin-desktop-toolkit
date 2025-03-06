@@ -616,9 +616,8 @@ class ApplicationState : AutoCloseable {
 }
 
 fun main() {
-    Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
-    Application.init(Application.ApplicationConfig())
+    Logger.info { runtimeInfo() }
     Application.setTextOperationHandler { textOperation ->
         if (textOperation is TextOperation.TextCommand) {
             Logger.debug { "TextOperationHandler received $textOperation , ignoring" }
@@ -628,17 +627,9 @@ fun main() {
             true
         }
     }
+    Application.init(Application.ApplicationConfig())
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
-        Application.setTextOperationHandler { textOperation ->
-            if (textOperation is TextOperation.TextCommand) {
-                Logger.debug { "TextOperationHandler received $textOperation , ignoring" }
-                false
-            } else {
-                Logger.debug { "TextOperationHandler received $textOperation" }
-                true
-            }
-        }
         Application.runEventLoop { event ->
             if (event is Event.ApplicationDidFinishLaunching) {
                 Files.readAllBytes(Path.of("resources/jb-logo.png")).let { iconBytes ->
