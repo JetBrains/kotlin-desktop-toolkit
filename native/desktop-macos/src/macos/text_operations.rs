@@ -1,6 +1,9 @@
 use crate::common::BorrowedStrPtr;
 
-use super::{application_api::AppState, events::KeyDownEvent, window_api::WindowId};
+use super::{
+    events::{CallbackUserData, KeyDownEvent},
+    window_api::WindowId,
+};
 
 #[repr(C)]
 #[derive(Debug, Default)]
@@ -37,22 +40,4 @@ pub enum TextOperation<'a> {
 }
 
 // return true if operation was handled
-pub type TextOperationHandler = extern "C" fn(&TextOperation) -> bool;
-
-impl TextChangedOperation<'_> {
-    pub(crate) fn run(self) -> bool {
-        AppState::with(|state| {
-            let operation = TextOperation::TextChanged(self);
-            (state.text_operation_handler)(&operation)
-        })
-    }
-}
-
-impl TextCommandOperation<'_> {
-    pub(crate) fn run(self) -> bool {
-        AppState::with(|state| {
-            let operation = TextOperation::TextCommand(self);
-            (state.text_operation_handler)(&operation)
-        })
-    }
-}
+pub type TextOperationHandler = extern "C" fn(&TextOperation, CallbackUserData) -> bool;

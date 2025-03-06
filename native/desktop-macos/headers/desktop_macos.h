@@ -279,7 +279,9 @@ typedef struct NativeEvent {
   };
 } NativeEvent;
 
-typedef bool (*NativeEventHandler)(const struct NativeEvent*);
+typedef void *NativeCallbackUserData;
+
+typedef bool (*NativeEventHandler)(const struct NativeEvent*, NativeCallbackUserData);
 
 typedef struct NativeTextCommandOperation {
   NativeWindowId window_id;
@@ -310,13 +312,15 @@ typedef struct NativeTextOperation {
   };
 } NativeTextOperation;
 
-typedef bool (*NativeTextOperationHandler)(const struct NativeTextOperation*);
+typedef bool (*NativeTextOperationHandler)(const struct NativeTextOperation*, NativeCallbackUserData);
 
 typedef struct NativeApplicationCallbacks {
   bool (*on_should_terminate)(void);
   void (*on_will_terminate)(void);
   NativeEventHandler event_handler;
+  NativeCallbackUserData event_handler_user_data;
   NativeTextOperationHandler text_operation_handler;
+  NativeCallbackUserData text_operation_handler_user_data;
 } NativeApplicationCallbacks;
 
 typedef struct NativeAppMenuKeystroke {
