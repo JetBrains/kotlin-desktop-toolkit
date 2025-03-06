@@ -9,11 +9,15 @@ use std::cell::OnceCell;
 
 use crate::{
     common::RustAllocatedStrPtr,
-    logger::ffi_boundary,
-    macos::events::{handle_application_did_finish_launching, handle_display_configuration_change},
+    logger::{catch_panic, ffi_boundary},
+    macos::events::Event,
 };
 
-use super::{events::EventHandler, string::copy_to_c_string, text_operations::TextOperationHandler};
+use super::{
+    events::{CallbackUserData, EventHandler},
+    string::copy_to_c_string,
+    text_operations::TextOperationHandler,
+};
 
 thread_local! {
     pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
@@ -26,8 +30,10 @@ pub(crate) struct AppState {
     #[allow(dead_code)]
     app_delegate: Retained<AppDelegate>,
     pub(crate) event_handler: EventHandler,
+    pub(crate) event_handler_user_data: CallbackUserData,
     pub(crate) mtm: MainThreadMarker,
     pub(crate) text_operation_handler: TextOperationHandler,
+    pub(crate) text_operation_handler_user_data: CallbackUserData,
 }
 
 impl AppState {
@@ -47,10 +53,12 @@ impl AppState {
 pub struct ApplicationCallbacks {
     // returns true if application should terminate,
     // otherwise termination will be canceled
-    on_should_terminate: extern "C" fn() -> bool,
-    on_will_terminate: extern "C" fn(),
-    event_handler: EventHandler,
-    text_operation_handler: TextOperationHandler,
+    pub on_should_terminate: extern "C" fn() -> bool,
+    pub on_will_terminate: extern "C" fn(),
+    pub event_handler: EventHandler,
+    pub event_handler_user_data: CallbackUserData,
+    pub text_operation_handler: TextOperationHandler,
+    pub text_operation_handler_user_data: CallbackUserData,
 }
 
 #[repr(C)]
@@ -88,7 +96,9 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         //    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
         app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
         let event_handler = callbacks.event_handler;
+        let event_handler_user_data = callbacks.event_handler_user_data;
         let text_operation_handler = callbacks.text_operation_handler;
+        let text_operation_handler_user_data = callbacks.text_operation_handler_user_data;
         let app_delegate = AppDelegate::new(mtm, callbacks);
         app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
         APP_STATE.with(|app_state| {
@@ -98,8 +108,10 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
                     app,
                     app_delegate,
                     event_handler,
+                    event_handler_user_data,
                     mtm,
                     text_operation_handler,
+                    text_operation_handler_user_data,
                 })
                 .map_err(|_| anyhow!("Can't initialize second time!"))?;
             Ok(())
@@ -283,12 +295,12 @@ define_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidChangeScreenParameters:))]
         fn did_change_screen_parameters(&self, _notification: &NSNotification) {
-            handle_display_configuration_change();
+            self.handle_event(&Event::new_display_configuration_change_event());
         }
 
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn did_finish_launching(&self, _notification: &NSNotification) {
-            handle_application_did_finish_launching();
+            self.handle_event(&Event::new_application_did_finish_launching_event());
         }
 
         #[unsafe(method(applicationShouldTerminate:))]
@@ -313,5 +325,10 @@ impl AppDelegate {
         let this = mtm.alloc();
         let this = this.set_ivars(AppDelegateIvars { callbacks });
         unsafe { msg_send![super(this), init] }
+    }
+
+    fn handle_event<'a>(&'a self, event: &'a Event) -> bool {
+        let callbacks = &self.ivars().callbacks;
+        catch_panic(|| Ok((callbacks.event_handler)(event, callbacks.event_handler_user_data))).unwrap_or(false)
     }
 }

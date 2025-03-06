@@ -131,7 +131,7 @@ public object Application {
     }
 
     // called from native
-    private fun onEvent(nativeEvent: MemorySegment): Boolean {
+    private fun onEvent(nativeEvent: MemorySegment, @Suppress("UNUSED_PARAMETER") userData: MemorySegment): Boolean {
         return ffiUpCall(default = false) {
             val event = Event.fromNative(nativeEvent)
             when (event) {
@@ -151,7 +151,7 @@ public object Application {
         }
     }
 
-    private fun onTextOperation(nativeOperation: MemorySegment): Boolean {
+    private fun onTextOperation(nativeOperation: MemorySegment, @Suppress("UNUSED_PARAMETER") userData: MemorySegment): Boolean {
         val operation = TextOperation.fromNative(nativeOperation)
         return ffiUpCall(default = false) {
             textOperationHandler?.invoke(operation)

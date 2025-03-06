@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    application_api::MyNSApplication,
+    application_api::{AppState, MyNSApplication},
     metal_api::{MetalView, MetalViewPtr},
     screen::{NSScreenExts, ScreenId},
     string::{copy_to_c_string, copy_to_ns_string},
@@ -35,8 +35,16 @@ pub struct WindowParams<'a> {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_create(params: &WindowParams) -> WindowPtr<'static> {
     let window = ffi_boundary("window_create", || {
-        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        Ok(Some(Window::new(mtm, params)?))
+        AppState::with(|state| {
+            Ok(Some(Window::new(
+                state.mtm,
+                params,
+                state.event_handler,
+                state.event_handler_user_data,
+                state.text_operation_handler,
+                state.text_operation_handler_user_data,
+            )?))
+        })
     });
     WindowPtr::from_value(window)
 }

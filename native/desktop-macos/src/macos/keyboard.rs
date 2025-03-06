@@ -1,4 +1,4 @@
-use anyhow::{Context, Ok, bail};
+use anyhow::{Context, Ok};
 use objc2::rc::Retained;
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
 use objc2_foundation::{NSString, NSTimeInterval};
@@ -81,17 +81,18 @@ pub(crate) struct FlagsChangedInfo {
     pub(crate) code: KeyCode,
 }
 
-pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<FlagsChangedInfo> {
-    if unsafe { ns_event.r#type() } != NSEventType::FlagsChanged {
-        bail!("Unexpected type of event {:?}", ns_event);
-    }
+pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> FlagsChangedInfo {
+    assert!(
+        unsafe { ns_event.r#type() } == NSEventType::FlagsChanged,
+        "Unexpected type of event {ns_event:?}"
+    );
     let modifiers = unsafe { ns_event.modifierFlags() }.into();
     let code = unsafe { ns_event.keyCode() };
 
-    Ok(FlagsChangedInfo {
+    FlagsChangedInfo {
         modifiers,
         code: KeyCode(code),
-    })
+    }
 }
 
 #[derive(Clone, Copy)]
