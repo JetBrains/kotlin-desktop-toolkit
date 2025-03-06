@@ -7,6 +7,11 @@ edition = "2024"
 crate-type = ["rlib", "cdylib"]
 name = "desktop_macos"
 
+[[test]]
+name = "tests"
+path = "tests/tests.rs"
+harness = false
+
 [dependencies]
 anyhow = { version = "1.0.93", features = ["backtrace"] }
 bitflags = "2.6.0"
@@ -19,6 +24,7 @@ cbindgen = "0.28.0"
 [dev-dependencies]
 quickcheck = "1"
 quickcheck_macros = "1"
+libtest-mimic = "0.8.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 foreign-types = "0.5"

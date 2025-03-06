@@ -46,7 +46,7 @@ impl<T> RustAllocatedRawPtr<'_, T> {
 pub struct BorrowedStrPtr<'a>(GenericRawPtr<'a, std::ffi::c_char>);
 
 impl BorrowedStrPtr<'_> {
-    pub(crate) const fn new(s: &CStr) -> Self {
+    pub const fn new(s: &CStr) -> Self {
         Self(GenericRawPtr {
             ptr: s.as_ptr(),
             phantom: PhantomData,
@@ -57,7 +57,7 @@ impl BorrowedStrPtr<'_> {
         NonNull::new(self.0.ptr.cast_mut())
     }
 
-    pub(crate) fn as_str(&self) -> anyhow::Result<&str> {
+    pub fn as_str(&self) -> anyhow::Result<&str> {
         assert!(!self.0.ptr.is_null());
         let c_str = unsafe { CStr::from_ptr(self.0.ptr) };
         c_str.to_str().with_context(|| format!("Invalid unicode in {c_str:?}"))
@@ -153,7 +153,7 @@ pub struct PhysicalSize {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhysicalPoint {
+pub(crate) struct PhysicalPoint {
     pub x: PhysicalPixels,
     pub y: PhysicalPixels,
 }
@@ -173,7 +173,7 @@ pub struct LogicalPoint {
 }
 
 #[derive(Debug)]
-pub struct LogicalRect {
+pub(crate) struct LogicalRect {
     // the point closest to coordinates origin
     pub(crate) origin: LogicalPoint,
     pub(crate) size: LogicalSize,

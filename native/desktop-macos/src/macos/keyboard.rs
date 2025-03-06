@@ -7,7 +7,7 @@ use super::window_api::WindowId;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct KeyCode(u16);
+pub struct KeyCode(pub u16);
 
 #[derive(Debug)]
 pub(crate) struct KeyEventInfo {
@@ -97,7 +97,7 @@ pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> FlagsChangedInfo
 
 #[derive(Clone, Copy)]
 #[repr(transparent)]
-pub struct KeyModifiersSet(usize);
+pub struct KeyModifiersSet(pub usize);
 
 impl std::fmt::Debug for KeyModifiersSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
