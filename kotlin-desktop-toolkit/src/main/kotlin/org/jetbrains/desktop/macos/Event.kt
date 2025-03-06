@@ -38,16 +38,16 @@ public value class Timestamp(
 public sealed class Event {
     public companion object {
         public fun pressedMouseButtons(): MouseButtonsSet {
-            return MouseButtonsSet(desktop_macos_h.events_pressed_mouse_buttons())
+            return MouseButtonsSet(ffiDownCall { desktop_macos_h.events_pressed_mouse_buttons() })
         }
 
         public fun pressedModifiers(): KeyModifiersSet {
-            return KeyModifiersSet(desktop_macos_h.events_pressed_modifiers())
+            return KeyModifiersSet(ffiDownCall { desktop_macos_h.events_pressed_modifiers() })
         }
 
         public fun cursorLocationInScreen(): LogicalPoint {
             return Arena.ofConfined().use { arena ->
-                LogicalPoint.fromNative(desktop_macos_h.events_cursor_location_in_screen(arena))
+                LogicalPoint.fromNative(ffiDownCall { desktop_macos_h.events_cursor_location_in_screen(arena) })
             }
         }
     }
