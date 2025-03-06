@@ -334,7 +334,7 @@ impl Window {
         }
     }
 
-    pub(crate) fn open_file_dialog(&self, mtm: MainThreadMarker, params: FileDialogParams, callback: FileDialogCallback) {
+    pub(crate) fn open_file_dialog(&self, mtm: MainThreadMarker, params: &FileDialogParams, callback: FileDialogCallback) {
         const NSMODAL_RESPONSE_OK: NSModalResponse = 1;
 
         let panel = unsafe { NSOpenPanel::new(mtm) };
@@ -346,7 +346,7 @@ impl Window {
         };
         if let Some(path) = res
             .then_some(())
-            .and_then(|_| unsafe { panel.URL() })
+            .and_then(|()| unsafe { panel.URL() })
             .and_then(|url| unsafe { url.path() })
         {
             callback(path.UTF8String());

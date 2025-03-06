@@ -64,7 +64,7 @@ impl BorrowedStrPtr<'_> {
     }
 }
 
-impl<'a> std::fmt::Debug for BorrowedStrPtr<'a> {
+impl std::fmt::Debug for BorrowedStrPtr<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.as_str())
     }

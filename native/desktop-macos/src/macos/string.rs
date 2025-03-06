@@ -17,7 +17,7 @@ pub extern "C" fn string_drop(mut str_ptr: RustAllocatedStrPtr) {
     });
 }
 
-pub(crate) fn borrow_ns_string<'a>(s: &'a NSString) -> BorrowedStrPtr<'a> {
+pub(crate) fn borrow_ns_string(s: &NSString) -> BorrowedStrPtr<'_> {
     let c_str = unsafe { CStr::from_ptr(s.UTF8String()) };
     BorrowedStrPtr::new(c_str)
 }
