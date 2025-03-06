@@ -1,11 +1,10 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use log::info;
 use objc2::{ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
-    NSEventType, NSRunningApplication,
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSRunningApplication
 };
-use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
+use objc2_foundation::{MainThreadMarker, NSData, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
 use std::cell::OnceCell;
 
 use crate::{
@@ -205,6 +204,21 @@ pub extern "C" fn application_unhide_all_applications() {
         }
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u64) {
+    ffi_boundary("application_set_dock_icon", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        let bytes = unsafe { std::slice::from_raw_parts_mut(data, data_length.try_into().unwrap()) };
+        let data = NSData::with_bytes(bytes);
+        let image = NSImage::initWithData(mtm.alloc(), &data).context("Can't create image from data")?;
+        unsafe {
+            app.setApplicationIconImage(Some(&image));
+        }
+        Ok(())
+    })
 }
 
 #[derive(Debug)]

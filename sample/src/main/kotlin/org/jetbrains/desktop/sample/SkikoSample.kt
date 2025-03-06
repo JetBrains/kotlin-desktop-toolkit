@@ -28,6 +28,8 @@ import org.jetbrains.skia.Color
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import java.lang.AutoCloseable
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.cos
@@ -626,6 +628,9 @@ fun main() {
         state.createWindow(useCustomTitlebar = true)
         Application.runEventLoop { event ->
             if (event is Event.ApplicationDidFinishLaunching) {
+                Files.readAllBytes(Path.of("resources/jb-logo.png")).let { iconBytes ->
+                    Application.setDockIcon(iconBytes)
+                }
                 AppMenuManager.setMainMenu(state.buildMenu())
             }
             state.handleEvent(event)
