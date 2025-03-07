@@ -12,7 +12,7 @@ use objc2::{
     runtime::{AnyObject, Bool, ProtocolObject, Sel},
 };
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSModalResponse, NSNormalWindowLevel, NSOpenPanel, NSScreen,
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen,
     NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
     NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode,
     NSWindowStyleMask, NSWindowTitleVisibility,
@@ -44,7 +44,7 @@ use super::{
     events::to_key_up_event,
     metal_api::MetalView,
     screen::NSScreenExts,
-    window_api::{FileDialogCallback, FileDialogParams, WindowBackground, WindowId, WindowParams, WindowVisualEffect},
+    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
 
 pub(crate) struct Window {
@@ -328,27 +328,6 @@ impl Window {
         unsafe {
             layer.ns_view.setFrameSize(content_view.frame().size);
             content_view.addSubview_positioned_relativeTo(&layer.ns_view, NSWindowOrderingMode::Below, Some(&self.root_view));
-        }
-    }
-
-    pub(crate) fn open_file_dialog(&self, mtm: MainThreadMarker, params: &FileDialogParams, callback: FileDialogCallback) {
-        const NSMODAL_RESPONSE_OK: NSModalResponse = 1;
-
-        let panel = unsafe { NSOpenPanel::new(mtm) };
-        let res = unsafe {
-            panel.setCanChooseFiles(params.allow_file);
-            panel.setCanChooseDirectories(params.allow_folder);
-            panel.setAllowsMultipleSelection(params.allow_multiple_selection);
-            panel.runModal() == NSMODAL_RESPONSE_OK
-        };
-        if let Some(path) = res
-            .then_some(())
-            .and_then(|()| unsafe { panel.URL() })
-            .and_then(|url| unsafe { url.path() })
-        {
-            callback(path.UTF8String());
-        } else {
-            callback(std::ptr::null());
         }
     }
 }

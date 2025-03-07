@@ -14,3 +14,4 @@ pub mod string;
 pub mod text_operations;
 pub mod window;
 pub mod window_api;
+pub mod file_dialog;
