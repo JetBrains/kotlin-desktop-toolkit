@@ -3,8 +3,6 @@ package org.jetbrains.desktop.macos
 import org.jetbrains.desktop.LogicalPixels
 import org.jetbrains.desktop.LogicalPoint
 import org.jetbrains.desktop.LogicalSize
-import org.jetbrains.desktop.macos.generated.NativeFileDialogCallback
-import org.jetbrains.desktop.macos.generated.NativeFileDialogParams
 import org.jetbrains.desktop.macos.generated.NativeWindowBackground
 import org.jetbrains.desktop.macos.generated.NativeWindowParams
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
@@ -229,27 +227,6 @@ public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desk
             }
         }
     }
-
-    public fun openFileDialog(params: FileDialogParams, callback: (String?) -> Unit) {
-        Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                val nativeCallback = NativeFileDialogCallback.allocate({
-                    val path = if (it == MemorySegment.NULL) {
-                        null
-                    } else {
-                        it.getUtf8String(0)
-                    }
-                    callback(path)
-                }, arena)
-                val nativeParams = NativeFileDialogParams.allocate(arena)
-                NativeFileDialogParams.allow_file(nativeParams, params.allowFile)
-                NativeFileDialogParams.allow_folder(nativeParams, params.allowFolder)
-                NativeFileDialogParams.allow_multiple_selection(nativeParams, params.allowMultipleSelection)
-
-                desktop_macos_h.window_open_file_dialog(pointer, nativeParams, nativeCallback)
-            }
-        }
-    }
 }
 
 public sealed class WindowBackground {
@@ -313,9 +290,3 @@ public enum class WindowVisualEffect {
         }
     }
 }
-
-public data class FileDialogParams(
-    val allowFile: Boolean = true,
-    val allowFolder: Boolean = true,
-    val allowMultipleSelection: Boolean = false,
-)

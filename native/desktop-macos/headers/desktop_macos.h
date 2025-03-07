@@ -421,14 +421,6 @@ typedef struct NativeWindowParams {
   NativeLogicalPixels titlebar_height;
 } NativeWindowParams;
 
-typedef struct NativeFileDialogParams {
-  bool allow_file;
-  bool allow_folder;
-  bool allow_multiple_selection;
-} NativeFileDialogParams;
-
-typedef void (*NativeFileDialogCallback)(const char*);
-
 typedef struct NativeColor {
   double red;
   double green;
@@ -453,6 +445,12 @@ typedef struct NativeWindowBackground {
     };
   };
 } NativeWindowBackground;
+
+typedef struct NativeFileDialogParams {
+  bool allow_file;
+  bool allow_folder;
+  bool allow_multiple_selection;
+} NativeFileDialogParams;
 
 struct NativeExceptionsArray logger_check_exceptions(void);
 
@@ -588,12 +586,10 @@ void window_toggle_full_screen(NativeWindowPtr window_ptr);
 
 bool window_is_full_screen(NativeWindowPtr window_ptr);
 
-void window_open_file_dialog(NativeWindowPtr window_ptr,
-                             struct NativeFileDialogParams params,
-                             NativeFileDialogCallback callback);
-
 void window_start_drag(NativeWindowPtr window_ptr);
 
 void window_invalidate_shadow(NativeWindowPtr window_ptr);
 
 void window_set_background(NativeWindowPtr window_ptr, struct NativeWindowBackground background);
+
+NativeRustAllocatedStrPtr file_dialog_run_modal(struct NativeFileDialogParams params);
