@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.tests
 
 import org.jetbrains.desktop.LogicalPoint
+import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
@@ -11,6 +12,9 @@ import org.junit.jupiter.api.Test
 class MetalTests {
     @Test
     fun smokeTest() {
+        GrandCentralDispatch.dispatchOnMainSync {
+            Application.init()
+        }
         val (device, queue) = GrandCentralDispatch.dispatchOnMainSync {
             val device = MetalDevice.create()
             val queue = MetalCommandQueue.create(device)

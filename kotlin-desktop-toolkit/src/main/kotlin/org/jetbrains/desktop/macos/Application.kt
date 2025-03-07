@@ -105,9 +105,11 @@ public object Application {
     // called from native
     private fun onShouldTerminate(): Boolean {
         Logger.info { "onShouldTerminate" }
-        return ffiUpCall(default = false) {
+        return ffiUpCall(defaultResult = false) {
             // todo send event to request user interaction?
-            true
+            // we always cancel termination because otherwise jvm shoultdown hooks might be skipped
+            // to stop application we may call `Application.stopEventLoop()`
+            false
         }
     }
 
@@ -132,7 +134,7 @@ public object Application {
 
     // called from native
     private fun onEvent(nativeEvent: MemorySegment): Boolean {
-        return ffiUpCall(default = false) {
+        return ffiUpCall(defaultResult = false) {
             val event = Event.fromNative(nativeEvent)
             when (event) {
                 is Event.ApplicationDidFinishLaunching -> {
@@ -153,7 +155,7 @@ public object Application {
 
     private fun onTextOperation(nativeOperation: MemorySegment): Boolean {
         val operation = TextOperation.fromNative(nativeOperation)
-        return ffiUpCall(default = false) {
+        return ffiUpCall(defaultResult = false) {
             textOperationHandler?.invoke(operation)
         } ?: run {
             Logger.warn { "textOperationHandler is null; event: $operation was ignored!" }

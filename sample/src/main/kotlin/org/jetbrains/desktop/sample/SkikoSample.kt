@@ -500,10 +500,7 @@ class ApplicationState : AutoCloseable {
                     "Quit",
                     keystroke = Keystroke(key = "q", modifiers = KeyModifiersSet.create(command = true)),
                     perform = {
-                        thread {
-                            // we shouldn't call this function on main thread because it block it
-                            Runtime.getRuntime().exit(0)
-                        }
+                        Application.stopEventLoop()
                     },
                 ),
                 specialTag = AppMenuItem.SubMenu.SpecialTag.AppNameMenu,
@@ -621,9 +618,18 @@ class ApplicationState : AutoCloseable {
 }
 
 fun main() {
-    KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     Logger.info { runtimeInfo() }
+    KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     Application.init(Application.ApplicationConfig())
+    Application.setTextOperationHandler { textOperation ->
+        if (textOperation is TextOperation.TextCommand) {
+            Logger.debug { "TextOperationHandler received $textOperation , ignoring" }
+            false
+        } else {
+            Logger.debug { "TextOperationHandler received $textOperation" }
+            true
+        }
+    }
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
         Application.runEventLoop { event ->

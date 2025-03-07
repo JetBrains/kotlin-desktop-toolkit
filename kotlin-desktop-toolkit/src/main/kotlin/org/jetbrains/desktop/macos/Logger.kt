@@ -233,11 +233,11 @@ internal inline fun ffiUpCall(crossinline body: () -> Unit) {
     }
 }
 
-internal inline fun <T> ffiUpCall(default: T, crossinline body: () -> T): T {
+internal inline fun <T> ffiUpCall(defaultResult: T, crossinline body: () -> T): T {
     return try {
         body()
     } catch (e: Throwable) {
         Logger.error(e) { "Exception caught" }
-        default
+        defaultResult
     }
 }
