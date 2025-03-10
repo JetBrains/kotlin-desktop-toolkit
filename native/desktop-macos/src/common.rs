@@ -43,15 +43,6 @@ impl<T> RustAllocatedRawPtr<'_, T> {
     }
 }
 
-impl Clone for RustAllocatedRawPtr<'_, std::ffi::c_void> {
-    fn clone(&self) -> Self {
-        Self(GenericRawPtr {
-            ptr: self.0.ptr,
-            phantom: PhantomData,
-        })
-    }
-}
-
 #[repr(transparent)]
 pub struct BorrowedStrPtr<'a>(GenericRawPtr<'a, std::ffi::c_char>);
 
