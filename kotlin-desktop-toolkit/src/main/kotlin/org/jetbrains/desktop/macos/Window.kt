@@ -3,7 +3,10 @@ package org.jetbrains.desktop.macos
 import org.jetbrains.desktop.LogicalPixels
 import org.jetbrains.desktop.LogicalPoint
 import org.jetbrains.desktop.LogicalSize
+import org.jetbrains.desktop.macos.generated.NativeEventHandler
+import org.jetbrains.desktop.macos.generated.NativeTextOperationHandler
 import org.jetbrains.desktop.macos.generated.NativeWindowBackground
+import org.jetbrains.desktop.macos.generated.NativeWindowCallbacks
 import org.jetbrains.desktop.macos.generated.NativeWindowParams
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
@@ -40,13 +43,17 @@ public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desk
     }
 
     public companion object {
-        public fun create(params: WindowParams): Window {
+        public fun create(params: WindowParams,
+                          eventHandler: EventHandler?,
+                          textOperationHandler: TextOperationHandler?): Window {
             return Arena.ofConfined().use { arena ->
-                Window(ffiDownCall { desktop_macos_h.window_create(params.toNative(arena)) })
+                Window(ffiDownCall { desktop_macos_h.window_create(params.toNative(arena), windowCallbacks(eventHandler, textOperationHandler)) })
             }
         }
 
         public fun create(
+            eventHandler: EventHandler? = null,
+            textOperationHandler: TextOperationHandler? = null,
             origin: LogicalPoint = LogicalPoint(0.0, 0.0),
             size: LogicalSize = LogicalSize(640.0, 480.0),
             title: String = "Window",
@@ -67,8 +74,52 @@ public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desk
                     isFullScreenAllowed,
                     useCustomTitlebar,
                 ),
+                eventHandler,
+                textOperationHandler,
             )
         }
+
+        private fun runEventHandler(eventHandler: EventHandler?, event: Event): EventHandlerResult {
+            return eventHandler?.let { eventHandler ->
+                eventHandler(event)
+            } ?: run {
+                Logger.warn { "eventHandler is null; event: $event was ignored!" }
+                EventHandlerResult.Continue
+            }
+        }
+
+        // called from native
+        private fun onEvent(eventHandler: EventHandler?, nativeEvent: MemorySegment, @Suppress("UNUSED_PARAMETER") userData: MemorySegment): Boolean {
+            return ffiUpCall(defaultResult = false) {
+                val event = Event.fromNative(nativeEvent)
+                val result = runEventHandler(eventHandler, event)
+                when (result) {
+                    EventHandlerResult.Continue -> false
+                    EventHandlerResult.Stop -> true
+                }
+            }
+        }
+
+        private fun onTextOperation(textOperationHandler: TextOperationHandler?, nativeOperation: MemorySegment, @Suppress("UNUSED_PARAMETER") userData: MemorySegment): Boolean {
+            val operation = TextOperation.fromNative(nativeOperation)
+            return ffiUpCall(defaultResult = false) {
+                textOperationHandler?.invoke(operation)
+            } ?: run {
+                Logger.warn { "textOperationHandler is null; event: $operation was ignored!" }
+                false
+            }
+        }
+
+        private fun windowCallbacks(eventHandler: EventHandler?, textOperationHandler: TextOperationHandler?): MemorySegment {
+            val arena = Arena.global()
+            val callbacks = NativeWindowCallbacks.allocate(arena)
+            NativeWindowCallbacks.event_handler(callbacks, NativeEventHandler.allocate(
+                { nativeEvent, userData -> onEvent(eventHandler, nativeEvent, userData) }, arena))
+            NativeWindowCallbacks.text_operation_handler(callbacks, NativeTextOperationHandler.allocate(
+                { nativeEvent, userData -> onTextOperation(textOperationHandler, nativeEvent, userData) }, arena))
+            return callbacks
+        }
+
     }
 
     public fun windowId(): WindowId {

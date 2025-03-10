@@ -169,13 +169,9 @@ public sealed class Event {
         val isFullScreen: Boolean,
     ) : Event()
 
-    public data object DisplayConfigurationChange : Event()
-
-    public data object ApplicationDidFinishLaunching : Event()
-
     public data class WindowCloseRequest(val windowId: WindowId) : Event()
 
-    public fun windowId(): WindowId? {
+    public fun windowId(): WindowId {
         return when (this) {
             is KeyDown -> windowId
             is KeyUp -> windowId
@@ -193,8 +189,6 @@ public sealed class Event {
             is WindowCloseRequest -> windowId
             is WindowFullScreenToggle -> windowId
             is ModifiersChanged -> windowId
-            ApplicationDidFinishLaunching -> null
-            DisplayConfigurationChange -> null
         }
     }
 }
@@ -319,12 +313,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.WindowCloseRequest(
                 windowId = NativeWindowCloseRequestEvent.window_id(nativeEvent),
             )
-        }
-        desktop_macos_h.NativeEvent_DisplayConfigurationChange() -> {
-            Event.DisplayConfigurationChange
-        }
-        desktop_macos_h.NativeEvent_ApplicationDidFinishLaunching() -> {
-            Event.ApplicationDidFinishLaunching
         }
         desktop_macos_h.NativeEvent_WindowFullScreenToggle() -> {
             val nativeEvent = NativeEvent.window_full_screen_toggle(s)

@@ -2,8 +2,6 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeApplicationCallbacks
 import org.jetbrains.desktop.macos.generated.NativeApplicationConfig
-import org.jetbrains.desktop.macos.generated.NativeEventHandler
-import org.jetbrains.desktop.macos.generated.NativeTextOperationHandler
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -30,8 +28,6 @@ public object Application {
         }
     }
 
-    private var eventHandler: EventHandler? = null
-    private var textOperationHandler: TextOperationHandler? = null
     public lateinit var screens: AllScreens
 
     public fun init(applicationConfig: ApplicationConfig = ApplicationConfig()) {
@@ -42,15 +38,10 @@ public object Application {
         }
     }
 
-    public fun runEventLoop(eventHandler: EventHandler) {
+    public fun runEventLoop() {
         ffiDownCall {
-            this.eventHandler = eventHandler
             desktop_macos_h.application_run_event_loop()
         }
-    }
-
-    public fun setTextOperationHandler(textOperationHandler: TextOperationHandler) {
-        this.textOperationHandler = textOperationHandler
     }
 
     public fun stopEventLoop() {
@@ -126,44 +117,16 @@ public object Application {
         }
     }
 
-    private fun runEventHandler(event: Event): EventHandlerResult {
-        return eventHandler?.let { eventHandler ->
-            eventHandler(event)
-        } ?: run {
-            Logger.warn { "eventHandler is null; event: $event was ignored!" }
-            EventHandlerResult.Continue
-        }
+    // called from native
+    private fun onDidChangeScreenParameters() {
+        Logger.info { "onDidChangeScreenParameters" }
+        screens = Screen.allScreens()
     }
 
     // called from native
-    private fun onEvent(nativeEvent: MemorySegment, @Suppress("UNUSED_PARAMETER") userData: MemorySegment): Boolean {
-        return ffiUpCall(defaultResult = false) {
-            val event = Event.fromNative(nativeEvent)
-            when (event) {
-                is Event.ApplicationDidFinishLaunching -> {
-                    screens = Screen.allScreens()
-                }
-                is Event.DisplayConfigurationChange -> {
-                    screens = Screen.allScreens()
-                }
-                else -> {}
-            }
-            val result = runEventHandler(event)
-            when (result) {
-                EventHandlerResult.Continue -> false
-                EventHandlerResult.Stop -> true
-            }
-        }
-    }
-
-    private fun onTextOperation(nativeOperation: MemorySegment, @Suppress("UNUSED_PARAMETER") userData: MemorySegment): Boolean {
-        val operation = TextOperation.fromNative(nativeOperation)
-        return ffiUpCall(defaultResult = false) {
-            textOperationHandler?.invoke(operation)
-        } ?: run {
-            Logger.warn { "textOperationHandler is null; event: $operation was ignored!" }
-            false
-        }
+    private fun onDidFinishLaunching() {
+        Logger.info { "onDidFinishLaunching" }
+        screens = Screen.allScreens()
     }
 
     private fun applicationCallbacks(): MemorySegment {
@@ -177,8 +140,14 @@ public object Application {
             callbacks,
             NativeApplicationCallbacks.on_will_terminate.allocate(::onWillTerminate, arena),
         )
-        NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
-        NativeApplicationCallbacks.text_operation_handler(callbacks, NativeTextOperationHandler.allocate(::onTextOperation, arena))
+        NativeApplicationCallbacks.on_did_change_screen_parameters(
+            callbacks,
+            NativeApplicationCallbacks.on_did_change_screen_parameters.allocate(::onDidChangeScreenParameters, arena),
+        )
+        NativeApplicationCallbacks.on_did_finish_launching(
+            callbacks,
+            NativeApplicationCallbacks.on_did_finish_launching.allocate(::onDidFinishLaunching, arena)
+        )
         return callbacks
     }
 }

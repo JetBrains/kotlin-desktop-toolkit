@@ -9,24 +9,7 @@ use objc2_foundation::{MainThreadMarker, NSData, NSNotification, NSObject, NSObj
 
 use crate::{common::RustAllocatedStrPtr, logger::ffi_boundary};
 
-use super::{
-    events::{CallbackUserData, EventHandler},
-    string::copy_to_c_string,
-    text_operations::TextOperationHandler,
-};
-
-#[derive(Debug)]
-pub(crate) struct AppState {
-    #[allow(dead_code)]
-    pub(crate) app: Retained<MyNSApplication>,
-    #[allow(dead_code)]
-    app_delegate: Retained<AppDelegate>,
-    pub(crate) event_handler: EventHandler,
-    pub(crate) event_handler_user_data: CallbackUserData,
-    pub(crate) mtm: MainThreadMarker,
-    pub(crate) text_operation_handler: TextOperationHandler,
-    pub(crate) text_operation_handler_user_data: CallbackUserData,
-}
+use super::string::copy_to_c_string;
 
 #[repr(C)]
 #[derive(Debug)]

@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    application_api::{AppState, MyNSApplication},
+    application_api::MyNSApplication,
     events::{CallbackUserData, EventHandler},
     metal_api::{MetalView, MetalViewPtr},
     screen::{NSScreenExts, ScreenId},

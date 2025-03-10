@@ -2,13 +2,17 @@ package org.jetbrains.desktop.sample
 
 import org.jetbrains.desktop.LogicalSize
 import org.jetbrains.desktop.PhysicalSize
+import org.jetbrains.desktop.macos.AppMenuManager
+import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.DisplayLink
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
+import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView
 import org.jetbrains.desktop.macos.ScreenId
+import org.jetbrains.desktop.macos.TextOperation
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.skia.BackendRenderTarget
 import org.jetbrains.skia.Canvas
@@ -18,15 +22,37 @@ import org.jetbrains.skia.DirectContext
 import org.jetbrains.skia.Surface
 import org.jetbrains.skia.SurfaceColorFormat
 import org.jetbrains.skia.SurfaceOrigin
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.time.TimeSource
 
 abstract class SkikoWindow(
     device: MetalDevice,
     private val queue: MetalCommandQueue,
     windowParams: Window.WindowParams,
+    appState: ApplicationState,
 ) : AutoCloseable {
 
-    val window = Window.create(windowParams)
+    var firstEvent = true
+
+    val window = Window.create(windowParams, eventHandler = { event ->
+        if (firstEvent) {
+            Files.readAllBytes(Path.of("resources/jb-logo.png")).let { iconBytes ->
+                Application.setDockIcon(iconBytes)
+            }
+            AppMenuManager.setMainMenu(appState.buildMenu())
+            firstEvent = false
+        }
+        appState.handleEvent(event)
+    }, textOperationHandler = { textOperation ->
+        if (textOperation is TextOperation.TextCommand) {
+            Logger.debug { "TextOperationHandler received $textOperation , ignoring" }
+            false
+        } else {
+            Logger.debug { "TextOperationHandler received $textOperation" }
+            true
+        }
+    })
     var displayLink = DisplayLink.create(window.screenId(), onNextFrame = {
         performDrawing(syncWithCA = false)
     })

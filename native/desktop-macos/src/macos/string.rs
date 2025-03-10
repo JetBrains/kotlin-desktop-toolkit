@@ -22,7 +22,7 @@ pub fn borrow_ns_string<'a>(s: &'a NSString) -> BorrowedStrPtr<'a> {
     BorrowedStrPtr::new(c_str)
 }
 
-pub(crate) fn copy_to_ns_string(s: &BorrowedStrPtr) -> anyhow::Result<Retained<NSString>> {
+pub fn copy_to_ns_string(s: &BorrowedStrPtr) -> anyhow::Result<Retained<NSString>> {
     let ptr = s.as_non_null().context("Null pointer")?;
     unsafe { NSString::stringWithUTF8String(ptr) }.context("stringWithUTF8String failed")
 }

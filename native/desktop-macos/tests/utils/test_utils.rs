@@ -1,3 +1,5 @@
+use std::ffi::c_ushort;
+
 use desktop_macos::{
     common::{BorrowedStrPtr, LogicalPoint, LogicalSize},
     logger_api::{LogLevel, LoggerConfiguration, logger_init},
@@ -139,10 +141,11 @@ impl<'a> TestData<'a> {
 
         if !self.expected_text_operations.is_empty() {
             Err(format!("{:?}", self.expected_text_operations).into())
+        } else if !self.expected_events.is_empty() {
+            Err(format!("{:?}", self.expected_events).into())
         } else {
             Ok(())
         }
-        //assert_eq!(self.expected_events.len(), 0, "{:?}", self.expected_events);
     }
 }
 
@@ -202,7 +205,7 @@ fn compare_text_operations(lhs: &TextOperation, rhs: &TextOperation) -> bool {
     }
 }
 
-pub fn make_ns_key_down_event<'a>(w_num: WindowId, keys: &NSString, flags: NSEventModifierFlags) -> Retained<NSEvent> {
+pub fn make_ns_key_down_event(w_num: WindowId, keys: &NSString, flags: NSEventModifierFlags, code: c_ushort) -> Retained<NSEvent> {
     let location = NSPoint::default();
     let time = NSTimeInterval::default();
     unsafe {
@@ -216,7 +219,7 @@ pub fn make_ns_key_down_event<'a>(w_num: WindowId, keys: &NSString, flags: NSEve
             keys,
             keys,
             false,
-            0,
+            code,
         ).unwrap()
     }
 }

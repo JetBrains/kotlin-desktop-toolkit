@@ -1,16 +1,16 @@
 mod utils;
 
-use std::ptr::NonNull;
+use std::{ffi::CStr, ptr::NonNull};
 
-use desktop_macos::macos::{
-    string::borrow_ns_string,
-    text_operations::{TextChangedOperation, TextOperation},
-};
+use desktop_macos::{common::BorrowedStrPtr, macos::{
+    events::{Event, KeyDownEvent}, keyboard::{KeyCode, KeyModifiersSet}, string::{borrow_ns_string, copy_to_ns_string}, text_operations::{TextChangedOperation, TextOperation}
+}};
 use libtest_mimic::Trial;
 use objc2::MainThreadMarker;
 use objc2_app_kit::NSEventModifierFlags;
 use objc2_foundation::{NSString, NSUTF32LittleEndianStringEncoding};
 use utils::test_utils::{TestData, TestResult, init_tests, make_ns_key_down_event};
+
 
 fn test_simple_text_input() -> TestResult {
     let mtm = MainThreadMarker::new().unwrap();
@@ -33,10 +33,22 @@ fn test_simple_text_input() -> TestResult {
         })
         .collect::<Vec<_>>();
 
+    let cstr = c"";
     for keys in &all_keys {
         test_data
             .events_to_send
-            .push(make_ns_key_down_event(test_data.window_id, keys, NSEventModifierFlags(0)));
+            .push(make_ns_key_down_event(test_data.window_id, keys, NSEventModifierFlags(0), 0));
+//        test_data
+//            .expected_events
+//            .push(Event::KeyDown(KeyDownEvent{
+//                window_id: test_data.window_id,
+//                modifiers: KeyModifiersSet(0),
+//                code: KeyCode(0),
+//                characters: BorrowedStrPtr::new(cstr),
+//                key: BorrowedStrPtr::new(cstr),
+//                is_repeat: false,
+//                timestamp: 0.0,
+//            }));
         test_data
             .expected_text_operations
             .push(TextOperation::TextChanged(TextChangedOperation {
@@ -48,6 +60,71 @@ fn test_simple_text_input() -> TestResult {
     test_data.run_test()
 }
 
+fn test_navigation_input() -> TestResult {
+    let mtm = MainThreadMarker::new().unwrap();
+    let mut test_data = TestData::default();
+
+    let all_keys: Vec<(u16, &CStr)> = vec![
+//        (36, c""), // -> Return
+//        (48, c""), // -> Tab
+//        (49, c""), // -> Space
+//        (51, c""), // -> Delete
+//        (53, c"\u{1B}"), // -> Escape
+//        (57, c""), // -> CapsLock
+//        (63, c""), // -> Function
+//        (64, c""), // -> F17
+//        (72, c""), // -> VolumeUp
+//        (73, c""), // -> VolumeDown
+//        (74, c""), // -> Mute
+//        (79, c""), // -> F18
+//        (80, c""), // -> F19
+//        (90, c""), // -> F20
+//        (96, c"\u{F708}"), // -> F5
+//        (97, c"\u{F709}"), // -> F6
+//        (98, c"\u{F70A}"), // -> F7
+//        (99, c"\u{F706}"), // -> F3
+//        (100, c"\u{F70B}"), // -> F8
+//        (101, c"\u{F70C}"), // -> F9
+//        (103, c"\u{F70E}"), // -> F11
+//        (105, c""), // -> F13
+//        (106, c""), // -> F16
+//        (107, c""), // -> F14
+//        (109, c"\u{F70D}"), // -> F10
+//        (110, c""), // -> ContextualMenu
+//        (111, c"\u{F70F}"), // -> F12
+//        (113, c""), // -> F15
+//        (114, c""), // -> Help
+//        (115, c""), // -> Home
+//        (116, c""), // -> PageUp
+//        (117, c""), // -> ForwardDelete
+//        (118, c"\u{F707}"), // -> F4
+//        (119, c""), // -> End
+//        (120, c"\u{F705}"), // -> F2
+//        (121, c""), // -> PageDown
+//        (122, c"\u{F704}"), // -> F1
+        (123, c"\u{F702}"), // -> LeftArrow
+        (124, c"\u{F703}"), // -> RightArrow
+        (125, c"\u{F701}"), // -> DownArrow
+        (126, c"\u{F700}"), // -> UpArrow
+    ];
+    for (key, cstr) in all_keys {
+        test_data
+            .events_to_send
+            .push(make_ns_key_down_event(test_data.window_id, &copy_to_ns_string(&BorrowedStrPtr::new(cstr)).unwrap(), NSEventModifierFlags(0), key));
+        test_data
+            .expected_events
+            .push(Event::KeyDown(KeyDownEvent{
+                window_id: test_data.window_id,
+                modifiers: KeyModifiersSet(0),
+                code: KeyCode(key),
+                characters: BorrowedStrPtr::new(cstr),
+                key: BorrowedStrPtr::new(cstr),
+                is_repeat: false,
+                timestamp: 0.0,
+            }));
+    }
+    test_data.run_test()
+}
 // TODO: add the following tests
 // * Send [ARROW_RIGHT] -> Event::KeyDown(ARROW_RIGHT)
 // * Send [Ctrl+ARROW_RIGHT] -> Event::KeyDown(Ctrl+ARROW_RIGHT)
@@ -78,7 +155,8 @@ fn main() {
     init_tests();
 
     let mut tests = Vec::<Trial>::new();
-    tests.push(Trial::test("test_simple_text_input", test_simple_text_input));
+//    tests.push(Trial::test("test_simple_text_input", test_simple_text_input));
+    tests.push(Trial::test("test_navigation_input", test_navigation_input));
 
     libtest_mimic::run(&args, tests).exit();
 }

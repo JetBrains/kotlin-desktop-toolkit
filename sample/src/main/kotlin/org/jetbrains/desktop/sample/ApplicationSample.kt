@@ -20,8 +20,8 @@ fun main() {
         ),
     )
     AppMenuManager.setMainMenu(buildAppMenu())
-    val window1 = Window.create(origin = LogicalPoint(100.0, 200.0), title = "Window1")
-    val window2 = Window.create(origin = LogicalPoint(200.0, 300.0), title = "Window2")
+    val window1 = Window.create(origin = LogicalPoint(100.0, 200.0), title = "Window1", eventHandler = { EventHandlerResult.Continue })
+    val window2 = Window.create(origin = LogicalPoint(200.0, 300.0), title = "Window2", eventHandler = { EventHandlerResult.Continue })
 
     thread {
         while (true) {
@@ -31,7 +31,7 @@ fun main() {
             Thread.sleep(1000)
         }
     }
-    Application.runEventLoop { EventHandlerResult.Continue }
+    Application.runEventLoop()
     window1.close()
     window2.close()
 }

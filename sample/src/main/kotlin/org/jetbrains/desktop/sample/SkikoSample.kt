@@ -10,6 +10,7 @@ import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.AppMenuStructure
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
+import org.jetbrains.desktop.macos.EventHandler
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.FileDialog
 import org.jetbrains.desktop.macos.KeyModifiersSet
@@ -20,7 +21,7 @@ import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.Screen
-import org.jetbrains.desktop.macos.TextOperation
+import org.jetbrains.desktop.macos.TextOperationHandler
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
 import org.jetbrains.desktop.macos.WindowVisualEffect
@@ -31,7 +32,6 @@ import org.jetbrains.skia.Rect
 import java.lang.AutoCloseable
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -245,10 +245,12 @@ class RotatingBallWindow(
     queue: MetalCommandQueue,
     private val windowContainer: WindowContainer,
     windowParams: Window.WindowParams,
+    appState: ApplicationState,
 ) : SkikoWindow(
     device,
     queue,
     windowParams,
+    appState,
 ) {
 
     companion object {
@@ -258,6 +260,7 @@ class RotatingBallWindow(
             title: String,
             origin: LogicalPoint,
             useCustomTitlebar: Boolean,
+            appState: ApplicationState,
         ): RotatingBallWindow {
             val windowSize = LogicalSize(640.0, 480.0)
             val windowContentSize = windowSize // todo it's incorrect
@@ -271,7 +274,7 @@ class RotatingBallWindow(
                 titlebarHeight = container.customTitlebar?.size?.height ?: 0.0,
             )
 
-            return RotatingBallWindow(device, queue, container, windowParams)
+            return RotatingBallWindow(device, queue, container, windowParams, appState)
         }
     }
 
@@ -329,6 +332,7 @@ class ApplicationState : AutoCloseable {
                 "Window ${windows.count()}",
                 LogicalPoint(0.0, 0.0),
                 useCustomTitlebar,
+                this,
             ),
         )
     }
@@ -619,25 +623,8 @@ fun main() {
     Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     Application.init(Application.ApplicationConfig())
-    Application.setTextOperationHandler { textOperation ->
-        if (textOperation is TextOperation.TextCommand) {
-            Logger.debug { "TextOperationHandler received $textOperation , ignoring" }
-            false
-        } else {
-            Logger.debug { "TextOperationHandler received $textOperation" }
-            true
-        }
-    }
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
-        Application.runEventLoop { event ->
-            if (event is Event.ApplicationDidFinishLaunching) {
-                Files.readAllBytes(Path.of("resources/jb-logo.png")).let { iconBytes ->
-                    Application.setDockIcon(iconBytes)
-                }
-                AppMenuManager.setMainMenu(state.buildMenu())
-            }
-            state.handleEvent(event)
-        }
+        Application.runEventLoop()
     }
 }
