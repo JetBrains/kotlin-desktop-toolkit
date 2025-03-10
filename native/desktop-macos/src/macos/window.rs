@@ -852,6 +852,7 @@ impl RootView {
                 debug!("Ignoring the noop: selector, forwarding the raw event");
                 return Ok(());
             }
+            debug!("do_command_by_selector: {s:?}");
             let ivars = self.ivars();
             let key_event_info = ivars.current_key_down_event.take();
             let original_event = key_event_info.as_ref().map(KeyDownEvent::from_key_event_info);

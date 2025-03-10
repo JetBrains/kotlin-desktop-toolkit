@@ -61,7 +61,6 @@ fn test_simple_text_input() -> TestResult {
 }
 
 fn test_navigation_input() -> TestResult {
-    let mtm = MainThreadMarker::new().unwrap();
     let mut test_data = TestData::default();
 
     let all_keys: Vec<(u16, &CStr)> = vec![
@@ -69,7 +68,7 @@ fn test_navigation_input() -> TestResult {
 //        (48, c""), // -> Tab
 //        (49, c""), // -> Space
 //        (51, c""), // -> Delete
-//        (53, c"\u{1B}"), // -> Escape
+        (53, c"\u{1B}"), // -> Escape
 //        (57, c""), // -> CapsLock
 //        (63, c""), // -> Function
 //        (64, c""), // -> F17
@@ -79,29 +78,29 @@ fn test_navigation_input() -> TestResult {
 //        (79, c""), // -> F18
 //        (80, c""), // -> F19
 //        (90, c""), // -> F20
-//        (96, c"\u{F708}"), // -> F5
-//        (97, c"\u{F709}"), // -> F6
-//        (98, c"\u{F70A}"), // -> F7
-//        (99, c"\u{F706}"), // -> F3
-//        (100, c"\u{F70B}"), // -> F8
-//        (101, c"\u{F70C}"), // -> F9
-//        (103, c"\u{F70E}"), // -> F11
+        (96, c"\u{F708}"), // -> F5
+        (97, c"\u{F709}"), // -> F6
+        (98, c"\u{F70A}"), // -> F7
+        (99, c"\u{F706}"), // -> F3
+        (100, c"\u{F70B}"), // -> F8
+        (101, c"\u{F70C}"), // -> F9
+        (103, c"\u{F70E}"), // -> F11
 //        (105, c""), // -> F13
 //        (106, c""), // -> F16
 //        (107, c""), // -> F14
-//        (109, c"\u{F70D}"), // -> F10
+        (109, c"\u{F70D}"), // -> F10
 //        (110, c""), // -> ContextualMenu
-//        (111, c"\u{F70F}"), // -> F12
+        (111, c"\u{F70F}"), // -> F12
 //        (113, c""), // -> F15
 //        (114, c""), // -> Help
 //        (115, c""), // -> Home
 //        (116, c""), // -> PageUp
 //        (117, c""), // -> ForwardDelete
-//        (118, c"\u{F707}"), // -> F4
+        (118, c"\u{F707}"), // -> F4
 //        (119, c""), // -> End
-//        (120, c"\u{F705}"), // -> F2
+        (120, c"\u{F705}"), // -> F2
 //        (121, c""), // -> PageDown
-//        (122, c"\u{F704}"), // -> F1
+        (122, c"\u{F704}"), // -> F1
         (123, c"\u{F702}"), // -> LeftArrow
         (124, c"\u{F703}"), // -> RightArrow
         (125, c"\u{F701}"), // -> DownArrow

@@ -29,58 +29,63 @@ pub struct TestData<'a> {
 }
 
 extern "C" fn event_handler(e: &Event, user_data: CallbackUserData) -> bool {
-    eprintln!("event_handler: {e:?}");
-
     let test_data: &mut TestData = unsafe { &mut *(user_data.cast()) };
+    eprintln!("event_handler: events_to_send.len: {}, {e:?}", test_data.events_to_send.len());
 
     if !test_data.events_to_send.is_empty() {
         let mtm = MainThreadMarker::new().unwrap();
         let app = NSApplication::sharedApplication(mtm);
-        for e in &test_data.events_to_send {
+        let events_to_send = std::mem::take(&mut test_data.events_to_send);
+        for e in &events_to_send {
             eprintln!("Sending event: {e:?}");
             unsafe { app.sendEvent(e) };
         }
         test_data.events_to_send.clear();
+        eprintln!("event_handler: sent all events, events_to_send.len: {}", test_data.events_to_send.len());
     } else {
-        match e {
-            Event::WindowResize(_) | Event::WindowMove(_) | Event::WindowFocusChange(_) => return true,
-            _ => {}
-        }
-        if let Some(expected_event) = test_data.expected_events.first() {
-            if compare_events(e, expected_event) {
-                test_data.expected_events.remove(0);
-                if !test_data.expected_events.is_empty() {
-                    return true;
-                } else {
-                    application_stop_event_loop();
-                    return true;
-                }
+        if !test_data.expected_events.is_empty() {
+            match e {
+                Event::WindowResize(_) | Event::WindowMove(_) | Event::WindowFocusChange(_) => return true,
+                _ => {}
+            }
+            let expected_event = test_data.expected_events.remove(0);
+            if !compare_events(e, &expected_event) {
+                eprintln!("Unexpected event: {e:?}");
+                eprintln!("Expected: {expected_event:?}");
+                application_stop_event_loop();
             }
         }
-        eprintln!("Unexpected event: {e:?}");
-        application_stop_event_loop();
+        if test_data.expected_events.is_empty() && test_data.expected_text_operations.is_empty() {
+            application_stop_event_loop();
+        }
     }
     true
 }
 
 extern "C" fn text_operation_handler(e: &TextOperation, user_data: CallbackUserData) -> bool {
     let test_data: &mut TestData = unsafe { &mut *(user_data.cast()) };
-    if let Some(expected_op) = test_data.expected_text_operations.first() {
-        eprintln!("text_operation_handler, checking if event is {expected_op:?}");
-        if compare_text_operations(e, expected_op) {
-            test_data.expected_text_operations.remove(0);
-            if !test_data.expected_text_operations.is_empty() {
-                return true;
-            } else {
+    let mut handled = true;
+    if let TextOperation::TextCommand(_) = e {
+        eprintln!("Returning false for {e:?}");
+        handled = false;
+    } else {
+        if test_data.expected_text_operations.is_empty() {
+            eprintln!("Unexpected text operation (expected list is empty): {e:?}");
+            application_stop_event_loop();
+        } else {
+            let expected_op = test_data.expected_text_operations.remove(0);
+            if !compare_text_operations(e, &expected_op) {
+                eprintln!("Unexpected text operation: {e:?}");
+                eprintln!("Expected: {expected_op:?}");
                 application_stop_event_loop();
-                return true;
             }
         }
     }
+    if test_data.expected_events.is_empty() && test_data.expected_text_operations.is_empty() {
+        application_stop_event_loop();
+    }
 
-    eprintln!("Unexpected event: {e:?}");
-    application_stop_event_loop();
-    true
+    handled
 }
 
 pub fn init_tests() {
