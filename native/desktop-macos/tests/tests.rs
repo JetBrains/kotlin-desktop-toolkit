@@ -12,22 +12,39 @@ use objc2_app_kit::NSEventModifierFlags;
 use objc2_foundation::{NSString, NSUTF32LittleEndianStringEncoding};
 use utils::test_utils::{TestData, TestResult, init_tests, make_ns_key_down_event};
 
-fn test_simple_text_input(key: char) -> TestResult {
+fn test_simple_text_input() -> TestResult {
     let mtm = MainThreadMarker::new().unwrap();
     let mut test_data = TestData::default();
-    let d = NonNull::<std::ffi::c_void>::new((&raw const key).cast_mut().cast()).unwrap();
-    let keys = unsafe { NSString::initWithBytes_length_encoding(mtm.alloc(), d, 4, NSUTF32LittleEndianStringEncoding) }.unwrap();
 
-    test_data
-        .events_to_send
-        .push(make_ns_key_down_event(test_data.window_id, &keys, NSEventModifierFlags(0)));
-    test_data
-        .expected_text_operations
-        .push(TextOperation::TextChanged(TextChangedOperation {
-            window_id: test_data.window_id,
-            original_event: None, // not yet checked in tests
-            text: borrow_ns_string(&keys),
-        }));
+    let all_keys = (0x0020..0x007E)
+        .chain(0x0020..0x007E)
+        .chain(0x00A1..0x00BF)
+        .chain(0x00C0..0x00FF)
+        .chain(0x0400..0x04FF)
+        .chain(0x0600..0x06FF)
+        .chain(0x1D00..0x1EFF)
+        .chain(0x30A0..0x30FF)
+        .chain(0x1F600..0x1F64F)
+        .chain(0x31350..0x313AF)
+        .map(|v| {
+            let key = char::from_u32(v).unwrap();
+            let d = NonNull::<std::ffi::c_void>::new((&raw const key).cast_mut().cast()).unwrap();
+            unsafe { NSString::initWithBytes_length_encoding(mtm.alloc(), d, 4, NSUTF32LittleEndianStringEncoding) }.unwrap()
+        })
+        .collect::<Vec<_>>();
+
+    for keys in &all_keys {
+        test_data
+            .events_to_send
+            .push(make_ns_key_down_event(test_data.window_id, keys, NSEventModifierFlags(0)));
+        test_data
+            .expected_text_operations
+            .push(TextOperation::TextChanged(TextChangedOperation {
+                window_id: test_data.window_id,
+                original_event: None, // not yet checked in tests
+                text: borrow_ns_string(keys),
+            }));
+    }
     test_data.run_test()
 }
 
@@ -58,18 +75,10 @@ fn test_simple_text_input(key: char) -> TestResult {
 fn main() {
     let mut args = libtest_mimic::Arguments::from_args();
     args.test_threads = Some(1);
+    init_tests();
 
     let mut tests = Vec::<Trial>::new();
-    init_tests();
-    //    tests.push(Trial::test("test_simple_text_input", move || test_simple_text_input(65)));
-    for v in (0x0020..0x007E) {
-        //(0x0020..0x007E).chain(0x00A1..0x00BF).chain(0x00C0..0x00FF).chain(0x0400..0x04FF).chain(0x0600..0x06FF).chain(0x1D00..0x1EFF).chain(0x30A0..0x30FF).chain(0x1F600..0x1F64F).chain(0x31350..0x313AF) {
-        let key = char::from_u32(v).unwrap();
-
-        tests.push(Trial::test(format!("test_simple_text_input: {key}"), move || {
-            test_simple_text_input(key)
-        }));
-    }
+    tests.push(Trial::test("test_simple_text_input", test_simple_text_input));
 
     libtest_mimic::run(&args, tests).exit();
 }
