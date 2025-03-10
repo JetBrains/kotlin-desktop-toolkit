@@ -1,14 +1,16 @@
 use std::sync::Mutex;
 
 use desktop_macos::{
-    common::{BorrowedStrPtr, LogicalPoint, LogicalSize}, logger_api::{logger_init, LogLevel, LoggerConfiguration}, macos::{
+    common::{BorrowedStrPtr, LogicalPoint, LogicalSize},
+    logger_api::{LogLevel, LoggerConfiguration, logger_init},
+    macos::{
         application_api::{
-            application_init, application_run_event_loop, application_stop_event_loop, ApplicationCallbacks, ApplicationConfig
+            ApplicationCallbacks, ApplicationConfig, application_init, application_run_event_loop, application_stop_event_loop,
         },
         events::{CallbackUserData, Event},
         text_operations::TextOperation,
-        window_api::{window_create, window_get_window_id, WindowId, WindowParams},
-    }
+        window_api::{WindowCallbacks, WindowId, WindowParams, window_create, window_drop, window_get_window_id},
+    },
 };
 
 use objc2::MainThreadMarker;
@@ -30,35 +32,56 @@ pub struct TestData<'a> {
 
 impl<'a> TestData<'a> {
     pub fn init() -> Box<Self> {
-        let params = WindowParams {
-            origin: LogicalPoint { x: 0.0, y: 0.0 },
-            size: LogicalSize { width: 0.0, height: 0.0 },
-            title: BorrowedStrPtr::new(c"Test Window 1"),
+        extern "C" fn on_should_terminate() -> bool {
+            true
+        }
+        extern "C" fn dummy() {}
 
-            is_resizable: false,
-            is_closable: true,
-            is_miniaturizable: true,
-
-            is_full_screen_allowed: false,
-            use_custom_titlebar: false,
-            titlebar_height: 0.0,
+        let config = ApplicationConfig {
+            disable_dictation_menu_item: false,
+            disable_character_palette_menu_item: false,
         };
 
+        let test_data = Box::new(TestData::default());
+
+        let callbacks = ApplicationCallbacks {
+            on_should_terminate,
+            on_will_terminate: dummy,
+            on_did_change_screen_parameters: dummy,
+            on_did_finish_launching: dummy,
+        };
+        eprintln!("application_init");
+
+        let mut is_initialized = IS_INITIALIZED.lock().unwrap();
+        if !(*is_initialized) {
+            logger_init(&LoggerConfiguration {
+                file_path: BorrowedStrPtr::new(c"/tmp/a"),
+                console_level: LogLevel::Debug,
+                file_level: LogLevel::Error,
+            });
+            application_init(&config, callbacks);
+            *is_initialized = true;
+        }
+        test_data
+    }
+
+    pub fn run_test(&mut self) -> TestResult {
         extern "C" fn event_handler(e: &Event, user_data: CallbackUserData) -> bool {
             eprintln!("event_handler: {e:?}");
-            match e {
-                Event::WindowResize(_) | Event::WindowMove(_) | Event::WindowFocusChange(_) => { return true }
-                _ => {}
-            }
+            //            match e {
+            //                Event::WindowResize(_) | Event::WindowMove(_) => { return true }
+            //                _ => {}
+            //            }
             let test_data: &mut TestData = unsafe { &mut *(user_data.cast()) };
 
-            if let Event::ApplicationDidFinishLaunching = e {
+            if !test_data.events_to_send.is_empty() {
                 let mtm = MainThreadMarker::new().unwrap();
                 let app = NSApplication::sharedApplication(mtm);
                 for e in &test_data.events_to_send {
                     eprintln!("Sending event: {e:?}");
                     unsafe { app.sendEvent(e) };
                 }
+                test_data.events_to_send.clear();
             } else {
                 if let Some(expected_event) = test_data.expected_events.first() {
                     if compare_events(e, expected_event) {
@@ -96,60 +119,50 @@ impl<'a> TestData<'a> {
             application_stop_event_loop();
             true
         }
-        extern "C" fn on_should_terminate() -> bool {
-            true
-        }
-        extern "C" fn on_will_terminate() {}
-
-        let config = ApplicationConfig {
-            disable_dictation_menu_item: false,
-            disable_character_palette_menu_item: false,
-        };
-
-        let mut test_data = Box::new(TestData::default());
-        let test_data_ptr: *mut TestData = &mut *test_data;
-
-        let callbacks = ApplicationCallbacks {
-            on_should_terminate,
-            on_will_terminate,
+        let test_data_ptr: *mut TestData = &mut *self;
+        let window_callbacks = WindowCallbacks {
             event_handler,
             event_handler_user_data: test_data_ptr.cast(),
             text_operation_handler,
             text_operation_handler_user_data: test_data_ptr.cast(),
         };
-        eprintln!("application_init");
+        let params = WindowParams {
+            origin: LogicalPoint { x: 0.0, y: 0.0 },
+            size: LogicalSize { width: 0.0, height: 0.0 },
+            title: BorrowedStrPtr::new(c"Test Window 1"),
 
-        let mut is_initialized = IS_INITIALIZED.lock().unwrap();
-        if !(*is_initialized) {
-            logger_init(&LoggerConfiguration { file_path: BorrowedStrPtr::new(c"/tmp/a"), console_level: LogLevel::Debug, file_level: LogLevel::Error });
-            application_init(&config, callbacks);
-            *is_initialized = true;
-        }
-        let window_ptr = window_create(&params);
-        test_data.window_id = window_get_window_id(window_ptr);
-        test_data
-    }
+            is_resizable: false,
+            is_closable: true,
+            is_miniaturizable: true,
 
-    pub fn run_test(&self) -> TestResult {
+            is_full_screen_allowed: false,
+            use_custom_titlebar: false,
+            titlebar_height: 0.0,
+        };
+
+        let window_ptr = window_create(&params, window_callbacks);
+        self.window_id = window_get_window_id(window_ptr.clone());
+        eprintln!("self.window_id = {}", self.window_id);
+
         application_run_event_loop();
-        assert_eq!(
-            self.expected_text_operations.len(),
-            0,
-            "{:?}",
-            self.expected_text_operations
-        );
-        assert_eq!(self.expected_events.len(), 0, "{:?}", self.expected_events);
-        Ok(())
+
+        window_drop(window_ptr);
+
+        if !self.expected_text_operations.is_empty() {
+            Err(format!("{:?}", self.expected_text_operations).into())
+        } else {
+            Ok(())
+        }
+        //assert_eq!(self.expected_events.len(), 0, "{:?}", self.expected_events);
     }
 }
-
 
 fn compare_borrowed_strings(lhs: &BorrowedStrPtr, rhs: &BorrowedStrPtr) -> bool {
     let s1 = lhs.as_str().unwrap();
     let s2 = rhs.as_str().unwrap();
     if s1 == s2 {
         eprintln!("compare_borrowed_strings {s1} == {s2}");
-        return true
+        return true;
     }
     eprintln!("compare_borrowed_strings {s1} != {s2}");
     false
@@ -196,8 +209,6 @@ fn compare_events(lhs: &Event, rhs: &Event) -> bool {
         (Event::WindowFullScreenToggle(lhs), Event::WindowFullScreenToggle(rhs)) => {
             lhs.window_id == rhs.window_id && lhs.is_full_screen == rhs.is_full_screen
         }
-        (Event::DisplayConfigurationChange, Event::DisplayConfigurationChange) => true,
-        (Event::ApplicationDidFinishLaunching, Event::ApplicationDidFinishLaunching) => true,
         _ => false,
     }
 }

@@ -7,9 +7,11 @@ use crate::{
 
 use super::{
     application_api::{AppState, MyNSApplication},
+    events::{CallbackUserData, EventHandler},
     metal_api::{MetalView, MetalViewPtr},
     screen::{NSScreenExts, ScreenId},
     string::{copy_to_c_string, copy_to_ns_string},
+    text_operations::TextOperationHandler,
     window::{NSWindowExts, Window},
 };
 
@@ -32,19 +34,29 @@ pub struct WindowParams<'a> {
     pub titlebar_height: LogicalPixels,
 }
 
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowCallbacks {
+    // returns true if application should terminate,
+    // otherwise termination will be canceled
+    pub event_handler: EventHandler,
+    pub event_handler_user_data: CallbackUserData,
+    pub text_operation_handler: TextOperationHandler,
+    pub text_operation_handler_user_data: CallbackUserData,
+}
+
 #[unsafe(no_mangle)]
-pub extern "C" fn window_create(params: &WindowParams) -> WindowPtr<'static> {
+pub extern "C" fn window_create(params: &WindowParams, callbacks: WindowCallbacks) -> WindowPtr<'static> {
     let window = ffi_boundary("window_create", || {
-        AppState::with(|state| {
-            Ok(Some(Window::new(
-                state.mtm,
-                params,
-                state.event_handler,
-                state.event_handler_user_data,
-                state.text_operation_handler,
-                state.text_operation_handler_user_data,
-            )?))
-        })
+        let mtm = MainThreadMarker::new().unwrap();
+        Ok(Some(Window::new(
+            mtm,
+            params,
+            callbacks.event_handler,
+            callbacks.event_handler_user_data,
+            callbacks.text_operation_handler,
+            callbacks.text_operation_handler_user_data,
+        )?))
     });
     WindowPtr::from_value(window)
 }

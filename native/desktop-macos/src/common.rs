@@ -15,6 +15,7 @@ struct GenericRawPtr<'a, T> {
     phantom: PhantomData<&'a T>,
 }
 
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct RustAllocatedRawPtr<'a, T>(GenericRawPtr<'a, T>);
 
@@ -39,6 +40,15 @@ impl<T> RustAllocatedRawPtr<'_, T> {
 
     pub(crate) unsafe fn borrow_mut<R>(&mut self) -> &mut R {
         Box::leak(unsafe { self.to_owned() })
+    }
+}
+
+impl Clone for RustAllocatedRawPtr<'_, std::ffi::c_void> {
+    fn clone(&self) -> Self {
+        Self(GenericRawPtr {
+            ptr: self.0.ptr,
+            phantom: PhantomData,
+        })
     }
 }
 

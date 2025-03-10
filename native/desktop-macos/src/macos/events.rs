@@ -193,8 +193,6 @@ pub enum Event<'a> {
     WindowFocusChange(WindowFocusChangeEvent),
     WindowCloseRequest(WindowCloseRequestEvent),
     WindowFullScreenToggle(WindowFullScreenToggleEvent),
-    DisplayConfigurationChange,
-    ApplicationDidFinishLaunching,
 }
 
 impl<'a> Event<'a> {
@@ -239,14 +237,6 @@ impl<'a> Event<'a> {
             window_id: window.window_id(),
             is_full_screen: window.is_full_screen(),
         })
-    }
-
-    pub(crate) const fn new_display_configuration_change_event() -> Self {
-        Event::DisplayConfigurationChange
-    }
-
-    pub(crate) const fn new_application_did_finish_launching_event() -> Self {
-        Event::ApplicationDidFinishLaunching
     }
 
     pub(crate) fn new_key_down_event(key_info: &'a KeyEventInfo) -> Self {

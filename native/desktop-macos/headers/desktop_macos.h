@@ -76,9 +76,134 @@ typedef struct NativeApplicationConfig {
   bool disable_character_palette_menu_item;
 } NativeApplicationConfig;
 
-typedef intptr_t NativeWindowId;
+typedef struct NativeApplicationCallbacks {
+  bool (*on_should_terminate)(void);
+  void (*on_will_terminate)(void);
+  void (*on_did_change_screen_parameters)(void);
+  void (*on_did_finish_launching)(void);
+} NativeApplicationCallbacks;
 
 typedef uintptr_t NativeKeyModifiersSet;
+
+typedef struct NativeAppMenuKeystroke {
+  NativeBorrowedStrPtr key;
+  NativeKeyModifiersSet modifiers;
+} NativeAppMenuKeystroke;
+
+typedef enum NativeAppMenuItem_Tag {
+  NativeAppMenuItem_ActionItem,
+  NativeAppMenuItem_SeparatorItem,
+  NativeAppMenuItem_SubMenuItem,
+} NativeAppMenuItem_Tag;
+
+typedef struct NativeAppMenuItem_NativeActionItem_Body {
+  bool enabled;
+  enum NativeActionItemState state;
+  NativeBorrowedStrPtr title;
+  enum NativeActionMenuItemSpecialTag special_tag;
+  const struct NativeAppMenuKeystroke *keystroke;
+  void (*perform)(void);
+} NativeAppMenuItem_NativeActionItem_Body;
+
+typedef struct NativeAppMenuItem_NativeSubMenuItem_Body {
+  NativeBorrowedStrPtr title;
+  enum NativeSubMenuItemSpecialTag special_tag;
+  const struct NativeAppMenuItem *items;
+  NativeArraySize items_count;
+} NativeAppMenuItem_NativeSubMenuItem_Body;
+
+typedef struct NativeAppMenuItem {
+  NativeAppMenuItem_Tag tag;
+  union {
+    NativeAppMenuItem_NativeActionItem_Body action_item;
+    NativeAppMenuItem_NativeSubMenuItem_Body sub_menu_item;
+  };
+} NativeAppMenuItem;
+
+typedef struct NativeAppMenuStructure {
+  const struct NativeAppMenuItem *items;
+  NativeArraySize items_count;
+} NativeAppMenuStructure;
+
+typedef const void *NativeGenericRawPtr_c_void;
+
+typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr_c_void;
+
+typedef NativeRustAllocatedRawPtr_c_void NativeDisplayLinkPtr;
+
+typedef uint32_t NativeScreenId;
+
+typedef void (*NativeDisplayLinkCallback)(void);
+
+typedef uint32_t NativeMouseButtonsSet;
+
+typedef double NativeLogicalPixels;
+
+typedef struct NativeLogicalPoint {
+  NativeLogicalPixels x;
+  NativeLogicalPixels y;
+} NativeLogicalPoint;
+
+typedef struct NativeFileDialogParams {
+  bool allow_file;
+  bool allow_folder;
+  bool allow_multiple_selection;
+} NativeFileDialogParams;
+
+typedef void *NativeMetalDeviceRef;
+
+typedef void *NativeMetalCommandQueueRef;
+
+typedef NativeRustAllocatedRawPtr_c_void NativeMetalViewPtr;
+
+typedef double NativePhysicalPixels;
+
+typedef struct NativePhysicalSize {
+  NativePhysicalPixels width;
+  NativePhysicalPixels height;
+} NativePhysicalSize;
+
+typedef void *NativeMetalTextureRef;
+
+typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
+
+typedef struct NativeLogicalSize {
+  NativeLogicalPixels width;
+  NativeLogicalPixels height;
+} NativeLogicalSize;
+
+typedef struct NativeScreenInfo {
+  NativeScreenId screen_id;
+  bool is_primary;
+  NativeAutoDropStrPtr name;
+  struct NativeLogicalPoint origin;
+  struct NativeLogicalSize size;
+  double scale;
+  uint32_t maximum_frames_per_second;
+} NativeScreenInfo;
+
+typedef struct NativeAutoDropArray_ScreenInfo {
+  const struct NativeScreenInfo *ptr;
+  NativeArraySize len;
+} NativeAutoDropArray_ScreenInfo;
+
+typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
+
+typedef NativeRustAllocatedRawPtr_c_void NativeWindowPtr;
+
+typedef struct NativeWindowParams {
+  struct NativeLogicalPoint origin;
+  struct NativeLogicalSize size;
+  NativeBorrowedStrPtr title;
+  bool is_resizable;
+  bool is_closable;
+  bool is_miniaturizable;
+  bool is_full_screen_allowed;
+  bool use_custom_titlebar;
+  NativeLogicalPixels titlebar_height;
+} NativeWindowParams;
+
+typedef intptr_t NativeWindowId;
 
 typedef uint16_t NativeKeyCode;
 
@@ -109,13 +234,6 @@ typedef struct NativeModifiersChangedEvent {
   NativeKeyCode code;
   NativeTimestamp timestamp;
 } NativeModifiersChangedEvent;
-
-typedef double NativeLogicalPixels;
-
-typedef struct NativeLogicalPoint {
-  NativeLogicalPixels x;
-  NativeLogicalPixels y;
-} NativeLogicalPoint;
 
 typedef struct NativeMouseMovedEvent {
   NativeWindowId window_id;
@@ -167,17 +285,10 @@ typedef struct NativeScrollWheelEvent {
   NativeTimestamp timestamp;
 } NativeScrollWheelEvent;
 
-typedef uint32_t NativeScreenId;
-
 typedef struct NativeWindowScreenChangeEvent {
   NativeWindowId window_id;
   NativeScreenId new_screen_id;
 } NativeWindowScreenChangeEvent;
-
-typedef struct NativeLogicalSize {
-  NativeLogicalPixels width;
-  NativeLogicalPixels height;
-} NativeLogicalSize;
 
 typedef struct NativeWindowResizeEvent {
   NativeWindowId window_id;
@@ -221,8 +332,6 @@ typedef enum NativeEvent_Tag {
   NativeEvent_WindowFocusChange,
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowFullScreenToggle,
-  NativeEvent_DisplayConfigurationChange,
-  NativeEvent_ApplicationDidFinishLaunching,
 } NativeEvent_Tag;
 
 typedef struct NativeEvent {
@@ -314,118 +423,12 @@ typedef struct NativeTextOperation {
 
 typedef bool (*NativeTextOperationHandler)(const struct NativeTextOperation*, NativeCallbackUserData);
 
-typedef struct NativeApplicationCallbacks {
-  bool (*on_should_terminate)(void);
-  void (*on_will_terminate)(void);
+typedef struct NativeWindowCallbacks {
   NativeEventHandler event_handler;
   NativeCallbackUserData event_handler_user_data;
   NativeTextOperationHandler text_operation_handler;
   NativeCallbackUserData text_operation_handler_user_data;
-} NativeApplicationCallbacks;
-
-typedef struct NativeAppMenuKeystroke {
-  NativeBorrowedStrPtr key;
-  NativeKeyModifiersSet modifiers;
-} NativeAppMenuKeystroke;
-
-typedef enum NativeAppMenuItem_Tag {
-  NativeAppMenuItem_ActionItem,
-  NativeAppMenuItem_SeparatorItem,
-  NativeAppMenuItem_SubMenuItem,
-} NativeAppMenuItem_Tag;
-
-typedef struct NativeAppMenuItem_NativeActionItem_Body {
-  bool enabled;
-  enum NativeActionItemState state;
-  NativeBorrowedStrPtr title;
-  enum NativeActionMenuItemSpecialTag special_tag;
-  const struct NativeAppMenuKeystroke *keystroke;
-  void (*perform)(void);
-} NativeAppMenuItem_NativeActionItem_Body;
-
-typedef struct NativeAppMenuItem_NativeSubMenuItem_Body {
-  NativeBorrowedStrPtr title;
-  enum NativeSubMenuItemSpecialTag special_tag;
-  const struct NativeAppMenuItem *items;
-  NativeArraySize items_count;
-} NativeAppMenuItem_NativeSubMenuItem_Body;
-
-typedef struct NativeAppMenuItem {
-  NativeAppMenuItem_Tag tag;
-  union {
-    NativeAppMenuItem_NativeActionItem_Body action_item;
-    NativeAppMenuItem_NativeSubMenuItem_Body sub_menu_item;
-  };
-} NativeAppMenuItem;
-
-typedef struct NativeAppMenuStructure {
-  const struct NativeAppMenuItem *items;
-  NativeArraySize items_count;
-} NativeAppMenuStructure;
-
-typedef const void *NativeGenericRawPtr_c_void;
-
-typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr_c_void;
-
-typedef NativeRustAllocatedRawPtr_c_void NativeDisplayLinkPtr;
-
-typedef void (*NativeDisplayLinkCallback)(void);
-
-typedef uint32_t NativeMouseButtonsSet;
-
-typedef struct NativeFileDialogParams {
-  bool allow_file;
-  bool allow_folder;
-  bool allow_multiple_selection;
-} NativeFileDialogParams;
-
-typedef void *NativeMetalDeviceRef;
-
-typedef void *NativeMetalCommandQueueRef;
-
-typedef NativeRustAllocatedRawPtr_c_void NativeMetalViewPtr;
-
-typedef double NativePhysicalPixels;
-
-typedef struct NativePhysicalSize {
-  NativePhysicalPixels width;
-  NativePhysicalPixels height;
-} NativePhysicalSize;
-
-typedef void *NativeMetalTextureRef;
-
-typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
-
-typedef struct NativeScreenInfo {
-  NativeScreenId screen_id;
-  bool is_primary;
-  NativeAutoDropStrPtr name;
-  struct NativeLogicalPoint origin;
-  struct NativeLogicalSize size;
-  double scale;
-  uint32_t maximum_frames_per_second;
-} NativeScreenInfo;
-
-typedef struct NativeAutoDropArray_ScreenInfo {
-  const struct NativeScreenInfo *ptr;
-  NativeArraySize len;
-} NativeAutoDropArray_ScreenInfo;
-
-typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
-
-typedef NativeRustAllocatedRawPtr_c_void NativeWindowPtr;
-
-typedef struct NativeWindowParams {
-  struct NativeLogicalPoint origin;
-  struct NativeLogicalSize size;
-  NativeBorrowedStrPtr title;
-  bool is_resizable;
-  bool is_closable;
-  bool is_miniaturizable;
-  bool is_full_screen_allowed;
-  bool use_custom_titlebar;
-  NativeLogicalPixels titlebar_height;
-} NativeWindowParams;
+} NativeWindowCallbacks;
 
 typedef struct NativeColor {
   double red;
@@ -538,7 +541,8 @@ NativeScreenId screen_get_main_screen_id(void);
 
 void string_drop(NativeRustAllocatedStrPtr str_ptr);
 
-NativeWindowPtr window_create(const struct NativeWindowParams *params);
+NativeWindowPtr window_create(const struct NativeWindowParams *params,
+                              struct NativeWindowCallbacks callbacks);
 
 void window_drop(NativeWindowPtr window_ptr);
 

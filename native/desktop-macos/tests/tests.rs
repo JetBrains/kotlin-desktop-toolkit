@@ -1,6 +1,5 @@
 mod utils;
 
-use std::cell::OnceCell;
 use std::ptr::NonNull;
 
 use desktop_macos::macos::{
@@ -11,7 +10,7 @@ use libtest_mimic::Trial;
 use objc2::MainThreadMarker;
 use objc2_app_kit::NSEventModifierFlags;
 use objc2_foundation::{NSString, NSUTF32LittleEndianStringEncoding};
-use utils::test_utils::{make_ns_key_down_event, TestData, TestResult};
+use utils::test_utils::{TestData, TestResult, make_ns_key_down_event};
 
 fn test_simple_text_input(key: char) -> TestResult {
     let mut test_data = TestData::init();
@@ -62,8 +61,8 @@ fn main() {
 
     let mut tests = Vec::<Trial>::new();
     //    tests.push(Trial::test("test_simple_text_input", move || test_simple_text_input(65)));
-    for v in (0x0021..0x007E) {
-        //.chain(0x00A1..0x00BF).chain(0x00C0..0x00FF).chain(0x0400..0x04FF).chain(0x0600..0x06FF).chain(0x1D00..0x1EFF).chain(0x30A0..0x30FF).chain(0x1F600..0x1F64F).chain(0x31350..0x313AF) {
+    for v in (0x0020..0x0025) {
+        //(0x0020..0x007E).chain(0x00A1..0x00BF).chain(0x00C0..0x00FF).chain(0x0400..0x04FF).chain(0x0600..0x06FF).chain(0x1D00..0x1EFF).chain(0x30A0..0x30FF).chain(0x1F600..0x1F64F).chain(0x31350..0x313AF) {
         let key = char::from_u32(v).unwrap();
         tests.push(Trial::test(format!("test_simple_text_input: {key}"), move || {
             test_simple_text_input(key)

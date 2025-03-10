@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use log::{debug, info};
 use objc2::{ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
@@ -6,23 +6,14 @@ use objc2_app_kit::{
     NSEventType, NSImage, NSRunningApplication,
 };
 use objc2_foundation::{MainThreadMarker, NSData, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
-use std::cell::OnceCell;
 
-use crate::{
-    common::RustAllocatedStrPtr,
-    logger::{catch_panic, ffi_boundary},
-    macos::events::Event,
-};
+use crate::{common::RustAllocatedStrPtr, logger::ffi_boundary};
 
 use super::{
     events::{CallbackUserData, EventHandler},
     string::copy_to_c_string,
     text_operations::TextOperationHandler,
 };
-
-thread_local! {
-    pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
-}
 
 #[derive(Debug)]
 pub(crate) struct AppState {
@@ -37,18 +28,6 @@ pub(crate) struct AppState {
     pub(crate) text_operation_handler_user_data: CallbackUserData,
 }
 
-impl AppState {
-    pub(crate) fn with<T, F>(f: F) -> T
-    where
-        F: FnOnce(&Self) -> T,
-    {
-        APP_STATE.with(|app_state| {
-            let app_state = app_state.get().expect("Can't access app state before initialization!"); // todo handle error
-            f(app_state)
-        })
-    }
-}
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct ApplicationCallbacks {
@@ -56,10 +35,8 @@ pub struct ApplicationCallbacks {
     // otherwise termination will be canceled
     pub on_should_terminate: extern "C" fn() -> bool,
     pub on_will_terminate: extern "C" fn(),
-    pub event_handler: EventHandler,
-    pub event_handler_user_data: CallbackUserData,
-    pub text_operation_handler: TextOperationHandler,
-    pub text_operation_handler_user_data: CallbackUserData,
+    pub on_did_change_screen_parameters: extern "C" fn(),
+    pub on_did_finish_launching: extern "C" fn(),
 }
 
 #[repr(C)]
@@ -96,27 +73,9 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         //    let default_presentation_options = app.presentationOptions();
         //    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
         app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
-        let event_handler = callbacks.event_handler;
-        let event_handler_user_data = callbacks.event_handler_user_data;
-        let text_operation_handler = callbacks.text_operation_handler;
-        let text_operation_handler_user_data = callbacks.text_operation_handler_user_data;
         let app_delegate = AppDelegate::new(mtm, callbacks);
         app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
-        APP_STATE.with(|app_state| {
-            // app_state.
-            app_state
-                .set(AppState {
-                    app,
-                    app_delegate,
-                    event_handler,
-                    event_handler_user_data,
-                    mtm,
-                    text_operation_handler,
-                    text_operation_handler_user_data,
-                })
-                .map_err(|_| anyhow!("Can't initialize second time!"))?;
-            Ok(())
-        })
+        Ok(())
     });
 }
 
@@ -299,12 +258,14 @@ define_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidChangeScreenParameters:))]
         fn did_change_screen_parameters(&self, _notification: &NSNotification) {
-            self.handle_event(&Event::new_display_configuration_change_event());
+            let callbacks = &self.ivars().callbacks;
+            (callbacks.on_did_change_screen_parameters)()
         }
 
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn did_finish_launching(&self, _notification: &NSNotification) {
-            self.handle_event(&Event::new_application_did_finish_launching_event());
+            let callbacks = &self.ivars().callbacks;
+            (callbacks.on_did_finish_launching)()
         }
 
         #[unsafe(method(applicationShouldTerminate:))]
@@ -329,10 +290,5 @@ impl AppDelegate {
         let this = mtm.alloc();
         let this = this.set_ivars(AppDelegateIvars { callbacks });
         unsafe { msg_send![super(this), init] }
-    }
-
-    fn handle_event<'a>(&'a self, event: &'a Event) -> bool {
-        let callbacks = &self.ivars().callbacks;
-        catch_panic(|| Ok((callbacks.event_handler)(event, callbacks.event_handler_user_data))).unwrap_or(false)
     }
 }
