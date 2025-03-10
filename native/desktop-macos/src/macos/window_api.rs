@@ -270,8 +270,6 @@ pub extern "C" fn window_is_full_screen(window_ptr: WindowPtr) -> bool {
     })
 }
 
-
-
 #[unsafe(no_mangle)]
 pub extern "C" fn window_start_drag(window_ptr: WindowPtr) {
     ffi_boundary("window_start_drag", || {

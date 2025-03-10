@@ -1,42 +1,42 @@
 mod utils;
 
-use desktop_macos::{
-    common::BorrowedStrPtr,
-    macos::text_operations::{TextChangedOperation, TextOperation},
+use std::cell::OnceCell;
+use std::ptr::NonNull;
+
+use desktop_macos::macos::{
+    string::borrow_ns_string,
+    text_operations::{TextChangedOperation, TextOperation},
 };
 use libtest_mimic::Trial;
-use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
-use objc2_foundation::{NSPoint, NSString, NSTimeInterval};
-use utils::test_utils::{TestResult, run_test};
+use objc2::MainThreadMarker;
+use objc2_app_kit::NSEventModifierFlags;
+use objc2_foundation::{NSString, NSUTF32LittleEndianStringEncoding};
+use utils::test_utils::{make_ns_key_down_event, TestData, TestResult};
 
-fn test_simple_text_input() -> TestResult {
-    run_test(|user_data| {
-        user_data.events_to_send.push(unsafe {
-            NSEvent::keyEventWithType_location_modifierFlags_timestamp_windowNumber_context_characters_charactersIgnoringModifiers_isARepeat_keyCode(
-                NSEventType::KeyDown,
-                NSPoint::default(),
-                NSEventModifierFlags(0),
-                NSTimeInterval::default(),
-                user_data.window_id,
-                None,
-                &NSString::from_str("a"),
-                &NSString::from_str("a"),
-                false,
-                0,
-            ).unwrap()
-        });
+fn test_simple_text_input(key: char) -> TestResult {
+    let mut test_data = TestData::init();
+    let mtm = MainThreadMarker::new().unwrap();
+    let d = NonNull::<std::ffi::c_void>::new((&raw const key).cast_mut().cast()).unwrap();
+    let keys = unsafe { NSString::initWithBytes_length_encoding(mtm.alloc(), d, 4, NSUTF32LittleEndianStringEncoding) }.unwrap();
 
-        user_data
-            .expected_text_operations
-            .push(TextOperation::TextChanged(TextChangedOperation {
-                window_id: user_data.window_id,
-                original_event: None, // not yet checked in tests
-                text: BorrowedStrPtr::new(c"a"),
-            }));
-    })
+    test_data
+        .events_to_send
+        .push(make_ns_key_down_event(test_data.window_id, &keys, NSEventModifierFlags(0)));
+    test_data
+        .expected_text_operations
+        .push(TextOperation::TextChanged(TextChangedOperation {
+            window_id: test_data.window_id,
+            original_event: None, // not yet checked in tests
+            text: borrow_ns_string(&keys),
+        }));
+    test_data.run_test()
 }
 
 // TODO: add the following tests
+// * Send [ARROW_RIGHT] -> Event::KeyDown(ARROW_RIGHT)
+// * Send [Ctrl+ARROW_RIGHT] -> Event::KeyDown(Ctrl+ARROW_RIGHT)
+// * Send [Opt+ARROW_RIGHT] -> Event::KeyDown(Option+ARROW_RIGHT)
+// * Send [Cmd+ARROW_RIGHT] -> Event::KeyDown(Command+ARROW_RIGHT)
 // * Send [Option+U, u] -> TextChangedOperation(text: "ü", original_event: Some)
 // * Send [Option+U, m] -> TextChangedOperation(text: "¨m")
 // * Send [Option+U, ESC]   -> TextChangedOperation(text: "¨")
@@ -44,6 +44,9 @@ fn test_simple_text_input() -> TestResult {
 // * Send [Option+U, Option+U, o] -> TextChangedOperation(text: "¨ö")
 // * Send [LONG_PRESS a, SPACE] -> TextChangedOperation(text: "a ")
 // * Send [LONG_PRESS a, RIGHT_ARROW, ENTER] -> TextChangedOperation(text: "à")
+// * Send [LONG_PRESS a, Ctrl+RIGHT_ARROW, ENTER] -> TextChangedOperation(text: "à")
+// * Send [LONG_PRESS a, Cmd+RIGHT_ARROW, ENTER] -> TextChangedOperation(text: "à")
+// * Send [LONG_PRESS a, Opt+RIGHT_ARROW, ENTER] -> TextChangedOperation(text: "à")
 // * Send [LONG_PRESS a, RIGHT_ARROW, SPACE] -> TextChangedOperation(text: "à ")
 // * Send [LONG_PRESS a, RIGHT_ARROW, LEFT_ARROW, SPACE] -> TextChangedOperation(text: " ")
 // * Send [LONG_PRESS a, MOUSE_CLICK(first item)] -> TextChangedOperation(text: "à")
@@ -57,7 +60,15 @@ fn main() {
     let mut args = libtest_mimic::Arguments::from_args();
     args.test_threads = Some(1);
 
-    let tests = vec![Trial::test("test_simple_text_input", test_simple_text_input)];
+    let mut tests = Vec::<Trial>::new();
+    //    tests.push(Trial::test("test_simple_text_input", move || test_simple_text_input(65)));
+    for v in (0x0021..0x007E) {
+        //.chain(0x00A1..0x00BF).chain(0x00C0..0x00FF).chain(0x0400..0x04FF).chain(0x0600..0x06FF).chain(0x1D00..0x1EFF).chain(0x30A0..0x30FF).chain(0x1F600..0x1F64F).chain(0x31350..0x313AF) {
+        let key = char::from_u32(v).unwrap();
+        tests.push(Trial::test(format!("test_simple_text_input: {key}"), move || {
+            test_simple_text_input(key)
+        }));
+    }
 
     libtest_mimic::run(&args, tests).exit();
 }

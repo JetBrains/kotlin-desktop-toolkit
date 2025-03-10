@@ -1,8 +1,9 @@
-use anyhow::{anyhow, Context};
-use log::info;
+use anyhow::{Context, anyhow};
+use log::{debug, info};
 use objc2::{ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSRunningApplication
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
+    NSEventType, NSImage, NSRunningApplication,
 };
 use objc2_foundation::{MainThreadMarker, NSData, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
 use std::cell::OnceCell;
@@ -133,7 +134,9 @@ pub extern "C" fn application_run_event_loop() {
         info!("Start event loop");
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
+
         app.run();
+        info!("application_run_event_loop end");
         Ok(())
     });
 }
@@ -266,6 +269,7 @@ impl MyNSApplication {
     // modifiers are down, but swallows the key up if the modifiers include
     // command.  This one makes all modifiers consistent by always sending key ups.
     fn send_event_impl(&self, event: &NSEvent) {
+        debug!("send_event_impl: {event:?}");
         if unsafe { event.r#type() } == NSEventType::KeyUp {
             let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
             if let Some(window) = unsafe { event.window(mtm) } {

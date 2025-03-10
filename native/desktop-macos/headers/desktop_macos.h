@@ -373,6 +373,12 @@ typedef void (*NativeDisplayLinkCallback)(void);
 
 typedef uint32_t NativeMouseButtonsSet;
 
+typedef struct NativeFileDialogParams {
+  bool allow_file;
+  bool allow_folder;
+  bool allow_multiple_selection;
+} NativeFileDialogParams;
+
 typedef void *NativeMetalDeviceRef;
 
 typedef void *NativeMetalCommandQueueRef;
@@ -446,12 +452,6 @@ typedef struct NativeWindowBackground {
   };
 } NativeWindowBackground;
 
-typedef struct NativeFileDialogParams {
-  bool allow_file;
-  bool allow_folder;
-  bool allow_multiple_selection;
-} NativeFileDialogParams;
-
 struct NativeExceptionsArray logger_check_exceptions(void);
 
 void logger_clear_exceptions(void);
@@ -501,6 +501,8 @@ NativeMouseButtonsSet events_pressed_mouse_buttons(void);
 NativeKeyModifiersSet events_pressed_modifiers(void);
 
 struct NativeLogicalPoint events_cursor_location_in_screen(void);
+
+NativeRustAllocatedStrPtr file_dialog_run_modal(struct NativeFileDialogParams params);
 
 NativeMetalDeviceRef metal_create_device(void);
 
@@ -591,5 +593,3 @@ void window_start_drag(NativeWindowPtr window_ptr);
 void window_invalidate_shadow(NativeWindowPtr window_ptr);
 
 void window_set_background(NativeWindowPtr window_ptr, struct NativeWindowBackground background);
-
-NativeRustAllocatedStrPtr file_dialog_run_modal(struct NativeFileDialogParams params);

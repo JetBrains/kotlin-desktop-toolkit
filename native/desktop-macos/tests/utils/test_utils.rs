@@ -1,118 +1,158 @@
+use std::sync::Mutex;
+
 use desktop_macos::{
-    common::{BorrowedStrPtr, LogicalPoint, LogicalSize},
-    macos::{
+    common::{BorrowedStrPtr, LogicalPoint, LogicalSize}, logger_api::{logger_init, LogLevel, LoggerConfiguration}, macos::{
         application_api::{
-            ApplicationCallbacks, ApplicationConfig, application_init, application_run_event_loop, application_stop_event_loop,
+            application_init, application_run_event_loop, application_stop_event_loop, ApplicationCallbacks, ApplicationConfig
         },
         events::{CallbackUserData, Event},
         text_operations::TextOperation,
-        window_api::{WindowId, WindowParams, window_create, window_get_window_id},
-    },
+        window_api::{window_create, window_get_window_id, WindowId, WindowParams},
+    }
 };
 
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
-use objc2_app_kit::{NSApplication, NSEvent};
+use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType};
+use objc2_foundation::{NSPoint, NSString, NSTimeInterval};
 
 pub type TestResult = Result<(), libtest_mimic::Failed>;
 
-#[derive(Default)]
-pub struct TestData {
+static IS_INITIALIZED: Mutex<bool> = Mutex::new(false);
+
+#[derive(Debug, Default)]
+pub struct TestData<'a> {
     pub window_id: WindowId,
     pub events_to_send: Vec<Retained<NSEvent>>,
-    pub expected_events: Vec<Event<'static>>,
-    pub expected_text_operations: Vec<TextOperation<'static>>,
+    pub expected_events: Vec<Event<'a>>,
+    pub expected_text_operations: Vec<TextOperation<'a>>,
 }
 
-pub fn run_test<F: FnOnce(&mut TestData) -> ()>(fill_test_data: F) -> TestResult {
-    let params = WindowParams {
-        origin: LogicalPoint { x: 0.0, y: 0.0 },
-        size: LogicalSize { width: 0.0, height: 0.0 },
-        title: BorrowedStrPtr::new(c"Test Window 1"),
+impl<'a> TestData<'a> {
+    pub fn init() -> Box<Self> {
+        let params = WindowParams {
+            origin: LogicalPoint { x: 0.0, y: 0.0 },
+            size: LogicalSize { width: 0.0, height: 0.0 },
+            title: BorrowedStrPtr::new(c"Test Window 1"),
 
-        is_resizable: false,
-        is_closable: true,
-        is_miniaturizable: true,
+            is_resizable: false,
+            is_closable: true,
+            is_miniaturizable: true,
 
-        is_full_screen_allowed: false,
-        use_custom_titlebar: false,
-        titlebar_height: 0.0,
-    };
+            is_full_screen_allowed: false,
+            use_custom_titlebar: false,
+            titlebar_height: 0.0,
+        };
 
-    let mut test_data = TestData::default();
-
-    extern "C" fn event_handler(e: &Event, user_data: CallbackUserData) -> bool {
-        let test_data: &mut TestData = unsafe { &mut *(user_data.cast()) };
-
-        if let Event::ApplicationDidFinishLaunching = e {
-            let mtm = MainThreadMarker::new().unwrap();
-            let app = NSApplication::sharedApplication(mtm);
-            for e in &test_data.events_to_send {
-                unsafe { app.sendEvent(e) };
+        extern "C" fn event_handler(e: &Event, user_data: CallbackUserData) -> bool {
+            eprintln!("event_handler: {e:?}");
+            match e {
+                Event::WindowResize(_) | Event::WindowMove(_) | Event::WindowFocusChange(_) => { return true }
+                _ => {}
             }
-        } else {
-            if let Some(expected_event) = test_data.expected_events.first() {
-                if compare_events(e, expected_event) {
-                    test_data.expected_events.remove(0);
-                    if !test_data.expected_events.is_empty() {
+            let test_data: &mut TestData = unsafe { &mut *(user_data.cast()) };
+
+            if let Event::ApplicationDidFinishLaunching = e {
+                let mtm = MainThreadMarker::new().unwrap();
+                let app = NSApplication::sharedApplication(mtm);
+                for e in &test_data.events_to_send {
+                    eprintln!("Sending event: {e:?}");
+                    unsafe { app.sendEvent(e) };
+                }
+            } else {
+                if let Some(expected_event) = test_data.expected_events.first() {
+                    if compare_events(e, expected_event) {
+                        test_data.expected_events.remove(0);
+                        if !test_data.expected_events.is_empty() {
+                            return true;
+                        } else {
+                            application_stop_event_loop();
+                            return true;
+                        }
+                    }
+                }
+                eprintln!("Unexpected event: {e:?}");
+                application_stop_event_loop();
+            }
+            true
+        }
+
+        extern "C" fn text_operation_handler(e: &TextOperation, user_data: CallbackUserData) -> bool {
+            let test_data: &mut TestData = unsafe { &mut *(user_data.cast()) };
+            if let Some(expected_op) = test_data.expected_text_operations.first() {
+                eprintln!("text_operation_handler, checking if event is {expected_op:?}");
+                if compare_text_operations(e, expected_op) {
+                    test_data.expected_text_operations.remove(0);
+                    if !test_data.expected_text_operations.is_empty() {
+                        return true;
+                    } else {
+                        application_stop_event_loop();
                         return true;
                     }
                 }
             }
+
+            eprintln!("Unexpected event: {e:?}");
             application_stop_event_loop();
+            true
         }
-        true
-    }
-
-    extern "C" fn text_operation_handler(e: &TextOperation, user_data: CallbackUserData) -> bool {
-        let test_data: &mut TestData = unsafe { &mut *(user_data.cast()) };
-        if let Some(expected_op) = test_data.expected_text_operations.first() {
-            if compare_text_operations(e, expected_op) {
-                test_data.expected_text_operations.remove(0);
-                if !test_data.expected_text_operations.is_empty() {
-                    return true;
-                }
-            }
+        extern "C" fn on_should_terminate() -> bool {
+            true
         }
+        extern "C" fn on_will_terminate() {}
 
-        application_stop_event_loop();
-        true
+        let config = ApplicationConfig {
+            disable_dictation_menu_item: false,
+            disable_character_palette_menu_item: false,
+        };
+
+        let mut test_data = Box::new(TestData::default());
+        let test_data_ptr: *mut TestData = &mut *test_data;
+
+        let callbacks = ApplicationCallbacks {
+            on_should_terminate,
+            on_will_terminate,
+            event_handler,
+            event_handler_user_data: test_data_ptr.cast(),
+            text_operation_handler,
+            text_operation_handler_user_data: test_data_ptr.cast(),
+        };
+        eprintln!("application_init");
+
+        let mut is_initialized = IS_INITIALIZED.lock().unwrap();
+        if !(*is_initialized) {
+            logger_init(&LoggerConfiguration { file_path: BorrowedStrPtr::new(c"/tmp/a"), console_level: LogLevel::Debug, file_level: LogLevel::Error });
+            application_init(&config, callbacks);
+            *is_initialized = true;
+        }
+        let window_ptr = window_create(&params);
+        test_data.window_id = window_get_window_id(window_ptr);
+        test_data
     }
-    extern "C" fn on_should_terminate() -> bool {
-        true
+
+    pub fn run_test(&self) -> TestResult {
+        application_run_event_loop();
+        assert_eq!(
+            self.expected_text_operations.len(),
+            0,
+            "{:?}",
+            self.expected_text_operations
+        );
+        assert_eq!(self.expected_events.len(), 0, "{:?}", self.expected_events);
+        Ok(())
     }
-    extern "C" fn on_will_terminate() {}
-
-    let config = ApplicationConfig {
-        disable_dictation_menu_item: false,
-        disable_character_palette_menu_item: false,
-    };
-    let callbacks = ApplicationCallbacks {
-        on_should_terminate,
-        on_will_terminate,
-        event_handler,
-        event_handler_user_data: (&raw mut test_data).cast(),
-        text_operation_handler,
-        text_operation_handler_user_data: (&raw mut test_data).cast(),
-    };
-    application_init(&config, callbacks);
-    let window_ptr = window_create(&params);
-    test_data.window_id = window_get_window_id(window_ptr);
-    fill_test_data(&mut test_data);
-
-    application_run_event_loop();
-    assert_eq!(
-        test_data.expected_text_operations.len(),
-        0,
-        "{:?}",
-        test_data.expected_text_operations
-    );
-    assert_eq!(test_data.expected_events.len(), 0, "{:?}", test_data.expected_events);
-    Ok(())
 }
 
+
 fn compare_borrowed_strings(lhs: &BorrowedStrPtr, rhs: &BorrowedStrPtr) -> bool {
-    lhs.as_str().unwrap() == rhs.as_str().unwrap()
+    let s1 = lhs.as_str().unwrap();
+    let s2 = rhs.as_str().unwrap();
+    if s1 == s2 {
+        eprintln!("compare_borrowed_strings {s1} == {s2}");
+        return true
+    }
+    eprintln!("compare_borrowed_strings {s1} != {s2}");
+    false
 }
 
 fn compare_events(lhs: &Event, rhs: &Event) -> bool {
@@ -171,5 +211,24 @@ fn compare_text_operations(lhs: &TextOperation, rhs: &TextOperation) -> bool {
             lhs.window_id == rhs.window_id && compare_borrowed_strings(&lhs.text, &rhs.text)
         }
         _ => false,
+    }
+}
+
+pub fn make_ns_key_down_event<'a>(w_num: WindowId, keys: &NSString, flags: NSEventModifierFlags) -> Retained<NSEvent> {
+    let location = NSPoint::default();
+    let time = NSTimeInterval::default();
+    unsafe {
+        NSEvent::keyEventWithType_location_modifierFlags_timestamp_windowNumber_context_characters_charactersIgnoringModifiers_isARepeat_keyCode(
+            NSEventType::KeyDown,
+            location,
+            flags,
+            time,
+            w_num,
+            None,
+            keys,
+            keys,
+            false,
+            0,
+        ).unwrap()
     }
 }
