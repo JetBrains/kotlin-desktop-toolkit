@@ -102,14 +102,17 @@ public object Application {
         }
     }
 
+    public fun setQuitHandler(isSafeToQuit: () -> Boolean) {
+        this.isSafeToQuit = isSafeToQuit
+    }
+
+    private var isSafeToQuit: () -> Boolean = { true }
+
     // called from native
     private fun onShouldTerminate(): Boolean {
         Logger.info { "onShouldTerminate" }
         return ffiUpCall(defaultResult = false) {
-            // todo send event to request user interaction?
-            // we always cancel termination because otherwise jvm shoultdown hooks might be skipped
-            // to stop application we may call `Application.stopEventLoop()`
-            false
+            isSafeToQuit()
         }
     }
 
