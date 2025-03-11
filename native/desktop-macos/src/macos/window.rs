@@ -812,7 +812,7 @@ impl RootView {
         catch_panic(|| {
             let ivars = self.ivars();
             let key_event_info = unpack_key_event(ns_event)?;
-            debug!("keyDown start, calling interpretKeyEvents with {key_event_info:?}");
+            debug!("keyDown start, calling interpretKeyEvents with {ns_event:?}");
             let had_marked_text = self.has_marked_text_impl();
             ivars.current_key_down_event.set(Some(key_event_info));
             unsafe {

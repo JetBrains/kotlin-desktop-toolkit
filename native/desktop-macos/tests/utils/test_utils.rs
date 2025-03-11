@@ -26,38 +26,53 @@ pub struct TestData<'a> {
     pub events_to_send: Vec<Retained<NSEvent>>,
     pub expected_events: Vec<Event<'a>>,
     pub expected_text_operations: Vec<TextOperation<'a>>,
+    encountered_error: Option<String>,
 }
 
 extern "C" fn event_handler(e: &Event, user_data: CallbackUserData) -> bool {
     let test_data: &mut TestData = unsafe { &mut *(user_data.cast()) };
-    eprintln!("event_handler: events_to_send.len: {}, {e:?}", test_data.events_to_send.len());
+    eprintln!(
+        "test_utils event_handler: events_to_send.len: {}, {e:?}",
+        test_data.events_to_send.len()
+    );
 
     if !test_data.events_to_send.is_empty() {
         let mtm = MainThreadMarker::new().unwrap();
         let app = NSApplication::sharedApplication(mtm);
         let events_to_send = std::mem::take(&mut test_data.events_to_send);
         for e in &events_to_send {
+            if test_data.encountered_error.is_some() {
+                application_stop_event_loop();
+                return false;
+            }
             eprintln!("Sending event: {e:?}");
             unsafe { app.sendEvent(e) };
         }
         test_data.events_to_send.clear();
-        eprintln!("event_handler: sent all events, events_to_send.len: {}", test_data.events_to_send.len());
+        eprintln!(
+            "test_utils event_handler: sent all events, events_to_send.len: {}",
+            test_data.events_to_send.len()
+        );
     } else {
-        if !test_data.expected_events.is_empty() {
-            match e {
-                Event::WindowResize(_) | Event::WindowMove(_) | Event::WindowFocusChange(_) => return true,
-                _ => {}
-            }
+        match e {
+            Event::WindowResize(_) | Event::WindowMove(_) | Event::WindowFocusChange(_) => return true,
+            _ => {}
+        }
+        if test_data.expected_events.is_empty() {
+            let msg = format!("Unexpected event (expected list is empty): {e:?}");
+            eprintln!("{}", msg);
+            test_data.encountered_error = Some(msg);
+        } else {
             let expected_event = test_data.expected_events.remove(0);
             if !compare_events(e, &expected_event) {
-                eprintln!("Unexpected event: {e:?}");
-                eprintln!("Expected: {expected_event:?}");
-                application_stop_event_loop();
+                let msg = format!("Unexpected event: {e:?}\n    Expected: {expected_event:?}");
+                eprintln!("{}", msg);
+                test_data.encountered_error = Some(msg);
             }
         }
-        if test_data.expected_events.is_empty() && test_data.expected_text_operations.is_empty() {
-            application_stop_event_loop();
-        }
+    }
+    if test_data.expected_events.is_empty() && test_data.expected_text_operations.is_empty() {
+        application_stop_event_loop();
     }
     true
 }
@@ -70,13 +85,16 @@ extern "C" fn text_operation_handler(e: &TextOperation, user_data: CallbackUserD
         handled = false;
     } else {
         if test_data.expected_text_operations.is_empty() {
-            eprintln!("Unexpected text operation (expected list is empty): {e:?}");
+            let msg = format!("Unexpected event (expected list is empty): {e:?}");
+            eprintln!("{}", msg);
+            test_data.encountered_error = Some(msg);
             application_stop_event_loop();
         } else {
             let expected_op = test_data.expected_text_operations.remove(0);
             if !compare_text_operations(e, &expected_op) {
-                eprintln!("Unexpected text operation: {e:?}");
-                eprintln!("Expected: {expected_op:?}");
+                let msg = format!("Unexpected text operation: {e:?}\n    Expected: {expected_op:?}");
+                eprintln!("{}", msg);
+                test_data.encountered_error = Some(msg);
                 application_stop_event_loop();
             }
         }
@@ -144,10 +162,8 @@ impl<'a> TestData<'a> {
 
         window_drop(window_ptr);
 
-        if !self.expected_text_operations.is_empty() {
-            Err(format!("{:?}", self.expected_text_operations).into())
-        } else if !self.expected_events.is_empty() {
-            Err(format!("{:?}", self.expected_events).into())
+        if let Some(e) = &self.encountered_error {
+            Err(e.into())
         } else {
             Ok(())
         }
@@ -157,12 +173,7 @@ impl<'a> TestData<'a> {
 fn compare_borrowed_strings(lhs: &BorrowedStrPtr, rhs: &BorrowedStrPtr) -> bool {
     let s1 = lhs.as_str().unwrap();
     let s2 = rhs.as_str().unwrap();
-    if s1 == s2 {
-        eprintln!("compare_borrowed_strings {s1} == {s2}");
-        return true;
-    }
-    eprintln!("compare_borrowed_strings {s1} != {s2}");
-    false
+    s1 == s2
 }
 
 fn compare_events(lhs: &Event, rhs: &Event) -> bool {
@@ -210,9 +221,16 @@ fn compare_text_operations(lhs: &TextOperation, rhs: &TextOperation) -> bool {
     }
 }
 
-pub fn make_ns_key_down_event(w_num: WindowId, keys: &NSString, flags: NSEventModifierFlags, code: c_ushort) -> Retained<NSEvent> {
+pub fn make_ns_key_down_event(
+    w_num: WindowId,
+    chars: &NSString,
+    unmodchars: &NSString,
+    flags: NSEventModifierFlags,
+    code: c_ushort,
+) -> Retained<NSEvent> {
     let location = NSPoint::default();
     let time = NSTimeInterval::default();
+    let is_repeat = false;
     unsafe {
         NSEvent::keyEventWithType_location_modifierFlags_timestamp_windowNumber_context_characters_charactersIgnoringModifiers_isARepeat_keyCode(
             NSEventType::KeyDown,
@@ -221,9 +239,35 @@ pub fn make_ns_key_down_event(w_num: WindowId, keys: &NSString, flags: NSEventMo
             time,
             w_num,
             None,
-            keys,
-            keys,
-            false,
+            chars,
+            unmodchars,
+            is_repeat,
+            code,
+        ).unwrap()
+    }
+}
+
+pub fn make_ns_key_up_event(
+    w_num: WindowId,
+    chars: &NSString,
+    unmodchars: &NSString,
+    flags: NSEventModifierFlags,
+    code: c_ushort,
+) -> Retained<NSEvent> {
+    let location = NSPoint::default();
+    let time = NSTimeInterval::default();
+    let is_repeat = false;
+    unsafe {
+        NSEvent::keyEventWithType_location_modifierFlags_timestamp_windowNumber_context_characters_charactersIgnoringModifiers_isARepeat_keyCode(
+            NSEventType::KeyUp,
+            location,
+            flags,
+            time,
+            w_num,
+            None,
+            chars,
+            unmodchars,
+            is_repeat,
             code,
         ).unwrap()
     }

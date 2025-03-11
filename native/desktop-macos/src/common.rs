@@ -67,7 +67,16 @@ impl BorrowedStrPtr<'_> {
 
 impl std::fmt::Debug for BorrowedStrPtr<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.as_str())
+        match self.as_str() {
+            Ok(s) => {
+                if s.is_ascii() {
+                    f.write_str(s)
+                } else {
+                    write!(f, "{}", s.escape_unicode())
+                }
+            }
+            Err(e) => write!(f, "{e}"),
+        }
     }
 }
 
