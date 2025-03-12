@@ -11,7 +11,7 @@ pub mod metal_api;
 pub mod mouse;
 pub mod screen;
 pub mod string;
-pub mod text_operations;
+pub mod text_input_client;
 pub mod window;
 pub mod window_api;
 pub mod file_dialog;

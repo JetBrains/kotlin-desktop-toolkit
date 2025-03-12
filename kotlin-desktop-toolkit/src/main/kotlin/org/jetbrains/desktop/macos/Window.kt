@@ -11,7 +11,7 @@ import java.lang.foreign.MemorySegment
 
 public typealias WindowId = Long
 
-public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_macos_h::window_drop) {
+public class Window internal constructor(ptr: MemorySegment, public val textInputClientHolder: TextInputClientHolder) : Managed(ptr, desktop_macos_h::window_drop) {
     public data class WindowParams(
         val origin: LogicalPoint = LogicalPoint(0.0, 0.0),
         val size: LogicalSize = LogicalSize(640.0, 480.0),
@@ -42,7 +42,8 @@ public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desk
     public companion object {
         public fun create(params: WindowParams): Window {
             return Arena.ofConfined().use { arena ->
-                Window(ffiDownCall { desktop_macos_h.window_create(params.toNative(arena)) })
+                val textInputClientHolder = TextInputClientHolder(null)
+                Window(ffiDownCall { desktop_macos_h.window_create(params.toNative(arena), textInputClientHolder.toNative()) }, textInputClientHolder)
             }
         }
 
@@ -226,6 +227,11 @@ public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desk
                 desktop_macos_h.window_set_background(pointer, background.toNative(arena))
             }
         }
+    }
+
+    override fun close() {
+        super.close()
+        textInputClientHolder.close()
     }
 }
 

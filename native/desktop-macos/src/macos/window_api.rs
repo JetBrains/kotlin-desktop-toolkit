@@ -6,11 +6,7 @@ use crate::{
 };
 
 use super::{
-    application_api::MyNSApplication,
-    metal_api::{MetalView, MetalViewPtr},
-    screen::{NSScreenExts, ScreenId},
-    string::{copy_to_c_string, copy_to_ns_string},
-    window::{NSWindowExts, Window},
+    application_api::MyNSApplication, metal_api::{MetalView, MetalViewPtr}, screen::{NSScreenExts, ScreenId}, string::{copy_to_c_string, copy_to_ns_string}, text_input_client::{TextInputClient}, window::{NSWindowExts, Window}
 };
 
 pub type WindowId = isize;
@@ -29,14 +25,14 @@ pub struct WindowParams<'a> {
 
     pub is_full_screen_allowed: bool,
     pub use_custom_titlebar: bool,
-    pub titlebar_height: LogicalPixels,
+    pub titlebar_height: LogicalPixels
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_create(params: &WindowParams) -> WindowPtr<'static> {
+pub extern "C" fn window_create(params: WindowParams, text_input_client: TextInputClient) -> WindowPtr<'static> {
     let window = ffi_boundary("window_create", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        Ok(Some(Window::new(mtm, params)?))
+        Ok(Some(Window::new(mtm, params, text_input_client)?))
     });
     WindowPtr::from_value(window)
 }

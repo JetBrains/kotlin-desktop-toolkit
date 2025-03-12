@@ -281,40 +281,10 @@ typedef struct NativeEvent {
 
 typedef bool (*NativeEventHandler)(const struct NativeEvent*);
 
-typedef struct NativeTextCommandOperation {
-  NativeWindowId window_id;
-  NativeBorrowedStrPtr command;
-} NativeTextCommandOperation;
-
-typedef struct NativeTextChangedOperation {
-  NativeWindowId window_id;
-  NativeBorrowedStrPtr text;
-} NativeTextChangedOperation;
-
-typedef enum NativeTextOperation_Tag {
-  NativeTextOperation_TextCommand,
-  NativeTextOperation_TextChanged,
-} NativeTextOperation_Tag;
-
-typedef struct NativeTextOperation {
-  NativeTextOperation_Tag tag;
-  union {
-    struct {
-      struct NativeTextCommandOperation text_command;
-    };
-    struct {
-      struct NativeTextChangedOperation text_changed;
-    };
-  };
-} NativeTextOperation;
-
-typedef bool (*NativeTextOperationHandler)(const struct NativeTextOperation*);
-
 typedef struct NativeApplicationCallbacks {
   bool (*on_should_terminate)(void);
   void (*on_will_terminate)(void);
   NativeEventHandler event_handler;
-  NativeTextOperationHandler text_operation_handler;
 } NativeApplicationCallbacks;
 
 typedef struct NativeAppMenuKeystroke {
@@ -414,6 +384,15 @@ typedef struct NativeWindowParams {
   bool use_custom_titlebar;
   NativeLogicalPixels titlebar_height;
 } NativeWindowParams;
+
+typedef void (*NativeOnInsertText)(NativeBorrowedStrPtr text);
+
+typedef void (*NativeOnDoCommand)(NativeBorrowedStrPtr command);
+
+typedef struct NativeTextInputClient {
+  NativeOnInsertText on_insert_text;
+  NativeOnDoCommand on_do_command;
+} NativeTextInputClient;
 
 typedef struct NativeColor {
   double red;
@@ -530,7 +509,10 @@ NativeScreenId screen_get_main_screen_id(void);
 
 void string_drop(NativeRustAllocatedStrPtr str_ptr);
 
-NativeWindowPtr window_create(const struct NativeWindowParams *params);
+bool text_input_context_handle_current_event(void);
+
+NativeWindowPtr window_create(struct NativeWindowParams params,
+                              struct NativeTextInputClient text_input_client);
 
 void window_drop(NativeWindowPtr window_ptr);
 

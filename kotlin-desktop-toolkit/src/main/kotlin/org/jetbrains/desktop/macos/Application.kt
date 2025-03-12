@@ -3,7 +3,6 @@ package org.jetbrains.desktop.macos
 import org.jetbrains.desktop.macos.generated.NativeApplicationCallbacks
 import org.jetbrains.desktop.macos.generated.NativeApplicationConfig
 import org.jetbrains.desktop.macos.generated.NativeEventHandler
-import org.jetbrains.desktop.macos.generated.NativeTextOperationHandler
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -15,7 +14,6 @@ public enum class EventHandlerResult {
 }
 
 public typealias EventHandler = (Event) -> EventHandlerResult
-public typealias TextOperationHandler = (TextOperation) -> Boolean
 
 public object Application {
     public data class ApplicationConfig(
@@ -31,7 +29,6 @@ public object Application {
     }
 
     private var eventHandler: EventHandler? = null
-    private var textOperationHandler: TextOperationHandler? = null
     public lateinit var screens: AllScreens
 
     public fun init(applicationConfig: ApplicationConfig = ApplicationConfig()) {
@@ -47,10 +44,6 @@ public object Application {
             this.eventHandler = eventHandler
             desktop_macos_h.application_run_event_loop()
         }
-    }
-
-    public fun setTextOperationHandler(textOperationHandler: TextOperationHandler) {
-        this.textOperationHandler = textOperationHandler
     }
 
     public fun stopEventLoop() {
@@ -156,16 +149,6 @@ public object Application {
         }
     }
 
-    private fun onTextOperation(nativeOperation: MemorySegment): Boolean {
-        val operation = TextOperation.fromNative(nativeOperation)
-        return ffiUpCall(defaultResult = false) {
-            textOperationHandler?.invoke(operation)
-        } ?: run {
-            Logger.warn { "textOperationHandler is null; event: $operation was ignored!" }
-            false
-        }
-    }
-
     private fun applicationCallbacks(): MemorySegment {
         val arena = Arena.global()
         val callbacks = NativeApplicationCallbacks.allocate(arena)
@@ -178,7 +161,6 @@ public object Application {
             NativeApplicationCallbacks.on_will_terminate.allocate(::onWillTerminate, arena),
         )
         NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
-        NativeApplicationCallbacks.text_operation_handler(callbacks, NativeTextOperationHandler.allocate(::onTextOperation, arena))
         return callbacks
     }
 }

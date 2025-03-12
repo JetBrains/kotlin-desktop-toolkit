@@ -1,6 +1,5 @@
 use std::{
     cell::{Cell, RefCell},
-    ptr::NonNull,
     rc::Rc,
 };
 
@@ -19,7 +18,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
-    NSRangePointer, NSRect, NSSize, NSString, NSUInteger,
+    NSRangePointer, NSRect, NSUInteger,
 };
 
 use crate::{
@@ -33,18 +32,12 @@ use crate::{
             handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change, to_key_down_event,
         },
         keyboard::unpack_key_event,
-        string::{borrow_ns_string, copy_to_ns_string},
-        text_operations::{handle_text_changed_operation, handle_text_command_operation},
+        string::copy_to_ns_string,
     },
 };
 
 use super::{
-    application_api::MyNSApplication,
-    custom_titlebar::CustomTitlebarCell,
-    events::to_key_up_event,
-    metal_api::MetalView,
-    screen::NSScreenExts,
-    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
+    application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::to_key_up_event, metal_api::MetalView, screen::NSScreenExts, text_input_client::{TextInputClient}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}
 };
 
 pub(crate) struct Window {
@@ -156,7 +149,7 @@ impl NSWindowExts for NSWindow {
 }
 
 impl Window {
-    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams) -> anyhow::Result<Self> {
+    pub(crate) fn new(mtm: MainThreadMarker, params: WindowParams, text_input_client: TextInputClient) -> anyhow::Result<Self> {
         /*
         see doc: https://developer.apple.com/documentation/appkit/nswindow/stylemask-swift.struct/resizable?language=objc
 
@@ -240,7 +233,7 @@ impl Window {
         let delegate = WindowDelegate::new(mtm, ns_window.clone(), custom_titlebar.clone());
         ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
 
-        let root_view = RootView::new(mtm);
+        let root_view = RootView::new(mtm, text_input_client);
         ns_window.setAcceptsMouseMovedEvents(true);
 
         let container = unsafe { NSView::new(mtm) };
@@ -461,7 +454,7 @@ impl MyNSWindow {
 
 pub(crate) struct RootViewIvars {
     tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
-    key_event_handled: Cell<Option<bool>>,
+    text_input_client: TextInputClient
 }
 
 define_class!(
@@ -477,20 +470,23 @@ define_class!(
 
         #[unsafe(method(hasMarkedText))]
         unsafe fn has_marked_text(&self) -> bool {
-            debug!("hasMarkedText");
-            false  // TODO
+            catch_panic(|| {
+                Ok(self.ivars().text_input_client.has_marked_text())
+            }).unwrap_or(false)
         }
 
         #[unsafe(method(markedRange))]
         unsafe fn marked_range(&self) -> NSRange {
-            debug!("markedRange");
-            NSRange { location: 0, length: 0 }  // TODO
+            catch_panic(|| {
+                Ok(self.ivars().text_input_client.marked_range())
+            }).unwrap_or(NSRange { location: 0, length: 0 })
         }
 
         #[unsafe(method(selectedRange))]
         unsafe fn selected_range(&self) -> NSRange {
-            debug!("selectedRange");
-            NSRange { location: 0, length: 0 }  // TODO
+            catch_panic(|| {
+                Ok(self.ivars().text_input_client.selected_range())
+            }).unwrap_or(NSRange { location: 0, length: 0 })
         }
 
         #[unsafe(method(setMarkedText:selectedRange:replacementRange:))]
@@ -500,31 +496,23 @@ define_class!(
             selected_range: NSRange,
             replacement_range: NSRange,
         ) {
-            self.set_marked_text_selected_range_replacement_range_impl(string, selected_range, replacement_range);
+            catch_panic(|| {
+                Ok(self.ivars().text_input_client.set_marked_text(string, selected_range, replacement_range))
+            });
         }
 
         #[unsafe(method(unmarkText))]
         unsafe fn unmark_text(&self) {
-            self.unmark_text_impl();
+            catch_panic(|| {
+                Ok(self.ivars().text_input_client.unmark_text())
+            });
         }
 
         #[unsafe(method_id(validAttributesForMarkedText))]
         unsafe fn valid_attributes_for_marked_text(&self) -> Retained<NSArray<NSAttributedStringKey>> {
-            debug!("validAttributesForMarkedText");
-            let v = vec![
-                NSString::from_str("NSFont"),
-                NSString::from_str("NSUnderline"),
-                NSString::from_str("NSColor"),
-                NSString::from_str("NSBackgroundColor"),
-                NSString::from_str("NSUnderlineColor"),
-                NSString::from_str("NSMarkedClauseSegment"),
-                NSString::from_str("NSLanguage"),
-                NSString::from_str("NSTextInputReplacementRangeAttributeName"),
-                NSString::from_str("NSGlyphInfo"),
-                NSString::from_str("NSTextAlternatives"),
-                NSString::from_str("NSTextInsertionUndoable"),
-            ];
-            NSArray::from_retained_slice(&v)
+            catch_panic(|| {
+                Ok(self.ivars().text_input_client.valid_attributes_for_marked_text())
+            }).unwrap_or(NSArray::from_slice(&[]))
         }
 
         // Storing text
@@ -535,9 +523,9 @@ define_class!(
             range: NSRange,
             actual_range: NSRangePointer,
         ) -> Option<Retained<NSAttributedString>> {
-            let actual_range = NonNull::new(actual_range);
-            debug!("attributedSubstringForProposedRange, range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
-            None  // TODO
+            catch_panic(|| {
+                Ok(self.ivars().text_input_client.attributed_substring_for_proposed_range(range, actual_range))
+            }).unwrap_or(None)
         }
 
         #[unsafe(method(insertText:replacementRange:))]
@@ -546,7 +534,10 @@ define_class!(
             string: &AnyObject,
             replacement_range: NSRange,
         ) {
-            self.insert_text_replacement_range_impl(string, replacement_range);
+            catch_panic(|| {
+                self.ivars().text_input_client.insert_text(string, replacement_range)?;
+                Ok(())
+            });
         }
 
         // Getting character coordinates
@@ -557,20 +548,24 @@ define_class!(
             range: NSRange,
             actual_range: NSRangePointer,
         ) -> NSRect {
-            let actual_range = NonNull::new(actual_range);
-            debug!("firstRectForCharacterRange: range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
-            NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64))  // TODO
+            catch_panic(|| {
+                Ok(self.ivars().text_input_client.first_rect_for_character_range(range, actual_range))
+            }).unwrap_or(NSRect::ZERO)
         }
 
         #[unsafe(method(characterIndexForPoint:))]
         unsafe fn character_index_for_point(&self, point: NSPoint) -> NSUInteger {
-            debug!("characterIndexForPoint: {:?}", point);
-            0  // TODO
+            catch_panic(|| {
+                Ok(self.ivars().text_input_client.character_index_for_point(point))
+            }).unwrap_or(0)
         }
 
         #[unsafe(method(doCommandBySelector:))]
         unsafe fn do_command_by_selector(&self, selector: Sel) {
-            self.do_command_by_selector_impl(selector);
+            catch_panic(|| {
+                self.ivars().text_input_client.do_command(selector);
+                Ok(())
+            });
         }
     }
 
@@ -707,13 +702,13 @@ define_class!(
         }
 
         #[unsafe(method(keyDown:))]
-        fn key_down(&self, nsevent: &NSEvent) {
-            self.key_down_impl(nsevent);
+        fn key_down(&self, ns_event: &NSEvent) {
+            catch_panic(|| handle_key_event(&to_key_down_event(&unpack_key_event(ns_event)?)));
         }
 
         #[unsafe(method(keyUp:))]
-        fn key_up(&self, nsevent: &NSEvent) {
-            self.key_up_impl(nsevent);
+        fn key_up(&self, ns_event: &NSEvent) {
+            catch_panic(|| handle_key_event(&to_key_up_event(&unpack_key_event(ns_event)?)));
         }
 
         #[unsafe(method(performKeyEquivalent:))]
@@ -751,24 +746,14 @@ define_class!(
     }
 );
 
-fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttributedString>, Retained<NSString>), anyhow::Error> {
-    if let Some(ns_attributed_string) = string.downcast_ref::<NSAttributedString>() {
-        let text = ns_attributed_string.string();
-        Ok((Some(ns_attributed_string), text))
-    } else if let Some(text) = string.downcast_ref::<NSString>() {
-        Ok((None, text.into()))
-    } else {
-        // This method is guaranteed to get either a `NSString` or a `NSAttributedString`.
-        panic!("unexpected text {string:?}")
-    }
-}
+
 
 impl RootView {
-    pub(crate) fn new(mtm: MainThreadMarker) -> Retained<Self> {
+    pub(crate) fn new(mtm: MainThreadMarker, text_input_client: TextInputClient) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars {
             tracking_area: Cell::new(None),
-            key_event_handled: Cell::new(None),
+            text_input_client: text_input_client
         });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {
@@ -803,88 +788,5 @@ impl RootView {
         let ret: Bool = unsafe { msg_send![super(self), performKeyEquivalent: ns_event] };
         debug!("performKeyEquivalent -> {}", ret.as_bool());
         ret
-    }
-
-    fn key_down_impl(&self, ns_event: &NSEvent) {
-        catch_panic(|| {
-            // Ignore in case it was already handled in `performKeyEquivalent`.
-            if self.ivars().key_event_handled.get().is_some() {
-                debug!("keyDown: already tried handling the event, ignoring");
-                Ok(())
-            } else {
-                debug!("keyDown start: {ns_event:?}");
-                // First check if the key would be handled by the system (e.g. interacting with the input method popup)
-                unsafe {
-                    let key_events = NSArray::arrayWithObject(ns_event);
-                    self.interpretKeyEvents(&key_events);
-                };
-
-                // Otherwise, if it was not handled in `doCommandBySelector` or `insertText`, forward the event to application.
-                if self.ivars().key_event_handled.get() == Some(true) {
-                    debug!("keyDown: not forwarding event to app");
-                } else {
-                    debug!("keyDown: forwarding event to app");
-                    let _ = handle_key_event(&to_key_down_event(&unpack_key_event(ns_event)?))?;
-                }
-                Ok(())
-            }
-        });
-        // Reset the flag
-        self.ivars().key_event_handled.set(None);
-        debug!("keyDown end");
-    }
-
-    fn key_up_impl(&self, ns_event: &NSEvent) {
-        debug!("keyUp: {ns_event:?}");
-        catch_panic(|| handle_key_event(&to_key_up_event(&unpack_key_event(ns_event)?)));
-    }
-
-    fn do_command_by_selector_impl(&self, selector: Sel) {
-        catch_panic(|| {
-            let s = selector.name();
-            let window = self.window().context("No window for view")?;
-            let handled = handle_text_command_operation(window.window_id(), s)?;
-            self.ivars().key_event_handled.set(Some(handled));
-            Ok(handled)
-        });
-    }
-
-    fn insert_text_replacement_range_impl(&self, string: &AnyObject, replacement_range: NSRange) {
-        catch_panic(|| {
-            let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-            debug!(
-                "insertText, marked_text={:?}, string={:?}, replacement_range={:?}",
-                ns_attributed_string, text, replacement_range
-            );
-
-            let window = self.window().context("No window for view")?;
-            let handled = handle_text_changed_operation(window.window_id(), borrow_ns_string(&text))?;
-            self.ivars().key_event_handled.set(Some(handled));
-            Ok(handled)
-        });
-    }
-
-    fn set_marked_text_selected_range_replacement_range_impl(
-        &self,
-        string: &AnyObject,
-        selected_range: NSRange,
-        replacement_range: NSRange,
-    ) {
-        catch_panic(|| {
-            self.ivars().key_event_handled.set(Some(true));
-            let window = self.window().context("No window for view")?;
-            let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-            debug!(
-                "setMarkedText, window={window:?}, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
-                ns_attributed_string, text, selected_range, replacement_range
-            );
-            Ok(())
-        });
-    }
-
-    fn unmark_text_impl(&self) {
-        debug!("unmarkText");
-        self.ivars().key_event_handled.set(Some(true));
-        // TODO
     }
 }

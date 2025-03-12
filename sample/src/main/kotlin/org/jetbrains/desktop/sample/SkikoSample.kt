@@ -20,7 +20,7 @@ import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.Screen
-import org.jetbrains.desktop.macos.TextOperation
+import org.jetbrains.desktop.macos.TextInputContext
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
 import org.jetbrains.desktop.macos.WindowVisualEffect
@@ -435,6 +435,19 @@ class ApplicationState : AutoCloseable {
                 }
                 EventHandlerResult.Stop
             }
+            is Event.KeyDown -> {
+                if (TextInputContext.handleCurrentEvent()) {
+                    Logger.info {
+                        "Handle $event by TextInputContext"
+                    }
+                    EventHandlerResult.Stop
+                } else {
+                    Logger.info {
+                        "Ignored $event by TextInputContext"
+                    }
+                    EventHandlerResult.Continue
+                }
+            }
             is Event.WindowFullScreenToggle -> {
                 AppMenuManager.setMainMenu(buildMenu())
                 EventHandlerResult.Continue
@@ -602,6 +615,7 @@ class ApplicationState : AutoCloseable {
                 ),
                 specialTag = AppMenuItem.SubMenu.SpecialTag.Window,
             ),
+            AppMenuItem.SubMenu("Help")
         )
     }
 
@@ -616,17 +630,8 @@ class ApplicationState : AutoCloseable {
 
 fun main() {
     Logger.info { runtimeInfo() }
-    KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
+    KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
     Application.init(Application.ApplicationConfig())
-    Application.setTextOperationHandler { textOperation ->
-        if (textOperation is TextOperation.TextCommand) {
-            Logger.debug { "TextOperationHandler received $textOperation , ignoring" }
-            false
-        } else {
-            Logger.debug { "TextOperationHandler received $textOperation" }
-            true
-        }
-    }
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
         Application.runEventLoop { event ->
