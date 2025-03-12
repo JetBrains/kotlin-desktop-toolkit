@@ -20,6 +20,7 @@ import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.Screen
+import org.jetbrains.desktop.macos.TextOperation
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
 import org.jetbrains.desktop.macos.WindowVisualEffect
