@@ -845,12 +845,11 @@ impl RootView {
         });
     }
 
-    fn try_handle_original_event(&self) -> bool {
+    fn try_handle_current_key_down_event(&self) -> bool {
         if self.has_marked_text_impl() {
             return false;
         }
-        let ivars = self.ivars();
-        if let Some(key_info) = ivars.current_key_down_event.take() {
+        if let Some(key_info) = self.ivars().current_key_down_event.take() {
             let e = Event::new_key_down_event(&key_info);
             if self.handle_event(&e) {
                 if let Some(input_context) = self.inputContext() {
@@ -858,7 +857,6 @@ impl RootView {
                 }
                 return true;
             }
-            ivars.current_key_down_event.set(Some(key_info));
         }
         false
     }
@@ -871,14 +869,11 @@ impl RootView {
                 return Ok(());
             }
             debug!("do_command_by_selector: {s:?}");
-            if !self.try_handle_original_event() {
-                let handled = self.handle_text_operation(&TextOperation::TextCommand(TextCommandOperation {
+            if !self.try_handle_current_key_down_event() {
+                let _handled = self.handle_text_operation(&TextOperation::TextCommand(TextCommandOperation {
                     window_id: self.window_id()?,
                     command: BorrowedStrPtr::new(s),
                 }));
-                if handled {
-                    self.ivars().current_key_down_event.set(None);
-                }
             }
             Ok(())
         });
@@ -892,15 +887,12 @@ impl RootView {
                 ns_attributed_string, text, replacement_range
             );
 
-            if !self.try_handle_original_event() {
+            if !self.try_handle_current_key_down_event() {
                 let ivars = self.ivars();
-                let handled = self.handle_text_operation(&TextOperation::TextChanged(TextChangedOperation {
+                let _handled = self.handle_text_operation(&TextOperation::TextChanged(TextChangedOperation {
                     window_id: self.window_id()?,
                     text: borrow_ns_string(&text),
                 }));
-                if handled {
-                    ivars.current_key_down_event.set(None);
-                }
                 ivars.marked_text_range.set(None);
             }
             Ok(())
@@ -937,8 +929,7 @@ impl RootView {
                 "setMarkedText, window={window:?}, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
                 ns_attributed_string, text, selected_range, replacement_range
             );
-            if !self.try_handle_original_event() {
-                ivars.current_key_down_event.set(None);
+            if !self.try_handle_current_key_down_event() {
                 ivars.marked_text_range.set(Some(selected_range));
                 let _handled = self.handle_text_operation(&TextOperation::SetMarkedText(SetMarkedTextOperation {
                     window_id: self.window_id()?,
