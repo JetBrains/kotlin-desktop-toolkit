@@ -23,13 +23,14 @@ use objc2_foundation::{
 
 use crate::{
     common::{BorrowedStrPtr, LogicalPoint, LogicalRect, LogicalSize},
-    logger::catch_panic, macos::text_operations::{SetMarkedTextOperation, TextRange, UnmarkTextOperation},
+    logger::catch_panic,
+    macos::text_operations::{SetMarkedTextOperation, TextRange, UnmarkTextOperation},
 };
 
 use super::{
     application_api::MyNSApplication,
     custom_titlebar::{CustomTitlebar, CustomTitlebarCell},
-    events::{CallbackUserData, Event, EventHandler, KeyDownEvent},
+    events::{CallbackUserData, Event, EventHandler},
     keyboard::{KeyEventInfo, unpack_key_event},
     metal_api::MetalView,
     screen::NSScreenExts,
@@ -740,7 +741,7 @@ impl RootView {
             tracking_area: Cell::new(None),
             current_key_down_event: Cell::new(None),
             marked_text_range: Cell::new(None),
-            custom_ime_handler: Cell::new(Some(|_, _| { false })),
+            custom_ime_handler: Cell::new(Some(|_, _| false)),
         });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {
@@ -811,14 +812,16 @@ impl RootView {
                 debug!("keyDown, custom IME handled");
             } else {
                 debug!("keyDown, calling interpretKeyEvents");
+                // TODO: call only if we have ActiveTextInput set
+                // or expose `interpretKeyEvents` which will be called by the app when we have ActiveTextInput set
                 unsafe {
                     let key_events = NSArray::arrayWithObject(ns_event);
                     self.interpretKeyEvents(&key_events);
                 };
             }
             if let Some(key_event_info) = ivars.current_key_down_event.take() {
-                if self.has_marked_text_impl() || had_marked_text {
-                    debug!("keyDown: has/had marked text, not forwarding");
+                if had_marked_text {
+                    debug!("keyDown: had marked text, not forwarding");
                 } else {
                     debug!("keyDown: forwarding");
                     let handled = self.handle_event(&Event::new_key_down_event(&key_event_info));
@@ -842,6 +845,24 @@ impl RootView {
         });
     }
 
+    fn try_handle_original_event(&self) -> bool {
+        if self.has_marked_text_impl() {
+            return false;
+        }
+        let ivars = self.ivars();
+        if let Some(key_info) = ivars.current_key_down_event.take() {
+            let e = Event::new_key_down_event(&key_info);
+            if self.handle_event(&e) {
+                if let Some(input_context) = self.inputContext() {
+                    input_context.discardMarkedText();
+                }
+                return true;
+            }
+            ivars.current_key_down_event.set(Some(key_info));
+        }
+        false
+    }
+
     fn do_command_by_selector_impl(&self, selector: Sel) {
         catch_panic(|| {
             let s = selector.name();
@@ -850,16 +871,14 @@ impl RootView {
                 return Ok(());
             }
             debug!("do_command_by_selector: {s:?}");
-            let ivars = self.ivars();
-            let key_event_info = ivars.current_key_down_event.take();
-            let original_event = key_event_info.as_ref().map(KeyDownEvent::from_key_event_info);
-            let handled = self.handle_text_operation(&TextOperation::TextCommand(TextCommandOperation {
-                window_id: self.window_id()?,
-                original_event: original_event.as_ref(),
-                command: BorrowedStrPtr::new(s),
-            }));
-            if !handled {
-                ivars.current_key_down_event.set(key_event_info);
+            if !self.try_handle_original_event() {
+                let handled = self.handle_text_operation(&TextOperation::TextCommand(TextCommandOperation {
+                    window_id: self.window_id()?,
+                    command: BorrowedStrPtr::new(s),
+                }));
+                if handled {
+                    self.ivars().current_key_down_event.set(None);
+                }
             }
             Ok(())
         });
@@ -873,18 +892,17 @@ impl RootView {
                 ns_attributed_string, text, replacement_range
             );
 
-            let ivars = self.ivars();
-            let key_event_info = ivars.current_key_down_event.take();
-            let original_event = key_event_info.as_ref().map(KeyDownEvent::from_key_event_info);
-            let handled = self.handle_text_operation(&TextOperation::TextChanged(TextChangedOperation {
-                window_id: self.window_id()?,
-                original_event: original_event.as_ref(),
-                text: borrow_ns_string(&text),
-            }));
-            if !handled {
-                ivars.current_key_down_event.set(key_event_info);
+            if !self.try_handle_original_event() {
+                let ivars = self.ivars();
+                let handled = self.handle_text_operation(&TextOperation::TextChanged(TextChangedOperation {
+                    window_id: self.window_id()?,
+                    text: borrow_ns_string(&text),
+                }));
+                if handled {
+                    ivars.current_key_down_event.set(None);
+                }
+                ivars.marked_text_range.set(None);
             }
-            ivars.marked_text_range.set(None);
             Ok(())
         });
     }
@@ -912,20 +930,29 @@ impl RootView {
         replacement_range: NSRange,
     ) {
         catch_panic(|| {
-            self.ivars().current_key_down_event.set(None);
-            self.ivars().marked_text_range.set(Some(selected_range));
+            let ivars = self.ivars();
             let window = self.window().context("No window for view")?;
             let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
             debug!(
                 "setMarkedText, window={window:?}, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
                 ns_attributed_string, text, selected_range, replacement_range
             );
-            let _handled = self.handle_text_operation(&TextOperation::SetMarkedText(SetMarkedTextOperation {
-                window_id: self.window_id()?,
-                text: borrow_ns_string(&text),
-                selected_range: TextRange { location: selected_range.location, length: selected_range.length },
-                replacement_range: TextRange { location: replacement_range.location, length: replacement_range.length },
-            }));
+            if !self.try_handle_original_event() {
+                ivars.current_key_down_event.set(None);
+                ivars.marked_text_range.set(Some(selected_range));
+                let _handled = self.handle_text_operation(&TextOperation::SetMarkedText(SetMarkedTextOperation {
+                    window_id: self.window_id()?,
+                    text: borrow_ns_string(&text),
+                    selected_range: TextRange {
+                        location: selected_range.location,
+                        length: selected_range.length,
+                    },
+                    replacement_range: TextRange {
+                        location: replacement_range.location,
+                        length: replacement_range.length,
+                    },
+                }));
+            }
             Ok(())
         });
     }

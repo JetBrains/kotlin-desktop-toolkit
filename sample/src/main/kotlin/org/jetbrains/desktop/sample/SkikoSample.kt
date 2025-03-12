@@ -12,6 +12,7 @@ import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.FileDialog
+import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.KeyModifiersSet
 import org.jetbrains.desktop.macos.Keystroke
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
@@ -439,6 +440,15 @@ class ApplicationState : AutoCloseable {
             is Event.WindowFullScreenToggle -> {
                 AppMenuManager.setMainMenu(buildMenu())
                 EventHandlerResult.Continue
+            }
+            is Event.KeyDown -> {
+                Logger.debug { "$event" }
+                if (event.modifiers.option && event.keyCode == KeyCode.ANSI_U) {
+                    Logger.debug { "!! Intercepted Opt+u" }
+                    EventHandlerResult.Stop
+                } else {
+                    EventHandlerResult.Continue
+                }
             }
             else -> {
                 val window = windows.find {

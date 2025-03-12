@@ -45,12 +45,15 @@ abstract class SkikoWindow(
         }
         appState.handleEvent(event)
     }, textOperationHandler = { textOperation ->
-        if (textOperation is TextOperation.TextCommand) {
-            Logger.debug { "TextOperationHandler received $textOperation , ignoring" }
-            false
-        } else {
-            Logger.debug { "TextOperationHandler received $textOperation" }
-            true
+        when (textOperation) {
+            is TextOperation.TextCommand -> {
+                Logger.debug { "TextOperationHandler received $textOperation , ignoring" }
+                false
+            }
+            else -> {
+                Logger.debug { "TextOperationHandler received $textOperation" }
+                true
+            }
         }
     })
     var displayLink = DisplayLink.create(window.screenId(), onNextFrame = {

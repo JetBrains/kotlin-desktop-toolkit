@@ -3,15 +3,17 @@ package org.jetbrains.desktop.macos
 public sealed class TextOperation {
     public data class TextChanged(
         val windowId: WindowId,
-        val originalEvent: Event.KeyDown?,
         val text: String,
     ) : TextOperation()
 
     public data class TextCommand(
         val windowId: WindowId,
-        val originalEvent: Event.KeyDown?,
         val command: String,
     ) : TextOperation()
+
+    public data class UnmarkText(val windowId: WindowId) : TextOperation()
+
+    public data class SetMarkedText(val windowId: WindowId) : TextOperation()
 
     public fun windowId(): WindowId? {
         return when (this) {

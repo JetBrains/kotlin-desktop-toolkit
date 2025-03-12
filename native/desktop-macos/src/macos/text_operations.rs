@@ -17,7 +17,6 @@ pub struct TextRange {
 #[derive(Debug)]
 pub struct TextChangedOperation<'a> {
     pub window_id: WindowId,
-    pub original_event: Option<&'a KeyDownEvent<'a>>,
     pub text: BorrowedStrPtr<'a>,
 //    pub composition_range: TextRange,
 //    pub composition_committed_range: TextRange,
@@ -28,7 +27,6 @@ pub struct TextChangedOperation<'a> {
 #[derive(Debug)]
 pub struct TextCommandOperation<'a> {
     pub window_id: WindowId,
-    pub original_event: Option<&'a KeyDownEvent<'a>>,
     pub command: BorrowedStrPtr<'a>,
 }
 

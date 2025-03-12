@@ -2,20 +2,20 @@ use std::ffi::c_ushort;
 
 use desktop_macos::{
     common::{BorrowedStrPtr, LogicalPoint, LogicalSize},
-    logger_api::{logger_init, LogLevel, LoggerConfiguration},
+    logger_api::{LogLevel, LoggerConfiguration, logger_init},
     macos::{
         application_api::{
-            application_init, application_run_event_loop, application_stop_event_loop, ApplicationCallbacks, ApplicationConfig
+            ApplicationCallbacks, ApplicationConfig, application_init, application_run_event_loop, application_stop_event_loop,
         },
         events::{CallbackUserData, Event},
         text_operations::TextOperation,
         window::{RootView, Window},
-        window_api::{window_create, window_drop, WindowCallbacks, WindowId, WindowParams},
+        window_api::{WindowCallbacks, WindowId, WindowParams, window_create, window_drop},
     },
 };
 
-use objc2::rc::Retained;
 use objc2::MainThreadMarker;
+use objc2::rc::Retained;
 use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType, NSTextInputClient};
 use objc2_foundation::{NSNotFound, NSPoint, NSRange, NSString, NSTimeInterval, NSUInteger};
 
@@ -139,10 +139,7 @@ fn custom_ime_handler(e: &NSEvent, text_input_client: &RootView) -> bool {
         location: NSNotFound as NSUInteger,
         length: 0,
     };
-    const DEFAULT_SELECTED_RANGE: NSRange = NSRange {
-        location: 1,
-        length: 0,
-    };
+    const DEFAULT_SELECTED_RANGE: NSRange = NSRange { location: 1, length: 0 };
 
     match unsafe { e.r#type() } {
         NSEventType::KeyDown => {
@@ -150,22 +147,26 @@ fn custom_ime_handler(e: &NSEvent, text_input_client: &RootView) -> bool {
                 match unsafe { e.keyCode() } {
                     50 => {
                         let string = NSString::from_str("`");
-                        unsafe { text_input_client.setMarkedText_selectedRange_replacementRange(&string, DEFAULT_SELECTED_RANGE, DEFAULT_REPLACEMENT_RANGE) };
+                        unsafe {
+                            text_input_client.setMarkedText_selectedRange_replacementRange(
+                                &string,
+                                DEFAULT_SELECTED_RANGE,
+                                DEFAULT_REPLACEMENT_RANGE,
+                            )
+                        };
                         true
                     }
-                    _ => { false }
+                    _ => false,
                 }
             } else {
                 if unsafe { text_input_client.hasMarkedText() } {
-                    let string = NSString::from_str("`");  // TODO: cache last diacritic
+                    let string = NSString::from_str("`"); // TODO: cache last diacritic
                     unsafe { text_input_client.insertText_replacementRange(&string, DEFAULT_REPLACEMENT_RANGE) };
                 }
                 true
             }
         }
-        NSEventType::KeyUp => {
-            false
-        }
+        NSEventType::KeyUp => false,
         _ => false,
     }
 }
@@ -257,11 +258,11 @@ fn compare_text_operations(lhs: &TextOperation, rhs: &TextOperation) -> bool {
         (TextOperation::TextCommand(lhs), TextOperation::TextCommand(rhs)) => compare_borrowed_strings(&lhs.command, &rhs.command),
         (TextOperation::TextChanged(lhs), TextOperation::TextChanged(rhs)) => compare_borrowed_strings(&lhs.text, &rhs.text),
         (TextOperation::SetMarkedText(lhs), TextOperation::SetMarkedText(rhs)) => {
-            lhs.selected_range == rhs.selected_range && lhs.replacement_range == rhs.replacement_range && compare_borrowed_strings(&lhs.text, &rhs.text)
-        },
-        (TextOperation::UnmarkText(_), TextOperation::UnmarkText(_)) => {
-            true
-        },
+            lhs.selected_range == rhs.selected_range
+                && lhs.replacement_range == rhs.replacement_range
+                && compare_borrowed_strings(&lhs.text, &rhs.text)
+        }
+        (TextOperation::UnmarkText(_), TextOperation::UnmarkText(_)) => true,
         _ => false,
     }
 }

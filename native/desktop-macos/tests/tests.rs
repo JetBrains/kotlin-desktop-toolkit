@@ -541,13 +541,7 @@ fn test_dead_keys() -> TestResult {
 
     let mut test_data = TestData::default();
     test_data.events_to_send = vec![
-        make_ns_key_down_event(
-            test_data.window_id,
-            &chars,
-            &unmodchars,
-            flags,
-            50,
-        ),
+        make_ns_key_down_event(test_data.window_id, &chars, &unmodchars, flags, 50),
         make_ns_key_down_event(
             test_data.window_id,
             &NSString::from_str("¨"),
@@ -561,7 +555,10 @@ fn test_dead_keys() -> TestResult {
             window_id: test_data.window_id,
             text: borrow_ns_string(&unmodchars),
             selected_range: TextRange { location: 1, length: 0 },
-            replacement_range: TextRange { location: 9223372036854775807, length: 0 }
+            replacement_range: TextRange {
+                location: 9223372036854775807,
+                length: 0,
+            },
         }),
         TextOperation::TextChanged(TextChangedOperation {
             window_id: test_data.window_id,
