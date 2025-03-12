@@ -43,11 +43,13 @@ public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desk
     }
 
     public companion object {
-        public fun create(params: WindowParams,
-                          eventHandler: EventHandler?,
-                          textOperationHandler: TextOperationHandler?): Window {
+        public fun create(params: WindowParams, eventHandler: EventHandler?, textOperationHandler: TextOperationHandler?): Window {
             return Arena.ofConfined().use { arena ->
-                Window(ffiDownCall { desktop_macos_h.window_create(params.toNative(arena), windowCallbacks(eventHandler, textOperationHandler)) })
+                Window(
+                    ffiDownCall {
+                        desktop_macos_h.window_create(params.toNative(arena), windowCallbacks(eventHandler, textOperationHandler))
+                    },
+                )
             }
         }
 
@@ -89,7 +91,11 @@ public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desk
         }
 
         // called from native
-        private fun onEvent(eventHandler: EventHandler?, nativeEvent: MemorySegment, @Suppress("UNUSED_PARAMETER") userData: MemorySegment): Boolean {
+        private fun onEvent(
+            eventHandler: EventHandler?,
+            nativeEvent: MemorySegment,
+            @Suppress("UNUSED_PARAMETER") userData: MemorySegment,
+        ): Boolean {
             return ffiUpCall(defaultResult = false) {
                 val event = Event.fromNative(nativeEvent)
                 val result = runEventHandler(eventHandler, event)
@@ -100,7 +106,11 @@ public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desk
             }
         }
 
-        private fun onTextOperation(textOperationHandler: TextOperationHandler?, nativeOperation: MemorySegment, @Suppress("UNUSED_PARAMETER") userData: MemorySegment): Boolean {
+        private fun onTextOperation(
+            textOperationHandler: TextOperationHandler?,
+            nativeOperation: MemorySegment,
+            @Suppress("UNUSED_PARAMETER") userData: MemorySegment,
+        ): Boolean {
             val operation = TextOperation.fromNative(nativeOperation)
             return ffiUpCall(defaultResult = false) {
                 textOperationHandler?.invoke(operation)
@@ -113,13 +123,24 @@ public class Window internal constructor(ptr: MemorySegment) : Managed(ptr, desk
         private fun windowCallbacks(eventHandler: EventHandler?, textOperationHandler: TextOperationHandler?): MemorySegment {
             val arena = Arena.global()
             val callbacks = NativeWindowCallbacks.allocate(arena)
-            NativeWindowCallbacks.event_handler(callbacks, NativeEventHandler.allocate(
-                { nativeEvent, userData -> onEvent(eventHandler, nativeEvent, userData) }, arena))
-            NativeWindowCallbacks.text_operation_handler(callbacks, NativeTextOperationHandler.allocate(
-                { nativeEvent, userData -> onTextOperation(textOperationHandler, nativeEvent, userData) }, arena))
+            NativeWindowCallbacks.event_handler(
+                callbacks,
+                NativeEventHandler.allocate(
+                    { nativeEvent, userData -> onEvent(eventHandler, nativeEvent, userData) },
+                    arena,
+                ),
+            )
+            NativeWindowCallbacks.event_handler_user_data(callbacks, MemorySegment.NULL)
+            NativeWindowCallbacks.text_operation_handler(
+                callbacks,
+                NativeTextOperationHandler.allocate(
+                    { nativeEvent, userData -> onTextOperation(textOperationHandler, nativeEvent, userData) },
+                    arena,
+                ),
+            )
+            NativeWindowCallbacks.text_operation_handler_user_data(callbacks, MemorySegment.NULL)
             return callbacks
         }
-
     }
 
     public fun windowId(): WindowId {

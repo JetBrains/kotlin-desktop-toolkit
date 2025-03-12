@@ -34,17 +34,17 @@ use super::{
     metal_api::MetalView,
     screen::NSScreenExts,
     string::{borrow_ns_string, copy_to_ns_string},
-    text_operations::{TextChangedOperation, TextCommandOperation, TextOperation, TextOperationHandler},
-    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
+    text_operations::{TextChangedOperation, TextCommandOperation, TextOperation},
+    window_api::{WindowBackground, WindowCallbacks, WindowId, WindowParams, WindowVisualEffect},
 };
 
 const DEFAULT_NS_RANGE: NSRange = NSRange { location: 0, length: 0 };
 
-pub(crate) struct Window {
+pub struct Window {
     pub(crate) ns_window: Retained<MyNSWindow>,
     #[allow(dead_code)]
     pub(crate) delegate: Retained<WindowDelegate>,
-    pub(crate) root_view: Retained<RootView>,
+    pub root_view: Retained<RootView>,
     pub(crate) background_state: RefCell<WindowBackgroundState>,
     #[allow(dead_code)]
     pub(crate) custom_titlebar: Option<CustomTitlebarCell>,
@@ -149,14 +149,7 @@ impl NSWindowExts for NSWindow {
 }
 
 impl Window {
-    pub(crate) fn new(
-        mtm: MainThreadMarker,
-        params: &WindowParams,
-        event_handler: EventHandler,
-        event_handler_user_data: CallbackUserData,
-        text_operation_handler: TextOperationHandler,
-        text_operation_handler_user_data: CallbackUserData,
-    ) -> anyhow::Result<Self> {
+    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams, callbacks: WindowCallbacks) -> anyhow::Result<Self> {
         /*
         see doc: https://developer.apple.com/documentation/appkit/nswindow/stylemask-swift.struct/resizable?language=objc
 
@@ -240,19 +233,13 @@ impl Window {
         let delegate = WindowDelegate::new(
             mtm,
             ns_window.clone(),
-            event_handler,
-            event_handler_user_data,
+            callbacks.event_handler,
+            callbacks.event_handler_user_data,
             custom_titlebar.clone(),
         );
         ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
 
-        let root_view = RootView::new(
-            mtm,
-            event_handler,
-            event_handler_user_data,
-            text_operation_handler,
-            text_operation_handler_user_data,
-        );
+        let root_view = RootView::new(mtm, callbacks);
         ns_window.setAcceptsMouseMovedEvents(true);
 
         let container = unsafe { NSView::new(mtm) };
@@ -486,22 +473,22 @@ impl MyNSWindow {
     }
 }
 
-pub(crate) struct RootViewIvars {
-    event_handler: EventHandler,
-    event_handler_user_data: CallbackUserData,
-    text_operation_handler: TextOperationHandler,
-    text_operation_handler_user_data: CallbackUserData,
+pub type CustomImeHandler = fn(&NSEvent, &RootView) -> bool;
+
+pub struct RootViewIvars {
     mtm: MainThreadMarker,
+    callbacks: WindowCallbacks,
     tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
     current_key_down_event: Cell<Option<KeyEventInfo>>,
     marked_text_range: Cell<Option<NSRange>>,
+    custom_ime_handler: Cell<Option<CustomImeHandler>>,
 }
 
 define_class!(
     #[unsafe(super(NSView))]
     #[name = "RootView"]
     #[ivars = RootViewIvars]
-    pub(crate) struct RootView;
+    pub struct RootView;
 
     unsafe impl NSObjectProtocol for RootView {}
 
@@ -745,23 +732,15 @@ impl RootView {
         Ok(window.window_id())
     }
 
-    pub(crate) fn new(
-        mtm: MainThreadMarker,
-        event_handler: EventHandler,
-        event_handler_user_data: CallbackUserData,
-        text_operation_handler: TextOperationHandler,
-        text_operation_handler_user_data: CallbackUserData,
-    ) -> Retained<Self> {
+    pub(crate) fn new(mtm: MainThreadMarker, callbacks: WindowCallbacks) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars {
-            event_handler,
-            event_handler_user_data,
-            text_operation_handler,
-            text_operation_handler_user_data,
             mtm,
+            callbacks,
             tracking_area: Cell::new(None),
             current_key_down_event: Cell::new(None),
             marked_text_range: Cell::new(None),
+            custom_ime_handler: Cell::new(None),
         });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {
@@ -772,9 +751,13 @@ impl RootView {
         root_view
     }
 
+    pub fn set_custom_ime_handler(&self, custom_ime_handler: Option<CustomImeHandler>) {
+        self.ivars().custom_ime_handler.set(custom_ime_handler);
+    }
+
     fn handle_event<'a>(&'a self, event: &'a Event) -> bool {
-        let ivars = self.ivars();
-        catch_panic(|| Ok((ivars.event_handler)(event, ivars.event_handler_user_data))).unwrap_or(false)
+        let callbacks = &self.ivars().callbacks;
+        catch_panic(|| Ok((callbacks.event_handler)(event, callbacks.event_handler_user_data))).unwrap_or(false)
     }
 
     fn handle_mouse_event<'a>(&'a self, ns_event: &'a NSEvent, f: impl FnOnce(&'a NSEvent, MainThreadMarker) -> Event<'a>) {
@@ -784,8 +767,14 @@ impl RootView {
     }
 
     fn handle_text_operation(&self, operation: &TextOperation) -> bool {
-        let ivars = self.ivars();
-        catch_panic(|| Ok((ivars.text_operation_handler)(operation, ivars.text_operation_handler_user_data))).unwrap_or(false)
+        let callbacks = &self.ivars().callbacks;
+        catch_panic(|| {
+            Ok((callbacks.text_operation_handler)(
+                operation,
+                callbacks.text_operation_handler_user_data,
+            ))
+        })
+        .unwrap_or(false)
     }
 
     fn update_tracking_area_impl(&self, mtm: MainThreadMarker) {
@@ -815,10 +804,16 @@ impl RootView {
             debug!("keyDown start, calling interpretKeyEvents with {ns_event:?}");
             let had_marked_text = self.has_marked_text_impl();
             ivars.current_key_down_event.set(Some(key_event_info));
-            unsafe {
-                let key_events = NSArray::arrayWithObject(ns_event);
-                self.interpretKeyEvents(&key_events);
-            };
+            dbg!(&raw const self);
+            if let Some(custom_ime_handler) = ivars.custom_ime_handler.take() {
+                custom_ime_handler(ns_event, self);
+                ivars.custom_ime_handler.set(Some(custom_ime_handler));
+            } else {
+                unsafe {
+                    let key_events = NSArray::arrayWithObject(ns_event);
+                    self.interpretKeyEvents(&key_events);
+                };
+            }
             if let Some(key_event_info) = ivars.current_key_down_event.take() {
                 if self.has_marked_text_impl() || had_marked_text {
                     debug!("keyDown: has/had marked text, not forwarding");

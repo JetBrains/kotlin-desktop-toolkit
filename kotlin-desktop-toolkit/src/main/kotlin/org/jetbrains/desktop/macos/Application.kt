@@ -146,7 +146,7 @@ public object Application {
         )
         NativeApplicationCallbacks.on_did_finish_launching(
             callbacks,
-            NativeApplicationCallbacks.on_did_finish_launching.allocate(::onDidFinishLaunching, arena)
+            NativeApplicationCallbacks.on_did_finish_launching.allocate(::onDidFinishLaunching, arena),
         )
         return callbacks
     }

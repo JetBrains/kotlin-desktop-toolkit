@@ -2,19 +2,20 @@ use std::ffi::c_ushort;
 
 use desktop_macos::{
     common::{BorrowedStrPtr, LogicalPoint, LogicalSize},
-    logger_api::{LogLevel, LoggerConfiguration, logger_init},
+    logger_api::{logger_init, LogLevel, LoggerConfiguration},
     macos::{
         application_api::{
-            ApplicationCallbacks, ApplicationConfig, application_init, application_run_event_loop, application_stop_event_loop,
+            application_init, application_run_event_loop, application_stop_event_loop, ApplicationCallbacks, ApplicationConfig
         },
         events::{CallbackUserData, Event},
         text_operations::TextOperation,
-        window_api::{WindowCallbacks, WindowId, WindowParams, window_create, window_drop},
+        window::{RootView, Window},
+        window_api::{window_create, window_drop, WindowCallbacks, WindowId, WindowParams},
     },
 };
 
-use objc2::MainThreadMarker;
 use objc2::rc::Retained;
+use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType};
 use objc2_foundation::{NSPoint, NSString, NSTimeInterval};
 
@@ -133,6 +134,18 @@ pub fn init_tests() {
     application_init(&config, callbacks);
 }
 
+fn custom_ime_handler(e: &NSEvent, _text_input_client: &RootView) -> bool {
+    match unsafe { e.r#type() } {
+        NSEventType::KeyDown => {
+            false
+        }
+        NSEventType::KeyUp => {
+            false
+        }
+        _ => false,
+    }
+}
+
 impl<'a> TestData<'a> {
     pub fn run_test(&mut self) -> TestResult {
         let test_data_ptr: *mut TestData = self;
@@ -157,6 +170,8 @@ impl<'a> TestData<'a> {
         };
 
         let window_ptr = window_create(&params, window_callbacks);
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        window.root_view.set_custom_ime_handler(Some(custom_ime_handler));
 
         application_run_event_loop();
 

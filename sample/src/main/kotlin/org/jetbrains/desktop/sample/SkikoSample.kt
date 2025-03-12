@@ -10,7 +10,6 @@ import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.AppMenuStructure
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
-import org.jetbrains.desktop.macos.EventHandler
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.FileDialog
 import org.jetbrains.desktop.macos.KeyModifiersSet
@@ -21,7 +20,6 @@ import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.Screen
-import org.jetbrains.desktop.macos.TextOperationHandler
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
 import org.jetbrains.desktop.macos.WindowVisualEffect
@@ -30,8 +28,6 @@ import org.jetbrains.skia.Color
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import java.lang.AutoCloseable
-import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin

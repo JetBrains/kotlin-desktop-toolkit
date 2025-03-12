@@ -533,6 +533,7 @@ fn test_navigation_input() -> TestResult {
     }
     test_data.run_test()
 }
+
 // TODO: add the following tests
 // * Send [ARROW_RIGHT] -> Event::KeyDown(ARROW_RIGHT)
 // * Send [Ctrl+ARROW_RIGHT] -> Event::KeyDown(Ctrl+ARROW_RIGHT)

@@ -34,7 +34,7 @@ impl<T> RustAllocatedRawPtr<'_, T> {
         unsafe { Box::from_raw(ptr) }
     }
 
-    pub(crate) unsafe fn borrow<R>(&self) -> &R {
+    pub unsafe fn borrow<R>(&self) -> &R {
         Box::leak(unsafe { self.to_owned() })
     }
 

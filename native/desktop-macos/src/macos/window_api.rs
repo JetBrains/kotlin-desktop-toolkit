@@ -49,14 +49,7 @@ pub struct WindowCallbacks {
 pub extern "C" fn window_create(params: &WindowParams, callbacks: WindowCallbacks) -> WindowPtr<'static> {
     let window = ffi_boundary("window_create", || {
         let mtm = MainThreadMarker::new().unwrap();
-        Ok(Some(Window::new(
-            mtm,
-            params,
-            callbacks.event_handler,
-            callbacks.event_handler_user_data,
-            callbacks.text_operation_handler,
-            callbacks.text_operation_handler_user_data,
-        )?))
+        Ok(Some(Window::new(mtm, params, callbacks)?))
     });
     WindowPtr::from_value(window)
 }
