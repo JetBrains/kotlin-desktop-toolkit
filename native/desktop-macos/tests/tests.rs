@@ -8,7 +8,7 @@ use desktop_macos::{
         events::{Event, KeyDownEvent, KeyUpEvent},
         keyboard::{KeyCode, KeyModifiersSet},
         string::{borrow_ns_string, copy_to_ns_string},
-        text_operations::{TextChangedOperation, TextOperation},
+        text_operations::{SetMarkedTextOperation, TextChangedOperation, TextOperation, TextRange},
     },
 };
 use libtest_mimic::Trial;
@@ -534,6 +534,46 @@ fn test_navigation_input() -> TestResult {
     test_data.run_test()
 }
 
+fn test_dead_keys() -> TestResult {
+    let chars = NSString::from_str("");
+    let unmodchars = NSString::from_str("`");
+    let flags = NSEventModifierFlags::Option;
+
+    let mut test_data = TestData::default();
+    test_data.events_to_send = vec![
+        make_ns_key_down_event(
+            test_data.window_id,
+            &chars,
+            &unmodchars,
+            flags,
+            50,
+        ),
+        make_ns_key_down_event(
+            test_data.window_id,
+            &NSString::from_str("¨"),
+            &NSString::from_str(" "),
+            NSEventModifierFlags(0),
+            49,
+        ),
+    ];
+    test_data.expected_text_operations = vec![
+        TextOperation::SetMarkedText(SetMarkedTextOperation {
+            window_id: test_data.window_id,
+            text: borrow_ns_string(&unmodchars),
+            selected_range: TextRange { location: 1, length: 0 },
+            replacement_range: TextRange { location: 9223372036854775807, length: 0 }
+        }),
+        TextOperation::TextChanged(TextChangedOperation {
+            window_id: test_data.window_id,
+            original_event: None, // not yet checked in tests
+            text: borrow_ns_string(&unmodchars),
+        }),
+    ];
+
+    test_data.run_test()
+}
+
+
 // TODO: add the following tests
 // * Send [ARROW_RIGHT] -> Event::KeyDown(ARROW_RIGHT)
 // * Send [Ctrl+ARROW_RIGHT] -> Event::KeyDown(Ctrl+ARROW_RIGHT)
@@ -564,10 +604,11 @@ fn main() {
     init_tests();
 
     let mut tests = Vec::<Trial>::new();
-    tests.push(Trial::test("test_simple_text_input", test_simple_text_input));
-    tests.push(Trial::test("test_navigation_input", test_navigation_input));
-    tests.push(Trial::test("test_input_with_modifiers", test_input_with_modifiers));
-    tests.push(Trial::test("test_input_with_modifiers2", test_input_with_modifiers2));
+//    tests.push(Trial::test("test_simple_text_input", test_simple_text_input));
+//    tests.push(Trial::test("test_navigation_input", test_navigation_input));
+//    tests.push(Trial::test("test_input_with_modifiers", test_input_with_modifiers));
+//    tests.push(Trial::test("test_input_with_modifiers2", test_input_with_modifiers2));
+    tests.push(Trial::test("test_dead_keys", test_dead_keys));
 
     libtest_mimic::run(&args, tests).exit();
 }

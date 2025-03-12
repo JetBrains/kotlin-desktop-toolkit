@@ -16,8 +16,8 @@ use desktop_macos::{
 
 use objc2::rc::Retained;
 use objc2::MainThreadMarker;
-use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType};
-use objc2_foundation::{NSPoint, NSString, NSTimeInterval};
+use objc2_app_kit::{NSApplication, NSEvent, NSEventModifierFlags, NSEventType, NSTextInputClient};
+use objc2_foundation::{NSNotFound, NSPoint, NSRange, NSString, NSTimeInterval, NSUInteger};
 
 pub type TestResult = Result<(), libtest_mimic::Failed>;
 
@@ -134,10 +134,34 @@ pub fn init_tests() {
     application_init(&config, callbacks);
 }
 
-fn custom_ime_handler(e: &NSEvent, _text_input_client: &RootView) -> bool {
+fn custom_ime_handler(e: &NSEvent, text_input_client: &RootView) -> bool {
+    const DEFAULT_REPLACEMENT_RANGE: NSRange = NSRange {
+        location: NSNotFound as NSUInteger,
+        length: 0,
+    };
+    const DEFAULT_SELECTED_RANGE: NSRange = NSRange {
+        location: 1,
+        length: 0,
+    };
+
     match unsafe { e.r#type() } {
         NSEventType::KeyDown => {
-            false
+            if unsafe { e.modifierFlags().contains(NSEventModifierFlags::Option) } {
+                match unsafe { e.keyCode() } {
+                    50 => {
+                        let string = NSString::from_str("`");
+                        unsafe { text_input_client.setMarkedText_selectedRange_replacementRange(&string, DEFAULT_SELECTED_RANGE, DEFAULT_REPLACEMENT_RANGE) };
+                        true
+                    }
+                    _ => { false }
+                }
+            } else {
+                if unsafe { text_input_client.hasMarkedText() } {
+                    let string = NSString::from_str("`");  // TODO: cache last diacritic
+                    unsafe { text_input_client.insertText_replacementRange(&string, DEFAULT_REPLACEMENT_RANGE) };
+                }
+                true
+            }
         }
         NSEventType::KeyUp => {
             false
@@ -232,6 +256,12 @@ fn compare_text_operations(lhs: &TextOperation, rhs: &TextOperation) -> bool {
     match (lhs, rhs) {
         (TextOperation::TextCommand(lhs), TextOperation::TextCommand(rhs)) => compare_borrowed_strings(&lhs.command, &rhs.command),
         (TextOperation::TextChanged(lhs), TextOperation::TextChanged(rhs)) => compare_borrowed_strings(&lhs.text, &rhs.text),
+        (TextOperation::SetMarkedText(lhs), TextOperation::SetMarkedText(rhs)) => {
+            lhs.selected_range == rhs.selected_range && lhs.replacement_range == rhs.replacement_range && compare_borrowed_strings(&lhs.text, &rhs.text)
+        },
+        (TextOperation::UnmarkText(_), TextOperation::UnmarkText(_)) => {
+            true
+        },
         _ => false,
     }
 }

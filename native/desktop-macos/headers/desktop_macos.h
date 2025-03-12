@@ -404,9 +404,27 @@ typedef struct NativeTextChangedOperation {
   NativeBorrowedStrPtr text;
 } NativeTextChangedOperation;
 
+typedef struct NativeTextRange {
+  uintptr_t location;
+  uintptr_t length;
+} NativeTextRange;
+
+typedef struct NativeSetMarkedTextOperation {
+  NativeWindowId window_id;
+  NativeBorrowedStrPtr text;
+  struct NativeTextRange selected_range;
+  struct NativeTextRange replacement_range;
+} NativeSetMarkedTextOperation;
+
+typedef struct NativeUnmarkTextOperation {
+  NativeWindowId window_id;
+} NativeUnmarkTextOperation;
+
 typedef enum NativeTextOperation_Tag {
   NativeTextOperation_TextCommand,
   NativeTextOperation_TextChanged,
+  NativeTextOperation_SetMarkedText,
+  NativeTextOperation_UnmarkText,
 } NativeTextOperation_Tag;
 
 typedef struct NativeTextOperation {
@@ -417,6 +435,12 @@ typedef struct NativeTextOperation {
     };
     struct {
       struct NativeTextChangedOperation text_changed;
+    };
+    struct {
+      struct NativeSetMarkedTextOperation set_marked_text;
+    };
+    struct {
+      struct NativeUnmarkTextOperation unmark_text;
     };
   };
 } NativeTextOperation;

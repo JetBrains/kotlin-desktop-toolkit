@@ -23,7 +23,7 @@ use objc2_foundation::{
 
 use crate::{
     common::{BorrowedStrPtr, LogicalPoint, LogicalRect, LogicalSize},
-    logger::catch_panic,
+    logger::catch_panic, macos::text_operations::{SetMarkedTextOperation, TextRange, UnmarkTextOperation},
 };
 
 use super::{
@@ -740,7 +740,7 @@ impl RootView {
             tracking_area: Cell::new(None),
             current_key_down_event: Cell::new(None),
             marked_text_range: Cell::new(None),
-            custom_ime_handler: Cell::new(None),
+            custom_ime_handler: Cell::new(Some(|_, _| { false })),
         });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {
@@ -799,16 +799,18 @@ impl RootView {
 
     fn key_down_impl(&self, ns_event: &NSEvent) {
         catch_panic(|| {
+            debug!("keyDown start: {ns_event:?}");
             let ivars = self.ivars();
             let key_event_info = unpack_key_event(ns_event)?;
-            debug!("keyDown start, calling interpretKeyEvents with {ns_event:?}");
             let had_marked_text = self.has_marked_text_impl();
             ivars.current_key_down_event.set(Some(key_event_info));
-            dbg!(&raw const self);
-            if let Some(custom_ime_handler) = ivars.custom_ime_handler.take() {
-                custom_ime_handler(ns_event, self);
-                ivars.custom_ime_handler.set(Some(custom_ime_handler));
+            let custom_ime_handler = ivars.custom_ime_handler.take().unwrap();
+            let custom_ime_handler_res = custom_ime_handler(ns_event, self);
+            ivars.custom_ime_handler.set(Some(custom_ime_handler));
+            if custom_ime_handler_res {
+                debug!("keyDown, custom IME handled");
             } else {
+                debug!("keyDown, calling interpretKeyEvents");
                 unsafe {
                     let key_events = NSArray::arrayWithObject(ns_event);
                     self.interpretKeyEvents(&key_events);
@@ -918,14 +920,25 @@ impl RootView {
                 "setMarkedText, window={window:?}, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
                 ns_attributed_string, text, selected_range, replacement_range
             );
+            let _handled = self.handle_text_operation(&TextOperation::SetMarkedText(SetMarkedTextOperation {
+                window_id: self.window_id()?,
+                text: borrow_ns_string(&text),
+                selected_range: TextRange { location: selected_range.location, length: selected_range.length },
+                replacement_range: TextRange { location: replacement_range.location, length: replacement_range.length },
+            }));
             Ok(())
         });
     }
 
     fn unmark_text_impl(&self) {
-        debug!("unmarkText");
-        self.ivars().current_key_down_event.set(None);
-        self.ivars().marked_text_range.set(None);
-        // TODO
+        catch_panic(|| {
+            debug!("unmarkText");
+            self.ivars().current_key_down_event.set(None);
+            self.ivars().marked_text_range.set(None);
+            let _handled = self.handle_text_operation(&TextOperation::UnmarkText(UnmarkTextOperation {
+                window_id: self.window_id()?,
+            }));
+            Ok(())
+        });
     }
 }
