@@ -805,9 +805,15 @@ impl RootView {
             let key_event_info = unpack_key_event(ns_event)?;
             let had_marked_text = self.has_marked_text_impl();
             ivars.current_key_down_event.set(Some(key_event_info));
-            let custom_ime_handler = ivars.custom_ime_handler.take().unwrap();
-            let custom_ime_handler_res = custom_ime_handler(ns_event, self);
-            ivars.custom_ime_handler.set(Some(custom_ime_handler));
+            let custom_ime_handler_res = ivars
+                .custom_ime_handler
+                .take()
+                .map(|h| {
+                    let r = h(ns_event, self);
+                    ivars.custom_ime_handler.set(Some(h));
+                    r
+                })
+                .unwrap_or_default();
             if custom_ime_handler_res {
                 debug!("keyDown, custom IME handled");
             } else {

@@ -1,9 +1,6 @@
 use crate::common::BorrowedStrPtr;
 
-use super::{
-    events::{CallbackUserData, KeyDownEvent},
-    window_api::WindowId,
-};
+use super::{events::CallbackUserData, window_api::WindowId};
 
 #[repr(C)]
 #[derive(Debug, Default, PartialEq, Eq)]

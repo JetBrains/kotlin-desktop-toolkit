@@ -9,7 +9,7 @@ use desktop_macos::{
         },
         events::{CallbackUserData, Event},
         text_operations::TextOperation,
-        window::{RootView, Window},
+        window::{CustomImeHandler, RootView, Window},
         window_api::{WindowCallbacks, WindowId, WindowParams, window_create, window_drop},
     },
 };
@@ -27,14 +27,16 @@ pub struct TestData<'a> {
     pub events_to_send: Vec<Retained<NSEvent>>,
     pub expected_events: Vec<Event<'a>>,
     pub expected_text_operations: Vec<TextOperation<'a>>,
+    pub ignore_non_text_events: bool,
+    pub custom_ime_handler: Option<CustomImeHandler>,
     encountered_error: Option<String>,
 }
 
 extern "C" fn event_handler(e: &Event, user_data: CallbackUserData) -> bool {
     let test_data: &mut TestData = unsafe { &mut *(user_data.cast()) };
     eprintln!(
-        "test_utils event_handler: events_to_send.len: {}, {e:?}",
-        test_data.events_to_send.len()
+        "test_utils event_handler: expected_events.len: {}, {e:?}",
+        test_data.expected_events.len()
     );
 
     if !test_data.events_to_send.is_empty() {
@@ -56,7 +58,7 @@ extern "C" fn event_handler(e: &Event, user_data: CallbackUserData) -> bool {
         );
     } else {
         match e {
-            Event::WindowResize(_) | Event::WindowMove(_) | Event::WindowFocusChange(_) => return true,
+            Event::WindowResize(_) | Event::WindowMove(_) | Event::WindowFocusChange(_) | Event::MouseMoved(_) => return true,
             _ => {}
         }
         if test_data.expected_events.is_empty() {
@@ -75,11 +77,15 @@ extern "C" fn event_handler(e: &Event, user_data: CallbackUserData) -> bool {
     if test_data.expected_events.is_empty() && test_data.expected_text_operations.is_empty() {
         application_stop_event_loop();
     }
-    true
+    !test_data.ignore_non_text_events
 }
 
 extern "C" fn text_operation_handler(e: &TextOperation, user_data: CallbackUserData) -> bool {
     let test_data: &mut TestData = unsafe { &mut *(user_data.cast()) };
+    eprintln!(
+        "test_utils text_operation_handler: expected_text_operations.len: {}, {e:?}",
+        test_data.expected_events.len()
+    );
     let mut handled = true;
     if let TextOperation::TextCommand(_) = e {
         eprintln!("Returning false for {e:?}");
@@ -134,7 +140,7 @@ pub fn init_tests() {
     application_init(&config, callbacks);
 }
 
-fn custom_ime_handler(e: &NSEvent, text_input_client: &RootView) -> bool {
+pub fn custom_ime_handler(e: &NSEvent, text_input_client: &RootView) -> bool {
     const DEFAULT_REPLACEMENT_RANGE: NSRange = NSRange {
         location: NSNotFound as NSUInteger,
         length: 0,
@@ -196,7 +202,7 @@ impl<'a> TestData<'a> {
 
         let window_ptr = window_create(&params, window_callbacks);
         let window = unsafe { window_ptr.borrow::<Window>() };
-        window.root_view.set_custom_ime_handler(Some(custom_ime_handler));
+        window.root_view.set_custom_ime_handler(self.custom_ime_handler);
 
         application_run_event_loop();
 

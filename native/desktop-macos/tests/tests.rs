@@ -15,7 +15,7 @@ use libtest_mimic::Trial;
 use objc2::{MainThreadMarker, rc::Retained};
 use objc2_app_kit::NSEventModifierFlags;
 use objc2_foundation::{NSString, NSUTF32LittleEndianStringEncoding};
-use utils::test_utils::{TestData, TestResult, init_tests, make_ns_key_down_event, make_ns_key_up_event};
+use utils::test_utils::{TestData, TestResult, custom_ime_handler, init_tests, make_ns_key_down_event, make_ns_key_up_event};
 
 fn ns_string_from_codepoint(mtm: MainThreadMarker, codepoint: u32) -> Retained<NSString> {
     let key = char::from_u32(codepoint).unwrap();
@@ -46,14 +46,23 @@ fn test_simple_text_input() -> TestResult {
         test_data
             .events_to_send
             .push(make_ns_key_down_event(test_data.window_id, keys, keys, NSEventModifierFlags(0), 0));
+        test_data.expected_events.push(Event::KeyDown(KeyDownEvent {
+            window_id: test_data.window_id,
+            modifiers: KeyModifiersSet(0),
+            code: KeyCode(0),
+            characters: borrow_ns_string(&keys),
+            key: borrow_ns_string(&keys),
+            is_repeat: false,
+            timestamp: 0.0,
+        }));
         test_data
             .expected_text_operations
             .push(TextOperation::TextChanged(TextChangedOperation {
                 window_id: test_data.window_id,
-                original_event: None, // not yet checked in tests
                 text: borrow_ns_string(keys),
             }));
     }
+    test_data.ignore_non_text_events = true;
     test_data.run_test()
 }
 
@@ -535,25 +544,33 @@ fn test_navigation_input() -> TestResult {
 }
 
 fn test_dead_keys() -> TestResult {
-    let chars = NSString::from_str("");
-    let unmodchars = NSString::from_str("`");
+    let empty_string = NSString::from_str("");
+    let unmodchars1 = NSString::from_str("`");
+
+    let chars2 = NSString::from_str("¨");
+    let unmodchars2 = NSString::from_str(" ");
+
     let flags = NSEventModifierFlags::Option;
 
     let mut test_data = TestData::default();
+    test_data.custom_ime_handler = Some(custom_ime_handler);
     test_data.events_to_send = vec![
-        make_ns_key_down_event(test_data.window_id, &chars, &unmodchars, flags, 50),
-        make_ns_key_down_event(
-            test_data.window_id,
-            &NSString::from_str("¨"),
-            &NSString::from_str(" "),
-            NSEventModifierFlags(0),
-            49,
-        ),
+        make_ns_key_down_event(test_data.window_id, &empty_string, &unmodchars1, flags, 50),
+        make_ns_key_down_event(test_data.window_id, &chars2, &unmodchars2, NSEventModifierFlags(0), 49),
     ];
+    test_data.expected_events = vec![Event::KeyDown(KeyDownEvent {
+        window_id: test_data.window_id,
+        modifiers: KeyModifiersSet(flags.0),
+        code: KeyCode(50),
+        characters: borrow_ns_string(&empty_string),
+        key: borrow_ns_string(&empty_string),
+        is_repeat: false,
+        timestamp: 0.0,
+    })];
     test_data.expected_text_operations = vec![
         TextOperation::SetMarkedText(SetMarkedTextOperation {
             window_id: test_data.window_id,
-            text: borrow_ns_string(&unmodchars),
+            text: borrow_ns_string(&unmodchars1),
             selected_range: TextRange { location: 1, length: 0 },
             replacement_range: TextRange {
                 location: 9223372036854775807,
@@ -562,14 +579,13 @@ fn test_dead_keys() -> TestResult {
         }),
         TextOperation::TextChanged(TextChangedOperation {
             window_id: test_data.window_id,
-            original_event: None, // not yet checked in tests
-            text: borrow_ns_string(&unmodchars),
+            text: borrow_ns_string(&unmodchars1),
         }),
     ];
 
+    test_data.ignore_non_text_events = true;
     test_data.run_test()
 }
-
 
 // TODO: add the following tests
 // * Send [ARROW_RIGHT] -> Event::KeyDown(ARROW_RIGHT)
@@ -601,10 +617,10 @@ fn main() {
     init_tests();
 
     let mut tests = Vec::<Trial>::new();
-//    tests.push(Trial::test("test_simple_text_input", test_simple_text_input));
-//    tests.push(Trial::test("test_navigation_input", test_navigation_input));
-//    tests.push(Trial::test("test_input_with_modifiers", test_input_with_modifiers));
-//    tests.push(Trial::test("test_input_with_modifiers2", test_input_with_modifiers2));
+    tests.push(Trial::test("test_simple_text_input", test_simple_text_input));
+    tests.push(Trial::test("test_navigation_input", test_navigation_input));
+    tests.push(Trial::test("test_input_with_modifiers", test_input_with_modifiers));
+    tests.push(Trial::test("test_input_with_modifiers2", test_input_with_modifiers2));
     tests.push(Trial::test("test_dead_keys", test_dead_keys));
 
     libtest_mimic::run(&args, tests).exit();
