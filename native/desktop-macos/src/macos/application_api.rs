@@ -1,14 +1,18 @@
-use anyhow::{anyhow, Context};
+use std::cell::OnceCell;
+
+use anyhow::{Context, anyhow};
 use log::info;
 use objc2::{ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSRunningApplication
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
+    NSEventType, NSImage, NSRunningApplication,
 };
 use objc2_foundation::{MainThreadMarker, NSData, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
-use std::cell::OnceCell;
 
 use crate::{
-    common::RustAllocatedStrPtr, logger::ffi_boundary, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}
+    common::RustAllocatedStrPtr,
+    logger::ffi_boundary,
+    macos::events::{handle_application_did_finish_launching, handle_display_configuration_change},
 };
 
 use super::{events::EventHandler, string::copy_to_c_string};
@@ -44,9 +48,9 @@ impl AppState {
 pub struct ApplicationCallbacks {
     // returns true if application should terminate,
     // otherwise termination will be canceled
-    on_should_terminate: extern "C" fn() -> bool,
-    on_will_terminate: extern "C" fn(),
-    event_handler: EventHandler
+    pub on_should_terminate: extern "C" fn() -> bool,
+    pub on_will_terminate: extern "C" fn(),
+    pub event_handler: EventHandler,
 }
 
 #[repr(C)]
@@ -87,13 +91,12 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         let app_delegate = AppDelegate::new(mtm, callbacks);
         app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
         APP_STATE.with(|app_state| {
-            // app_state.
             app_state
                 .set(AppState {
                     app,
                     app_delegate,
                     event_handler,
-                    mtm
+                    mtm,
                 })
                 .map_err(|_| anyhow!("Can't initialize second time!"))?;
             Ok(())
@@ -165,7 +168,7 @@ pub extern "C" fn application_get_name() -> RustAllocatedStrPtr {
     ffi_boundary("application_name", || {
         match unsafe { NSRunningApplication::currentApplication().localizedName() } {
             Some(name) => copy_to_c_string(&name),
-            None => Ok(RustAllocatedStrPtr::null())
+            None => Ok(RustAllocatedStrPtr::null()),
         }
     })
 }
@@ -202,11 +205,15 @@ pub extern "C" fn application_unhide_all_applications() {
     });
 }
 
+/// # Safety
+///
+/// `data` must be a valid, non-null, pointer.
 #[unsafe(no_mangle)]
-pub extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u64) {
+pub unsafe extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u64) {
     ffi_boundary("application_set_dock_icon", || {
         let mtm = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
+        assert!(!data.is_null());
         let bytes = unsafe { std::slice::from_raw_parts_mut(data, data_length.try_into().unwrap()) };
         let data = NSData::with_bytes(bytes);
         let image = NSImage::initWithData(mtm.alloc(), &data).context("Can't create image from data")?;
@@ -217,13 +224,10 @@ pub extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u64) {
     })
 }
 
-#[derive(Debug)]
-pub(crate) struct MyNSApplicationIvars {}
-
 define_class!(
     #[unsafe(super(NSApplication))]
     #[name = "MyNSApplication"]
-    #[ivars = MyNSApplicationIvars]
+    #[ivars = ()]
     #[derive(Debug)]
     pub(crate) struct MyNSApplication;
 

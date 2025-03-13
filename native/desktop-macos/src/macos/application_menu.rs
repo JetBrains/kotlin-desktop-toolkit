@@ -299,7 +299,10 @@ impl<'a> ItemIdentity<'a> {
         match item {
             AppMenuItemSafe::Action { title, .. } => Self::Action { title },
             AppMenuItemSafe::Separator => Self::Separator,
-            AppMenuItemSafe::SubMenu { special_tag: SubMenuItemSpecialTag::AppNameMenu, .. } => Self::AppNameSubMenu,
+            AppMenuItemSafe::SubMenu {
+                special_tag: SubMenuItemSpecialTag::AppNameMenu,
+                ..
+            } => Self::AppNameSubMenu,
             AppMenuItemSafe::SubMenu { title, .. } => Self::SubMenu { title },
         }
     }

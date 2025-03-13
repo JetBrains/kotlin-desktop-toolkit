@@ -337,6 +337,12 @@ typedef void (*NativeDisplayLinkCallback)(void);
 
 typedef uint32_t NativeMouseButtonsSet;
 
+typedef struct NativeFileDialogParams {
+  bool allow_file;
+  bool allow_folder;
+  bool allow_multiple_selection;
+} NativeFileDialogParams;
+
 typedef void *NativeMetalDeviceRef;
 
 typedef void *NativeMetalCommandQueueRef;
@@ -385,13 +391,34 @@ typedef struct NativeWindowParams {
   NativeLogicalPixels titlebar_height;
 } NativeWindowParams;
 
-typedef void (*NativeOnInsertText)(NativeBorrowedStrPtr text);
+typedef struct NativeOnInsertTextArgs {
+  NativeBorrowedStrPtr text;
+} NativeOnInsertTextArgs;
 
-typedef void (*NativeOnDoCommand)(NativeBorrowedStrPtr command);
+typedef void (*NativeOnInsertText)(struct NativeOnInsertTextArgs args);
+
+typedef bool (*NativeOnDoCommand)(NativeBorrowedStrPtr command);
+
+typedef void (*NativeOnUnmarkText)(void);
+
+typedef struct NativeTextRange {
+  uintptr_t location;
+  uintptr_t length;
+} NativeTextRange;
+
+typedef struct NativeOnSetMarkedTextArgs {
+  NativeBorrowedStrPtr text;
+  struct NativeTextRange selected_range;
+  struct NativeTextRange replacement_range;
+} NativeOnSetMarkedTextArgs;
+
+typedef void (*NativeOnSetMarkedText)(struct NativeOnSetMarkedTextArgs args);
 
 typedef struct NativeTextInputClient {
   NativeOnInsertText on_insert_text;
   NativeOnDoCommand on_do_command;
+  NativeOnUnmarkText on_unmark_text;
+  NativeOnSetMarkedText on_set_marked_text;
 } NativeTextInputClient;
 
 typedef struct NativeColor {
@@ -419,12 +446,6 @@ typedef struct NativeWindowBackground {
   };
 } NativeWindowBackground;
 
-typedef struct NativeFileDialogParams {
-  bool allow_file;
-  bool allow_folder;
-  bool allow_multiple_selection;
-} NativeFileDialogParams;
-
 struct NativeExceptionsArray logger_check_exceptions(void);
 
 void logger_clear_exceptions(void);
@@ -450,6 +471,11 @@ void application_hide_other_applications(void);
 
 void application_unhide_all_applications(void);
 
+/**
+ * # Safety
+ *
+ * `data` must be a valid, non-null, pointer.
+ */
 void application_set_dock_icon(uint8_t *data, uint64_t data_length);
 
 void main_menu_update(struct NativeAppMenuStructure menu);
@@ -474,6 +500,8 @@ NativeMouseButtonsSet events_pressed_mouse_buttons(void);
 NativeKeyModifiersSet events_pressed_modifiers(void);
 
 struct NativeLogicalPoint events_cursor_location_in_screen(void);
+
+NativeRustAllocatedStrPtr file_dialog_run_modal(struct NativeFileDialogParams params);
 
 NativeMetalDeviceRef metal_create_device(void);
 
@@ -508,8 +536,6 @@ void screen_list_drop(NativeScreenInfoArray arr);
 NativeScreenId screen_get_main_screen_id(void);
 
 void string_drop(NativeRustAllocatedStrPtr str_ptr);
-
-bool text_input_context_handle_current_event(void);
 
 NativeWindowPtr window_create(struct NativeWindowParams params,
                               struct NativeTextInputClient text_input_client);
@@ -567,5 +593,3 @@ void window_start_drag(NativeWindowPtr window_ptr);
 void window_invalidate_shadow(NativeWindowPtr window_ptr);
 
 void window_set_background(NativeWindowPtr window_ptr, struct NativeWindowBackground background);
-
-NativeRustAllocatedStrPtr file_dialog_run_modal(struct NativeFileDialogParams params);

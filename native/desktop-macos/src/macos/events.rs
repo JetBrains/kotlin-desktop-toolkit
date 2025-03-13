@@ -2,7 +2,8 @@
 
 use core::f64;
 
-use objc2_app_kit::{NSEvent, NSScreen, NSWindow};
+use anyhow::bail;
+use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
 use crate::{
@@ -12,7 +13,7 @@ use crate::{
 
 use super::{
     application_api::AppState,
-    keyboard::{EMPTY_KEY_MODIFIERS, KeyCode, KeyEventInfo, KeyModifiersSet, unpack_flags_changed_event},
+    keyboard::{EMPTY_KEY_MODIFIERS, KeyCode, KeyModifiersSet, unpack_flags_changed_event, unpack_key_event},
     mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt},
     screen::{NSScreenExts, ScreenId},
     string::borrow_ns_string,
@@ -27,151 +28,137 @@ pub type Timestamp = f64;
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyDownEvent<'a> {
-    window_id: WindowId,
-    modifiers: KeyModifiersSet,
-    code: KeyCode,
-    characters: BorrowedStrPtr<'a>,
-    key: BorrowedStrPtr<'a>,
-    is_repeat: bool,
-    timestamp: Timestamp,
-}
-
-impl<'a> KeyDownEvent<'a> {
-    pub(crate) fn from_key_event_info(key_info: &'a KeyEventInfo) -> Self {
-        Self {
-            window_id: key_info.window_id,
-            code: key_info.code,
-            is_repeat: key_info.is_repeat,
-            characters: borrow_ns_string(&key_info.chars),
-            key: borrow_ns_string(&key_info.chars),
-            modifiers: key_info.modifiers,
-            timestamp: key_info.timestamp,
-        }
-    }
+    pub window_id: WindowId,
+    pub modifiers: KeyModifiersSet,
+    pub code: KeyCode,
+    pub characters: BorrowedStrPtr<'a>,
+    pub key: BorrowedStrPtr<'a>,
+    pub is_repeat: bool,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyUpEvent<'a> {
-    window_id: WindowId,
-    modifiers: KeyModifiersSet,
-    code: KeyCode,
-    characters: BorrowedStrPtr<'a>,
-    key: BorrowedStrPtr<'a>,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub modifiers: KeyModifiersSet,
+    pub code: KeyCode,
+    pub characters: BorrowedStrPtr<'a>,
+    pub key: BorrowedStrPtr<'a>,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct ModifiersChangedEvent {
-    window_id: WindowId,
-    modifiers: KeyModifiersSet,
-    code: KeyCode,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub modifiers: KeyModifiersSet,
+    pub code: KeyCode,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseMovedEvent {
-    window_id: WindowId,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseDraggedEvent {
-    window_id: WindowId,
-    button: MouseButton,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub button: MouseButton,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseEnteredEvent {
-    window_id: WindowId,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseExitedEvent {
-    window_id: WindowId,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseDownEvent {
-    window_id: WindowId,
-    button: MouseButton,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub button: MouseButton,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseUpEvent {
-    window_id: WindowId,
-    button: MouseButton,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub button: MouseButton,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct ScrollWheelEvent {
-    window_id: WindowId,
-    scrolling_delta_x: LogicalPixels,
-    scrolling_delta_y: LogicalPixels,
-    has_precise_scrolling_deltas: bool,
-    location_in_window: LogicalPoint,
-    timestamp: Timestamp,
+    pub window_id: WindowId,
+    pub scrolling_delta_x: LogicalPixels,
+    pub scrolling_delta_y: LogicalPixels,
+    pub has_precise_scrolling_deltas: bool,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowScreenChangeEvent {
-    window_id: WindowId,
-    new_screen_id: ScreenId,
+    pub window_id: WindowId,
+    pub new_screen_id: ScreenId,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowResizeEvent {
-    window_id: WindowId,
-    size: LogicalSize,
+    pub window_id: WindowId,
+    pub size: LogicalSize,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowMoveEvent {
-    window_id: WindowId,
-    origin: LogicalPoint,
+    pub window_id: WindowId,
+    pub origin: LogicalPoint,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowFocusChangeEvent {
-    window_id: WindowId,
-    is_key: bool,
-    is_main: bool,
+    pub window_id: WindowId,
+    pub is_key: bool,
+    pub is_main: bool,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowCloseRequestEvent {
-    window_id: WindowId,
+    pub window_id: WindowId,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowFullScreenToggleEvent {
-    window_id: WindowId,
-    is_full_screen: bool,
+    pub window_id: WindowId,
+    pub is_full_screen: bool,
 }
 
 #[repr(C)]
@@ -197,97 +184,39 @@ pub enum Event<'a> {
     ApplicationDidFinishLaunching,
 }
 
-impl PanicDefault for MouseButtonsSet {
-    fn default() -> Self {
-        EmptyMouseButtonsSet
-    }
-}
-
-#[unsafe(no_mangle)]
-extern "C" fn events_pressed_mouse_buttons() -> MouseButtonsSet {
-    ffi_boundary("events_pressed_mouse_buttons", || Ok(NSEvent::pressed_mouse_buttons()))
-}
-
-impl PanicDefault for KeyModifiersSet {
-    fn default() -> Self {
-        EMPTY_KEY_MODIFIERS
-    }
-}
-
-#[unsafe(no_mangle)]
-extern "C" fn events_pressed_modifiers() -> KeyModifiersSet {
-    ffi_boundary("events_pressed_modifiers", || Ok(NSEvent::pressed_modifiers()))
-}
-
-#[unsafe(no_mangle)]
-extern "C" fn events_cursor_location_in_screen() -> LogicalPoint {
-    ffi_boundary("events_cursor_location_in_screen", || {
-        let mtm = MainThreadMarker::new().unwrap();
-        Ok(NSEvent::cursor_location_in_screen(mtm))
-    })
-}
-
-trait NSEventExt {
-    fn me(&self) -> &NSEvent;
-
-    fn window_id(&self) -> WindowId {
-        let me = self.me();
-        unsafe { me.windowNumber() as WindowId }
-    }
-
-    fn cursor_location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint {
-        let me = self.me();
-        let point = unsafe {
-            // position is relative to bottom left corner of the root view
-            me.locationInWindow()
-        };
-        let window = unsafe { me.window(mtm).expect("No window for event") };
-        let frame = window.contentView().unwrap().frame();
-        LogicalPoint::from_macos_coords(point, frame.size.height)
-    }
-
-    fn cursor_location_in_screen(mtm: MainThreadMarker) -> LogicalPoint {
-        let point = unsafe { NSEvent::mouseLocation() };
-        let screen = NSScreen::primary(mtm).unwrap();
-        LogicalPoint::from_macos_coords(point, screen.height())
-    }
-
-    fn pressed_modifiers() -> KeyModifiersSet {
-        unsafe { NSEvent::modifierFlags_class() }.into()
-    }
-}
-
-impl NSEventExt for NSEvent {
-    fn me(&self) -> &NSEvent {
-        self
-    }
-}
-
-pub(crate) fn to_key_down_event(key_info: &KeyEventInfo) -> Event {
-    Event::KeyDown(KeyDownEvent::from_key_event_info(key_info))
-}
-
-pub(crate) fn to_key_up_event(key_info: &KeyEventInfo) -> Event {
-    Event::KeyUp(KeyUpEvent {
-        window_id: key_info.window_id,
-        code: key_info.code,
-        characters: borrow_ns_string(&key_info.chars),
-        key: borrow_ns_string(&key_info.chars),
-        modifiers: key_info.modifiers,
-        timestamp: key_info.timestamp,
-    })
-}
-
-pub(crate) fn handle_key_event(event: &Event) -> anyhow::Result<bool> {
-    let handled = AppState::with(|state| {
-        let res = (state.event_handler)(event);
-        //debug!("handle_key_event: {event:?} -> {res}");
-        Ok(res)
+pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
+    let handled = AppState::with(|state| match unsafe { ns_event.r#type() } {
+        NSEventType::KeyDown => {
+            let key_info = unpack_key_event(ns_event)?;
+            let event = Event::KeyDown(KeyDownEvent {
+                window_id: ns_event.window_id(),
+                code: key_info.code,
+                is_repeat: key_info.is_repeat,
+                characters: borrow_ns_string(&key_info.chars),
+                key: borrow_ns_string(&key_info.key),
+                modifiers: key_info.modifiers,
+                timestamp: unsafe { ns_event.timestamp() },
+            });
+            Ok((state.event_handler)(&event))
+        }
+        NSEventType::KeyUp => {
+            let key_info = unpack_key_event(ns_event)?;
+            let event = Event::KeyUp(KeyUpEvent {
+                window_id: ns_event.window_id(),
+                code: key_info.code,
+                characters: borrow_ns_string(&key_info.chars),
+                key: borrow_ns_string(&key_info.key),
+                modifiers: key_info.modifiers,
+                timestamp: unsafe { ns_event.timestamp() },
+            });
+            Ok((state.event_handler)(&event))
+        }
+        _ => bail!("Unexpected type of event {:?}", ns_event),
     });
     handled
 }
 
-pub(crate) fn handle_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
+pub(crate) fn handle_flags_change(ns_event: &NSEvent) -> anyhow::Result<bool> {
     let handled = AppState::with(|state| {
         let flags_changed_info = unpack_flags_changed_event(ns_event)?;
         let event = Event::ModifiersChanged(ModifiersChangedEvent {
@@ -296,7 +225,6 @@ pub(crate) fn handle_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<b
             code: flags_changed_info.code,
             timestamp: unsafe { ns_event.timestamp() },
         });
-
         Ok((state.event_handler)(&event))
     });
     handled
@@ -465,4 +393,70 @@ pub(crate) fn handle_application_did_finish_launching() {
         let event = Event::ApplicationDidFinishLaunching;
         (state.event_handler)(&event)
     });
+}
+
+impl PanicDefault for MouseButtonsSet {
+    fn default() -> Self {
+        EmptyMouseButtonsSet
+    }
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn events_pressed_mouse_buttons() -> MouseButtonsSet {
+    ffi_boundary("events_pressed_mouse_buttons", || Ok(NSEvent::pressed_mouse_buttons()))
+}
+
+impl PanicDefault for KeyModifiersSet {
+    fn default() -> Self {
+        EMPTY_KEY_MODIFIERS
+    }
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn events_pressed_modifiers() -> KeyModifiersSet {
+    ffi_boundary("events_pressed_modifiers", || Ok(NSEvent::pressed_modifiers()))
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn events_cursor_location_in_screen() -> LogicalPoint {
+    ffi_boundary("events_cursor_location_in_screen", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        Ok(NSEvent::cursor_location_in_screen(mtm))
+    })
+}
+
+trait NSEventExt {
+    fn me(&self) -> &NSEvent;
+
+    fn window_id(&self) -> WindowId {
+        let me = self.me();
+        unsafe { me.windowNumber() }
+    }
+
+    fn cursor_location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint {
+        let me = self.me();
+        let point = unsafe {
+            // position is relative to bottom left corner of the root view
+            me.locationInWindow()
+        };
+        let window = unsafe { me.window(mtm).expect("No window for event") };
+        let frame = window.contentView().unwrap().frame();
+        LogicalPoint::from_macos_coords(point, frame.size.height)
+    }
+
+    fn cursor_location_in_screen(mtm: MainThreadMarker) -> LogicalPoint {
+        let point = unsafe { NSEvent::mouseLocation() };
+        let screen = NSScreen::primary(mtm).unwrap();
+        LogicalPoint::from_macos_coords(point, screen.height())
+    }
+
+    fn pressed_modifiers() -> KeyModifiersSet {
+        unsafe { NSEvent::modifierFlags_class() }.into()
+    }
+}
+
+impl NSEventExt for NSEvent {
+    fn me(&self) -> &NSEvent {
+        self
+    }
 }

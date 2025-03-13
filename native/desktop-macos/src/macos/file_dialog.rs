@@ -1,5 +1,5 @@
 use anyhow::Context;
-use objc2::{rc::Retained, MainThreadMarker};
+use objc2::{MainThreadMarker, rc::Retained};
 use objc2_app_kit::{NSModalResponse, NSOpenPanel};
 use objc2_foundation::NSString;
 
@@ -8,7 +8,6 @@ use crate::{common::RustAllocatedStrPtr, logger::ffi_boundary};
 use super::string::copy_to_c_string;
 
 pub type FileDialogCallback = extern "C" fn(*const std::ffi::c_char);
-
 
 #[repr(C)]
 pub struct FileDialogParams {
@@ -30,7 +29,6 @@ pub extern "C" fn file_dialog_run_modal(params: FileDialogParams) -> RustAllocat
         Ok(result)
     })
 }
-
 
 fn file_dialog_run_model_impl(mtm: MainThreadMarker, params: &FileDialogParams) -> anyhow::Result<Option<Retained<NSString>>> {
     const NSMODAL_RESPONSE_OK: NSModalResponse = 1;
