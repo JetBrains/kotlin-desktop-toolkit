@@ -66,7 +66,16 @@ impl BorrowedStrPtr<'_> {
 
 impl std::fmt::Debug for BorrowedStrPtr<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.as_str())
+        match self.as_str() {
+            Ok(s) => {
+                if s.is_ascii() {
+                    f.write_str(s)
+                } else {
+                    write!(f, "{}", s.escape_unicode())
+                }
+            }
+            Err(e) => write!(f, "{e}"),
+        }
     }
 }
 
@@ -153,7 +162,7 @@ pub struct PhysicalSize {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct PhysicalPoint {
+pub(crate) struct PhysicalPoint {
     pub x: PhysicalPixels,
     pub y: PhysicalPixels,
 }
@@ -173,7 +182,7 @@ pub struct LogicalPoint {
 }
 
 #[derive(Debug)]
-pub struct LogicalRect {
+pub(crate) struct LogicalRect {
     // the point closest to coordinates origin
     pub(crate) origin: LogicalPoint,
     pub(crate) size: LogicalSize,

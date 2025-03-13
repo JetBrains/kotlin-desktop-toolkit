@@ -4,18 +4,17 @@ use std::{
     rc::Rc,
 };
 
-use anyhow::{Context, Ok};
+use anyhow::{Context, Ok, bail};
 use log::debug;
 use objc2::{
     DeclaredClass, MainThreadOnly, define_class, msg_send,
     rc::Retained,
-    runtime::{AnyObject, Bool, ProtocolObject, Sel},
+    runtime::{AnyObject, ProtocolObject, Sel},
 };
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen,
-    NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
-    NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode,
-    NSWindowStyleMask, NSWindowTitleVisibility,
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea,
+    NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
+    NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility,
 };
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
@@ -23,28 +22,25 @@ use objc2_foundation::{
 };
 
 use crate::{
-    common::{LogicalPoint, LogicalRect, LogicalSize},
+    common::{BorrowedStrPtr, LogicalPoint, LogicalRect, LogicalSize},
     logger::catch_panic,
     macos::{
         custom_titlebar::CustomTitlebar,
-        events::{
-            handle_flags_changed_event, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
-            handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_close_request, handle_window_focus_change,
-            handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change, to_key_down_event,
-        },
+        events::Event,
         keyboard::unpack_key_event,
         string::{borrow_ns_string, copy_to_ns_string},
-        text_operations::{handle_text_changed_operation, handle_text_command_operation},
+        text_operations::TextChangedOperation,
     },
 };
 
 use super::{
     application_api::MyNSApplication,
     custom_titlebar::CustomTitlebarCell,
-    events::to_key_up_event,
+    events::EventHandler,
     metal_api::MetalView,
     screen::NSScreenExts,
-    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
+    text_operations::{TextCommandOperation, TextOperation},
+    window_api::{WindowBackground, WindowCallbacks, WindowId, WindowParams, WindowVisualEffect},
 };
 
 pub(crate) struct Window {
@@ -156,7 +152,7 @@ impl NSWindowExts for NSWindow {
 }
 
 impl Window {
-    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams) -> anyhow::Result<Self> {
+    pub(crate) fn new(mtm: MainThreadMarker, params: &WindowParams, callbacks: WindowCallbacks) -> anyhow::Result<Self> {
         /*
         see doc: https://developer.apple.com/documentation/appkit/nswindow/stylemask-swift.struct/resizable?language=objc
 
@@ -237,10 +233,10 @@ impl Window {
             ns_window.setRestorable(false);
         }
 
-        let delegate = WindowDelegate::new(mtm, ns_window.clone(), custom_titlebar.clone());
+        let delegate = WindowDelegate::new(mtm, ns_window.clone(), callbacks.event_handler, custom_titlebar.clone());
         ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
 
-        let root_view = RootView::new(mtm);
+        let root_view = RootView::new(mtm, callbacks);
         ns_window.setAcceptsMouseMovedEvents(true);
 
         let container = unsafe { NSView::new(mtm) };
@@ -334,6 +330,8 @@ impl Window {
 
 pub(crate) struct WindowDelegateIvars {
     ns_window: Retained<MyNSWindow>,
+    mtm: MainThreadMarker,
+    event_handler: EventHandler,
     custom_titlebar: Option<CustomTitlebarCell>,
 }
 
@@ -349,20 +347,17 @@ define_class!(
     unsafe impl NSWindowDelegate for WindowDelegate {
         #[unsafe(method(windowDidResize:))]
         unsafe fn window_did_resize(&self, _notification: &NSNotification) {
-            handle_window_resize(&self.ivars().ns_window);
+            catch_panic(|| Ok(self.handle_event(Event::new_window_resize_event)));
         }
 
         #[unsafe(method(windowDidChangeScreen:))]
         unsafe fn window_did_change_screen(&self, _notification: &NSNotification) {
-            catch_panic(|| {
-                handle_window_screen_change(&self.ivars().ns_window);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_event(Event::new_window_screen_change_event)));
         }
 
         #[unsafe(method(windowDidMove:))]
         unsafe fn window_did_move(&self, _notification: &NSNotification) {
-            handle_window_move(&self.ivars().ns_window);
+            catch_panic(|| Ok(self.handle_event(|window| Event::new_window_move_event(window, self.ivars().mtm))));
         }
 
         #[unsafe(method(windowWillEnterFullScreen:))]
@@ -373,56 +368,69 @@ define_class!(
 
         #[unsafe(method(windowDidEnterFullScreen:))]
         unsafe fn window_did_enter_full_screen(&self, _notification: &NSNotification) {
-            handle_window_full_screen_toggle(&self.ivars().ns_window);
+            catch_panic(|| Ok(self.handle_event(Event::new_window_full_screen_toggle_event)));
         }
 
         #[unsafe(method(windowDidExitFullScreen:))]
         unsafe fn window_did_exit_full_screen(&self, _notification: &NSNotification) {
             let ivars = self.ivars();
             CustomTitlebar::after_exit_fullscreen(&ivars.custom_titlebar, &ivars.ns_window);
-            handle_window_full_screen_toggle(&self.ivars().ns_window);
+            catch_panic(|| Ok(self.handle_event(Event::new_window_full_screen_toggle_event)));
         }
 
         #[unsafe(method(windowDidBecomeKey:))]
         unsafe fn window_did_become_key(&self, _notification: &NSNotification) {
             debug!("windowDidBecomeKey");
-            handle_window_focus_change(&self.ivars().ns_window);
+            catch_panic(|| Ok(self.handle_event(Event::new_window_focus_change_event)));
         }
 
         #[unsafe(method(windowDidResignKey:))]
         unsafe fn window_did_resign_key(&self, _notification: &NSNotification) {
             debug!("windowDidResignKey");
-            handle_window_focus_change(&self.ivars().ns_window);
+            catch_panic(|| Ok(self.handle_event(Event::new_window_focus_change_event)));
         }
 
         #[unsafe(method(windowDidBecomeMain:))]
         unsafe fn window_did_become_main(&self, _notification: &NSNotification) {
             debug!("windowDidBecomeMain");
-            handle_window_focus_change(&self.ivars().ns_window);
+            catch_panic(|| Ok(self.handle_event(Event::new_window_focus_change_event)));
         }
 
         #[unsafe(method(windowDidResignMain:))]
         unsafe fn window_did_resign_main(&self, _notification: &NSNotification) {
             debug!("windowDidResignMain");
-            handle_window_focus_change(&self.ivars().ns_window);
+            catch_panic(|| Ok(self.handle_event(Event::new_window_focus_change_event)));
         }
 
         #[unsafe(method(windowShouldClose:))]
         unsafe fn window_should_close(&self, _notification: &NSNotification) -> bool {
-            handle_window_close_request(&self.ivars().ns_window);
+            catch_panic(|| Ok(self.handle_event(Event::new_window_close_request_event)));
             false
         }
     }
 );
 
 impl WindowDelegate {
-    fn new(mtm: MainThreadMarker, ns_window: Retained<MyNSWindow>, custom_titlebar: Option<CustomTitlebarCell>) -> Retained<Self> {
+    fn new(
+        mtm: MainThreadMarker,
+        ns_window: Retained<MyNSWindow>,
+        event_handler: EventHandler,
+        custom_titlebar: Option<CustomTitlebarCell>,
+    ) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(WindowDelegateIvars {
             ns_window,
+            mtm,
+            event_handler,
             custom_titlebar,
         });
         unsafe { msg_send![super(this), init] }
+    }
+
+    fn handle_event<'a>(&'a self, f: impl FnOnce(&'a NSWindow) -> Event<'a>) -> bool {
+        let ivars = self.ivars();
+        let event = f(&ivars.ns_window);
+        (ivars.event_handler)(&event)
     }
 }
 
@@ -459,7 +467,12 @@ impl MyNSWindow {
     }
 }
 
+const DEFAULT_NS_RANGE: NSRange = NSRange { location: 0, length: 0 };
+const DEFAULT_NS_RECT: NSRect = NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64));
+
 pub(crate) struct RootViewIvars {
+    mtm: MainThreadMarker,
+    callbacks: WindowCallbacks,
     tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
     key_event_handled: Cell<Option<bool>>,
 }
@@ -477,20 +490,17 @@ define_class!(
 
         #[unsafe(method(hasMarkedText))]
         unsafe fn has_marked_text(&self) -> bool {
-            debug!("hasMarkedText");
-            false  // TODO
+            catch_panic(|| Ok(self.has_marked_text_impl())).unwrap_or(false)
         }
 
         #[unsafe(method(markedRange))]
         unsafe fn marked_range(&self) -> NSRange {
-            debug!("markedRange");
-            NSRange { location: 0, length: 0 }  // TODO
+            catch_panic(|| Ok(self.marked_range_impl())).flatten().unwrap_or(DEFAULT_NS_RANGE)
         }
 
         #[unsafe(method(selectedRange))]
         unsafe fn selected_range(&self) -> NSRange {
-            debug!("selectedRange");
-            NSRange { location: 0, length: 0 }  // TODO
+            catch_panic(|| Ok(self.selected_range_impl())).unwrap_or(DEFAULT_NS_RANGE)
         }
 
         #[unsafe(method(setMarkedText:selectedRange:replacementRange:))]
@@ -500,12 +510,12 @@ define_class!(
             selected_range: NSRange,
             replacement_range: NSRange,
         ) {
-            self.set_marked_text_selected_range_replacement_range_impl(string, selected_range, replacement_range);
+            catch_panic(|| self.set_marked_text_selected_range_replacement_range_impl(string, selected_range, replacement_range));
         }
 
         #[unsafe(method(unmarkText))]
         unsafe fn unmark_text(&self) {
-            self.unmark_text_impl();
+            catch_panic(|| self.unmark_text_impl());
         }
 
         #[unsafe(method_id(validAttributesForMarkedText))]
@@ -535,9 +545,7 @@ define_class!(
             range: NSRange,
             actual_range: NSRangePointer,
         ) -> Option<Retained<NSAttributedString>> {
-            let actual_range = NonNull::new(actual_range);
-            debug!("attributedSubstringForProposedRange, range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
-            None  // TODO
+            catch_panic(|| Ok(self.attributed_substring_for_proposed_range_actual_range_impl(range, actual_range))).flatten()
         }
 
         #[unsafe(method(insertText:replacementRange:))]
@@ -546,7 +554,7 @@ define_class!(
             string: &AnyObject,
             replacement_range: NSRange,
         ) {
-            self.insert_text_replacement_range_impl(string, replacement_range);
+            catch_panic(|| self.insert_text_replacement_range_impl(string, replacement_range));
         }
 
         // Getting character coordinates
@@ -557,30 +565,25 @@ define_class!(
             range: NSRange,
             actual_range: NSRangePointer,
         ) -> NSRect {
-            let actual_range = NonNull::new(actual_range);
-            debug!("firstRectForCharacterRange: range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
-            NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64))  // TODO
+            catch_panic(|| self.first_rect_for_character_range_actual_range_impl(range, actual_range)).unwrap_or(DEFAULT_NS_RECT)
         }
 
         #[unsafe(method(characterIndexForPoint:))]
         unsafe fn character_index_for_point(&self, point: NSPoint) -> NSUInteger {
-            debug!("characterIndexForPoint: {:?}", point);
-            0  // TODO
+            catch_panic(|| self.character_index_for_point_impl(point)).unwrap_or(0)
         }
 
         #[unsafe(method(doCommandBySelector:))]
         unsafe fn do_command_by_selector(&self, selector: Sel) {
-            self.do_command_by_selector_impl(selector);
+            catch_panic(|| self.do_command_by_selector_impl(selector));
         }
     }
 
     impl RootView {
         #[unsafe(method(updateTrackingArea))]
         fn update_tracking_area(&self) {
+            let mtm = unsafe { MainThreadMarker::new_unchecked() };
             catch_panic(|| {
-                let mtm = unsafe {
-                    MainThreadMarker::new_unchecked()
-                };
                 self.update_tracking_area_impl(mtm);
                 Ok(())
             });
@@ -588,115 +591,68 @@ define_class!(
 
         #[unsafe(method(mouseMoved:))]
         fn mouse_moved(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_move(event); // todo pass to next responder if it's not handled
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_move_event)));
         }
 
         #[unsafe(method(mouseDragged:))]
         fn mouse_dragged(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_drag(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_drag_event)));
         }
 
         #[unsafe(method(rightMouseDragged:))]
         fn right_mouse_dragged(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_drag(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_drag_event)));
         }
 
         #[unsafe(method(otherMouseDragged:))]
         fn other_mouse_dragged(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_drag(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_drag_event)));
         }
 
         #[unsafe(method(mouseEntered:))]
         fn mouse_entered(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_enter(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_enter_event)));
         }
 
         #[unsafe(method(mouseExited:))]
         fn mouse_exited(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_exit(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_exit_event)));
         }
 
         #[unsafe(method(mouseDown:))]
         fn mouse_down(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_down(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_down_event)));
         }
 
         #[unsafe(method(mouseUp:))]
         fn mouse_up(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_up(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_up_event)));
         }
 
         #[unsafe(method(rightMouseDown:))]
         fn right_mouse_down(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_down(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_down_event)));
         }
 
         #[unsafe(method(rightMouseUp:))]
         fn right_mouse_up(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_up(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_up_event)));
         }
 
 
         #[unsafe(method(scrollWheel:))]
         fn scroll_wheel(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_scroll_wheel(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_scroll_wheel_event)));
         }
 
         #[unsafe(method(otherMouseDown:))]
         fn other_mouse_down(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_down(event);
-                Ok(())
-            });
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_down_event)));
         }
 
         #[unsafe(method(otherMouseUp:))]
         fn other_mouse_up(&self, event: &NSEvent) {
-            catch_panic(|| {
-                handle_mouse_up(event);
-                Ok(())
-            });
-        }
-
-        #[unsafe(method(interpretKeyEvents:))]
-        fn interpret_key_events(&self, event_array: &NSArray<NSEvent>) {
-            debug!("interpretKeyEvents: {:?}", event_array);
-            unsafe {
-                let _: () = msg_send![super(self), interpretKeyEvents: event_array];
-            }
+            catch_panic(|| Ok(self.handle_mouse_event(event, Event::new_mouse_up_event)));
         }
 
         // Needed for e.g. Ctrl+Tab event reporting
@@ -708,24 +664,17 @@ define_class!(
 
         #[unsafe(method(keyDown:))]
         fn key_down(&self, nsevent: &NSEvent) {
-            self.key_down_impl(nsevent);
+            catch_panic(|| self.key_down_impl(nsevent));
         }
 
         #[unsafe(method(keyUp:))]
         fn key_up(&self, nsevent: &NSEvent) {
-            self.key_up_impl(nsevent);
-        }
-
-        #[unsafe(method(performKeyEquivalent:))]
-        fn perform_key_equivalent(&self, event: &NSEvent) -> bool {
-            return self.perform_key_equivalent_impl(event);
+            catch_panic(|| self.key_up_impl(nsevent));
         }
 
         #[unsafe(method(flagsChanged:))]
         fn flags_changed(&self, event: &NSEvent) {
-            catch_panic(|| {
-               handle_flags_changed_event(event)
-            });
+            catch_panic(|| Ok(self.handle_event(&Event::new_modifiers_changed_event(event))));
         }
 
         // we need those three methods to prevent transparent titlbar from being draggable
@@ -764,9 +713,16 @@ fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttribut
 }
 
 impl RootView {
-    pub(crate) fn new(mtm: MainThreadMarker) -> Retained<Self> {
+    fn window_id(&self) -> anyhow::Result<WindowId> {
+        let window = self.window().context("No window for view")?;
+        Ok(window.window_id())
+    }
+
+    pub(crate) fn new(mtm: MainThreadMarker, callbacks: WindowCallbacks) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars {
+            mtm,
+            callbacks,
             tracking_area: Cell::new(None),
             key_event_handled: Cell::new(None),
         });
@@ -779,6 +735,22 @@ impl RootView {
         root_view
     }
 
+    fn handle_event<'a>(&'a self, event: &'a Event) -> bool {
+        let callbacks = &self.ivars().callbacks;
+        (callbacks.event_handler)(event)
+    }
+
+    fn handle_mouse_event<'a>(&'a self, ns_event: &'a NSEvent, f: impl FnOnce(&'a NSEvent, MainThreadMarker) -> Event<'a>) -> bool {
+        let ivars = self.ivars();
+        let event = f(ns_event, ivars.mtm);
+        self.handle_event(&event)
+    }
+
+    fn handle_text_operation(&self, operation: &TextOperation) -> bool {
+        let callbacks = &self.ivars().callbacks;
+        (callbacks.text_operation_handler)(operation)
+    }
+
     fn update_tracking_area_impl(&self, mtm: MainThreadMarker) {
         let rect = self.bounds();
         let options = NSTrackingAreaOptions::MouseEnteredAndExited
@@ -788,7 +760,7 @@ impl RootView {
             | NSTrackingAreaOptions::InVisibleRect
             | NSTrackingAreaOptions::AssumeInside;
         let tracking_area = unsafe { NSTrackingArea::initWithRect_options_owner_userInfo(mtm.alloc(), rect, options, Some(self), None) };
-        if let Some(old_tracking_area) = self.ivars().tracking_area.replace(None) {
+        if let Some(old_tracking_area) = self.ivars().tracking_area.take() {
             unsafe {
                 self.removeTrackingArea(&old_tracking_area);
             }
@@ -796,72 +768,23 @@ impl RootView {
         unsafe {
             self.addTrackingArea(&tracking_area);
         }
-        self.ivars().tracking_area.replace(Some(tracking_area));
+        self.ivars().tracking_area.set(Some(tracking_area));
     }
 
-    fn perform_key_equivalent_impl(&self, ns_event: &NSEvent) -> Bool {
-        let ret: Bool = unsafe { msg_send![super(self), performKeyEquivalent: ns_event] };
-        debug!("performKeyEquivalent -> {}", ret.as_bool());
+    fn has_marked_text_impl(&self) -> bool {
+        let ret = self.marked_range_impl().is_some();
+        debug!("hasMarkedText: {ret}");
         ret
     }
 
-    fn key_down_impl(&self, ns_event: &NSEvent) {
-        catch_panic(|| {
-            // Ignore in case it was already handled in `performKeyEquivalent`.
-            if self.ivars().key_event_handled.get().is_some() {
-                debug!("keyDown: already tried handling the event, ignoring");
-                Ok(())
-            } else {
-                debug!("keyDown start: {ns_event:?}");
-                // First check if the key would be handled by the system (e.g. interacting with the input method popup)
-                unsafe {
-                    let key_events = NSArray::arrayWithObject(ns_event);
-                    self.interpretKeyEvents(&key_events);
-                };
-
-                // Otherwise, if it was not handled in `doCommandBySelector` or `insertText`, forward the event to application.
-                if self.ivars().key_event_handled.get() == Some(true) {
-                    debug!("keyDown: not forwarding event to app");
-                } else {
-                    debug!("keyDown: forwarding event to app");
-                    let _ = handle_key_event(&to_key_down_event(&unpack_key_event(ns_event)?))?;
-                }
-                Ok(())
-            }
-        });
-        // Reset the flag
-        self.ivars().key_event_handled.set(None);
-        debug!("keyDown end");
+    fn marked_range_impl(&self) -> Option<NSRange> {
+        debug!("markedRange");
+        Some(DEFAULT_NS_RANGE) // TODO
     }
 
-    fn key_up_impl(&self, ns_event: &NSEvent) {
-        debug!("keyUp: {ns_event:?}");
-        catch_panic(|| handle_key_event(&to_key_up_event(&unpack_key_event(ns_event)?)));
-    }
-
-    fn do_command_by_selector_impl(&self, selector: Sel) {
-        catch_panic(|| {
-            let s = selector.name();
-            let window = self.window().context("No window for view")?;
-            let handled = handle_text_command_operation(window.window_id(), s)?;
-            self.ivars().key_event_handled.set(Some(handled));
-            Ok(handled)
-        });
-    }
-
-    fn insert_text_replacement_range_impl(&self, string: &AnyObject, replacement_range: NSRange) {
-        catch_panic(|| {
-            let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-            debug!(
-                "insertText, marked_text={:?}, string={:?}, replacement_range={:?}",
-                ns_attributed_string, text, replacement_range
-            );
-
-            let window = self.window().context("No window for view")?;
-            let handled = handle_text_changed_operation(window.window_id(), borrow_ns_string(&text))?;
-            self.ivars().key_event_handled.set(Some(handled));
-            Ok(handled)
-        });
+    fn selected_range_impl(&self) -> NSRange {
+        debug!("selectedRange");
+        DEFAULT_NS_RANGE // TODO
     }
 
     fn set_marked_text_selected_range_replacement_range_impl(
@@ -869,22 +792,110 @@ impl RootView {
         string: &AnyObject,
         selected_range: NSRange,
         replacement_range: NSRange,
-    ) {
-        catch_panic(|| {
-            self.ivars().key_event_handled.set(Some(true));
-            let window = self.window().context("No window for view")?;
-            let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-            debug!(
-                "setMarkedText, window={window:?}, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
-                ns_attributed_string, text, selected_range, replacement_range
-            );
-            Ok(())
-        });
+    ) -> anyhow::Result<bool> {
+        self.ivars().key_event_handled.set(Some(true));
+        let window_id = self.window_id()?;
+        let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
+        debug!(
+            "setMarkedText, window_id={window_id:?}, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
+            ns_attributed_string, text, selected_range, replacement_range
+        );
+        Ok(true)
     }
 
-    fn unmark_text_impl(&self) {
+    fn unmark_text_impl(&self) -> anyhow::Result<bool> {
         debug!("unmarkText");
         self.ivars().key_event_handled.set(Some(true));
         // TODO
+        Ok(true)
+    }
+
+    fn attributed_substring_for_proposed_range_actual_range_impl(
+        &self,
+        range: NSRange,
+        actual_range: NSRangePointer,
+    ) -> Option<Retained<NSAttributedString>> {
+        let actual_range = NonNull::new(actual_range);
+        debug!(
+            "attributedSubstringForProposedRange, range={:?}, actual_range={:?}",
+            range,
+            actual_range.map(|r| unsafe { r.read() })
+        );
+        None // TODO
+    }
+
+    fn insert_text_replacement_range_impl(&self, string: &AnyObject, replacement_range: NSRange) -> anyhow::Result<bool> {
+        let window_id = self.window_id()?;
+        let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
+        debug!(
+            "insertText, marked_text={:?}, string={:?}, replacement_range={:?}",
+            ns_attributed_string, text, replacement_range
+        );
+
+        let handled = self.handle_text_operation(&TextOperation::TextChanged(TextChangedOperation {
+            window_id,
+            text: borrow_ns_string(&text),
+        }));
+        self.ivars().key_event_handled.set(Some(handled));
+        Ok(handled)
+    }
+
+    fn first_rect_for_character_range_actual_range_impl(&self, range: NSRange, actual_range: NSRangePointer) -> anyhow::Result<NSRect> {
+        let actual_range = NonNull::new(actual_range);
+        debug!(
+            "firstRectForCharacterRange: range={:?}, actual_range={:?}",
+            range,
+            actual_range.map(|r| unsafe { r.read() })
+        );
+        bail!("Not implemented") // TODO
+    }
+
+    fn character_index_for_point_impl(&self, point: NSPoint) -> anyhow::Result<NSUInteger> {
+        debug!("characterIndexForPoint: {:?}", point);
+        bail!("Not implemented") // TODO
+    }
+
+    fn key_down_impl(&self, ns_event: &NSEvent) -> anyhow::Result<()> {
+        // Ignore in case it was already handled in `performKeyEquivalent`.
+        if self.ivars().key_event_handled.get().is_some() {
+            debug!("keyDown: already tried handling the event, ignoring");
+        } else {
+            debug!("keyDown start: {ns_event:?}");
+            // First check if the key would be handled by the system (e.g. interacting with the input method popup)
+            unsafe {
+                let key_events = NSArray::arrayWithObject(ns_event);
+                self.interpretKeyEvents(&key_events);
+            };
+
+            // Otherwise, if it was not handled in `doCommandBySelector` or `insertText`, forward the event to application.
+            if self.ivars().key_event_handled.get() == Some(true) {
+                debug!("keyDown: not forwarding event to app");
+            } else {
+                debug!("keyDown: forwarding event to app");
+                let _ = self.handle_event(&Event::new_key_down_event(&unpack_key_event(ns_event)?));
+            }
+        }
+        // Reset the flag
+        self.ivars().key_event_handled.set(None);
+        debug!("keyDown end");
+        Ok(())
+    }
+
+    fn key_up_impl(&self, ns_event: &NSEvent) -> anyhow::Result<bool> {
+        debug!("keyUp start: {ns_event:?}");
+        let handled = self.handle_event(&Event::new_key_up_event(&unpack_key_event(ns_event)?));
+        debug!("keyUp end: handled = {handled}");
+        Ok(handled)
+    }
+
+    fn do_command_by_selector_impl(&self, selector: Sel) -> anyhow::Result<bool> {
+        let s = selector.name();
+        debug!("do_command_by_selector: {s:?}");
+        let handled = self.handle_text_operation(&TextOperation::TextCommand(TextCommandOperation {
+            window_id: self.window_id()?,
+            command: BorrowedStrPtr::new(s),
+        }));
+        self.ivars().key_event_handled.set(Some(handled));
+        Ok(handled)
     }
 }

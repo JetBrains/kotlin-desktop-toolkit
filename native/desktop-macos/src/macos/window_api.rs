@@ -7,9 +7,11 @@ use crate::{
 
 use super::{
     application_api::MyNSApplication,
+    events::EventHandler,
     metal_api::{MetalView, MetalViewPtr},
     screen::{NSScreenExts, ScreenId},
     string::{copy_to_c_string, copy_to_ns_string},
+    text_operations::TextOperationHandler,
     window::{NSWindowExts, Window},
 };
 
@@ -32,11 +34,30 @@ pub struct WindowParams<'a> {
     pub titlebar_height: LogicalPixels,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct WindowCallbacks {
+    // returns true if application should terminate,
+    // otherwise termination will be canceled
+    pub event_handler: EventHandler,
+    pub text_operation_handler: TextOperationHandler,
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn window_create(params: &WindowParams) -> WindowPtr<'static> {
     let window = ffi_boundary("window_create", || {
-        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        Ok(Some(Window::new(mtm, params)?))
+        let mtm = MainThreadMarker::new().unwrap();
+        MyNSApplication::sharedApplication(mtm).with_app_callbacks(|app_callbacks| {
+            if let Some(app_callbacks) = app_callbacks {
+                let window_callbacks = WindowCallbacks {
+                    event_handler: app_callbacks.event_handler,
+                    text_operation_handler: app_callbacks.text_operation_handler,
+                };
+                Ok(Some(Window::new(mtm, params, window_callbacks)?))
+            } else {
+                Ok(None)
+            }
+        })
     });
     WindowPtr::from_value(window)
 }
@@ -261,8 +282,6 @@ pub extern "C" fn window_is_full_screen(window_ptr: WindowPtr) -> bool {
         Ok(window.ns_window.is_full_screen())
     })
 }
-
-
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_start_drag(window_ptr: WindowPtr) {

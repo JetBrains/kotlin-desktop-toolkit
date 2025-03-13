@@ -1,54 +1,25 @@
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use log::info;
 use objc2::{ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSRunningApplication
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
+    NSEventType, NSImage, NSRunningApplication,
 };
 use objc2_foundation::{MainThreadMarker, NSData, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
-use std::cell::OnceCell;
 
-use crate::{
-    common::RustAllocatedStrPtr, logger::ffi_boundary, macos::events::{handle_application_did_finish_launching, handle_display_configuration_change}
-};
+use crate::{common::RustAllocatedStrPtr, logger::ffi_boundary, macos::events::Event};
 
 use super::{events::EventHandler, string::copy_to_c_string, text_operations::TextOperationHandler};
-
-thread_local! {
-    pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
-}
-
-#[derive(Debug)]
-pub(crate) struct AppState {
-    #[allow(dead_code)]
-    pub(crate) app: Retained<MyNSApplication>,
-    #[allow(dead_code)]
-    app_delegate: Retained<AppDelegate>,
-    pub(crate) event_handler: EventHandler,
-    pub(crate) mtm: MainThreadMarker,
-    pub(crate) text_operation_handler: TextOperationHandler,
-}
-
-impl AppState {
-    pub(crate) fn with<T, F>(f: F) -> T
-    where
-        F: FnOnce(&Self) -> T,
-    {
-        APP_STATE.with(|app_state| {
-            let app_state = app_state.get().expect("Can't access app state before initialization!"); // todo handle error
-            f(app_state)
-        })
-    }
-}
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct ApplicationCallbacks {
     // returns true if application should terminate,
     // otherwise termination will be canceled
-    on_should_terminate: extern "C" fn() -> bool,
-    on_will_terminate: extern "C" fn(),
-    event_handler: EventHandler,
-    text_operation_handler: TextOperationHandler,
+    pub on_should_terminate: extern "C" fn() -> bool,
+    pub on_will_terminate: extern "C" fn(),
+    pub event_handler: EventHandler,
+    pub text_operation_handler: TextOperationHandler,
 }
 
 #[repr(C)]
@@ -85,23 +56,9 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         //    let default_presentation_options = app.presentationOptions();
         //    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
         app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
-        let event_handler = callbacks.event_handler;
-        let text_operation_handler = callbacks.text_operation_handler;
         let app_delegate = AppDelegate::new(mtm, callbacks);
         app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
-        APP_STATE.with(|app_state| {
-            // app_state.
-            app_state
-                .set(AppState {
-                    app,
-                    app_delegate,
-                    event_handler,
-                    mtm,
-                    text_operation_handler,
-                })
-                .map_err(|_| anyhow!("Can't initialize second time!"))?;
-            Ok(())
-        })
+        Ok(())
     });
 }
 
@@ -169,7 +126,7 @@ pub extern "C" fn application_get_name() -> RustAllocatedStrPtr {
     ffi_boundary("application_name", || {
         match unsafe { NSRunningApplication::currentApplication().localizedName() } {
             Some(name) => copy_to_c_string(&name),
-            None => Ok(RustAllocatedStrPtr::null())
+            None => Ok(RustAllocatedStrPtr::null()),
         }
     })
 }
@@ -206,11 +163,15 @@ pub extern "C" fn application_unhide_all_applications() {
     });
 }
 
+/// # Safety
+///
+/// `data` must be a valid, non-null, pointer.
 #[unsafe(no_mangle)]
-pub extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u64) {
+pub unsafe extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u64) {
     ffi_boundary("application_set_dock_icon", || {
         let mtm = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
+        assert!(!data.is_null());
         let bytes = unsafe { std::slice::from_raw_parts_mut(data, data_length.try_into().unwrap()) };
         let data = NSData::with_bytes(bytes);
         let image = NSImage::initWithData(mtm.alloc(), &data).context("Can't create image from data")?;
@@ -221,13 +182,10 @@ pub extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u64) {
     })
 }
 
-#[derive(Debug)]
-pub(crate) struct MyNSApplicationIvars {}
-
 define_class!(
     #[unsafe(super(NSApplication))]
     #[name = "MyNSApplication"]
-    #[ivars = MyNSApplicationIvars]
+    #[ivars = ()]
     #[derive(Debug)]
     pub(crate) struct MyNSApplication;
 
@@ -261,6 +219,15 @@ impl MyNSApplication {
         }
         let _: () = unsafe { msg_send![super(self), sendEvent: event] };
     }
+
+    pub(crate) fn with_app_callbacks<T>(&self, f: impl FnOnce(Option<&ApplicationCallbacks>) -> T) -> T {
+        if let Some(delegate) = unsafe { self.delegate() } {
+            if let Ok(app_delegate) = delegate.downcast::<AppDelegate>() {
+                return f(Some(&app_delegate.ivars().callbacks));
+            }
+        }
+        f(None)
+    }
 }
 
 #[derive(Debug)]
@@ -281,12 +248,14 @@ define_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidChangeScreenParameters:))]
         fn did_change_screen_parameters(&self, _notification: &NSNotification) {
-            handle_display_configuration_change();
+            let callbacks = &self.ivars().callbacks;
+            (callbacks.event_handler)(&Event::DisplayConfigurationChange);
         }
 
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn did_finish_launching(&self, _notification: &NSNotification) {
-            handle_application_did_finish_launching();
+            let callbacks = &self.ivars().callbacks;
+            (callbacks.event_handler)(&Event::ApplicationDidFinishLaunching);
         }
 
         #[unsafe(method(applicationShouldTerminate:))]
