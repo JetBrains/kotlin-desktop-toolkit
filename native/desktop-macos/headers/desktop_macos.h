@@ -395,9 +395,26 @@ typedef void (*NativeOnInsertText)(NativeBorrowedStrPtr text);
 
 typedef void (*NativeOnDoCommand)(NativeBorrowedStrPtr command);
 
+typedef void (*NativeOnUnmarkText)(void);
+
+typedef struct NativeTextRange {
+  uintptr_t location;
+  uintptr_t length;
+} NativeTextRange;
+
+typedef struct NativeSetMarkedTextOperation {
+  NativeBorrowedStrPtr text;
+  struct NativeTextRange selected_range;
+  struct NativeTextRange replacement_range;
+} NativeSetMarkedTextOperation;
+
+typedef void (*NativeOnSetMarkedText)(struct NativeSetMarkedTextOperation data);
+
 typedef struct NativeTextInputClient {
   NativeOnInsertText on_insert_text;
   NativeOnDoCommand on_do_command;
+  NativeOnUnmarkText on_unmark_text;
+  NativeOnSetMarkedText on_set_marked_text;
 } NativeTextInputClient;
 
 typedef struct NativeColor {

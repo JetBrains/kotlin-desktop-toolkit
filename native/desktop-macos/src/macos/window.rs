@@ -489,7 +489,7 @@ define_class!(
         unsafe fn marked_range(&self) -> NSRange {
             catch_panic(|| {
                 Ok(self.text_input_client().marked_range())
-            }).unwrap_or(NSRange { location: 0, length: 0 })
+            }).flatten().unwrap_or(NSRange { location: 0, length: 0 })
         }
 
         #[unsafe(method(selectedRange))]
@@ -507,7 +507,7 @@ define_class!(
             replacement_range: NSRange,
         ) {
             catch_panic(|| {
-                Ok(self.text_input_client().set_marked_text(string, selected_range, replacement_range))
+                self.text_input_client().set_marked_text(string, selected_range, replacement_range)
             });
         }
 
@@ -559,21 +559,21 @@ define_class!(
             actual_range: NSRangePointer,
         ) -> NSRect {
             catch_panic(|| {
-                Ok(self.text_input_client().first_rect_for_character_range(range, actual_range))
+                self.text_input_client().first_rect_for_character_range(range, actual_range)
             }).unwrap_or(NSRect::ZERO)
         }
 
         #[unsafe(method(characterIndexForPoint:))]
         unsafe fn character_index_for_point(&self, point: NSPoint) -> NSUInteger {
             catch_panic(|| {
-                Ok(self.text_input_client().character_index_for_point(point))
+                self.text_input_client().character_index_for_point(point)
             }).unwrap_or(0)
         }
 
         #[unsafe(method(doCommandBySelector:))]
         unsafe fn do_command_by_selector(&self, selector: Sel) {
             catch_panic(|| {
-                self.text_input_client().do_command(selector);
+                self.text_input_client().do_command(selector)?;
                 Ok(())
             });
         }
