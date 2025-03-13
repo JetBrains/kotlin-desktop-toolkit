@@ -11,9 +11,7 @@ use objc2::{
     runtime::{AnyObject, ProtocolObject, Sel},
 };
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea,
-    NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
-    NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility,
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSEventModifierFlags, NSModeSwitchFunctionKey, NSNormalWindowLevel, NSRightArrowFunctionKey, NSScreen, NSTextInputClient, NSTextInputContext, NSTrackingArea, NSTrackingAreaOptions, NSUpArrowFunctionKey, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility
 };
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
@@ -27,14 +25,7 @@ use crate::{
 };
 
 use super::{
-    application_api::MyNSApplication,
-    custom_titlebar::CustomTitlebarCell,
-    events::EventHandler,
-    metal_api::MetalView,
-    screen::NSScreenExts,
-    text_input_client::TextInputClient,
-    window_api::WindowCallbacks,
-    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
+    application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::EventHandler, keyboard::KeyEventInfo, metal_api::MetalView, screen::NSScreenExts, text_input_client::{TextInputClient}, window_api::{WindowBackground, WindowCallbacks, WindowId, WindowParams, WindowVisualEffect}
 };
 
 pub(crate) struct Window {
@@ -664,7 +655,7 @@ define_class!(
 
         #[unsafe(method(keyDown:))]
         fn key_down(&self, ns_event: &NSEvent) {
-            catch_panic(|| Ok(self.handle_event(&Event::new_key_down_event(&unpack_key_event(ns_event)?))));
+            catch_panic(|| Ok(self.key_down_impl(ns_event)?));
         }
 
         #[unsafe(method(keyUp:))]
@@ -750,5 +741,55 @@ impl RootView {
             self.addTrackingArea(&tracking_area);
         }
         self.ivars().tracking_area.set(Some(tracking_area));
+    }
+
+    fn key_down_impl(&self, ns_event: &NSEvent) -> anyhow::Result<bool> {
+        debug!("keyDown start: {ns_event:?}");
+        let key_event_info = unpack_key_event(ns_event)?;
+        debug!("keyDown key_event_info: {key_event_info:?}");
+        let key_event = Event::new_key_down_event(&key_event_info);
+//        let handled: bool = if let Some(input_context) = self.inputContext() {
+//            if self.text_input_client().has_marked_text()
+//                || dbg!(is_ime_navigation_key(&key_event_info)
+//                    && !key_event_info.modifiers.contains(NSEventModifierFlags::Control.0)
+//                    && !has_function_modifier(&key_event_info))
+//            {
+//                self.text_input_client().send_event_to_input_context(&ns_event, &input_context) || self.handle_event(&key_event)
+//            } else {
+//                self.handle_event(&key_event) || self.text_input_client().send_event_to_input_context(&ns_event, &input_context)
+//            }
+//        } else {
+//            self.handle_event(&key_event);
+//        };
+        let handled = self.handle_event(&key_event);
+
+        debug!("keyDown end: handled = {handled}");
+        Ok(handled)
+    }
+}
+
+
+fn is_ime_navigation_key(key_event_info: &KeyEventInfo) -> bool {
+    const ESC_KEYCODE: u32 = 0x1b; // 27
+    let first_char: Option<u32> = if key_event_info.chars.length() > 0 {
+        Some(unsafe { key_event_info.chars.characterAtIndex(0).into() })
+    } else {
+        None
+    };
+    first_char.map_or(true, |ch| {
+        (NSUpArrowFunctionKey..=NSRightArrowFunctionKey).contains(&ch) || ch == ESC_KEYCODE
+    })
+}
+
+fn has_function_modifier(key_event_info: &KeyEventInfo) -> bool {
+    if key_event_info.modifiers.contains(NSEventModifierFlags::Function.0) {
+        let first_char: Option<u32> = if key_event_info.chars.length() > 0 {
+            Some(unsafe { key_event_info.chars.characterAtIndex(0).into() })
+        } else {
+            None
+        };
+        first_char.map_or(true, |ch| !(NSUpArrowFunctionKey..=NSModeSwitchFunctionKey).contains(&ch))
+    } else {
+        false
     }
 }

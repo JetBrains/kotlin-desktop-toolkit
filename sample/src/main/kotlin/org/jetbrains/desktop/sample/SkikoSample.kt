@@ -436,6 +436,9 @@ class ApplicationState : AutoCloseable {
                 EventHandlerResult.Stop
             }
             is Event.KeyDown -> {
+                val window = windows.find {
+                    it.window.windowId() == eventWindowId
+                }
                 if (TextInputContext.handleCurrentEvent()) {
                     Logger.info {
                         "Handle $event by TextInputContext"

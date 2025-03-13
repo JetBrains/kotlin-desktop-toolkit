@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
-use std::ptr::NonNull;
+use std::{cell::Cell, ptr::NonNull};
 
 use anyhow::Context;
 use log::debug;
@@ -74,7 +74,21 @@ pub extern "C" fn text_input_context_handle_current_event() -> bool {
 const DEFAULT_NS_RANGE: NSRange = NSRange { location: 0, length: 0 };
 const DEFAULT_NS_RECT: NSRect = NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64));
 
+pub(crate) struct TextInputClientHandler {
+    client: TextInputClient,
+    handled_key_down_event: Cell<bool>,
+    marked_text_range: Cell<Option<NSRange>>,
+}
+
 impl TextInputClient {
+//    pub fn send_event_to_input_context(&self, ns_event: &NSEvent, input_context: &NSTextInputContext) -> bool {
+//        if !unsafe { input_context.handleEvent(ns_event) } {
+//            false
+//        } else {
+//            self.handled_key_down_event.get()
+//        }
+//    }
+
     pub fn has_marked_text(&self) -> bool {
         let ret = self.marked_range().is_some();
         debug!("hasMarkedText: {ret}");
@@ -83,7 +97,8 @@ impl TextInputClient {
 
     pub fn marked_range(&self) -> Option<NSRange> {
         debug!("markedRange");
-        self.ivars().marked_text_range.get() // TODO
+        //self.marked_text_range.get() // TODO
+        None // TODO
     }
 
     pub fn selected_range(&self) -> NSRange {
@@ -97,33 +112,31 @@ impl TextInputClient {
         selected_range: NSRange,
         replacement_range: NSRange,
     ) -> anyhow::Result<bool> {
-        let ivars = self.ivars();
         let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
         debug!(
             "setMarkedText, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
             ns_attributed_string, text, selected_range, replacement_range
         );
-        if !self.try_handle_current_key_down_event() {
-            ivars.marked_text_range.set(Some(selected_range));
-            (self.on_set_marked_text)(SetMarkedTextOperation {
-                text: borrow_ns_string(&text),
-                selected_range: TextRange {
-                    location: selected_range.location,
-                    length: selected_range.length,
-                },
-                replacement_range: TextRange {
-                    location: replacement_range.location,
-                    length: replacement_range.length,
-                },
-            });
-        }
+        (self.on_set_marked_text)(SetMarkedTextOperation {
+            text: borrow_ns_string(&text),
+            selected_range: TextRange {
+                location: selected_range.location,
+                length: selected_range.length,
+            },
+            replacement_range: TextRange {
+                location: replacement_range.location,
+                length: replacement_range.length,
+            },
+        });
+//        self.handled_key_down_event.set(true);
+//        self.marked_text_range.set(Some(selected_range));
         Ok(true)
     }
 
     pub fn unmark_text(&self) -> anyhow::Result<bool> {
         debug!("unmarkText");
-        self.ivars().current_key_down_event.set(None);
-        self.ivars().marked_text_range.set(None);
+//        self.handled_key_down_event.set(true);
+//        self.marked_text_range.set(None);
         (self.on_unmark_text)();
         Ok(true)
     }
@@ -167,13 +180,10 @@ impl TextInputClient {
             ns_attributed_string, text, replacement_range
         );
 
-        if self.try_handle_current_key_down_event() {
-            Ok(true)
-        } else {
-            (self.on_insert_text)(borrow_ns_string(&text));
-            ivars.marked_text_range.set(None);
-            Ok(true)
-        }
+        (self.on_insert_text)(borrow_ns_string(&text));
+//        self.handled_key_down_event.set(true);
+//        self.marked_text_range.set(None);
+        Ok(true)
     }
 
     pub fn first_rect_for_character_range(&self, range: NSRange, actual_range: NSRangePointer) -> anyhow::Result<NSRect> {
@@ -191,53 +201,6 @@ impl TextInputClient {
         Ok(0) // TODO
     }
 
-    pub fn key_down(&self, ns_event: &NSEvent) -> anyhow::Result<bool> {
-        debug!("keyDown start: {ns_event:?}");
-        let ivars = self.ivars();
-        let key_event_info = unpack_key_event(ns_event)?;
-        let had_marked_text = self.has_marked_text();
-        ivars.current_key_down_event.set(Some(key_event_info));
-        debug!("keyDown, calling interpretKeyEvents");
-        // TODO: call only if we have ActiveTextInput set
-        // or expose `interpretKeyEvents` which will be called by the app when we have ActiveTextInput set
-        unsafe {
-            let key_events = NSArray::arrayWithObject(ns_event);
-            self.interpretKeyEvents(&key_events);
-        };
-        let handled = if let Some(key_event_info) = ivars.current_key_down_event.take() {
-            if had_marked_text || self.has_marked_text() /* to handle the initial IME navigation key */ {
-                debug!("keyDown: has/had marked text, not forwarding");
-                true
-            } else {
-                debug!("keyDown: forwarding");
-                let handled = self.handle_event(&Event::new_key_down_event(&key_event_info));
-                debug!("keyDown: handled = {handled}");
-                handled
-            }
-        } else {
-            debug!("keyDown: handled by interpretKeyEvents, not forwarding");
-            true
-        };
-        debug!("keyDown end");
-        Ok(handled)
-    }
-
-    pub fn try_handle_current_key_down_event(&self) -> bool {
-        if self.has_marked_text() {
-            return false;
-        }
-        if let Some(key_info) = self.ivars().current_key_down_event.take() {
-            let e = Event::new_key_down_event(&key_info);
-            if self.handle_event(&e) {
-                if let Some(input_context) = self.inputContext() {
-                    input_context.discardMarkedText();
-                }
-                return true;
-            }
-        }
-        false
-    }
-
     pub fn do_command(&self, selector: Sel) -> anyhow::Result<bool> {
         let s = selector.name();
         if s == c"noop:" {
@@ -245,9 +208,7 @@ impl TextInputClient {
             return Ok(false);
         }
         debug!("do_command_by_selector: {s:?}");
-        if !self.try_handle_current_key_down_event() {
-            (self.on_do_command)(BorrowedStrPtr::new(s));
-        }
+        (self.on_do_command)(BorrowedStrPtr::new(s));
         Ok(true)
     }
 }

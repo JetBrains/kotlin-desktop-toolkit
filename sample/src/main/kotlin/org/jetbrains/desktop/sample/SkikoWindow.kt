@@ -10,7 +10,9 @@ import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView
 import org.jetbrains.desktop.macos.ScreenId
+import org.jetbrains.desktop.macos.SetMarkedTextOperation
 import org.jetbrains.desktop.macos.TextInputClient
+import org.jetbrains.desktop.macos.TextRange
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.skia.BackendRenderTarget
 import org.jetbrains.skia.Canvas
@@ -39,6 +41,8 @@ abstract class SkikoWindow(
 
     init {
         window.textInputClientHolder.textInputClient = object : TextInputClient {
+            var markedText: TextRange? = null
+
             override fun insertText(text: String) {
                 Logger.info {
                     "TextInputClient Insert: $text"
@@ -49,6 +53,18 @@ abstract class SkikoWindow(
                 Logger.info {
                     "TextInputClient Perform Command: $command"
                 }
+            }
+
+            override fun hasMarkedText(): Boolean {
+                return markedText != null
+            }
+
+            override fun unmarkText() {
+                markedText = null
+            }
+
+            override fun setMarkedText(operation: SetMarkedTextOperation) {
+                markedText = operation.selectedRange
             }
 
         }
