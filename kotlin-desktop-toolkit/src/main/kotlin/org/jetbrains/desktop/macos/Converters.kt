@@ -7,9 +7,11 @@ import org.jetbrains.desktop.macos.generated.NativeColor
 import org.jetbrains.desktop.macos.generated.NativeLogicalPoint
 import org.jetbrains.desktop.macos.generated.NativeLogicalSize
 import org.jetbrains.desktop.macos.generated.NativePhysicalSize
+import org.jetbrains.desktop.macos.generated.NativeSetMarkedTextOperation
 import org.jetbrains.desktop.macos.generated.NativeTextChangedOperation
 import org.jetbrains.desktop.macos.generated.NativeTextCommandOperation
 import org.jetbrains.desktop.macos.generated.NativeTextOperation
+import org.jetbrains.desktop.macos.generated.NativeUnmarkTextOperation
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -84,6 +86,18 @@ internal fun TextOperation.Companion.fromNative(s: MemorySegment): TextOperation
             TextOperation.TextCommand(
                 windowId = NativeTextCommandOperation.window_id(nativeEvent),
                 command = NativeTextCommandOperation.command(nativeEvent).getUtf8String(0),
+            )
+        }
+        desktop_macos_h.NativeTextOperation_UnmarkText() -> {
+            val nativeEvent = NativeTextOperation.unmark_text(s)
+            TextOperation.UnmarkText(
+                windowId = NativeUnmarkTextOperation.window_id(nativeEvent),
+            )
+        }
+        desktop_macos_h.NativeTextOperation_SetMarkedText() -> {
+            val nativeEvent = NativeTextOperation.set_marked_text(s)
+            TextOperation.SetMarkedText(
+                windowId = NativeSetMarkedTextOperation.window_id(nativeEvent),
             )
         }
         else -> {
