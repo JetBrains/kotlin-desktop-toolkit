@@ -110,7 +110,7 @@ impl TextInputClient {
 
     pub fn do_command(&self, command: Sel) {
         let command_name = command.name();
-
+        (self.on_do_command)(BorrowedStrPtr::new(command_name))
     }
 }
 
