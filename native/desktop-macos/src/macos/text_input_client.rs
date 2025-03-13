@@ -4,9 +4,15 @@ use std::ptr::NonNull;
 
 use anyhow::Context;
 use log::debug;
-use objc2::{rc::Retained, runtime::{AnyObject, Sel}, MainThreadMarker};
+use objc2::{
+    MainThreadMarker,
+    rc::Retained,
+    runtime::{AnyObject, Sel},
+};
 use objc2_app_kit::NSTextInputContext;
-use objc2_foundation::{NSArray, NSAttributedString, NSAttributedStringKey, NSPoint, NSRange, NSRangePointer, NSRect, NSSize, NSString, NSUInteger};
+use objc2_foundation::{
+    NSArray, NSAttributedString, NSAttributedStringKey, NSPoint, NSRange, NSRangePointer, NSRect, NSSize, NSString, NSUInteger,
+};
 
 use crate::{common::BorrowedStrPtr, logger::ffi_boundary};
 
@@ -27,22 +33,17 @@ pub extern "C" fn text_input_context_handle_current_event() -> bool {
         let mtm = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
         let current_event = app.currentEvent().context("Should be called from event handler")?;
-        let input_context = unsafe {
-            NSTextInputContext::currentInputContext(mtm)
-        };
+        let input_context = unsafe { NSTextInputContext::currentInputContext(mtm) };
         let result = match input_context {
-            Some(input_context) => {
-                unsafe {
-                    input_context.handleEvent(&current_event)
-                }
-            }
-            None => {
-                false
-            }
+            Some(input_context) => unsafe { input_context.handleEvent(&current_event) },
+            None => false,
         };
         Ok(result)
     })
 }
+
+const DEFAULT_NS_RANGE: NSRange = NSRange { location: 0, length: 0 };
+const DEFAULT_NS_RECT: NSRect = NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64));
 
 impl TextInputClient {
     pub fn has_marked_text(&self) -> bool {
@@ -52,23 +53,16 @@ impl TextInputClient {
 
     pub fn marked_range(&self) -> NSRange {
         // TODO
-        NSRange { location: 0, length: 0 }  // TODO
+        DEFAULT_NS_RANGE // TODO
     }
 
     pub fn selected_range(&self) -> NSRange {
-        NSRange { location: 0, length: 0 }  // TODO
+        DEFAULT_NS_RANGE // TODO
     }
 
-    pub fn set_marked_text(&self,
-                           string: &AnyObject,
-                           selected_range: NSRange,
-                           replacement_range: NSRange) {
+    pub fn set_marked_text(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) {}
 
-    }
-
-    pub fn unmark_text(&self) {
-
-    }
+    pub fn unmark_text(&self) {}
 
     pub fn valid_attributes_for_marked_text(&self) -> Retained<NSArray<NSAttributedStringKey>> {
         debug!("validAttributesForMarkedText");
@@ -88,7 +82,11 @@ impl TextInputClient {
         NSArray::from_retained_slice(&v)
     }
 
-    pub fn attributed_substring_for_proposed_range(&self, range: NSRange, actual_range: NSRangePointer) -> Option<Retained<NSAttributedString>> {
+    pub fn attributed_substring_for_proposed_range(
+        &self,
+        range: NSRange,
+        actual_range: NSRangePointer,
+    ) -> Option<Retained<NSAttributedString>> {
         None
     }
 
@@ -100,8 +98,12 @@ impl TextInputClient {
 
     pub fn first_rect_for_character_range(&self, range: NSRange, actual_range: NSRangePointer) -> NSRect {
         let actual_range = NonNull::new(actual_range);
-        debug!("firstRectForCharacterRange: range={:?}, actual_range={:?}", range, actual_range.map(|r| unsafe { r.read() }));
-        NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64))  // TODO
+        debug!(
+            "firstRectForCharacterRange: range={:?}, actual_range={:?}",
+            range,
+            actual_range.map(|r| unsafe { r.read() })
+        );
+        DEFAULT_NS_RECT // TODO
     }
 
     pub fn character_index_for_point(&self, point: NSPoint) -> NSUInteger {
@@ -114,8 +116,6 @@ impl TextInputClient {
     }
 }
 
-
-
 fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttributedString>, Retained<NSString>), anyhow::Error> {
     if let Some(ns_attributed_string) = string.downcast_ref::<NSAttributedString>() {
         let text = ns_attributed_string.string();
@@ -127,4 +127,3 @@ fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttribut
         panic!("unexpected text {string:?}")
     }
 }
-

@@ -43,11 +43,11 @@ impl NSMouseEventExt for NSEvent {
 
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
-pub struct MouseButton(u32);
+pub struct MouseButton(pub u32);
 
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct MouseButtonsSet(u32);
+pub struct MouseButtonsSet(pub u32);
 
 #[allow(non_upper_case_globals)]
 pub(crate) const EmptyMouseButtonsSet: MouseButtonsSet = MouseButtonsSet(0);
