@@ -878,28 +878,13 @@ impl RootView {
     }
 
     fn is_ime_navigation_key(key_event_info: &KeyEventInfo) -> bool {
-        const ESC_KEYCODE: u32 = 0x1b; // 27
-        let first_char: Option<u32> = if key_event_info.chars.length() > 0 {
-            Some(unsafe { key_event_info.chars.characterAtIndex(0).into() })
-        } else {
-            None
-        };
-        first_char.map_or(true, |ch| {
-            (NSUpArrowFunctionKey..=NSRightArrowFunctionKey).contains(&ch) || ch == ESC_KEYCODE
-        })
-    }
-
-    fn has_function_modifier(key_event_info: &KeyEventInfo) -> bool {
-        if key_event_info.modifiers.contains(NSEventModifierFlags::Function.0) {
-            let first_char: Option<u32> = if key_event_info.chars.length() > 0 {
-                Some(unsafe { key_event_info.chars.characterAtIndex(0).into() })
-            } else {
-                None
-            };
-            first_char.map_or(true, |ch| !(NSUpArrowFunctionKey..=NSModeSwitchFunctionKey).contains(&ch))
-        } else {
-            false
-        }
+        const ESC: u16 = 53;
+        const LEFT_ARROW: u16 = 123;
+        const RIGHT_ARROW: u16 = 124;
+        const DOWN_ARROW: u16 = 125;
+        const UP_ARROW: u16 = 126;
+        // TODO: improve heuristic
+        [ESC, LEFT_ARROW, RIGHT_ARROW, DOWN_ARROW, UP_ARROW].contains(&key_event_info.code.0)
     }
 
     fn send_event_to_input_context(&self, ns_event: &NSEvent, input_context: &NSTextInputContext) -> bool {
@@ -919,7 +904,7 @@ impl RootView {
             if self.has_marked_text_impl()
                 || dbg!(Self::is_ime_navigation_key(&key_event_info)
                     && !key_event_info.modifiers.contains(NSEventModifierFlags::Control.0)
-                    && !Self::has_function_modifier(&key_event_info))
+                )
             {
                 self.send_event_to_input_context(&ns_event, &input_context) || self.handle_event(&key_event)
             } else {
