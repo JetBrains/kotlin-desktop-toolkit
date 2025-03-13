@@ -105,6 +105,12 @@ impl std::fmt::Debug for KeyModifiersSet {
     }
 }
 
+impl KeyModifiersSet {
+    pub fn contains(&self, flag: usize) -> bool {
+        self.0 & flag == flag
+    }
+}
+
 pub(crate) const EMPTY_KEY_MODIFIERS: KeyModifiersSet = KeyModifiersSet(0);
 
 impl From<NSEventModifierFlags> for KeyModifiersSet {
