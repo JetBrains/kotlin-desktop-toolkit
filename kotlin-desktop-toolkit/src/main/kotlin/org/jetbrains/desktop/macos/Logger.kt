@@ -225,12 +225,11 @@ internal fun <T> ffiDownCall(body: () -> T): T {
     return result
 }
 
-internal inline fun <T> ffiUpCall(crossinline body: () -> T): T? {
-    try {
-        return body()
+internal inline fun ffiUpCall(crossinline body: () -> Unit) {
+    return try {
+        body()
     } catch (e: Throwable) {
         Logger.error(e) { "Exception caught" }
-        return null
     }
 }
 

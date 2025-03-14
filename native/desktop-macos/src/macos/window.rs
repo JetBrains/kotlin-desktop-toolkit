@@ -656,7 +656,7 @@ define_class!(
 
         #[unsafe(method(keyDown:))]
         fn key_down(&self, ns_event: &NSEvent) {
-            catch_panic(|| Ok(self.text_input_client().on_key_down(ns_event, &self.inputContext(), self.ivars().event_handler)?));
+            catch_panic(|| Ok(self.handle_event(&Event::new_key_down_event(&unpack_key_event(ns_event)?))));
         }
 
         #[unsafe(method(keyUp:))]

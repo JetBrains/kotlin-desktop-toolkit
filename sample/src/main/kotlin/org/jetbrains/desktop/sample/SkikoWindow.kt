@@ -5,7 +5,7 @@ import org.jetbrains.desktop.PhysicalSize
 import org.jetbrains.desktop.macos.DisplayLink
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
-import org.jetbrains.desktop.macos.InsetTextArgs
+import org.jetbrains.desktop.macos.InsertTextArgs
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
@@ -42,9 +42,9 @@ abstract class SkikoWindow(
 
     init {
         window.textInputClientHolder.textInputClient = object : TextInputClient {
-            var markedText: TextRange? = null
+            private var markedRange: TextRange? = null
 
-            override fun insertText(args: InsetTextArgs) {
+            override fun insertText(args: InsertTextArgs) {
                 Logger.info {
                     "TextInputClient Insert: $args.text"
                 }
@@ -58,15 +58,19 @@ abstract class SkikoWindow(
             }
 
             override fun hasMarkedText(): Boolean {
-                return markedText != null
+                return markedRange != null
+            }
+
+            override fun markedRange(): TextRange? {
+                return markedRange
             }
 
             override fun unmarkText() {
-                markedText = null
+                markedRange = null
             }
 
             override fun setMarkedText(args: SetMarkedTextArgs) {
-                markedText = args.selectedRange
+                markedRange = args.selectedRange
             }
 
         }
