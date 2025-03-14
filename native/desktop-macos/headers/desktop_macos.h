@@ -391,13 +391,34 @@ typedef struct NativeWindowParams {
   NativeLogicalPixels titlebar_height;
 } NativeWindowParams;
 
-typedef void (*NativeOnInsertText)(NativeBorrowedStrPtr text);
+typedef struct NativeOnInsertTextArgs {
+  NativeBorrowedStrPtr text;
+} NativeOnInsertTextArgs;
 
-typedef void (*NativeOnDoCommand)(NativeBorrowedStrPtr command);
+typedef void (*NativeOnInsertText)(struct NativeOnInsertTextArgs args);
+
+typedef bool (*NativeOnDoCommand)(NativeBorrowedStrPtr command);
+
+typedef void (*NativeOnUnmarkText)(void);
+
+typedef struct NativeTextRange {
+  uintptr_t location;
+  uintptr_t length;
+} NativeTextRange;
+
+typedef struct NativeOnSetMarkedTextArgs {
+  NativeBorrowedStrPtr text;
+  struct NativeTextRange selected_range;
+  struct NativeTextRange replacement_range;
+} NativeOnSetMarkedTextArgs;
+
+typedef void (*NativeOnSetMarkedText)(struct NativeOnSetMarkedTextArgs args);
 
 typedef struct NativeTextInputClient {
   NativeOnInsertText on_insert_text;
   NativeOnDoCommand on_do_command;
+  NativeOnUnmarkText on_unmark_text;
+  NativeOnSetMarkedText on_set_marked_text;
 } NativeTextInputClient;
 
 typedef struct NativeColor {
@@ -515,8 +536,6 @@ void screen_list_drop(NativeScreenInfoArray arr);
 NativeScreenId screen_get_main_screen_id(void);
 
 void string_drop(NativeRustAllocatedStrPtr str_ptr);
-
-bool text_input_context_handle_current_event(void);
 
 NativeWindowPtr window_create(struct NativeWindowParams params,
                               struct NativeTextInputClient text_input_client);
