@@ -11,9 +11,7 @@ use objc2::{
     runtime::{AnyObject, ProtocolObject, Sel},
 };
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea,
-    NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
-    NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility,
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility
 };
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
@@ -27,14 +25,7 @@ use crate::{
 };
 
 use super::{
-    application_api::MyNSApplication,
-    custom_titlebar::CustomTitlebarCell,
-    events::EventHandler,
-    metal_api::MetalView,
-    screen::NSScreenExts,
-    text_input_client::TextInputClient,
-    window_api::WindowCallbacks,
-    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
+    application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::EventHandler, metal_api::MetalView, screen::NSScreenExts, text_input_client::TextInputClientHandler, window_api::{WindowBackground, WindowCallbacks, WindowId, WindowParams, WindowVisualEffect}
 };
 
 pub(crate) struct Window {
@@ -463,7 +454,8 @@ impl MyNSWindow {
 
 pub(crate) struct RootViewIvars {
     mtm: MainThreadMarker,
-    callbacks: WindowCallbacks,
+    event_handler: EventHandler,
+    text_input_client: TextInputClientHandler,
     tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
 }
 
@@ -489,7 +481,7 @@ define_class!(
         unsafe fn marked_range(&self) -> NSRange {
             catch_panic(|| {
                 Ok(self.text_input_client().marked_range())
-            }).unwrap_or(NSRange { location: 0, length: 0 })
+            }).flatten().unwrap_or(NSRange { location: 0, length: 0 })
         }
 
         #[unsafe(method(selectedRange))]
@@ -507,7 +499,7 @@ define_class!(
             replacement_range: NSRange,
         ) {
             catch_panic(|| {
-                Ok(self.text_input_client().set_marked_text(string, selected_range, replacement_range))
+                self.text_input_client().set_marked_text(string, selected_range, replacement_range)
             });
         }
 
@@ -559,21 +551,21 @@ define_class!(
             actual_range: NSRangePointer,
         ) -> NSRect {
             catch_panic(|| {
-                Ok(self.text_input_client().first_rect_for_character_range(range, actual_range))
+                self.text_input_client().first_rect_for_character_range(range, actual_range)
             }).unwrap_or(NSRect::ZERO)
         }
 
         #[unsafe(method(characterIndexForPoint:))]
         unsafe fn character_index_for_point(&self, point: NSPoint) -> NSUInteger {
             catch_panic(|| {
-                Ok(self.text_input_client().character_index_for_point(point))
+                self.text_input_client().character_index_for_point(point)
             }).unwrap_or(0)
         }
 
         #[unsafe(method(doCommandBySelector:))]
         unsafe fn do_command_by_selector(&self, selector: Sel) {
             catch_panic(|| {
-                self.text_input_client().do_command(selector);
+                self.text_input_client().do_command(selector)?;
                 Ok(())
             });
         }
@@ -664,7 +656,7 @@ define_class!(
 
         #[unsafe(method(keyDown:))]
         fn key_down(&self, ns_event: &NSEvent) {
-            catch_panic(|| Ok(self.handle_event(&Event::new_key_down_event(&unpack_key_event(ns_event)?))));
+            catch_panic(|| Ok(self.text_input_client().on_key_down(ns_event, &self.inputContext(), self.ivars().event_handler)?));
         }
 
         #[unsafe(method(keyUp:))]
@@ -705,7 +697,12 @@ impl RootView {
         let this = mtm.alloc();
         let this = this.set_ivars(RootViewIvars {
             mtm,
-            callbacks,
+            event_handler: callbacks.event_handler,
+            text_input_client: TextInputClientHandler {
+                client: callbacks.text_input_client,
+                handled_key_down_event: Cell::new(false),
+                marked_text_range: Cell::new(None),
+            },
             tracking_area: Cell::new(None),
         });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
@@ -717,13 +714,12 @@ impl RootView {
         root_view
     }
 
-    fn text_input_client(&self) -> &TextInputClient {
-        &self.ivars().callbacks.text_input_client
+    fn text_input_client(&self) -> &TextInputClientHandler {
+        &self.ivars().text_input_client
     }
 
     fn handle_event<'a>(&'a self, event: &'a Event) -> bool {
-        let callbacks = &self.ivars().callbacks;
-        (callbacks.event_handler)(event)
+        (self.ivars().event_handler)(event)
     }
 
     fn handle_mouse_event<'a>(&'a self, ns_event: &'a NSEvent, f: impl FnOnce(&'a NSEvent, MainThreadMarker) -> Event<'a>) -> bool {

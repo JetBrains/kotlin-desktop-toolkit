@@ -1,68 +1,151 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
-use std::ptr::NonNull;
+use std::{cell::Cell, ptr::NonNull};
 
-use anyhow::Context;
 use log::debug;
 use objc2::{
-    MainThreadMarker,
     rc::Retained,
     runtime::{AnyObject, Sel},
 };
-use objc2_app_kit::NSTextInputContext;
+use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSModeSwitchFunctionKey, NSRightArrowFunctionKey, NSTextInputContext, NSUpArrowFunctionKey};
 use objc2_foundation::{
     NSArray, NSAttributedString, NSAttributedStringKey, NSPoint, NSRange, NSRangePointer, NSRect, NSSize, NSString, NSUInteger,
 };
 
-use crate::{common::BorrowedStrPtr, logger::ffi_boundary};
+use crate::{common::BorrowedStrPtr, macos::{events::Event, keyboard::unpack_key_event}};
 
-use super::{application_api::MyNSApplication, string::borrow_ns_string};
+use super::{events::EventHandler, keyboard::KeyEventInfo, string::borrow_ns_string};
 
-pub type OnInsertText = extern "C" fn(text: BorrowedStrPtr);
-pub type OnDoCommand = extern "C" fn(command: BorrowedStrPtr);
+#[repr(C)]
+#[derive(Debug, Default)]
+ // For the invalid (missing) value, all values are 0
+pub struct TextRange {
+    pub location: usize,
+    pub length: usize,
+}
+
+pub type OnDoCommand = extern "C" fn(command: BorrowedStrPtr) -> bool;
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct OnInsertTextArgs<'a> {
+    pub text: BorrowedStrPtr<'a>,
+    //pub composition_range: TextRange,
+    //pub composition_committed_range: TextRange,
+    //pub composition_selected_range: TextRange,
+    //pub replacement_range: TextRange,
+}
+pub type OnInsertText = extern "C" fn(args: OnInsertTextArgs);
+
+#[repr(C)]
+pub struct OnSetMarkedTextArgs<'a> {
+    pub text: BorrowedStrPtr<'a>,
+    pub selected_range: TextRange,
+    pub replacement_range: TextRange,
+}
+pub type OnSetMarkedText = extern "C" fn(args: OnSetMarkedTextArgs);
+
+pub type OnUnmarkText = extern "C" fn();
 
 #[repr(C)]
 pub struct TextInputClient {
     pub on_insert_text: OnInsertText,
     pub on_do_command: OnDoCommand,
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn text_input_context_handle_current_event() -> bool {
-    ffi_boundary("text_input_context_handle_current_event", || {
-        let mtm = MainThreadMarker::new().unwrap();
-        let app = MyNSApplication::sharedApplication(mtm);
-        let current_event = app.currentEvent().context("Should be called from event handler")?;
-        let input_context = unsafe { NSTextInputContext::currentInputContext(mtm) };
-        let result = match input_context {
-            Some(input_context) => unsafe { input_context.handleEvent(&current_event) },
-            None => false,
-        };
-        Ok(result)
-    })
+    pub on_unmark_text: OnUnmarkText,
+    pub on_set_marked_text: OnSetMarkedText,
 }
 
 const DEFAULT_NS_RANGE: NSRange = NSRange { location: 0, length: 0 };
 const DEFAULT_NS_RECT: NSRect = NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64));
 
-impl TextInputClient {
-    pub fn has_marked_text(&self) -> bool {
-        // TODO
-        false
+pub(crate) struct TextInputClientHandler {
+    pub client: TextInputClient,
+    pub handled_key_down_event: Cell<bool>,
+    pub marked_text_range: Cell<Option<NSRange>>,
+}
+
+impl TextInputClientHandler {
+    pub fn send_event_to_input_context(&self, ns_event: &NSEvent, input_context: &NSTextInputContext) -> bool {
+        if !unsafe { input_context.handleEvent(ns_event) } {
+            false
+        } else {
+            self.handled_key_down_event.get()
+        }
     }
 
-    pub fn marked_range(&self) -> NSRange {
-        // TODO
-        DEFAULT_NS_RANGE // TODO
+    pub fn on_key_down(&self, ns_event: &NSEvent, input_context: &Option<Retained<NSTextInputContext>>, event_handler: EventHandler) -> anyhow::Result<bool> {
+        debug!("keyDown start: {ns_event:?}");
+        let key_event_info = unpack_key_event(ns_event)?;
+        debug!("keyDown key_event_info: {key_event_info:?}");
+        let key_event = Event::new_key_down_event(&key_event_info);
+        let handled: bool = if let Some(input_context) = input_context {
+            if self.has_marked_text()
+                || dbg!(is_ime_navigation_key(&key_event_info)
+                    && !key_event_info.modifiers.contains(NSEventModifierFlags::Control.0)
+                    && !has_function_modifier(&key_event_info))
+            {
+                self.send_event_to_input_context(&ns_event, &input_context) || (event_handler)(&key_event)
+            } else {
+                (event_handler)(&key_event) || self.send_event_to_input_context(&ns_event, &input_context)
+            }
+        } else {
+            (event_handler)(&key_event)
+        };
+
+        debug!("keyDown end: handled = {handled}");
+        Ok(handled)
+    }
+
+    pub fn has_marked_text(&self) -> bool {
+        let ret = self.marked_range().is_some();
+        debug!("hasMarkedText: {ret}");
+        ret
+    }
+
+    pub fn marked_range(&self) -> Option<NSRange> {
+        debug!("markedRange");
+        self.marked_text_range.get()
     }
 
     pub fn selected_range(&self) -> NSRange {
+        debug!("selectedRange");
         DEFAULT_NS_RANGE // TODO
     }
 
-    pub fn set_marked_text(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) {}
+    pub fn set_marked_text(
+        &self,
+        string: &AnyObject,
+        selected_range: NSRange,
+        replacement_range: NSRange,
+    ) -> anyhow::Result<bool> {
+        let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
+        debug!(
+            "setMarkedText, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
+            ns_attributed_string, text, selected_range, replacement_range
+        );
+        (self.client.on_set_marked_text)(OnSetMarkedTextArgs {
+            text: borrow_ns_string(&text),
+            selected_range: TextRange {
+                location: selected_range.location,
+                length: selected_range.length,
+            },
+            replacement_range: TextRange {
+                location: replacement_range.location,
+                length: replacement_range.length,
+            },
+        });
+        self.handled_key_down_event.set(true);
+        self.marked_text_range.set(Some(selected_range));
+        Ok(true)
+    }
 
-    pub fn unmark_text(&self) {}
+    pub fn unmark_text(&self) -> anyhow::Result<bool> {
+        debug!("unmarkText");
+        self.handled_key_down_event.set(true);
+        self.marked_text_range.set(None);
+        (self.client.on_unmark_text)();
+        Ok(true)
+    }
 
     pub fn valid_attributes_for_marked_text(&self) -> Retained<NSArray<NSAttributedStringKey>> {
         debug!("validAttributesForMarkedText");
@@ -87,32 +170,54 @@ impl TextInputClient {
         range: NSRange,
         actual_range: NSRangePointer,
     ) -> Option<Retained<NSAttributedString>> {
-        None
+        let actual_range = NonNull::new(actual_range);
+        debug!(
+            "attributedSubstringForProposedRange, range={:?}, actual_range={:?}",
+            range,
+            actual_range.map(|r| unsafe { r.read() })
+        );
+        None // TODO
     }
 
-    pub fn insert_text(&self, string: &AnyObject, replacement_range: NSRange) -> anyhow::Result<()> {
-        let (_ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-        (self.on_insert_text)(borrow_ns_string(&text));
-        Ok(())
+    pub fn insert_text(&self, string: &AnyObject, replacement_range: NSRange) -> anyhow::Result<bool> {
+        let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
+        debug!(
+            "insertText, marked_text={:?}, string={:?}, replacement_range={:?}",
+            ns_attributed_string, text, replacement_range
+        );
+
+        (self.client.on_insert_text)(OnInsertTextArgs { text: borrow_ns_string(&text) });
+        self.handled_key_down_event.set(true);
+        self.marked_text_range.set(None);
+        Ok(true)
     }
 
-    pub fn first_rect_for_character_range(&self, range: NSRange, actual_range: NSRangePointer) -> NSRect {
+    pub fn first_rect_for_character_range(&self, range: NSRange, actual_range: NSRangePointer) -> anyhow::Result<NSRect> {
         let actual_range = NonNull::new(actual_range);
         debug!(
             "firstRectForCharacterRange: range={:?}, actual_range={:?}",
             range,
             actual_range.map(|r| unsafe { r.read() })
         );
-        DEFAULT_NS_RECT // TODO
+        Ok(DEFAULT_NS_RECT) // TODO
     }
 
-    pub fn character_index_for_point(&self, point: NSPoint) -> NSUInteger {
-        0
+    pub fn character_index_for_point(&self, point: NSPoint) -> anyhow::Result<NSUInteger> {
+        debug!("characterIndexForPoint: {:?}", point);
+        Ok(0) // TODO
     }
 
-    pub fn do_command(&self, command: Sel) {
-        let command_name = command.name();
-        (self.on_do_command)(BorrowedStrPtr::new(command_name))
+    pub fn do_command(&self, selector: Sel) -> anyhow::Result<bool> {
+        let s = selector.name();
+        if s == c"noop:" {
+            debug!("Ignoring the noop: selector, forwarding the raw event");
+            return Ok(false);
+        }
+        debug!("do_command_by_selector: {s:?}");
+        if (self.client.on_do_command)(BorrowedStrPtr::new(s)) {
+            self.handled_key_down_event.set(true);
+        }
+        Ok(true)
     }
 }
 
@@ -125,5 +230,30 @@ fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttribut
     } else {
         // This method is guaranteed to get either a `NSString` or a `NSAttributedString`.
         panic!("unexpected text {string:?}")
+    }
+}
+
+fn is_ime_navigation_key(key_event_info: &KeyEventInfo) -> bool {
+    const ESC_KEYCODE: u32 = 0x1b; // 27
+    let first_char: Option<u32> = if key_event_info.chars.length() > 0 {
+        Some(unsafe { key_event_info.chars.characterAtIndex(0).into() })
+    } else {
+        None
+    };
+    first_char.map_or(true, |ch| {
+        (NSUpArrowFunctionKey..=NSRightArrowFunctionKey).contains(&ch) || ch == ESC_KEYCODE
+    })
+}
+
+fn has_function_modifier(key_event_info: &KeyEventInfo) -> bool {
+    if key_event_info.modifiers.contains(NSEventModifierFlags::Function.0) {
+        let first_char: Option<u32> = if key_event_info.chars.length() > 0 {
+            Some(unsafe { key_event_info.chars.characterAtIndex(0).into() })
+        } else {
+            None
+        };
+        first_char.map_or(true, |ch| !(NSUpArrowFunctionKey..=NSModeSwitchFunctionKey).contains(&ch))
+    } else {
+        false
     }
 }

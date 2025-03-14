@@ -5,12 +5,15 @@ import org.jetbrains.desktop.PhysicalSize
 import org.jetbrains.desktop.macos.DisplayLink
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
+import org.jetbrains.desktop.macos.InsetTextArgs
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView
 import org.jetbrains.desktop.macos.ScreenId
+import org.jetbrains.desktop.macos.SetMarkedTextArgs
 import org.jetbrains.desktop.macos.TextInputClient
+import org.jetbrains.desktop.macos.TextRange
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.skia.BackendRenderTarget
 import org.jetbrains.skia.Canvas
@@ -39,16 +42,31 @@ abstract class SkikoWindow(
 
     init {
         window.textInputClientHolder.textInputClient = object : TextInputClient {
-            override fun insertText(text: String) {
+            var markedText: TextRange? = null
+
+            override fun insertText(args: InsetTextArgs) {
                 Logger.info {
-                    "TextInputClient Insert: $text"
+                    "TextInputClient Insert: $args.text"
                 }
             }
 
-            override fun doCommand(command: String) {
+            override fun doCommand(command: String): Boolean {
                 Logger.info {
                     "TextInputClient Perform Command: $command"
                 }
+                return false
+            }
+
+            override fun hasMarkedText(): Boolean {
+                return markedText != null
+            }
+
+            override fun unmarkText() {
+                markedText = null
+            }
+
+            override fun setMarkedText(args: SetMarkedTextArgs) {
+                markedText = args.selectedRange
             }
 
         }

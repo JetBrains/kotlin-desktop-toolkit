@@ -20,7 +20,6 @@ import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.Screen
-import org.jetbrains.desktop.macos.TextInputContext
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
 import org.jetbrains.desktop.macos.WindowVisualEffect
@@ -436,17 +435,7 @@ class ApplicationState : AutoCloseable {
                 EventHandlerResult.Stop
             }
             is Event.KeyDown -> {
-                if (TextInputContext.handleCurrentEvent()) {
-                    Logger.info {
-                        "Handle $event by TextInputContext"
-                    }
-                    EventHandlerResult.Stop
-                } else {
-                    Logger.info {
-                        "Ignored $event by TextInputContext"
-                    }
-                    EventHandlerResult.Continue
-                }
+                EventHandlerResult.Continue
             }
             is Event.WindowFullScreenToggle -> {
                 AppMenuManager.setMainMenu(buildMenu())
