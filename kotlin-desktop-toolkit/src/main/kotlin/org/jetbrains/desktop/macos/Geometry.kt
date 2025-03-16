@@ -1,4 +1,4 @@
-package org.jetbrains.desktop
+package org.jetbrains.desktop.macos
 
 public typealias PhysicalPixels = Double
 public typealias LogicalPixels = Double

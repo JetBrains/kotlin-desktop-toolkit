@@ -1,10 +1,10 @@
 package org.jetbrains.desktop.sample
 
-import org.jetbrains.desktop.LogicalPixels
-import org.jetbrains.desktop.LogicalPoint
-import org.jetbrains.desktop.LogicalSize
-import org.jetbrains.desktop.PhysicalPoint
-import org.jetbrains.desktop.PhysicalSize
+import org.jetbrains.desktop.macos.LogicalPixels
+import org.jetbrains.desktop.macos.LogicalPoint
+import org.jetbrains.desktop.macos.LogicalSize
+import org.jetbrains.desktop.macos.PhysicalPoint
+import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.AppMenuItem
 import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.AppMenuStructure

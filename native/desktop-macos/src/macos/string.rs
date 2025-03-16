@@ -4,8 +4,8 @@ use anyhow::Context;
 use objc2::rc::Retained;
 use objc2_foundation::NSString;
 
-use crate::{
-    common::{BorrowedStrPtr, RustAllocatedStrPtr},
+use desktop_common::{
+    ffi_utils::{BorrowedStrPtr, RustAllocatedStrPtr},
     logger::ffi_boundary,
 };
 

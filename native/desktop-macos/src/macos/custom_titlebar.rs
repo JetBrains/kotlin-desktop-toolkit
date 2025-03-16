@@ -7,7 +7,7 @@ use objc2::rc::Retained;
 use objc2_app_kit::{NSButton, NSLayoutConstraint, NSView, NSWindow, NSWindowButton};
 use objc2_foundation::NSArray;
 
-use crate::common::LogicalPixels;
+use crate::geometry::LogicalPixels;
 
 pub(crate) type CustomTitlebarCell = Rc<RefCell<CustomTitlebar>>;
 

@@ -7,9 +7,30 @@ use objc2_foundation::{MainThreadMarker, NSString};
 use objc2_metal::{MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};
 use objc2_quartz_core::{CAAutoresizingMask, CAMetalDrawable, CAMetalLayer, kCAGravityTopLeft};
 
-use crate::common::RustAllocatedRawPtr;
-use crate::logger::{PanicDefault, ffi_boundary};
-use crate::{common::PhysicalSize, define_objc_ref};
+use crate::geometry::PhysicalSize;
+use desktop_common::ffi_utils::RustAllocatedRawPtr;
+use desktop_common::logger::{PanicDefault, ffi_boundary};
+
+macro_rules! define_objc_ref {
+    ($name:ident, $otype:ty) => {
+        #[allow(dead_code)]
+        impl $name {
+            pub fn new(obj: Retained<$otype>) -> Self {
+                return Self {
+                    ptr: Retained::into_raw(obj).cast::<c_void>(),
+                };
+            }
+
+            pub unsafe fn retain(&self) -> Retained<$otype> {
+                return unsafe { Retained::retain(self.ptr.cast::<$otype>()) }.unwrap();
+            }
+
+            pub unsafe fn consume(self) -> Retained<$otype> {
+                return unsafe { Retained::from_raw(self.ptr.cast::<$otype>()) }.unwrap();
+            }
+        }
+    };
+}
 
 #[repr(transparent)]
 pub struct MetalDeviceRef {

@@ -1,8 +1,8 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.LogicalPixels
-import org.jetbrains.desktop.LogicalPoint
-import org.jetbrains.desktop.LogicalSize
+import org.jetbrains.desktop.macos.LogicalPixels
+import org.jetbrains.desktop.macos.LogicalPoint
+import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.generated.NativeEvent
 import org.jetbrains.desktop.macos.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.macos.generated.NativeKeyUpEvent

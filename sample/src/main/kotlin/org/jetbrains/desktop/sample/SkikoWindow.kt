@@ -1,7 +1,7 @@
 package org.jetbrains.desktop.sample
 
-import org.jetbrains.desktop.LogicalSize
-import org.jetbrains.desktop.PhysicalSize
+import org.jetbrains.desktop.macos.LogicalSize
+import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.DisplayLink
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult

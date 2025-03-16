@@ -1,6 +1,6 @@
 package org.jetbrains.desktop.sample
 
-import org.jetbrains.desktop.PhysicalPoint
+import org.jetbrains.desktop.macos.PhysicalPoint
 import org.jetbrains.skia.Canvas
 
 fun runtimeInfo(): String {

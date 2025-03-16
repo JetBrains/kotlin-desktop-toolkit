@@ -1,11 +1,8 @@
 use std::{ffi::c_void, ptr::addr_of};
 
 use super::screen::ScreenId;
-use crate::{
-    common::RustAllocatedRawPtr,
-    logger::{PanicDefault, ffi_boundary},
-};
 use anyhow::Result;
+use desktop_common::{ffi_utils::RustAllocatedRawPtr, logger::ffi_boundary};
 use dispatch_sys::{
     _dispatch_main_q, _dispatch_source_type_data_add, dispatch_object_t, dispatch_queue_t, dispatch_resume, dispatch_set_context,
     dispatch_source_cancel, dispatch_source_create, dispatch_source_merge_data, dispatch_source_set_event_handler_f, dispatch_source_t,
@@ -47,12 +44,6 @@ pub extern "C" fn display_link_set_running(mut display_link_ptr: DisplayLinkPtr,
         }
         Ok(())
     });
-}
-
-impl PanicDefault for bool {
-    fn default() -> Self {
-        false
-    }
 }
 
 #[unsafe(no_mangle)]

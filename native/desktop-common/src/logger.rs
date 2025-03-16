@@ -1,4 +1,4 @@
-use std::{any::Any, cell::RefCell, panic::AssertUnwindSafe};
+use std::{any::Any, cell::RefCell, isize, panic::AssertUnwindSafe};
 
 use anyhow::Context;
 use log::error;
@@ -16,10 +16,10 @@ use log4rs::{
     filter::threshold::ThresholdFilter,
 };
 
-use crate::logger_api::{LogLevel, LoggerConfiguration};
+use crate::ffi_utils::{ArraySize, RustAllocatedStrPtr};
 use crate::{
-    common::{ArraySize, RustAllocatedStrPtr},
-    logger_api::ExceptionsArray,
+    ffi_utils::AutoDropArray,
+    logger_api::{ExceptionsArray, LogLevel, LoggerConfiguration},
 };
 
 const MAX_EXCEPTIONS_COUNT: usize = 10;
@@ -155,7 +155,7 @@ impl LoggerConfiguration<'_> {
             .build()
     }
 
-    pub(crate) fn init_logger(&self) {
+    pub fn init_logger(&self) {
         unsafe {
             // enable backtraces for anyhow errors
             std::env::set_var("RUST_LIB_BACKTRACE", "1");
@@ -246,6 +246,45 @@ impl PanicDefault for () {
 impl<T> PanicDefault for Option<T> {
     fn default() -> Self {
         None
+    }
+}
+
+impl<T> PanicDefault for AutoDropArray<T> {
+    fn default() -> Self {
+        Self {
+            ptr: std::ptr::null_mut(),
+            len: 0,
+        }
+    }
+}
+
+impl PanicDefault for bool {
+    fn default() -> Self {
+        false
+    }
+}
+
+impl PanicDefault for isize {
+    fn default() -> Self {
+        0
+    }
+}
+
+impl PanicDefault for u32 {
+    fn default() -> Self {
+        0
+    }
+}
+
+impl PanicDefault for f64 {
+    fn default() -> Self {
+        0.0
+    }
+}
+
+impl PanicDefault for RustAllocatedStrPtr {
+    fn default() -> Self {
+        Self::null()
     }
 }
 

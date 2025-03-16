@@ -1,7 +1,7 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.LogicalPoint
-import org.jetbrains.desktop.LogicalSize
+import org.jetbrains.desktop.macos.LogicalPoint
+import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.generated.NativeDisplayLinkCallback
 import org.jetbrains.desktop.macos.generated.NativeScreenInfo
 import org.jetbrains.desktop.macos.generated.NativeScreenInfoArray

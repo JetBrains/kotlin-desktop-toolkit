@@ -1,6 +1,5 @@
+use desktop_common::logger::ffi_boundary;
 use objc2::MainThreadMarker;
-
-use crate::logger::ffi_boundary;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn dispatcher_is_main_thread() -> bool {

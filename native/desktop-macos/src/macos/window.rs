@@ -21,8 +21,7 @@ use objc2_foundation::{
 };
 
 use crate::{
-    common::{LogicalPoint, LogicalRect, LogicalSize},
-    logger::catch_panic,
+    geometry::{LogicalPoint, LogicalRect, LogicalSize},
     macos::{
         custom_titlebar::CustomTitlebar,
         events::{
@@ -33,6 +32,7 @@ use crate::{
         string::copy_to_ns_string,
     },
 };
+use desktop_common::logger::catch_panic;
 
 use super::{
     application_api::MyNSApplication,

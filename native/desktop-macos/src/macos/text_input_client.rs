@@ -13,7 +13,8 @@ use objc2_foundation::{
     NSArray, NSAttributedString, NSAttributedStringKey, NSPoint, NSRange, NSRangePointer, NSRect, NSSize, NSString, NSUInteger,
 };
 
-use crate::{common::BorrowedStrPtr, macos::keyboard::key_codes};
+use crate::macos::keyboard::key_codes;
+use desktop_common::ffi_utils::BorrowedStrPtr;
 
 use super::string::borrow_ns_string;
 

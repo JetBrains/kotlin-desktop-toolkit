@@ -3,7 +3,7 @@ use objc2::{MainThreadMarker, rc::Retained};
 use objc2_app_kit::{NSModalResponse, NSOpenPanel};
 use objc2_foundation::NSString;
 
-use crate::{common::RustAllocatedStrPtr, logger::ffi_boundary};
+use desktop_common::{ffi_utils::RustAllocatedStrPtr, logger::ffi_boundary};
 
 use super::string::copy_to_c_string;
 

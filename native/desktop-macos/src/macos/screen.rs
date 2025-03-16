@@ -3,10 +3,12 @@ use objc2::rc::Retained;
 use objc2_app_kit::NSScreen;
 use objc2_foundation::{MainThreadMarker, NSNumber, NSString};
 
-use crate::{
-    common::{AutoDropArray, AutoDropStrPtr, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize},
-    logger::{PanicDefault, ffi_boundary},
+use desktop_common::{
+    ffi_utils::{AutoDropArray, AutoDropStrPtr},
+    logger::ffi_boundary,
 };
+
+use crate::geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize};
 
 use super::string::copy_to_c_string;
 
@@ -24,15 +26,6 @@ pub struct ScreenInfo {
     pub maximum_frames_per_second: u32,
     // todo color space?
     // todo stable uuid?
-}
-
-impl<T> PanicDefault for AutoDropArray<T> {
-    fn default() -> Self {
-        Self {
-            ptr: std::ptr::null_mut(),
-            len: 0,
-        }
-    }
 }
 
 type ScreenInfoArray = AutoDropArray<ScreenInfo>;

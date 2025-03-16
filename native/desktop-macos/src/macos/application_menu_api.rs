@@ -1,9 +1,9 @@
+use desktop_common::ffi_utils::{ArraySize, BorrowedStrPtr};
+use desktop_common::logger::ffi_boundary;
 use objc2_foundation::MainThreadMarker;
 
 use super::keyboard::KeyModifiersSet;
 use super::{application_api::MyNSApplication, application_menu::main_menu_update_impl};
-use crate::common::{ArraySize, BorrowedStrPtr};
-use crate::logger::ffi_boundary;
 
 // This file contains C API of the library
 // The symbols listed here will be exported into .h file

@@ -2,7 +2,7 @@ use objc2::rc::Retained;
 use objc2_app_kit::NSColor;
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 
-use crate::common::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint, PhysicalSize};
+use crate::geometry::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint, PhysicalSize};
 
 impl From<NSSize> for LogicalSize {
     fn from(value: NSSize) -> Self {

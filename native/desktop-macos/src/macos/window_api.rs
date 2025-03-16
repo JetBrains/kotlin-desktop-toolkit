@@ -1,9 +1,11 @@
 use objc2_foundation::MainThreadMarker;
 
-use crate::{
-    common::{BorrowedStrPtr, Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, RustAllocatedRawPtr, RustAllocatedStrPtr},
+use desktop_common::{
+    ffi_utils::{BorrowedStrPtr, RustAllocatedRawPtr, RustAllocatedStrPtr},
     logger::{PanicDefault, ffi_boundary},
 };
+
+use crate::geometry::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize};
 
 use super::{
     application_api::MyNSApplication,
@@ -52,12 +54,6 @@ pub extern "C" fn window_drop(window_ptr: WindowPtr) {
     });
 }
 
-impl PanicDefault for WindowId {
-    fn default() -> Self {
-        0
-    }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
     ffi_boundary("window_get_window_id", || {
@@ -66,24 +62,12 @@ pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
     })
 }
 
-impl PanicDefault for ScreenId {
-    fn default() -> Self {
-        0
-    }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_screen_id(window_ptr: WindowPtr) -> ScreenId {
     ffi_boundary("window_get_screen_id", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.screen().unwrap().screen_id())
     })
-}
-
-impl PanicDefault for f64 {
-    fn default() -> Self {
-        0.0
-    }
 }
 
 #[unsafe(no_mangle)]
@@ -120,12 +104,6 @@ pub extern "C" fn window_set_title(window_ptr: WindowPtr, new_title: BorrowedStr
         window.ns_window.setTitle(&new_title);
         Ok(())
     });
-}
-
-impl PanicDefault for RustAllocatedStrPtr {
-    fn default() -> Self {
-        Self::null()
-    }
 }
 
 #[unsafe(no_mangle)]

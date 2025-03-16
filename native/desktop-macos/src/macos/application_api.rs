@@ -1,6 +1,7 @@
 use std::cell::OnceCell;
 
 use anyhow::{Context, anyhow};
+use desktop_common::{ffi_utils::RustAllocatedStrPtr, logger::ffi_boundary};
 use log::info;
 use objc2::{ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{
@@ -9,11 +10,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{MainThreadMarker, NSData, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
 
-use crate::{
-    common::RustAllocatedStrPtr,
-    logger::ffi_boundary,
-    macos::events::{handle_application_did_finish_launching, handle_display_configuration_change},
-};
+use crate::macos::events::{handle_application_did_finish_launching, handle_display_configuration_change};
 
 use super::{events::EventHandler, string::copy_to_c_string};
 

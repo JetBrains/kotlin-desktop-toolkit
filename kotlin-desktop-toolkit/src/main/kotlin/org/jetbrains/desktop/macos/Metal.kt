@@ -1,6 +1,6 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.PhysicalSize
+import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment

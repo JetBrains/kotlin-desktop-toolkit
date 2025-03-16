@@ -1,5 +1,4 @@
 use anyhow::{Context, Ok, bail};
-use bitflags::Flags;
 use objc2::rc::Retained;
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
 use objc2_foundation::NSString;

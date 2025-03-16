@@ -6,10 +6,12 @@ use anyhow::bail;
 use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
-use crate::{
-    common::{BorrowedStrPtr, LogicalPixels, LogicalPoint, LogicalSize},
+use desktop_common::{
+    ffi_utils::BorrowedStrPtr,
     logger::{PanicDefault, ffi_boundary},
 };
+
+use crate::geometry::{LogicalPixels, LogicalPoint, LogicalSize};
 
 use super::{
     application_api::AppState,

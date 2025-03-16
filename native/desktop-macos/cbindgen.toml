@@ -11,8 +11,8 @@ bitflags = true
 [parse]
 ## Whether to parse dependent crates and include their types in the output
 ## default: false
-#parse_deps = false
-#include = ["desktop-macos"]
+parse_deps = true
+include = ["desktop-macos", "desktop-common"]
 
 [parse.expand]
 # A list of crate names that should be run through `cargo expand` before
