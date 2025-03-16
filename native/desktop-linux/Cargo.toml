@@ -1,0 +1,17 @@
+[package]
+name = "desktop-linux"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+name = "desktop_linux"
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+log4rs.workspace = true
+desktop-common = { path = "../desktop-common" }
+
+[build-dependencies]
+cbindgen.workspace = true

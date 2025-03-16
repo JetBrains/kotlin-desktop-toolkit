@@ -1,0 +1,31 @@
+language = "C"
+header = "/* This header is generated please don't edit it manually. */"
+sys_includes = ["stdbool.h", "stdint.h"]
+no_includes = true
+
+[macro_expansion]
+# Whether bindings should be generated for instances of the bitflags! macro.
+# default: false
+bitflags = true
+
+[parse]
+## Whether to parse dependent crates and include their types in the output
+## default: false
+parse_deps = true
+include = ["desktop-linux", "desktop-common"]
+
+[parse.expand]
+# A list of crate names that should be run through `cargo expand` before
+# parsing to expand any macros. Note that if a crate is named here, it
+# will always be parsed, even if the blacklist/whitelist says it shouldn't be.
+#
+# default: []
+# If you want to turn macro expansion you need to set "RUSTC_BOOTSTRAP=1" before calling bindgen, or use nightly rustc.
+# see: https://github.com/mozilla/cbindgen/issues/1015
+# crates = ["desktop-linux"]
+
+[enum]
+prefix_with_name = true
+
+[export]
+prefix = "Native"
