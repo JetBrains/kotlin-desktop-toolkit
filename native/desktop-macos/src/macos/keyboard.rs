@@ -1,4 +1,5 @@
 use anyhow::{Context, Ok, bail};
+use bitflags::Flags;
 use objc2::rc::Retained;
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType};
 use objc2_foundation::NSString;
@@ -88,7 +89,7 @@ pub struct KeyModifiersSet(pub usize);
 
 impl std::fmt::Debug for KeyModifiersSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "KeyModifiersSet({:#b})", self.0)
+        write!(f, "KeyModifiersSet({:032b})", self.0)
     }
 }
 
@@ -103,7 +104,10 @@ pub(crate) const EMPTY_KEY_MODIFIERS: KeyModifiersSet = KeyModifiersSet(0);
 
 impl From<NSEventModifierFlags> for KeyModifiersSet {
     fn from(value: NSEventModifierFlags) -> Self {
-        Self(value.bits())
+        // We filter out device dependant part of modifier flags
+        // It contains e.g. flags that allow to distinct between left and right modifier keys
+        // But I'm not sure that it has the same meaning for Intel, or for different keyboars
+        Self(value.bits() & NSEventModifierFlags::DeviceIndependentFlagsMask.bits())
     }
 }
 
