@@ -1,8 +1,5 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.LogicalPoint
-import org.jetbrains.desktop.macos.LogicalSize
-import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.generated.NativeColor
 import org.jetbrains.desktop.macos.generated.NativeLogicalPoint
 import org.jetbrains.desktop.macos.generated.NativeLogicalSize

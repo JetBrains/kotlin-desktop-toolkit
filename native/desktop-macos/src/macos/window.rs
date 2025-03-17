@@ -43,6 +43,7 @@ use super::{
     window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
 
+#[allow(clippy::struct_field_names)]
 pub(crate) struct Window {
     pub(crate) ns_window: Retained<MyNSWindow>,
     #[allow(dead_code)]
@@ -371,7 +372,7 @@ define_class!(
         unsafe fn window_will_enter_full_screen(&self, _notification: &NSNotification) {
             catch_panic(|| {
                 let ivars = self.ivars();
-                CustomTitlebar::before_enter_fullscreen(&ivars.custom_titlebar, &ivars.ns_window);
+                CustomTitlebar::before_enter_fullscreen(ivars.custom_titlebar.as_ref(), &ivars.ns_window);
                 Ok(())
             });
         }
@@ -388,7 +389,7 @@ define_class!(
         unsafe fn window_did_exit_full_screen(&self, _notification: &NSNotification) {
             catch_panic(|| {
                 let ivars = self.ivars();
-                CustomTitlebar::after_exit_fullscreen(&ivars.custom_titlebar, &ivars.ns_window);
+                CustomTitlebar::after_exit_fullscreen(ivars.custom_titlebar.as_ref(), &ivars.ns_window);
                 handle_window_full_screen_toggle(&self.ivars().ns_window);
                 Ok(())
             });
@@ -545,7 +546,7 @@ define_class!(
         unsafe fn valid_attributes_for_marked_text(&self) -> Retained<NSArray<NSAttributedStringKey>> {
             catch_panic(|| {
                 Ok(self.text_input_client().valid_attributes_for_marked_text())
-            }).unwrap_or(NSArray::from_slice(&[]))
+            }).unwrap_or_else(|| NSArray::from_slice(&[]))
         }
 
         // Storing text
@@ -735,7 +736,7 @@ define_class!(
         fn key_down(&self, ns_event: &NSEvent) {
             catch_panic(|| {
                 let input_context = self.inputContext();
-                self.ivars().text_input_client_handler.on_key_down(ns_event, &input_context, |ns_event| {
+                self.ivars().text_input_client_handler.on_key_down(ns_event, input_context.as_ref(), |ns_event| {
                     handle_key_event(ns_event)
                 })?;
                 Ok(())

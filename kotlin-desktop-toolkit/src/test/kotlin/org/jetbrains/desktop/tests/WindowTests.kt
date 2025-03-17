@@ -1,8 +1,8 @@
 package org.jetbrains.desktop.tests
 
-import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
+import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.Test
 

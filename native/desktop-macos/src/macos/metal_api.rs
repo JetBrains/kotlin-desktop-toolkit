@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use std::{cell::Cell, ffi::c_void};
 
 use anyhow::Context;
@@ -15,18 +17,20 @@ macro_rules! define_objc_ref {
     ($name:ident, $otype:ty) => {
         #[allow(dead_code)]
         impl $name {
+            #[must_use]
             pub fn new(obj: Retained<$otype>) -> Self {
                 return Self {
                     ptr: Retained::into_raw(obj).cast::<c_void>(),
                 };
             }
 
+            #[must_use]
             pub unsafe fn retain(&self) -> Retained<$otype> {
                 return unsafe { Retained::retain(self.ptr.cast::<$otype>()) }.unwrap();
             }
 
-            pub unsafe fn consume(self) -> Retained<$otype> {
-                return unsafe { Retained::from_raw(self.ptr.cast::<$otype>()) }.unwrap();
+            pub unsafe fn consume(self) {
+                unsafe { Retained::from_raw(self.ptr.cast::<$otype>()) }.unwrap();
             }
         }
     };

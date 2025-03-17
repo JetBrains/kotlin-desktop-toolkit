@@ -182,7 +182,7 @@ impl CustomTitlebar {
         Ok(())
     }
 
-    pub(crate) fn before_enter_fullscreen(titlebar: &Option<CustomTitlebarCell>, ns_window: &NSWindow) {
+    pub(crate) fn before_enter_fullscreen(titlebar: Option<&CustomTitlebarCell>, ns_window: &NSWindow) {
         if let Some(titlebar) = titlebar {
             let mut titlebar = (**titlebar).borrow_mut();
             unsafe {
@@ -191,7 +191,7 @@ impl CustomTitlebar {
         }
     }
 
-    pub(crate) fn after_exit_fullscreen(titlebar: &Option<CustomTitlebarCell>, ns_window: &NSWindow) {
+    pub(crate) fn after_exit_fullscreen(titlebar: Option<&CustomTitlebarCell>, ns_window: &NSWindow) {
         if let Some(titlebar) = titlebar {
             let mut titlebar = (**titlebar).borrow_mut();
             unsafe {

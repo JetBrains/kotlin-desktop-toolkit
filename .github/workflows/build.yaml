@@ -21,3 +21,5 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - name: Build with Gradle
         run: ./gradlew build # TODO: maybe a different task?
+      - name: Lint with Gradle
+        run: ./gradlew lint

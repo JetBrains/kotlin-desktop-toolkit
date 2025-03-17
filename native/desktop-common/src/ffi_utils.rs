@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use core::slice;
 use std::{
     ffi::{CStr, CString, NulError},
@@ -27,16 +29,19 @@ impl<T> RustAllocatedRawPtr<'_, T> {
     }
 
     #[allow(clippy::unnecessary_box_returns)]
+    #[must_use]
     pub unsafe fn to_owned<R>(&self) -> Box<R> {
         assert!(!self.0.ptr.is_null());
         let ptr = self.0.ptr.cast_mut().cast::<R>();
         unsafe { Box::from_raw(ptr) }
     }
 
+    #[must_use]
     pub unsafe fn borrow<R>(&self) -> &R {
         Box::leak(unsafe { self.to_owned() })
     }
 
+    #[must_use]
     pub unsafe fn borrow_mut<R>(&mut self) -> &mut R {
         Box::leak(unsafe { self.to_owned() })
     }
@@ -46,6 +51,7 @@ impl<T> RustAllocatedRawPtr<'_, T> {
 pub struct BorrowedStrPtr<'a>(GenericRawPtr<'a, std::ffi::c_char>);
 
 impl BorrowedStrPtr<'_> {
+    #[must_use]
     pub const fn new(s: &CStr) -> Self {
         Self(GenericRawPtr {
             ptr: s.as_ptr(),
@@ -53,6 +59,7 @@ impl BorrowedStrPtr<'_> {
         })
     }
 
+    #[must_use]
     pub const fn as_non_null(&self) -> Option<NonNull<std::ffi::c_char>> {
         NonNull::new(self.0.ptr.cast_mut())
     }
@@ -84,6 +91,7 @@ impl std::fmt::Debug for BorrowedStrPtr<'_> {
 pub struct RustAllocatedStrPtr(GenericRawPtr<'static, std::ffi::c_char>);
 
 impl RustAllocatedStrPtr {
+    #[must_use]
     pub const fn null() -> Self {
         Self(GenericRawPtr {
             ptr: std::ptr::null(),
@@ -104,6 +112,7 @@ impl RustAllocatedStrPtr {
         self.0.ptr = std::ptr::null();
     }
 
+    #[must_use]
     pub const fn to_auto_drop(self) -> AutoDropStrPtr {
         AutoDropStrPtr(self)
     }
@@ -127,6 +136,7 @@ pub struct AutoDropArray<T> {
 }
 
 impl<T> AutoDropArray<T> {
+    #[must_use]
     pub fn new(array: Box<[T]>) -> Self {
         let array = Box::leak(array);
         Self {

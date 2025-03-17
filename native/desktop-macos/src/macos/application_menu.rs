@@ -127,13 +127,14 @@ impl AppMenuItemSafe {
         Ok(safe_item)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn reconcile_action(
         item: &NSMenuItem,
         enabled: bool,
         state: ActionItemState,
         title: &Retained<NSString>,
         _special_tag: ActionMenuItemSpecialTag,
-        keystroke: &Option<AppMenuKeystrokeSafe>,
+        keystroke: Option<&AppMenuKeystrokeSafe>,
         perform: Callback,
         mtm: MainThreadMarker,
     ) {
@@ -189,7 +190,7 @@ impl AppMenuItemSafe {
                 keystroke,
                 perform,
             } => {
-                Self::reconcile_action(item, *enabled, *state, title, *special_tag, keystroke, *perform, mtm);
+                Self::reconcile_action(item, *enabled, *state, title, *special_tag, keystroke.as_ref(), *perform, mtm);
             }
             Self::Separator => {
                 assert!(unsafe { item.isSeparatorItem() });
@@ -211,7 +212,7 @@ impl AppMenuItemSafe {
                 perform,
             } => {
                 let item = NSMenuItem::new(mtm);
-                Self::reconcile_action(&item, enabled, state, title, special_tag, keystroke, perform, mtm);
+                Self::reconcile_action(&item, enabled, state, title, special_tag, keystroke.as_ref(), perform, mtm);
                 item
             }
             Self::Separator => {
@@ -308,6 +309,7 @@ impl<'a> ItemIdentity<'a> {
     }
 }
 
+#[allow(clippy::cast_possible_wrap)]
 fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_top_level: bool, new_items: &[AppMenuItemSafe]) {
     let items_array = unsafe { menu.itemArray() };
     let menu_titles: Vec<_> = items_array.iter().map(|submenu| unsafe { submenu.title() }).collect();
@@ -475,6 +477,7 @@ mod tests {
         Ok(v)
     }
 
+    #[allow(clippy::cast_possible_wrap)]
     fn fix_positions(operations: &mut [Operation]) {
         let mut shift: isize = 0;
         for operation in operations {

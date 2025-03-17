@@ -1,10 +1,5 @@
 package org.jetbrains.desktop.sample
 
-import org.jetbrains.desktop.macos.LogicalPixels
-import org.jetbrains.desktop.macos.LogicalPoint
-import org.jetbrains.desktop.macos.LogicalSize
-import org.jetbrains.desktop.macos.PhysicalPoint
-import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.AppMenuItem
 import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.AppMenuStructure
@@ -17,8 +12,13 @@ import org.jetbrains.desktop.macos.Keystroke
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.LogLevel
 import org.jetbrains.desktop.macos.Logger
+import org.jetbrains.desktop.macos.LogicalPixels
+import org.jetbrains.desktop.macos.LogicalPoint
+import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
+import org.jetbrains.desktop.macos.PhysicalPoint
+import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.Screen
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
@@ -455,7 +455,8 @@ class ApplicationState : AutoCloseable {
     fun buildMenu(): AppMenuStructure {
         return AppMenuStructure(
             AppMenuItem.SubMenu(
-                title = "App", // Ignored
+                // Ignored
+                title = "App",
                 AppMenuItem.Action(
                     "New Window",
                     keystroke = Keystroke(key = "n", modifiers = KeyModifiersSet.create(command = true)),
@@ -604,7 +605,7 @@ class ApplicationState : AutoCloseable {
                 ),
                 specialTag = AppMenuItem.SubMenu.SpecialTag.Window,
             ),
-            AppMenuItem.SubMenu("Help")
+            AppMenuItem.SubMenu("Help"),
         )
     }
 

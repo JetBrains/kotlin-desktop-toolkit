@@ -14,6 +14,7 @@ import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.ktlint)
 
     // Apply the java-library plugin for API and implementation separation.
     `java-library`
@@ -71,6 +72,38 @@ val compileDebugDesktopToolkitTask = tasks.register<CompileRustTask>("compileNat
     crateName = "desktop-macos"
     rustProfile = "dev"
     nativeDirectory = layout.projectDirectory.dir("../native")
+}
+
+val cargoFmtCheckTask = tasks.register<Exec>("cargoFmtCheck") {
+    workingDir = layout.projectDirectory.dir("../native").getAsFile()
+    commandLine("cargo", "fmt", "--check")
+}
+
+val cargoFmtTask = tasks.register<Exec>("cargoFmt") {
+    workingDir = layout.projectDirectory.dir("../native").getAsFile()
+    commandLine("cargo", "fmt")
+}
+
+val clippyCheckTask = tasks.register<Exec>("clippyCheck") {
+    workingDir = layout.projectDirectory.dir("../native").getAsFile()
+    commandLine("cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--", "--deny", "warnings")
+}
+
+val clippyFixTask = tasks.register<Exec>("clippyFix") {
+    workingDir = layout.projectDirectory.dir("../native").getAsFile()
+    commandLine("cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--fix", "--allow-dirty", "--allow-staged")
+}
+
+task("lint") {
+    dependsOn(tasks.named("ktlintCheck"))
+    dependsOn(clippyCheckTask)
+    dependsOn(cargoFmtCheckTask)
+}
+
+task("autofix") {
+    dependsOn(tasks.named("ktlintFormat"))
+    dependsOn(clippyFixTask)
+    dependsOn(cargoFmtTask)
 }
 
 val downloadJExtractTask = tasks.register<DownloadJExtractTask>("downloadJExtract") {

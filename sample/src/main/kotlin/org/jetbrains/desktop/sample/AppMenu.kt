@@ -31,7 +31,8 @@ fun buildAppMenu(): AppMenuStructure {
      */
     return AppMenuStructure(
         AppMenuItem.SubMenu(
-            title = "App", // Ignored
+            // Ignored
+            title = "App",
             AppMenuItem.Action("App menu item1", false),
             AppMenuItem.SubMenu("Services", specialTag = AppMenuItem.SubMenu.SpecialTag.Services),
             AppMenuItem.Separator,
@@ -80,7 +81,8 @@ fun buildAppMenu(): AppMenuStructure {
             title = "Keystrokes",
             AppMenuItem.Action(
                 "Item1",
-                keystroke = Keystroke(key = "xy", modifiers = KeyModifiersSet.create()), // second letter is ignored
+                // second letter is ignored
+                keystroke = Keystroke(key = "xy", modifiers = KeyModifiersSet.create()),
                 perform = if (imLucky()) {
                     val f = { Logger.info { "Odd" } }
                     f
@@ -91,13 +93,15 @@ fun buildAppMenu(): AppMenuStructure {
             ),
             AppMenuItem.Action(
                 "Item2",
+                // shift modifier added because letter is capital
                 keystroke = Keystroke(key = "X", modifiers = KeyModifiersSet.create()),
-            ), // shift modifier added because letter is capital
+            ),
             AppMenuItem.Action("Item3", keystroke = Keystroke(key = "й", modifiers = KeyModifiersSet.create(option = true))),
             AppMenuItem.Action(
                 "Item4",
+                // it's enter
                 keystroke = Keystroke(key = "\u000d", modifiers = KeyModifiersSet.create(command = true)),
-            ), // it's enter
+            ),
             AppMenuItem.Action(
                 "Item5",
                 keystroke = if (imLucky()) Keystroke(key = "k", modifiers = KeyModifiersSet.create(shift = true)) else null,

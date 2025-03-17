@@ -7,7 +7,7 @@ pub extern "C" fn logger_check_exceptions() -> ExceptionsArray {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn logger_clear_exceptions() {
-    desktop_common::logger_api::logger_clear_exceptions_impl()
+    desktop_common::logger_api::logger_clear_exceptions_impl();
 }
 
 #[unsafe(no_mangle)]
