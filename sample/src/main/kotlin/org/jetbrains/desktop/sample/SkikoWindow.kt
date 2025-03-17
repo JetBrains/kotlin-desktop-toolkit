@@ -10,6 +10,7 @@ import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView
 import org.jetbrains.desktop.macos.PhysicalSize
+import org.jetbrains.desktop.macos.Rectangle
 import org.jetbrains.desktop.macos.ScreenId
 import org.jetbrains.desktop.macos.SetMarkedTextArgs
 import org.jetbrains.desktop.macos.TextInputClient
@@ -67,6 +68,12 @@ abstract class SkikoWindow(
 
             override fun setMarkedText(args: SetMarkedTextArgs) {
                 markedText = args.selectedRange
+            }
+
+            override fun firstRectForCharacterRange(range: TextRange): Pair<Rectangle, TextRange?> {
+                val windowSize = window.size
+                val rect = Rectangle(x = windowSize.width / 2, y = windowSize.height / 2, w = 0.0, h = 0.0)
+                return Pair(rect, null)
             }
         }
         window.minSize = LogicalSize(320.0, 240.0)

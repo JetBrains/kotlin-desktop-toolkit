@@ -414,11 +414,26 @@ typedef struct NativeOnSetMarkedTextArgs {
 
 typedef void (*NativeOnSetMarkedText)(struct NativeOnSetMarkedTextArgs args);
 
+typedef struct NativeRectangle {
+  double x;
+  double y;
+  double w;
+  double h;
+} NativeRectangle;
+
+typedef struct NativeOnFirstRectForCharacterRangeArgs {
+  struct NativeTextRange range;
+  struct NativeRectangle *result_out;
+} NativeOnFirstRectForCharacterRangeArgs;
+
+typedef void (*NativeOnFirstRectForCharacterRange)(struct NativeOnFirstRectForCharacterRangeArgs args);
+
 typedef struct NativeTextInputClient {
   NativeOnInsertText on_insert_text;
   NativeOnDoCommand on_do_command;
   NativeOnUnmarkText on_unmark_text;
   NativeOnSetMarkedText on_set_marked_text;
+  NativeOnFirstRectForCharacterRange on_first_rect_for_character_range;
 } NativeTextInputClient;
 
 typedef struct NativeColor {

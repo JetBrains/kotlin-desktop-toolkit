@@ -583,7 +583,8 @@ define_class!(
             actual_range: NSRangePointer,
         ) -> NSRect {
             catch_panic(|| {
-                self.text_input_client().first_rect_for_character_range(range, actual_range)
+                let window = self.window().context("No window for view")?;
+                self.text_input_client().first_rect_for_character_range(&window, range, actual_range)
             }).unwrap_or(NSRect::ZERO)
         }
 

@@ -8,7 +8,7 @@ use objc2::{
     rc::Retained,
     runtime::{AnyObject, Sel},
 };
-use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType, NSTextInputContext};
+use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType, NSTextInputContext, NSWindow};
 use objc2_foundation::{
     NSArray, NSAttributedString, NSAttributedStringKey, NSPoint, NSRange, NSRangePointer, NSRect, NSSize, NSString, NSUInteger,
 };
@@ -24,6 +24,15 @@ use super::string::borrow_ns_string;
 pub struct TextRange {
     pub location: usize,
     pub length: usize,
+}
+
+#[repr(C)]
+#[derive(Debug, Default)]
+pub struct Rectangle {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
 }
 
 pub type OnDoCommand = extern "C" fn(command: BorrowedStrPtr) -> bool;
@@ -50,11 +59,19 @@ pub type OnSetMarkedText = extern "C" fn(args: OnSetMarkedTextArgs);
 pub type OnUnmarkText = extern "C" fn();
 
 #[repr(C)]
+pub struct OnFirstRectForCharacterRangeArgs<'a> {
+    pub range: TextRange,
+    pub result_out: &'a mut Rectangle,
+}
+pub type OnFirstRectForCharacterRange = extern "C" fn(args: OnFirstRectForCharacterRangeArgs);
+
+#[repr(C)]
 pub struct TextInputClient {
     pub on_insert_text: OnInsertText,
     pub on_do_command: OnDoCommand,
     pub on_unmark_text: OnUnmarkText,
     pub on_set_marked_text: OnSetMarkedText,
+    pub on_first_rect_for_character_range: OnFirstRectForCharacterRange,
 }
 
 const DEFAULT_NS_RANGE: NSRange = NSRange { location: 0, length: 0 };
@@ -205,14 +222,33 @@ impl TextInputClientHandler {
     }
 
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-    pub fn first_rect_for_character_range(&self, range: NSRange, actual_range: NSRangePointer) -> anyhow::Result<NSRect> {
-        let actual_range = NonNull::new(actual_range);
-        debug!(
-            "firstRectForCharacterRange: range={:?}, actual_range={:?}",
-            range,
-            actual_range.map(|r| unsafe { r.read() })
-        );
-        Ok(DEFAULT_NS_RECT) // TODO
+    pub fn first_rect_for_character_range(
+        &self,
+        window: &NSWindow,
+        range: NSRange,
+        actual_range: NSRangePointer,
+    ) -> anyhow::Result<NSRect> {
+        let actual_range = NonNull::new(actual_range).map(|r| unsafe { r.read() });
+        debug!("firstRectForCharacterRange: range={range:?}");
+
+        let mut result_out = Rectangle::default();
+        (self.client.on_first_rect_for_character_range)(OnFirstRectForCharacterRangeArgs {
+            range: TextRange {
+                location: range.location,
+                length: range.length,
+            },
+            result_out: &mut result_out,
+        });
+        let data = result_out;
+
+        let window_size = window.frame().size;
+        let view_point = NSPoint::new(data.x, window_size.height - data.y);
+        let view_rect = NSRect::new(view_point, NSSize::new(data.w, data.h));
+        let global_rect = window.convertRectToScreen(view_rect);
+
+        debug!("firstRectForCharacterRange -> result_out={data:?},\n    view_rect={view_rect:?},\n    global_rect={global_rect:?}");
+
+        Ok(global_rect)
     }
 
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
