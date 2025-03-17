@@ -1,16 +1,10 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.generated.NativeOnInsertText
-import org.jetbrains.desktop.macos.generated.NativeOnInsertTextArgs
-import org.jetbrains.desktop.macos.generated.NativeOnSetMarkedText
-import org.jetbrains.desktop.macos.generated.NativeOnUnmarkText
-import org.jetbrains.desktop.macos.generated.NativeOnSetMarkedTextArgs
-import org.jetbrains.desktop.macos.generated.NativeTextInputClient
-import org.jetbrains.desktop.macos.generated.NativeTextRange
+import org.jetbrains.desktop.macos.generated.*
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
-public class InsetTextArgs(
+public class InsertTextArgs(
     public val text: String,
 )
 
@@ -21,9 +15,11 @@ public class SetMarkedTextArgs(
 )
 
 public interface TextInputClient {
-    public fun insertText(args: InsetTextArgs)
+    public fun insertText(args: InsertTextArgs)
     public fun doCommand(command: String): Boolean
     public fun hasMarkedText(): Boolean
+
+    public fun markedRange(): TextRange?
     public fun unmarkText()
     public fun setMarkedText(args: SetMarkedTextArgs)
 }
@@ -37,7 +33,13 @@ public class TextRange(
             return TextRange(NativeTextRange.location(native), NativeTextRange.length(native))
         }
     }
+
+    internal fun modifyNative(nativeRange: MemorySegment) {
+        NativeTextRange.location(nativeRange, location)
+        NativeTextRange.length(nativeRange, length)
+    }
 }
+
 
 public data class TextInputClientHolder(var textInputClient: TextInputClient?): AutoCloseable {
     private val arena = Arena.ofShared()
@@ -46,7 +48,7 @@ public data class TextInputClientHolder(var textInputClient: TextInputClient?): 
     private fun onInsertText(s: MemorySegment) {
         ffiUpCall {
             val text = NativeOnInsertTextArgs.text(s).getUtf8String(0)
-            textInputClient?.insertText(InsetTextArgs(text))
+            textInputClient?.insertText(InsertTextArgs(text))
         }
     }
 
@@ -54,6 +56,27 @@ public data class TextInputClientHolder(var textInputClient: TextInputClient?): 
     private fun onDoCommand(command: MemorySegment): Boolean {
         return ffiUpCall(defaultResult = false) {
             textInputClient?.doCommand(command.getUtf8String(0)) ?: false
+        }
+    }
+
+    // called from native code
+    private fun onHasMarkedText(): Boolean {
+        return ffiUpCall(defaultResult = false) {
+            textInputClient?.hasMarkedText() ?: false
+        }
+    }
+
+    // called from native code
+    private fun onMarkedRange(rangeOut: MemorySegment) {
+        ffiUpCall(defaultResult = null) {
+            val result = textInputClient?.markedRange()
+            if (result != null) {
+                NativeOptionalTextRange.exists(rangeOut, true)
+                val nativeRange = NativeOptionalTextRange.range(rangeOut)
+                result.modifyNative(nativeRange)
+            } else {
+                NativeOptionalTextRange.exists(rangeOut, true)
+            }
         }
     }
 
@@ -78,6 +101,8 @@ public data class TextInputClientHolder(var textInputClient: TextInputClient?): 
         val native = NativeTextInputClient.allocate(arena)
         NativeTextInputClient.on_insert_text(native, NativeOnInsertText.allocate(this::onInsertText, arena))
         NativeTextInputClient.on_do_command(native, NativeOnInsertText.allocate(this::onDoCommand, arena))
+        NativeTextInputClient.on_has_marked_text(native, NativeOnHasMarkedText.allocate(this::onHasMarkedText, arena))
+        NativeTextInputClient.on_marked_range(native, NativeOnMarkedRange.allocate(this::onMarkedRange, arena))
         NativeTextInputClient.on_unmark_text(native, NativeOnUnmarkText.allocate(this::onUnmarkText, arena))
         NativeTextInputClient.on_set_marked_text(native, NativeOnSetMarkedText.allocate(this::onSetMarkedText, arena))
         return native

@@ -6,11 +6,11 @@ use anyhow::bail;
 use log::debug;
 use objc2::{
     rc::Retained,
-    runtime::{AnyObject, Sel},
+    runtime::{AnyObject, Bool, Sel},
 };
 use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType, NSTextInputContext};
 use objc2_foundation::{
-    NSArray, NSAttributedString, NSAttributedStringKey, NSPoint, NSRange, NSRangePointer, NSRect, NSSize, NSString, NSUInteger,
+    NSArray, NSAttributedString, NSAttributedStringKey, NSInteger, NSNotFound, NSPoint, NSRange, NSRangePointer, NSRect, NSSize, NSString, NSUInteger
 };
 
 use crate::macos::keyboard::key_codes;
@@ -24,6 +24,15 @@ use super::string::borrow_ns_string;
 pub struct TextRange {
     pub location: usize,
     pub length: usize,
+}
+
+impl From<TextRange> for NSRange {
+    fn from(value: TextRange) -> Self {
+        NSRange {
+            location: value.location,
+            length: value.length,
+        }
+    }
 }
 
 pub type OnDoCommand = extern "C" fn(command: BorrowedStrPtr) -> bool;
@@ -48,11 +57,22 @@ pub struct OnSetMarkedTextArgs<'a> {
 pub type OnSetMarkedText = extern "C" fn(args: OnSetMarkedTextArgs);
 
 pub type OnUnmarkText = extern "C" fn();
+pub type OnHasMarkedText = extern "C" fn() -> bool;
+
+#[repr(C)]
+pub struct OptionalTextRange {
+    exists: bool,
+    range: TextRange,
+}
+
+pub type OnMarkedRange = extern "C" fn(range_out: &mut OptionalTextRange);
 
 #[repr(C)]
 pub struct TextInputClient {
     pub on_insert_text: OnInsertText,
     pub on_do_command: OnDoCommand,
+    pub on_has_marked_text: OnHasMarkedText,
+    pub on_marked_range: OnMarkedRange,
     pub on_unmark_text: OnUnmarkText,
     pub on_set_marked_text: OnSetMarkedText,
 }
@@ -63,7 +83,6 @@ const DEFAULT_NS_RECT: NSRect = NSRect::new(NSPoint::new(0f64, 0f64), NSSize::ne
 pub(crate) struct TextInputClientHandler {
     pub client: TextInputClient,
     pub do_command_handled_event: Cell<bool>,
-    pub marked_text_range: Cell<Option<NSRange>>,
 }
 
 impl TextInputClientHandler {
@@ -71,7 +90,6 @@ impl TextInputClientHandler {
         TextInputClientHandler {
             client: text_input_client,
             do_command_handled_event: Cell::new(false),
-            marked_text_range: Cell::new(None),
         }
     }
 
@@ -112,14 +130,20 @@ impl TextInputClientHandler {
     }
 
     pub fn has_marked_text(&self) -> bool {
-        let ret = self.marked_range().is_some();
-        debug!("hasMarkedText: {ret}");
-        ret
+        (self.client.on_has_marked_text)()
     }
 
     pub fn marked_range(&self) -> Option<NSRange> {
-        debug!("markedRange");
-        self.marked_text_range.get()
+        let mut result = OptionalTextRange {
+            exists: false,
+            range: TextRange::default(),
+        };
+        (self.client.on_marked_range)(&mut result);
+        return if result.exists {
+            Some(result.range.into())
+        } else {
+            None
+        }
     }
 
     #[allow(clippy::unused_self)]
@@ -145,13 +169,11 @@ impl TextInputClientHandler {
                 length: replacement_range.length,
             },
         });
-        self.marked_text_range.set(Some(selected_range));
         Ok(true)
     }
 
     pub fn unmark_text(&self) -> bool {
         debug!("unmarkText");
-        self.marked_text_range.set(None);
         (self.client.on_unmark_text)();
         true
     }
@@ -198,7 +220,6 @@ impl TextInputClientHandler {
         (self.client.on_insert_text)(OnInsertTextArgs {
             text: borrow_ns_string(&text),
         });
-        self.marked_text_range.set(None);
         Ok(true)
     }
 
