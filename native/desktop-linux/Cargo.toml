@@ -7,6 +7,9 @@ edition = "2024"
 crate-type = ["rlib", "cdylib"]
 name = "desktop_linux"
 
+[[bin]]
+name = "desktop-linux-test"
+
 [lints]
 workspace = true
 
@@ -15,6 +18,7 @@ anyhow.workspace = true
 log.workspace = true
 log4rs.workspace = true
 desktop-common = { path = "../desktop-common" }
+smithay-client-toolkit = "0.19.2"
 
 [build-dependencies]
 cbindgen.workspace = true
