@@ -1,12 +1,12 @@
 package org.jetbrains.desktop.sample
 
-import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.Logger
+import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Window
 import kotlin.concurrent.thread
 

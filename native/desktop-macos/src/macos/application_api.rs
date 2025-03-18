@@ -218,7 +218,7 @@ pub unsafe extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u
             app.setApplicationIconImage(Some(&image));
         }
         Ok(())
-    })
+    });
 }
 
 define_class!(

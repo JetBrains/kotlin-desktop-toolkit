@@ -1,4 +1,4 @@
-use std::{any::Any, cell::RefCell, isize, panic::AssertUnwindSafe};
+use std::{any::Any, cell::RefCell, panic::AssertUnwindSafe};
 
 use anyhow::Context;
 use log::error;
@@ -209,6 +209,7 @@ impl LoggerConfiguration<'_> {
     }
 }
 
+#[must_use]
 pub fn panic_payload_msg(payload: &Box<dyn Any + Send + 'static>) -> String {
     if let Some(msg) = payload.downcast_ref::<&str>() {
         (*msg).to_string()

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# To use, run the following from the repository root directory:
+# cp .git-hooks/pre-push .git/hooks/pre-push
+
+set -o errexit
+set -o errtrace
+set -o pipefail
+set -o nounset
+
+./gradlew lint

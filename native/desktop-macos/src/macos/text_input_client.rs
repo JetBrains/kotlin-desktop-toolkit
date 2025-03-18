@@ -67,8 +67,8 @@ pub(crate) struct TextInputClientHandler {
 }
 
 impl TextInputClientHandler {
-    pub fn new(text_input_client: TextInputClient) -> Self {
-        TextInputClientHandler {
+    pub const fn new(text_input_client: TextInputClient) -> Self {
+        Self {
             client: text_input_client,
             do_command_handled_event: Cell::new(false),
             marked_text_range: Cell::new(None),
@@ -87,7 +87,7 @@ impl TextInputClientHandler {
     pub fn on_key_down<F>(
         &self,
         ns_event: &NSEvent,
-        input_context: &Option<Retained<NSTextInputContext>>,
+        input_context: Option<&Retained<NSTextInputContext>>,
         emit_key_down: F,
     ) -> anyhow::Result<bool>
     where
@@ -156,6 +156,7 @@ impl TextInputClientHandler {
         true
     }
 
+    #[allow(clippy::unused_self)]
     pub fn valid_attributes_for_marked_text(&self) -> Retained<NSArray<NSAttributedStringKey>> {
         debug!("validAttributesForMarkedText");
         let v = vec![
@@ -174,6 +175,7 @@ impl TextInputClientHandler {
         NSArray::from_retained_slice(&v)
     }
 
+    #[allow(clippy::unused_self)]
     pub fn attributed_substring_for_proposed_range(
         &self,
         range: NSRange,

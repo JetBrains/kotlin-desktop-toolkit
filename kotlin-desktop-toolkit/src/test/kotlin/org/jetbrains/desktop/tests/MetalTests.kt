@@ -1,8 +1,8 @@
 package org.jetbrains.desktop.tests
 
-import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.GrandCentralDispatch
+import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView

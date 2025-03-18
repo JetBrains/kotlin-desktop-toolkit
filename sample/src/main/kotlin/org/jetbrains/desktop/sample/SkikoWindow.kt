@@ -1,15 +1,15 @@
 package org.jetbrains.desktop.sample
 
-import org.jetbrains.desktop.macos.LogicalSize
-import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.DisplayLink
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.InsetTextArgs
 import org.jetbrains.desktop.macos.Logger
+import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView
+import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.ScreenId
 import org.jetbrains.desktop.macos.SetMarkedTextArgs
 import org.jetbrains.desktop.macos.TextInputClient
@@ -68,7 +68,6 @@ abstract class SkikoWindow(
             override fun setMarkedText(args: SetMarkedTextArgs) {
                 markedText = args.selectedRange
             }
-
         }
         window.minSize = LogicalSize(320.0, 240.0)
         view.isOpaque = false

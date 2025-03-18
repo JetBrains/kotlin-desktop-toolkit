@@ -9,6 +9,7 @@ import org.jetbrains.desktop.buildscripts.buildOs
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.ktlint)
 
     // Apply the application plugin to add support for building a CLI application in Java.
     application
@@ -143,4 +144,12 @@ tasks.register<JavaExec>("runSkikoSample") {
 tasks.named<Test>("test") {
     // Use JUnit Platform for unit tests.
     useJUnitPlatform()
+}
+
+task("lint") {
+    dependsOn(tasks.named("ktlintCheck"))
+}
+
+task("autofix") {
+    dependsOn(tasks.named("ktlintFormat"))
 }

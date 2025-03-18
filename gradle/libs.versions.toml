@@ -5,6 +5,7 @@
 commons-math3 = "3.6.1"
 guava = "33.4.0-jre"
 junit-jupiter-engine = "5.11.4"
+ktlint = "12.2.0"
 
 [libraries]
 commons-math3 = { module = "org.apache.commons:commons-math3", version.ref = "commons-math3" }
@@ -13,3 +14,4 @@ junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", vers
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version = "2.1.10" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }

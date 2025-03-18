@@ -340,7 +340,7 @@ public value class KeyModifiersSet internal constructor(internal val value: Long
     }
 }
 
-@Suppress("ConstPropertyName")
+@Suppress("ConstPropertyName", "ktlint:standard:property-naming")
 public object CodepointConstants {
     public const val EnterCharacter: Int = 0x0003
     public const val BackspaceCharacter: Int = 0x0008

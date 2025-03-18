@@ -7,9 +7,9 @@ fn main() {
     // Get the crate name from Cargo environment variable
 
     let artifact_name = env::var("CARGO_PKG_NAME").unwrap().replace('-', "_");
-//    let dylib_name = format!("lib{artifact_name}.so");
+    // let dylib_name = format!("lib{artifact_name}.so");
     let header_name = format!("{artifact_name}.h");
-//    println!("cargo:rustc-link-arg=-Wl,-install_name,./{dylib_name}");
+    // println!("cargo:rustc-link-arg=-Wl,-install_name,./{dylib_name}");
 
     cbindgen::generate(crate_dir)
         //.expect("Unable to generate bindings")

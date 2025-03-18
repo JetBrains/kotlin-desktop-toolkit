@@ -1,8 +1,5 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.macos.LogicalPixels
-import org.jetbrains.desktop.macos.LogicalPoint
-import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.generated.NativeEvent
 import org.jetbrains.desktop.macos.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.macos.generated.NativeKeyUpEvent
@@ -28,7 +25,8 @@ import kotlin.time.Duration.Companion.seconds
 
 @JvmInline
 public value class Timestamp(
-    private val value: Double, // Count of seconds passed since some fixed but arbitrary moment in the past
+    // Count of seconds passed since some fixed but arbitrary moment in the past
+    private val value: Double,
 ) {
     public fun toDuration(): Duration {
         return value.seconds

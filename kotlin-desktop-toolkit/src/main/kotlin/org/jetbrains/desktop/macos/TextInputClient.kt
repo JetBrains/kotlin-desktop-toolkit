@@ -3,16 +3,14 @@ package org.jetbrains.desktop.macos
 import org.jetbrains.desktop.macos.generated.NativeOnInsertText
 import org.jetbrains.desktop.macos.generated.NativeOnInsertTextArgs
 import org.jetbrains.desktop.macos.generated.NativeOnSetMarkedText
-import org.jetbrains.desktop.macos.generated.NativeOnUnmarkText
 import org.jetbrains.desktop.macos.generated.NativeOnSetMarkedTextArgs
+import org.jetbrains.desktop.macos.generated.NativeOnUnmarkText
 import org.jetbrains.desktop.macos.generated.NativeTextInputClient
 import org.jetbrains.desktop.macos.generated.NativeTextRange
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
-public class InsetTextArgs(
-    public val text: String,
-)
+public class InsetTextArgs(public val text: String)
 
 public class SetMarkedTextArgs(
     public val text: String,
@@ -39,7 +37,7 @@ public class TextRange(
     }
 }
 
-public data class TextInputClientHolder(var textInputClient: TextInputClient?): AutoCloseable {
+public data class TextInputClientHolder(var textInputClient: TextInputClient?) : AutoCloseable {
     private val arena = Arena.ofShared()
 
     // called from native code
