@@ -91,11 +91,15 @@ impl KeyboardHandler for ApplicationState {
 
     fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
         if let Some(surface_id) = self.key_surface.as_ref() {
-            self.windows.get_mut(surface_id).unwrap().press_key(event);
+            self.windows.get_mut(surface_id).unwrap().press_key(&event);
         }
     }
 
-    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, _: KeyEvent) {}
+    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
+        if let Some(surface_id) = self.key_surface.as_ref() {
+            self.windows.get_mut(surface_id).unwrap().release_key(&event);
+        }
+    }
 
     fn update_modifiers(
         &mut self,
@@ -231,7 +235,7 @@ impl WindowHandler for ApplicationState {
         if let Some(window_data) = self.get_window_data(window.wl_surface()) {
             window_data
                 .window
-                .configure(conn, qh, window_data.shm, window, configure, window_data.themed_pointer);
+                .configure(conn, qh, window_data.shm, window, &configure, window_data.themed_pointer);
         }
     }
 }
@@ -243,7 +247,7 @@ delegate_subcompositor!(ApplicationState);
 impl PointerHandler for ApplicationState {
     fn pointer_frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
         for event in events {
-            //debug!("pointer event with surface_id={}", event.surface.id());
+            //            debug!("pointer event with surface_id={}", event.surface.id());
             for window in self.windows.values_mut() {
                 window.pointer_frame(pointer, event);
             }

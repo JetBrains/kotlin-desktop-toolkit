@@ -14,7 +14,7 @@ impl SimpleWindow {
         self.keyboard_focus = false;
     }
 
-    pub fn press_key(&mut self, event: KeyEvent) {
+    pub fn press_key(&mut self, event: &KeyEvent) {
         if event.keysym == Keysym::N {
             // Cycle through cursor icons.
             self.window_cursor_icon_idx = (self.window_cursor_icon_idx + 1) % CURSORS.len();
@@ -23,7 +23,7 @@ impl SimpleWindow {
         }
     }
 
-    pub fn release_key(&mut self, _: u32, _: KeyEvent) {}
+    pub fn release_key(&mut self, _event: &KeyEvent) {}
 
     pub fn update_modifiers(&mut self, _: Modifiers, _layout: u32) {}
 }
