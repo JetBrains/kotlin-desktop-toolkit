@@ -22,7 +22,7 @@ abstract class DownloadJExtractTask @Inject constructor(
     private val archiveOperations: ArchiveOperations,
 ) : DefaultTask() {
     @get:Input
-    val platform = providerFactory.provider { buildPlatform() }
+    val platform = providerFactory.provider { jextractPlatform(currentPlatform()) }
 
     @get:Input
     val slug = objectFactory.property<String>()
@@ -78,17 +78,15 @@ private fun downloadJExtract(platform: String, slug: String, jextractDirectory: 
 private fun jextractUrl(platform: String, slug: String): String =
     "https://download.java.net/java/early_access/jextract/${slug}_${platform}_bin.tar.gz"
 
-private fun buildPlatform(): String = jextractPlatform(buildOs(), buildArch())
-
-private fun jextractPlatform(os: Os, arch: Arch): String {
-    val jextractOs = when (os) {
+private fun jextractPlatform(platform: Platform): String {
+    val jextractOs = when (platform.os) {
         Os.WINDOWS -> "windows"
         Os.LINUX -> "linux"
         Os.MACOS -> "macos"
     }
-    val jextractArch = when (arch) {
-        Arch.X86_64 -> "x64"
-        Arch.AARCH64 -> "aarch64"
+    val jextractArch = when (platform.arch) {
+        Arch.x86_64 -> "x64"
+        Arch.aarch64 -> "aarch64"
     }
     return "$jextractOs-$jextractArch"
 }

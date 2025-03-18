@@ -7,6 +7,7 @@ import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Nested
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
@@ -16,7 +17,6 @@ import java.io.ByteArrayOutputStream
 import java.nio.file.Path
 import javax.inject.Inject
 import kotlin.io.path.copyTo
-import kotlin.io.path.nameWithoutExtension
 
 abstract class CompileRustTask @Inject constructor(
     objectFactory: ObjectFactory,
@@ -30,15 +30,15 @@ abstract class CompileRustTask @Inject constructor(
     @get:Input
     val crateName = objectFactory.property<String>()
 
-    @get:Input
-    val rustTarget = objectFactory.property<String>().convention(buildPlatformRustTarget())
+    @get:Nested
+    val rustTarget = objectFactory.property<Platform>()
 
     @get:Input
     val rustProfile = objectFactory.property<String>()
 
     @Internal
     val outputDirectory =
-        projectLayout.buildDirectory.dir(providerFactory.provider { "target/${rustTarget.get()}/${rustProfile.get()}" })
+        projectLayout.buildDirectory.dir(providerFactory.provider { "target/${buildPlatformRustTarget(rustTarget.get())}/${rustProfile.get()}" })
 
     @get:OutputFile
     val headerFile = outputDirectory.map { outDir -> outDir.file("headers/${crateName.get().replace("-", "_")}.h") }
@@ -48,14 +48,13 @@ abstract class CompileRustTask @Inject constructor(
 
     @get:OutputFile
     val libraryFile = providerFactory.provider {
-        val dir = libraryDirectory.get().asFile
+        val dir = outputDirectory.get().asFile
         val target = rustTarget.get()
-        val name = headerFile.get().asFile.toPath().nameWithoutExtension
-        when {
-            target.contains("apple") -> dir.resolve("lib$name.dylib")
-            target.contains("linux") -> dir.resolve("$name.so") // FIXME: verify
-            target.contains("windows") -> dir.resolve("lib_$name.dll") // FIXME: verify
-            else -> error("unsupported target '$target'")
+        val name = crateName.get().replace('-', '_')
+        when (target.os) {
+            Os.LINUX -> dir.resolve("lib$name.so")
+            Os.MACOS -> dir.resolve("lib$name.dylib")
+            Os.WINDOWS -> dir.resolve("$name.dll")
         }
     }
 
@@ -64,7 +63,7 @@ abstract class CompileRustTask @Inject constructor(
         execOperations.compileRust(
             nativeDirectory.get().asFile.toPath(),
             crateName.get(),
-            rustTarget.get(),
+            buildPlatformRustTarget(rustTarget.get()),
             rustProfile.get(),
             headerFile.get().asFile.toPath(),
             libraryFile.get().toPath(),
@@ -78,7 +77,7 @@ abstract class CompileRustTask @Inject constructor(
 internal fun ExecOperations.findCommand(command: String): Path? {
     val output = ByteArrayOutputStream()
     val result = exec {
-        val cmd = when (buildOs()) {
+        val cmd = when (currentOs()) {
             Os.MACOS, Os.LINUX -> listOf("/bin/sh", "-c", "command -v $command")
             Os.WINDOWS -> listOf("cmd.exe", "/c", "where", command)
         }
@@ -133,15 +132,15 @@ private fun ExecOperations.compileRust(
         .copyTo(libraryFile, overwrite = true)
 }
 
-private fun buildPlatformRustTarget(): String {
-    val osPart = when (buildOs()) {
-        Os.WINDOWS -> "windows-msvc"
+fun buildPlatformRustTarget(platform: Platform): String {
+    val osPart = when (platform.os) {
+        Os.WINDOWS -> "pc-windows-msvc"
         Os.MACOS -> "apple-darwin"
         Os.LINUX -> "unknown-linux-gnu"
     }
-    val archPart = when (buildArch()) {
-        Arch.AARCH64 -> "aarch64"
-        Arch.X86_64 -> "x86_64"
+    val archPart = when (platform.arch) {
+        Arch.aarch64 -> "aarch64"
+        Arch.x86_64 -> "x86_64"
     }
     return "$archPart-$osPart"
 }

@@ -3,8 +3,8 @@ import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.Os
-import org.jetbrains.desktop.buildscripts.buildArch
-import org.jetbrains.desktop.buildscripts.buildOs
+import org.jetbrains.desktop.buildscripts.currentArch
+import org.jetbrains.desktop.buildscripts.currentOs
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -21,15 +21,15 @@ repositories {
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
 
-val targetOs = when (buildOs()) {
+val targetOs = when (currentOs()) {
     Os.LINUX -> "linux"
     Os.MACOS -> "macos"
     Os.WINDOWS -> "windows"
 }
 
-val targetArch = when (buildArch()) {
-    Arch.AARCH64 -> "arm64"
-    Arch.X86_64 -> "x64"
+val targetArch = when (currentArch()) {
+    Arch.aarch64 -> "arm64"
+    Arch.x86_64 -> "x64"
 }
 
 val skikoVersion = "0.8.18"

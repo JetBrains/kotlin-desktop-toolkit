@@ -10,6 +10,7 @@ import org.jetbrains.desktop.buildscripts.GenerateJavaBindingsTask
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
+import org.jetbrains.desktop.buildscripts.currentPlatform
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -71,6 +72,7 @@ tasks.test {
 val compileDebugDesktopToolkitTask = tasks.register<CompileRustTask>("compileNative") {
     crateName = "desktop-macos"
     rustProfile = "dev"
+    rustTarget = currentPlatform()
     nativeDirectory = layout.projectDirectory.dir("../native")
 }
 
@@ -147,7 +149,7 @@ tasks.named<Jar>("sourcesJar") {
 // TODO: decide if this is needed, depending on how we package the native code
 sourceSets.main {
     java.srcDirs(generateBindingsTask.flatMap { it.generatedSourcesDirectory })
-    resources.srcDirs(compileDebugDesktopToolkitTask.map { it.libraryDirectory }) // parentFile because we need a directory
+    resources.srcDirs(compileDebugDesktopToolkitTask.map { it.libraryDirectory })
 }
 
 tasks.processResources {
