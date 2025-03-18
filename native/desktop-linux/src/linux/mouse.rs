@@ -41,7 +41,9 @@ impl SimpleWindow {
             }
             Press { button, serial, time } | Release { button, serial, time } => {
                 let pressed = matches!(event.kind, Press { .. });
-                if &event.surface != self.window.wl_surface() {
+                if &event.surface == self.window.wl_surface() {
+                    // TODO: send event
+                } else {
                     let click = match button {
                         0x110 => FrameClick::Normal,
                         0x111 => FrameClick::Alternate,
@@ -56,8 +58,6 @@ impl SimpleWindow {
                         debug!("Frame click action {action:?}");
                         self.frame_action(pointer, serial, action);
                     }
-                } else if pressed {
-                    self.shift = self.shift.xor(Some(0));
                 }
             }
             Axis { .. } => {}
