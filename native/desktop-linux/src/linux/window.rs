@@ -1,6 +1,7 @@
-use std::sync::Arc;
 use std::num::NonZeroU32;
+use std::sync::Arc;
 
+use log::debug;
 use smithay_client_toolkit::reexports::csd_frame::{DecorationsFrame, FrameAction, ResizeEdge};
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
 use smithay_client_toolkit::{
@@ -163,6 +164,11 @@ impl SimpleWindow {
 
     pub fn draw(&mut self, conn: &Connection, qh: &QueueHandle<ApplicationState>, themed_pointer: Option<&mut ThemedPointer>) {
         if self.set_cursor {
+            debug!(
+                "Updating cursor to {} for {}",
+                self.window_cursor_icon_idx,
+                self.window.wl_surface().id()
+            );
             let cursor_icon = self.decorations_cursor.unwrap_or(CURSORS[self.window_cursor_icon_idx]);
             themed_pointer.unwrap().set_cursor(conn, cursor_icon).unwrap();
             self.set_cursor = false;
