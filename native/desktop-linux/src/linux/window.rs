@@ -59,7 +59,7 @@ impl SimpleWindow {
         qh: &QueueHandle<ApplicationState>,
         shm: &Shm,
         window: &Window,
-        configure: WindowConfigure,
+        configure: &WindowConfigure,
         themed_pointer: Option<&mut ThemedPointer>,
     ) {
         self.buffer = None;
@@ -201,7 +201,7 @@ impl SimpleWindow {
         // Draw to the window:
         {
             for (i, pixel) in canvas.chunks_exact_mut(4).enumerate() {
-                let i = i as u32;
+                let i = u32::try_from(i).unwrap();
                 // Borders at 1px offset from sides
                 if (i % width == 1)
                     || (i % width == (width - 2))
@@ -210,14 +210,12 @@ impl SimpleWindow {
                 {
                     pixel[0] = 0;
                     pixel[1] = 0;
-                    pixel[2] = 255;
-                    pixel[3] = 255;
                 } else {
                     pixel[0] = 255;
                     pixel[1] = 255;
-                    pixel[2] = 255;
-                    pixel[3] = 255;
                 }
+                pixel[2] = 255;
+                pixel[3] = 255;
             }
         }
 
