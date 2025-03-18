@@ -127,7 +127,6 @@ impl Application {
             pool,
             width,
             height,
-            shift: None,
             buffer: None,
             window,
             window_frame: None,

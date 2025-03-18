@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::{convert::TryInto, num::NonZeroU32};
+use std::num::NonZeroU32;
 
 use smithay_client_toolkit::reexports::csd_frame::{DecorationsFrame, FrameAction, ResizeEdge};
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
@@ -38,7 +38,6 @@ pub struct SimpleWindow {
     pub pool: SlotPool,
     pub width: NonZeroU32,
     pub height: NonZeroU32,
-    pub shift: Option<u32>,
     pub buffer: Option<Buffer>,
     pub window: Window,
     pub window_frame: Option<FallbackFrame<ApplicationState>>,
@@ -196,23 +195,24 @@ impl SimpleWindow {
 
         // Draw to the window:
         {
-            let shift = self.shift.unwrap_or(0);
-            canvas.chunks_exact_mut(4).enumerate().for_each(|(index, chunk)| {
-                let x = ((index + shift as usize) % width as usize) as u32;
-                let y = (index / width as usize) as u32;
-
-                let a = 0xFF;
-                let r = u32::min(((width - x) * 0xFF) / width, ((height - y) * 0xFF) / height);
-                let g = u32::min((x * 0xFF) / width, ((height - y) * 0xFF) / height);
-                let b = u32::min(((width - x) * 0xFF) / width, (y * 0xFF) / height);
-                let color = (a << 24) + (r << 16) + (g << 8) + b;
-
-                let array: &mut [u8; 4] = chunk.try_into().unwrap();
-                *array = color.to_le_bytes();
-            });
-
-            if let Some(shift) = &mut self.shift {
-                *shift = (*shift + 1) % width;
+            for (i, pixel) in canvas.chunks_exact_mut(4).enumerate() {
+                let i = i as u32;
+                // Borders at 1px offset from sides
+                if (i % width == 1)
+                    || (i % width == (width - 2))
+                    || ((i >= width) && (i < width * 2))
+                    || ((i >= width * (height - 2)) && (i < width * (height - 1)))
+                {
+                    pixel[0] = 0;
+                    pixel[1] = 0;
+                    pixel[2] = 255;
+                    pixel[3] = 255;
+                } else {
+                    pixel[0] = 255;
+                    pixel[1] = 255;
+                    pixel[2] = 255;
+                    pixel[3] = 255;
+                }
             }
         }
 

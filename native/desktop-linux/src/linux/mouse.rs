@@ -56,8 +56,8 @@ impl SimpleWindow {
                         debug!("Frame click action {action:?}");
                         self.frame_action(pointer, serial, action);
                     }
-                } else if pressed {
-                    self.shift = self.shift.xor(Some(0));
+                } else {
+                    // TODO: send event
                 }
             }
             Axis { .. } => {}

@@ -57,13 +57,11 @@ impl ApplicationState {
     }
 
     fn get_window_data(&mut self, surface: &WlSurface) -> Option<WindowData> {
-        self.windows.get_mut(&surface.id()).map(|window|
-            WindowData {
-                window,
-                shm: &self.shm_state,
-                themed_pointer: self.themed_pointer.as_mut(),
-            }
-        )
+        self.windows.get_mut(&surface.id()).map(|window| WindowData {
+            window,
+            shm: &self.shm_state,
+            themed_pointer: self.themed_pointer.as_mut(),
+        })
     }
 }
 
