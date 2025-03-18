@@ -3,7 +3,6 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use anyhow::Result;
-use desktop_common::logger::ffi_boundary;
 use log::debug;
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::{Connection, globals::registry_queue_init};
@@ -48,7 +47,7 @@ impl Application {
     }
 
     fn new_state(globals: &GlobalList, qh: &QueueHandle<ApplicationState>) -> ApplicationState {
-        let registry_state = RegistryState::new(&globals);
+        let registry_state = RegistryState::new(globals);
         let seat_state = SeatState::new(globals, qh);
         let output_state = OutputState::new(globals, qh);
         let compositor_state = CompositorState::bind(globals, qh).expect("wl_compositor not available");
@@ -137,12 +136,4 @@ impl Application {
         };
         self.state.windows.insert(surface_id, w);
     }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn application_run_event_loop() {
-    ffi_boundary("application_run_event_loop", || {
-        todo!();
-        Ok(())
-    });
 }

@@ -59,7 +59,7 @@ impl SimpleWindow {
         qh: &QueueHandle<ApplicationState>,
         shm: &Shm,
         window: &Window,
-        configure: WindowConfigure,
+        configure: &WindowConfigure,
         themed_pointer: Option<&mut ThemedPointer>,
     ) {
         self.buffer = None;
@@ -112,7 +112,7 @@ impl SimpleWindow {
         } else {
             // Hide the frame, if any.
             if let Some(frame) = self.window_frame.as_mut() {
-                frame.set_hidden(true)
+                frame.set_hidden(true);
             }
             let width = configure.new_size.0.unwrap_or(self.width);
             let height = configure.new_size.1.unwrap_or(self.height);
@@ -185,24 +185,23 @@ impl SimpleWindow {
                 .0
         });
 
-        let canvas = match self.pool.canvas(buffer) {
-            Some(canvas) => canvas,
-            None => {
-                // This should be rare, but if the compositor has not released the previous
-                // buffer, we need double-buffering.
-                let (second_buffer, canvas) = self
-                    .pool
-                    .create_buffer(width as i32, height as i32, stride, wl_shm::Format::Argb8888)
-                    .expect("create buffer");
-                *buffer = second_buffer;
-                canvas
-            }
+        let canvas = if let Some(canvas) = self.pool.canvas(buffer) {
+            canvas
+        } else {
+            // This should be rare, but if the compositor has not released the previous
+            // buffer, we need double-buffering.
+            let (second_buffer, canvas) = self
+                .pool
+                .create_buffer(width as i32, height as i32, stride, wl_shm::Format::Argb8888)
+                .expect("create buffer");
+            *buffer = second_buffer;
+            canvas
         };
 
         // Draw to the window:
         {
             for (i, pixel) in canvas.chunks_exact_mut(4).enumerate() {
-                let i = i as u32;
+                let i = u32::try_from(i).unwrap();
                 // Borders at 1px offset from sides
                 if (i % width == 1)
                     || (i % width == (width - 2))
@@ -211,14 +210,12 @@ impl SimpleWindow {
                 {
                     pixel[0] = 0;
                     pixel[1] = 0;
-                    pixel[2] = 255;
-                    pixel[3] = 255;
                 } else {
                     pixel[0] = 255;
                     pixel[1] = 255;
-                    pixel[2] = 255;
-                    pixel[3] = 255;
                 }
+                pixel[2] = 255;
+                pixel[3] = 255;
             }
         }
 

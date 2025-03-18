@@ -77,13 +77,13 @@ impl KeyboardHandler for ApplicationState {
         keysyms: &[Keysym],
     ) {
         self.key_surface = Some(surface.id());
-        if let Some(window) = self.get_window(&surface) {
+        if let Some(window) = self.get_window(surface) {
             window.keyboard_enter(keysyms);
         }
     }
 
     fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, surface: &WlSurface, _: u32) {
-        if let Some(window) = self.get_window(&surface) {
+        if let Some(window) = self.get_window(surface) {
             window.keyboard_leave();
         }
         self.key_surface = None;
@@ -91,11 +91,15 @@ impl KeyboardHandler for ApplicationState {
 
     fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
         if let Some(surface_id) = self.key_surface.as_ref() {
-            self.windows.get_mut(&surface_id).unwrap().press_key(event);
+            self.windows.get_mut(surface_id).unwrap().press_key(&event);
         }
     }
 
-    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, _: KeyEvent) {}
+    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
+        if let Some(surface_id) = self.key_surface.as_ref() {
+            self.windows.get_mut(surface_id).unwrap().release_key(&event);
+        }
+    }
 
     fn update_modifiers(
         &mut self,
@@ -204,7 +208,7 @@ impl CompositorHandler for ApplicationState {
     }
 
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, _time: u32) {
-        if let Some(window_data) = self.get_window_data(&surface) {
+        if let Some(window_data) = self.get_window_data(surface) {
             window_data.window.draw(conn, qh, window_data.themed_pointer);
         }
     }
@@ -222,16 +226,16 @@ delegate_compositor!(ApplicationState);
 
 impl WindowHandler for ApplicationState {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &Window) {
-        if let Some(window) = self.get_window(&window.wl_surface()) {
+        if let Some(window) = self.get_window(window.wl_surface()) {
             window.request_close();
         }
     }
 
     fn configure(&mut self, conn: &Connection, qh: &QueueHandle<Self>, window: &Window, configure: WindowConfigure, _serial: u32) {
-        if let Some(window_data) = self.get_window_data(&window.wl_surface()) {
+        if let Some(window_data) = self.get_window_data(window.wl_surface()) {
             window_data
                 .window
-                .configure(conn, qh, window_data.shm, window, configure, window_data.themed_pointer);
+                .configure(conn, qh, window_data.shm, window, &configure, window_data.themed_pointer);
         }
     }
 }

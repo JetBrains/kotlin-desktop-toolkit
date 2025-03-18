@@ -2,5 +2,3 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-
-void application_run_event_loop(void);
