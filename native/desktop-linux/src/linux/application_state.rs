@@ -243,7 +243,7 @@ delegate_subcompositor!(ApplicationState);
 impl PointerHandler for ApplicationState {
     fn pointer_frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
         for event in events {
-            debug!("pointer event with surface_id={}", event.surface.id());
+            //debug!("pointer event with surface_id={}", event.surface.id());
             for window in self.windows.values_mut() {
                 window.pointer_frame(pointer, event);
             }
