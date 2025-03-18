@@ -16,7 +16,9 @@ impl SimpleWindow {
         let (x, y) = event.position;
         match event.kind {
             Enter { .. } => {
-                self.set_cursor = true;
+                if &event.surface == self.window.wl_surface() {
+                    self.set_cursor = true;
+                }
                 self.decorations_cursor = self
                     .window_frame
                     .as_mut()
@@ -41,6 +43,7 @@ impl SimpleWindow {
             }
             Press { button, serial, time } | Release { button, serial, time } => {
                 let pressed = matches!(event.kind, Press { .. });
+                debug!("Click action for {}", event.surface.id());
                 if &event.surface == self.window.wl_surface() {
                     // TODO: send event
                 } else {
