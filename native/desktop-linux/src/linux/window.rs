@@ -2,6 +2,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use log::debug;
+use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::reexports::csd_frame::{DecorationsFrame, FrameAction, ResizeEdge};
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
 use smithay_client_toolkit::{
@@ -25,6 +26,7 @@ use smithay_client_toolkit::{
 
 use crate::linux::application_state::ApplicationState;
 use crate::linux::cursors::CURSORS;
+use crate::linux::events::LogicalSize;
 
 use smithay_client_toolkit::{
     seat::pointer::{CursorIcon, ThemedPointer},
@@ -32,7 +34,10 @@ use smithay_client_toolkit::{
     subcompositor::SubcompositorState,
 };
 
+use super::events::{Event, EventHandler};
+
 pub struct SimpleWindow {
+    pub event_handler: EventHandler,
     pub subcompositor_state: Arc<SubcompositorState>,
     pub close: bool,
     pub first_configure: bool,
@@ -50,6 +55,7 @@ pub struct SimpleWindow {
 
 impl SimpleWindow {
     pub fn request_close(&mut self) {
+        (self.event_handler)(&Event::new_window_close_request_event());
         self.close = true;
     }
 
@@ -125,6 +131,11 @@ impl SimpleWindow {
         // Update new width and height;
         self.width = width;
         self.height = height;
+
+        (self.event_handler)(&Event::new_window_resize_event(LogicalSize {
+            width: width.get().into(),
+            height: height.get().into(),
+        }));
 
         // Initiate the first draw.
         if self.first_configure {
@@ -235,5 +246,9 @@ impl SimpleWindow {
         // Attach and commit to present.
         buffer.attach_to(self.window.wl_surface()).expect("buffer attach");
         self.window.wl_surface().commit();
+    }
+
+    pub fn surface_enter(&mut self, output: &WlOutput) {
+        (self.event_handler)(&Event::new_window_screen_change_event(output));
     }
 }

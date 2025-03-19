@@ -8,16 +8,19 @@ use smithay_client_toolkit::{
     shell::WaylandSurface,
 };
 
+use crate::linux::events::Event;
+
 use super::window::SimpleWindow;
 
 impl SimpleWindow {
-    pub fn pointer_frame(&mut self, pointer: &wl_pointer::WlPointer, event: &PointerEvent) {
+    pub fn pointer_event(&mut self, pointer: &wl_pointer::WlPointer, event: &PointerEvent) {
         use PointerEventKind::{Axis, Enter, Leave, Motion, Press, Release};
         let (x, y) = event.position;
         match event.kind {
             Enter { .. } => {
                 if &event.surface == self.window.wl_surface() {
                     self.set_cursor = true;
+                    (self.event_handler)(&Event::new_mouse_enter_event(event));
                 }
                 self.decorations_cursor = self
                     .window_frame
@@ -25,13 +28,16 @@ impl SimpleWindow {
                     .and_then(|frame| frame.click_point_moved(Duration::ZERO, &event.surface.id(), x, y));
             }
             Leave { .. } => {
-                if &event.surface != self.window.wl_surface() {
-                    if let Some(window_frame) = self.window_frame.as_mut() {
-                        window_frame.click_point_left();
-                    }
+                if &event.surface == self.window.wl_surface() {
+                    (self.event_handler)(&Event::new_mouse_exit_event(event));
+                } else if let Some(window_frame) = self.window_frame.as_mut() {
+                    window_frame.click_point_left();
                 }
             }
             Motion { time } => {
+                if &event.surface == self.window.wl_surface() {
+                    (self.event_handler)(&Event::new_mouse_move_event(event, time));
+                }
                 if let Some(new_cursor) = self
                     .window_frame
                     .as_mut()
@@ -45,6 +51,11 @@ impl SimpleWindow {
                 let pressed = matches!(event.kind, Press { .. });
                 debug!("Click action for {}", event.surface.id());
                 if &event.surface == self.window.wl_surface() {
+                    if pressed {
+                        (self.event_handler)(&Event::new_mouse_down_event(event, button, time));
+                    } else {
+                        (self.event_handler)(&Event::new_mouse_up_event(event, button, time));
+                    }
                     // TODO: send event
                 } else {
                     let click = match button {
@@ -63,7 +74,14 @@ impl SimpleWindow {
                     }
                 }
             }
-            Axis { .. } => {}
+            Axis {
+                time,
+                horizontal,
+                vertical,
+                ..
+            } => {
+                (self.event_handler)(&Event::new_scroll_wheel_event(event, time, horizontal, vertical));
+            }
         }
     }
 }

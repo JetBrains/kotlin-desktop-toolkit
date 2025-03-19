@@ -25,6 +25,19 @@ use smithay_client_toolkit::{
 use super::events::EventHandler;
 use super::{application_state::ApplicationState, window::SimpleWindow};
 
+#[repr(C)]
+#[derive(Debug)]
+pub struct ApplicationConfig {}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct ApplicationCallbacks {
+    // Returns true if application should terminate, otherwise termination will be canceled
+    pub on_should_terminate: extern "C" fn() -> bool,
+    pub on_will_terminate: extern "C" fn(),
+    pub on_display_configuration_change: extern "C" fn(),
+}
+
 pub struct Application {
     globals: GlobalList,
     event_queue: EventQueue<ApplicationState>,
@@ -34,12 +47,12 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn new() -> Result<Self> {
+    pub fn new(callbacks: ApplicationCallbacks) -> Result<Self> {
         let conn = Connection::connect_to_env()?;
 
         let (globals, event_queue) = registry_queue_init(&conn)?;
         let qh: QueueHandle<ApplicationState> = event_queue.handle();
-        let state = Self::new_state(&globals, &qh);
+        let state = Self::new_state(&globals, &qh, callbacks);
         Ok(Self {
             globals,
             event_queue,
@@ -49,7 +62,7 @@ impl Application {
         })
     }
 
-    fn new_state(globals: &GlobalList, qh: &QueueHandle<ApplicationState>) -> ApplicationState {
+    fn new_state(globals: &GlobalList, qh: &QueueHandle<ApplicationState>, callbacks: ApplicationCallbacks) -> ApplicationState {
         let registry_state = RegistryState::new(globals);
         let seat_state = SeatState::new(globals, qh);
         let output_state = OutputState::new(globals, qh);
@@ -57,6 +70,7 @@ impl Application {
         let shm_state = Shm::bind(globals, qh).expect("wl_shm not available");
         let xdg_shell_state = XdgShell::bind(globals, qh).expect("xdg shell not available");
         ApplicationState {
+            callbacks,
             registry_state,
             seat_state,
             output_state,
@@ -87,14 +101,15 @@ impl Application {
                 }
             }
 
-            if self.exit {
+            if self.exit && (self.state.callbacks.on_should_terminate)() {
                 debug!("Exiting");
+                (self.state.callbacks.on_will_terminate)();
                 break;
             }
         }
     }
 
-    pub fn new_window(&mut self) {
+    pub fn new_window(&mut self, event_handler: EventHandler) {
         let state = &self.state;
         let width = NonZeroU32::new(256).unwrap();
         let height = NonZeroU32::new(256).unwrap();
@@ -123,6 +138,7 @@ impl Application {
 
         debug!("Created new window with surface_id={surface_id}");
         let w = SimpleWindow {
+            event_handler,
             subcompositor_state: Arc::new(subcompositor_state),
             close: false,
             first_configure: true,
@@ -141,55 +157,42 @@ impl Application {
     }
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct ApplicationConfig {}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct ApplicationCallbacks {
-    // returns true if application should terminate,
-    // otherwise termination will be canceled
-    pub on_should_terminate: extern "C" fn() -> bool,
-    pub on_will_terminate: extern "C" fn(),
-    pub on_display_configuration_change: extern "C" fn(),
-    pub on_application_did_finish_launching: extern "C" fn(),
-    pub event_handler: EventHandler,
-}
-
 pub type AppPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_init(_config: &ApplicationConfig, _callbacks: ApplicationCallbacks) -> AppPtr<'static> {
+pub extern "C" fn application_init(_config: &ApplicationConfig, callbacks: ApplicationCallbacks) -> AppPtr<'static> {
     let app = ffi_boundary("application_init", || {
         debug!("Application Init");
         // todo
-        Ok(Some(Application::new()?))
+        Ok(Some(Application::new(callbacks)?))
     });
     AppPtr::from_value(app)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_run_event_loop(app_ptr: AppPtr) {
+pub extern "C" fn application_run_event_loop(mut app_ptr: AppPtr) {
     ffi_boundary("application_run_event_loop", || {
-        // todo
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        app.run();
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_stop_event_loop() {
+pub extern "C" fn application_stop_event_loop(mut app_ptr: AppPtr) {
     ffi_boundary("application_stop_event_loop", || {
         debug!("Stop event loop");
-        // todo
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        app.exit = true;
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_shutdown() {
+pub extern "C" fn application_shutdown(app_ptr: AppPtr) {
     ffi_boundary("application_shutdown", || {
-        // todo
+        let mut app = unsafe { app_ptr.to_owned::<Application>() };
+        app.exit = true;
         Ok(())
     });
 }
