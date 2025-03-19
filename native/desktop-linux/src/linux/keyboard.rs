@@ -27,3 +27,17 @@ impl SimpleWindow {
 
     pub fn update_modifiers(&mut self, _: Modifiers, _layout: u32) {}
 }
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct KeyModifiersSet(pub usize);
+
+impl std::fmt::Debug for KeyModifiersSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "KeyModifiersSet({:032b})", self.0)
+    }
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct KeyCode(pub u16);
