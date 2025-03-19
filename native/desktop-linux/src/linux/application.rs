@@ -3,6 +3,8 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use anyhow::Result;
+use desktop_common::ffi_utils::RustAllocatedRawPtr;
+use desktop_common::logger::ffi_boundary;
 use log::debug;
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::{Connection, globals::registry_queue_init};
@@ -20,6 +22,7 @@ use smithay_client_toolkit::{
     subcompositor::SubcompositorState,
 };
 
+use super::events::EventHandler;
 use super::{application_state::ApplicationState, window::SimpleWindow};
 
 pub struct Application {
@@ -136,4 +139,57 @@ impl Application {
         };
         self.state.windows.insert(surface_id, w);
     }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct ApplicationConfig {}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct ApplicationCallbacks {
+    // returns true if application should terminate,
+    // otherwise termination will be canceled
+    pub on_should_terminate: extern "C" fn() -> bool,
+    pub on_will_terminate: extern "C" fn(),
+    pub on_display_configuration_change: extern "C" fn(),
+    pub on_application_did_finish_launching: extern "C" fn(),
+    pub event_handler: EventHandler,
+}
+
+pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_init(_config: &ApplicationConfig, _callbacks: ApplicationCallbacks) -> AppPtr<'static> {
+    let app = ffi_boundary("application_init", || {
+        debug!("Application Init");
+        // todo
+        Ok(Some(Application::new()?))
+    });
+    AppPtr::from_value(app)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_run_event_loop(_app_ptr: AppPtr) {
+    ffi_boundary("application_run_event_loop", || {
+        // todo
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_stop_event_loop() {
+    ffi_boundary("application_stop_event_loop", || {
+        debug!("Stop event loop");
+        // todo
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_shutdown() {
+    ffi_boundary("application_shutdown", || {
+        // todo
+        Ok(())
+    });
 }

@@ -67,3 +67,11 @@ impl SimpleWindow {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct MouseButton(pub u32);
+
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct MouseButtonsSet(pub u32);
