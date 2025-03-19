@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub type PhysicalPixels = f64;
 pub type LogicalPixels = f64;
 
