@@ -173,11 +173,20 @@ tasks.named<Jar>("sourcesJar") {
     dependsOn(generateBindingsTask)
 }
 
+val generateNativeResources = tasks.register<Sync>("generateResourcesDir") {
+    destinationDir = layout.buildDirectory.dir("native").get().asFile
+
+    compileMacOSDesktopToolkitTaskByTarget.forEach { (platform, task) ->
+        from(task.map { it.libraryFile }) {
+            into("")
+        }
+    }
+}
+
 // TODO: decide if this is needed, depending on how we package the native code
 sourceSets.main {
-    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(currentPlatform(), "dev")]!!
     java.srcDirs(generateBindingsTask.flatMap { it.generatedSourcesDirectory })
-    resources.srcDirs(buildNativeTask.map { it.libraryDirectory })
+    resources.srcDirs(generateNativeResources.map { it.destinationDir })
 }
 
 tasks.processResources {

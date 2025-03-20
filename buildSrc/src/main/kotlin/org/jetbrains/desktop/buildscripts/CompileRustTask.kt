@@ -38,23 +38,50 @@ abstract class CompileRustTask @Inject constructor(
 
     @Internal
     val outputDirectory =
-        projectLayout.buildDirectory.dir(providerFactory.provider { "target/${buildPlatformRustTarget(rustTarget.get())}/${rustProfile.get()}" })
+        projectLayout.buildDirectory.dir(providerFactory.provider {
+            inCrateArtifactsPath(rustTarget.get(), rustProfile.get())
+        })
 
-    @get:OutputFile
-    val headerFile = outputDirectory.map { outDir -> outDir.file("headers/${crateName.get().replace("-", "_")}.h") }
-
-    @get:OutputDirectory
-    val libraryDirectory = outputDirectory.map { outDir -> outDir.dir("deps") }
-
-    @get:OutputFile
-    val libraryFile = providerFactory.provider {
-        val dir = outputDirectory.get().asFile
+    @Internal
+    val rustOutputLibraryFile = providerFactory.provider {
+        val dir = nativeDirectory.get().asFile.resolve(inCrateArtifactsPath(rustTarget.get(), rustProfile.get()))
         val target = rustTarget.get()
         val name = crateName.get().replace('-', '_')
         when (target.os) {
             Os.LINUX -> dir.resolve("lib$name.so")
             Os.MACOS -> dir.resolve("lib$name.dylib")
             Os.WINDOWS -> dir.resolve("$name.dll")
+        }
+    }
+
+    @get:OutputFile
+    val headerFile = outputDirectory.map { outDir -> outDir.file("headers/${crateName.get().replace("-", "_")}.h") }
+
+    @get:OutputFile
+    val libraryFile = providerFactory.provider {
+        val dir = outputDirectory.get().asFile
+        val target = rustTarget.get()
+        val rustProfile = rustProfile.get()
+
+        val osSuffix = when (target.os) {
+            Os.LINUX -> "linux"
+            Os.MACOS -> "darwin"
+            Os.WINDOWS -> "win32"
+        }
+
+        val targetSuffix = when (target.arch) {
+            Arch.aarch64 -> "aarch64"
+            Arch.x86_64 -> "x86-64"
+        }
+
+        val debugSuffix = if (rustProfile == "debug" || rustProfile == "dev") "+debug" else ""
+
+        val crateName = crateName.get().replace('-', '_')
+        val libName = "${crateName}_${osSuffix}_${targetSuffix}${debugSuffix}"
+        when (target.os) {
+            Os.LINUX -> dir.resolve("lib$libName.so")
+            Os.MACOS -> dir.resolve("lib$libName.dylib")
+            Os.WINDOWS -> dir.resolve("$libName.dll")
         }
     }
 
@@ -66,9 +93,19 @@ abstract class CompileRustTask @Inject constructor(
             buildPlatformRustTarget(rustTarget.get()),
             rustProfile.get(),
             headerFile.get().asFile.toPath(),
+            rustOutputLibraryFile.get().toPath(),
             libraryFile.get().toPath(),
         )
     }
+}
+
+internal fun profileFolderName(rustProfile: String) = when (rustProfile) {
+    "dev" -> "debug"
+    else -> rustProfile
+}
+
+internal fun inCrateArtifactsPath(rustTarget: Platform, rustProfile: String): String {
+    return "target/${buildPlatformRustTarget(rustTarget)}/${profileFolderName(rustProfile)}/"
 }
 
 /**
@@ -100,6 +137,7 @@ private fun ExecOperations.compileRust(
     rustTarget: String,
     rustProfile: String,
     headerFile: Path,
+    rustOutputLibraryFile: Path,
     libraryFile: Path,
 ) {
     exec {
@@ -119,16 +157,8 @@ private fun ExecOperations.compileRust(
         .resolve("headers")
         .resolve(headerFile.fileName).copyTo(headerFile, overwrite = true)
 
-    val folderName = when (rustProfile) {
-        "dev" -> "debug"
-        else -> rustProfile
-    }
-
     nativeDirectory
-        .resolve("target")
-        .resolve(rustTarget)
-        .resolve(folderName)
-        .resolve(libraryFile.fileName)
+        .resolve(rustOutputLibraryFile)
         .copyTo(libraryFile, overwrite = true)
 }
 
