@@ -4,13 +4,19 @@
  * This generated file contains a sample Kotlin library project to get you started.
  * For more details on building Java & JVM projects, please refer to https://docs.gradle.org/8.10.2/userguide/building_java_projects.html in the Gradle documentation.
  */
+import org.gradle.internal.impldep.kotlinx.serialization.Serializable
+import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.CompileRustTask
 import org.jetbrains.desktop.buildscripts.DownloadJExtractTask
 import org.jetbrains.desktop.buildscripts.GenerateJavaBindingsTask
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
+import org.jetbrains.desktop.buildscripts.Os
 import org.jetbrains.desktop.buildscripts.currentPlatform
+import org.jetbrains.desktop.buildscripts.Platform
+import org.jetbrains.desktop.buildscripts.buildPlatformRustTarget
+import org.jetbrains.desktop.buildscripts.currentArch
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -53,10 +59,11 @@ java {
 }
 
 tasks.test {
-    dependsOn(compileDebugDesktopToolkitTask)
+    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(currentPlatform(), "dev")]!!
+    dependsOn(buildNativeTask)
     // Use JUnit Platform for unit tests.
     jvmArgs("--enable-preview")
-    val nativeLibProvider = compileDebugDesktopToolkitTask.flatMap { it.libraryFile }.map { it.absolutePath }
+    val nativeLibProvider = buildNativeTask.flatMap { it.libraryFile }.map { it.absolutePath }
     val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
     jvmArgumentProviders.add(
         CommandLineArgumentProvider {
@@ -69,11 +76,28 @@ tasks.test {
     useJUnitPlatform()
 }
 
-val compileDebugDesktopToolkitTask = tasks.register<CompileRustTask>("compileNative") {
-    crateName = "desktop-macos"
-    rustProfile = "dev"
-    rustTarget = currentPlatform()
-    nativeDirectory = layout.projectDirectory.dir("../native")
+@Serializable
+data class RustTarget(
+    @get:Input val platform: Platform,
+    @get:Input val profile: String,
+)
+
+// to install toolchain
+// rustup target add --toolchain 1.85.0 x86_64-apple-darwin
+val compileMacOSDesktopToolkitTaskByTarget = listOf(
+    RustTarget(Platform(Os.MACOS, Arch.x86_64), "dev"),
+    RustTarget(Platform(Os.MACOS, Arch.aarch64), "dev"),
+    RustTarget(Platform(Os.MACOS, Arch.x86_64), "release"),
+    RustTarget(Platform(Os.MACOS, Arch.aarch64), "release"),
+).associateWith { target ->
+    val platform = target.platform
+    tasks.register<CompileRustTask>("compileNative-${buildPlatformRustTarget(platform)}-${target.profile}") {
+        crateName = "desktop-macos"
+        rustProfile = target.profile
+        rustTarget = platform
+        nativeDirectory = layout.projectDirectory.dir("../native")
+        enabled = true
+    }
 }
 
 val cargoFmtCheckTask = tasks.register<Exec>("cargoFmtCheck") {
@@ -120,16 +144,19 @@ val nativeConsumable = configurations.consumable("nativeParts") {
     }
 }
 
-artifacts.add(nativeConsumable.name, compileDebugDesktopToolkitTask.flatMap { it.libraryFile }) {
-    builtBy(compileDebugDesktopToolkitTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
+compileMacOSDesktopToolkitTaskByTarget[RustTarget(currentPlatform(), "dev")]?.let { buildNativeTask ->
+    artifacts.add(nativeConsumable.name, buildNativeTask.flatMap { it.libraryFile }) {
+        builtBy(buildNativeTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
+    }
 }
 
 val generateBindingsTask = tasks.register<GenerateJavaBindingsTask>("generateBindings") {
+    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(currentPlatform(), "dev")]!!
     dependsOn(downloadJExtractTask)
-    dependsOn(compileDebugDesktopToolkitTask)
+    dependsOn(buildNativeTask)
 
     jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
-    headerFile = compileDebugDesktopToolkitTask.flatMap { it.headerFile }
+    headerFile = buildNativeTask.flatMap { it.headerFile }
     packageName = "org.jetbrains.desktop.macos.generated"
     generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/main/java/")
 }
@@ -148,12 +175,13 @@ tasks.named<Jar>("sourcesJar") {
 
 // TODO: decide if this is needed, depending on how we package the native code
 sourceSets.main {
+    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(currentPlatform(), "dev")]!!
     java.srcDirs(generateBindingsTask.flatMap { it.generatedSourcesDirectory })
-    resources.srcDirs(compileDebugDesktopToolkitTask.map { it.libraryDirectory })
+    resources.srcDirs(buildNativeTask.map { it.libraryDirectory })
 }
 
 tasks.processResources {
-    dependsOn(compileDebugDesktopToolkitTask)
+    dependsOn(compileMacOSDesktopToolkitTaskByTarget[RustTarget(currentPlatform(), "dev")])
 }
 
 kotlin {
