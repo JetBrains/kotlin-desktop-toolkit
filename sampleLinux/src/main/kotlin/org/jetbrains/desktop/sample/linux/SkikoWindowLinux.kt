@@ -7,7 +7,6 @@ import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.skia.Canvas
-import org.jetbrains.skia.Color
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.ImageInfo

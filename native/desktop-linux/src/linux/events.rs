@@ -165,9 +165,16 @@ pub struct WindowFullScreenToggleEvent {
 #[derive(Debug)]
 pub struct WindowDrawEvent {
     pub buffer: *mut c_char,
-    pub width: i32,
-    pub height: i32,
-    pub stride: i32,
+    pub width: u32,
+    pub height: u32,
+    pub stride: u32,
+    pub scale: f64,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowScaleChangedEvent {
+    pub new_scale: f64,
 }
 
 #[repr(C)]
@@ -190,6 +197,7 @@ pub enum Event<'a> {
     WindowCloseRequest,
     WindowFullScreenToggle(WindowFullScreenToggleEvent),
     WindowDraw(WindowDrawEvent),
+    WindowScaleChanged(WindowScaleChangedEvent),
 }
 
 impl Event<'_> {
@@ -312,12 +320,17 @@ impl Event<'_> {
         })
     }
 
-    pub(crate) const fn new_window_draw_event(buffer: &mut [u8], width: i32, height: i32, stride: i32) -> Self {
+    pub(crate) const fn new_window_draw_event(buffer: &mut [u8], width: u32, height: u32, stride: u32, scale: f64) -> Self {
         Event::WindowDraw(WindowDrawEvent {
             buffer: buffer.as_mut_ptr(),
             width,
             height,
             stride,
+            scale,
         })
+    }
+
+    pub(crate) const fn new_window_scale_changed_event(new_scale: f64) -> Self {
+        Event::WindowScaleChanged(WindowScaleChangedEvent { new_scale })
     }
 }

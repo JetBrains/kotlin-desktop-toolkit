@@ -49,7 +49,7 @@ class CustomTitlebar(
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Double) {
+    fun draw(canvas: Canvas, scale: Double) {
         val physicalOrigin = origin.toPhysical(scale)
         val physicalSize = size.toPhysical(scale)
         val x = physicalOrigin.x.toFloat()
@@ -91,7 +91,6 @@ class ContentArea(
     fun draw(canvas: Canvas, time: Long, scale: Double) {
         val contentOrigin = origin.toPhysical(scale)
         val contentSize = size.toPhysical(scale)
-
         Paint().use { paint ->
             paint.color = 0x77264653
             canvas.drawRect(
@@ -104,12 +103,12 @@ class ContentArea(
                 paint,
             )
         }
-        canvas.drawSpiningCircle(contentOrigin, contentSize, time, scale.toFloat())
-        canvas.drawWindowBorders(contentOrigin, contentSize, time, scale.toFloat())
-        canvas.drawCursor(contentOrigin, contentSize, time, scale.toFloat())
+        canvas.drawSpiningCircle(contentOrigin, contentSize, time)
+        canvas.drawWindowBorders(contentOrigin, contentSize, scale.toFloat())
+        canvas.drawCursor(contentOrigin, contentSize, scale.toFloat())
     }
 
-    private fun Canvas.drawSpiningCircle(origin: PhysicalPoint, size: PhysicalSize, t: Long, scale: Float) = withTranslated(origin) {
+    private fun Canvas.drawSpiningCircle(origin: PhysicalPoint, size: PhysicalSize, t: Long) = withTranslated(origin) {
         val width = size.width.toFloat()
         val height = size.height.toFloat()
         val angle = (t / 2000f) * 2f * PI
@@ -122,7 +121,7 @@ class ContentArea(
         }
     }
 
-    private fun Canvas.drawWindowBorders(origin: PhysicalPoint, size: PhysicalSize, t: Long, scale: Float) = withTranslated(origin) {
+    private fun Canvas.drawWindowBorders(origin: PhysicalPoint, size: PhysicalSize, scale: Float) = withTranslated(origin) {
         val width = size.width.toFloat()
         val height = size.height.toFloat()
         Paint().use { paint ->
@@ -154,7 +153,7 @@ class ContentArea(
         }
     }
 
-    private fun Canvas.drawCursor(origin: PhysicalPoint, size: PhysicalSize, t: Long, scale: Float) = withTranslated(origin) {
+    private fun Canvas.drawCursor(origin: PhysicalPoint, size: PhysicalSize, scale: Float) = withTranslated(origin) {
         val canvas = this
         markerPosition?.let { curs ->
             val positive = curs.x > 0 && curs.y > 0
@@ -221,7 +220,7 @@ class WindowContainer(
     }
 
     fun draw(canvas: Canvas, time: Long, scale: Double) {
-        customTitlebar?.draw(canvas, time, scale)
+        customTitlebar?.draw(canvas, scale)
         contentArea.draw(canvas, time, scale)
     }
 }
@@ -248,7 +247,7 @@ class RotatingBallWindow(
     }
 
     init {
-//        windowContainer.resize(view.size().toLogical(window.scaleFactor()))
+        windowContainer.resize(window.size)
 //        performDrawing(syncWithCA = true)
     }
 
@@ -257,7 +256,7 @@ class RotatingBallWindow(
             when {
                 event is Event.WindowResize -> {
                     windowContainer.resize(event.size)
-                    //performDrawing(syncWithCA = true)
+                    // performDrawing(syncWithCA = true)
                     EventHandlerResult.Stop
                 }
             }

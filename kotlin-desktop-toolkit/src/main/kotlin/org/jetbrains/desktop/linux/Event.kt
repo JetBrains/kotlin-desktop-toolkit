@@ -16,6 +16,7 @@ import org.jetbrains.desktop.linux.generated.NativeWindowFocusChangeEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowFullScreenToggleEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowMoveEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowResizeEvent
+import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
 import java.lang.foreign.MemorySegment
 import kotlin.time.Duration
@@ -136,6 +137,11 @@ public sealed class Event {
         val width: Int,
         val height: Int,
         val stride: Int,
+        val scale: Double,
+    ) : Event()
+
+    public data class WindowScaleChanged(
+        val newScale: Double,
     ) : Event()
 
     public data object WindowCloseRequest : Event()
@@ -264,6 +270,13 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 width = NativeWindowDrawEvent.width(nativeEvent),
                 height = NativeWindowDrawEvent.height(nativeEvent),
                 stride = NativeWindowDrawEvent.stride(nativeEvent),
+                scale = NativeWindowDrawEvent.scale(nativeEvent),
+            )
+        }
+        desktop_h.NativeEvent_WindowScaleChanged() -> {
+            val nativeEvent = NativeEvent.window_scale_changed(s)
+            Event.WindowScaleChanged(
+                newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent),
             )
         }
         else -> {

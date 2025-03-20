@@ -7,10 +7,21 @@ use smithay_client_toolkit::{
     delegate_subcompositor, delegate_xdg_shell, delegate_xdg_window,
     dmabuf::DmabufState,
     output::{OutputHandler, OutputState},
-    reexports::client::{
-        Connection, Proxy, QueueHandle,
-        backend::ObjectId,
-        protocol::{wl_keyboard, wl_output, wl_pointer::WlPointer, wl_seat, wl_surface::WlSurface},
+    reexports::{
+        client::{
+            Connection, Dispatch, Proxy, QueueHandle,
+            backend::ObjectId,
+            delegate_noop,
+            globals::GlobalList,
+            protocol::{wl_keyboard, wl_output, wl_pointer::WlPointer, wl_seat, wl_surface::WlSurface},
+        },
+        protocols::wp::{
+            fractional_scale::v1::client::{
+                wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
+                wp_fractional_scale_v1::{self, WpFractionalScaleV1},
+            },
+            viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
+        },
     },
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
@@ -45,6 +56,8 @@ pub struct ApplicationState {
     pub xdg_shell_state: XdgShell,
     pub keyboard: Option<wl_keyboard::WlKeyboard>,
     pub themed_pointer: Option<ThemedPointer>,
+    pub viewporter: Option<WpViewporter>,
+    pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
 
     pub last_window_id: WindowId,
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
@@ -59,6 +72,36 @@ struct WindowData<'a> {
 }
 
 impl ApplicationState {
+    #[must_use]
+    pub fn new(globals: &GlobalList, qh: &QueueHandle<Self>, callbacks: ApplicationCallbacks) -> Self {
+        let registry_state = RegistryState::new(globals);
+        let seat_state = SeatState::new(globals, qh);
+        let output_state = OutputState::new(globals, qh);
+        let compositor_state = CompositorState::bind(globals, qh).expect("wl_compositor not available");
+        let shm_state = Shm::bind(globals, qh).expect("wl_shm not available");
+        let xdg_shell_state = XdgShell::bind(globals, qh).expect("xdg shell not available");
+        let dma_state = DmabufState::new(globals, qh);
+        debug!("DMA-BUF protocol version: {:?}", dma_state.version());
+        Self {
+            callbacks,
+            dma_state,
+            registry_state,
+            seat_state,
+            output_state,
+            compositor_state,
+            shm_state,
+            xdg_shell_state,
+            keyboard: None,
+            themed_pointer: None,
+            viewporter: globals.bind(qh, 1..=1, ()).ok(),
+            fractional_scale_manager: globals.bind(qh, 1..=1, ()).ok(),
+            last_window_id: WindowId(0),
+            window_id_to_surface_id: HashMap::new(),
+            windows: HashMap::new(),
+            key_surface: None,
+        }
+    }
+
     pub fn get_window(&mut self, surface: &WlSurface) -> Option<&mut SimpleWindow> {
         let surface_id: &ObjectId = &surface.id();
         debug!("Getting window for {surface_id}");
@@ -208,18 +251,15 @@ impl ShmHandler for ApplicationState {
 delegate_shm!(ApplicationState);
 
 impl CompositorHandler for ApplicationState {
-    fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &WlSurface, _new_factor: i32) {
-        // Not needed for this example.
+    fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_factor: i32) {
+        debug!("scale_factor_changed for {surface:?}: {new_factor}");
+        if let Some(window_data) = self.get_window_data(surface) {
+            window_data.window.scale_changed(new_factor.into());
+        }
     }
 
-    fn transform_changed(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _new_transform: wl_output::Transform,
-    ) {
-        // Not needed for this example.
+    fn transform_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_transform: wl_output::Transform) {
+        debug!("transform_changed for {surface:?}: {new_transform:?}");
     }
 
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, _time: u32) {
@@ -230,12 +270,14 @@ impl CompositorHandler for ApplicationState {
 
     fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &wl_output::WlOutput) {
         if let Some(window_data) = self.get_window_data(surface) {
-            window_data.window.surface_enter(output);
+            window_data.window.output_changed(output);
         }
     }
 
-    fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &WlSurface, _output: &wl_output::WlOutput) {
-        // Not needed for this example.
+    fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &wl_output::WlOutput) {
+        if let Some(window_data) = self.get_window_data(surface) {
+            window_data.window.output_changed(output);
+        }
     }
 }
 
@@ -274,3 +316,27 @@ impl PointerHandler for ApplicationState {
 
 delegate_pointer!(ApplicationState);
 delegate_xdg_window!(ApplicationState);
+
+delegate_noop!(ApplicationState: ignore WpFractionalScaleManagerV1);
+delegate_noop!(ApplicationState: ignore WpFractionalScaleV1);
+delegate_noop!(ApplicationState: ignore WpViewporter);
+delegate_noop!(ApplicationState: ignore WpViewport);
+
+impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
+    fn event(
+        this: &mut Self,
+        _: &WpFractionalScaleV1,
+        event: <WpFractionalScaleV1 as Proxy>::Event,
+        surface_id: &ObjectId,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        let Some(window) = this.windows.get_mut(surface_id) else {
+            return;
+        };
+
+        if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
+            window.scale_changed(f64::from(scale) / 120.0);
+        }
+    }
+}
