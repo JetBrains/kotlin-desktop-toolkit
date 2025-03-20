@@ -34,10 +34,10 @@ use smithay_client_toolkit::{
     subcompositor::SubcompositorState,
 };
 
-use super::events::{Event, EventHandler};
+use super::events::{Event, InternalEventHandler};
 
 pub struct SimpleWindow {
-    pub event_handler: EventHandler,
+    pub event_handler: Box<InternalEventHandler>,
     pub subcompositor_state: Arc<SubcompositorState>,
     pub close: bool,
     pub first_configure: bool,
@@ -55,7 +55,7 @@ pub struct SimpleWindow {
 
 impl SimpleWindow {
     pub fn request_close(&mut self) {
-        (self.event_handler)(&Event::new_window_close_request_event());
+        (self.event_handler)(&Event::WindowCloseRequest);
         self.close = true;
     }
 
@@ -70,10 +70,13 @@ impl SimpleWindow {
     ) {
         self.buffer = None;
 
-        println!(
+        debug!(
             "Configure size {:?}, decorations: {:?}",
             configure.new_size, configure.decoration_mode
         );
+        debug!("Supported formats: {:?}", shm.formats());
+        // [Argb8888, Xrgb8888, Abgr8888, Xbgr8888, Rgb565, Argb2101010, Xrgb2101010, Abgr2101010, Xbgr2101010, Argb16161616f, Xrgb16161616f, Abgr16161616f, Xbgr16161616f, Yuyv, Nv12, P010, Yuv420]
+
 
         let (width, height) = if configure.decoration_mode == DecorationMode::Client {
             let window_frame = self.window_frame.get_or_insert_with(|| {
@@ -105,7 +108,7 @@ impl SimpleWindow {
             let width = width.unwrap_or(NonZeroU32::new(1).unwrap());
             let height = height.unwrap_or(NonZeroU32::new(1).unwrap());
 
-            println!("New dimentions: {width}, {height}");
+            debug!("New dimentions: {width}, {height}");
             window_frame.resize(width, height);
 
             let (x, y) = window_frame.location();
@@ -185,13 +188,13 @@ impl SimpleWindow {
             self.set_cursor = false;
         }
 
-        let width = self.width.get();
-        let height = self.height.get();
-        let stride = self.width.get() as i32 * 4;
+        let width = self.width.get() as i32;
+        let height = self.height.get() as i32;
+        let stride = width * 4;
 
         let buffer = self.buffer.get_or_insert_with(|| {
             self.pool
-                .create_buffer(width as i32, height as i32, stride, wl_shm::Format::Argb8888)
+                .create_buffer(width, height, stride, wl_shm::Format::Argb8888)
                 .expect("create buffer")
                 .0
         });
@@ -203,32 +206,13 @@ impl SimpleWindow {
             // buffer, we need double-buffering.
             let (second_buffer, canvas) = self
                 .pool
-                .create_buffer(width as i32, height as i32, stride, wl_shm::Format::Argb8888)
+                .create_buffer(width, height, stride, wl_shm::Format::Argb8888)
                 .expect("create buffer");
             *buffer = second_buffer;
             canvas
         };
 
-        // Draw to the window:
-        {
-            for (i, pixel) in canvas.chunks_exact_mut(4).enumerate() {
-                let i = u32::try_from(i).unwrap();
-                // Borders at 1px offset from sides
-                if (i % width == 1)
-                    || (i % width == (width - 2))
-                    || ((i >= width) && (i < width * 2))
-                    || ((i >= width * (height - 2)) && (i < width * (height - 1)))
-                {
-                    pixel[0] = 0;
-                    pixel[1] = 0;
-                } else {
-                    pixel[0] = 255;
-                    pixel[1] = 255;
-                }
-                pixel[2] = 255;
-                pixel[3] = 255;
-            }
-        }
+        (self.event_handler)(&Event::new_window_draw_event(canvas, width, height, stride));
 
         // Draw the decorations frame.
         if let Some(frame) = self.window_frame.as_mut() {
@@ -238,7 +222,7 @@ impl SimpleWindow {
         }
 
         // Damage the entire window
-        self.window.wl_surface().damage_buffer(0, 0, width as i32, height as i32);
+        self.window.wl_surface().damage_buffer(0, 0, width, height);
 
         // Request our next frame
         self.window.wl_surface().frame(qh, self.window.wl_surface().clone());

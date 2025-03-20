@@ -11,6 +11,7 @@ import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.Os
+import org.jetbrains.desktop.buildscripts.buildOs
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -25,11 +26,13 @@ plugins {
 group = "org.jetbrains"
 version = (project.properties["version"] as? String)?.takeIf { it.isNotBlank() && it != "unspecified" } ?: "SNAPSHOT"
 
-val projectTargetOsName = project.properties["targetOs"] ?: "linux"
-val projectTargetOs = when(projectTargetOsName) {
+val projectTargetOsName = project.properties["targetOs"]
+
+val projectTargetOs = when (projectTargetOsName) {
     "macos" -> Os.MACOS
     "linux" -> Os.LINUX
     "windows" -> Os.WINDOWS
+    null -> buildOs()
     else -> throw GradleException("Unsupported target os: $projectTargetOsName")
 }
 

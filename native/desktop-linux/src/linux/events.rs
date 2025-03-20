@@ -1,4 +1,5 @@
 use core::f64;
+use std::ffi::c_char;
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use smithay_client_toolkit::{
@@ -13,6 +14,8 @@ use super::{
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
+
+pub type InternalEventHandler = dyn FnMut(&Event) -> bool;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -154,12 +157,17 @@ pub struct WindowFocusChangeEvent {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct WindowCloseRequestEvent {}
+pub struct WindowFullScreenToggleEvent {
+    pub is_full_screen: bool,
+}
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct WindowFullScreenToggleEvent {
-    pub is_full_screen: bool,
+pub struct WindowDrawEvent {
+    pub buffer: *mut c_char,
+    pub width: i32,
+    pub height: i32,
+    pub stride: i32,
 }
 
 #[repr(C)]
@@ -179,8 +187,9 @@ pub enum Event<'a> {
     WindowResize(WindowResizeEvent),
     WindowMove(WindowMoveEvent),
     WindowFocusChange(WindowFocusChangeEvent),
-    WindowCloseRequest(WindowCloseRequestEvent),
+    WindowCloseRequest,
     WindowFullScreenToggle(WindowFullScreenToggleEvent),
+    WindowDraw(WindowDrawEvent),
 }
 
 impl Event<'_> {
@@ -199,10 +208,6 @@ impl Event<'_> {
     //                origin: window.get_origin(mtm).unwrap(), // todo
     //            })
     //        }
-
-    pub(crate) const fn new_window_close_request_event() -> Self {
-        Self::WindowCloseRequest(WindowCloseRequestEvent {})
-    }
 
     pub(crate) const fn new_window_focus_change_event(is_key: bool) -> Self {
         Self::WindowFocusChange(WindowFocusChangeEvent { is_key, is_main: is_key })
@@ -304,6 +309,15 @@ impl Event<'_> {
                 y: LogicalPixels(event.position.1),
             },
             timestamp: Timestamp(time),
+        })
+    }
+
+    pub(crate) const fn new_window_draw_event(buffer: &mut [u8], width: i32, height: i32, stride: i32) -> Self {
+        Event::WindowDraw(WindowDrawEvent {
+            buffer: buffer.as_mut_ptr(),
+            width,
+            height,
+            stride,
         })
     }
 }

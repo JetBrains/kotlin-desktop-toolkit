@@ -20,6 +20,15 @@ struct GenericRawPtr<'a, T> {
 #[repr(transparent)]
 pub struct RustAllocatedRawPtr<'a, T>(GenericRawPtr<'a, T>);
 
+impl<T> Clone for RustAllocatedRawPtr<'_, T> {
+    fn clone(&self) -> Self {
+        Self(GenericRawPtr {
+            ptr: self.0.ptr,
+            phantom: PhantomData,
+        })
+    }
+}
+
 impl<T> RustAllocatedRawPtr<'_, T> {
     pub fn from_value<R>(value: Option<R>) -> Self {
         Self(GenericRawPtr {
