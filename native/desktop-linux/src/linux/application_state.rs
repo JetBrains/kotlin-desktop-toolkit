@@ -30,7 +30,7 @@ use smithay_client_toolkit::{
 
 use crate::linux::window::SimpleWindow;
 
-use super::application::ApplicationCallbacks;
+use super::{application::ApplicationCallbacks, events::WindowId};
 
 pub struct ApplicationState {
     pub callbacks: ApplicationCallbacks,
@@ -43,6 +43,9 @@ pub struct ApplicationState {
     pub xdg_shell_state: XdgShell,
     pub keyboard: Option<wl_keyboard::WlKeyboard>,
     pub themed_pointer: Option<ThemedPointer>,
+
+    pub last_window_id: WindowId,
+    pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
     pub key_surface: Option<ObjectId>,
 }
@@ -54,8 +57,8 @@ struct WindowData<'a> {
 }
 
 impl ApplicationState {
-    fn get_window(&mut self, surface: &WlSurface) -> Option<&mut SimpleWindow> {
-        let surface_id = &surface.id();
+    pub fn get_window(&mut self, surface: &WlSurface) -> Option<&mut SimpleWindow> {
+        let surface_id: &ObjectId = &surface.id();
         debug!("Getting window for {surface_id}");
         self.windows.get_mut(surface_id)
     }

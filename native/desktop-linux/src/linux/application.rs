@@ -6,12 +6,13 @@ use anyhow::Result;
 use desktop_common::ffi_utils::RustAllocatedRawPtr;
 use desktop_common::logger::ffi_boundary;
 use log::debug;
-use smithay_client_toolkit::reexports::client::globals::GlobalList;
-use smithay_client_toolkit::reexports::client::{Connection, globals::registry_queue_init};
-use smithay_client_toolkit::reexports::client::{EventQueue, Proxy, QueueHandle};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
+    reexports::client::{
+        Connection, EventQueue, Proxy, QueueHandle,
+        globals::{GlobalList, registry_queue_init},
+    },
     registry::RegistryState,
     seat::SeatState,
     shell::{
@@ -22,7 +23,7 @@ use smithay_client_toolkit::{
     subcompositor::SubcompositorState,
 };
 
-use super::events::EventHandler;
+use super::events::{EventHandler, LogicalPixels, LogicalSize, WindowId};
 use super::{application_state::ApplicationState, window::SimpleWindow};
 
 #[repr(C)]
@@ -44,6 +45,24 @@ pub struct Application {
     qh: QueueHandle<ApplicationState>,
     exit: bool,
     state: ApplicationState,
+}
+
+#[repr(C)]
+pub struct WindowParams {
+    pub event_handler: EventHandler,
+
+    //pub origin: LogicalPoint,
+    pub width: u32,
+    pub height: u32,
+    //pub title: BorrowedStrPtr<'a>,
+
+    //pub is_resizable: bool,
+    //pub is_closable: bool,
+    //pub is_miniaturizable: bool,
+
+    //pub is_full_screen_allowed: bool,
+    //pub use_custom_titlebar: bool,
+    //pub titlebar_height: LogicalPixels,
 }
 
 impl Application {
@@ -79,6 +98,8 @@ impl Application {
             xdg_shell_state,
             keyboard: None,
             themed_pointer: None,
+            last_window_id: WindowId(0),
+            window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             key_surface: None,
         }
@@ -109,10 +130,10 @@ impl Application {
         }
     }
 
-    pub fn new_window(&mut self, event_handler: EventHandler) {
+    pub fn new_window(&mut self, params: &WindowParams) -> WindowId {
         let state = &self.state;
-        let width = NonZeroU32::new(256).unwrap();
-        let height = NonZeroU32::new(256).unwrap();
+        let width = NonZeroU32::new(params.width).unwrap();
+        let height = NonZeroU32::new(params.height).unwrap();
         let pool = SlotPool::new(width.get() as usize * height.get() as usize * 4, &state.shm_state).expect("Failed to create pool");
 
         let subcompositor_state = SubcompositorState::bind(state.compositor_state.wl_compositor().clone(), &self.globals, &self.qh)
@@ -138,7 +159,7 @@ impl Application {
 
         debug!("Created new window with surface_id={surface_id}");
         let w = SimpleWindow {
-            event_handler,
+            event_handler: params.event_handler,
             subcompositor_state: Arc::new(subcompositor_state),
             close: false,
             first_configure: true,
@@ -153,7 +174,32 @@ impl Application {
             window_cursor_icon_idx: 0,
             decorations_cursor: None,
         };
-        self.state.windows.insert(surface_id, w);
+        self.state.windows.insert(surface_id.clone(), w);
+        self.state.last_window_id.0 += 1;
+        self.state.window_id_to_surface_id.insert(self.state.last_window_id, surface_id);
+        self.state.last_window_id
+    }
+
+    pub fn drop_window(&mut self, window_id: WindowId) {
+        if let Some(surface_id) = self.state.window_id_to_surface_id.remove(&window_id) {
+            self.state.windows.remove(&surface_id);
+        }
+    }
+
+    #[must_use]
+    fn get_window(&self, window_id: WindowId) -> Option<&SimpleWindow> {
+        self.state
+            .window_id_to_surface_id
+            .get(&window_id)
+            .and_then(|surface_id| self.state.windows.get(surface_id))
+    }
+
+    #[must_use]
+    pub fn get_window_size(&self, window_id: WindowId) -> Option<LogicalSize> {
+        self.get_window(window_id).map(|w| LogicalSize {
+            width: LogicalPixels(w.width.get().into()),
+            height: LogicalPixels(w.height.get().into()),
+        })
     }
 }
 
