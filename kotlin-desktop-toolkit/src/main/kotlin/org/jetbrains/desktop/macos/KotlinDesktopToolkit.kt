@@ -1,6 +1,6 @@
 package org.jetbrains.desktop.macos
 
-import org.jetbrains.desktop.common.Os
+import org.jetbrains.desktop.common.Platform
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.absolutePathString
@@ -40,26 +40,26 @@ public object KotlinDesktopToolkit {
      * See `CompileRustTask.kt` if you would like to change this logic.
      */
     private fun libraryName(useDebugBuild: Boolean): String {
-        val osSuffix = when (Os.INSTANCE.type) {
-            Os.Type.MacOS -> "darwin"
-            Os.Type.Windows -> "win32"
-            Os.Type.Linux -> "linux"
-            Os.Type.Unknown -> throw Error("Unexpected OS, probably it's not suported")
+        val platformSuffix = when (Platform.INSTANCE.type) {
+            Platform.Type.MacOS -> "darwin"
+            Platform.Type.Windows -> "win32"
+            Platform.Type.Linux -> "linux"
+            Platform.Type.Unknown -> throw Error("Unexpected OS, probably it's not suported")
         }
 
         val targetSuffix = when {
-            Os.INSTANCE.isAarch64 -> "aarch64"
+            Platform.INSTANCE.isAarch64 -> "aarch64"
             else -> "x86-64"
         }
 
         val debugSuffix = if (useDebugBuild) "+debug" else ""
 
-        val libName = "desktop_macos_${osSuffix}_${targetSuffix}${debugSuffix}"
-        return when(Os.INSTANCE.type) {
-            Os.Type.Windows -> "$libName.dll"
-            Os.Type.Linux -> "lib$libName.so"
-            Os.Type.MacOS -> "lib$libName.dylib"
-            Os.Type.Unknown -> TODO()
+        val libName = "desktop_macos_${platformSuffix}_${targetSuffix}$debugSuffix"
+        return when (Platform.INSTANCE.type) {
+            Platform.Type.Windows -> "$libName.dll"
+            Platform.Type.Linux -> "lib$libName.so"
+            Platform.Type.MacOS -> "lib$libName.dylib"
+            Platform.Type.Unknown -> TODO()
         }
     }
 
