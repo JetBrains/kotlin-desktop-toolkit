@@ -10,6 +10,7 @@ import org.jetbrains.desktop.buildscripts.GenerateJavaBindingsTask
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
+import org.jetbrains.desktop.buildscripts.Os
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -23,6 +24,14 @@ plugins {
 
 group = "org.jetbrains"
 version = (project.properties["version"] as? String)?.takeIf { it.isNotBlank() && it != "unspecified" } ?: "SNAPSHOT"
+
+val projectTargetOsName = project.properties["targetOs"] ?: "linux"
+val projectTargetOs = when(projectTargetOsName) {
+    "macos" -> Os.MACOS
+    "linux" -> Os.LINUX
+    "windows" -> Os.WINDOWS
+    else -> throw GradleException("Unsupported target os: $projectTargetOsName")
+}
 
 repositories {
     // Use Maven Central for resolving dependencies.
@@ -69,28 +78,29 @@ tasks.test {
 }
 
 val compileDebugDesktopToolkitTask = tasks.register<CompileRustTask>("compileNative") {
-    crateName = "desktop-macos"
+    crateName = "desktop-$projectTargetOsName"
+    targetOs = projectTargetOs
     rustProfile = "dev"
     nativeDirectory = layout.projectDirectory.dir("../native")
 }
 
 val cargoFmtCheckTask = tasks.register<Exec>("cargoFmtCheck") {
-    workingDir = layout.projectDirectory.dir("../native").getAsFile()
+    workingDir = layout.projectDirectory.dir("../native").asFile
     commandLine("cargo", "fmt", "--check")
 }
 
 val cargoFmtTask = tasks.register<Exec>("cargoFmt") {
-    workingDir = layout.projectDirectory.dir("../native").getAsFile()
+    workingDir = layout.projectDirectory.dir("../native").asFile
     commandLine("cargo", "fmt")
 }
 
 val clippyCheckTask = tasks.register<Exec>("clippyCheck") {
-    workingDir = layout.projectDirectory.dir("../native").getAsFile()
+    workingDir = layout.projectDirectory.dir("../native").asFile
     commandLine("cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--", "--deny", "warnings")
 }
 
 val clippyFixTask = tasks.register<Exec>("clippyFix") {
-    workingDir = layout.projectDirectory.dir("../native").getAsFile()
+    workingDir = layout.projectDirectory.dir("../native").asFile
     commandLine("cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--fix", "--allow-dirty", "--allow-staged")
 }
 
@@ -128,7 +138,7 @@ val generateBindingsTask = tasks.register<GenerateJavaBindingsTask>("generateBin
 
     jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
     headerFile = compileDebugDesktopToolkitTask.flatMap { it.headerFile }
-    packageName = "org.jetbrains.desktop.macos.generated"
+    packageName = "org.jetbrains.desktop.$projectTargetOsName.generated"
     generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/main/java/")
 }
 
@@ -146,7 +156,9 @@ tasks.named<Jar>("sourcesJar") {
 
 // TODO: decide if this is needed, depending on how we package the native code
 sourceSets.main {
+    kotlin.include("**/org/jetbrains/desktop/$projectTargetOsName/**")
     java.srcDirs(generateBindingsTask.flatMap { it.generatedSourcesDirectory })
+    java.include("**/org/jetbrains/desktop/$projectTargetOsName/**")
     resources.srcDirs(compileDebugDesktopToolkitTask.map { it.libraryDirectory }) // parentFile because we need a directory
 }
 

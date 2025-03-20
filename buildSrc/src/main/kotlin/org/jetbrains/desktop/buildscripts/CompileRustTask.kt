@@ -31,7 +31,15 @@ abstract class CompileRustTask @Inject constructor(
     val crateName = objectFactory.property<String>()
 
     @get:Input
-    val rustTarget = objectFactory.property<String>().convention(buildPlatformRustTarget())
+    val targetOs = objectFactory.property<Os>().convention(buildOs())
+
+    @get:Input
+    val targetArch = objectFactory.property<Arch>().convention(buildArch())
+
+    @Internal
+    val rustTarget = providerFactory.provider {
+        buildPlatformRustTarget(targetOs.get(), targetArch.get())
+    }
 
     @get:Input
     val rustProfile = objectFactory.property<String>()
@@ -49,13 +57,12 @@ abstract class CompileRustTask @Inject constructor(
     @get:OutputFile
     val libraryFile = providerFactory.provider {
         val dir = libraryDirectory.get().asFile
-        val target = rustTarget.get()
+        val target = targetOs.get()
         val name = headerFile.get().asFile.toPath().nameWithoutExtension
-        when {
-            target.contains("apple") -> dir.resolve("lib$name.dylib")
-            target.contains("linux") -> dir.resolve("$name.so") // FIXME: verify
-            target.contains("windows") -> dir.resolve("lib_$name.dll") // FIXME: verify
-            else -> error("unsupported target '$target'")
+        when(target) {
+            Os.MACOS -> dir.resolve("lib$name.dylib")
+            Os.LINUX -> dir.resolve("lib$name.so")
+            Os.WINDOWS -> dir.resolve("lib_$name.dll") // FIXME: verify
         }
     }
 
@@ -133,13 +140,13 @@ private fun ExecOperations.compileRust(
         .copyTo(libraryFile, overwrite = true)
 }
 
-private fun buildPlatformRustTarget(): String {
-    val osPart = when (buildOs()) {
+private fun buildPlatformRustTarget(os: Os, arch: Arch): String {
+    val osPart = when (os) {
         Os.WINDOWS -> "windows-msvc"
         Os.MACOS -> "apple-darwin"
         Os.LINUX -> "unknown-linux-gnu"
     }
-    val archPart = when (buildArch()) {
+    val archPart = when (arch) {
         Arch.AARCH64 -> "aarch64"
         Arch.X86_64 -> "x86_64"
     }
