@@ -6,6 +6,7 @@ use anyhow::Result;
 use desktop_common::logger::ffi_boundary;
 use desktop_common::{ffi_utils::RustAllocatedRawPtr, logger::catch_panic};
 use log::debug;
+use smithay_client_toolkit::dmabuf::DmabufState;
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
@@ -82,8 +83,11 @@ impl Application {
         let compositor_state = CompositorState::bind(globals, qh).expect("wl_compositor not available");
         let shm_state = Shm::bind(globals, qh).expect("wl_shm not available");
         let xdg_shell_state = XdgShell::bind(globals, qh).expect("xdg shell not available");
+        let dma_state = DmabufState::new(&globals, &qh);
+        debug!("DMA-BUF protocol version: {:?}", dma_state.version());
         ApplicationState {
             callbacks,
+            dma_state,
             registry_state,
             seat_state,
             output_state,
