@@ -85,11 +85,12 @@ val nativeLib = configurations.resolvable("nativeParts") {
 
 fun JavaExec.setUpLoggingAndLibraryPath() {
     val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample.log").map { it.asFile.absolutePath }
-    val nativeLibPath = nativeLib.map { it.singleFile.absolutePath }
+    val nativeLibPath = nativeLib.map { it.singleFile.parentFile.absolutePath }
     jvmArgumentProviders.add(
         CommandLineArgumentProvider {
             listOf(
-                "-Dkdt.library.path=${nativeLibPath.get()}",
+                "-Dkdt.library.folder.path=${nativeLibPath.get()}",
+                "-Dkdt.debug=true",
                 "-Dkdt.native.log.path=${logFilePath.get()}",
             )
         },

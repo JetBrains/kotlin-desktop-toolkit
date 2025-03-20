@@ -13,10 +13,9 @@ import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.Os
-import org.jetbrains.desktop.buildscripts.currentPlatform
 import org.jetbrains.desktop.buildscripts.Platform
 import org.jetbrains.desktop.buildscripts.buildPlatformRustTarget
-import org.jetbrains.desktop.buildscripts.currentArch
+import org.jetbrains.desktop.buildscripts.currentPlatform
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -63,12 +62,13 @@ tasks.test {
     dependsOn(buildNativeTask)
     // Use JUnit Platform for unit tests.
     jvmArgs("--enable-preview")
-    val nativeLibProvider = buildNativeTask.flatMap { it.libraryFile }.map { it.absolutePath }
+    val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
     val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
     jvmArgumentProviders.add(
         CommandLineArgumentProvider {
             listOf(
-                "-Dkdt.library.path=${nativeLibProvider.get()}",
+                "-Dkdt.library.folder.path=${libFolder.get()}",
+                "-Dkdt.debug=true",
                 "-Dkdt.native.log.path=${logFile.get().asFile.absolutePath}",
             )
         },
