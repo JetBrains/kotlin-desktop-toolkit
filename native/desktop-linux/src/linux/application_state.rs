@@ -5,6 +5,7 @@ use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_output, delegate_pointer, delegate_registry, delegate_seat, delegate_shm,
     delegate_subcompositor, delegate_xdg_shell, delegate_xdg_window,
+    dmabuf::DmabufState,
     output::{OutputHandler, OutputState},
     reexports::client::{
         Connection, Proxy, QueueHandle,
@@ -35,6 +36,7 @@ use super::{application::ApplicationCallbacks, events::WindowId};
 pub struct ApplicationState {
     pub callbacks: ApplicationCallbacks,
 
+    pub dma_state: DmabufState,
     pub registry_state: RegistryState,
     pub seat_state: SeatState,
     pub output_state: OutputState,
