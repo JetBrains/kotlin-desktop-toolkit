@@ -7,6 +7,9 @@ on:
   pull_request_review:
     types: [submitted, edited]
 
+env:
+  RUST_VERSION: 1.85.0 # the same as in rust-toolchain
+
 jobs:
   # TODO: add support for more OS
   macos:
@@ -14,11 +17,27 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
+
+      - name: Setup Rust for x86_64
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          target: x86_64-apple-darwin
+          cache: true
+
+      - name: Setup Rust for aarch64
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          target: aarch64-apple-darwin
+          cache: true
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: 21
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
       - name: Build with Gradle
