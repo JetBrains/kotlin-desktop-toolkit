@@ -7,6 +7,7 @@ import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.skia.Canvas
+import org.jetbrains.skia.Color
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.ImageInfo
@@ -20,6 +21,7 @@ abstract class SkikoWindowLinux(
 //    private val directContext = DirectContext.makeGL()
     val window = app.createWindow({ event -> handleEvent(event) }, params)
     private val creationTime = TimeSource.Monotonic.markNow()
+    private val backgroundColor = Color.makeRGB(128, 128, 128)
 
     init {
 //        window.minSize = LogicalSize(320.0, 240.0)
@@ -103,7 +105,7 @@ abstract class SkikoWindowLinux(
 //                rt = renderTarget,
 //            )!!.use { surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
-//            surface.canvas.clear(Color.TRANSPARENT)
+            surface.canvas.clear(backgroundColor)
             surface.canvas.draw(PhysicalSize(surface.width.toDouble(), surface.height.toDouble()), time)
             surface.flushAndSubmit()
         }
