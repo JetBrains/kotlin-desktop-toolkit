@@ -40,21 +40,14 @@ public object KotlinDesktopToolkit {
      * See `CompileRustTask.kt` if you would like to change this logic.
      */
     private fun libraryName(useDebugBuild: Boolean): String {
-        val platformSuffix = when (Platform.INSTANCE.type) {
-            Platform.Type.MacOS -> "darwin"
-            Platform.Type.Windows -> "win32"
-            Platform.Type.Linux -> "linux"
-            Platform.Type.Unknown -> throw Error("Unexpected OS, probably it's not suported")
-        }
-
         val targetSuffix = when {
-            Platform.INSTANCE.isAarch64 -> "aarch64"
-            else -> "x86-64"
+            Platform.INSTANCE.isAarch64 -> "arm64"
+            else -> "x64"
         }
 
         val debugSuffix = if (useDebugBuild) "+debug" else ""
 
-        val libName = "desktop_macos_${platformSuffix}_${targetSuffix}$debugSuffix"
+        val libName = "desktop_macos_${targetSuffix}$debugSuffix"
         return when (Platform.INSTANCE.type) {
             Platform.Type.Windows -> "$libName.dll"
             Platform.Type.Linux -> "lib$libName.so"

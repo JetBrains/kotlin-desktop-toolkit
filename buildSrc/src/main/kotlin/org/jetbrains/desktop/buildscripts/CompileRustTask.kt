@@ -62,21 +62,21 @@ abstract class CompileRustTask @Inject constructor(
         val target = rustTarget.get()
         val rustProfile = rustProfile.get()
 
-        val osSuffix = when (target.os) {
-            Os.LINUX -> "linux"
-            Os.MACOS -> "darwin"
-            Os.WINDOWS -> "win32"
-        }
-
         val targetSuffix = when (target.arch) {
-            Arch.aarch64 -> "aarch64"
-            Arch.x86_64 -> "x86-64"
+            Arch.aarch64 -> "arm64"
+            Arch.x86_64 -> "x64"
         }
 
         val debugSuffix = if (rustProfile == "debug" || rustProfile == "dev") "+debug" else ""
 
         val crateName = crateName.get().replace('-', '_')
-        val libName = "${crateName}_${osSuffix}_${targetSuffix}${debugSuffix}"
+        val libName = "${crateName}_${targetSuffix}${debugSuffix}"
+
+
+        /**
+        * See `KotlinDesktopToolkit.kt` if you would like to change this logic.
+        */
+        // todo change libname with otool
         when (target.os) {
             Os.LINUX -> dir.resolve("lib$libName.so")
             Os.MACOS -> dir.resolve("lib$libName.dylib")
