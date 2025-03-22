@@ -95,7 +95,7 @@ val compileMacOSDesktopToolkitTaskByTarget = listOf(
         crateName = "desktop-macos"
         rustProfile = target.profile
         rustTarget = platform
-        nativeDirectory = layout.projectDirectory.dir("../native")
+        nativeDirectory = layout.projectDirectory.dir("../native").asFile.absolutePath
         enabled = true
     }
 }
@@ -176,7 +176,7 @@ tasks.named<Jar>("sourcesJar") {
 val generateNativeResources = tasks.register<Sync>("generateResourcesDir") {
     destinationDir = layout.buildDirectory.dir("native").get().asFile
 
-    compileMacOSDesktopToolkitTaskByTarget.forEach { (platform, task) ->
+    compileMacOSDesktopToolkitTaskByTarget.forEach { (_, task) ->
         from(task.map { it.libraryFile }) {
             into("")
         }
