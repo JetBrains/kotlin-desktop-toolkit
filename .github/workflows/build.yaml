@@ -23,6 +23,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           target: x86_64-apple-darwin
+          components: rustfmt, clippy
           cache: true
 
       - name: Setup Rust for aarch64
@@ -30,6 +31,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           target: aarch64-apple-darwin
+          components: rustfmt, clippy
           cache: true
 
       - name: Setup Java
