@@ -13,6 +13,23 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
+
+      - name: Setup Rust for x86_64
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          target: x86_64-apple-darwin
+          components: rustfmt, clippy
+          cache: true
+
+      - name: Setup Rust for aarch64
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          target: aarch64-apple-darwin
+          components: rustfmt, clippy
+          cache: true
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
