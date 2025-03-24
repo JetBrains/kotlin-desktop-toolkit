@@ -1,3 +1,5 @@
+use std::ffi::CStr;
+
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
@@ -86,6 +88,7 @@ extern "C" fn event_handler_2(event: &Event) -> bool {
 }
 
 pub fn main() {
+    const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
     logger_init_impl(&LoggerConfiguration {
         file_path: BorrowedStrPtr::new(c"/tmp/a"),
         console_level: LogLevel::Debug,
@@ -96,7 +99,27 @@ pub fn main() {
         on_will_terminate,
         on_display_configuration_change,
     });
-    window_create(app_ptr.clone(), event_handler_1, WindowParams { width: 200, height: 300 });
-    window_create(app_ptr.clone(), event_handler_2, WindowParams { width: 300, height: 200 });
+    window_create(
+        app_ptr.clone(),
+        event_handler_1,
+        WindowParams {
+            width: 200,
+            height: 300,
+            title: BorrowedStrPtr::new(c"Window 1"),
+            app_id: BorrowedStrPtr::new(APP_ID),
+            force_client_side_decoration: false,
+        },
+    );
+    window_create(
+        app_ptr.clone(),
+        event_handler_2,
+        WindowParams {
+            width: 300,
+            height: 200,
+            title: BorrowedStrPtr::new(c"Window 2"),
+            app_id: BorrowedStrPtr::new(APP_ID),
+            force_client_side_decoration: true,
+        },
+    );
     application_run_event_loop(app_ptr);
 }
