@@ -277,6 +277,12 @@ typedef bool (*NativeEventHandler)(const struct NativeEvent*);
 typedef struct NativeWindowParams {
   uint32_t width;
   uint32_t height;
+  NativeBorrowedStrPtr title;
+  /**
+   * See <https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_app_id>
+   */
+  NativeBorrowedStrPtr app_id;
+  bool force_client_side_decoration;
 } NativeWindowParams;
 
 typedef struct NativeExceptionsArray {
