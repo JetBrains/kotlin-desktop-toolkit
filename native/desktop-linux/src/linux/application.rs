@@ -94,7 +94,7 @@ impl Application {
     }
 
     #[must_use]
-    fn get_window(&self, window_id: WindowId) -> Option<&SimpleWindow> {
+    pub fn get_window(&self, window_id: WindowId) -> Option<&SimpleWindow> {
         self.state
             .window_id_to_surface_id
             .get(&window_id)

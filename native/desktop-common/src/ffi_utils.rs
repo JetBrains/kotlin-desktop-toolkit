@@ -69,11 +69,15 @@ impl<'a> BorrowedStrPtr<'a> {
     }
 
     #[must_use]
-    pub const fn null() -> Self {
-        Self(GenericRawPtr {
-            ptr: std::ptr::null(),
-            phantom: PhantomData,
-        })
+    pub fn new_optional(s: Option<&'a CString>) -> Self {
+        if let Some(s) = s {
+            BorrowedStrPtr::new(s.as_c_str())
+        } else {
+            Self(GenericRawPtr {
+                ptr: std::ptr::null(),
+                phantom: PhantomData,
+            })
+        }
     }
 
     #[must_use]

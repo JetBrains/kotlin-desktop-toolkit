@@ -6,32 +6,25 @@ use log::debug;
 use smithay_client_toolkit::compositor::SurfaceData;
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
-use smithay_client_toolkit::reexports::csd_frame::{DecorationsFrame, FrameAction, ResizeEdge};
+use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
-use smithay_client_toolkit::shell::xdg::window::WindowDecorations;
-use smithay_client_toolkit::{
-    reexports::client::{
-        Connection, Proxy, QueueHandle,
-        protocol::{wl_pointer, wl_shm},
+use smithay_client_toolkit::shell::xdg::window::{DecorationMode, WindowDecorations};
+use smithay_client_toolkit::shell::{
+    WaylandSurface,
+    xdg::{
+        XdgSurface,
+        window::{Window, WindowConfigure},
     },
-    shm::Shm,
 };
 use smithay_client_toolkit::{
-    seat::pointer::PointerData,
-    shell::{
-        WaylandSurface,
-        xdg::{
-            XdgSurface,
-            fallback_frame::FallbackFrame,
-            window::{DecorationMode, Window, WindowConfigure},
-        },
-    },
+    reexports::client::{Connection, Proxy, QueueHandle, protocol::wl_shm},
+    shm::Shm,
 };
 
 use crate::linux::application_state::ApplicationState;
 use crate::linux::cursors::CURSORS;
-use crate::linux::events::{LogicalPixels, LogicalSize};
+use crate::linux::events::{LogicalPixels, LogicalSize, WindowResizeEvent};
 
 use smithay_client_toolkit::{
     seat::pointer::{CursorIcon, ThemedPointer},
@@ -39,7 +32,7 @@ use smithay_client_toolkit::{
     subcompositor::SubcompositorState,
 };
 
-use super::events::{Event, InternalEventHandler};
+use super::events::{Event, InternalEventHandler, WindowDrawEvent};
 
 #[repr(C)]
 pub struct WindowParams<'a> {
@@ -55,6 +48,52 @@ pub struct WindowParams<'a> {
     pub force_client_side_decoration: bool,
 }
 
+#[repr(C)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum WindowResizeEdge {
+    /// Nothing is being dragged.
+    None,
+    /// The top edge is being dragged.
+    Top,
+    /// The bottom edge is being dragged.
+    Bottom,
+    /// The left edge is being dragged.
+    Left,
+    /// The top left corner is being dragged.
+    TopLeft,
+    /// The bottom left corner is being dragged.
+    BottomLeft,
+    /// The right edge is being dragged.
+    Right,
+    /// The top right corner is being dragged.
+    TopRight,
+    /// The bottom right corner is being dragged.
+    BottomRight,
+}
+
+#[repr(C)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum WindowFrameAction {
+    None,
+    /// The window should be minimized.
+    Minimize,
+    /// The window should be maximized.
+    Maximize,
+    /// The window should be unmaximized.
+    UnMaximize,
+    /// The window should be closed.
+    Close,
+    /// An interactive move should be started.
+    Move,
+    /// An interactive resize should be started with the provided edge.
+    Resize(WindowResizeEdge),
+    /// Show window menu.
+    ///
+    /// The coordinates are relative to the base surface, as in should be
+    /// directly passed to the `xdg_toplevel::show_window_menu`.
+    ShowMenu(i32, i32),
+}
+
 pub struct SimpleWindow {
     pub event_handler: Box<InternalEventHandler>,
     pub subcompositor_state: Arc<SubcompositorState>,
@@ -66,12 +105,12 @@ pub struct SimpleWindow {
     pub buffer: Option<Buffer>,
     pub viewport: Option<WpViewport>,
     pub window: Window,
-    pub window_frame: Option<FallbackFrame<ApplicationState>>,
     pub keyboard_focus: bool,
     pub set_cursor: bool,
     pub window_cursor_icon_idx: usize,
     pub decorations_cursor: Option<CursorIcon>,
     pub current_scale: f64,
+    pub decoration_mode: DecorationMode,
 }
 
 impl SimpleWindow {
@@ -132,12 +171,12 @@ impl SimpleWindow {
             buffer: None,
             viewport,
             window,
-            window_frame: None,
             keyboard_focus: false,
             set_cursor: false,
             window_cursor_icon_idx: 0,
             decorations_cursor: None,
             current_scale: 1.0,
+            decoration_mode: DecorationMode::Client,
         }
     }
 
@@ -156,6 +195,7 @@ impl SimpleWindow {
         themed_pointer: Option<&mut ThemedPointer>,
     ) {
         self.buffer = None;
+        self.decoration_mode = configure.decoration_mode;
 
         debug!(
             "Configure size {:?}, decorations: {:?}",
@@ -164,58 +204,11 @@ impl SimpleWindow {
         debug!("Supported formats: {:?}", shm.formats());
         // [Argb8888, Xrgb8888, Abgr8888, Xbgr8888, Rgb565, Argb2101010, Xrgb2101010, Abgr2101010, Xbgr2101010, Argb16161616f, Xrgb16161616f, Abgr16161616f, Xbgr16161616f, Yuyv, Nv12, P010, Yuv420]
 
-        let (width, height) = if configure.decoration_mode == DecorationMode::Client {
-            let window_frame = self.window_frame.get_or_insert_with(|| {
-                FallbackFrame::new(&self.window, shm, self.subcompositor_state.clone(), qh.clone())
-                    .expect("failed to create client side decorations frame.")
-            });
-
-            // Un-hide the frame.
-            window_frame.set_hidden(false);
-
-            // Configure state before touching any resizing.
-            window_frame.update_state(configure.state);
-
-            // Update the capabilities.
-            window_frame.update_wm_capabilities(configure.capabilities);
-
-            let (width, height) = match configure.new_size {
-                (Some(width), Some(height)) => {
-                    // The size could be 0.
-                    window_frame.subtract_borders(width, height)
-                }
-                _ => {
-                    // You might want to consider checking for configure bounds.
-                    (Some(self.width), Some(self.height))
-                }
-            };
-
-            // Clamp the size to at least one pixel.
-            let width = width.unwrap_or(NonZeroU32::new(1).unwrap());
-            let height = height.unwrap_or(NonZeroU32::new(1).unwrap());
-
-            debug!("New dimentions: {width}, {height}");
-            window_frame.resize(width, height);
-
-            let (x, y) = window_frame.location();
-            let outer_size = window_frame.add_borders(width.get(), height.get());
-            window
-                .xdg_surface()
-                .set_window_geometry(x, y, outer_size.0 as i32, outer_size.1 as i32);
-
-            (width, height)
-        } else {
-            // Hide the frame, if any.
-            if let Some(frame) = self.window_frame.as_mut() {
-                frame.set_hidden(true);
-            }
-            let width = configure.new_size.0.unwrap_or(self.width);
-            let height = configure.new_size.1.unwrap_or(self.height);
-            self.window
-                .xdg_surface()
-                .set_window_geometry(0, 0, width.get() as i32, height.get() as i32);
-            (width, height)
-        };
+        let width = configure.new_size.0.unwrap_or(self.width);
+        let height = configure.new_size.1.unwrap_or(self.height);
+        window
+            .xdg_surface()
+            .set_window_geometry(0, 0, width.get() as i32, height.get() as i32);
 
         // Update new width and height;
         self.width = width;
@@ -224,10 +217,16 @@ impl SimpleWindow {
         if let Some(viewport) = &self.viewport {
             viewport.set_destination(self.width.get() as i32, self.height.get() as i32);
         }
-        (self.event_handler)(&Event::new_window_resize_event(LogicalSize {
-            width: LogicalPixels(width.get().into()),
-            height: LogicalPixels(height.get().into()),
-        }));
+        (self.event_handler)(
+            &WindowResizeEvent {
+                size: LogicalSize {
+                    width: LogicalPixels(width.get().into()),
+                    height: LogicalPixels(height.get().into()),
+                },
+                draw_decoration: configure.decoration_mode == DecorationMode::Client,
+            }
+            .into(),
+        );
 
         // Initiate the first draw.
         if self.first_configure {
@@ -236,32 +235,29 @@ impl SimpleWindow {
         }
     }
 
-    pub fn frame_action(&mut self, pointer: &wl_pointer::WlPointer, serial: u32, action: FrameAction) {
-        let pointer_data = pointer.data::<PointerData>().unwrap();
-        let seat = pointer_data.seat();
+    pub fn frame_action(&mut self, seat: &WlSeat, serial: u32, action: WindowFrameAction) {
         match action {
-            FrameAction::Close => self.close = true,
-            FrameAction::Minimize => self.window.set_minimized(),
-            FrameAction::Maximize => self.window.set_maximized(),
-            FrameAction::UnMaximize => self.window.unset_maximized(),
-            FrameAction::ShowMenu(x, y) => self.window.show_window_menu(seat, serial, (x, y)),
-            FrameAction::Resize(edge) => {
+            WindowFrameAction::Close => self.close = true,
+            WindowFrameAction::Minimize => self.window.set_minimized(),
+            WindowFrameAction::Maximize => self.window.set_maximized(),
+            WindowFrameAction::UnMaximize => self.window.unset_maximized(),
+            WindowFrameAction::ShowMenu(x, y) => self.window.show_window_menu(seat, serial, (x, y)),
+            WindowFrameAction::Resize(edge) => {
                 let edge = match edge {
-                    ResizeEdge::None => XdgResizeEdge::None,
-                    ResizeEdge::Top => XdgResizeEdge::Top,
-                    ResizeEdge::Bottom => XdgResizeEdge::Bottom,
-                    ResizeEdge::Left => XdgResizeEdge::Left,
-                    ResizeEdge::TopLeft => XdgResizeEdge::TopLeft,
-                    ResizeEdge::BottomLeft => XdgResizeEdge::BottomLeft,
-                    ResizeEdge::Right => XdgResizeEdge::Right,
-                    ResizeEdge::TopRight => XdgResizeEdge::TopRight,
-                    ResizeEdge::BottomRight => XdgResizeEdge::BottomRight,
-                    _ => return,
+                    WindowResizeEdge::None => XdgResizeEdge::None,
+                    WindowResizeEdge::Top => XdgResizeEdge::Top,
+                    WindowResizeEdge::Bottom => XdgResizeEdge::Bottom,
+                    WindowResizeEdge::Left => XdgResizeEdge::Left,
+                    WindowResizeEdge::TopLeft => XdgResizeEdge::TopLeft,
+                    WindowResizeEdge::BottomLeft => XdgResizeEdge::BottomLeft,
+                    WindowResizeEdge::Right => XdgResizeEdge::Right,
+                    WindowResizeEdge::TopRight => XdgResizeEdge::TopRight,
+                    WindowResizeEdge::BottomRight => XdgResizeEdge::BottomRight,
                 };
                 self.window.resize(seat, serial, edge);
             }
-            FrameAction::Move => self.window.move_(seat, serial),
-            _ => (),
+            WindowFrameAction::Move => self.window.move_(seat, serial),
+            WindowFrameAction::None => (),
         }
     }
 
@@ -302,20 +298,16 @@ impl SimpleWindow {
             canvas
         };
 
-        (self.event_handler)(&Event::new_window_draw_event(
-            canvas,
-            u32::try_from(width).unwrap(),
-            u32::try_from(height).unwrap(),
-            u32::try_from(stride).unwrap(),
-            self.current_scale,
-        ));
-
-        // Draw the decorations frame.
-        if let Some(frame) = self.window_frame.as_mut() {
-            if frame.is_dirty() && !frame.is_hidden() {
-                frame.draw();
+        (self.event_handler)(
+            &WindowDrawEvent {
+                buffer: canvas.as_mut_ptr(),
+                width: u32::try_from(width).unwrap(),
+                height: u32::try_from(height).unwrap(),
+                stride: u32::try_from(stride).unwrap(),
+                scale: self.current_scale,
             }
-        }
+            .into(),
+        );
 
         // Damage the entire window
         surface.damage_buffer(0, 0, width, height);

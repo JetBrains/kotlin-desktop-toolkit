@@ -14,7 +14,6 @@ import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowFocusChangeEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowFullScreenToggleEvent
-import org.jetbrains.desktop.linux.generated.NativeWindowMoveEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
@@ -116,6 +115,7 @@ public sealed class Event {
 
     public data class WindowResize(
         val size: LogicalSize,
+        val drawDecoration: Boolean,
     ) : Event()
 
     public data class WindowMove(
@@ -241,12 +241,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             val nativeEvent = NativeEvent.window_resize(s)
             Event.WindowResize(
                 size = LogicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
-            )
-        }
-        desktop_h.NativeEvent_WindowMove() -> {
-            val nativeEvent = NativeEvent.window_move(s)
-            Event.WindowMove(
-                origin = LogicalPoint.fromNative(NativeWindowMoveEvent.origin(nativeEvent)),
+                drawDecoration = NativeWindowResizeEvent.draw_decoration(nativeEvent),
             )
         }
         desktop_h.NativeEvent_WindowFocusChange() -> {

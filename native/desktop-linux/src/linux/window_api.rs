@@ -99,15 +99,22 @@ pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> Logic
     })
 }
 
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: LogicalPoint, size: LogicalSize, animate: bool) {
+//fn with_window(app_ptr: AppPtr, window_id: WindowId, name: &str, f: impl FnOnce(&SimpleWindow)) {
 //    ffi_boundary("window_set_rect", || {
-//        let mtm = MainThreadMarker::new().unwrap();
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        window.ns_window.set_rect(&LogicalRect::new(origin, size), animate, mtm)
+//        let app = unsafe { app_ptr.borrow::<Application>() };
+//        let w = app.get_window(window_id).context("No window found")?;
+//        f(&w);
+//        Ok(())
 //    });
 //}
-//
+
+//#[unsafe(no_mangle)]
+//pub extern "C" fn window_do_frame_action(app_ptr: AppPtr, window_id: WindowId, action: FrameAction) {
+//    with_window(app_ptr, window_id, "window_set_rect", |window| {
+//        window.frame_action(pointer, serial, action);
+//    });
+//}
+
 //#[unsafe(no_mangle)]
 //pub extern "C" fn window_get_content_origin(window_ptr: WindowPtr) -> LogicalPoint {
 //    ffi_boundary("window_get_content_origin", || {

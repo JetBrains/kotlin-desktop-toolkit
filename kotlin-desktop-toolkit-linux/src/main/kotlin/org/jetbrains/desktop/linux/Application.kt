@@ -21,7 +21,7 @@ public data class WindowParams(
     val width: Int = 640,
     val height: Int = 480,
     val title: String = "Window",
-    val appId: String = "Window",
+    val appId: String = "org.jetbrains.desktop.linux.skikoSample1",
     val forceClientSideDecoration: Boolean = false,
 ) {
     internal fun toNative(arena: Arena): MemorySegment {
