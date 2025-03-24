@@ -50,9 +50,9 @@ impl<T> RustAllocatedRawPtr<'_, T> {
 #[repr(transparent)]
 pub struct BorrowedStrPtr<'a>(GenericRawPtr<'a, std::ffi::c_char>);
 
-impl BorrowedStrPtr<'_> {
+impl<'a> BorrowedStrPtr<'a> {
     #[must_use]
-    pub const fn new(s: &CStr) -> Self {
+    pub const fn new(s: &'a CStr) -> Self {
         Self(GenericRawPtr {
             ptr: s.as_ptr(),
             phantom: PhantomData,
