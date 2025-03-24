@@ -55,29 +55,6 @@ public class Window internal constructor(
 
     public fun scaleFactor(): Double = scale
 
-//    public var title: String
-//        get() {
-//            val title = ffiDownCall { desktop_h.window_get_title(pointer) }
-//            return try {
-//                title.getUtf8String(0)
-//            } finally {
-//                ffiDownCall { desktop_h.string_drop(title) }
-//            }
-//        }
-//        set(value) {
-//            Arena.ofConfined().use { arena ->
-//                val title = arena.allocateUtf8String(value)
-//                ffiDownCall { desktop_h.window_set_title(pointer, title) }
-//            }
-//        }
-
-//    public val origin: LogicalPoint
-//        get() {
-//            return Arena.ofConfined().use { arena ->
-//                LogicalPoint.fromNative(ffiDownCall { desktop_h.window_get_origin(arena, appPtr, windowId) })
-//            }
-//        }
-
     public val size: LogicalSize
         get() {
             return Arena.ofConfined().use { arena ->
@@ -85,46 +62,6 @@ public class Window internal constructor(
             }
         }
 
-//    public val contentOrigin: LogicalPoint
-//        get() {
-//            return Arena.ofConfined().use { arena ->
-//                LogicalPoint.fromNative(ffiDownCall { desktop_h.window_get_content_origin(arena, pointer) })
-//            }
-//        }
-//
-//    public val contentSize: LogicalSize
-//        get() {
-//            return Arena.ofConfined().use { arena ->
-//                LogicalSize.fromNative(ffiDownCall { desktop_h.window_get_content_size(arena, pointer) })
-//            }
-//        }
-//
-//    public var maxSize: LogicalSize
-//        get() {
-//            return Arena.ofConfined().use { arena ->
-//                LogicalSize.fromNative(ffiDownCall { desktop_h.window_get_max_size(arena, pointer) })
-//            }
-//        }
-//        set(value) {
-//            Arena.ofConfined().use { arena ->
-//                ffiDownCall {
-//                    desktop_h.window_set_max_size(pointer, value.toNative(arena))
-//                }
-//            }
-//        }
-//
-//    public var minSize: LogicalSize
-//        get() {
-//            return Arena.ofConfined().use { arena ->
-//                LogicalSize.fromNative(ffiDownCall { desktop_h.window_get_min_size(arena, pointer) })
-//            }
-//        }
-//        set(value) {
-//            Arena.ofConfined().use { arena ->
-//                ffiDownCall { desktop_h.window_set_min_size(pointer, value.toNative(arena)) }
-//            }
-//        }
-//
 //    public val isFullScreen: Boolean
 //        get() {
 //            return ffiDownCall { desktop_h.window_is_full_screen(pointer) }

@@ -1,6 +1,7 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
+use desktop_common::ffi_utils::BorrowedStrPtr;
 use log::debug;
 use smithay_client_toolkit::compositor::SurfaceData;
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
@@ -41,19 +42,17 @@ use smithay_client_toolkit::{
 use super::events::{Event, InternalEventHandler};
 
 #[repr(C)]
-pub struct WindowParams {
-    //pub origin: LogicalPoint,
+pub struct WindowParams<'a> {
     pub width: u32,
+
     pub height: u32,
-    //pub title: BorrowedStrPtr<'a>,
 
-    //pub is_resizable: bool,
-    //pub is_closable: bool,
-    //pub is_miniaturizable: bool,
+    pub title: BorrowedStrPtr<'a>,
 
-    //pub is_full_screen_allowed: bool,
-    //pub use_custom_titlebar: bool,
-    //pub titlebar_height: LogicalPixels,
+    /// See <https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_app_id>
+    pub app_id: BorrowedStrPtr<'a>,
+
+    pub force_client_side_decoration: bool,
 }
 
 pub struct SimpleWindow {
@@ -103,12 +102,15 @@ impl SimpleWindow {
 
         let d: Option<&SurfaceData> = window_surface.data();
         dbg!(d);
-        let window = state
-            .xdg_shell_state
-            .create_window(window_surface, WindowDecorations::ServerDefault, qh);
-        window.set_title("A wayland window");
-        // GitHub does not let projects use the `org.github` domain but the `io.github` domain is fine.
-        window.set_app_id("io.github.smithay.client-toolkit.SimpleWindow");
+
+        let decorations = if params.force_client_side_decoration {
+            WindowDecorations::RequestClient
+        } else {
+            WindowDecorations::ServerDefault
+        };
+        let window = state.xdg_shell_state.create_window(window_surface, decorations, qh);
+        window.set_title(params.title.as_str().unwrap());
+        window.set_app_id(params.app_id.as_str().unwrap());
         window.set_min_size(Some((width.get(), height.get())));
 
         // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.

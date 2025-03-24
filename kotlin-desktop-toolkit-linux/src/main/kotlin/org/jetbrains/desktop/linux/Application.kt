@@ -21,25 +21,16 @@ public data class WindowParams(
     val width: Int = 640,
     val height: Int = 480,
     val title: String = "Window",
-    val isResizable: Boolean = true,
-    val isClosable: Boolean = true,
-    val isMiniaturizable: Boolean = true,
-    val isFullScreenAllowed: Boolean = true,
-    val customTitlebar: CustomTitlebarParams? = null,
+    val appId: String = "Window",
+    val forceClientSideDecoration: Boolean = false,
 ) {
     internal fun toNative(arena: Arena): MemorySegment {
         val nativeWindowParams = NativeWindowParams.allocate(arena)
-//            NativeWindowParams.origin(nativeWindowParams, origin.toNative(arena))
         NativeWindowParams.width(nativeWindowParams, width)
         NativeWindowParams.height(nativeWindowParams, height)
-//            NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
-//
-//            NativeWindowParams.is_resizable(nativeWindowParams, isResizable)
-//            NativeWindowParams.is_closable(nativeWindowParams, isClosable)
-//            NativeWindowParams.is_miniaturizable(nativeWindowParams, isMiniaturizable)
-//            NativeWindowParams.is_full_screen_allowed(nativeWindowParams, isFullScreenAllowed)
-//            NativeWindowParams.use_custom_titlebar(nativeWindowParams, useCustomTitlebar)
-//            NativeWindowParams.titlebar_height(nativeWindowParams, titlebarHeight)
+        NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
+        NativeWindowParams.app_id(nativeWindowParams, arena.allocateUtf8String(appId))
+        NativeWindowParams.force_client_side_decoration(nativeWindowParams, forceClientSideDecoration)
         return nativeWindowParams
     }
 }
@@ -116,32 +107,6 @@ public class Application(applicationConfig: ApplicationConfig = ApplicationConfi
 
     public fun createWindow(eventHandler: EventHandler, params: WindowParams): Window {
         return Window(appPtr!!, eventHandler, params)
-    }
-
-    public fun createWindow(
-        eventHandler: EventHandler,
-        width: Int = 640,
-        height: Int = 480,
-        title: String = "Window",
-        isResizable: Boolean = true,
-        isClosable: Boolean = true,
-        isMiniaturizable: Boolean = true,
-        isFullScreenAllowed: Boolean = true,
-        customTitlebar: CustomTitlebarParams? = null,
-    ): Window {
-        return createWindow(
-            eventHandler,
-            WindowParams(
-                width,
-                height,
-                title,
-                isResizable,
-                isClosable,
-                isMiniaturizable,
-                isFullScreenAllowed,
-                customTitlebar,
-            ),
-        )
     }
 
     public fun allScreens(): AllScreens {
