@@ -52,24 +52,23 @@ public sealed class Event {
 
     public data class KeyDown(
         val keyCode: KeyCode,
-        val characters: String,
-        val key: String,
-        val modifiers: KeyModifiersSet,
+        val characters: String?,
+        val key: String?,
+        val modifiers: KeyModifiers,
         val isRepeat: Boolean,
         val timestamp: Timestamp,
     ) : Event()
 
     public data class KeyUp(
         val keyCode: KeyCode,
-        val characters: String,
-        val key: String,
-        val modifiers: KeyModifiersSet,
+        val characters: String?,
+        val key: String?,
+        val modifiers: KeyModifiers,
         val timestamp: Timestamp,
     ) : Event()
 
     public data class ModifiersChanged(
-        val modifiers: KeyModifiersSet,
-        val keyCode: KeyCode,
+        val modifiers: KeyModifiers,
         val timestamp: Timestamp,
     ) : Event()
 
@@ -147,15 +146,19 @@ public sealed class Event {
     public data object WindowCloseRequest : Event()
 }
 
+private fun fromOptionalNativeString(s: MemorySegment): String? {
+    return if (s == MemorySegment.NULL) null else s.getUtf8String(0)
+}
+
 internal fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
         desktop_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
             Event.KeyDown(
                 keyCode = KeyCode.fromNative(NativeKeyDownEvent.code(nativeEvent)),
-                characters = NativeKeyDownEvent.characters(nativeEvent).getUtf8String(0),
-                key = NativeKeyDownEvent.key(nativeEvent).getUtf8String(0),
-                modifiers = KeyModifiersSet(NativeKeyDownEvent.modifiers(nativeEvent)),
+                characters = fromOptionalNativeString(NativeKeyDownEvent.characters(nativeEvent)),
+                key = fromOptionalNativeString(NativeKeyDownEvent.key(nativeEvent)),
+                modifiers = KeyModifiers.fromNative(NativeKeyDownEvent.modifiers(nativeEvent)),
                 isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
                 timestamp = Timestamp(NativeKeyDownEvent.timestamp(nativeEvent)),
             )
@@ -163,9 +166,9 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_h.NativeEvent_KeyUp() -> {
             val nativeEvent = NativeEvent.key_up(s)
             Event.KeyUp(
-                characters = NativeKeyUpEvent.characters(nativeEvent).getUtf8String(0),
-                key = NativeKeyUpEvent.key(nativeEvent).getUtf8String(0),
-                modifiers = KeyModifiersSet(NativeKeyUpEvent.modifiers(nativeEvent)),
+                characters = fromOptionalNativeString(NativeKeyUpEvent.characters(nativeEvent)),
+                key = fromOptionalNativeString(NativeKeyUpEvent.key(nativeEvent)),
+                modifiers = KeyModifiers.fromNative(NativeKeyUpEvent.modifiers(nativeEvent)),
                 keyCode = KeyCode.fromNative(NativeKeyUpEvent.code(nativeEvent)),
                 timestamp = Timestamp(NativeKeyUpEvent.timestamp(nativeEvent)),
             )
@@ -173,8 +176,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_h.NativeEvent_ModifiersChanged() -> {
             val nativeEvent = NativeEvent.modifiers_changed(s)
             Event.ModifiersChanged(
-                modifiers = KeyModifiersSet(NativeModifiersChangedEvent.modifiers(nativeEvent)),
-                keyCode = KeyCode.fromNative(NativeModifiersChangedEvent.code(nativeEvent)),
+                modifiers = KeyModifiers.fromNative(NativeModifiersChangedEvent.modifiers(nativeEvent)),
                 timestamp = Timestamp(NativeModifiersChangedEvent.timestamp(nativeEvent)),
             )
         }
