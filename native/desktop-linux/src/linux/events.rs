@@ -1,13 +1,17 @@
 use core::f64;
+use std::ffi::CString;
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use smithay_client_toolkit::{
     reexports::client::{Proxy, protocol::wl_output::WlOutput},
-    seat::pointer::{AxisScroll, PointerEvent},
+    seat::{
+        keyboard::{KeyEvent, Modifiers},
+        pointer::{AxisScroll, PointerEvent},
+    },
 };
 
 use super::{
-    keyboard::{KeyCode, KeyModifiersSet},
+    keyboard::{KeyCode, KeyModifiers},
     mouse::MouseButton,
 };
 
@@ -49,7 +53,7 @@ pub struct LogicalSize {
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyDownEvent<'a> {
-    pub modifiers: KeyModifiersSet,
+    pub modifiers: KeyModifiers,
     pub code: KeyCode,
     pub characters: BorrowedStrPtr<'a>,
     pub key: BorrowedStrPtr<'a>,
@@ -60,7 +64,7 @@ pub struct KeyDownEvent<'a> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyUpEvent<'a> {
-    pub modifiers: KeyModifiersSet,
+    pub modifiers: KeyModifiers,
     pub code: KeyCode,
     pub characters: BorrowedStrPtr<'a>,
     pub key: BorrowedStrPtr<'a>,
@@ -70,8 +74,7 @@ pub struct KeyUpEvent<'a> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ModifiersChangedEvent {
-    pub modifiers: KeyModifiersSet,
-    pub code: KeyCode,
+    pub modifiers: KeyModifiers,
     pub timestamp: Timestamp,
 }
 
@@ -225,30 +228,59 @@ impl Event<'_> {
     //            is_full_screen: window.is_full_screen(),
     //        })
     //    }
-    //
-    //    pub(crate) fn new_key_down_event(key_info: &'a KeyEventInfo) -> Self {
-    //        Self::KeyDown(KeyDownEvent::from_key_event_info(key_info))
-    //    }
-    //
-    //    pub(crate) fn new_key_up_event(key_info: &'a KeyEventInfo) -> Self {
-    //        Self::KeyUp(KeyUpEvent {
-    //            code: key_info.code,
-    //            characters: borrow_ns_string(&key_info.chars),
-    //            key: borrow_ns_string(&key_info.chars),
-    //            modifiers: key_info.modifiers,
-    //            timestamp: key_info.timestamp,
-    //        })
-    //    }
-    //
-    //    pub(crate) fn new_modifiers_changed_event(ns_event: &NSEvent) -> Self {
-    //        let flags_changed_info = unpack_flags_changed_event(ns_event);
-    //        Self::ModifiersChanged(ModifiersChangedEvent {
-    //            modifiers: flags_changed_info.modifiers,
-    //            code: flags_changed_info.code,
-    //            timestamp: unsafe { ns_event.timestamp() },
-    //        })
-    //    }
-    //
+
+    pub(crate) fn new_key_down_event<'a>(event: &KeyEvent, characters: Option<&'a CString>, key: Option<&'a CString>) -> Event<'a> {
+        Event::KeyDown(KeyDownEvent {
+            modifiers: KeyModifiers::default(), // TODO
+            code: KeyCode(event.raw_code),
+            characters: if let Some(s) = characters {
+                BorrowedStrPtr::new(s)
+            } else {
+                BorrowedStrPtr::null()
+            },
+            key: if let Some(s) = key {
+                BorrowedStrPtr::new(s)
+            } else {
+                BorrowedStrPtr::null()
+            },
+            is_repeat: false,        // TODO
+            timestamp: Timestamp(0), // TODO
+        })
+    }
+
+    pub(crate) fn new_key_up_event<'a>(event: &KeyEvent, characters: Option<&'a CString>, key: Option<&'a CString>) -> Event<'a> {
+        Event::KeyUp(KeyUpEvent {
+            modifiers: KeyModifiers::default(), // TODO
+            code: KeyCode(event.raw_code),
+            characters: if let Some(s) = characters {
+                BorrowedStrPtr::new(s)
+            } else {
+                BorrowedStrPtr::null()
+            },
+            key: if let Some(s) = key {
+                BorrowedStrPtr::new(s)
+            } else {
+                BorrowedStrPtr::null()
+            },
+            timestamp: Timestamp(0), // TODO
+        })
+    }
+
+    pub(crate) const fn new_modifiers_changed_event(modifiers: Modifiers) -> Self {
+        let key_modifiers = KeyModifiers {
+            ctrl: modifiers.ctrl,
+            alt: modifiers.alt,
+            shift: modifiers.shift,
+            caps_lock: modifiers.caps_lock,
+            logo: modifiers.logo,
+            num_lock: modifiers.num_lock,
+        };
+        Self::ModifiersChanged(ModifiersChangedEvent {
+            modifiers: key_modifiers,
+            timestamp: Timestamp(0), // TODO
+        })
+    }
+
     pub(crate) const fn new_mouse_move_event(event: &PointerEvent, time: u32) -> Self {
         Event::MouseMoved(MouseMovedEvent {
             location_in_window: LogicalPoint {

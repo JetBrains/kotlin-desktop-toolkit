@@ -69,6 +69,14 @@ impl<'a> BorrowedStrPtr<'a> {
     }
 
     #[must_use]
+    pub const fn null() -> Self {
+        Self(GenericRawPtr {
+            ptr: std::ptr::null(),
+            phantom: PhantomData,
+        })
+    }
+
+    #[must_use]
     pub const fn as_non_null(&self) -> Option<NonNull<std::ffi::c_char>> {
         NonNull::new(self.0.ptr.cast_mut())
     }
@@ -82,6 +90,9 @@ impl<'a> BorrowedStrPtr<'a> {
 
 impl std::fmt::Debug for BorrowedStrPtr<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0.ptr.is_null() {
+            return write!(f, "null");
+        }
         match self.as_str() {
             Ok(s) => {
                 if s.is_ascii() {

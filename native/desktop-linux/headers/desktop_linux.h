@@ -64,16 +64,43 @@ typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
 
 typedef uint32_t NativeWindowId;
 
-typedef uintptr_t NativeKeyModifiersSet;
+typedef struct NativeKeyModifiers {
+  /**
+   * The "control" key
+   */
+  bool ctrl;
+  /**
+   * The "alt" key
+   */
+  bool alt;
+  /**
+   * The "shift" key
+   */
+  bool shift;
+  /**
+   * The "Caps lock" key
+   */
+  bool caps_lock;
+  /**
+   * The "logo" key
+   *
+   * Also known as the "windows" or "super" key on a keyboard.
+   */
+  bool logo;
+  /**
+   * The "Num lock" key
+   */
+  bool num_lock;
+} NativeKeyModifiers;
 
-typedef uint16_t NativeKeyCode;
+typedef uint32_t NativeKeyCode;
 
 typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
 typedef uint32_t NativeTimestamp;
 
 typedef struct NativeKeyDownEvent {
-  NativeKeyModifiersSet modifiers;
+  struct NativeKeyModifiers modifiers;
   NativeKeyCode code;
   NativeBorrowedStrPtr characters;
   NativeBorrowedStrPtr key;
@@ -82,7 +109,7 @@ typedef struct NativeKeyDownEvent {
 } NativeKeyDownEvent;
 
 typedef struct NativeKeyUpEvent {
-  NativeKeyModifiersSet modifiers;
+  struct NativeKeyModifiers modifiers;
   NativeKeyCode code;
   NativeBorrowedStrPtr characters;
   NativeBorrowedStrPtr key;
@@ -90,8 +117,7 @@ typedef struct NativeKeyUpEvent {
 } NativeKeyUpEvent;
 
 typedef struct NativeModifiersChangedEvent {
-  NativeKeyModifiersSet modifiers;
-  NativeKeyCode code;
+  struct NativeKeyModifiers modifiers;
   NativeTimestamp timestamp;
 } NativeModifiersChangedEvent;
 
