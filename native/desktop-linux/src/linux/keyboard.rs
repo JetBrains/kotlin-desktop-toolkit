@@ -3,7 +3,7 @@ use std::{ffi::CString, str::FromStr};
 use log::debug;
 use smithay_client_toolkit::seat::keyboard::{KeyEvent, Keysym, Modifiers};
 
-use super::{events::Event, window::SimpleWindow};
+use super::{events::{Event, KeyDownEvent}, window::{SimpleWindow, WindowFrameAction}};
 
 impl SimpleWindow {
     pub fn keyboard_enter(&mut self, keysyms: &[Keysym]) {
@@ -17,10 +17,12 @@ impl SimpleWindow {
         (self.event_handler)(&Event::new_window_focus_change_event(false));
     }
 
-    pub fn press_key(&mut self, event: &KeyEvent) {
+    pub fn press_key(&mut self, event: &KeyEvent) -> WindowFrameAction {
         let characters = event.utf8.as_ref().map(|s| CString::from_str(s).unwrap());
         let key = event.keysym.name().map(|s| CString::from_str(s).unwrap());
-        (self.event_handler)(&Event::new_key_down_event(event, characters.as_ref(), key.as_ref()));
+        let e = KeyDownEvent::new(event, characters.as_ref(), key.as_ref());
+        (self.event_handler)(&(&e).into());
+        e.frame_action_out
     }
 
     pub fn release_key(&mut self, event: &KeyEvent) {
@@ -29,7 +31,7 @@ impl SimpleWindow {
         (self.event_handler)(&Event::new_key_up_event(event, characters.as_ref(), key.as_ref()));
     }
 
-    pub fn update_modifiers(&mut self, modifiers: Modifiers, _layout: u32) {
+    pub fn update_modifiers(&mut self, modifiers: Modifiers) {
         (self.event_handler)(&Event::new_modifiers_changed_event(modifiers));
     }
 }

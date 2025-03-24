@@ -12,6 +12,45 @@ typedef enum NativeLogLevel {
   NativeLogLevel_Trace,
 } NativeLogLevel;
 
+typedef enum NativeWindowResizeEdge {
+  /**
+   * Nothing is being dragged.
+   */
+  NativeWindowResizeEdge_None,
+  /**
+   * The top edge is being dragged.
+   */
+  NativeWindowResizeEdge_Top,
+  /**
+   * The bottom edge is being dragged.
+   */
+  NativeWindowResizeEdge_Bottom,
+  /**
+   * The left edge is being dragged.
+   */
+  NativeWindowResizeEdge_Left,
+  /**
+   * The top left corner is being dragged.
+   */
+  NativeWindowResizeEdge_TopLeft,
+  /**
+   * The bottom left corner is being dragged.
+   */
+  NativeWindowResizeEdge_BottomLeft,
+  /**
+   * The right edge is being dragged.
+   */
+  NativeWindowResizeEdge_Right,
+  /**
+   * The top right corner is being dragged.
+   */
+  NativeWindowResizeEdge_TopRight,
+  /**
+   * The bottom right corner is being dragged.
+   */
+  NativeWindowResizeEdge_BottomRight,
+} NativeWindowResizeEdge;
+
 typedef const void *NativeGenericRawPtr_c_void;
 
 typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr_c_void;
@@ -99,6 +138,56 @@ typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
 typedef uint32_t NativeTimestamp;
 
+typedef enum NativeWindowFrameAction_Tag {
+  NativeWindowFrameAction_None,
+  /**
+   * The window should be minimized.
+   */
+  NativeWindowFrameAction_Minimize,
+  /**
+   * The window should be maximized.
+   */
+  NativeWindowFrameAction_Maximize,
+  /**
+   * The window should be unmaximized.
+   */
+  NativeWindowFrameAction_UnMaximize,
+  /**
+   * The window should be closed.
+   */
+  NativeWindowFrameAction_Close,
+  /**
+   * An interactive move should be started.
+   */
+  NativeWindowFrameAction_Move,
+  /**
+   * An interactive resize should be started with the provided edge.
+   */
+  NativeWindowFrameAction_Resize,
+  /**
+   * Show window menu.
+   *
+   * The coordinates are relative to the base surface, as in should be
+   * directly passed to the `xdg_toplevel::show_window_menu`.
+   */
+  NativeWindowFrameAction_ShowMenu,
+} NativeWindowFrameAction_Tag;
+
+typedef struct NativeWindowFrameAction_NativeShowMenu_Body {
+  int32_t _0;
+  int32_t _1;
+} NativeWindowFrameAction_NativeShowMenu_Body;
+
+typedef struct NativeWindowFrameAction {
+  NativeWindowFrameAction_Tag tag;
+  union {
+    struct {
+      enum NativeWindowResizeEdge resize;
+    };
+    NativeWindowFrameAction_NativeShowMenu_Body show_menu;
+  };
+} NativeWindowFrameAction;
+
 typedef struct NativeKeyDownEvent {
   struct NativeKeyModifiers modifiers;
   NativeKeyCode code;
@@ -106,6 +195,7 @@ typedef struct NativeKeyDownEvent {
   NativeBorrowedStrPtr key;
   bool is_repeat;
   NativeTimestamp timestamp;
+  struct NativeWindowFrameAction frame_action_out;
 } NativeKeyDownEvent;
 
 typedef struct NativeKeyUpEvent {
@@ -146,6 +236,7 @@ typedef struct NativeMouseDownEvent {
   NativeMouseButton button;
   struct NativeLogicalPoint location_in_window;
   NativeTimestamp timestamp;
+  struct NativeWindowFrameAction frame_action_out;
 } NativeMouseDownEvent;
 
 typedef struct NativeMouseUpEvent {
@@ -167,11 +258,8 @@ typedef struct NativeWindowScreenChangeEvent {
 
 typedef struct NativeWindowResizeEvent {
   struct NativeLogicalSize size;
+  bool draw_decoration;
 } NativeWindowResizeEvent;
-
-typedef struct NativeWindowMoveEvent {
-  struct NativeLogicalPoint origin;
-} NativeWindowMoveEvent;
 
 typedef struct NativeWindowFocusChangeEvent {
   bool is_key;
@@ -207,7 +295,6 @@ typedef enum NativeEvent_Tag {
   NativeEvent_ScrollWheel,
   NativeEvent_WindowScreenChange,
   NativeEvent_WindowResize,
-  NativeEvent_WindowMove,
   NativeEvent_WindowFocusChange,
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowFullScreenToggle,
@@ -219,7 +306,7 @@ typedef struct NativeEvent {
   NativeEvent_Tag tag;
   union {
     struct {
-      struct NativeKeyDownEvent key_down;
+      const struct NativeKeyDownEvent *key_down;
     };
     struct {
       struct NativeKeyUpEvent key_up;
@@ -240,7 +327,7 @@ typedef struct NativeEvent {
       struct NativeMouseExitedEvent mouse_exited;
     };
     struct {
-      struct NativeMouseDownEvent mouse_down;
+      const struct NativeMouseDownEvent *mouse_down;
     };
     struct {
       struct NativeMouseUpEvent mouse_up;
@@ -253,9 +340,6 @@ typedef struct NativeEvent {
     };
     struct {
       struct NativeWindowResizeEvent window_resize;
-    };
-    struct {
-      struct NativeWindowMoveEvent window_move;
     };
     struct {
       struct NativeWindowFocusChangeEvent window_focus_change;

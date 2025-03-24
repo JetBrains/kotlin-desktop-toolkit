@@ -1,9 +1,9 @@
 use core::f64;
-use std::ffi::{CString, c_char};
+use std::ffi::{c_char, CString};
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use smithay_client_toolkit::{
-    reexports::client::{Proxy, protocol::wl_output::WlOutput},
+    reexports::client::{protocol::wl_output::WlOutput, Proxy},
     seat::{
         keyboard::{KeyEvent, Modifiers},
         pointer::{AxisScroll, PointerEvent},
@@ -12,7 +12,7 @@ use smithay_client_toolkit::{
 
 use super::{
     keyboard::{KeyCode, KeyModifiers},
-    mouse::MouseButton,
+    mouse::MouseButton, window::WindowFrameAction,
 };
 
 // return true if event was handled
@@ -59,6 +59,27 @@ pub struct KeyDownEvent<'a> {
     pub key: BorrowedStrPtr<'a>,
     pub is_repeat: bool,
     pub timestamp: Timestamp,
+    pub frame_action_out: WindowFrameAction,
+}
+
+impl<'a> From<&'a KeyDownEvent<'a>> for Event<'a> {
+    fn from(value: &'a KeyDownEvent<'a>) -> Self {
+        Self::KeyDown(value)
+    }
+}
+
+impl<'a> KeyDownEvent<'a> {
+    pub(crate) fn new(event: &KeyEvent, characters: Option<&'a CString>, key: Option<&'a CString>) -> KeyDownEvent<'a> {
+        Self {
+            modifiers: KeyModifiers::default(), // TODO
+            code: KeyCode(event.raw_code),
+            characters: BorrowedStrPtr::new_optional(characters),
+            key: BorrowedStrPtr::new_optional(key),
+            is_repeat: false,        // TODO
+            timestamp: Timestamp(0), // TODO
+            frame_action_out: WindowFrameAction::None,
+        }
+    }
 }
 
 #[repr(C)]
@@ -71,6 +92,12 @@ pub struct KeyUpEvent<'a> {
     pub timestamp: Timestamp,
 }
 
+impl<'a> From<KeyUpEvent<'a>> for Event<'a> {
+    fn from(value: KeyUpEvent<'a>) -> Self {
+        Self::KeyUp(value)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct ModifiersChangedEvent {
@@ -78,11 +105,23 @@ pub struct ModifiersChangedEvent {
     pub timestamp: Timestamp,
 }
 
+impl From<ModifiersChangedEvent> for Event<'_> {
+    fn from(value: ModifiersChangedEvent) -> Self {
+        Self::ModifiersChanged(value)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseMovedEvent {
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
+}
+
+impl From<MouseMovedEvent> for Event<'_> {
+    fn from(value: MouseMovedEvent) -> Self {
+        Self::MouseMoved(value)
+    }
 }
 
 #[repr(C)]
@@ -93,11 +132,23 @@ pub struct MouseDraggedEvent {
     pub timestamp: Timestamp,
 }
 
+impl From<MouseDraggedEvent> for Event<'_> {
+    fn from(value: MouseDraggedEvent) -> Self {
+        Self::MouseDragged(value)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseEnteredEvent {
     pub location_in_window: LogicalPoint,
     //    pub timestamp: Timestamp,
+}
+
+impl From<MouseEnteredEvent> for Event<'_> {
+    fn from(value: MouseEnteredEvent) -> Self {
+        Self::MouseEntered(value)
+    }
 }
 
 #[repr(C)]
@@ -107,12 +158,39 @@ pub struct MouseExitedEvent {
     //    pub timestamp: Timestamp,
 }
 
+impl From<MouseExitedEvent> for Event<'_> {
+    fn from(value: MouseExitedEvent) -> Self {
+        Self::MouseExited(value)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseDownEvent {
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
+    pub frame_action_out: WindowFrameAction,
+}
+
+impl<'a> From<&'a MouseDownEvent> for Event<'a> {
+    fn from(value: &'a MouseDownEvent) -> Self {
+        Self::MouseDown(value)
+    }
+}
+
+impl MouseDownEvent {
+    pub(crate) const fn new(event: &PointerEvent, button: u32, time: u32) -> Self {
+        Self {
+            button: MouseButton(button),
+            location_in_window: LogicalPoint {
+                x: LogicalPixels(event.position.0),
+                y: LogicalPixels(event.position.1),
+            },
+            timestamp: Timestamp(time),
+            frame_action_out: WindowFrameAction::None
+        }
+    }
 }
 
 #[repr(C)]
@@ -121,6 +199,12 @@ pub struct MouseUpEvent {
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
+}
+
+impl From<MouseUpEvent> for Event<'_> {
+    fn from(value: MouseUpEvent) -> Self {
+        Self::MouseUp(value)
+    }
 }
 
 #[repr(C)]
@@ -132,22 +216,35 @@ pub struct ScrollWheelEvent {
     pub timestamp: Timestamp,
 }
 
+impl From<ScrollWheelEvent> for Event<'_> {
+    fn from(value: ScrollWheelEvent) -> Self {
+        Self::ScrollWheel(value)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowScreenChangeEvent {
     pub new_screen_id: ScreenId,
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct WindowResizeEvent {
-    pub size: LogicalSize,
+impl From<WindowScreenChangeEvent> for Event<'_> {
+    fn from(value: WindowScreenChangeEvent) -> Self {
+        Self::WindowScreenChange(value)
+    }
 }
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct WindowMoveEvent {
-    pub origin: LogicalPoint,
+pub struct WindowResizeEvent {
+    pub size: LogicalSize,
+    pub draw_decoration: bool,
+}
+
+impl From<WindowResizeEvent> for Event<'_> {
+    fn from(value: WindowResizeEvent) -> Self {
+        Self::WindowResize(value)
+    }
 }
 
 #[repr(C)]
@@ -157,10 +254,22 @@ pub struct WindowFocusChangeEvent {
     pub is_main: bool,
 }
 
+impl From<WindowFocusChangeEvent> for Event<'_> {
+    fn from(value: WindowFocusChangeEvent) -> Self {
+        Self::WindowFocusChange(value)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowFullScreenToggleEvent {
     pub is_full_screen: bool,
+}
+
+impl From<WindowFullScreenToggleEvent> for Event<'_> {
+    fn from(value: WindowFullScreenToggleEvent) -> Self {
+        Self::WindowFullScreenToggle(value)
+    }
 }
 
 #[repr(C)]
@@ -173,28 +282,39 @@ pub struct WindowDrawEvent {
     pub scale: f64,
 }
 
+impl From<WindowDrawEvent> for Event<'_> {
+    fn from(value: WindowDrawEvent) -> Self {
+        Self::WindowDraw(value)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowScaleChangedEvent {
     pub new_scale: f64,
 }
 
+impl From<WindowScaleChangedEvent> for Event<'_> {
+    fn from(value: WindowScaleChangedEvent) -> Self {
+        Self::WindowScaleChanged(value)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub enum Event<'a> {
-    KeyDown(KeyDownEvent<'a>),
+    KeyDown(&'a KeyDownEvent<'a>),
     KeyUp(KeyUpEvent<'a>),
     ModifiersChanged(ModifiersChangedEvent),
     MouseMoved(MouseMovedEvent),
     MouseDragged(MouseDraggedEvent),
     MouseEntered(MouseEnteredEvent),
     MouseExited(MouseExitedEvent),
-    MouseDown(MouseDownEvent),
+    MouseDown(&'a MouseDownEvent),
     MouseUp(MouseUpEvent),
     ScrollWheel(ScrollWheelEvent),
     WindowScreenChange(WindowScreenChangeEvent),
     WindowResize(WindowResizeEvent),
-    WindowMove(WindowMoveEvent),
     WindowFocusChange(WindowFocusChangeEvent),
     WindowCloseRequest,
     WindowFullScreenToggle(WindowFullScreenToggleEvent),
@@ -204,23 +324,13 @@ pub enum Event<'a> {
 
 impl Event<'_> {
     pub(crate) fn new_window_screen_change_event(output: &WlOutput) -> Self {
-        Self::WindowScreenChange(WindowScreenChangeEvent {
+        WindowScreenChangeEvent {
             new_screen_id: ScreenId(output.id().protocol_id()),
-        })
+        }.into()
     }
 
-    pub(crate) const fn new_window_resize_event(size: LogicalSize) -> Self {
-        Self::WindowResize(WindowResizeEvent { size })
-    }
-
-    //        pub(crate) fn new_window_move_event(window: &NSWindow) -> Self {
-    //            Self::WindowMove(WindowMoveEvent {
-    //                origin: window.get_origin(mtm).unwrap(), // todo
-    //            })
-    //        }
-
-    pub(crate) const fn new_window_focus_change_event(is_key: bool) -> Self {
-        Self::WindowFocusChange(WindowFocusChangeEvent { is_key, is_main: is_key })
+    pub(crate) fn new_window_focus_change_event(is_key: bool) -> Self {
+        WindowFocusChangeEvent { is_key, is_main: is_key }.into()
     }
 
     //    pub(crate) fn new_window_full_screen_toggle_event(window: &NSWindow) -> Self {
@@ -229,39 +339,12 @@ impl Event<'_> {
     //        })
     //    }
 
-    pub(crate) fn new_key_down_event<'a>(event: &KeyEvent, characters: Option<&'a CString>, key: Option<&'a CString>) -> Event<'a> {
-        Event::KeyDown(KeyDownEvent {
-            modifiers: KeyModifiers::default(), // TODO
-            code: KeyCode(event.raw_code),
-            characters: if let Some(s) = characters {
-                BorrowedStrPtr::new(s)
-            } else {
-                BorrowedStrPtr::null()
-            },
-            key: if let Some(s) = key {
-                BorrowedStrPtr::new(s)
-            } else {
-                BorrowedStrPtr::null()
-            },
-            is_repeat: false,        // TODO
-            timestamp: Timestamp(0), // TODO
-        })
-    }
-
     pub(crate) fn new_key_up_event<'a>(event: &KeyEvent, characters: Option<&'a CString>, key: Option<&'a CString>) -> Event<'a> {
         Event::KeyUp(KeyUpEvent {
             modifiers: KeyModifiers::default(), // TODO
             code: KeyCode(event.raw_code),
-            characters: if let Some(s) = characters {
-                BorrowedStrPtr::new(s)
-            } else {
-                BorrowedStrPtr::null()
-            },
-            key: if let Some(s) = key {
-                BorrowedStrPtr::new(s)
-            } else {
-                BorrowedStrPtr::null()
-            },
+            characters: BorrowedStrPtr::new_optional(characters),
+            key: BorrowedStrPtr::new_optional(key),
             timestamp: Timestamp(0), // TODO
         })
     }
@@ -317,17 +400,6 @@ impl Event<'_> {
         })
     }
 
-    pub(crate) const fn new_mouse_down_event(event: &PointerEvent, button: u32, time: u32) -> Self {
-        Event::MouseDown(MouseDownEvent {
-            button: MouseButton(button),
-            location_in_window: LogicalPoint {
-                x: LogicalPixels(event.position.0),
-                y: LogicalPixels(event.position.1),
-            },
-            timestamp: Timestamp(time),
-        })
-    }
-
     pub(crate) const fn new_mouse_up_event(event: &PointerEvent, button: u32, time: u32) -> Self {
         Event::MouseUp(MouseUpEvent {
             button: MouseButton(button),
@@ -348,16 +420,6 @@ impl Event<'_> {
                 y: LogicalPixels(event.position.1),
             },
             timestamp: Timestamp(time),
-        })
-    }
-
-    pub(crate) const fn new_window_draw_event(buffer: &mut [u8], width: u32, height: u32, stride: u32, scale: f64) -> Self {
-        Event::WindowDraw(WindowDrawEvent {
-            buffer: buffer.as_mut_ptr(),
-            width,
-            height,
-            stride,
-            scale,
         })
     }
 

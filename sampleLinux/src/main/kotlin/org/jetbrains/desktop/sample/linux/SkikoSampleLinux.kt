@@ -175,37 +175,26 @@ class ContentArea(
 }
 
 class WindowContainer(
-    val customTitlebar: CustomTitlebar?,
+    var customTitlebar: CustomTitlebar?,
     private val contentArea: ContentArea,
 ) {
     companion object {
-        fun create(windowContentSize: LogicalSize, useCustomTitlebar: Boolean): WindowContainer {
-            return if (useCustomTitlebar) {
-                val titlebar = CustomTitlebar(
-                    LogicalPoint.Zero,
-                    LogicalSize(width = windowContentSize.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT),
-                )
-                val contentArea = ContentArea(
-                    LogicalPoint(x = 0.0, y = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT),
-                    LogicalSize(
-                        width = windowContentSize.width,
-                        height = windowContentSize.height - titlebar.size.height,
-                    ),
-                )
-                WindowContainer(titlebar, contentArea)
-            } else {
-                val contentArea = ContentArea(LogicalPoint.Zero, windowContentSize)
-                WindowContainer(null, contentArea)
-            }
+        fun create(windowContentSize: LogicalSize): WindowContainer {
+            val contentArea = ContentArea(LogicalPoint.Zero, windowContentSize)
+            return WindowContainer(null, contentArea)
         }
     }
 
-    fun resize(windowSize: LogicalSize) {
-        if (customTitlebar != null) {
-            customTitlebar.size = LogicalSize(width = windowSize.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
-            contentArea.origin = LogicalPoint(x = 0.0, y = customTitlebar.size.height)
+    fun resize(drawDecoration: Boolean, windowSize: LogicalSize) {
+        if (drawDecoration) {
+            val titlebarSize = LogicalSize(width = windowSize.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
+            val titlebar = customTitlebar ?: CustomTitlebar(origin = LogicalPoint.Zero, size = titlebarSize).also {
+                customTitlebar = it
+            }
+            titlebar.size = LogicalSize(width = windowSize.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
+            contentArea.origin = LogicalPoint(x = 0.0, y = titlebar.size.height)
             contentArea.size =
-                LogicalSize(width = windowSize.width, height = windowSize.height - customTitlebar.size.height)
+                LogicalSize(width = windowSize.width, height = windowSize.height - titlebar.size.height)
         } else {
             contentArea.size = windowSize
         }
@@ -234,12 +223,13 @@ class RotatingBallWindow(
         fun createWindow(app: Application, title: String, useCustomTitlebar: Boolean): RotatingBallWindow {
             val windowSize = LogicalSize(640.0, 480.0)
             val windowContentSize = windowSize // todo it's incorrect
-            val container = WindowContainer.create(windowContentSize, useCustomTitlebar)
+            val container = WindowContainer.create(windowContentSize)
 
             val windowParams = WindowParams(
                 width = 640,
                 height = 480,
                 title = title,
+                forceClientSideDecoration = useCustomTitlebar,
             )
 
             return RotatingBallWindow(container, app, windowParams)
@@ -247,7 +237,7 @@ class RotatingBallWindow(
     }
 
     init {
-        windowContainer.resize(window.size)
+        windowContainer.resize(false, window.size)
 //        performDrawing(syncWithCA = true)
     }
 
@@ -255,7 +245,7 @@ class RotatingBallWindow(
         return if (super.handleEvent(event) == EventHandlerResult.Continue) {
             when {
                 event is Event.WindowResize -> {
-                    windowContainer.resize(event.size)
+                    windowContainer.resize(event.drawDecoration, event.size)
                     // performDrawing(syncWithCA = true)
                     EventHandlerResult.Stop
                 }
@@ -336,7 +326,7 @@ fun main(args: Array<String>) {
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     val app = Application(ApplicationConfig())
     ApplicationState(app).use { state ->
-        state.createWindow(useCustomTitlebar = false)
+        state.createWindow(useCustomTitlebar = true)
         app.runEventLoop()
     }
 }
