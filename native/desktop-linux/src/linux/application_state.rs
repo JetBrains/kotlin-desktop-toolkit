@@ -27,7 +27,7 @@ use smithay_client_toolkit::{
     registry_handlers,
     seat::{
         Capability, SeatHandler, SeatState,
-        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
+        keyboard::{KeyEvent, KeyboardData, KeyboardHandler, Keysym, Modifiers},
         pointer::{PointerEvent, PointerHandler, ThemeSpec, ThemedPointer},
     },
     shell::{
@@ -115,6 +115,10 @@ impl ApplicationState {
             themed_pointer: self.themed_pointer.as_mut(),
         })
     }
+
+    fn get_key_window(&mut self) -> Option<&mut SimpleWindow> {
+        self.key_surface.as_mut().and_then(|surface_id| self.windows.get_mut(surface_id))
+    }
 }
 
 impl KeyboardHandler for ApplicationState {
@@ -141,15 +145,19 @@ impl KeyboardHandler for ApplicationState {
         self.key_surface = None;
     }
 
-    fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
-        if let Some(surface_id) = self.key_surface.as_ref() {
-            self.windows.get_mut(surface_id).unwrap().press_key(&event);
+    fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, keyboard: &wl_keyboard::WlKeyboard, serial: u32, event: KeyEvent) {
+        if let Some(window) = self.get_key_window() {
+            let frame_action = window.press_key(&event);
+            if let Some(keyboard_data) = keyboard.data::<KeyboardData<Self>>() {
+                let seat = keyboard_data.seat();
+                window.frame_action(seat, serial, frame_action);
+            }
         }
     }
 
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
-        if let Some(surface_id) = self.key_surface.as_ref() {
-            self.windows.get_mut(surface_id).unwrap().release_key(&event);
+        if let Some(window) = self.get_key_window() {
+            window.release_key(&event);
         }
     }
 
@@ -159,9 +167,12 @@ impl KeyboardHandler for ApplicationState {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         _serial: u32,
-        _: Modifiers,
+        modifiers: Modifiers,
         _layout: u32,
     ) {
+        if let Some(window) = self.get_key_window() {
+            window.update_modifiers(modifiers);
+        }
     }
 }
 
