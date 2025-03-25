@@ -1,5 +1,5 @@
-use smithay_client_toolkit::reexports::client::protocol::wl_pointer;
 use smithay_client_toolkit::reexports::client::Proxy;
+use smithay_client_toolkit::reexports::client::protocol::wl_pointer;
 use smithay_client_toolkit::seat::pointer::PointerData;
 use smithay_client_toolkit::{
     seat::pointer::{PointerEvent, PointerEventKind},

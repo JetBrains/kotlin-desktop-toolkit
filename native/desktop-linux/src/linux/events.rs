@@ -1,9 +1,9 @@
 use core::f64;
-use std::ffi::{c_char, CString};
+use std::ffi::{CString, c_char};
 
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
 use smithay_client_toolkit::{
-    reexports::client::{protocol::wl_output::WlOutput, Proxy},
+    reexports::client::{Proxy, protocol::wl_output::WlOutput},
     seat::{
         keyboard::{KeyEvent, Modifiers},
         pointer::{AxisScroll, PointerEvent},
@@ -12,7 +12,9 @@ use smithay_client_toolkit::{
 
 use super::{
     keyboard::{KeyCode, KeyModifiers},
-    mouse::MouseButton, window::WindowFrameAction,
+    mouse::MouseButton,
+    window::WindowFrameAction,
+    xdg_desktop_settings::WindowButtonType,
 };
 
 // return true if event was handled
@@ -69,7 +71,7 @@ impl<'a> From<&'a KeyDownEvent<'a>> for Event<'a> {
 }
 
 impl<'a> KeyDownEvent<'a> {
-    pub(crate) fn new(event: &KeyEvent, characters: Option<&'a CString>, key: Option<&'a CString>) -> KeyDownEvent<'a> {
+    pub(crate) fn new(event: &KeyEvent, characters: Option<&'a CString>, key: Option<&'a CString>) -> Self {
         Self {
             modifiers: KeyModifiers::default(), // TODO
             code: KeyCode(event.raw_code),
@@ -188,7 +190,7 @@ impl MouseDownEvent {
                 y: LogicalPixels(event.position.1),
             },
             timestamp: Timestamp(time),
-            frame_action_out: WindowFrameAction::None
+            frame_action_out: WindowFrameAction::None,
         }
     }
 }
@@ -238,7 +240,8 @@ impl From<WindowScreenChangeEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct WindowResizeEvent {
     pub size: LogicalSize,
-    pub draw_decoration: bool,
+    pub titlebar_layout_left: AutoDropArray<WindowButtonType>,
+    pub titlebar_layout_right: AutoDropArray<WindowButtonType>,
 }
 
 impl From<WindowResizeEvent> for Event<'_> {
@@ -326,7 +329,8 @@ impl Event<'_> {
     pub(crate) fn new_window_screen_change_event(output: &WlOutput) -> Self {
         WindowScreenChangeEvent {
             new_screen_id: ScreenId(output.id().protocol_id()),
-        }.into()
+        }
+        .into()
     }
 
     pub(crate) fn new_window_focus_change_event(is_key: bool) -> Self {

@@ -12,6 +12,16 @@ typedef enum NativeLogLevel {
   NativeLogLevel_Trace,
 } NativeLogLevel;
 
+enum NativeWindowButtonType {
+  NativeWindowButtonType_AppMenu,
+  NativeWindowButtonType_Icon,
+  NativeWindowButtonType_Spacer,
+  NativeWindowButtonType_Minimize,
+  NativeWindowButtonType_Maximize,
+  NativeWindowButtonType_Close,
+};
+typedef int32_t NativeWindowButtonType;
+
 typedef enum NativeWindowResizeEdge {
   /**
    * Nothing is being dragged.
@@ -256,9 +266,15 @@ typedef struct NativeWindowScreenChangeEvent {
   NativeScreenId new_screen_id;
 } NativeWindowScreenChangeEvent;
 
+typedef struct NativeAutoDropArray_WindowButtonType {
+  const NativeWindowButtonType *ptr;
+  NativeArraySize len;
+} NativeAutoDropArray_WindowButtonType;
+
 typedef struct NativeWindowResizeEvent {
   struct NativeLogicalSize size;
-  bool draw_decoration;
+  struct NativeAutoDropArray_WindowButtonType titlebar_layout_left;
+  struct NativeAutoDropArray_WindowButtonType titlebar_layout_right;
 } NativeWindowResizeEvent;
 
 typedef struct NativeWindowFocusChangeEvent {

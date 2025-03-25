@@ -3,7 +3,10 @@ use std::{ffi::CString, str::FromStr};
 use log::debug;
 use smithay_client_toolkit::seat::keyboard::{KeyEvent, Keysym, Modifiers};
 
-use super::{events::{Event, KeyDownEvent}, window::{SimpleWindow, WindowFrameAction}};
+use super::{
+    events::{Event, KeyDownEvent},
+    window::{SimpleWindow, WindowFrameAction},
+};
 
 impl SimpleWindow {
     pub fn keyboard_enter(&mut self, keysyms: &[Keysym]) {

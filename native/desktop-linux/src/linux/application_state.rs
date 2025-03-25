@@ -9,7 +9,11 @@ use smithay_client_toolkit::{
     output::{OutputHandler, OutputState},
     reexports::{
         client::{
-            backend::ObjectId, delegate_noop, globals::GlobalList, protocol::{wl_keyboard, wl_output, wl_pointer::WlPointer, wl_seat, wl_surface::WlSurface}, Connection, Dispatch, Proxy, QueueHandle
+            Connection, Dispatch, Proxy, QueueHandle,
+            backend::ObjectId,
+            delegate_noop,
+            globals::GlobalList,
+            protocol::{wl_keyboard, wl_output, wl_pointer::WlPointer, wl_seat, wl_surface::WlSurface},
         },
         protocols::wp::{
             fractional_scale::v1::client::{
@@ -22,12 +26,16 @@ use smithay_client_toolkit::{
     registry::{ProvidesRegistryState, RegistryState},
     registry_handlers,
     seat::{
-        keyboard::{KeyEvent, KeyboardData, KeyboardHandler, Keysym, Modifiers}, pointer::{PointerEvent, PointerHandler, ThemeSpec, ThemedPointer}, Capability, SeatHandler, SeatState
+        Capability, SeatHandler, SeatState,
+        keyboard::{KeyEvent, KeyboardData, KeyboardHandler, Keysym, Modifiers},
+        pointer::{PointerEvent, PointerHandler, ThemeSpec, ThemedPointer},
     },
     shell::{
+        WaylandSurface,
         xdg::{
-            window::{Window, WindowConfigure, WindowHandler}, XdgShell
-        }, WaylandSurface
+            XdgShell,
+            window::{Window, WindowConfigure, WindowHandler},
+        },
     },
     shm::{Shm, ShmHandler},
 };
@@ -140,7 +148,7 @@ impl KeyboardHandler for ApplicationState {
     fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, keyboard: &wl_keyboard::WlKeyboard, serial: u32, event: KeyEvent) {
         if let Some(window) = self.get_key_window() {
             let frame_action = window.press_key(&event);
-            if let Some(keyboard_data) = keyboard.data::<KeyboardData<ApplicationState>>() {
+            if let Some(keyboard_data) = keyboard.data::<KeyboardData<Self>>() {
                 let seat = keyboard_data.seat();
                 window.frame_action(seat, serial, frame_action);
             }

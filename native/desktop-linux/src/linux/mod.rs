@@ -8,3 +8,4 @@ pub mod mouse;
 pub mod screen;
 pub mod window;
 pub mod window_api;
+pub mod xdg_desktop_settings;

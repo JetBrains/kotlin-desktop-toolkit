@@ -1,10 +1,13 @@
-use anyhow::Result;
+use std::time::Duration;
+
 use desktop_common::logger::ffi_boundary;
 use desktop_common::{ffi_utils::RustAllocatedRawPtr, logger::catch_panic};
 use log::debug;
+use smithay_client_toolkit::reexports::calloop::{EventLoop, channel};
+use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 use smithay_client_toolkit::{
     reexports::client::{
-        Connection, EventQueue, Proxy, QueueHandle,
+        Connection, Proxy, QueueHandle,
         globals::{GlobalList, registry_queue_init},
     },
     shell::WaylandSurface,
@@ -12,6 +15,7 @@ use smithay_client_toolkit::{
 
 use super::events::{EventHandler, LogicalPixels, LogicalSize, WindowId};
 use super::window::WindowParams;
+use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
 use super::{application_state::ApplicationState, window::SimpleWindow};
 
 #[repr(C)]
@@ -23,35 +27,55 @@ pub struct ApplicationCallbacks {
     pub on_display_configuration_change: extern "C" fn(),
 }
 
-pub struct Application {
+pub struct Application<'a> {
     globals: GlobalList,
-    event_queue: EventQueue<ApplicationState>,
+    event_loop: EventLoop<'a, ApplicationState>,
     qh: QueueHandle<ApplicationState>,
     exit: bool,
     pub state: ApplicationState,
 }
 
-impl Application {
-    pub fn new(callbacks: ApplicationCallbacks) -> Result<Self> {
+impl Application<'_> {
+    pub fn new(callbacks: ApplicationCallbacks) -> anyhow::Result<Self> {
         let conn = Connection::connect_to_env()?;
 
         let (globals, event_queue) = registry_queue_init(&conn)?;
         let qh: QueueHandle<ApplicationState> = event_queue.handle();
+
+        let event_loop = EventLoop::<ApplicationState>::try_new()?;
+        let loop_handle = event_loop.handle();
+
+        WaylandSource::new(conn, event_queue).insert(loop_handle)?;
+
+        let (s, c) = channel::channel();
+        async_std::task::spawn(xdg_desktop_settings_notifier(s));
+
+        event_loop
+            .handle()
+            .insert_source(c, |event, _a, state| {
+                if let channel::Event::Msg(e) = event {
+                    for w in state.windows.values_mut() {
+                        w.handle_xdg_desktop_setting(&e);
+                    }
+                }
+            })
+            .unwrap();
+
         let state = ApplicationState::new(&globals, &qh, callbacks);
         Ok(Self {
             globals,
-            event_queue,
+            event_loop,
             qh,
             exit: false,
             state,
         })
     }
 
-    pub fn run(&mut self) {
+    fn run(&mut self) -> Result<(), anyhow::Error> {
         debug!("Start event loop");
-        loop {
-            self.event_queue.blocking_dispatch(&mut self.state).unwrap();
 
+        loop {
+            self.event_loop.dispatch(Duration::from_millis(16), &mut self.state)?;
             if !self.state.windows.is_empty() {
                 self.state.windows.retain(|k, v| {
                     if v.close {
@@ -69,7 +93,9 @@ impl Application {
                 (self.state.callbacks.on_will_terminate)();
                 break;
             }
+            // debug!("Continuing event loop");
         }
+        Ok(())
     }
 
     pub fn new_window(&mut self, event_handler: EventHandler, params: &WindowParams) -> WindowId {
@@ -125,8 +151,7 @@ pub extern "C" fn application_init(callbacks: ApplicationCallbacks) -> AppPtr<'s
 pub extern "C" fn application_run_event_loop(mut app_ptr: AppPtr) {
     ffi_boundary("application_run_event_loop", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.run();
-        Ok(())
+        app.run()
     });
 }
 

@@ -12,6 +12,7 @@ import org.jetbrains.desktop.linux.LogicalPoint
 import org.jetbrains.desktop.linux.LogicalSize
 import org.jetbrains.desktop.linux.PhysicalPoint
 import org.jetbrains.desktop.linux.PhysicalSize
+import org.jetbrains.desktop.linux.WindowButtonType
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
@@ -26,6 +27,7 @@ class CustomTitlebar(
     private var origin: LogicalPoint,
     var size: LogicalSize,
     var startWindowDrag: (() -> Unit)? = null,
+    var buttonLayout: Pair<List<WindowButtonType>, List<WindowButtonType>>? = null
 ) {
     companion object {
         const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55.0
@@ -49,6 +51,36 @@ class CustomTitlebar(
         }
     }
 
+    private fun drawButton(canvas: Canvas, button: WindowButtonType, xOffset: Float, scale: Float) {
+        val buttonSize = 50f * scale
+        val yOffset = 0f * scale
+        Paint().use { paint ->
+            paint.color = Color.BLACK
+            paint.strokeWidth = 5f * scale
+            when (button) {
+                WindowButtonType.AppMenu -> {
+                    canvas.drawLine(xOffset, yOffset, xOffset + buttonSize, yOffset, paint)
+                    canvas.drawLine(xOffset, yOffset + (buttonSize / 2), xOffset + buttonSize, yOffset + (buttonSize / 2), paint)
+                    canvas.drawLine(xOffset, yOffset + buttonSize, xOffset + buttonSize, yOffset + buttonSize, paint)
+                }
+                WindowButtonType.Icon -> {
+                    //canvas.drawImage()
+                }
+                WindowButtonType.Spacer -> {}
+                WindowButtonType.Minimize -> {
+                    canvas.drawLine(xOffset, yOffset + buttonSize, xOffset + buttonSize, yOffset + buttonSize, paint)
+                }
+                WindowButtonType.Maximize -> {
+                    canvas.drawRect(Rect.makeXYWH(xOffset, yOffset, buttonSize, buttonSize), paint)
+                }
+                WindowButtonType.Close -> {
+                    canvas.drawLine(xOffset, yOffset, xOffset + buttonSize, yOffset + buttonSize, paint)
+                    canvas.drawLine(xOffset + buttonSize, yOffset, xOffset, yOffset + buttonSize, paint)
+                }
+            }
+        }
+    }
+
     fun draw(canvas: Canvas, scale: Double) {
         val physicalOrigin = origin.toPhysical(scale)
         val physicalSize = size.toPhysical(scale)
@@ -60,9 +92,13 @@ class CustomTitlebar(
             paint.color = 0xFF404040.toInt()
             canvas.drawRect(Rect.makeXYWH(x, y, width, height), paint)
         }
-        Paint().use { paint ->
-            paint.color = 0xFFAAAAAA.toInt()
-            canvas.drawRect(Rect.makeXYWH(width * 0.75f, y, width * 0.25f, height), paint)
+        buttonLayout?.let { (buttonsLeft, buttonsRight) ->
+            for ((i, b) in buttonsLeft.withIndex()) {
+                drawButton(canvas, b, i * 60f * scale.toFloat(), scale.toFloat())
+            }
+            for ((i, b) in buttonsRight.reversed().withIndex()) {
+                drawButton(canvas, b, width - (i * 60f * scale.toFloat()), scale.toFloat())
+            }
         }
     }
 }
@@ -185,18 +221,19 @@ class WindowContainer(
         }
     }
 
-    fun resize(drawDecoration: Boolean, windowSize: LogicalSize) {
-        if (drawDecoration) {
-            val titlebarSize = LogicalSize(width = windowSize.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
+    fun resize(event: Event.WindowResize) {
+        if (event.titlebarLayout != null) {
+            val titlebarSize = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
             val titlebar = customTitlebar ?: CustomTitlebar(origin = LogicalPoint.Zero, size = titlebarSize).also {
                 customTitlebar = it
             }
-            titlebar.size = LogicalSize(width = windowSize.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
+            titlebar.buttonLayout = event.titlebarLayout
+            titlebar.size = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
             contentArea.origin = LogicalPoint(x = 0.0, y = titlebar.size.height)
             contentArea.size =
-                LogicalSize(width = windowSize.width, height = windowSize.height - titlebar.size.height)
+                LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
         } else {
-            contentArea.size = windowSize
+            contentArea.size = event.size
         }
     }
 
@@ -236,16 +273,11 @@ class RotatingBallWindow(
         }
     }
 
-    init {
-        windowContainer.resize(false, window.size)
-//        performDrawing(syncWithCA = true)
-    }
-
     override fun handleEvent(event: Event): EventHandlerResult {
         return if (super.handleEvent(event) == EventHandlerResult.Continue) {
             when {
                 event is Event.WindowResize -> {
-                    windowContainer.resize(event.drawDecoration, event.size)
+                    windowContainer.resize(event)
                     // performDrawing(syncWithCA = true)
                     EventHandlerResult.Stop
                 }
