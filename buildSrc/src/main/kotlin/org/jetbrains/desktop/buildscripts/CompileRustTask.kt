@@ -8,6 +8,7 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Nested
+import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import org.gradle.kotlin.dsl.property
@@ -23,8 +24,8 @@ abstract class CompileRustTask @Inject constructor(
     projectLayout: ProjectLayout,
     private val execOperations: ExecOperations,
 ) : DefaultTask() {
-    @get:Input
-    val nativeDirectory = objectFactory.property<String>()
+    @get:InputDirectory
+    val nativeDirectory = objectFactory.directoryProperty()
 
     @get:Input
     val crateName = objectFactory.property<String>()
@@ -43,7 +44,7 @@ abstract class CompileRustTask @Inject constructor(
 
     @Internal
     val rustOutputLibraryFile = providerFactory.provider {
-        val dir = Path.of(nativeDirectory.get()).resolve(inCrateArtifactsPath(rustTarget.get(), rustProfile.get()))
+        val dir = nativeDirectory.get().asFile.resolve(inCrateArtifactsPath(rustTarget.get(), rustProfile.get()))
         val target = rustTarget.get()
         val name = crateName.get().replace('-', '_')
         when (target.os) {
@@ -87,12 +88,12 @@ abstract class CompileRustTask @Inject constructor(
     @TaskAction
     fun compile() {
         execOperations.compileRust(
-            Path.of(nativeDirectory.get()),
+            nativeDirectory.get().asFile.toPath(),
             crateName.get(),
             buildPlatformRustTarget(rustTarget.get()),
             rustProfile.get(),
             headerFile.get().asFile.toPath(),
-            rustOutputLibraryFile.get(),
+            rustOutputLibraryFile.get().toPath(),
             libraryFile.get().toPath(),
         )
     }
