@@ -2,6 +2,7 @@ pub mod application_api;
 pub mod application_menu;
 pub mod application_menu_api;
 pub mod converters;
+pub mod cursor;
 pub mod custom_titlebar;
 pub mod dispatcher;
 pub mod display_link;

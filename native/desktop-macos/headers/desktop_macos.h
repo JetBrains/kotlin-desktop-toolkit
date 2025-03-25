@@ -19,6 +19,32 @@ typedef enum NativeActionMenuItemSpecialTag {
   NativeActionMenuItemSpecialTag_Delete,
 } NativeActionMenuItemSpecialTag;
 
+typedef enum NativeCursorIcon {
+  NativeCursorIcon_Unknown,
+  NativeCursorIcon_ArrowCursor,
+  NativeCursorIcon_IBeamCursor,
+  NativeCursorIcon_CrosshairCursor,
+  NativeCursorIcon_ClosedHandCursor,
+  NativeCursorIcon_OpenHandCursor,
+  NativeCursorIcon_PointingHandCursor,
+  NativeCursorIcon_ResizeLeftCursor,
+  NativeCursorIcon_ResizeRightCursor,
+  NativeCursorIcon_ResizeLeftRightCursor,
+  NativeCursorIcon_ResizeUpCursor,
+  NativeCursorIcon_ResizeDownCursor,
+  NativeCursorIcon_ResizeUpDownCursor,
+  NativeCursorIcon_DisappearingItemCursor,
+  NativeCursorIcon_IBeamCursorForVerticalLayout,
+  NativeCursorIcon_OperationNotAllowedCursor,
+  NativeCursorIcon_DragLinkCursor,
+  NativeCursorIcon_DragCopyCursor,
+  NativeCursorIcon_ContextualMenuCursor,
+  NativeCursorIcon_ZoomInCursor,
+  NativeCursorIcon_ZoomOutCursor,
+  NativeCursorIcon_ColumnResizeCursor,
+  NativeCursorIcon_RowResizeCursor,
+} NativeCursorIcon;
+
 typedef enum NativeLogLevel {
   NativeLogLevel_Off,
   NativeLogLevel_Error,
@@ -481,6 +507,14 @@ void application_set_dock_icon(uint8_t *data, uint64_t data_length);
 void main_menu_update(struct NativeAppMenuStructure menu);
 
 void main_menu_set_none(void);
+
+void cursor_push_hide(void);
+
+void cursor_pop_hide(void);
+
+void cursor_set_icon(enum NativeCursorIcon icon);
+
+enum NativeCursorIcon cursor_get_icon(void);
 
 bool dispatcher_is_main_thread(void);
 

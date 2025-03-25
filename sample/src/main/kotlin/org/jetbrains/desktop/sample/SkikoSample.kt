@@ -4,6 +4,7 @@ import org.jetbrains.desktop.macos.AppMenuItem
 import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.AppMenuStructure
 import org.jetbrains.desktop.macos.Application
+import org.jetbrains.desktop.macos.Cursor
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.FileDialog
@@ -373,6 +374,12 @@ class ApplicationState : AutoCloseable {
         }
     }
 
+    private var cursors = generateSequence { Cursor.Icon.entries.asSequence() }.flatten().iterator()
+
+    private fun cycleCursor() {
+        Cursor.icon = cursors.next()
+    }
+
     private var effect = generateSequence { WindowVisualEffect.entries.asSequence() }.flatten().iterator()
 
     private fun cycleWindowEffects() {
@@ -605,7 +612,22 @@ class ApplicationState : AutoCloseable {
                 ),
                 specialTag = AppMenuItem.SubMenu.SpecialTag.Window,
             ),
-            AppMenuItem.SubMenu("Help"),
+            AppMenuItem.SubMenu(
+                title = "Mouse",
+                AppMenuItem.Action(
+                    title = "Cycle Mouse Cursor",
+                    keystroke = Keystroke(key = "m", modifiers = KeyModifiersSet.create(command = true)),
+                    perform = { cycleCursor() },
+                ),
+                AppMenuItem.Action(
+                    title = "Mouse Toggle Cursor",
+                    keystroke = Keystroke(key = "h", modifiers = KeyModifiersSet.create(command = true)),
+                    perform = {
+                        Cursor.hidden = !Cursor.hidden
+                    },
+                ),
+            ),
+            AppMenuItem.SubMenu(title = "Help"),
         )
     }
 
