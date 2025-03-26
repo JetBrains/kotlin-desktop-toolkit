@@ -7,26 +7,26 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
-    width = NativeLogicalSize.width(s),
-    height = NativeLogicalSize.height(s),
+    width = NativeLogicalSize.width(s).toFloat(),
+    height = NativeLogicalSize.height(s).toFloat(),
 )
 
 internal fun LogicalSize.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalSize.allocate(arena)
-    NativeLogicalSize.width(result, width)
-    NativeLogicalSize.height(result, height)
+    NativeLogicalSize.width(result, width.toDouble())
+    NativeLogicalSize.height(result, height.toDouble())
     return result
 }
 
 internal fun LogicalPoint.Companion.fromNative(s: MemorySegment) = LogicalPoint(
-    x = NativeLogicalPoint.x(s),
-    y = NativeLogicalPoint.y(s),
+    x = NativeLogicalPoint.x(s).toFloat(),
+    y = NativeLogicalPoint.y(s).toFloat(),
 )
 
 internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalPoint.allocate(arena)
-    NativeLogicalPoint.x(result, x)
-    NativeLogicalPoint.y(result, y)
+    NativeLogicalPoint.x(result, x.toDouble())
+    NativeLogicalPoint.y(result, y.toDouble())
     return result
 }
 
