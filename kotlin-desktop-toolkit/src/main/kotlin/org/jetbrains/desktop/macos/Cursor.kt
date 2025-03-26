@@ -58,7 +58,8 @@ public object Cursor {
         internal companion object {
             internal fun fromNative(value: Int): Cursor.Icon {
                 return when (value) {
-                    desktop_macos_h.NativeCursorIcon_Unknown() -> throw Error("Cursor have unknown type, probably it was set outside of KDT")
+                    desktop_macos_h.NativeCursorIcon_Unknown() ->
+                        throw Error("Cursor have unknown type, probably it was set outside of KDT")
                     desktop_macos_h.NativeCursorIcon_ArrowCursor() -> ArrowCursor
                     desktop_macos_h.NativeCursorIcon_IBeamCursor() -> IBeamCursor
                     desktop_macos_h.NativeCursorIcon_CrosshairCursor() -> CrosshairCursor

@@ -31,7 +31,7 @@ pub extern "C" fn cursor_pop_hide() {
 pub extern "C" fn cursor_set_icon(icon: CursorIcon) {
     ffi_boundary("cursor_set_icon", || {
         CURSOR_ICONS_CACHE.with(|cache| {
-            let ns_cursor = cache.borrow_mut().to_ns_cursor(icon);
+            let ns_cursor = cache.borrow_mut().ns_cursor_from_icon(icon);
             unsafe {
                 ns_cursor.set();
             }
@@ -51,7 +51,7 @@ pub extern "C" fn cursor_get_icon() -> CursorIcon {
     ffi_boundary("cursor_get_icon", || {
         CURSOR_ICONS_CACHE.with(|cache| {
             let current = unsafe { NSCursor::currentCursor() };
-            let icon = cache.borrow_mut().to_icon(&current)?;
+            let icon = cache.borrow_mut().icon_from_ns_cursor(&current)?;
             Ok(icon)
         })
     })
@@ -74,17 +74,17 @@ impl CursorIconsCache {
             inverted: HashMap::new(),
         };
         // Add this cursor to cache because it used by app at the beggining
-        cache.to_ns_cursor(CursorIcon::ArrowCursor);
-        return cache
+        cache.ns_cursor_from_icon(CursorIcon::ArrowCursor);
+        cache
     }
 
-    fn to_ns_cursor(&mut self, icon: CursorIcon) -> Retained<NSCursor> {
+    fn ns_cursor_from_icon(&mut self, icon: CursorIcon) -> Retained<NSCursor> {
         let ns_cursor = self.cache.entry(icon).or_insert_with(|| Self::new_ns_cursor(icon)).clone();
         self.inverted.insert(ns_cursor.clone(), icon);
         ns_cursor
     }
 
-    fn to_icon(&mut self, cursor: &NSCursor) -> anyhow::Result<CursorIcon> {
+    fn icon_from_ns_cursor(&self, cursor: &NSCursor) -> anyhow::Result<CursorIcon> {
         self.inverted
             .get(cursor)
             .copied()
