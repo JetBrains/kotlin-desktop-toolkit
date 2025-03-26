@@ -28,7 +28,7 @@ abstract class CompileRustTask @Inject constructor(
     projectLayout: ProjectLayout,
     private val execOperations: ExecOperations,
 ) : DefaultTask() {
-    @get:InputDirectory
+    @Internal
     val workspaceRoot = objectFactory.directoryProperty()
 
     @Suppress("unused")
