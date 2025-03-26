@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use desktop_common::logger::{PanicDefault, ffi_boundary};
-use objc2::{msg_send, rc::Retained, ClassType};
+use objc2::{ClassType, msg_send, rc::Retained};
 use objc2_app_kit::{NSCursor, NSHorizontalDirections, NSVerticalDirections};
 
 #[unsafe(no_mangle)]
@@ -102,19 +102,15 @@ impl CursorIconsCache {
 
             CursorIcon::ResizeLeftCursor => unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::Left) },
             CursorIcon::ResizeRightCursor => unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::Right) },
-            CursorIcon::ResizeLeftRightCursor => unsafe {
-                NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::All)
-            },
+            CursorIcon::ResizeLeftRightCursor => unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::All) },
             CursorIcon::ResizeUpCursor => unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::Up) },
             CursorIcon::ResizeDownCursor => unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::Down) },
-            CursorIcon::ResizeUpDownCursor => unsafe {
-                NSCursor::rowResizeCursorInDirections(NSVerticalDirections::All)
-            },
+            CursorIcon::ResizeUpDownCursor => unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::All) },
 
             // Next two is undocumented
             // see: https://stackoverflow.com/questions/27242353/cocoa-predefined-resize-mouse-cursor
-            CursorIcon::ResizeUpLeftDownRight => unsafe { msg_send![NSCursor::class(), _windowResizeNorthWestSouthEastCursor] }
-            CursorIcon::ResizeUpRightDownLeft => unsafe { msg_send![NSCursor::class(), _windowResizeNorthEastSouthWestCursor] }
+            CursorIcon::ResizeUpLeftDownRight => unsafe { msg_send![NSCursor::class(), _windowResizeNorthWestSouthEastCursor] },
+            CursorIcon::ResizeUpRightDownLeft => unsafe { msg_send![NSCursor::class(), _windowResizeNorthEastSouthWestCursor] },
 
             CursorIcon::DisappearingItemCursor => NSCursor::disappearingItemCursor(),
             CursorIcon::IBeamCursorForVerticalLayout => NSCursor::IBeamCursorForVerticalLayout(),
