@@ -120,8 +120,11 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> MetalViewPtr<'sta
         unsafe {
             layer.setDevice(Some(ProtocolObject::from_ref(&*device)));
             layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
+            // For Fleet use case we need to sample the texture
+            // e.g. to implment frost glass effect for tabs
+            layer.setFramebufferOnly(false);
 
-            //        layer.setFramebufferOnly(false); // missing in zed
+            // layer.setFramebufferOnly(false); // missing in zed
 
             layer.setAllowsNextDrawableTimeout(false);
             // layer.setDisplaySyncEnabled(false); JWM but why ignore vsync?
