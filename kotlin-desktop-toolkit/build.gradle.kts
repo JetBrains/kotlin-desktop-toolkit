@@ -95,7 +95,7 @@ val compileMacOSDesktopToolkitTaskByTarget = listOf(
         crateName = "desktop-macos"
         rustProfile = target.profile
         rustTarget = platform
-        nativeDirectory = layout.projectDirectory.dir("../native")
+        workspaceRoot = layout.projectDirectory.dir("../native")
         enabled = true
     }
 }

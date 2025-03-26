@@ -1,15 +1,19 @@
 package org.jetbrains.desktop.buildscripts
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.Directory
+import org.gradle.api.file.FileTree
 import org.gradle.api.file.ProjectLayout
 import org.gradle.api.model.ObjectFactory
+import org.gradle.api.provider.Provider
 import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Nested
-import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.TaskAction
 import org.gradle.kotlin.dsl.property
 import org.gradle.process.ExecOperations
@@ -25,7 +29,12 @@ abstract class CompileRustTask @Inject constructor(
     private val execOperations: ExecOperations,
 ) : DefaultTask() {
     @get:InputDirectory
-    val nativeDirectory = objectFactory.directoryProperty()
+    val workspaceRoot = objectFactory.directoryProperty()
+
+    @Suppress("unused")
+    @get:InputFiles
+    @get:PathSensitive(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+    val workspaceFiles = objectFactory.rustWorkspaceFiles(workspaceRoot)
 
     @get:Input
     val crateName = objectFactory.property<String>()
@@ -44,7 +53,7 @@ abstract class CompileRustTask @Inject constructor(
 
     @Internal
     val rustOutputLibraryFile = providerFactory.provider {
-        val dir = nativeDirectory.get().asFile.resolve(inCrateArtifactsPath(rustTarget.get(), rustProfile.get()))
+        val dir = workspaceRoot.get().asFile.resolve(inCrateArtifactsPath(rustTarget.get(), rustProfile.get()))
         val target = rustTarget.get()
         val name = crateName.get().replace('-', '_')
         when (target.os) {
@@ -88,7 +97,7 @@ abstract class CompileRustTask @Inject constructor(
     @TaskAction
     fun compile() {
         execOperations.compileRust(
-            nativeDirectory.get().asFile.toPath(),
+            workspaceRoot.get().asFile.toPath(),
             crateName.get(),
             buildPlatformRustTarget(rustTarget.get()),
             rustProfile.get(),
@@ -173,4 +182,13 @@ fun buildPlatformRustTarget(platform: Platform): String {
         Arch.x86_64 -> "x86_64"
     }
     return "$archPart-$osPart"
+}
+
+/**
+ * All workspace files under [workspaceRoot] excluding compilation outputs and caches
+ */
+internal fun ObjectFactory.rustWorkspaceFiles(workspaceRoot: Provider<Directory>): FileTree = fileTree().apply {
+  setDir(workspaceRoot)
+}.matching {
+  exclude("target/**/*")
 }
