@@ -433,7 +433,7 @@ class ApplicationState : AutoCloseable {
 //        logEvents(event)
         val eventWindowId = event.windowId()
 
-        return when (event) {
+        val result = when (event) {
             is Event.MouseMoved -> {
                 windows.find {
                     it.window.windowId() == lockedWindowId
@@ -460,14 +460,17 @@ class ApplicationState : AutoCloseable {
                 AppMenuManager.setMainMenu(buildMenu())
                 EventHandlerResult.Continue
             }
-            else -> {
-                val window = windows.find {
-                    it.window.windowId() == eventWindowId
-                }
-                window?.let {
-                    window.handleEvent(event)
-                } ?: EventHandlerResult.Continue
+            else -> EventHandlerResult.Continue
+        }
+        return if (result == EventHandlerResult.Continue) {
+            val window = windows.find {
+                it.window.windowId() == eventWindowId
             }
+            window?.let {
+                window.handleEvent(event)
+            } ?: EventHandlerResult.Continue
+        } else {
+            EventHandlerResult.Stop
         }
     }
 
