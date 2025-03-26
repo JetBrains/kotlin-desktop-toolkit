@@ -16,9 +16,12 @@ import org.jetbrains.desktop.linux.WindowButtonType
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
+import org.jetbrains.skia.Image
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import java.lang.AutoCloseable
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -27,10 +30,14 @@ class CustomTitlebar(
     private var origin: LogicalPoint,
     var size: LogicalSize,
     var startWindowDrag: (() -> Unit)? = null,
-    var buttonLayout: Pair<List<WindowButtonType>, List<WindowButtonType>>? = null
+    var buttonLayout: Pair<List<WindowButtonType>, List<WindowButtonType>>? = null,
 ) {
     companion object {
-        const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55.0
+        const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55f
+        const val BUTTON_SPACING: LogicalPixels = 10f
+        const val BUTTON_LINE_WIDTH: LogicalPixels = 5f
+
+        val APP_ICON = Image.makeFromEncoded(Files.readAllBytes(Path.of("resources/jb-logo.png")))
     }
 
     fun handleEvent(event: Event): EventHandlerResult {
@@ -51,53 +58,80 @@ class CustomTitlebar(
         }
     }
 
-    private fun drawButton(canvas: Canvas, button: WindowButtonType, xOffset: Float, scale: Float) {
-        val buttonSize = 50f * scale
+    private fun drawButton(canvas: Canvas, button: WindowButtonType, xOffset: LogicalPixels, scale: Float) {
+        val buttonSize = CUSTOM_TITLEBAR_HEIGHT * scale
+        val xOffset = xOffset * scale
         val yOffset = 0f * scale
         Paint().use { paint ->
             paint.color = Color.BLACK
-            paint.strokeWidth = 5f * scale
+            paint.strokeWidth = BUTTON_LINE_WIDTH * scale
+
+            val yTop = yOffset + (paint.strokeWidth / 2)
+            val yBottom = (yOffset + buttonSize) - (paint.strokeWidth / 2)
+            val xLeft = xOffset + (paint.strokeWidth / 2)
+            val xRight = (xOffset + buttonSize) - (paint.strokeWidth / 2)
             when (button) {
                 WindowButtonType.AppMenu -> {
                     canvas.drawLine(xOffset, yOffset, xOffset + buttonSize, yOffset, paint)
                     canvas.drawLine(xOffset, yOffset + (buttonSize / 2), xOffset + buttonSize, yOffset + (buttonSize / 2), paint)
-                    canvas.drawLine(xOffset, yOffset + buttonSize, xOffset + buttonSize, yOffset + buttonSize, paint)
+                    canvas.drawLine(xOffset, yBottom, xOffset + buttonSize, yBottom, paint)
                 }
                 WindowButtonType.Icon -> {
-                    //canvas.drawImage()
+//                    APP_ICON.scalePixels()
+                    canvas.drawImage(APP_ICON, xOffset, yOffset, paint)
                 }
                 WindowButtonType.Spacer -> {}
                 WindowButtonType.Minimize -> {
-                    canvas.drawLine(xOffset, yOffset + buttonSize, xOffset + buttonSize, yOffset + buttonSize, paint)
+                    canvas.drawLine(xOffset, yBottom, xOffset + buttonSize, yBottom, paint)
                 }
                 WindowButtonType.Maximize -> {
-                    canvas.drawRect(Rect.makeXYWH(xOffset, yOffset, buttonSize, buttonSize), paint)
+                    canvas.drawLine(xLeft, yTop, xLeft, yBottom, paint)
+                    canvas.drawLine(xLeft, yTop, xRight, yTop, paint)
+                    canvas.drawLine(xRight, yTop, xRight, yBottom, paint)
+                    canvas.drawLine(xLeft, yBottom, xRight, yBottom, paint)
                 }
                 WindowButtonType.Close -> {
-                    canvas.drawLine(xOffset, yOffset, xOffset + buttonSize, yOffset + buttonSize, paint)
-                    canvas.drawLine(xOffset + buttonSize, yOffset, xOffset, yOffset + buttonSize, paint)
+                    canvas.drawLine(xOffset, yOffset, xOffset + buttonSize, yBottom, paint)
+                    canvas.drawLine(xOffset + buttonSize, yOffset, xOffset, yBottom, paint)
                 }
             }
         }
     }
 
-    fun draw(canvas: Canvas, scale: Double) {
+    fun draw(canvas: Canvas, scale: Float) {
         val physicalOrigin = origin.toPhysical(scale)
         val physicalSize = size.toPhysical(scale)
-        val x = physicalOrigin.x.toFloat()
-        val y = physicalOrigin.y.toFloat()
-        val width = physicalSize.width.toFloat()
-        val height = physicalSize.height.toFloat()
+        val x = physicalOrigin.x
+        val y = physicalOrigin.y
+        val width = physicalSize.width
+        val height = physicalSize.height
         Paint().use { paint ->
             paint.color = 0xFF404040.toInt()
-            canvas.drawRect(Rect.makeXYWH(x, y, width, height), paint)
+            canvas.drawRect(Rect.makeXYWH(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat()), paint)
         }
         buttonLayout?.let { (buttonsLeft, buttonsRight) ->
-            for ((i, b) in buttonsLeft.withIndex()) {
-                drawButton(canvas, b, i * 60f * scale.toFloat(), scale.toFloat())
+            val buttonOffset = CUSTOM_TITLEBAR_HEIGHT + BUTTON_SPACING
+            Paint().use { paint ->
+                paint.color = 0xFFD3D3D3.toInt()
+                canvas.drawRect(
+                    Rect.makeXYWH(x.toFloat(), y.toFloat(), ((buttonsLeft.size * buttonOffset) - BUTTON_SPACING) * scale, height.toFloat()),
+                    paint,
+                )
+                canvas.drawRect(
+                    Rect.makeXYWH(
+                        (size.width - (buttonsRight.size * buttonOffset) + BUTTON_SPACING) * scale,
+                        y.toFloat(),
+                        ((buttonsRight.size * buttonOffset) - BUTTON_SPACING) * scale,
+                        height.toFloat(),
+                    ),
+                    paint,
+                )
             }
-            for ((i, b) in buttonsRight.reversed().withIndex()) {
-                drawButton(canvas, b, width - (i * 60f * scale.toFloat()), scale.toFloat())
+            for ((i, b) in buttonsLeft.withIndex()) {
+                drawButton(canvas, b, i * buttonOffset, scale)
+            }
+            for ((i, b) in buttonsRight.withIndex()) {
+                drawButton(canvas, b, size.width - ((buttonsRight.size - i) * buttonOffset) + BUTTON_SPACING, scale)
             }
         }
     }
@@ -124,7 +158,7 @@ class ContentArea(
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Double) {
+    fun draw(canvas: Canvas, time: Long, scale: Float) {
         val contentOrigin = origin.toPhysical(scale)
         val contentSize = size.toPhysical(scale)
         Paint().use { paint ->
@@ -140,8 +174,8 @@ class ContentArea(
             )
         }
         canvas.drawSpiningCircle(contentOrigin, contentSize, time)
-        canvas.drawWindowBorders(contentOrigin, contentSize, scale.toFloat())
-        canvas.drawCursor(contentOrigin, contentSize, scale.toFloat())
+        canvas.drawWindowBorders(contentOrigin, contentSize, scale)
+        canvas.drawCursor(contentOrigin, contentSize, scale)
     }
 
     private fun Canvas.drawSpiningCircle(origin: PhysicalPoint, size: PhysicalSize, t: Long) = withTranslated(origin) {
@@ -195,8 +229,8 @@ class ContentArea(
             val positive = curs.x > 0 && curs.y > 0
             val inBox = curs.x < size.width && curs.y < size.height
             if (positive && inBox) {
-                val x = curs.x.toFloat()
-                val y = curs.y.toFloat()
+                val x = curs.x
+                val y = curs.y
                 val width = size.width.toFloat()
                 val height = size.height.toFloat()
 
@@ -229,7 +263,7 @@ class WindowContainer(
             }
             titlebar.buttonLayout = event.titlebarLayout
             titlebar.size = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
-            contentArea.origin = LogicalPoint(x = 0.0, y = titlebar.size.height)
+            contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height)
             contentArea.size =
                 LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
         } else {
@@ -245,7 +279,7 @@ class WindowContainer(
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Double) {
+    fun draw(canvas: Canvas, time: Long, scale: Float) {
         customTitlebar?.draw(canvas, scale)
         contentArea.draw(canvas, time, scale)
     }
@@ -258,7 +292,7 @@ class RotatingBallWindow(
 ) : SkikoWindowLinux(app, windowParams) {
     companion object {
         fun createWindow(app: Application, title: String, useCustomTitlebar: Boolean): RotatingBallWindow {
-            val windowSize = LogicalSize(640.0, 480.0)
+            val windowSize = LogicalSize(640f, 480f)
             val windowContentSize = windowSize // todo it's incorrect
             val container = WindowContainer.create(windowContentSize)
 
@@ -294,7 +328,7 @@ class RotatingBallWindow(
     override fun Canvas.draw(size: PhysicalSize, time: Long) {
         val canvas = this
 //        canvas.clear(Color.TRANSPARENT) // use RED to debug
-        windowContainer.draw(canvas, time, window.scaleFactor())
+        windowContainer.draw(canvas, time, window.scaleFactor().toFloat())
     }
 }
 
