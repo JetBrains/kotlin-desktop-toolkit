@@ -119,6 +119,11 @@ public object Cursor {
             }
         }
 
+    /**
+     * You can change mouse cursor with this property.
+     * Though it will have an effect only for the time when cursor is in the same window.
+     * Basically cursor might be changed by OS at any moment when it leaves or enters any window.
+     */
     public var icon: Icon
         get() {
             return ffiDownCall { Icon.fromNative(desktop_macos_h.cursor_get_icon()) }
