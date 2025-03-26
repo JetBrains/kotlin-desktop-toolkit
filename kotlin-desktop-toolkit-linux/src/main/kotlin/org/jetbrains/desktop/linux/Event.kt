@@ -263,8 +263,8 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_h.NativeEvent_ScrollWheel() -> {
             val nativeEvent = NativeEvent.scroll_wheel(s)
             Event.ScrollWheel(
-                scrollingDeltaX = NativeScrollWheelEvent.scrolling_delta_x(nativeEvent),
-                scrollingDeltaY = NativeScrollWheelEvent.scrolling_delta_y(nativeEvent),
+                scrollingDeltaX = NativeScrollWheelEvent.scrolling_delta_x(nativeEvent).toFloat(),
+                scrollingDeltaY = NativeScrollWheelEvent.scrolling_delta_y(nativeEvent).toFloat(),
                 locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
             )

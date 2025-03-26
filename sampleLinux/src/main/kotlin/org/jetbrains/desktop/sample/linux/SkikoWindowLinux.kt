@@ -106,7 +106,7 @@ abstract class SkikoWindowLinux(
 //            )!!.use { surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
             surface.canvas.clear(backgroundColor)
-            surface.canvas.draw(PhysicalSize(surface.width.toDouble(), surface.height.toDouble()), time)
+            surface.canvas.draw(PhysicalSize(surface.width, surface.height), time)
             surface.flushAndSubmit()
         }
 //        }
