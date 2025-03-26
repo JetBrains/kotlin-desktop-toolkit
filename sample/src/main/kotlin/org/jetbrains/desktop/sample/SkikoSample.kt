@@ -23,6 +23,7 @@ import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.Screen
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
+import org.jetbrains.desktop.macos.WindowId
 import org.jetbrains.desktop.macos.WindowVisualEffect
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
@@ -426,11 +427,22 @@ class ApplicationState : AutoCloseable {
         }
     }
 
+    var lockedWindowId: WindowId? = null
+
     fun handleEvent(event: Event): EventHandlerResult {
 //        logEvents(event)
         val eventWindowId = event.windowId()
 
         return when (event) {
+            is Event.MouseMoved -> {
+                windows.find {
+                    it.window.windowId() == lockedWindowId
+                }?.let { window ->
+                    val size = window.window.size
+                    window.window.setContentRect(Event.cursorLocationInScreen(), size, animateTransition = false)
+                }
+                EventHandlerResult.Continue
+            }
             is Event.WindowCloseRequest -> {
                 windows.find {
                     it.window.windowId() == eventWindowId
@@ -598,6 +610,17 @@ class ApplicationState : AutoCloseable {
                                     contentSize: ${window.contentSize}
                                 """.trimIndent()
                             }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Lock Window",
+                    keystroke = Keystroke(key = "L", modifiers = KeyModifiersSet.create(command = true, shift = true)),
+                    perform = {
+                        if (lockedWindowId == null) {
+                            lockedWindowId = mainWindow()?.window?.windowId()
+                        } else {
+                            lockedWindowId = null
                         }
                     },
                 ),
