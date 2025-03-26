@@ -16,6 +16,8 @@ public object Cursor {
         ResizeUpCursor,
         ResizeDownCursor,
         ResizeUpDownCursor,
+        ResizeUpLeftDownRightCursor,
+        ResizeUpRightDownLeftCursor,
         DisappearingItemCursor,
         IBeamCursorForVerticalLayout,
         OperationNotAllowedCursor,
@@ -42,6 +44,8 @@ public object Cursor {
                 ResizeUpCursor -> desktop_macos_h.NativeCursorIcon_ResizeUpCursor()
                 ResizeDownCursor -> desktop_macos_h.NativeCursorIcon_ResizeDownCursor()
                 ResizeUpDownCursor -> desktop_macos_h.NativeCursorIcon_ResizeUpDownCursor()
+                ResizeUpLeftDownRightCursor -> desktop_macos_h.NativeCursorIcon_ResizeUpLeftDownRight()
+                ResizeUpRightDownLeftCursor -> desktop_macos_h.NativeCursorIcon_ResizeUpRightDownLeft()
                 DisappearingItemCursor -> desktop_macos_h.NativeCursorIcon_DisappearingItemCursor()
                 IBeamCursorForVerticalLayout -> desktop_macos_h.NativeCursorIcon_IBeamCursorForVerticalLayout()
                 OperationNotAllowedCursor -> desktop_macos_h.NativeCursorIcon_OperationNotAllowedCursor()
@@ -56,7 +60,7 @@ public object Cursor {
         }
 
         internal companion object {
-            internal fun fromNative(value: Int): Cursor.Icon {
+            internal fun fromNative(value: Int): Icon {
                 return when (value) {
                     desktop_macos_h.NativeCursorIcon_Unknown() ->
                         throw Error("Cursor have unknown type, probably it was set outside of KDT")
@@ -72,6 +76,8 @@ public object Cursor {
                     desktop_macos_h.NativeCursorIcon_ResizeUpCursor() -> ResizeUpCursor
                     desktop_macos_h.NativeCursorIcon_ResizeDownCursor() -> ResizeDownCursor
                     desktop_macos_h.NativeCursorIcon_ResizeUpDownCursor() -> ResizeUpDownCursor
+                    desktop_macos_h.NativeCursorIcon_ResizeUpLeftDownRight() -> ResizeUpLeftDownRightCursor
+                    desktop_macos_h.NativeCursorIcon_ResizeUpRightDownLeft() -> ResizeUpRightDownLeftCursor
                     desktop_macos_h.NativeCursorIcon_DisappearingItemCursor() -> DisappearingItemCursor
                     desktop_macos_h.NativeCursorIcon_IBeamCursorForVerticalLayout() -> IBeamCursorForVerticalLayout
                     desktop_macos_h.NativeCursorIcon_OperationNotAllowedCursor() -> OperationNotAllowedCursor

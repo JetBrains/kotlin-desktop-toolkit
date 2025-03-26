@@ -33,6 +33,8 @@ typedef enum NativeCursorIcon {
   NativeCursorIcon_ResizeUpCursor,
   NativeCursorIcon_ResizeDownCursor,
   NativeCursorIcon_ResizeUpDownCursor,
+  NativeCursorIcon_ResizeUpLeftDownRight,
+  NativeCursorIcon_ResizeUpRightDownLeft,
   NativeCursorIcon_DisappearingItemCursor,
   NativeCursorIcon_IBeamCursorForVerticalLayout,
   NativeCursorIcon_OperationNotAllowedCursor,
