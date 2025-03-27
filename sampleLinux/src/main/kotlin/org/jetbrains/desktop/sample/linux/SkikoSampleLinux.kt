@@ -416,41 +416,6 @@ class ApplicationState(private val app: Application) : AutoCloseable {
         )
     }
 
-    private fun setPaused(value: Boolean) {
-//        mainWindow()?.displayLink?.setRunning(!value)
-    }
-
-//    private fun mainWindow(): RotatingBallWindow? {
-//        return windows.find { window ->
-//            window.window.isMain
-//        }
-//    }
-//
-//    private fun changeCurrentWindowSize(delta: LogicalPixels) {
-//        mainWindow()?.let { window ->
-//            val currentOrigin = window.window.origin
-//            val currentSize = window.window.size
-//            // todo check display bounds
-//            // todo check min and max size
-//            window.window.setRect(
-//                origin = LogicalPoint(
-//                    currentOrigin.x - delta / 2.0,
-//                    currentOrigin.y - delta / 2.0,
-//                ),
-//                size = LogicalSize(
-//                    currentSize.width + delta,
-//                    currentSize.height + delta,
-//                ),
-//                animateTransition = true,
-//            )
-//        }
-//    }
-
-    private fun killWindow(window: RotatingBallWindow) {
-        windows.remove(window)
-        window.close()
-    }
-
     override fun close() {
         windows.forEach {
             it.close()
@@ -459,6 +424,9 @@ class ApplicationState(private val app: Application) : AutoCloseable {
 }
 
 fun main(args: Array<String>) {
+    if (args.isNotEmpty()) {
+        Logger.info { "args = $args" }
+    }
     Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     val app = Application(ApplicationConfig())
