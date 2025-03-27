@@ -38,3 +38,5 @@ public data class LogicalPoint(
     }
     public fun toPhysical(scale: Float): PhysicalPoint = PhysicalPoint((x * scale).roundToInt(), (y * scale).roundToInt())
 }
+
+public data class LogicalRect(val point: LogicalPoint, val size: LogicalSize)

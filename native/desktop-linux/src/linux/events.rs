@@ -242,6 +242,8 @@ pub struct WindowResizeEvent {
     pub size: LogicalSize,
     pub titlebar_layout_left: AutoDropArray<WindowButtonType>,
     pub titlebar_layout_right: AutoDropArray<WindowButtonType>,
+    pub maximized: bool,
+    pub fullscreen: bool,
 }
 
 impl From<WindowResizeEvent> for Event<'_> {

@@ -275,6 +275,8 @@ typedef struct NativeWindowResizeEvent {
   struct NativeLogicalSize size;
   struct NativeAutoDropArray_WindowButtonType titlebar_layout_left;
   struct NativeAutoDropArray_WindowButtonType titlebar_layout_right;
+  bool maximized;
+  bool fullscreen;
 } NativeWindowResizeEvent;
 
 typedef struct NativeWindowFocusChangeEvent {
