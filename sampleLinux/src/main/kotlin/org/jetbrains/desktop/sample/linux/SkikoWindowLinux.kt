@@ -31,43 +31,37 @@ abstract class SkikoWindowLinux(
 
     private fun logEvents(event: Event) {
         when (event) {
-            is Event.KeyDown -> {
+            is Event.KeyDown,
+            is Event.KeyUp,
+            is Event.ModifiersChanged,
+            is Event.MouseEntered,
+            is Event.MouseExited,
+            is Event.MouseDragged,
+            is Event.MouseDown,
+            is Event.MouseUp,
+            is Event.ScrollWheel,
+            is Event.WindowCloseRequest,
+            is Event.WindowFocusChange,
+            is Event.WindowFullScreenToggle,
+            is Event.WindowMove,
+            is Event.WindowResize,
+            is Event.WindowScaleChanged,
+            is Event.WindowScreenChange,
+            -> {
                 Logger.info { "$event" }
             }
-            is Event.KeyUp -> {
-                Logger.info { "$event" }
+            is Event.MouseMoved, is Event.WindowDraw -> {
             }
-            is Event.ModifiersChanged -> {
-                Logger.info { "$event" }
-            }
-            is Event.MouseEntered -> {
-                Logger.info { "$event" }
-            }
-            is Event.MouseExited -> {
-                Logger.info { "$event" }
-            }
-            is Event.MouseMoved -> {
-                Logger.info { "$event" }
-            }
-            is Event.MouseDragged -> {
-                Logger.info { "$event" }
-            }
-            is Event.MouseDown -> {
-                Logger.info { "$event" }
-            }
-            is Event.MouseUp -> {
-                Logger.info { "$event" }
-            }
-            is Event.WindowDraw -> {
-                performDrawing(event)
-            }
-            else -> {}
         }
     }
 
     open fun handleEvent(event: Event): EventHandlerResult {
         logEvents(event)
         return when (event) {
+            is Event.WindowDraw -> {
+                performDrawing(event)
+                EventHandlerResult.Stop
+            }
             is Event.WindowScreenChange -> {
                 EventHandlerResult.Continue
             }
