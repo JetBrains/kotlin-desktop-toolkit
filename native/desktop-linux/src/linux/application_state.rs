@@ -67,7 +67,6 @@ pub struct ApplicationState {
 
 struct WindowData<'a> {
     window: &'a mut SimpleWindow,
-    shm: &'a Shm,
     themed_pointer: Option<&'a mut ThemedPointer>,
 }
 
@@ -111,7 +110,6 @@ impl ApplicationState {
     fn get_window_data(&mut self, surface: &WlSurface) -> Option<WindowData> {
         self.windows.get_mut(&surface.id()).map(|window| WindowData {
             window,
-            shm: &self.shm_state,
             themed_pointer: self.themed_pointer.as_mut(),
         })
     }
@@ -305,7 +303,7 @@ impl WindowHandler for ApplicationState {
         if let Some(window_data) = self.get_window_data(window.wl_surface()) {
             window_data
                 .window
-                .configure(conn, qh, window_data.shm, window, &configure, window_data.themed_pointer);
+                .configure(conn, qh, window, &configure, window_data.themed_pointer);
         }
     }
 }

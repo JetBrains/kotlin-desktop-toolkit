@@ -9,6 +9,7 @@ use desktop_linux::linux::{
     events::{Event, WindowDrawEvent},
     window::WindowParams,
     window_api::window_create,
+    xdg_desktop_settings::XdgDesktopSetting,
 };
 
 extern "C" fn on_should_terminate() -> bool {
@@ -87,6 +88,10 @@ extern "C" fn event_handler_2(event: &Event) -> bool {
     true
 }
 
+extern "C" fn on_xdg_desktop_settings_change(s: XdgDesktopSetting) {
+    dbg!(s);
+}
+
 pub fn main() {
     const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
     logger_init_impl(&LoggerConfiguration {
@@ -98,6 +103,7 @@ pub fn main() {
         on_should_terminate,
         on_will_terminate,
         on_display_configuration_change,
+        on_xdg_desktop_settings_change,
     });
     window_create(
         app_ptr.clone(),

@@ -12,6 +12,169 @@ typedef enum NativeLogLevel {
   NativeLogLevel_Trace,
 } NativeLogLevel;
 
+typedef enum NativePointerShape {
+  /**
+   * The platform-dependent default cursor. Often rendered as arrow.
+   */
+  NativePointerShape_Default,
+  /**
+   * A context menu is available for the object under the cursor. Often
+   * rendered as an arrow with a small menu-like graphic next to it.
+   */
+  NativePointerShape_ContextMenu,
+  /**
+   * Help is available for the object under the cursor. Often rendered as a
+   * question mark or a balloon.
+   */
+  NativePointerShape_Help,
+  /**
+   * The cursor is a pointer that indicates a link. Often rendered as the
+   * backside of a hand with the index finger extended.
+   */
+  NativePointerShape_Pointer,
+  /**
+   * A progress indicator. The program is performing some processing, but is
+   * different from [`CursorIcon::Wait`] in that the user may still interact
+   * with the program.
+   */
+  NativePointerShape_Progress,
+  /**
+   * Indicates that the program is busy and the user should wait. Often
+   * rendered as a watch or hourglass.
+   */
+  NativePointerShape_Wait,
+  /**
+   * Indicates that a cell or set of cells may be selected. Often rendered as
+   * a thick plus-sign with a dot in the middle.
+   */
+  NativePointerShape_Cell,
+  /**
+   * A simple crosshair (e.g., short line segments resembling a "+" sign).
+   * Often used to indicate a two dimensional bitmap selection mode.
+   */
+  NativePointerShape_Crosshair,
+  /**
+   * Indicates text that may be selected. Often rendered as an I-beam.
+   */
+  NativePointerShape_Text,
+  /**
+   * Indicates vertical-text that may be selected. Often rendered as a
+   * horizontal I-beam.
+   */
+  NativePointerShape_VerticalText,
+  /**
+   * Indicates an alias of/shortcut to something is to be created. Often
+   * rendered as an arrow with a small curved arrow next to it.
+   */
+  NativePointerShape_Alias,
+  /**
+   * Indicates something is to be copied. Often rendered as an arrow with a
+   * small plus sign next to it.
+   */
+  NativePointerShape_Copy,
+  /**
+   * Indicates something is to be moved.
+   */
+  NativePointerShape_Move,
+  /**
+   * Indicates that the dragged item cannot be dropped at the current cursor
+   * location. Often rendered as a hand or pointer with a small circle with a
+   * line through it.
+   */
+  NativePointerShape_NoDrop,
+  /**
+   * Indicates that the requested action will not be carried out. Often
+   * rendered as a circle with a line through it.
+   */
+  NativePointerShape_NotAllowed,
+  /**
+   * Indicates that something can be grabbed (dragged to be moved). Often
+   * rendered as the backside of an open hand.
+   */
+  NativePointerShape_Grab,
+  /**
+   * Indicates that something is being grabbed (dragged to be moved). Often
+   * rendered as the backside of a hand with fingers closed mostly out of
+   * view.
+   */
+  NativePointerShape_Grabbing,
+  /**
+   * The east border to be moved.
+   */
+  NativePointerShape_EResize,
+  /**
+   * The north border to be moved.
+   */
+  NativePointerShape_NResize,
+  /**
+   * The north-east corner to be moved.
+   */
+  NativePointerShape_NeResize,
+  /**
+   * The north-west corner to be moved.
+   */
+  NativePointerShape_NwResize,
+  /**
+   * The south border to be moved.
+   */
+  NativePointerShape_SResize,
+  /**
+   * The south-east corner to be moved.
+   */
+  NativePointerShape_SeResize,
+  /**
+   * The south-west corner to be moved.
+   */
+  NativePointerShape_SwResize,
+  /**
+   * The west border to be moved.
+   */
+  NativePointerShape_WResize,
+  /**
+   * The east and west borders to be moved.
+   */
+  NativePointerShape_EwResize,
+  /**
+   * The south and north borders to be moved.
+   */
+  NativePointerShape_NsResize,
+  /**
+   * The north-east and south-west corners to be moved.
+   */
+  NativePointerShape_NeswResize,
+  /**
+   * The north-west and south-east corners to be moved.
+   */
+  NativePointerShape_NwseResize,
+  /**
+   * Indicates that the item/column can be resized horizontally. Often
+   * rendered as arrows pointing left and right with a vertical bar
+   * separating them.
+   */
+  NativePointerShape_ColResize,
+  /**
+   * Indicates that the item/row can be resized vertically. Often rendered as
+   * arrows pointing up and down with a horizontal bar separating them.
+   */
+  NativePointerShape_RowResize,
+  /**
+   * Indicates that the something can be scrolled in any direction. Often
+   * rendered as arrows pointing up, down, left, and right with a dot in the
+   * middle.
+   */
+  NativePointerShape_AllScroll,
+  /**
+   * Indicates that something can be zoomed in. Often rendered as a
+   * magnifying glass with a "+" in the center of the glass.
+   */
+  NativePointerShape_ZoomIn,
+  /**
+   * Indicates that something can be zoomed in. Often rendered as a
+   * magnifying glass with a "-" in the center of the glass.
+   */
+  NativePointerShape_ZoomOut,
+} NativePointerShape;
+
 enum NativeWindowButtonType {
   NativeWindowButtonType_AppMenu,
   NativeWindowButtonType_Icon,
@@ -67,10 +230,40 @@ typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr;
 
 typedef NativeRustAllocatedRawPtr NativeAppPtr;
 
+typedef uintptr_t NativeArraySize;
+
+typedef struct NativeAutoDropArray_WindowButtonType {
+  const NativeWindowButtonType *ptr;
+  NativeArraySize len;
+} NativeAutoDropArray_WindowButtonType;
+
+typedef struct NativeTitlebarButtonLayout {
+  struct NativeAutoDropArray_WindowButtonType left_side;
+  struct NativeAutoDropArray_WindowButtonType right_side;
+} NativeTitlebarButtonLayout;
+
+typedef enum NativeXdgDesktopSetting_Tag {
+  NativeXdgDesktopSetting_TitlebarLayout,
+  NativeXdgDesktopSetting_DoubleClickIntervalMs,
+} NativeXdgDesktopSetting_Tag;
+
+typedef struct NativeXdgDesktopSetting {
+  NativeXdgDesktopSetting_Tag tag;
+  union {
+    struct {
+      struct NativeTitlebarButtonLayout titlebar_layout;
+    };
+    struct {
+      int32_t double_click_interval_ms;
+    };
+  };
+} NativeXdgDesktopSetting;
+
 typedef struct NativeApplicationCallbacks {
   bool (*on_should_terminate)(void);
   void (*on_will_terminate)(void);
   void (*on_display_configuration_change)(void);
+  void (*on_xdg_desktop_settings_change)(struct NativeXdgDesktopSetting);
 } NativeApplicationCallbacks;
 
 typedef uint32_t NativeScreenId;
@@ -101,8 +294,6 @@ typedef struct NativeScreenInfo {
   struct NativeLogicalSize size;
   double scale;
 } NativeScreenInfo;
-
-typedef uintptr_t NativeArraySize;
 
 typedef struct NativeAutoDropArray_ScreenInfo {
   const struct NativeScreenInfo *ptr;
@@ -266,17 +457,31 @@ typedef struct NativeWindowScreenChangeEvent {
   NativeScreenId new_screen_id;
 } NativeWindowScreenChangeEvent;
 
-typedef struct NativeAutoDropArray_WindowButtonType {
-  const NativeWindowButtonType *ptr;
-  NativeArraySize len;
-} NativeAutoDropArray_WindowButtonType;
+typedef struct NativeWindowCapabilities {
+  /**
+   * `show_window_menu` is available.
+   */
+  bool window_menu;
+  /**
+   * Window can be maximized and unmaximized.
+   */
+  bool maximixe;
+  /**
+   * Window can be fullscreened and unfullscreened.
+   */
+  bool fullscreen;
+  /**
+   * Window can be minimized.
+   */
+  bool minimize;
+} NativeWindowCapabilities;
 
 typedef struct NativeWindowResizeEvent {
   struct NativeLogicalSize size;
-  struct NativeAutoDropArray_WindowButtonType titlebar_layout_left;
-  struct NativeAutoDropArray_WindowButtonType titlebar_layout_right;
   bool maximized;
   bool fullscreen;
+  bool client_side_decorations;
+  struct NativeWindowCapabilities capabilities;
 } NativeWindowResizeEvent;
 
 typedef struct NativeWindowFocusChangeEvent {
@@ -415,6 +620,10 @@ NativeWindowId window_create(NativeAppPtr app_ptr,
                              struct NativeWindowParams params);
 
 void window_drop(NativeAppPtr app_ptr, NativeWindowId window_id);
+
+void window_set_pointer_shape(NativeAppPtr app_ptr,
+                              NativeWindowId window_id,
+                              enum NativePointerShape pointer_shape);
 
 struct NativeLogicalSize window_get_size(NativeAppPtr app_ptr, NativeWindowId window_id);
 

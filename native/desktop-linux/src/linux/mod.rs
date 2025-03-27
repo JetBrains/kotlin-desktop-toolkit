@@ -1,10 +1,10 @@
 pub mod application;
 pub mod application_state;
-pub mod cursors;
 pub mod dma;
 pub mod events;
 pub mod keyboard;
 pub mod mouse;
+pub mod pointer_shapes;
 pub mod screen;
 pub mod window;
 pub mod window_api;
