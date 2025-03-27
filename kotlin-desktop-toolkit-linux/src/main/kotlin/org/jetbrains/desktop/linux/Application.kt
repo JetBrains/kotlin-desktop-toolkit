@@ -35,9 +35,11 @@ public data class WindowParams(
     }
 }
 
-public class ApplicationConfig()
+public data class ApplicationConfig(val onXdgDesktopSettingsChange: (XdgDesktopSetting) -> Unit)
 
-public class Application(applicationConfig: ApplicationConfig = ApplicationConfig()) {
+public class Application() {
+    private var applicationConfig: ApplicationConfig? = null
+
     init {
         ffiDownCall {
             Arena.ofConfined().use { arena ->
@@ -49,7 +51,8 @@ public class Application(applicationConfig: ApplicationConfig = ApplicationConfi
     public lateinit var screens: AllScreens
     private var appPtr: MemorySegment? = null
 
-    public fun runEventLoop() {
+    public fun runEventLoop(applicationConfig: ApplicationConfig) {
+        this.applicationConfig = applicationConfig
         ffiDownCall {
             desktop_h.application_run_event_loop(appPtr!!)
         }
@@ -85,6 +88,10 @@ public class Application(applicationConfig: ApplicationConfig = ApplicationConfi
         }
     }
 
+    private fun onNativeXdgSettingsChanged(s: MemorySegment) {
+        applicationConfig?.onXdgDesktopSettingsChange(XdgDesktopSetting.fromNative(s))
+    }
+
     private fun applicationCallbacks(): MemorySegment {
         val arena = Arena.global()
         val callbacks = NativeApplicationCallbacks.allocate(arena)
@@ -101,6 +108,10 @@ public class Application(applicationConfig: ApplicationConfig = ApplicationConfi
             NativeApplicationCallbacks.on_display_configuration_change.allocate({
                 screens = allScreens()
             }, arena),
+        )
+        NativeApplicationCallbacks.on_xdg_desktop_settings_change(
+            callbacks,
+            NativeApplicationCallbacks.on_xdg_desktop_settings_change.allocate(::onNativeXdgSettingsChanged, arena),
         )
         return callbacks
     }

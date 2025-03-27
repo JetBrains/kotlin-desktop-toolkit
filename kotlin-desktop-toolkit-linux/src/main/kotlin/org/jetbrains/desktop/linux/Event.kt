@@ -22,16 +22,16 @@ import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
 import java.lang.foreign.MemorySegment
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration.Companion.milliseconds
 import org.jetbrains.desktop.linux.generated.desktop_linux_h as desktop_h
 
 @JvmInline
 public value class Timestamp(
-    // Count of seconds passed since some fixed but arbitrary moment in the past
+    // Count of milliseconds passed since some fixed but arbitrary moment in the past
     private val value: Int,
 ) {
     public fun toDuration(): Duration {
-        return value.seconds
+        return value.milliseconds
     }
 }
 
@@ -59,9 +59,7 @@ public enum class WindowButtonType {
             }
         }
 
-        fun fromNativeArray(nativeArray: MemorySegment): List<WindowButtonType>? {
-            if (nativeArray == MemorySegment.NULL) return null
-
+        fun fromNativeArray(nativeArray: MemorySegment): List<WindowButtonType> {
             val ptr = NativeAutoDropArray_WindowButtonType.ptr(nativeArray)
             val len = NativeAutoDropArray_WindowButtonType.len(nativeArray)
 
@@ -73,9 +71,6 @@ public enum class WindowButtonType {
 }
 
 public enum class WindowResizeEdge {
-    /** Nothing is being dragged. */
-    None,
-
     /** The top edge is being dragged. */
     Top,
 
@@ -128,7 +123,27 @@ public sealed class WindowFrameAction {
     public data class ShowMenu(val point: LogicalPoint) : WindowFrameAction()
 }
 
-public data class TitlebarLayout(val layoutLeft: List<WindowButtonType>, val layoutRight: List<WindowButtonType>)
+public sealed class XdgDesktopSetting {
+    public data class TitlebarLayout(val layoutLeft: List<WindowButtonType>, val layoutRight: List<WindowButtonType>) : XdgDesktopSetting()
+    public data class DoubleClickInterval(val intervalMs: Int) : XdgDesktopSetting()
+    internal companion object;
+}
+
+public data class WindowCapabilities(
+    /** `show_window_menu` is available. */
+    public val windowMenu: Boolean,
+
+    /** Window can be maximized and unmaximized. */
+    public val maximixe: Boolean,
+
+    /** Window can be fullscreened and unfullscreened. */
+    public val fullscreen: Boolean,
+
+    /** Window can be minimized. */
+    public val minimize: Boolean,
+) {
+    internal companion object;
+}
 
 public sealed class Event {
     public companion object {
@@ -210,7 +225,6 @@ public sealed class Event {
                 WindowFrameAction.Move -> desktop_h.NativeWindowFrameAction_Move()
                 is WindowFrameAction.Resize -> {
                     val nativeEdge = when (action.edge) {
-                        WindowResizeEdge.None -> desktop_h.NativeWindowResizeEdge_None()
                         WindowResizeEdge.Top -> desktop_h.NativeWindowResizeEdge_Top()
                         WindowResizeEdge.Bottom -> desktop_h.NativeWindowResizeEdge_Bottom()
                         WindowResizeEdge.Left -> desktop_h.NativeWindowResizeEdge_Left()
@@ -249,9 +263,10 @@ public sealed class Event {
 
     public data class WindowResize(
         val size: LogicalSize,
-        val titlebarLayout: TitlebarLayout?,
         val maximized: Boolean,
         val fullscreen: Boolean,
+        val clientSideDecorations: Boolean,
+        val capabilities: WindowCapabilities,
     ) : Event()
 
     public data class WindowMove(
@@ -376,20 +391,14 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_h.NativeEvent_WindowResize() -> {
             val nativeEvent = NativeEvent.window_resize(s)
-            val layoutLeft = WindowButtonType.fromNativeArray(NativeWindowResizeEvent.titlebar_layout_left(nativeEvent))
-            val layoutRight = WindowButtonType.fromNativeArray(NativeWindowResizeEvent.titlebar_layout_right(nativeEvent))
-            val titlebarLayout = if (layoutLeft != null && layoutRight != null) {
-                TitlebarLayout(layoutLeft, layoutRight)
-            } else {
-                null
-            }
             val maximized = NativeWindowResizeEvent.maximized(nativeEvent)
             val fullscreen = NativeWindowResizeEvent.fullscreen(nativeEvent)
             Event.WindowResize(
                 size = LogicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
-                titlebarLayout,
                 maximized,
                 fullscreen,
+                clientSideDecorations = NativeWindowResizeEvent.client_side_decorations(nativeEvent),
+                capabilities = WindowCapabilities.fromNative(NativeWindowResizeEvent.capabilities(nativeEvent)),
             )
         }
         desktop_h.NativeEvent_WindowFocusChange() -> {
