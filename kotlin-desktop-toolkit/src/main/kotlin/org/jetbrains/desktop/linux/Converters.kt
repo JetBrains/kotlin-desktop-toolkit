@@ -3,6 +3,7 @@ package org.jetbrains.desktop.linux
 import org.jetbrains.desktop.linux.generated.NativeKeyModifiers
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
 import org.jetbrains.desktop.linux.generated.NativeLogicalSize
+import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
@@ -38,3 +39,42 @@ internal fun KeyModifiers.Companion.fromNative(s: MemorySegment) = KeyModifiers(
     logo = NativeKeyModifiers.logo(s),
     numLock = NativeKeyModifiers.num_lock(s),
 )
+
+internal fun PointerShape.toNative(): Int {
+    return when (this) {
+        PointerShape.Default -> desktop_linux_h.NativePointerShape_Default()
+        PointerShape.ContextMenu -> desktop_linux_h.NativePointerShape_ContextMenu()
+        PointerShape.Help -> desktop_linux_h.NativePointerShape_Help()
+        PointerShape.Pointer -> desktop_linux_h.NativePointerShape_Pointer()
+        PointerShape.Progress -> desktop_linux_h.NativePointerShape_Progress()
+        PointerShape.Wait -> desktop_linux_h.NativePointerShape_Wait()
+        PointerShape.Cell -> desktop_linux_h.NativePointerShape_Cell()
+        PointerShape.Crosshair -> desktop_linux_h.NativePointerShape_Crosshair()
+        PointerShape.Text -> desktop_linux_h.NativePointerShape_Text()
+        PointerShape.VerticalText -> desktop_linux_h.NativePointerShape_VerticalText()
+        PointerShape.Alias -> desktop_linux_h.NativePointerShape_Alias()
+        PointerShape.Copy -> desktop_linux_h.NativePointerShape_Copy()
+        PointerShape.Move -> desktop_linux_h.NativePointerShape_Move()
+        PointerShape.NoDrop -> desktop_linux_h.NativePointerShape_NoDrop()
+        PointerShape.NotAllowed -> desktop_linux_h.NativePointerShape_NotAllowed()
+        PointerShape.Grab -> desktop_linux_h.NativePointerShape_Grab()
+        PointerShape.Grabbing -> desktop_linux_h.NativePointerShape_Grabbing()
+        PointerShape.EResize -> desktop_linux_h.NativePointerShape_EResize()
+        PointerShape.NResize -> desktop_linux_h.NativePointerShape_NResize()
+        PointerShape.NeResize -> desktop_linux_h.NativePointerShape_NeResize()
+        PointerShape.NwResize -> desktop_linux_h.NativePointerShape_NwResize()
+        PointerShape.SResize -> desktop_linux_h.NativePointerShape_SResize()
+        PointerShape.SeResize -> desktop_linux_h.NativePointerShape_SeResize()
+        PointerShape.SwResize -> desktop_linux_h.NativePointerShape_SwResize()
+        PointerShape.WResize -> desktop_linux_h.NativePointerShape_WResize()
+        PointerShape.EwResize -> desktop_linux_h.NativePointerShape_EwResize()
+        PointerShape.NsResize -> desktop_linux_h.NativePointerShape_NsResize()
+        PointerShape.NeswResize -> desktop_linux_h.NativePointerShape_NeswResize()
+        PointerShape.NwseResize -> desktop_linux_h.NativePointerShape_NwseResize()
+        PointerShape.ColResize -> desktop_linux_h.NativePointerShape_ColResize()
+        PointerShape.RowResize -> desktop_linux_h.NativePointerShape_RowResize()
+        PointerShape.AllScroll -> desktop_linux_h.NativePointerShape_AllScroll()
+        PointerShape.ZoomIn -> desktop_linux_h.NativePointerShape_ZoomIn()
+        PointerShape.ZoomOut -> desktop_linux_h.NativePointerShape_ZoomOut()
+    }
+}

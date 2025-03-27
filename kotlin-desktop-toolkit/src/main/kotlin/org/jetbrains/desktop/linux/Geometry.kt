@@ -39,4 +39,11 @@ public data class LogicalPoint(
     public fun toPhysical(scale: Float): PhysicalPoint = PhysicalPoint((x * scale).roundToInt(), (y * scale).roundToInt())
 }
 
-public data class LogicalRect(val point: LogicalPoint, val size: LogicalSize)
+public data class LogicalRect(val point: LogicalPoint, val size: LogicalSize) {
+    public fun contains(p: LogicalPoint): Boolean {
+        return p.x > point.x &&
+            p.x < point.x + size.width &&
+            p.y > point.y &&
+            p.y < point.y + size.height
+    }
+}

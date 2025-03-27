@@ -3,6 +3,7 @@ use desktop_common::logger::ffi_boundary;
 use super::{
     application::{AppPtr, Application},
     events::{EventHandler, LogicalPixels, LogicalSize, WindowId},
+    pointer_shapes::PointerShape,
     window::WindowParams,
 };
 
@@ -20,6 +21,17 @@ pub extern "C" fn window_drop(mut app_ptr: AppPtr, window_id: WindowId) {
     ffi_boundary("window_drop", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         app.drop_window(window_id);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_pointer_shape(mut app_ptr: AppPtr, window_id: WindowId, pointer_shape: PointerShape) {
+    ffi_boundary("window_set_pointer_shape", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        if let Some(window) = app.get_window_mut(window_id) {
+            window.set_pointer_shape(pointer_shape);
+        }
         Ok(())
     });
 }

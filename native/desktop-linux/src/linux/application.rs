@@ -128,6 +128,14 @@ impl Application<'_> {
     }
 
     #[must_use]
+    pub fn get_window_mut(&mut self, window_id: WindowId) -> Option<&mut SimpleWindow> {
+        self.state
+            .window_id_to_surface_id
+            .get(&window_id)
+            .and_then(|surface_id| self.state.windows.get_mut(surface_id))
+    }
+
+    #[must_use]
     pub fn get_window_size(&self, window_id: WindowId) -> Option<LogicalSize> {
         self.get_window(window_id).map(|w| LogicalSize {
             width: LogicalPixels(w.width.get().into()),

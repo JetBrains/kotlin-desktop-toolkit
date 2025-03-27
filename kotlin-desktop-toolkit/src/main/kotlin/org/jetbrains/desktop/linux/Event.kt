@@ -73,9 +73,6 @@ public enum class WindowButtonType {
 }
 
 public enum class WindowResizeEdge {
-    /** Nothing is being dragged. */
-    None,
-
     /** The top edge is being dragged. */
     Top,
 
@@ -210,7 +207,6 @@ public sealed class Event {
                 WindowFrameAction.Move -> desktop_h.NativeWindowFrameAction_Move()
                 is WindowFrameAction.Resize -> {
                     val nativeEdge = when (action.edge) {
-                        WindowResizeEdge.None -> desktop_h.NativeWindowResizeEdge_None()
                         WindowResizeEdge.Top -> desktop_h.NativeWindowResizeEdge_Top()
                         WindowResizeEdge.Bottom -> desktop_h.NativeWindowResizeEdge_Bottom()
                         WindowResizeEdge.Left -> desktop_h.NativeWindowResizeEdge_Left()

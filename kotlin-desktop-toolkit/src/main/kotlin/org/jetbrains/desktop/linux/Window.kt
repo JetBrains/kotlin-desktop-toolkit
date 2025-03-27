@@ -15,12 +15,15 @@ public class Window internal constructor(
     public val windowId: WindowId
     private val arena = Arena.ofConfined()
     private var scale: Double = 1.0
+    private var pointerShape = PointerShape.Default
 
     private val nativeEventHandler = NativeEventHandler.allocate(::onEvent, arena)
 
     init {
-        windowId = ffiDownCall {
-            desktop_h.window_create(appPtr, nativeEventHandler, params.toNative(arena))
+        Arena.ofConfined().use { arena ->
+            windowId = ffiDownCall {
+                desktop_h.window_create(appPtr, nativeEventHandler, params.toNative(arena))
+            }
         }
     }
 
@@ -82,6 +85,15 @@ public class Window internal constructor(
 //        get() {
 //            return ffiDownCall { desktop_h.window_is_main(appPtr, windowId) }
 //        }
+
+    public fun setPointerShape(shape: PointerShape) {
+        if (pointerShape != shape) {
+            pointerShape = shape
+            ffiDownCall {
+                desktop_h.window_set_pointer_shape(appPtr, windowId, shape.toNative())
+            }
+        }
+    }
 
     override fun close() {
         ffiDownCall {
