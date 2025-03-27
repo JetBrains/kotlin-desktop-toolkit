@@ -7,7 +7,7 @@ use smithay_client_toolkit::compositor::SurfaceData;
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
-use smithay_client_toolkit::reexports::csd_frame::WindowManagerCapabilities;
+use smithay_client_toolkit::reexports::csd_frame::{WindowManagerCapabilities, WindowState};
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
 use smithay_client_toolkit::shell::xdg::window::{DecorationMode, WindowDecorations};
@@ -251,6 +251,8 @@ impl SimpleWindow {
         }
         self.capabilities = Some(configure.capabilities);
 
+        let maximized = configure.state.contains(WindowState::MAXIMIZED);
+        let fullscreen = configure.state.contains(WindowState::FULLSCREEN);
         if configure.decoration_mode == DecorationMode::Client {
             let titlebar_layout_left = Self::filter_unsupported_buttons(&self.xdg_button_layout.left_side, configure.capabilities);
             let titlebar_layout_right = Self::filter_unsupported_buttons(&self.xdg_button_layout.right_side, configure.capabilities);
@@ -262,6 +264,8 @@ impl SimpleWindow {
                     },
                     titlebar_layout_left: AutoDropArray::new(titlebar_layout_left),
                     titlebar_layout_right: AutoDropArray::new(titlebar_layout_right),
+                    maximized,
+                    fullscreen,
                 }
                 .into(),
             );
@@ -274,6 +278,8 @@ impl SimpleWindow {
                     },
                     titlebar_layout_left: AutoDropArray::null(),
                     titlebar_layout_right: AutoDropArray::null(),
+                    maximized,
+                    fullscreen,
                 }
                 .into(),
             );

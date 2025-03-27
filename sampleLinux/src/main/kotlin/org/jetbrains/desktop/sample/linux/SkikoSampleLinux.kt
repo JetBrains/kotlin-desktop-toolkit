@@ -9,16 +9,24 @@ import org.jetbrains.desktop.linux.LogLevel
 import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.LogicalPixels
 import org.jetbrains.desktop.linux.LogicalPoint
+import org.jetbrains.desktop.linux.LogicalRect
 import org.jetbrains.desktop.linux.LogicalSize
+import org.jetbrains.desktop.linux.MouseButton
 import org.jetbrains.desktop.linux.PhysicalPoint
 import org.jetbrains.desktop.linux.PhysicalSize
+import org.jetbrains.desktop.linux.TitlebarLayout
 import org.jetbrains.desktop.linux.WindowButtonType
+import org.jetbrains.desktop.linux.WindowFrameAction
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
+import org.jetbrains.skia.Font
+import org.jetbrains.skia.FontMgr
+import org.jetbrains.skia.FontStyle
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
+import org.jetbrains.skia.TextLine
 import java.lang.AutoCloseable
 import java.nio.file.Files
 import java.nio.file.Path
@@ -29,52 +37,139 @@ import kotlin.math.sin
 class CustomTitlebar(
     private var origin: LogicalPoint,
     var size: LogicalSize,
-    var startWindowDrag: (() -> Unit)? = null,
-    var buttonLayout: Pair<List<WindowButtonType>, List<WindowButtonType>>? = null,
+    var buttonLayout: TitlebarLayout? = null,
 ) {
+    private var rectangles = ArrayList<Pair<LogicalRect, WindowButtonType>>()
+    private var mouseOverRectIndex: Int? = null
+    private var maximized: Boolean = false
+    private var fullscreen: Boolean = false
+
     companion object {
         const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55f
-        const val BUTTON_SPACING: LogicalPixels = 10f
         const val BUTTON_LINE_WIDTH: LogicalPixels = 5f
+        val BUTTON_SIZE = LogicalSize(CUSTOM_TITLEBAR_HEIGHT, CUSTOM_TITLEBAR_HEIGHT)
 
         val APP_ICON = Image.makeFromEncoded(Files.readAllBytes(Path.of("resources/jb-logo.png")))
-    }
 
-    fun handleEvent(event: Event): EventHandlerResult {
-        return when (event) {
-            is Event.MouseDown -> {
-                if (event.locationInWindow.x > origin.x &&
-                    event.locationInWindow.x < origin.x + size.width * 0.75 &&
-                    event.locationInWindow.y > origin.y &&
-                    event.locationInWindow.y < origin.y + size.height
-                ) {
-                    startWindowDrag?.invoke()
-                    EventHandlerResult.Stop
-                } else {
-                    EventHandlerResult.Continue
-                }
-            }
-            else -> EventHandlerResult.Continue
+        private fun isLocationInRect(loc: LogicalPoint, rect: LogicalRect): Boolean {
+            return loc.x > rect.point.x &&
+                loc.x < rect.point.x + rect.size.width &&
+                loc.y > rect.point.y &&
+                loc.y < rect.point.y + rect.size.height
         }
     }
 
-    private fun drawButton(canvas: Canvas, button: WindowButtonType, xOffset: LogicalPixels, scale: Float) {
-        val buttonSize = CUSTOM_TITLEBAR_HEIGHT * scale
-        val xOffset = xOffset * scale
-        val yOffset = 0f * scale
+    fun resize(event: Event.WindowResize) {
+        size = LogicalSize(width = event.size.width, height = CUSTOM_TITLEBAR_HEIGHT)
+        maximized = event.maximized
+        fullscreen = event.fullscreen
+        mouseOverRectIndex = null
+        setLayout(event.titlebarLayout)
+    }
+
+    private fun setLayout(layout: TitlebarLayout?) {
+        buttonLayout = layout
+        rectangles.clear()
+        buttonLayout?.let {
+            val buttonsLeftWidth = origin.x + (it.layoutLeft.size * BUTTON_SIZE.width)
+            val buttonsRightWidth = it.layoutRight.size * BUTTON_SIZE.width
+            val rect = LogicalRect(
+                LogicalPoint(buttonsLeftWidth, origin.y),
+                LogicalSize(size.width - buttonsRightWidth - buttonsLeftWidth, CUSTOM_TITLEBAR_HEIGHT),
+            )
+            rectangles.add(Pair(rect, WindowButtonType.Title))
+            for ((i, button) in it.layoutLeft.withIndex()) {
+                val rect = LogicalRect(LogicalPoint(i * BUTTON_SIZE.height, origin.y), BUTTON_SIZE)
+                rectangles.add(Pair(rect, button))
+            }
+            for ((i, button) in it.layoutRight.withIndex()) {
+                val rect = LogicalRect(
+                    LogicalPoint(origin.x + size.width - ((it.layoutRight.size - i) * BUTTON_SIZE.width), origin.y),
+                    BUTTON_SIZE,
+                )
+                rectangles.add(Pair(rect, button))
+            }
+        }
+    }
+
+    private fun toMouseClickAction(
+        windowButton: WindowButtonType,
+        mouseButton: MouseButton,
+        locationInWindow: LogicalPoint,
+    ): WindowFrameAction? {
+        return when (windowButton) {
+            WindowButtonType.AppMenu -> WindowFrameAction.ShowMenu(locationInWindow)
+            WindowButtonType.Icon -> WindowFrameAction.ShowMenu(locationInWindow)
+            WindowButtonType.Spacer,
+            WindowButtonType.Title,
+            -> when (mouseButton) {
+                MouseButton.LEFT -> WindowFrameAction.Move
+                MouseButton.RIGHT -> WindowFrameAction.ShowMenu(locationInWindow)
+                else -> null
+            }
+            WindowButtonType.Minimize -> WindowFrameAction.Minimize
+            WindowButtonType.Maximize -> if (maximized) WindowFrameAction.UnMaximize else WindowFrameAction.Maximize
+            WindowButtonType.Close -> WindowFrameAction.Close
+        }
+    }
+
+    fun handleEvent(event: Event): EventHandlerResult {
+        when (event) {
+            is Event.MouseDown -> {
+                for ((rect, windowButton) in rectangles) {
+                    if (isLocationInRect(event.locationInWindow, rect)) {
+                        toMouseClickAction(windowButton, event.button, event.locationInWindow)?.let {
+                            event.setFrameAction(it)
+                            return EventHandlerResult.Stop
+                        }
+                        break
+                    }
+                }
+            }
+            is Event.MouseMoved -> {
+                mouseOverRectIndex = null
+                for ((i, v) in rectangles.withIndex()) {
+                    val rect = v.first
+                    if (isLocationInRect(event.locationInWindow, rect)) {
+                        mouseOverRectIndex = i
+                        break
+                    }
+                }
+            }
+            else -> {}
+        }
+        return EventHandlerResult.Continue
+    }
+
+    private fun drawButton(canvas: Canvas, button: WindowButtonType, rect: LogicalRect, highlighted: Boolean, scale: Float) {
+        val w = rect.size.width * scale
+        val h = rect.size.height * scale
+        val xOffset = rect.point.x * scale
+        val yOffset = rect.point.y * scale
+
+        when (button) {
+            WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close -> {
+                Paint().use { paint ->
+                    paint.color = if (highlighted) Color.WHITE else 0xFFD3D3D3.toInt()
+                    canvas.drawRect(Rect.makeXYWH(xOffset, yOffset, w, h), paint)
+                }
+            }
+            else -> {}
+        }
+
         Paint().use { paint ->
             paint.color = Color.BLACK
             paint.strokeWidth = BUTTON_LINE_WIDTH * scale
 
             val yTop = yOffset + (paint.strokeWidth / 2)
-            val yBottom = (yOffset + buttonSize) - (paint.strokeWidth / 2)
+            val yBottom = (yOffset + h) - (paint.strokeWidth / 2)
             val xLeft = xOffset + (paint.strokeWidth / 2)
-            val xRight = (xOffset + buttonSize) - (paint.strokeWidth / 2)
+            val xRight = (xOffset + w) - (paint.strokeWidth / 2)
             when (button) {
                 WindowButtonType.AppMenu -> {
-                    canvas.drawLine(xOffset, yOffset, xOffset + buttonSize, yOffset, paint)
-                    canvas.drawLine(xOffset, yOffset + (buttonSize / 2), xOffset + buttonSize, yOffset + (buttonSize / 2), paint)
-                    canvas.drawLine(xOffset, yBottom, xOffset + buttonSize, yBottom, paint)
+                    canvas.drawLine(xOffset, yOffset, xOffset + w, yOffset, paint)
+                    canvas.drawLine(xOffset, yOffset + (h / 2), xOffset + w, yOffset + (h / 2), paint)
+                    canvas.drawLine(xOffset, yBottom, xOffset + w, yBottom, paint)
                 }
                 WindowButtonType.Icon -> {
 //                    APP_ICON.scalePixels()
@@ -82,7 +177,7 @@ class CustomTitlebar(
                 }
                 WindowButtonType.Spacer -> {}
                 WindowButtonType.Minimize -> {
-                    canvas.drawLine(xOffset, yBottom, xOffset + buttonSize, yBottom, paint)
+                    canvas.drawLine(xOffset, yBottom, xOffset + w, yBottom, paint)
                 }
                 WindowButtonType.Maximize -> {
                     canvas.drawLine(xLeft, yTop, xLeft, yBottom, paint)
@@ -91,8 +186,15 @@ class CustomTitlebar(
                     canvas.drawLine(xLeft, yBottom, xRight, yBottom, paint)
                 }
                 WindowButtonType.Close -> {
-                    canvas.drawLine(xOffset, yOffset, xOffset + buttonSize, yBottom, paint)
-                    canvas.drawLine(xOffset + buttonSize, yOffset, xOffset, yBottom, paint)
+                    canvas.drawLine(xOffset, yOffset, xOffset + w, yBottom, paint)
+                    canvas.drawLine(xOffset + w, yOffset, xOffset, yBottom, paint)
+                }
+                WindowButtonType.Title -> {
+                    paint.color = Color.WHITE
+                    FontMgr.default.matchFamilyStyle("sans-serif", FontStyle.BOLD)?.use { typeface ->
+//                        Logger.info { "typeface: $typeface" }
+                        canvas.drawTextLine(TextLine.make("aaaaaaaaaaaaaaaaaaaaaa", font = Font(typeface, 32f)), xOffset, yOffset, paint)
+                    }
                 }
             }
         }
@@ -101,38 +203,16 @@ class CustomTitlebar(
     fun draw(canvas: Canvas, scale: Float) {
         val physicalOrigin = origin.toPhysical(scale)
         val physicalSize = size.toPhysical(scale)
-        val x = physicalOrigin.x
-        val y = physicalOrigin.y
-        val width = physicalSize.width
-        val height = physicalSize.height
+        val l = physicalOrigin.x.toFloat()
+        val t = physicalOrigin.y.toFloat()
+        val w = physicalSize.width.toFloat()
+        val h = physicalSize.height.toFloat()
         Paint().use { paint ->
             paint.color = 0xFF404040.toInt()
-            canvas.drawRect(Rect.makeXYWH(x.toFloat(), y.toFloat(), width.toFloat(), height.toFloat()), paint)
+            canvas.drawRect(Rect.makeXYWH(l, t, w, h), paint)
         }
-        buttonLayout?.let { (buttonsLeft, buttonsRight) ->
-            val buttonOffset = CUSTOM_TITLEBAR_HEIGHT + BUTTON_SPACING
-            Paint().use { paint ->
-                paint.color = 0xFFD3D3D3.toInt()
-                canvas.drawRect(
-                    Rect.makeXYWH(x.toFloat(), y.toFloat(), ((buttonsLeft.size * buttonOffset) - BUTTON_SPACING) * scale, height.toFloat()),
-                    paint,
-                )
-                canvas.drawRect(
-                    Rect.makeXYWH(
-                        (size.width - (buttonsRight.size * buttonOffset) + BUTTON_SPACING) * scale,
-                        y.toFloat(),
-                        ((buttonsRight.size * buttonOffset) - BUTTON_SPACING) * scale,
-                        height.toFloat(),
-                    ),
-                    paint,
-                )
-            }
-            for ((i, b) in buttonsLeft.withIndex()) {
-                drawButton(canvas, b, i * buttonOffset, scale)
-            }
-            for ((i, b) in buttonsRight.withIndex()) {
-                drawButton(canvas, b, size.width - ((buttonsRight.size - i) * buttonOffset) + BUTTON_SPACING, scale)
-            }
+        for ((i, v) in rectangles.withIndex()) {
+            drawButton(canvas, v.second, v.first, highlighted = mouseOverRectIndex == i, scale)
         }
     }
 }
@@ -141,21 +221,16 @@ class ContentArea(
     var origin: LogicalPoint,
     var size: LogicalSize,
 ) {
-
     private var markerPosition: LogicalPoint? = null
 
     fun handleEvent(event: Event): EventHandlerResult {
-        return when (event) {
-            is Event.MouseMoved -> {
-                markerPosition = LogicalPoint(
-                    event.locationInWindow.x - origin.x,
-                    event.locationInWindow.y - origin.y,
-                )
-                EventHandlerResult.Continue
-            }
-
-            else -> EventHandlerResult.Continue
+        if (event is Event.MouseMoved) {
+            markerPosition = LogicalPoint(
+                event.locationInWindow.x - origin.x,
+                event.locationInWindow.y - origin.y,
+            )
         }
+        return EventHandlerResult.Continue
     }
 
     fun draw(canvas: Canvas, time: Long, scale: Float) {
@@ -261,8 +336,7 @@ class WindowContainer(
             val titlebar = customTitlebar ?: CustomTitlebar(origin = LogicalPoint.Zero, size = titlebarSize).also {
                 customTitlebar = it
             }
-            titlebar.buttonLayout = event.titlebarLayout
-            titlebar.size = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
+            titlebar.resize(event)
             contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height)
             contentArea.size =
                 LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
@@ -315,9 +389,6 @@ class RotatingBallWindow(
                     // performDrawing(syncWithCA = true)
                     EventHandlerResult.Stop
                 }
-            }
-            windowContainer.customTitlebar?.startWindowDrag = {
-//                window.startDrag()
             }
             windowContainer.handleEvent(event)
         } else {
