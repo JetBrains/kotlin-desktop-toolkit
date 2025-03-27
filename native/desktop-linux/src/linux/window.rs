@@ -1,12 +1,12 @@
 use std::num::NonZeroU32;
-use std::sync::Arc;
 
-use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
+use desktop_common::ffi_utils::BorrowedStrPtr;
 use log::debug;
 use smithay_client_toolkit::compositor::SurfaceData;
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
+use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle, protocol::wl_shm};
 use smithay_client_toolkit::reexports::csd_frame::{WindowManagerCapabilities, WindowState};
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
@@ -18,15 +18,9 @@ use smithay_client_toolkit::shell::{
         window::{Window, WindowConfigure},
     },
 };
-use smithay_client_toolkit::{
-    reexports::client::{Connection, Proxy, QueueHandle, protocol::wl_shm},
-    shm::Shm,
-};
 
 use crate::linux::application_state::ApplicationState;
-use crate::linux::cursors::CURSORS;
-use crate::linux::events::{LogicalPixels, LogicalSize, WindowResizeEvent};
-use crate::linux::xdg_desktop_settings::WindowButtonType;
+use crate::linux::events::{LogicalPixels, LogicalSize, WindowCapabilities, WindowResizeEvent};
 
 use smithay_client_toolkit::{
     seat::pointer::{CursorIcon, ThemedPointer},
@@ -35,7 +29,7 @@ use smithay_client_toolkit::{
 };
 
 use super::events::{Event, InternalEventHandler, WindowDrawEvent};
-use super::xdg_desktop_settings::{TitlebarButtonLayout, XdgDesktopSetting};
+use super::pointer_shapes::PointerShape;
 
 #[repr(C)]
 pub struct WindowParams<'a> {
@@ -99,7 +93,7 @@ pub enum WindowFrameAction {
 
 pub struct SimpleWindow {
     pub event_handler: Box<InternalEventHandler>,
-    pub subcompositor_state: Arc<SubcompositorState>,
+    pub subcompositor_state: SubcompositorState,
     pub close: bool,
     pub first_configure: bool,
     pub pool: SlotPool,
@@ -110,13 +104,9 @@ pub struct SimpleWindow {
     pub window: Window,
     pub keyboard_focus: bool,
     pub set_cursor: bool,
-    pub window_cursor_icon_idx: usize,
-    pub decorations_cursor: Option<CursorIcon>,
+    pub decorations_cursor: CursorIcon,
     pub current_scale: f64,
-    //    pub csd_button_layout: Option<String>,
     pub decoration_mode: DecorationMode,
-    pub capabilities: Option<WindowManagerCapabilities>,
-    pub xdg_button_layout: TitlebarButtonLayout,
 }
 
 impl SimpleWindow {
@@ -168,7 +158,7 @@ impl SimpleWindow {
         debug!("Created new window with surface_id={surface_id}");
         Self {
             event_handler,
-            subcompositor_state: Arc::new(subcompositor_state),
+            subcompositor_state,
             close: false,
             first_configure: true,
             pool,
@@ -179,24 +169,9 @@ impl SimpleWindow {
             window,
             keyboard_focus: false,
             set_cursor: false,
-            window_cursor_icon_idx: 0,
-            decorations_cursor: None,
+            decorations_cursor: CursorIcon::Default,
             current_scale: 1.0,
             decoration_mode: DecorationMode::Client,
-            xdg_button_layout: TitlebarButtonLayout {
-                left_side: vec![WindowButtonType::Icon],
-                right_side: vec![WindowButtonType::Minimize, WindowButtonType::Maximize, WindowButtonType::Close],
-            },
-            capabilities: None,
-        }
-    }
-
-    pub fn handle_xdg_desktop_setting(&mut self, s: &XdgDesktopSetting) {
-        match s {
-            XdgDesktopSetting::ButtonLayout(titlebar_button_layout) => self.xdg_button_layout = titlebar_button_layout.clone(),
-            XdgDesktopSetting::ActionDoubleClickTitlebar(_)
-            | XdgDesktopSetting::ActionRightClickTitlebar(_)
-            | XdgDesktopSetting::ActionMiddleClickTitlebar(_) => {}
         }
     }
 
@@ -205,23 +180,11 @@ impl SimpleWindow {
         self.close = true;
     }
 
-    fn filter_unsupported_buttons(buttons: &[WindowButtonType], capabilities: WindowManagerCapabilities) -> Box<[WindowButtonType]> {
-        buttons
-            .iter()
-            .filter(|b| match b {
-                WindowButtonType::AppMenu | WindowButtonType::Icon | WindowButtonType::Spacer | WindowButtonType::Close => true,
-                WindowButtonType::Minimize => capabilities.contains(WindowManagerCapabilities::MINIMIZE),
-                WindowButtonType::Maximize => capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
-            })
-            .copied()
-            .collect()
-    }
-
+    #[allow(clippy::too_many_arguments)]
     pub fn configure(
         &mut self,
         conn: &Connection,
         qh: &QueueHandle<ApplicationState>,
-        shm: &Shm,
         window: &Window,
         configure: &WindowConfigure,
         themed_pointer: Option<&mut ThemedPointer>,
@@ -233,7 +196,7 @@ impl SimpleWindow {
             "Configure size {:?}, decorations: {:?}",
             configure.new_size, configure.decoration_mode
         );
-        debug!("Supported formats: {:?}", shm.formats());
+        // debug!("Supported formats: {:?}", shm.formats());
         // [Argb8888, Xrgb8888, Abgr8888, Xbgr8888, Rgb565, Argb2101010, Xrgb2101010, Abgr2101010, Xbgr2101010, Argb16161616f, Xrgb16161616f, Abgr16161616f, Xbgr16161616f, Yuyv, Nv12, P010, Yuv420]
 
         let width = configure.new_size.0.unwrap_or(self.width);
@@ -249,41 +212,25 @@ impl SimpleWindow {
         if let Some(viewport) = &self.viewport {
             viewport.set_destination(self.width.get() as i32, self.height.get() as i32);
         }
-        self.capabilities = Some(configure.capabilities);
 
-        let maximized = configure.state.contains(WindowState::MAXIMIZED);
-        let fullscreen = configure.state.contains(WindowState::FULLSCREEN);
-        if configure.decoration_mode == DecorationMode::Client {
-            let titlebar_layout_left = Self::filter_unsupported_buttons(&self.xdg_button_layout.left_side, configure.capabilities);
-            let titlebar_layout_right = Self::filter_unsupported_buttons(&self.xdg_button_layout.right_side, configure.capabilities);
-            (self.event_handler)(
-                &WindowResizeEvent {
-                    size: LogicalSize {
-                        width: LogicalPixels(width.get().into()),
-                        height: LogicalPixels(height.get().into()),
-                    },
-                    titlebar_layout_left: AutoDropArray::new(titlebar_layout_left),
-                    titlebar_layout_right: AutoDropArray::new(titlebar_layout_right),
-                    maximized,
-                    fullscreen,
-                }
-                .into(),
-            );
-        } else {
-            (self.event_handler)(
-                &WindowResizeEvent {
-                    size: LogicalSize {
-                        width: LogicalPixels(width.get().into()),
-                        height: LogicalPixels(height.get().into()),
-                    },
-                    titlebar_layout_left: AutoDropArray::null(),
-                    titlebar_layout_right: AutoDropArray::null(),
-                    maximized,
-                    fullscreen,
-                }
-                .into(),
-            );
-        }
+        (self.event_handler)(
+            &WindowResizeEvent {
+                size: LogicalSize {
+                    width: LogicalPixels(width.get().into()),
+                    height: LogicalPixels(height.get().into()),
+                },
+                maximized: configure.state.contains(WindowState::MAXIMIZED),
+                fullscreen: configure.state.contains(WindowState::FULLSCREEN),
+                client_side_decorations: configure.decoration_mode == DecorationMode::Client,
+                capabilities: WindowCapabilities {
+                    window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
+                    maximixe: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
+                    fullscreen: configure.capabilities.contains(WindowManagerCapabilities::FULLSCREEN),
+                    minimize: configure.capabilities.contains(WindowManagerCapabilities::MINIMIZE),
+                },
+            }
+            .into(),
+        );
 
         // Initiate the first draw.
         if self.first_configure {
@@ -321,9 +268,8 @@ impl SimpleWindow {
     pub fn draw(&mut self, conn: &Connection, qh: &QueueHandle<ApplicationState>, themed_pointer: Option<&mut ThemedPointer>) {
         let surface = self.window.wl_surface();
         if self.set_cursor {
-            debug!("Updating cursor to {} for {}", self.window_cursor_icon_idx, surface.id());
-            let cursor_icon = self.decorations_cursor.unwrap_or(CURSORS[self.window_cursor_icon_idx]);
-            themed_pointer.unwrap().set_cursor(conn, cursor_icon).unwrap();
+            debug!("Updating cursor to {} for {}", self.decorations_cursor, surface.id());
+            themed_pointer.unwrap().set_cursor(conn, self.decorations_cursor).unwrap();
             self.set_cursor = false;
         }
 
@@ -390,5 +336,45 @@ impl SimpleWindow {
     pub fn scale_changed(&mut self, new_scale: f64) {
         self.current_scale = new_scale;
         (self.event_handler)(&Event::new_window_scale_changed_event(new_scale));
+    }
+
+    pub fn set_pointer_shape(&mut self, pointer_shape: PointerShape) {
+        self.set_cursor = true;
+        self.decorations_cursor = match pointer_shape {
+            PointerShape::Default => CursorIcon::Default,
+            PointerShape::ContextMenu => CursorIcon::ContextMenu,
+            PointerShape::Help => CursorIcon::Help,
+            PointerShape::Pointer => CursorIcon::Pointer,
+            PointerShape::Progress => CursorIcon::Progress,
+            PointerShape::Wait => CursorIcon::Wait,
+            PointerShape::Cell => CursorIcon::Cell,
+            PointerShape::Crosshair => CursorIcon::Crosshair,
+            PointerShape::Text => CursorIcon::Text,
+            PointerShape::VerticalText => CursorIcon::VerticalText,
+            PointerShape::Alias => CursorIcon::Alias,
+            PointerShape::Copy => CursorIcon::Copy,
+            PointerShape::Move => CursorIcon::Move,
+            PointerShape::NoDrop => CursorIcon::NoDrop,
+            PointerShape::NotAllowed => CursorIcon::NotAllowed,
+            PointerShape::Grab => CursorIcon::Grab,
+            PointerShape::Grabbing => CursorIcon::Grabbing,
+            PointerShape::EResize => CursorIcon::EResize,
+            PointerShape::NResize => CursorIcon::NResize,
+            PointerShape::NeResize => CursorIcon::NeResize,
+            PointerShape::NwResize => CursorIcon::NwResize,
+            PointerShape::SResize => CursorIcon::SResize,
+            PointerShape::SeResize => CursorIcon::SeResize,
+            PointerShape::SwResize => CursorIcon::SwResize,
+            PointerShape::WResize => CursorIcon::WResize,
+            PointerShape::EwResize => CursorIcon::EwResize,
+            PointerShape::NsResize => CursorIcon::NsResize,
+            PointerShape::NeswResize => CursorIcon::NeswResize,
+            PointerShape::NwseResize => CursorIcon::NwseResize,
+            PointerShape::ColResize => CursorIcon::ColResize,
+            PointerShape::RowResize => CursorIcon::RowResize,
+            PointerShape::AllScroll => CursorIcon::AllScroll,
+            PointerShape::ZoomIn => CursorIcon::ZoomIn,
+            PointerShape::ZoomOut => CursorIcon::ZoomOut,
+        };
     }
 }

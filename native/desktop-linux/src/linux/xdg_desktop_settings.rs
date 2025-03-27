@@ -1,5 +1,6 @@
 use ashpd::{desktop::settings::Settings, zvariant::OwnedValue};
 use async_std::stream::StreamExt;
+use desktop_common::ffi_utils::AutoDropArray;
 use log::{debug, warn};
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
@@ -32,13 +33,13 @@ impl WindowButtonType {
 }
 
 #[derive(Clone, Debug)]
-pub struct TitlebarButtonLayout {
-    pub left_side: Vec<WindowButtonType>,
-    pub right_side: Vec<WindowButtonType>,
+pub struct InternalTitlebarButtonLayout {
+    pub left_side: Box<[WindowButtonType]>,
+    pub right_side: Box<[WindowButtonType]>,
 }
 
-impl TitlebarButtonLayout {
-    fn parse_one_side(buttons: &str) -> Vec<WindowButtonType> {
+impl InternalTitlebarButtonLayout {
+    fn parse_one_side(buttons: &str) -> Box<[WindowButtonType]> {
         buttons.split(',').filter_map(WindowButtonType::parse).collect()
     }
 
@@ -52,13 +53,37 @@ impl TitlebarButtonLayout {
 }
 
 #[derive(Debug)]
-pub enum XdgDesktopSetting {
-    ButtonLayout(TitlebarButtonLayout),
+pub(crate) enum InternalXdgDesktopSetting {
+    TitlebarLayout(InternalTitlebarButtonLayout),
+    DoubleClickIntervalMs(i32),
+}
 
-    /// Valid values: "toggle-maximize", "toggle-maximize-horizontally", "toggle-maximize-vertically", "menu", "lower", "none"
-    ActionDoubleClickTitlebar(String),
-    ActionRightClickTitlebar(String),
-    ActionMiddleClickTitlebar(String),
+#[repr(C)]
+#[derive(Debug)]
+pub struct TitlebarButtonLayout {
+    pub left_side: AutoDropArray<WindowButtonType>,
+    pub right_side: AutoDropArray<WindowButtonType>,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub enum XdgDesktopSetting {
+    TitlebarLayout(TitlebarButtonLayout),
+    DoubleClickIntervalMs(i32),
+}
+
+impl XdgDesktopSetting {
+    pub(crate) fn with(s: InternalXdgDesktopSetting, f: impl FnOnce(Self)) {
+        match s {
+            InternalXdgDesktopSetting::TitlebarLayout(v) => {
+                f(Self::TitlebarLayout(TitlebarButtonLayout {
+                    left_side: AutoDropArray::new(v.left_side),
+                    right_side: AutoDropArray::new(v.right_side),
+                }));
+            }
+            InternalXdgDesktopSetting::DoubleClickIntervalMs(v) => f(Self::DoubleClickIntervalMs(v)),
+        }
+    }
 }
 
 // dbus-send --dest=org.freedesktop.portal.Desktop --print-reply /org/freedesktop/portal/desktop org.freedesktop.portal.Settings.Read string:"org.gnome.desktop.wm.preferences" string:"button-layout"
@@ -81,7 +106,7 @@ pub enum XdgDesktopSetting {
 //   accent-color
 //   color-scheme
 
-impl XdgDesktopSetting {
+impl InternalXdgDesktopSetting {
     #[must_use]
     pub fn new(namespace: &str, key: &str, value: &OwnedValue) -> Option<Self> {
         match namespace {
@@ -90,24 +115,32 @@ impl XdgDesktopSetting {
                     "button-layout" => value
                         .downcast_ref::<String>()
                         .ok()
-                        .map(|s| Self::ButtonLayout(TitlebarButtonLayout::parse(&s))),
-                    "action-double-click-titlebar" => value.downcast_ref::<String>().ok().map(Self::ActionDoubleClickTitlebar),
-                    //                "action-right-click-titlebar" => with_str(value, |s| f(XdgDesktopSetting::ActionRightClickTitlebar(s))),
-                    //                "action-middle-click-titlebar" => with_str(value, |s| f(XdgDesktopSetting::ActionMiddleClickTitlebar(s))),
+                        .map(|s| Self::TitlebarLayout(InternalTitlebarButtonLayout::parse(&s))),
+                    //// Valid values: "toggle-maximize", "toggle-maximize-horizontally", "toggle-maximize-vertically", "menu", "lower", "none"
+                    //"action-double-click-titlebar" => {},
+                    //"action-right-click-titlebar" => {},
+                    //"action-middle-click-titlebar" => {},
                     _ => None,
                 }
             }
+            "org.gnome.desktop.peripherals.mouse" => match key {
+                "double-click" => value.downcast_ref::<i32>().ok().map(Self::DoubleClickIntervalMs),
+                _ => None,
+            },
             _ => None,
         }
     }
 }
 
-pub async fn xdg_desktop_settings_notifier(tx: Sender<XdgDesktopSetting>) -> anyhow::Result<()> {
+pub(crate) async fn xdg_desktop_settings_notifier(tx: Sender<InternalXdgDesktopSetting>) -> anyhow::Result<()> {
     let xdg_desktop_settings = Settings::new().await?;
 
-    for (namespace, kv) in xdg_desktop_settings.read_all(&["org.gnome.desktop.wm.preferences"]).await? {
+    for (namespace, kv) in xdg_desktop_settings
+        .read_all(&["org.gnome.desktop.wm.preferences", "org.gnome.desktop.peripherals.mouse"])
+        .await?
+    {
         for (key, value) in kv {
-            if let Some(s) = XdgDesktopSetting::new(&namespace, &key, &value) {
+            if let Some(s) = InternalXdgDesktopSetting::new(&namespace, &key, &value) {
                 debug!("xdg_desktop_settings_notifier: {s:?}");
                 tx.send(s)?;
             }
@@ -117,7 +150,7 @@ pub async fn xdg_desktop_settings_notifier(tx: Sender<XdgDesktopSetting>) -> any
     let mut xdg_desktop_settings_signals = xdg_desktop_settings.receive_setting_changed().await?;
     while let Some(s) = xdg_desktop_settings_signals.next().await {
         debug!("xdg_desktop_settings_notifier: {s:?}");
-        if let Some(e) = XdgDesktopSetting::new(s.namespace(), s.key(), s.value()) {
+        if let Some(e) = InternalXdgDesktopSetting::new(s.namespace(), s.key(), s.value()) {
             tx.send(e)?;
         }
     }
