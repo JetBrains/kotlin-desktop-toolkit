@@ -14,6 +14,8 @@ import org.jetbrains.desktop.linux.generated.NativeMouseUpEvent
 import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowFocusChangeEvent
+import org.jetbrains.desktop.linux.generated.NativeWindowFrameAction
+import org.jetbrains.desktop.linux.generated.NativeWindowFrameAction_NativeShowMenu_Body
 import org.jetbrains.desktop.linux.generated.NativeWindowFullScreenToggleEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
@@ -37,6 +39,7 @@ public enum class WindowButtonType {
     AppMenu,
     Icon,
     Spacer,
+    Title,
     Minimize,
     Maximize,
     Close,
@@ -68,6 +71,64 @@ public enum class WindowButtonType {
         }
     }
 }
+
+public enum class WindowResizeEdge {
+    /** Nothing is being dragged. */
+    None,
+
+    /** The top edge is being dragged. */
+    Top,
+
+    /** The bottom edge is being dragged. */
+    Bottom,
+
+    /* The left edge is being dragged. */
+    Left,
+
+    /** The top left corner is being dragged. */
+    TopLeft,
+
+    /** The bottom left corner is being dragged. */
+    BottomLeft,
+
+    /** The right edge is being dragged. */
+    Right,
+
+    /** The top right corner is being dragged. */
+    TopRight,
+
+    /** The bottom right corner is being dragged. */
+    BottomRight,
+}
+
+public sealed class WindowFrameAction {
+    /** The window should be minimized. */
+    public data object Minimize : WindowFrameAction()
+
+    /** The window should be maximized. */
+    public data object Maximize : WindowFrameAction()
+
+    /** The window should be unmaximized. */
+    public data object UnMaximize : WindowFrameAction()
+
+    /** The window should be closed. */
+    public data object Close : WindowFrameAction()
+
+    /** An interactive move should be started. */
+    public data object Move : WindowFrameAction()
+
+    /** An interactive resize should be started with the provided edge. */
+    public data class Resize(val edge: WindowResizeEdge) : WindowFrameAction()
+
+    /** Show window menu.
+     *
+     * The coordinates are relative to the base surface, as in should be
+     * directly passed to the `xdg_toplevel::show_window_menu`.
+     */
+    public data class ShowMenu(val point: LogicalPoint) : WindowFrameAction()
+}
+
+public data class TitlebarLayout(val layoutLeft: List<WindowButtonType>, val layoutRight: List<WindowButtonType>)
 
 public sealed class Event {
     public companion object {
@@ -137,7 +198,43 @@ public sealed class Event {
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event()
+        private val native: MemorySegment,
+    ) : Event() {
+        public fun setFrameAction(action: WindowFrameAction) {
+            Logger.info { "setFrameAction: $action" }
+            val nativeFrameAction = NativeMouseDownEvent.frame_action_out(native)
+            val tag = when (action) {
+                WindowFrameAction.Close -> desktop_h.NativeWindowFrameAction_Close()
+                WindowFrameAction.Maximize -> desktop_h.NativeWindowFrameAction_Maximize()
+                WindowFrameAction.Minimize -> desktop_h.NativeWindowFrameAction_Minimize()
+                WindowFrameAction.Move -> desktop_h.NativeWindowFrameAction_Move()
+                is WindowFrameAction.Resize -> {
+                    val nativeEdge = when (action.edge) {
+                        WindowResizeEdge.None -> desktop_h.NativeWindowResizeEdge_None()
+                        WindowResizeEdge.Top -> desktop_h.NativeWindowResizeEdge_Top()
+                        WindowResizeEdge.Bottom -> desktop_h.NativeWindowResizeEdge_Bottom()
+                        WindowResizeEdge.Left -> desktop_h.NativeWindowResizeEdge_Left()
+                        WindowResizeEdge.TopLeft -> desktop_h.NativeWindowResizeEdge_TopLeft()
+                        WindowResizeEdge.BottomLeft -> desktop_h.NativeWindowResizeEdge_BottomLeft()
+                        WindowResizeEdge.Right -> desktop_h.NativeWindowResizeEdge_Right()
+                        WindowResizeEdge.TopRight -> desktop_h.NativeWindowResizeEdge_TopRight()
+                        WindowResizeEdge.BottomRight -> desktop_h.NativeWindowResizeEdge_BottomRight()
+                    }
+                    NativeWindowFrameAction.resize(nativeFrameAction, nativeEdge)
+                    desktop_h.NativeWindowFrameAction_Resize()
+                }
+                is WindowFrameAction.ShowMenu -> {
+                    val nativeShowMenu = NativeWindowFrameAction.show_menu(nativeFrameAction)
+                    NativeWindowFrameAction_NativeShowMenu_Body._0(nativeShowMenu, action.point.x.toInt())
+                    NativeWindowFrameAction_NativeShowMenu_Body._1(nativeShowMenu, action.point.y.toInt())
+                    desktop_h.NativeWindowFrameAction_ShowMenu()
+                }
+                WindowFrameAction.UnMaximize -> desktop_h.NativeWindowFrameAction_UnMaximize()
+            }
+            NativeWindowFrameAction.tag(nativeFrameAction, tag)
+            NativeMouseDownEvent.frame_action_out(native)
+        }
+    }
 
     public data class ScrollWheel(
         val scrollingDeltaX: LogicalPixels,
@@ -152,7 +249,9 @@ public sealed class Event {
 
     public data class WindowResize(
         val size: LogicalSize,
-        val titlebarLayout: Pair<List<WindowButtonType>, List<WindowButtonType>>?,
+        val titlebarLayout: TitlebarLayout?,
+        val maximized: Boolean,
+        val fullscreen: Boolean,
     ) : Event()
 
     public data class WindowMove(
@@ -258,6 +357,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 button = MouseButton(NativeMouseDownEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseDownEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(NativeMouseDownEvent.timestamp(nativeEvent)),
+                native = nativeEvent,
             )
         }
         desktop_h.NativeEvent_ScrollWheel() -> {
@@ -276,16 +376,20 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_h.NativeEvent_WindowResize() -> {
             val nativeEvent = NativeEvent.window_resize(s)
-            val titlebarLayoutLeft = WindowButtonType.fromNativeArray(NativeWindowResizeEvent.titlebar_layout_left(nativeEvent))
-            val titlebarLayoutRight = WindowButtonType.fromNativeArray(NativeWindowResizeEvent.titlebar_layout_right(nativeEvent))
-            val titlebarLayout = if (titlebarLayoutLeft != null && titlebarLayoutRight != null) {
-                Pair(titlebarLayoutLeft, titlebarLayoutRight)
+            val layoutLeft = WindowButtonType.fromNativeArray(NativeWindowResizeEvent.titlebar_layout_left(nativeEvent))
+            val layoutRight = WindowButtonType.fromNativeArray(NativeWindowResizeEvent.titlebar_layout_right(nativeEvent))
+            val titlebarLayout = if (layoutLeft != null && layoutRight != null) {
+                TitlebarLayout(layoutLeft, layoutRight)
             } else {
                 null
             }
+            val maximized = NativeWindowResizeEvent.maximized(nativeEvent)
+            val fullscreen = NativeWindowResizeEvent.fullscreen(nativeEvent)
             Event.WindowResize(
                 size = LogicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
                 titlebarLayout,
+                maximized,
+                fullscreen,
             )
         }
         desktop_h.NativeEvent_WindowFocusChange() -> {

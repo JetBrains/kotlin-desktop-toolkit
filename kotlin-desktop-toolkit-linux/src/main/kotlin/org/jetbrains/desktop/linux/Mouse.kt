@@ -2,10 +2,27 @@ package org.jetbrains.desktop.linux
 
 @JvmInline
 public value class MouseButton internal constructor(public val value: Int) {
+    /* From linux/input-event-codes.h - the buttons usually used by mice */
     public companion object {
-        public val LEFT: MouseButton = MouseButton(0)
-        public val RIGHT: MouseButton = MouseButton(1)
-        public val MIDDLE: MouseButton = MouseButton(2)
+        public val LEFT: MouseButton = MouseButton(0x110)
+
+        public val RIGHT: MouseButton = MouseButton(0x111)
+
+        public val MIDDLE: MouseButton = MouseButton(0x112)
+
+        /** The fourth non-scroll button, which is often used as "back" in web browsers. */
+        public val SIDE: MouseButton = MouseButton(0x113)
+
+        /** The fifth non-scroll button, which is often used as "forward" in web browsers. */
+        public val EXTRA: MouseButton = MouseButton(0x114)
+
+        /** @see [EXTRA] */
+        public val FORWARD: MouseButton = MouseButton(0x115)
+
+        /** @see [SIDE] */
+        public val BACK: MouseButton = MouseButton(0x116)
+
+        public val TASK: MouseButton = MouseButton(0x117)
     }
 
     override fun toString(): String {
@@ -13,6 +30,11 @@ public value class MouseButton internal constructor(public val value: Int) {
             LEFT -> "MouseButton.LEFT"
             RIGHT -> "MouseButton.RIGHT"
             MIDDLE -> "MouseButton.MIDDLE"
+            SIDE -> "MouseButton.MIDDLE"
+            EXTRA -> "MouseButton.EXTRA"
+            FORWARD -> "MouseButton.FORWARD"
+            BACK -> "MouseButton.BACK"
+            TASK -> "MouseButton.TASK"
             else -> "MouseButton.Other($value)"
         }
     }
