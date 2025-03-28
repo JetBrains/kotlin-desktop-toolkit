@@ -230,10 +230,40 @@ typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr_c_void;
 
 typedef NativeRustAllocatedRawPtr_c_void NativeAppPtr;
 
+typedef uintptr_t NativeArraySize;
+
+typedef struct NativeAutoDropArray_WindowButtonType {
+  const NativeWindowButtonType *ptr;
+  NativeArraySize len;
+} NativeAutoDropArray_WindowButtonType;
+
+typedef struct NativeTitlebarButtonLayout {
+  struct NativeAutoDropArray_WindowButtonType left_side;
+  struct NativeAutoDropArray_WindowButtonType right_side;
+} NativeTitlebarButtonLayout;
+
+typedef enum NativeXdgDesktopSetting_Tag {
+  NativeXdgDesktopSetting_TitlebarLayout,
+  NativeXdgDesktopSetting_DoubleClickIntervalMs,
+} NativeXdgDesktopSetting_Tag;
+
+typedef struct NativeXdgDesktopSetting {
+  NativeXdgDesktopSetting_Tag tag;
+  union {
+    struct {
+      struct NativeTitlebarButtonLayout titlebar_layout;
+    };
+    struct {
+      int32_t double_click_interval_ms;
+    };
+  };
+} NativeXdgDesktopSetting;
+
 typedef struct NativeApplicationCallbacks {
   bool (*on_should_terminate)(void);
   void (*on_will_terminate)(void);
   void (*on_display_configuration_change)(void);
+  void (*on_xdg_desktop_settings_change)(struct NativeXdgDesktopSetting);
 } NativeApplicationCallbacks;
 
 typedef uint32_t NativeScreenId;
@@ -264,8 +294,6 @@ typedef struct NativeScreenInfo {
   struct NativeLogicalSize size;
   double scale;
 } NativeScreenInfo;
-
-typedef uintptr_t NativeArraySize;
 
 typedef struct NativeAutoDropArray_ScreenInfo {
   const struct NativeScreenInfo *ptr;
@@ -429,17 +457,31 @@ typedef struct NativeWindowScreenChangeEvent {
   NativeScreenId new_screen_id;
 } NativeWindowScreenChangeEvent;
 
-typedef struct NativeAutoDropArray_WindowButtonType {
-  const NativeWindowButtonType *ptr;
-  NativeArraySize len;
-} NativeAutoDropArray_WindowButtonType;
+typedef struct NativeWindowCapabilities {
+  /**
+   * `show_window_menu` is available.
+   */
+  bool window_menu;
+  /**
+   * Window can be maximized and unmaximized.
+   */
+  bool maximixe;
+  /**
+   * Window can be fullscreened and unfullscreened.
+   */
+  bool fullscreen;
+  /**
+   * Window can be minimized.
+   */
+  bool minimize;
+} NativeWindowCapabilities;
 
 typedef struct NativeWindowResizeEvent {
   struct NativeLogicalSize size;
-  struct NativeAutoDropArray_WindowButtonType titlebar_layout_left;
-  struct NativeAutoDropArray_WindowButtonType titlebar_layout_right;
   bool maximized;
   bool fullscreen;
+  bool client_side_decorations;
+  struct NativeWindowCapabilities capabilities;
 } NativeWindowResizeEvent;
 
 typedef struct NativeWindowFocusChangeEvent {
@@ -452,7 +494,7 @@ typedef struct NativeWindowFullScreenToggleEvent {
 } NativeWindowFullScreenToggleEvent;
 
 typedef struct NativeWindowDrawEvent {
-  char *buffer;
+  uint8_t *buffer;
   uint32_t width;
   uint32_t height;
   uint32_t stride;

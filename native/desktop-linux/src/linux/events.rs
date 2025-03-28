@@ -1,7 +1,7 @@
 use core::f64;
-use std::ffi::{CString, c_char};
+use std::ffi::CString;
 
-use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
+use desktop_common::ffi_utils::BorrowedStrPtr;
 use smithay_client_toolkit::{
     reexports::client::{Proxy, protocol::wl_output::WlOutput},
     seat::{
@@ -14,7 +14,6 @@ use super::{
     keyboard::{KeyCode, KeyModifiers},
     mouse::MouseButton,
     window::WindowFrameAction,
-    xdg_desktop_settings::WindowButtonType,
 };
 
 // return true if event was handled
@@ -238,12 +237,28 @@ impl From<WindowScreenChangeEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct WindowCapabilities {
+    /// `show_window_menu` is available.
+    pub window_menu: bool,
+
+    /// Window can be maximized and unmaximized.
+    pub maximixe: bool,
+
+    /// Window can be fullscreened and unfullscreened.
+    pub fullscreen: bool,
+
+    /// Window can be minimized.
+    pub minimize: bool,
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct WindowResizeEvent {
     pub size: LogicalSize,
-    pub titlebar_layout_left: AutoDropArray<WindowButtonType>,
-    pub titlebar_layout_right: AutoDropArray<WindowButtonType>,
     pub maximized: bool,
     pub fullscreen: bool,
+    pub client_side_decorations: bool,
+    pub capabilities: WindowCapabilities,
 }
 
 impl From<WindowResizeEvent> for Event<'_> {
@@ -280,7 +295,7 @@ impl From<WindowFullScreenToggleEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowDrawEvent {
-    pub buffer: *mut c_char,
+    pub buffer: *mut u8,
     pub width: u32,
     pub height: u32,
     pub stride: u32,

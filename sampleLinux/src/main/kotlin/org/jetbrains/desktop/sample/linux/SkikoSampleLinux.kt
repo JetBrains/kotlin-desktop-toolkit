@@ -15,11 +15,14 @@ import org.jetbrains.desktop.linux.MouseButton
 import org.jetbrains.desktop.linux.PhysicalPoint
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.PointerShape
-import org.jetbrains.desktop.linux.TitlebarLayout
+import org.jetbrains.desktop.linux.Timestamp
 import org.jetbrains.desktop.linux.WindowButtonType
+import org.jetbrains.desktop.linux.WindowCapabilities
 import org.jetbrains.desktop.linux.WindowFrameAction
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
+import org.jetbrains.desktop.linux.XdgDesktopSetting
+import org.jetbrains.desktop.linux.XdgDesktopSetting.TitlebarLayout
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.Font
@@ -39,12 +42,13 @@ import kotlin.math.sin
 class CustomTitlebar(
     private var origin: LogicalPoint,
     var size: LogicalSize,
-    var buttonLayout: TitlebarLayout? = null,
+    var buttonLayout: TitlebarLayout,
 ) {
     private var rectangles = ArrayList<Pair<LogicalRect, WindowButtonType>>()
     private var mouseOverRectIndex: Int? = null
     private var maximized: Boolean = false
     private var fullscreen: Boolean = false
+    private var lastHeaderMouseDownTime: Timestamp? = null
 
     companion object {
         const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55f
@@ -54,18 +58,18 @@ class CustomTitlebar(
         val APP_ICON = Image.makeFromEncoded(Files.readAllBytes(Path.of("resources/jb-logo.png")))
     }
 
-    fun resize(event: Event.WindowResize) {
+    fun resize(event: Event.WindowResize, layout: TitlebarLayout) {
         size = LogicalSize(width = event.size.width, height = CUSTOM_TITLEBAR_HEIGHT)
         maximized = event.maximized
         fullscreen = event.fullscreen
         mouseOverRectIndex = null
-        setLayout(event.titlebarLayout)
+        setLayout(layout)
     }
 
-    private fun setLayout(layout: TitlebarLayout?) {
+    fun setLayout(layout: TitlebarLayout) {
         buttonLayout = layout
         rectangles.clear()
-        buttonLayout?.let {
+        buttonLayout.let {
             val buttonsLeftWidth = origin.x + (it.layoutLeft.size * BUTTON_SIZE.width)
             val buttonsRightWidth = it.layoutRight.size * BUTTON_SIZE.width
             val rect = LogicalRect(
@@ -108,11 +112,24 @@ class CustomTitlebar(
         }
     }
 
-    fun handleEvent(event: Event): EventHandlerResult {
+    fun handleEvent(event: Event, xdgDesktopSettings: XdgDesktopSettings): EventHandlerResult {
         when (event) {
             is Event.MouseDown -> {
                 for ((rect, windowButton) in rectangles) {
                     if (rect.contains(event.locationInWindow)) {
+                        if (windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) {
+                            val prevTime = lastHeaderMouseDownTime
+                            if (prevTime != null) {
+                                val timeDiff = (event.timestamp.toDuration() - prevTime.toDuration()).inWholeMilliseconds
+                                Logger.info { "timeDiff: $timeDiff" }
+                                if (timeDiff <= xdgDesktopSettings.doubleClickIntervalMs) {
+                                    event.setFrameAction(if (maximized) WindowFrameAction.UnMaximize else WindowFrameAction.Maximize)
+                                    lastHeaderMouseDownTime = event.timestamp
+                                    return EventHandlerResult.Stop
+                                }
+                            }
+                            lastHeaderMouseDownTime = event.timestamp
+                        }
                         toMouseClickAction(windowButton, event.button, event.locationInWindow)?.let {
                             event.setFrameAction(it)
                             return EventHandlerResult.Stop
@@ -393,21 +410,57 @@ class WindowContainer(
     var customTitlebar: CustomTitlebar?,
     var customBorders: CustomBorders?,
     private val contentArea: ContentArea,
+    private var xdgDesktopSettings: XdgDesktopSettings,
 ) {
+    private var capabilities: WindowCapabilities? = null
+
     companion object {
-        fun create(windowContentSize: LogicalSize): WindowContainer {
+        fun create(windowContentSize: LogicalSize, xdgDesktopSettings: XdgDesktopSettings): WindowContainer {
             val contentArea = ContentArea(LogicalPoint.Zero, windowContentSize)
-            return WindowContainer(null, customBorders = null, contentArea)
+            return WindowContainer(null, customBorders = null, contentArea, xdgDesktopSettings)
+        }
+
+        private fun filterUnsupportedButtons(buttons: List<WindowButtonType>, capabilities: WindowCapabilities): List<WindowButtonType> {
+            return buttons
+                .filter {
+                    when (it) {
+                        WindowButtonType.AppMenu,
+                        WindowButtonType.Icon,
+                        WindowButtonType.Spacer,
+                        WindowButtonType.Title,
+                        WindowButtonType.Close,
+                        -> true
+                        WindowButtonType.Minimize -> capabilities.minimize
+                        WindowButtonType.Maximize -> capabilities.maximixe
+                    }
+                }
+        }
+    }
+
+    fun settingsChanged(xdgDesktopSettings: XdgDesktopSettings) {
+        this.xdgDesktopSettings = xdgDesktopSettings
+        capabilities?.let { capabilities ->
+            customTitlebar?.setLayout(
+                TitlebarLayout(
+                    layoutLeft = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutLeft, capabilities),
+                    layoutRight = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutRight, capabilities),
+                ),
+            )
         }
     }
 
     fun resize(event: Event.WindowResize) {
-        if (event.titlebarLayout != null) {
+        capabilities = event.capabilities
+        if (event.clientSideDecorations) {
+            val titlebarLayout = TitlebarLayout(
+                layoutLeft = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutLeft, event.capabilities),
+                layoutRight = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutRight, event.capabilities),
+            )
             val titlebarSize = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
-            val titlebar = customTitlebar ?: CustomTitlebar(origin = LogicalPoint.Zero, size = titlebarSize).also {
+            val titlebar = customTitlebar ?: CustomTitlebar(origin = LogicalPoint.Zero, size = titlebarSize, titlebarLayout).also {
                 customTitlebar = it
             }
-            titlebar.resize(event)
+            titlebar.resize(event, titlebarLayout)
             val customBorders = customBorders ?: CustomBorders().also { customBorders = it }
             customBorders.resize(event)
             contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height)
@@ -421,7 +474,7 @@ class WindowContainer(
     fun handleEvent(event: Event): EventHandlerResult {
         return when {
             customBorders?.handleEvent(event) == EventHandlerResult.Stop -> EventHandlerResult.Stop
-            customTitlebar?.handleEvent(event) == EventHandlerResult.Stop -> EventHandlerResult.Stop
+            customTitlebar?.handleEvent(event, xdgDesktopSettings) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             contentArea.handleEvent(event) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             else -> EventHandlerResult.Continue
         }
@@ -439,10 +492,15 @@ class RotatingBallWindow(
     windowParams: WindowParams,
 ) : SkikoWindowLinux(app, windowParams) {
     companion object {
-        fun createWindow(app: Application, title: String, useCustomTitlebar: Boolean): RotatingBallWindow {
+        fun createWindow(
+            app: Application,
+            title: String,
+            useCustomTitlebar: Boolean,
+            xdgDesktopSettings: XdgDesktopSettings,
+        ): RotatingBallWindow {
             val windowSize = LogicalSize(640f, 480f)
             val windowContentSize = windowSize // todo it's incorrect
-            val container = WindowContainer.create(windowContentSize)
+            val container = WindowContainer.create(windowContentSize, xdgDesktopSettings)
 
             val windowParams = WindowParams(
                 width = 640,
@@ -453,6 +511,10 @@ class RotatingBallWindow(
 
             return RotatingBallWindow(container, app, windowParams)
         }
+    }
+
+    fun settingsChanged(xdgDesktopSettings: XdgDesktopSettings) {
+        windowContainer.settingsChanged(xdgDesktopSettings)
     }
 
     override fun handleEvent(event: Event): EventHandlerResult {
@@ -491,6 +553,7 @@ class RotatingBallWindow(
 
 class ApplicationState(private val app: Application) : AutoCloseable {
     private val windows = mutableListOf<RotatingBallWindow>()
+    private var xdgDesktopSettings = XdgDesktopSettings()
 
     fun createWindow(useCustomTitlebar: Boolean) {
         windows.add(
@@ -498,8 +561,14 @@ class ApplicationState(private val app: Application) : AutoCloseable {
                 app,
                 "Window ${windows.count()}",
                 useCustomTitlebar,
+                xdgDesktopSettings,
             ),
         )
+    }
+
+    fun settingChanged(s: XdgDesktopSetting) {
+        this.xdgDesktopSettings.update(s)
+        windows.forEach { it.settingsChanged(xdgDesktopSettings) }
     }
 
     override fun close() {
@@ -515,9 +584,9 @@ fun main(args: Array<String>) {
     }
     Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
-    val app = Application(ApplicationConfig())
+    val app = Application()
     ApplicationState(app).use { state ->
         state.createWindow(useCustomTitlebar = true)
-        app.runEventLoop()
+        app.runEventLoop(ApplicationConfig(onXdgDesktopSettingsChange = { state.settingChanged(it) }))
     }
 }

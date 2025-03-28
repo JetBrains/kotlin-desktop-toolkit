@@ -3,6 +3,9 @@ package org.jetbrains.desktop.linux
 import org.jetbrains.desktop.linux.generated.NativeKeyModifiers
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
 import org.jetbrains.desktop.linux.generated.NativeLogicalSize
+import org.jetbrains.desktop.linux.generated.NativeTitlebarButtonLayout
+import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
+import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
 import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -76,5 +79,29 @@ internal fun PointerShape.toNative(): Int {
         PointerShape.AllScroll -> desktop_linux_h.NativePointerShape_AllScroll()
         PointerShape.ZoomIn -> desktop_linux_h.NativePointerShape_ZoomIn()
         PointerShape.ZoomOut -> desktop_linux_h.NativePointerShape_ZoomOut()
+    }
+}
+
+internal fun WindowCapabilities.Companion.fromNative(s: MemorySegment) = WindowCapabilities(
+    windowMenu = NativeWindowCapabilities.window_menu(s),
+    maximixe = NativeWindowCapabilities.maximixe(s),
+    fullscreen = NativeWindowCapabilities.fullscreen(s),
+    minimize = NativeWindowCapabilities.minimize(s),
+)
+
+internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDesktopSetting {
+    val nativeTag = NativeXdgDesktopSetting.tag(s)
+    return when (nativeTag) {
+        desktop_linux_h.NativeXdgDesktopSetting_TitlebarLayout() -> {
+            val nativeTitlebarLayout = NativeXdgDesktopSetting.titlebar_layout(s)
+            XdgDesktopSetting.TitlebarLayout(
+                layoutLeft = WindowButtonType.fromNativeArray(NativeTitlebarButtonLayout.left_side(nativeTitlebarLayout)),
+                layoutRight = WindowButtonType.fromNativeArray(NativeTitlebarButtonLayout.right_side(nativeTitlebarLayout)),
+            )
+        }
+        desktop_linux_h.NativeXdgDesktopSetting_DoubleClickIntervalMs() -> XdgDesktopSetting.DoubleClickInterval(
+            intervalMs = NativeXdgDesktopSetting.double_click_interval_ms(s),
+        )
+        else -> error("Unexpected setting $nativeTag")
     }
 }

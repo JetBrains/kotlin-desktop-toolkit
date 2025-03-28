@@ -1,7 +1,6 @@
 use std::num::NonZeroU32;
-use std::sync::Arc;
 
-use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
+use desktop_common::ffi_utils::BorrowedStrPtr;
 use log::debug;
 use smithay_client_toolkit::compositor::SurfaceData;
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
@@ -24,8 +23,7 @@ use smithay_client_toolkit::{
 };
 
 use crate::linux::application_state::ApplicationState;
-use crate::linux::events::{LogicalPixels, LogicalSize, WindowResizeEvent};
-use crate::linux::xdg_desktop_settings::WindowButtonType;
+use crate::linux::events::{LogicalPixels, LogicalSize, WindowCapabilities, WindowResizeEvent};
 
 use smithay_client_toolkit::{
     seat::pointer::{CursorIcon, ThemedPointer},
@@ -35,7 +33,6 @@ use smithay_client_toolkit::{
 
 use super::events::{Event, InternalEventHandler, WindowDrawEvent};
 use super::pointer_shapes::PointerShape;
-use super::xdg_desktop_settings::{TitlebarButtonLayout, XdgDesktopSetting};
 
 #[repr(C)]
 pub struct WindowParams<'a> {
@@ -99,7 +96,7 @@ pub enum WindowFrameAction {
 
 pub struct SimpleWindow {
     pub event_handler: Box<InternalEventHandler>,
-    pub subcompositor_state: Arc<SubcompositorState>,
+    pub subcompositor_state: SubcompositorState,
     pub close: bool,
     pub first_configure: bool,
     pub pool: SlotPool,
@@ -113,8 +110,6 @@ pub struct SimpleWindow {
     pub decorations_cursor: CursorIcon,
     pub current_scale: f64,
     pub decoration_mode: DecorationMode,
-    pub capabilities: Option<WindowManagerCapabilities>,
-    pub xdg_button_layout: TitlebarButtonLayout,
 }
 
 impl SimpleWindow {
@@ -166,7 +161,7 @@ impl SimpleWindow {
         debug!("Created new window with surface_id={surface_id}");
         Self {
             event_handler,
-            subcompositor_state: Arc::new(subcompositor_state),
+            subcompositor_state,
             close: false,
             first_configure: true,
             pool,
@@ -180,20 +175,6 @@ impl SimpleWindow {
             decorations_cursor: CursorIcon::Default,
             current_scale: 1.0,
             decoration_mode: DecorationMode::Client,
-            xdg_button_layout: TitlebarButtonLayout {
-                left_side: vec![WindowButtonType::Icon],
-                right_side: vec![WindowButtonType::Minimize, WindowButtonType::Maximize, WindowButtonType::Close],
-            },
-            capabilities: None,
-        }
-    }
-
-    pub fn handle_xdg_desktop_setting(&mut self, s: &XdgDesktopSetting) {
-        match s {
-            XdgDesktopSetting::ButtonLayout(titlebar_button_layout) => self.xdg_button_layout = titlebar_button_layout.clone(),
-            XdgDesktopSetting::ActionDoubleClickTitlebar(_)
-            | XdgDesktopSetting::ActionRightClickTitlebar(_)
-            | XdgDesktopSetting::ActionMiddleClickTitlebar(_) => {}
         }
     }
 
@@ -202,23 +183,12 @@ impl SimpleWindow {
         self.close = true;
     }
 
-    fn filter_unsupported_buttons(buttons: &[WindowButtonType], capabilities: WindowManagerCapabilities) -> Box<[WindowButtonType]> {
-        buttons
-            .iter()
-            .filter(|b| match b {
-                WindowButtonType::AppMenu | WindowButtonType::Icon | WindowButtonType::Spacer | WindowButtonType::Close => true,
-                WindowButtonType::Minimize => capabilities.contains(WindowManagerCapabilities::MINIMIZE),
-                WindowButtonType::Maximize => capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
-            })
-            .copied()
-            .collect()
-    }
-
+    #[allow(clippy::too_many_arguments)]
     pub fn configure(
         &mut self,
         conn: &Connection,
         qh: &QueueHandle<ApplicationState>,
-        shm: &Shm,
+        _shm: &Shm,
         window: &Window,
         configure: &WindowConfigure,
         themed_pointer: Option<&mut ThemedPointer>,
@@ -246,41 +216,25 @@ impl SimpleWindow {
         if let Some(viewport) = &self.viewport {
             viewport.set_destination(self.width.get() as i32, self.height.get() as i32);
         }
-        self.capabilities = Some(configure.capabilities);
 
-        let maximized = configure.state.contains(WindowState::MAXIMIZED);
-        let fullscreen = configure.state.contains(WindowState::FULLSCREEN);
-        if configure.decoration_mode == DecorationMode::Client {
-            let titlebar_layout_left = Self::filter_unsupported_buttons(&self.xdg_button_layout.left_side, configure.capabilities);
-            let titlebar_layout_right = Self::filter_unsupported_buttons(&self.xdg_button_layout.right_side, configure.capabilities);
-            (self.event_handler)(
-                &WindowResizeEvent {
-                    size: LogicalSize {
-                        width: LogicalPixels(width.get().into()),
-                        height: LogicalPixels(height.get().into()),
-                    },
-                    titlebar_layout_left: AutoDropArray::new(titlebar_layout_left),
-                    titlebar_layout_right: AutoDropArray::new(titlebar_layout_right),
-                    maximized,
-                    fullscreen,
-                }
-                .into(),
-            );
-        } else {
-            (self.event_handler)(
-                &WindowResizeEvent {
-                    size: LogicalSize {
-                        width: LogicalPixels(width.get().into()),
-                        height: LogicalPixels(height.get().into()),
-                    },
-                    titlebar_layout_left: AutoDropArray::null(),
-                    titlebar_layout_right: AutoDropArray::null(),
-                    maximized,
-                    fullscreen,
-                }
-                .into(),
-            );
-        }
+        (self.event_handler)(
+            &WindowResizeEvent {
+                size: LogicalSize {
+                    width: LogicalPixels(width.get().into()),
+                    height: LogicalPixels(height.get().into()),
+                },
+                maximized: configure.state.contains(WindowState::MAXIMIZED),
+                fullscreen: configure.state.contains(WindowState::FULLSCREEN),
+                client_side_decorations: configure.decoration_mode == DecorationMode::Client,
+                capabilities: WindowCapabilities {
+                    window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
+                    maximixe: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
+                    fullscreen: configure.capabilities.contains(WindowManagerCapabilities::FULLSCREEN),
+                    minimize: configure.capabilities.contains(WindowManagerCapabilities::MINIMIZE),
+                },
+            }
+            .into(),
+        );
 
         // Initiate the first draw.
         if self.first_configure {

@@ -15,7 +15,7 @@ use smithay_client_toolkit::{
 
 use super::events::{EventHandler, LogicalPixels, LogicalSize, WindowId};
 use super::window::WindowParams;
-use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
+use super::xdg_desktop_settings::{XdgDesktopSetting, xdg_desktop_settings_notifier};
 use super::{application_state::ApplicationState, window::SimpleWindow};
 
 #[repr(C)]
@@ -25,6 +25,7 @@ pub struct ApplicationCallbacks {
     pub on_should_terminate: extern "C" fn() -> bool,
     pub on_will_terminate: extern "C" fn(),
     pub on_display_configuration_change: extern "C" fn(),
+    pub on_xdg_desktop_settings_change: extern "C" fn(XdgDesktopSetting),
 }
 
 pub struct Application<'a> {
@@ -47,20 +48,6 @@ impl Application<'_> {
 
         WaylandSource::new(conn, event_queue).insert(loop_handle)?;
 
-        let (s, c) = channel::channel();
-        async_std::task::spawn(xdg_desktop_settings_notifier(s));
-
-        event_loop
-            .handle()
-            .insert_source(c, |event, _a, state| {
-                if let channel::Event::Msg(e) = event {
-                    for w in state.windows.values_mut() {
-                        w.handle_xdg_desktop_setting(&e);
-                    }
-                }
-            })
-            .unwrap();
-
         let state = ApplicationState::new(&globals, &qh, callbacks);
         Ok(Self {
             globals,
@@ -73,6 +60,18 @@ impl Application<'_> {
 
     fn run(&mut self) -> Result<(), anyhow::Error> {
         debug!("Start event loop");
+
+        let (s, c) = channel::channel();
+        async_std::task::spawn(xdg_desktop_settings_notifier(s));
+
+        self.event_loop
+            .handle()
+            .insert_source(c, move |event, _a, state| {
+                if let channel::Event::Msg(e) = event {
+                    XdgDesktopSetting::with(e, |s| (state.callbacks.on_xdg_desktop_settings_change)(s));
+                }
+            })
+            .unwrap();
 
         loop {
             self.event_loop.dispatch(Duration::from_millis(16), &mut self.state)?;
