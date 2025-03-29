@@ -5,29 +5,26 @@ use desktop_common::{
     ffi_utils::RustAllocatedStrPtr,
     logger::{catch_panic, ffi_boundary},
 };
-use dispatch2::object;
 use log::info;
 use objc2::{
-    define_class, msg_send, rc::Retained, runtime::{AnyObject, MessageReceiver, ProtocolObject}, ClassType, DeclaredClass, MainThreadOnly
+    ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send,
+    rc::Retained,
+    runtime::{AnyObject, ProtocolObject},
 };
 use objc2_app_kit::{
-    NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate,
-    NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSRunningApplication,
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
+    NSEventType, NSImage, NSRunningApplication,
 };
 use objc2_foundation::{
-    MainThreadMarker, NSArray, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSNotificationCenter,
-    NSObject, NSObjectNSComparisonMethods, NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSUserDefaults,
+    MainThreadMarker, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
+    NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSUserDefaults,
 };
 
 use crate::macos::events::{
     handle_application_appearance_change, handle_application_did_finish_launching, handle_display_configuration_change,
 };
 
-use super::{
-    appearance::{self, Appearance},
-    events::EventHandler,
-    string::copy_to_c_string,
-};
+use super::{appearance::Appearance, events::EventHandler, string::copy_to_c_string};
 
 thread_local! {
     pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
@@ -344,17 +341,16 @@ define_class!(
                 match (object, key_path) {
                     (Some(object), Some(key_path))
                         if object.class().superclass() == Some(MyNSApplication::class())
-                            && key_path == &*NSString::from_str("effectiveAppearance") => {
-                            handle_application_appearance_change();
-                        }
-                    _ => {
-                            unsafe {
-                                let _: () = msg_send![super(self), observeValueForKeyPath: key_path,
+                            && key_path == &*NSString::from_str("effectiveAppearance") =>
+                    {
+                        handle_application_appearance_change();
+                    }
+                    _ => unsafe {
+                        let _: () = msg_send![super(self), observeValueForKeyPath: key_path,
                                                                      ofObject: object,
                                                                        change: change,
                                                                       context: context];
-                            }
-                        }
+                    },
                 }
                 Ok(())
             });
