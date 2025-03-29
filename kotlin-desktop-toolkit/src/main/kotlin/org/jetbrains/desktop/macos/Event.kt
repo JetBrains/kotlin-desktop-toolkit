@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.macos
 
+import org.jetbrains.desktop.macos.generated.NativeApplicationAppearanceChangeEvent
 import org.jetbrains.desktop.macos.generated.NativeEvent
 import org.jetbrains.desktop.macos.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.macos.generated.NativeKeyUpEvent
@@ -156,6 +157,8 @@ public sealed class Event {
 
     public data class WindowCloseRequest(val windowId: WindowId) : Event()
 
+    public data class ApplicationAppearanceChange(val newAppearance: Appearance) : Event()
+
     public fun windowId(): WindowId? {
         return when (this) {
             is KeyDown -> windowId
@@ -176,6 +179,7 @@ public sealed class Event {
             is ModifiersChanged -> windowId
             ApplicationDidFinishLaunching -> null
             DisplayConfigurationChange -> null
+            is ApplicationAppearanceChange -> null
         }
     }
 }
@@ -321,6 +325,12 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.WindowFullScreenToggle(
                 windowId = NativeWindowFullScreenToggleEvent.window_id(nativeEvent),
                 isFullScreen = NativeWindowFullScreenToggleEvent.is_full_screen(nativeEvent),
+            )
+        }
+        desktop_macos_h.NativeEvent_ApplicationAppearanceChange() -> {
+            val nativeEvent = NativeEvent.application_appearance_change(s)
+            Event.ApplicationAppearanceChange(
+                newAppearance = Appearance.fromNative(NativeApplicationAppearanceChangeEvent.new_appearance(nativeEvent)),
             )
         }
         else -> {

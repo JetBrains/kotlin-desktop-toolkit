@@ -68,6 +68,13 @@ public object Application {
             }
         }
 
+    public val appearance: Appearance
+        get() {
+            return ffiDownCall {
+                Appearance.fromNative(desktop_macos_h.application_get_appearance())
+            }
+        }
+
     public fun hide() {
         ffiDownCall {
             desktop_macos_h.application_hide()

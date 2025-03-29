@@ -1,18 +1,33 @@
-use std::cell::OnceCell;
+use std::{cell::OnceCell, ffi::c_void};
 
 use anyhow::{Context, anyhow};
-use desktop_common::{ffi_utils::RustAllocatedStrPtr, logger::ffi_boundary};
-use log::info;
-use objc2::{ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, runtime::ProtocolObject};
-use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
-    NSEventType, NSImage, NSRunningApplication,
+use desktop_common::{
+    ffi_utils::RustAllocatedStrPtr,
+    logger::{catch_panic, ffi_boundary},
 };
-use objc2_foundation::{MainThreadMarker, NSData, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSString, NSUserDefaults};
+use dispatch2::object;
+use log::info;
+use objc2::{
+    define_class, msg_send, rc::Retained, runtime::{AnyObject, MessageReceiver, ProtocolObject}, ClassType, DeclaredClass, MainThreadOnly
+};
+use objc2_app_kit::{
+    NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate,
+    NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSRunningApplication,
+};
+use objc2_foundation::{
+    MainThreadMarker, NSArray, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSNotificationCenter,
+    NSObject, NSObjectNSComparisonMethods, NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSUserDefaults,
+};
 
-use crate::macos::events::{handle_application_did_finish_launching, handle_display_configuration_change};
+use crate::macos::events::{
+    handle_application_appearance_change, handle_application_did_finish_launching, handle_display_configuration_change,
+};
 
-use super::{events::EventHandler, string::copy_to_c_string};
+use super::{
+    appearance::{self, Appearance},
+    events::EventHandler,
+    string::copy_to_c_string,
+};
 
 thread_local! {
     pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
@@ -75,18 +90,13 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
             );
         };
         let app = MyNSApplication::sharedApplication(mtm);
-        //    unsafe {
-        //        if let Some(apperance) = NSAppearance::appearanceNamed(NSAppearanceNameDarkAqua) {
-        //            app.setAppearance(Some(&apperance));
-        //        }
-        //    }
-
         //    let default_presentation_options = app.presentationOptions();
         //    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
         app.setActivationPolicy(NSApplicationActivationPolicy::Regular);
         let event_handler = callbacks.event_handler;
         let app_delegate = AppDelegate::new(mtm, callbacks);
         app.setDelegate(Some(ProtocolObject::from_ref(&*app_delegate)));
+        app.set_appearance_observer(&app_delegate);
         APP_STATE.with(|app_state| {
             app_state
                 .set(AppState {
@@ -99,6 +109,16 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
             Ok(())
         })
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_get_appearance() -> Appearance {
+    ffi_boundary("application_get_appearance", || -> Result<Appearance, anyhow::Error> {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        let appearance = app.effectiveAppearance();
+        Ok(Appearance::from_ns_appearance(&appearance))
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -258,6 +278,17 @@ impl MyNSApplication {
         }
         let _: () = unsafe { msg_send![super(self), sendEvent: event] };
     }
+
+    fn set_appearance_observer(&self, delegate: &NSObject) {
+        unsafe {
+            self.addObserver_forKeyPath_options_context(
+                delegate,
+                &NSString::from_str("effectiveAppearance"),
+                NSKeyValueObservingOptions::New,
+                std::ptr::null_mut(),
+            );
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -299,6 +330,34 @@ define_class!(
         #[unsafe(method(applicationWillTerminate:))]
         fn will_terminate(&self, _notification: &NSNotification) {
             (self.ivars().callbacks.on_will_terminate)();
+        }
+
+        #[unsafe(method(observeValueForKeyPath:ofObject:change:context:))]
+        fn observe_value(
+            &self,
+            key_path: Option<&NSString>,
+            object: Option<&AnyObject>,
+            change: Option<&NSDictionary<NSKeyValueChangeKey, AnyObject>>,
+            context: *mut c_void,
+        ) {
+            catch_panic(|| {
+                match (object, key_path) {
+                    (Some(object), Some(key_path))
+                        if object.class().superclass() == Some(MyNSApplication::class())
+                            && key_path == &*NSString::from_str("effectiveAppearance") => {
+                            handle_application_appearance_change();
+                        }
+                    _ => {
+                            unsafe {
+                                let _: () = msg_send![super(self), observeValueForKeyPath: key_path,
+                                                                     ofObject: object,
+                                                                       change: change,
+                                                                      context: context];
+                            }
+                        }
+                }
+                Ok(())
+            });
         }
     }
 );

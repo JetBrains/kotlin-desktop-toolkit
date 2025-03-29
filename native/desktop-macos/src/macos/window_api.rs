@@ -1,3 +1,5 @@
+use objc2::runtime::Bool;
+use objc2_app_kit::NSAppearanceCustomization;
 use objc2_foundation::MainThreadMarker;
 
 use desktop_common::{
@@ -8,12 +10,7 @@ use desktop_common::{
 use crate::geometry::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize};
 
 use super::{
-    application_api::MyNSApplication,
-    metal_api::{MetalView, MetalViewPtr},
-    screen::{NSScreenExts, ScreenId},
-    string::{copy_to_c_string, copy_to_ns_string},
-    text_input_client::TextInputClient,
-    window::{NSWindowExts, Window},
+    appearance::{self, Appearance}, application_api::MyNSApplication, metal_api::{MetalView, MetalViewPtr}, screen::{NSScreenExts, ScreenId}, string::{copy_to_c_string, copy_to_ns_string}, text_input_client::TextInputClient, window::{NSWindowExts, Window}
 };
 
 pub type WindowId = isize;
@@ -264,6 +261,58 @@ pub extern "C" fn window_invalidate_shadow(window_ptr: WindowPtr) {
         }
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_appearance_override(window_ptr: WindowPtr, appearance: Appearance) {
+    ffi_boundary("window_appearance_override", || {
+        let window = unsafe {
+            window_ptr.borrow::<Window>()
+        };
+        let ns_appearance = appearance.to_ns_appearance();
+        unsafe {
+            window.ns_window.setAppearance(Some(&ns_appearance));
+        }
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_appearacne_is_overridden(window_ptr: WindowPtr) -> bool {
+    ffi_boundary("window_appearacne_is_overridden", || {
+        let window = unsafe {
+            window_ptr.borrow::<Window>()
+        };
+        let result = unsafe {
+            window.ns_window.appearance()
+        }.is_some();
+        Ok(result)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_appearacne_set_follow_application(window_ptr: WindowPtr) {
+    ffi_boundary("window_appearacne_set_follow_application", || {
+        let window = unsafe {
+            window_ptr.borrow::<Window>()
+        };
+        unsafe {
+            window.ns_window.setAppearance(None);
+        }
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_get_appearance(window_ptr: WindowPtr) -> Appearance {
+    ffi_boundary("window_get_appearance", || {
+        let window = unsafe {
+            window_ptr.borrow::<Window>()
+        };
+        let ns_appearance = unsafe { window.ns_window.effectiveAppearance() };
+        let appearance = Appearance::from_ns_appearance(&ns_appearance);
+        Ok(appearance)
+    })
 }
 
 #[derive(Debug)]

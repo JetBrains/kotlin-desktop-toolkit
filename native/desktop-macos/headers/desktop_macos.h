@@ -19,6 +19,11 @@ typedef enum NativeActionMenuItemSpecialTag {
   NativeActionMenuItemSpecialTag_Delete,
 } NativeActionMenuItemSpecialTag;
 
+typedef enum NativeAppearance {
+  NativeAppearance_Dark,
+  NativeAppearance_Light,
+} NativeAppearance;
+
 typedef enum NativeCursorIcon {
   NativeCursorIcon_Unknown,
   NativeCursorIcon_ArrowCursor,
@@ -232,6 +237,10 @@ typedef struct NativeWindowFullScreenToggleEvent {
   bool is_full_screen;
 } NativeWindowFullScreenToggleEvent;
 
+typedef struct NativeApplicationAppearanceChangeEvent {
+  enum NativeAppearance new_appearance;
+} NativeApplicationAppearanceChangeEvent;
+
 typedef enum NativeEvent_Tag {
   NativeEvent_KeyDown,
   NativeEvent_KeyUp,
@@ -251,6 +260,7 @@ typedef enum NativeEvent_Tag {
   NativeEvent_WindowFullScreenToggle,
   NativeEvent_DisplayConfigurationChange,
   NativeEvent_ApplicationDidFinishLaunching,
+  NativeEvent_ApplicationAppearanceChange,
 } NativeEvent_Tag;
 
 typedef struct NativeEvent {
@@ -303,6 +313,9 @@ typedef struct NativeEvent {
     };
     struct {
       struct NativeWindowFullScreenToggleEvent window_full_screen_toggle;
+    };
+    struct {
+      struct NativeApplicationAppearanceChangeEvent application_appearance_change;
     };
   };
 } NativeEvent;
@@ -483,6 +496,8 @@ void logger_init(const struct NativeLoggerConfiguration *logger_configuration);
 void application_init(const struct NativeApplicationConfig *config,
                       struct NativeApplicationCallbacks callbacks);
 
+enum NativeAppearance application_get_appearance(void);
+
 void application_shutdown(void);
 
 void application_run_event_loop(void);
@@ -627,5 +642,13 @@ bool window_is_full_screen(NativeWindowPtr window_ptr);
 void window_start_drag(NativeWindowPtr window_ptr);
 
 void window_invalidate_shadow(NativeWindowPtr window_ptr);
+
+void window_appearance_override(NativeWindowPtr window_ptr, enum NativeAppearance appearance);
+
+bool window_appearacne_is_overridden(NativeWindowPtr window_ptr);
+
+void window_appearacne_set_follow_application(NativeWindowPtr window_ptr);
+
+enum NativeAppearance window_get_appearance(NativeWindowPtr window_ptr);
 
 void window_set_background(NativeWindowPtr window_ptr, struct NativeWindowBackground background);

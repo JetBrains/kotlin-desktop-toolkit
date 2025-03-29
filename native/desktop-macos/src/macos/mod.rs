@@ -16,3 +16,4 @@ pub mod string;
 pub mod text_input_client;
 pub mod window;
 pub mod window_api;
+pub mod appearance;

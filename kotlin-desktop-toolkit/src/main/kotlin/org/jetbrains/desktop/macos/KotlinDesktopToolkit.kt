@@ -28,7 +28,7 @@ public object KotlinDesktopToolkit {
             )
             Logger.info { "KotlinDesktopToolkit is initialized" }
         } else {
-            Logger.error { "Init was called for already initialized library" }
+            Logger.warn { "Init was called for already initialized library" }
         }
     }
 

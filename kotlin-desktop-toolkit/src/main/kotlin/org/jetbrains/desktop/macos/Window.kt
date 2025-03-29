@@ -234,6 +234,28 @@ public class Window internal constructor(
         }
     }
 
+    public var overriddenAppearance: Appearance?
+        get() {
+            return if (ffiDownCall { desktop_macos_h.window_appearacne_is_overridden(pointer) }) {
+                ffiDownCall {
+                    Appearance.fromNative(desktop_macos_h.window_get_appearance(pointer))
+                }
+            } else {
+                null
+            }
+        }
+        set(value) {
+            if (value == null) {
+                ffiDownCall {
+                    desktop_macos_h.window_appearacne_set_follow_application(pointer)
+                }
+            } else {
+                ffiDownCall {
+                    desktop_macos_h.window_appearance_override(pointer, value.toNative())
+                }
+            }
+        }
+
     override fun close() {
         super.close()
         textInputClientHolder.close()

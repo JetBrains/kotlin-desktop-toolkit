@@ -3,7 +3,7 @@
 use core::f64;
 
 use anyhow::bail;
-use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
+use objc2_app_kit::{NSAppearanceCustomization, NSEvent, NSEventType, NSScreen, NSWindow};
 use objc2_foundation::MainThreadMarker;
 
 use desktop_common::{
@@ -14,13 +14,7 @@ use desktop_common::{
 use crate::geometry::{LogicalPixels, LogicalPoint, LogicalSize};
 
 use super::{
-    application_api::AppState,
-    keyboard::{EMPTY_KEY_MODIFIERS, KeyCode, KeyModifiersSet, unpack_flags_changed_event, unpack_key_event},
-    mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt},
-    screen::{NSScreenExts, ScreenId},
-    string::borrow_ns_string,
-    window::NSWindowExts,
-    window_api::WindowId,
+    appearance::Appearance, application_api::AppState, keyboard::{unpack_flags_changed_event, unpack_key_event, KeyCode, KeyModifiersSet, EMPTY_KEY_MODIFIERS}, mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt}, screen::{NSScreenExts, ScreenId}, string::borrow_ns_string, window::NSWindowExts, window_api::WindowId
 };
 
 // return true if event was handled
@@ -165,6 +159,12 @@ pub struct WindowFullScreenToggleEvent {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct ApplicationAppearanceChangeEvent {
+    pub new_appearance: Appearance,
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub enum Event<'a> {
     KeyDown(KeyDownEvent<'a>),
     KeyUp(KeyUpEvent<'a>),
@@ -184,6 +184,7 @@ pub enum Event<'a> {
     WindowFullScreenToggle(WindowFullScreenToggleEvent),
     DisplayConfigurationChange,
     ApplicationDidFinishLaunching,
+    ApplicationAppearanceChange(ApplicationAppearanceChangeEvent),
 }
 
 pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
@@ -393,6 +394,16 @@ pub(crate) fn handle_display_configuration_change() {
 pub(crate) fn handle_application_did_finish_launching() {
     let _handled = AppState::with(|state| {
         let event = Event::ApplicationDidFinishLaunching;
+        (state.event_handler)(&event)
+    });
+}
+
+pub(crate) fn handle_application_appearance_change() {
+    let _handled = AppState::with(|state| {
+        let new_appearance = Appearance::from_ns_appearance(&state.app.effectiveAppearance());
+        let event = Event::ApplicationAppearanceChange(ApplicationAppearanceChangeEvent {
+            new_appearance
+        });
         (state.event_handler)(&event)
     });
 }
