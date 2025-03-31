@@ -1,5 +1,7 @@
+use std::ffi::{CStr, c_void};
 use std::time::Duration;
 
+use anyhow::anyhow;
 use desktop_common::logger::ffi_boundary;
 use desktop_common::{ffi_utils::RustAllocatedRawPtr, logger::catch_panic};
 use log::debug;
@@ -13,6 +15,7 @@ use smithay_client_toolkit::{
     shell::WaylandSurface,
 };
 
+use super::application_state::EglInstance;
 use super::events::{EventHandler, LogicalPixels, LogicalSize, WindowId};
 use super::window::WindowParams;
 use super::xdg_desktop_settings::{XdgDesktopSetting, xdg_desktop_settings_notifier};
@@ -46,7 +49,9 @@ impl Application<'_> {
         let event_loop = EventLoop::<ApplicationState>::try_new()?;
         let loop_handle = event_loop.handle();
 
-        WaylandSource::new(conn, event_queue).insert(loop_handle)?;
+        WaylandSource::new(conn, event_queue)
+            .insert(loop_handle)
+            .map_err(|e| anyhow!(e.to_string()))?;
 
         let state = ApplicationState::new(&globals, &qh, callbacks);
         Ok(Self {
@@ -179,4 +184,35 @@ pub extern "C" fn application_shutdown(app_ptr: AppPtr) {
         app.exit = true;
         Ok(())
     });
+}
+
+#[repr(C)]
+pub struct GetEglProcFuncData {
+    pub f: extern "C" fn(ctx: *const c_void, name: *const std::ffi::c_char) -> *const c_void,
+    pub ctx: *const c_void,
+}
+
+extern "C" fn egl_get_gl_proc(ctx_ptr: *const c_void, name_ptr: *const std::ffi::c_char) -> *const c_void {
+    let name_cstr = unsafe { CStr::from_ptr(name_ptr) };
+    let name = name_cstr.to_str().unwrap();
+    debug!("egl_get_gl_proc for {name}");
+    let egl_ptr = ctx_ptr.cast::<EglInstance>();
+    let egl = unsafe { egl_ptr.as_ref() }.unwrap();
+    if let Some(f) = egl.get_proc_address(name) {
+        f as *const c_void
+    } else {
+        debug!("egl_get_gl_proc end for {name} returning null");
+        std::ptr::null()
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_get_egl_proc_func(app_ptr: AppPtr) -> GetEglProcFuncData {
+    debug!("application_get_egl_proc_func");
+    let app = unsafe { app_ptr.borrow::<Application>() };
+    let ctx_ptr = &raw const app.state.egl;
+    GetEglProcFuncData {
+        f: egl_get_gl_proc,
+        ctx: ctx_ptr.cast(),
+    }
 }

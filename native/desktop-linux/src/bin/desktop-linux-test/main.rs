@@ -29,9 +29,26 @@ fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
 }
 
+type GLenum = u32;
+type GLbitfield = u32;
+type GLfloat = f32;
+
+const GL_COLOR_BUFFER_BIT: GLenum = 0x0000_4000;
+
+#[link(kind = "dylib", name = "GL")]
+unsafe extern "C" {
+    unsafe fn glClearColor(red: GLfloat, green: GLfloat, blue: GLfloat, alpha: GLfloat);
+    unsafe fn glClear(mask: GLbitfield);
+}
+
 #[allow(clippy::many_single_char_names)]
 fn draw(data: &WindowDrawEvent) {
     const BYTES_PER_PIXEL: u8 = 4;
+    if data.buffer.is_null() {
+        unsafe { glClearColor(0.0, 1.0, 0.0, 1.0) };
+        unsafe { glClear(GL_COLOR_BUFFER_BIT) };
+        return;
+    }
     let canvas = unsafe { std::slice::from_raw_parts_mut(data.buffer, usize::try_from(data.height * data.stride).unwrap()) };
     let w = f64::from(data.width);
     let h = f64::from(data.height);
@@ -114,6 +131,7 @@ pub fn main() {
             title: BorrowedStrPtr::new(c"Window 1"),
             app_id: BorrowedStrPtr::new(APP_ID),
             force_client_side_decoration: false,
+            force_software_rendering: true,
         },
     );
     window_create(
@@ -125,6 +143,7 @@ pub fn main() {
             title: BorrowedStrPtr::new(c"Window 2"),
             app_id: BorrowedStrPtr::new(APP_ID),
             force_client_side_decoration: true,
+            force_software_rendering: false,
         },
     );
     application_run_event_loop(app_ptr);

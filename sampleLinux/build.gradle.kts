@@ -15,6 +15,7 @@ plugins {
 
 repositories {
     // Use Maven Central for resolving dependencies.
+    mavenLocal()
     mavenCentral()
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
@@ -27,7 +28,8 @@ val targetArch = when (buildArch()) {
     Arch.X86_64 -> "x64"
 }
 
-val skikoVersion = "0.8.18"
+// Requires build from https://github.com/nikola-kocic-jetbrains/skiko/tree/kocic/linux-egl
+val skikoVersion = "0.0.0-SNAPSHOT"
 val skikoTarget = "$projectTargetOsName-$targetArch"
 dependencies {
     // Use the Kotlin JUnit 5 integration.
