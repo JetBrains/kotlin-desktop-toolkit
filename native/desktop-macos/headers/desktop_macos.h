@@ -652,3 +652,5 @@ void window_appearacne_set_follow_application(NativeWindowPtr window_ptr);
 enum NativeAppearance window_get_appearance(NativeWindowPtr window_ptr);
 
 void window_set_background(NativeWindowPtr window_ptr, struct NativeWindowBackground background);
+
+void pateboard_clear(void);

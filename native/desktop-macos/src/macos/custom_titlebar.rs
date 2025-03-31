@@ -4,7 +4,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use anyhow::{Context, ensure};
 use objc2::rc::Retained;
-use objc2_app_kit::{NSButton, NSLayoutConstraint, NSView, NSWindow, NSWindowButton};
+use objc2_app_kit::{NSButton, NSLayoutConstraint, NSView, NSWindow, NSWindowButton, NSWindowStyleMask, NSWindowTitleVisibility};
 use objc2_foundation::NSArray;
 
 use crate::geometry::LogicalPixels;
@@ -150,14 +150,21 @@ impl TitlebarViews {
 }
 
 impl CustomTitlebar {
-    pub(crate) const fn init_custom_titlebar(titlebar_height: LogicalPixels) -> Self {
-        Self {
+    pub(crate) fn init_custom_titlebar(ns_window: &NSWindow, titlebar_height: LogicalPixels) -> CustomTitlebarCell {
+        let mut titlebar = Self {
             constraints: None,
             height: titlebar_height,
+        };
+        if !ns_window.styleMask().contains(NSWindowStyleMask::FullScreen) {
+            unsafe {
+                Self::set_default_titlebar_enabled(ns_window, false);
+                titlebar.activate_constraints(ns_window).unwrap();
+            }
         }
+        Rc::new(RefCell::new(titlebar))
     }
 
-    pub(crate) unsafe fn activate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
+    pub(crate) unsafe fn activate_constraints(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
         ensure!(self.constraints.is_none());
 
         let titlebar_views = unsafe { TitlebarViews::retireve_from_window(ns_window)? };
@@ -171,32 +178,57 @@ impl CustomTitlebar {
         Ok(())
     }
 
-    pub(crate) unsafe fn deactivate(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
+    pub(crate) fn set_default_titlebar_enabled(ns_window: &NSWindow, enabled: bool) {
+        if enabled {
+            ns_window.setTitlebarAppearsTransparent(false);
+            ns_window.setTitleVisibility(NSWindowTitleVisibility::Visible);
+        } else {
+            ns_window.setTitlebarAppearsTransparent(true);
+            ns_window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
+        }
+    }
+
+    pub(crate) unsafe fn deactivate_constraints(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
         let titlebar_views = unsafe { TitlebarViews::retireve_from_window(ns_window) }?;
 
         unsafe { titlebar_views.setTranslatesAutoresizingMaskIntoConstraints(true) };
         if let Some(constraints) = self.constraints.take() {
             unsafe { NSLayoutConstraint::deactivateConstraints(&constraints) };
         }
-
         Ok(())
     }
 
-    pub(crate) fn before_enter_fullscreen(titlebar: Option<&CustomTitlebarCell>, ns_window: &NSWindow) {
+    fn with_titlebar<F>(titlebar: Option<&CustomTitlebarCell>, f: F)
+    where
+        F: FnOnce(&mut Self),
+    {
         if let Some(titlebar) = titlebar {
             let mut titlebar = (**titlebar).borrow_mut();
-            unsafe {
-                titlebar.deactivate(ns_window).unwrap();
-            }
+            f(&mut titlebar);
         }
     }
 
+    pub(crate) fn before_enter_fullscreen(titlebar: Option<&CustomTitlebarCell>, ns_window: &NSWindow) {
+        Self::with_titlebar(titlebar, |titlebar| unsafe {
+            titlebar.deactivate_constraints(ns_window).unwrap();
+        });
+    }
+
+    pub(crate) fn after_enter_fullscreen(titlebar: Option<&CustomTitlebarCell>, ns_window: &NSWindow) {
+        Self::with_titlebar(titlebar, |_titlebar| {
+            Self::set_default_titlebar_enabled(ns_window, true);
+        });
+    }
+
+    pub(crate) fn before_exit_fullscreen(titlebar: Option<&CustomTitlebarCell>, ns_window: &NSWindow) {
+        Self::with_titlebar(titlebar, |_titlebar| {
+            Self::set_default_titlebar_enabled(ns_window, false);
+        });
+    }
+
     pub(crate) fn after_exit_fullscreen(titlebar: Option<&CustomTitlebarCell>, ns_window: &NSWindow) {
-        if let Some(titlebar) = titlebar {
-            let mut titlebar = (**titlebar).borrow_mut();
-            unsafe {
-                titlebar.activate(ns_window).unwrap();
-            }
-        }
+        Self::with_titlebar(titlebar, |titlebar| unsafe {
+            titlebar.activate_constraints(ns_window).unwrap();
+        });
     }
 }

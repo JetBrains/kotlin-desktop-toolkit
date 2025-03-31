@@ -1,7 +1,4 @@
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use std::cell::{Cell, RefCell};
 
 use anyhow::{Context, Ok};
 use log::debug;
@@ -11,9 +8,10 @@ use objc2::{
     runtime::{AnyObject, ProtocolObject, Sel},
 };
 use objc2_app_kit::{
-    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea,
-    NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
-    NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask, NSWindowTitleVisibility,
+    NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen,
+    NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
+    NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode,
+    NSWindowStyleMask,
 };
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
@@ -195,14 +193,8 @@ impl Window {
         let content_rect = unsafe { NSWindow::contentRectForFrameRect_styleMask(frame, style, mtm) };
         let ns_window = MyNSWindow::new(mtm, content_rect, style);
         let custom_titlebar = if params.use_custom_titlebar {
-            ns_window.setTitlebarAppearsTransparent(true);
-            ns_window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
             // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
-            let titlebar = Rc::new(RefCell::new(CustomTitlebar::init_custom_titlebar(params.titlebar_height)));
-            unsafe {
-                // we assume the window isn't full screen
-                (*titlebar).borrow_mut().activate(&ns_window).unwrap();
-            }
+            let titlebar = CustomTitlebar::init_custom_titlebar(&ns_window, params.titlebar_height);
             Some(titlebar)
         } else {
             None
@@ -380,7 +372,18 @@ define_class!(
         #[unsafe(method(windowDidEnterFullScreen:))]
         unsafe fn window_did_enter_full_screen(&self, _notification: &NSNotification) {
             catch_panic(|| {
+                let ivars = self.ivars();
+                CustomTitlebar::after_enter_fullscreen(ivars.custom_titlebar.as_ref(), &ivars.ns_window);
                 handle_window_full_screen_toggle(&self.ivars().ns_window);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(windowWillExitFullScreen:))]
+        unsafe fn window_will_exit_full_screen(&self, _notification: &NSNotification) {
+            catch_panic(|| {
+                let ivars = self.ivars();
+                CustomTitlebar::before_exit_fullscreen(ivars.custom_titlebar.as_ref(), &ivars.ns_window);
                 Ok(())
             });
         }
@@ -393,6 +396,18 @@ define_class!(
                 handle_window_full_screen_toggle(&self.ivars().ns_window);
                 Ok(())
             });
+        }
+
+        #[unsafe(method(window:willUseFullScreenPresentationOptions:))]
+        #[allow(non_snake_case)]
+        unsafe fn window_willUseFullScreenPresentationOptions(
+            &self,
+            _window: &NSWindow,
+            proposed_options: NSApplicationPresentationOptions,
+        ) -> NSApplicationPresentationOptions {
+            // here we can override fulscreen options for window
+            // e.g. disable dock or app menu on hover
+            proposed_options
         }
 
         #[unsafe(method(windowDidBecomeKey:))]
