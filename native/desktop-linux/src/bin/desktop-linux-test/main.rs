@@ -2,6 +2,9 @@
 mod wayland;
 
 #[cfg(target_os = "linux")]
+mod gl_sys;
+
+#[cfg(target_os = "linux")]
 pub fn main() {
     wayland::main();
 }
