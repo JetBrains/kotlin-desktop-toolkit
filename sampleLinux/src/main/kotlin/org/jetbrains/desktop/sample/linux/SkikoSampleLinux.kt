@@ -188,7 +188,7 @@ class CustomTitlebar(
                         APP_ICON,
                         src = APP_ICON.imageInfo.bounds.toRect(),
                         dst = Rect(xLeft, yTop, xRight, yBottom),
-                        paint
+                        paint,
                     )
                 }
                 WindowButtonType.Spacer -> {}
@@ -263,6 +263,19 @@ class ContentArea(
                 ),
                 paint,
             )
+        }
+        canvas.withTranslated(contentOrigin) {
+            Paint().use { paint ->
+                paint.color = Color.WHITE
+                paint.strokeWidth = scale
+                canvas.drawLine(
+                    contentSize.width.toFloat(),
+                    0f,
+                    0f,
+                    contentSize.height.toFloat(),
+                    paint,
+                )
+            }
         }
         canvas.drawSpiningCircle(contentOrigin, contentSize, time)
         canvas.drawWindowBorders(contentOrigin, contentSize, scale)

@@ -421,7 +421,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             val nativeBuffer = NativeWindowDrawEvent.buffer(nativeEvent)
             Event.WindowDraw(
                 buffer = if (nativeBuffer == MemorySegment.NULL) null else nativeBuffer.address(),
-                size = PhysicalSize(NativeWindowDrawEvent.width(nativeEvent), NativeWindowDrawEvent.height(nativeEvent)),
+                size = PhysicalSize(
+                    width = NativeWindowDrawEvent.physical_width(nativeEvent),
+                    height = NativeWindowDrawEvent.physical_height(nativeEvent),
+                ),
                 stride = NativeWindowDrawEvent.stride(nativeEvent),
                 scale = NativeWindowDrawEvent.scale(nativeEvent),
             )

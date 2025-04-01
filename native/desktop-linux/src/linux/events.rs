@@ -296,9 +296,9 @@ impl From<WindowFullScreenToggleEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct WindowDrawEvent {
     pub buffer: *mut u8,
-    pub width: u32,
-    pub height: u32,
-    pub stride: u32,
+    pub physical_width: i32,
+    pub physical_height: i32,
+    pub stride: i32,
     pub scale: f64,
 }
 

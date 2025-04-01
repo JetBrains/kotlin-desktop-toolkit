@@ -8,6 +8,7 @@ use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
 use smithay_client_toolkit::reexports::client::protocol::wl_shm;
+use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle};
 use smithay_client_toolkit::reexports::csd_frame::{WindowManagerCapabilities, WindowState};
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
@@ -18,10 +19,6 @@ use smithay_client_toolkit::shell::{
         XdgSurface,
         window::{Window, WindowConfigure},
     },
-};
-use smithay_client_toolkit::{
-    reexports::client::{Connection, Proxy, QueueHandle},
-    shm::Shm,
 };
 use wayland_egl::WlEglSurface;
 
@@ -102,8 +99,8 @@ pub enum WindowFrameAction {
 
 pub struct EglData {
     pub egl_surface: WlEglSurface,
-    pub egl_display: Option<egl::Display>,
-    pub egl_window_surface: Option<khronos_egl::Surface>,
+    pub egl_display: egl::Display,
+    pub egl_window_surface: khronos_egl::Surface,
 }
 
 pub struct SimpleWindow {
@@ -122,6 +119,7 @@ pub struct SimpleWindow {
     pub decorations_cursor: CursorIcon,
     pub current_scale: f64,
     pub decoration_mode: DecorationMode,
+    pub force_software_rendering: bool,
     pub egl_data: Option<EglData>,
 }
 
@@ -154,17 +152,6 @@ impl SimpleWindow {
         let d: Option<&SurfaceData> = window_surface.data();
         dbg!(d);
 
-        let egl_surface = if params.force_software_rendering {
-            info!("Forcing software rendering");
-            None
-        } else if let Ok(v) = WlEglSurface::new(surface_id.clone(), width.get() as i32, height.get() as i32) {
-            info!("Using EGL rendering");
-            Some(v)
-        } else {
-            warn!("Failed to create EGL rendering, falling back to software rendering");
-            None
-        };
-
         let decorations = if params.force_client_side_decoration {
             WindowDecorations::RequestClient
         } else {
@@ -173,7 +160,7 @@ impl SimpleWindow {
         let window = state.xdg_shell_state.create_window(window_surface, decorations, qh);
         window.set_title(params.title.as_str().unwrap());
         window.set_app_id(params.app_id.as_str().unwrap());
-        window.set_min_size(Some((width.get(), height.get())));
+        //window.set_min_size(Some((width.get(), height.get())));
 
         // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
         // For more info, see WaylandSurface::commit
@@ -182,7 +169,7 @@ impl SimpleWindow {
         // the correct options.
         window.commit();
 
-        debug!("Created new window with surface_id={surface_id}");
+        debug!("Creating new window with surface_id={surface_id}");
         Self {
             event_handler,
             subcompositor_state,
@@ -199,11 +186,8 @@ impl SimpleWindow {
             decorations_cursor: CursorIcon::Default,
             current_scale: 1.0,
             decoration_mode: DecorationMode::Client,
-            egl_data: egl_surface.map(|s| EglData {
-                egl_surface: s,
-                egl_display: None,
-                egl_window_surface: None,
-            }),
+            egl_data: None,
+            force_software_rendering: params.force_software_rendering,
         }
     }
 
@@ -212,24 +196,30 @@ impl SimpleWindow {
         self.close = true;
     }
 
-    #[allow(clippy::too_many_arguments)]
+    fn get_physical_size(&self) -> (i32, i32) {
+        #[allow(clippy::cast_possible_truncation)]
+        let physical_width = (f64::from(self.width.get()) * self.current_scale).ceil() as i32;
+
+        #[allow(clippy::cast_possible_truncation)]
+        let physical_height = (f64::from(self.height.get()) * self.current_scale).ceil() as i32;
+
+        (physical_width, physical_height)
+    }
+
     pub(crate) fn configure(
         &mut self,
         conn: &Connection,
         qh: &QueueHandle<ApplicationState>,
-        _shm: &Shm,
         window: &Window,
         configure: &WindowConfigure,
         themed_pointer: Option<&mut ThemedPointer>,
-        egl: &EglInstance,
+        egl: Option<&EglInstance>,
     ) {
+        debug!("Configure {configure:?}");
+
         self.buffer = None;
         self.decoration_mode = configure.decoration_mode;
 
-        debug!(
-            "Configure size {:?}, decorations: {:?}",
-            configure.new_size, configure.decoration_mode
-        );
         // debug!("Supported formats: {:?}", shm.formats());
         // [Argb8888, Xrgb8888, Abgr8888, Xbgr8888, Rgb565, Argb2101010, Xrgb2101010, Abgr2101010, Xbgr2101010, Argb16161616f, Xrgb16161616f, Abgr16161616f, Xbgr16161616f, Yuyv, Nv12, P010, Yuv420]
 
@@ -242,35 +232,51 @@ impl SimpleWindow {
         // Update new width and height;
         self.width = width;
         self.height = height;
-        if let Some(egl_data) = &mut self.egl_data {
-            egl_data.egl_surface.resize(self.width.get() as i32, self.height.get() as i32, 0, 0);
 
-            if egl_data.egl_display.is_none() {
-                let wayland_display_ptr = conn.display().id().as_ptr();
-                let egl_display = unsafe { egl.get_display(wayland_display_ptr.cast()).unwrap() };
-                egl.initialize(egl_display).unwrap();
+        let (physical_width, physical_height) = self.get_physical_size();
 
-                let egl_attributes = [egl::RED_SIZE, 8, egl::GREEN_SIZE, 8, egl::BLUE_SIZE, 8, egl::NONE];
+        if self.first_configure {
+            if self.force_software_rendering {
+                info!("Forcing software rendering");
+            } else if let Some(egl) = egl {
+                if let Ok(egl_surface) = WlEglSurface::new(window.wl_surface().id(), physical_width, physical_height) {
+                    info!("Using EGL rendering");
 
-                let egl_config = egl
-                    .choose_first_config(egl_display, &egl_attributes)
-                    .expect("unable to find an appropriate ELG configuration")
-                    .unwrap();
+                    let wayland_display_ptr = conn.display().id().as_ptr();
+                    let egl_display = unsafe { egl.get_display(wayland_display_ptr.cast()).unwrap() };
+                    egl.initialize(egl_display).unwrap();
 
-                let egl_context_attributes = [egl::CONTEXT_MAJOR_VERSION, 3, egl::CONTEXT_MINOR_VERSION, 0, egl::NONE];
+                    let egl_attributes = [egl::RED_SIZE, 8, egl::GREEN_SIZE, 8, egl::BLUE_SIZE, 8, egl::NONE];
 
-                let egl_context = egl.create_context(egl_display, egl_config, None, &egl_context_attributes).unwrap();
+                    let egl_config = egl
+                        .choose_first_config(egl_display, &egl_attributes)
+                        .expect("unable to find an appropriate ELG configuration")
+                        .unwrap();
 
-                let egl_window_surface = unsafe {
-                    egl.create_window_surface(egl_display, egl_config, egl_data.egl_surface.ptr().cast_mut(), None)
-                        .unwrap()
+                    let egl_context_attributes = [egl::CONTEXT_MAJOR_VERSION, 3, egl::CONTEXT_MINOR_VERSION, 0, egl::NONE];
+
+                    let egl_context = egl.create_context(egl_display, egl_config, None, &egl_context_attributes).unwrap();
+
+                    let egl_window_surface = unsafe {
+                        egl.create_window_surface(egl_display, egl_config, egl_surface.ptr().cast_mut(), None)
+                            .unwrap()
+                    };
+                    egl.make_current(egl_display, Some(egl_window_surface), Some(egl_window_surface), Some(egl_context))
+                        .unwrap();
+
+                    self.egl_data = Some(EglData {
+                        egl_surface,
+                        egl_display,
+                        egl_window_surface,
+                    });
+                } else {
+                    warn!("Failed to create EGL rendering, falling back to software rendering");
                 };
-                egl.make_current(egl_display, Some(egl_window_surface), Some(egl_window_surface), Some(egl_context))
-                    .unwrap();
-
-                egl_data.egl_display = Some(egl_display);
-                egl_data.egl_window_surface = Some(egl_window_surface);
+            } else {
+                warn!("Couldn't load EGL library, falling back to software rendering");
             }
+        } else if let Some(egl_data) = &mut self.egl_data {
+            egl_data.egl_surface.resize(physical_width, physical_height, 0, 0);
         }
 
         if let Some(viewport) = &self.viewport {
@@ -334,7 +340,7 @@ impl SimpleWindow {
         conn: &Connection,
         qh: &QueueHandle<ApplicationState>,
         themed_pointer: Option<&mut ThemedPointer>,
-        egl: &EglInstance,
+        egl: Option<&EglInstance>,
     ) {
         let surface = self.window.wl_surface();
         if self.set_cursor {
@@ -343,13 +349,8 @@ impl SimpleWindow {
             self.set_cursor = false;
         }
 
-        #[allow(clippy::cast_possible_truncation)]
-        let width = (f64::from(self.width.get()) * self.current_scale).ceil() as i32;
-
-        #[allow(clippy::cast_possible_truncation)]
-        let height = (f64::from(self.height.get()) * self.current_scale).ceil() as i32;
-
-        let stride = width * 4;
+        let (physical_width, physical_height) = self.get_physical_size();
+        let stride = physical_width * 4;
 
         let canvas = {
             if self.egl_data.is_some() {
@@ -357,7 +358,7 @@ impl SimpleWindow {
             } else {
                 let buffer = self.buffer.get_or_insert_with(|| {
                     self.pool
-                        .create_buffer(width, height, stride, wl_shm::Format::Argb8888)
+                        .create_buffer(physical_width, physical_height, stride, wl_shm::Format::Argb8888)
                         .expect("create buffer")
                         .0
                 });
@@ -369,7 +370,7 @@ impl SimpleWindow {
                     // buffer, we need double-buffering.
                     let (second_buffer, canvas) = self
                         .pool
-                        .create_buffer(width, height, stride, wl_shm::Format::Argb8888)
+                        .create_buffer(physical_width, physical_height, stride, wl_shm::Format::Argb8888)
                         .expect("create buffer");
                     *buffer = second_buffer;
                     Some(canvas)
@@ -379,16 +380,16 @@ impl SimpleWindow {
         (self.event_handler)(
             &WindowDrawEvent {
                 buffer: canvas.map_or_else(std::ptr::null_mut, <[u8]>::as_mut_ptr),
-                width: u32::try_from(width).unwrap(),
-                height: u32::try_from(height).unwrap(),
-                stride: u32::try_from(stride).unwrap(),
+                physical_width,
+                physical_height,
+                stride,
                 scale: self.current_scale,
             }
             .into(),
         );
 
         // Damage the entire window
-        surface.damage_buffer(0, 0, width, height);
+        surface.damage_buffer(0, 0, physical_width, physical_height);
 
         if self.viewport.is_none() {
             assert!(self.current_scale % 1.0 == 0.0);
@@ -400,11 +401,15 @@ impl SimpleWindow {
         surface.frame(qh, surface.clone());
 
         // Attach and commit to present.
-        if let Some(egl_data) = &self.egl_data {
-            egl.swap_buffers(egl_data.egl_display.unwrap(), egl_data.egl_window_surface.unwrap())
-                .unwrap();
-        } else if let Some(buffer) = &self.buffer {
-            buffer.attach_to(surface).expect("buffer attach");
+        match (egl, &self.egl_data) {
+            (Some(egl), Some(egl_data)) => {
+                egl.swap_buffers(egl_data.egl_display, egl_data.egl_window_surface).unwrap();
+            }
+            _ => {
+                if let Some(buffer) = &self.buffer {
+                    buffer.attach_to(surface).expect("buffer attach");
+                }
+            }
         }
         surface.commit();
     }

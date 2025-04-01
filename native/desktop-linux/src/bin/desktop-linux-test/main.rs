@@ -1,10 +1,6 @@
 mod gl_sys;
 
-use std::{
-    cell::{OnceCell, RefCell},
-    ffi::CStr,
-    sync::LazyLock,
-};
+use std::{cell::OnceCell, ffi::CStr, sync::LazyLock};
 
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
@@ -70,7 +66,7 @@ fn load_shader(gl: &OpenGlFuncs, shader_type: GLenum, shader_src: *const GLchar)
             return None;
         }
     }
-    return Some(shader);
+    Some(shader)
 }
 
 /// Initialize the shader and program object
@@ -112,11 +108,11 @@ void main()
             }
         }
         (gl.glClearColor)(0.0, 1.0, 0.0, 1.0);
-        return Some(program);
+        Some(program)
     }
 }
 
-/// Draw a triangle using the shader pair created in Init()
+/// Draw a triangle using the shader pair created in `Init()`
 fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEvent) {
     //    debug!("draw_opengl_triangle, program = {program}, event = {data:?}");
     const V_VERTICES: [f32; 6] = [0.0f32, 1.0, -1.0, -1.0, 1.0, -1.0];
