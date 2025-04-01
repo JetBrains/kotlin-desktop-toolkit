@@ -143,12 +143,12 @@ public class Application() {
 
     public data class EglProcFunc(val fPtr: Long, val ctxPtr: Long)
 
-    public fun getEglProcFunc(): EglProcFunc {
+    public fun getEglProcFunc(): EglProcFunc? {
         return Arena.ofConfined().use { arena ->
             val s = desktop_h.application_get_egl_proc_func(arena, appPtr!!)
             val f = NativeGetEglProcFuncData.f(s)
             val ctx = NativeGetEglProcFuncData.ctx(s)
-            EglProcFunc(fPtr = f.address(), ctxPtr = ctx.address())
+            if (ctx == MemorySegment.NULL) null else EglProcFunc(fPtr = f.address(), ctxPtr = ctx.address())
         }
     }
 }

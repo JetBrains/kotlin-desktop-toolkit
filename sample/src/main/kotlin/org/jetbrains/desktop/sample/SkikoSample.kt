@@ -28,8 +28,12 @@ import org.jetbrains.desktop.macos.WindowId
 import org.jetbrains.desktop.macos.WindowVisualEffect
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
+import org.jetbrains.skia.Font
+import org.jetbrains.skia.FontMgr
+import org.jetbrains.skia.FontStyle
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
+import org.jetbrains.skia.TextLine
 import java.lang.AutoCloseable
 import java.nio.file.Files
 import java.nio.file.Path
@@ -118,6 +122,27 @@ class ContentArea(
                 ),
                 paint,
             )
+        }
+        canvas.withTranslated(contentOrigin) {
+            Paint().use { paint ->
+                paint.color = Color.WHITE
+                paint.strokeWidth = scale.toFloat()
+                canvas.drawLine(
+                    0f,
+                    0f,
+                    contentSize.width.toFloat(),
+                    contentSize.height.toFloat(),
+                    paint,
+                )
+                FontMgr.default.matchFamilyStyle("Arial", FontStyle.BOLD)?.use { typeface ->
+                    canvas.drawTextLine(
+                        TextLine.make("aaaaaaaaaaaaaaaaaaaaaa", font = Font(typeface, 32f)),
+                        contentSize.width.toFloat() / 2,
+                        contentSize.height.toFloat(),
+                        paint,
+                    )
+                }
+            }
         }
         canvas.drawSpiningCircle(contentOrigin, contentSize, time, scale.toFloat())
         canvas.drawWindowBorders(contentOrigin, contentSize, time, scale.toFloat())

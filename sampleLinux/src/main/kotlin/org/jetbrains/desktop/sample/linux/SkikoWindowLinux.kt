@@ -41,7 +41,7 @@ abstract class SkikoWindowLinux(
     params: WindowParams,
 ) : AutoCloseable {
     private val directContext: DirectContext by lazy {
-        val eglFunc = app.getEglProcFunc()
+        val eglFunc = app.getEglProcFunc()!!
         val openGlInterace = DirectContext.makeGlAssembledInterface(ctxPtr = eglFunc.ctxPtr, fPtr = eglFunc.fPtr)
         DirectContext.makeGLWithInterface(openGlInterace)
     }
@@ -49,11 +49,11 @@ abstract class SkikoWindowLinux(
     private val creationTime = TimeSource.Monotonic.markNow()
     private val backgroundColor = Color.makeRGB(128, 128, 128)
 
-    init {
+//    init {
 //        window.minSize = LogicalSize(320.0, 240.0)
 //        view.isOpaque = false
 //        window.attachView(view)
-    }
+//    }
 
     private fun logEvents(event: Event) {
         when (event) {
@@ -129,7 +129,7 @@ abstract class SkikoWindowLinux(
             fbId = 0,
             fbFormat = FramebufferFormat.GR_GL_RGBA8,
         ).use { renderTarget ->
-            val surface = Surface.makeFromBackendRenderTarget(
+            Surface.makeFromBackendRenderTarget(
                 context = directContext,
                 rt = renderTarget,
                 origin = SurfaceOrigin.BOTTOM_LEFT,
@@ -138,8 +138,6 @@ abstract class SkikoWindowLinux(
                 surfaceProps = null,
             )!!.use { surface ->
                 val time = creationTime.elapsedNow().inWholeMilliseconds
-                surface.canvas.scale((1 / event.scale).toFloat(), (1 / event.scale).toFloat())
-                surface.canvas.translate(0f, (event.size.height * (event.scale - 1)).toFloat())
                 surface.canvas.clear(backgroundColor)
                 surface.canvas.draw(event.size, time)
                 surface.flushAndSubmit()

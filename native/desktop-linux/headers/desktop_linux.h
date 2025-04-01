@@ -500,9 +500,9 @@ typedef struct NativeWindowFullScreenToggleEvent {
 
 typedef struct NativeWindowDrawEvent {
   uint8_t *buffer;
-  uint32_t width;
-  uint32_t height;
-  uint32_t stride;
+  int32_t physical_width;
+  int32_t physical_height;
+  int32_t stride;
   double scale;
 } NativeWindowDrawEvent;
 
