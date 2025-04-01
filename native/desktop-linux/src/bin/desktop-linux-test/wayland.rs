@@ -1,5 +1,9 @@
-use std::ffi::CStr;
+use std::{cell::OnceCell, ffi::CStr, sync::LazyLock};
 
+use crate::gl_sys::{
+    GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
+    GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
+};
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
@@ -11,6 +15,8 @@ use desktop_linux::linux::{
     window_api::window_create,
     xdg_desktop_settings::XdgDesktopSetting,
 };
+use libloading::Library;
+use log::debug;
 
 extern "C" fn on_should_terminate() -> bool {
     println!("on_should_terminate");
@@ -29,24 +35,117 @@ fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
 }
 
-type GLenum = u32;
-type GLbitfield = u32;
-type GLfloat = f32;
+static OPENGL_LIB: LazyLock<Library> = LazyLock::new(|| unsafe { libloading::Library::new("libGLESv2.so") }.unwrap());
+static OPENGL: LazyLock<OpenGlFuncs> = LazyLock::new(|| OpenGlFuncs::new(&OPENGL_LIB).unwrap());
 
-const GL_COLOR_BUFFER_BIT: GLenum = 0x0000_4000;
+thread_local! {
+    pub static OPENGL_PROGRAM: OnceCell<GLuint> = const { OnceCell::new() };
+}
 
-#[link(kind = "dylib", name = "GL")]
-unsafe extern "C" {
-    unsafe fn glClearColor(red: GLfloat, green: GLfloat, blue: GLfloat, alpha: GLfloat);
-    unsafe fn glClear(mask: GLbitfield);
+const V_POSITION: GLuint = 0;
+
+fn load_shader(gl: &OpenGlFuncs, shader_type: GLenum, shader_src: *const GLchar) -> Option<GLuint> {
+    // Create the shader object
+    let shader = unsafe { (gl.glCreateShader)(shader_type) };
+    if shader == 0 {
+        return None;
+    }
+    // Load the shader source
+    unsafe { (gl.glShaderSource)(shader, 1, &shader_src, std::ptr::null()) };
+    // Compile the shader
+    unsafe { (gl.glCompileShader)(shader) };
+    // Check the compile status
+    {
+        let mut compiled: GLint = 0;
+        unsafe { (gl.glGetShaderiv)(shader, GL_COMPILE_STATUS, &mut compiled) };
+        dbg!(compiled);
+        if compiled == 0 {
+            unsafe { (gl.glDeleteShader)(shader) };
+            return None;
+        }
+    }
+    Some(shader)
+}
+
+/// Initialize the shader and program object
+fn create_opengl_program(gl: &OpenGlFuncs) -> Option<GLuint> {
+    const V_SHADER_STR: &CStr = c"attribute vec4 vPosition;
+void main()
+{
+  gl_Position = vPosition;
+}
+";
+    const F_SHADER_STR: &CStr = c"precision mediump float;
+void main()
+{
+  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+}
+";
+    // Load the vertex/fragment shaders
+    let vertex_shader = load_shader(gl, GL_VERTEX_SHADER, V_SHADER_STR.as_ptr()).unwrap();
+    let fragment_shader = load_shader(gl, GL_FRAGMENT_SHADER, F_SHADER_STR.as_ptr()).unwrap();
+    // Create the program object
+    unsafe {
+        let program = (gl.glCreateProgram)();
+        if program == 0 {
+            return None;
+        }
+        (gl.glAttachShader)(program, vertex_shader);
+        (gl.glAttachShader)(program, fragment_shader);
+        // Bind vPosition to attribute 0
+        (gl.glBindAttribLocation)(program, V_POSITION, c"vPosition".as_ptr());
+        (gl.glLinkProgram)(program);
+        // Check the link status
+        {
+            let mut linked: GLint = 0;
+            (gl.glGetProgramiv)(program, GL_LINK_STATUS, &mut linked);
+            dbg!(linked);
+            if linked == 0 {
+                (gl.glDeleteProgram)(program);
+                return None;
+            }
+        }
+        (gl.glClearColor)(0.0, 1.0, 0.0, 1.0);
+        Some(program)
+    }
+}
+
+/// Draw a triangle using the shader pair created in `Init()`
+fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEvent) {
+    //    debug!("draw_opengl_triangle, program = {program}, event = {data:?}");
+    const V_VERTICES: [f32; 6] = [0.0f32, 1.0, -1.0, -1.0, 1.0, -1.0];
+    unsafe {
+        (gl.glViewport)(0, 0, data.width as i32, data.height as i32);
+        (gl.glClear)(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+        (gl.glUseProgram)(program);
+        //let v_position = (gl.glGetAttribLocation)(program, c"vPosition".as_ptr());
+        //assert!(v_position != -1);
+        // Load the vertex data
+        (gl.glVertexAttribPointer)(V_POSITION, 2, GL_FLOAT, GL_FALSE, 0, V_VERTICES.as_ptr().cast());
+        (gl.glEnableVertexAttribArray)(V_POSITION);
+        (gl.glDrawArrays)(GL_TRIANGLES, 0, 3);
+    }
+}
+
+fn draw_opengl_triangle_with_init(data: &WindowDrawEvent) {
+    OPENGL_PROGRAM.with(|c| {
+        let gl: &OpenGlFuncs = &OPENGL;
+        if let Some(program) = c.get() {
+            draw_opengl_triangle(gl, *program, data);
+        } else {
+            let program = create_opengl_program(gl).unwrap();
+            c.set(program).unwrap();
+            debug!("draw_opengl_triangle_with_init, program = {program}, event = {data:?}");
+            draw_opengl_triangle(gl, program, data);
+        }
+    });
 }
 
 #[allow(clippy::many_single_char_names)]
 fn draw(data: &WindowDrawEvent) {
     const BYTES_PER_PIXEL: u8 = 4;
     if data.buffer.is_null() {
-        unsafe { glClearColor(0.0, 1.0, 0.0, 1.0) };
-        unsafe { glClear(GL_COLOR_BUFFER_BIT) };
+        draw_opengl_triangle_with_init(data);
         return;
     }
     let canvas = unsafe { std::slice::from_raw_parts_mut(data.buffer, usize::try_from(data.height * data.stride).unwrap()) };
