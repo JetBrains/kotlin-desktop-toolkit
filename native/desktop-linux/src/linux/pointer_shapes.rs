@@ -1,3 +1,5 @@
+use smithay_client_toolkit::seat::pointer::CursorIcon;
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub enum PointerShape {
@@ -126,4 +128,45 @@ pub enum PointerShape {
     /// Indicates that something can be zoomed in. Often rendered as a
     /// magnifying glass with a "-" in the center of the glass.
     ZoomOut,
+}
+
+impl PointerShape {
+    pub(crate) const fn to_cursor_icon(self) -> CursorIcon {
+        match self {
+            Self::Default => CursorIcon::Default,
+            Self::ContextMenu => CursorIcon::ContextMenu,
+            Self::Help => CursorIcon::Help,
+            Self::Pointer => CursorIcon::Pointer,
+            Self::Progress => CursorIcon::Progress,
+            Self::Wait => CursorIcon::Wait,
+            Self::Cell => CursorIcon::Cell,
+            Self::Crosshair => CursorIcon::Crosshair,
+            Self::Text => CursorIcon::Text,
+            Self::VerticalText => CursorIcon::VerticalText,
+            Self::Alias => CursorIcon::Alias,
+            Self::Copy => CursorIcon::Copy,
+            Self::Move => CursorIcon::Move,
+            Self::NoDrop => CursorIcon::NoDrop,
+            Self::NotAllowed => CursorIcon::NotAllowed,
+            Self::Grab => CursorIcon::Grab,
+            Self::Grabbing => CursorIcon::Grabbing,
+            Self::EResize => CursorIcon::EResize,
+            Self::NResize => CursorIcon::NResize,
+            Self::NeResize => CursorIcon::NeResize,
+            Self::NwResize => CursorIcon::NwResize,
+            Self::SResize => CursorIcon::SResize,
+            Self::SeResize => CursorIcon::SeResize,
+            Self::SwResize => CursorIcon::SwResize,
+            Self::WResize => CursorIcon::WResize,
+            Self::EwResize => CursorIcon::EwResize,
+            Self::NsResize => CursorIcon::NsResize,
+            Self::NeswResize => CursorIcon::NeswResize,
+            Self::NwseResize => CursorIcon::NwseResize,
+            Self::ColResize => CursorIcon::ColResize,
+            Self::RowResize => CursorIcon::RowResize,
+            Self::AllScroll => CursorIcon::AllScroll,
+            Self::ZoomIn => CursorIcon::ZoomIn,
+            Self::ZoomOut => CursorIcon::ZoomOut,
+        }
+    }
 }

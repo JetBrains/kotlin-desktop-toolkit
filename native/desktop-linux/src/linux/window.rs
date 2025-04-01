@@ -1,10 +1,8 @@
 use std::num::NonZeroU32;
 
-use desktop_common::ffi_utils::BorrowedStrPtr;
 use khronos_egl as egl;
 use log::{debug, info, warn};
 use smithay_client_toolkit::compositor::SurfaceData;
-use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
 use smithay_client_toolkit::reexports::client::protocol::wl_shm;
@@ -28,106 +26,41 @@ use crate::linux::events::{LogicalPixels, LogicalSize, WindowCapabilities, Windo
 use smithay_client_toolkit::{
     seat::pointer::{CursorIcon, ThemedPointer},
     shm::slot::{Buffer, SlotPool},
-    subcompositor::SubcompositorState,
 };
 
 use super::application_state::EglInstance;
-use super::events::{Event, InternalEventHandler, WindowDrawEvent};
-use super::pointer_shapes::PointerShape;
-
-#[repr(C)]
-pub struct WindowParams<'a> {
-    pub width: u32,
-
-    pub height: u32,
-
-    pub title: BorrowedStrPtr<'a>,
-
-    /// See <https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_app_id>
-    pub app_id: BorrowedStrPtr<'a>,
-
-    pub force_client_side_decoration: bool,
-
-    pub force_software_rendering: bool,
-}
-
-#[repr(C)]
-#[derive(Debug, PartialEq, Eq)]
-pub enum WindowResizeEdge {
-    /// Nothing is being dragged.
-    None,
-    /// The top edge is being dragged.
-    Top,
-    /// The bottom edge is being dragged.
-    Bottom,
-    /// The left edge is being dragged.
-    Left,
-    /// The top left corner is being dragged.
-    TopLeft,
-    /// The bottom left corner is being dragged.
-    BottomLeft,
-    /// The right edge is being dragged.
-    Right,
-    /// The top right corner is being dragged.
-    TopRight,
-    /// The bottom right corner is being dragged.
-    BottomRight,
-}
-
-#[repr(C)]
-#[derive(Debug, PartialEq, Eq)]
-pub enum WindowFrameAction {
-    None,
-    /// The window should be minimized.
-    Minimize,
-    /// The window should be maximized.
-    Maximize,
-    /// The window should be unmaximized.
-    UnMaximize,
-    /// The window should be closed.
-    Close,
-    /// An interactive move should be started.
-    Move,
-    /// An interactive resize should be started with the provided edge.
-    Resize(WindowResizeEdge),
-    /// Show window menu.
-    ///
-    /// The coordinates are relative to the base surface, as in should be
-    /// directly passed to the `xdg_toplevel::show_window_menu`.
-    ShowMenu(i32, i32),
-}
+use super::events::{Event, InternalEventHandler, WindowDrawEvent, WindowFrameAction, WindowResizeEdge};
+use super::window_api::WindowParams;
 
 pub struct EglData {
-    pub egl_surface: WlEglSurface,
-    pub egl_display: egl::Display,
-    pub egl_window_surface: khronos_egl::Surface,
+    wl_egl_surface: WlEglSurface,
+    egl_display: egl::Display,
+    egl_window_surface: khronos_egl::Surface,
 }
 
 pub struct SimpleWindow {
     pub event_handler: Box<InternalEventHandler>,
-    pub subcompositor_state: SubcompositorState,
     pub close: bool,
-    pub first_configure: bool,
-    pub pool: SlotPool,
+    first_configure: bool,
+    pool: SlotPool,
     pub width: NonZeroU32,
     pub height: NonZeroU32,
-    pub buffer: Option<Buffer>,
-    pub viewport: Option<WpViewport>,
+    buffer: Option<Buffer>,
+    viewport: Option<WpViewport>,
     pub window: Window,
     pub keyboard_focus: bool,
     pub set_cursor: bool,
-    pub decorations_cursor: CursorIcon,
-    pub current_scale: f64,
-    pub decoration_mode: DecorationMode,
-    pub force_software_rendering: bool,
-    pub egl_data: Option<EglData>,
+    decorations_cursor: CursorIcon,
+    current_scale: f64,
+    decoration_mode: DecorationMode,
+    force_software_rendering: bool,
+    egl_data: Option<EglData>,
 }
 
 impl SimpleWindow {
     #[must_use]
     pub fn new(
         app_state: &ApplicationState,
-        globals: &GlobalList,
         qh: &QueueHandle<ApplicationState>,
         event_handler: Box<InternalEventHandler>,
         params: &WindowParams,
@@ -137,8 +70,6 @@ impl SimpleWindow {
         let height = NonZeroU32::new(params.height).unwrap();
         let pool = SlotPool::new(width.get() as usize * height.get() as usize * 4, &state.shm_state).expect("Failed to create pool");
 
-        let subcompositor_state =
-            SubcompositorState::bind(state.compositor_state.wl_compositor().clone(), globals, qh).expect("wl_subcompositor not available");
         let window_surface = state.compositor_state.create_surface(qh);
 
         let surface_id = window_surface.id();
@@ -172,7 +103,6 @@ impl SimpleWindow {
         debug!("Creating new window with surface_id={surface_id}");
         Self {
             event_handler,
-            subcompositor_state,
             close: false,
             first_configure: true,
             pool,
@@ -206,7 +136,7 @@ impl SimpleWindow {
         (physical_width, physical_height)
     }
 
-    pub(crate) fn configure(
+    pub fn configure(
         &mut self,
         conn: &Connection,
         qh: &QueueHandle<ApplicationState>,
@@ -239,7 +169,7 @@ impl SimpleWindow {
             if self.force_software_rendering {
                 info!("Forcing software rendering");
             } else if let Some(egl) = egl {
-                if let Ok(egl_surface) = WlEglSurface::new(window.wl_surface().id(), physical_width, physical_height) {
+                if let Ok(wl_egl_surface) = WlEglSurface::new(window.wl_surface().id(), physical_width, physical_height) {
                     info!("Using EGL rendering");
 
                     let wayland_display_ptr = conn.display().id().as_ptr();
@@ -258,14 +188,14 @@ impl SimpleWindow {
                     let egl_context = egl.create_context(egl_display, egl_config, None, &egl_context_attributes).unwrap();
 
                     let egl_window_surface = unsafe {
-                        egl.create_window_surface(egl_display, egl_config, egl_surface.ptr().cast_mut(), None)
+                        egl.create_window_surface(egl_display, egl_config, wl_egl_surface.ptr().cast_mut(), None)
                             .unwrap()
                     };
                     egl.make_current(egl_display, Some(egl_window_surface), Some(egl_window_surface), Some(egl_context))
                         .unwrap();
 
                     self.egl_data = Some(EglData {
-                        egl_surface,
+                        wl_egl_surface,
                         egl_display,
                         egl_window_surface,
                     });
@@ -276,7 +206,7 @@ impl SimpleWindow {
                 warn!("Couldn't load EGL library, falling back to software rendering");
             }
         } else if let Some(egl_data) = &mut self.egl_data {
-            egl_data.egl_surface.resize(physical_width, physical_height, 0, 0);
+            egl_data.wl_egl_surface.resize(physical_width, physical_height, 0, 0);
         }
 
         if let Some(viewport) = &self.viewport {
@@ -424,43 +354,8 @@ impl SimpleWindow {
         (self.event_handler)(&Event::new_window_scale_changed_event(new_scale));
     }
 
-    pub fn set_pointer_shape(&mut self, pointer_shape: PointerShape) {
+    pub fn set_cursor_icon(&mut self, cursor_icon: CursorIcon) {
         self.set_cursor = true;
-        self.decorations_cursor = match pointer_shape {
-            PointerShape::Default => CursorIcon::Default,
-            PointerShape::ContextMenu => CursorIcon::ContextMenu,
-            PointerShape::Help => CursorIcon::Help,
-            PointerShape::Pointer => CursorIcon::Pointer,
-            PointerShape::Progress => CursorIcon::Progress,
-            PointerShape::Wait => CursorIcon::Wait,
-            PointerShape::Cell => CursorIcon::Cell,
-            PointerShape::Crosshair => CursorIcon::Crosshair,
-            PointerShape::Text => CursorIcon::Text,
-            PointerShape::VerticalText => CursorIcon::VerticalText,
-            PointerShape::Alias => CursorIcon::Alias,
-            PointerShape::Copy => CursorIcon::Copy,
-            PointerShape::Move => CursorIcon::Move,
-            PointerShape::NoDrop => CursorIcon::NoDrop,
-            PointerShape::NotAllowed => CursorIcon::NotAllowed,
-            PointerShape::Grab => CursorIcon::Grab,
-            PointerShape::Grabbing => CursorIcon::Grabbing,
-            PointerShape::EResize => CursorIcon::EResize,
-            PointerShape::NResize => CursorIcon::NResize,
-            PointerShape::NeResize => CursorIcon::NeResize,
-            PointerShape::NwResize => CursorIcon::NwResize,
-            PointerShape::SResize => CursorIcon::SResize,
-            PointerShape::SeResize => CursorIcon::SeResize,
-            PointerShape::SwResize => CursorIcon::SwResize,
-            PointerShape::WResize => CursorIcon::WResize,
-            PointerShape::EwResize => CursorIcon::EwResize,
-            PointerShape::NsResize => CursorIcon::NsResize,
-            PointerShape::NeswResize => CursorIcon::NeswResize,
-            PointerShape::NwseResize => CursorIcon::NwseResize,
-            PointerShape::ColResize => CursorIcon::ColResize,
-            PointerShape::RowResize => CursorIcon::RowResize,
-            PointerShape::AllScroll => CursorIcon::AllScroll,
-            PointerShape::ZoomIn => CursorIcon::ZoomIn,
-            PointerShape::ZoomOut => CursorIcon::ZoomOut,
-        };
+        self.decorations_cursor = cursor_icon;
     }
 }

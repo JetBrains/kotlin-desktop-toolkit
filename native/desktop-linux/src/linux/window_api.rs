@@ -1,11 +1,27 @@
-use desktop_common::logger::ffi_boundary;
+use desktop_common::{ffi_utils::BorrowedStrPtr, logger::ffi_boundary};
 
 use super::{
-    application::{AppPtr, Application},
+    application::Application,
+    application_api::AppPtr,
     events::{EventHandler, LogicalPixels, LogicalSize, WindowId},
     pointer_shapes::PointerShape,
-    window::WindowParams,
 };
+
+#[repr(C)]
+pub struct WindowParams<'a> {
+    pub width: u32,
+
+    pub height: u32,
+
+    pub title: BorrowedStrPtr<'a>,
+
+    /// See <https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_app_id>
+    pub app_id: BorrowedStrPtr<'a>,
+
+    pub force_client_side_decoration: bool,
+
+    pub force_software_rendering: bool,
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_create(mut app_ptr: AppPtr, event_handler: EventHandler, params: WindowParams) -> WindowId {
@@ -30,7 +46,7 @@ pub extern "C" fn window_set_pointer_shape(mut app_ptr: AppPtr, window_id: Windo
     ffi_boundary("window_set_pointer_shape", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         if let Some(window) = app.get_window_mut(window_id) {
-            window.set_pointer_shape(pointer_shape);
+            window.set_cursor_icon(pointer_shape.to_cursor_icon());
         }
         Ok(())
     });
@@ -42,31 +58,6 @@ pub extern "C" fn window_set_pointer_shape(mut app_ptr: AppPtr, window_id: Windo
 //        let window = unsafe { window_ptr.borrow::<Window>() };
 //        Ok(window.ns_window.screen().unwrap().screen_id())
 //    })
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_scale_factor(window_ptr: WindowPtr) -> f64 {
-//    ffi_boundary("window_scale_factor", || {
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        Ok(window.ns_window.backingScaleFactor())
-//    })
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_attach_layer(window_ptr: WindowPtr, layer_ptr: MetalViewPtr) {
-//    ffi_boundary("window_attach_layer", || {
-//        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        let layer = unsafe { layer_ptr.borrow::<MetalView>() };
-//        window.attach_layer(layer);
-//        Ok(())
-//    });
-//}
-//
-//impl PanicDefault for LogicalPoint {
-//    fn default() -> Self {
-//        Self { x: 0.0, y: 0.0 }
-//    }
 //}
 //
 //#[unsafe(no_mangle)]
@@ -89,15 +80,6 @@ pub extern "C" fn window_set_pointer_shape(mut app_ptr: AppPtr, window_id: Windo
 //        copy_to_c_string(&title)
 //    })
 //}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_get_origin(window_ptr: WindowPtr) -> LogicalPoint {
-//    ffi_boundary("window_get_origin", || {
-//        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        window.ns_window.get_origin(mtm)
-//    })
-//}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> LogicalSize {
@@ -117,40 +99,6 @@ pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> Logic
 //        let w = app.get_window(window_id).context("No window found")?;
 //        f(&w);
 //        Ok(())
-//    });
-//}
-
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_do_frame_action(app_ptr: AppPtr, window_id: WindowId, action: FrameAction) {
-//    with_window(app_ptr, window_id, "window_set_rect", |window| {
-//        window.frame_action(pointer, serial, action);
-//    });
-//}
-
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_get_content_origin(window_ptr: WindowPtr) -> LogicalPoint {
-//    ffi_boundary("window_get_content_origin", || {
-//        let mtm = MainThreadMarker::new().unwrap();
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        Ok(window.ns_window.get_content_rect(mtm)?.origin)
-//    })
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_get_content_size(window_ptr: WindowPtr) -> LogicalSize {
-//    ffi_boundary("window_get_content_size", || {
-//        let mtm = MainThreadMarker::new().unwrap();
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        Ok(window.ns_window.get_content_rect(mtm)?.size)
-//    })
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_set_content_rect(window_ptr: WindowPtr, origin: LogicalPoint, size: LogicalSize, animate: bool) {
-//    ffi_boundary("window_set_content_rect", || {
-//        let mtm = MainThreadMarker::new().unwrap();
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        window.ns_window.set_content_rect(&LogicalRect::new(origin, size), animate, mtm)
 //    });
 //}
 //
@@ -208,75 +156,6 @@ pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> Logic
 //    ffi_boundary("window_toggle_full_screen", || {
 //        let window = unsafe { window_ptr.borrow::<Window>() };
 //        window.ns_window.toggleFullScreen(None);
-//        Ok(())
-//    });
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_is_full_screen(window_ptr: WindowPtr) -> bool {
-//    ffi_boundary("window_is_full_screen", || {
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        Ok(window.ns_window.is_full_screen())
-//    })
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_start_drag(window_ptr: WindowPtr) {
-//    ffi_boundary("window_start_drag", || {
-//        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-//        let app = MyNSApplication::sharedApplication(mtm);
-//        if let Some(event) = app.currentEvent() {
-//            let window = unsafe { window_ptr.borrow::<Window>() };
-//            window.ns_window.performWindowDragWithEvent(&event);
-//        }
-//        Ok(())
-//    });
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_invalidate_shadow(window_ptr: WindowPtr) {
-//    ffi_boundary("window_invalidate_shadow", || {
-//        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-//        unsafe {
-//            let window = window_ptr.borrow::<Window>();
-//            window.ns_window.invalidateShadow();
-//        }
-//        Ok(())
-//    });
-//}
-//
-//#[derive(Debug)]
-//#[repr(C)]
-//pub enum WindowVisualEffect {
-//    TitlebarEffect,
-//    SelectionEffect,
-//    MenuEffect,
-//    PopoverEffect,
-//    SidebarEffect,
-//    HeaderViewEffect,
-//    SheetEffect,
-//    WindowBackgroundEffect,
-//    HUDWindowEffect,
-//    FullScreenUIEffect,
-//    ToolTipEffect,
-//    ContentBackgroundEffect,
-//    UnderWindowBackgroundEffect,
-//    UnderPageBackgroundEffect,
-//}
-//
-//#[repr(C)]
-//pub enum WindowBackground {
-//    Transparent,
-//    SolidColor(Color),
-//    VisualEffect(WindowVisualEffect),
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_set_background(window_ptr: WindowPtr, background: WindowBackground) {
-//    ffi_boundary("window_set_background", || {
-//        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        window.set_background(mtm, background).unwrap();
 //        Ok(())
 //    });
 //}

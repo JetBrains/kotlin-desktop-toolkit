@@ -43,7 +43,7 @@ use smithay_client_toolkit::{
 
 use crate::linux::window::SimpleWindow;
 
-use super::{application::ApplicationCallbacks, events::WindowId};
+use super::{application_api::ApplicationCallbacks, events::WindowId};
 
 pub type EglInstance = khronos_egl::Instance<khronos_egl::Dynamic<libloading::Library, khronos_egl::EGL1_0>>;
 
@@ -51,21 +51,21 @@ pub struct ApplicationState {
     pub callbacks: ApplicationCallbacks,
 
     pub dma_state: DmabufState,
-    pub registry_state: RegistryState,
-    pub seat_state: SeatState,
+    registry_state: RegistryState,
+    seat_state: SeatState,
     pub output_state: OutputState,
     pub compositor_state: CompositorState,
     pub shm_state: Shm,
     pub xdg_shell_state: XdgShell,
-    pub keyboard: Option<wl_keyboard::WlKeyboard>,
-    pub themed_pointer: Option<ThemedPointer>,
+    keyboard: Option<wl_keyboard::WlKeyboard>,
+    themed_pointer: Option<ThemedPointer>,
     pub viewporter: Option<WpViewporter>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
 
     pub last_window_id: WindowId,
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
-    pub key_surface: Option<ObjectId>,
+    key_surface: Option<ObjectId>,
     pub egl: Option<EglInstance>,
 }
 

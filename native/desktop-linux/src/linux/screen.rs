@@ -6,7 +6,8 @@ use desktop_common::{
 };
 
 use super::{
-    application::{AppPtr, Application},
+    application::Application,
+    application_api::AppPtr,
     events::{LogicalPixels, LogicalPoint, LogicalSize},
 };
 
