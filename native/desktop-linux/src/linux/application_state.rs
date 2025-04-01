@@ -272,9 +272,11 @@ delegate_shm!(ApplicationState);
 
 impl CompositorHandler for ApplicationState {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_factor: i32) {
-        debug!("scale_factor_changed for {surface:?}: {new_factor}");
-        if let Some(window_data) = self.get_window_data(surface) {
-            window_data.window.scale_changed(new_factor.into());
+        if self.fractional_scale_manager.is_none() {
+            debug!("scale_factor_changed for {surface:?}: {new_factor}");
+            if let Some(window_data) = self.get_window_data(surface) {
+                window_data.window.scale_changed(new_factor.into());
+            }
         }
     }
 
@@ -356,6 +358,7 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
         };
 
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
+            debug!("wp_fractional_scale_v1::Event::PreferredScale: {scale}");
             window.scale_changed(f64::from(scale) / 120.0);
         }
     }

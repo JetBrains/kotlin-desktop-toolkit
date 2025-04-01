@@ -98,8 +98,8 @@ abstract class SkikoWindowLinux(
     fun performSoftwareDrawing(event: Event.WindowDraw) {
         Surface.makeRasterDirect(
             imageInfo = ImageInfo(
-                width = event.width,
-                height = event.height,
+                width = event.size.width,
+                height = event.size.height,
                 colorType = ColorType.BGRA_8888,
                 alphaType = ColorAlphaType.OPAQUE,
                 colorSpace = null,
@@ -122,8 +122,8 @@ abstract class SkikoWindowLinux(
         }
 
         BackendRenderTarget.makeGL(
-            width = event.width,
-            height = event.height,
+            width = event.size.width,
+            height = event.size.height,
             sampleCnt = 1,
             stencilBits = 8,
             fbId = 0,
@@ -139,7 +139,7 @@ abstract class SkikoWindowLinux(
             )!!.use { surface ->
                 val time = creationTime.elapsedNow().inWholeMilliseconds
                 surface.canvas.clear(backgroundColor)
-                surface.canvas.draw(PhysicalSize(surface.width, surface.height), time)
+                surface.canvas.draw(event.size, time)
                 surface.flushAndSubmit()
             }
         }
