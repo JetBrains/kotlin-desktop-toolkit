@@ -6,7 +6,6 @@ use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_output, delegate_pointer, delegate_registry, delegate_seat, delegate_shm,
     delegate_subcompositor, delegate_xdg_shell, delegate_xdg_window,
-    dmabuf::DmabufState,
     output::{OutputHandler, OutputState},
     reexports::{
         client::{
@@ -50,7 +49,6 @@ pub type EglInstance = khronos_egl::Instance<khronos_egl::Dynamic<libloading::Li
 pub struct ApplicationState {
     pub callbacks: ApplicationCallbacks,
 
-    pub dma_state: DmabufState,
     registry_state: RegistryState,
     seat_state: SeatState,
     pub output_state: OutputState,
@@ -84,16 +82,13 @@ impl ApplicationState {
         let compositor_state = CompositorState::bind(globals, qh).expect("wl_compositor not available");
         let shm_state = Shm::bind(globals, qh).expect("wl_shm not available");
         let xdg_shell_state = XdgShell::bind(globals, qh).expect("xdg shell not available");
-        let dma_state = DmabufState::new(globals, qh);
         let egl = unsafe { libloading::Library::new("libEGL.so.1") }
             .map_err(|e| warn!("{e}"))
             .and_then(|lib| unsafe { EglInstance::load_required_from(lib) }.map_err(|e| warn!("{e}")))
             .ok();
 
-        debug!("DMA-BUF protocol version: {:?}", dma_state.version());
         Self {
             callbacks,
-            dma_state,
             registry_state,
             seat_state,
             output_state,
