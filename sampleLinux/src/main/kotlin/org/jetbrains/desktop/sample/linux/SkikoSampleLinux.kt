@@ -184,8 +184,12 @@ class CustomTitlebar(
                     canvas.drawLine(xOffset, yBottom, xOffset + w, yBottom, paint)
                 }
                 WindowButtonType.Icon -> {
-//                    APP_ICON.scalePixels()
-                    canvas.drawImage(APP_ICON, xOffset, yOffset, paint)
+                    canvas.drawImageRect(
+                        APP_ICON,
+                        src = APP_ICON.imageInfo.bounds.toRect(),
+                        dst = Rect(xLeft, yTop, xRight, yBottom),
+                        paint
+                    )
                 }
                 WindowButtonType.Spacer -> {}
                 WindowButtonType.Minimize -> {
