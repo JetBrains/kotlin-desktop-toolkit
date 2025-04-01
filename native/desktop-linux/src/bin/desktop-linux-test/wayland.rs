@@ -9,11 +9,10 @@ use desktop_common::{
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::{
-    application::{ApplicationCallbacks, application_init, application_run_event_loop},
+    application_api::{ApplicationCallbacks, application_init, application_run_event_loop},
     events::{Event, WindowDrawEvent},
-    window::WindowParams,
-    window_api::window_create,
-    xdg_desktop_settings::XdgDesktopSetting,
+    window_api::{WindowParams, window_create},
+    xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use libloading::Library;
 use log::debug;
