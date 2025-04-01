@@ -414,6 +414,7 @@ impl SimpleWindow {
     }
 
     pub fn scale_changed(&mut self, new_scale: f64) {
+        debug!("scale_changed: {new_scale}");
         self.current_scale = new_scale;
         (self.event_handler)(&Event::new_window_scale_changed_event(new_scale));
     }
