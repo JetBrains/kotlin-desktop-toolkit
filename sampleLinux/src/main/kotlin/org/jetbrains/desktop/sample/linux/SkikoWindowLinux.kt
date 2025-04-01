@@ -138,6 +138,8 @@ abstract class SkikoWindowLinux(
                 surfaceProps = null,
             )!!.use { surface ->
                 val time = creationTime.elapsedNow().inWholeMilliseconds
+                surface.canvas.scale((1 / event.scale).toFloat(), (1 / event.scale).toFloat())
+                surface.canvas.translate(0f, (event.size.height * (event.scale - 1)).toFloat())
                 surface.canvas.clear(backgroundColor)
                 surface.canvas.draw(event.size, time)
                 surface.flushAndSubmit()
