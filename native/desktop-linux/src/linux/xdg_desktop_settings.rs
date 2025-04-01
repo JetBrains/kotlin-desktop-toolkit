@@ -1,36 +1,9 @@
 use ashpd::{desktop::settings::Settings, zvariant::OwnedValue};
 use async_std::stream::StreamExt;
-use desktop_common::ffi_utils::AutoDropArray;
-use log::{debug, warn};
+use log::debug;
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
-#[repr(i32)]
-#[derive(Copy, Clone, Debug)]
-pub enum WindowButtonType {
-    AppMenu,
-    Icon,
-    Spacer,
-    Minimize,
-    Maximize,
-    Close,
-}
-
-impl WindowButtonType {
-    fn parse(button_name: &str) -> Option<Self> {
-        match button_name {
-            "appmenu" => Some(Self::AppMenu),
-            "icon" => Some(Self::Icon),
-            "spacer" => Some(Self::Spacer),
-            "minimize" => Some(Self::Minimize),
-            "maximize" => Some(Self::Maximize),
-            "close" => Some(Self::Close),
-            _ => {
-                warn!("Unknown button name {button_name}");
-                None
-            }
-        }
-    }
-}
+use super::xdg_desktop_settings_api::WindowButtonType;
 
 #[derive(Clone, Debug)]
 pub struct InternalTitlebarButtonLayout {
@@ -53,37 +26,9 @@ impl InternalTitlebarButtonLayout {
 }
 
 #[derive(Debug)]
-pub(crate) enum InternalXdgDesktopSetting {
+pub enum InternalXdgDesktopSetting {
     TitlebarLayout(InternalTitlebarButtonLayout),
     DoubleClickIntervalMs(i32),
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct TitlebarButtonLayout {
-    pub left_side: AutoDropArray<WindowButtonType>,
-    pub right_side: AutoDropArray<WindowButtonType>,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub enum XdgDesktopSetting {
-    TitlebarLayout(TitlebarButtonLayout),
-    DoubleClickIntervalMs(i32),
-}
-
-impl XdgDesktopSetting {
-    pub(crate) fn with(s: InternalXdgDesktopSetting, f: impl FnOnce(Self)) {
-        match s {
-            InternalXdgDesktopSetting::TitlebarLayout(v) => {
-                f(Self::TitlebarLayout(TitlebarButtonLayout {
-                    left_side: AutoDropArray::new(v.left_side),
-                    right_side: AutoDropArray::new(v.right_side),
-                }));
-            }
-            InternalXdgDesktopSetting::DoubleClickIntervalMs(v) => f(Self::DoubleClickIntervalMs(v)),
-        }
-    }
 }
 
 // dbus-send --dest=org.freedesktop.portal.Desktop --print-reply /org/freedesktop/portal/desktop org.freedesktop.portal.Settings.Read string:"org.gnome.desktop.wm.preferences" string:"button-layout"
@@ -108,7 +53,7 @@ impl XdgDesktopSetting {
 
 impl InternalXdgDesktopSetting {
     #[must_use]
-    pub fn new(namespace: &str, key: &str, value: &OwnedValue) -> Option<Self> {
+    pub(crate) fn new(namespace: &str, key: &str, value: &OwnedValue) -> Option<Self> {
         match namespace {
             "org.gnome.desktop.wm.preferences" => {
                 match key {
@@ -132,7 +77,7 @@ impl InternalXdgDesktopSetting {
     }
 }
 
-pub(crate) async fn xdg_desktop_settings_notifier(tx: Sender<InternalXdgDesktopSetting>) -> anyhow::Result<()> {
+pub async fn xdg_desktop_settings_notifier(tx: Sender<InternalXdgDesktopSetting>) -> anyhow::Result<()> {
     let xdg_desktop_settings = Settings::new().await?;
 
     for (namespace, kv) in xdg_desktop_settings

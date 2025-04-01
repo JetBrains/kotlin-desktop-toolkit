@@ -1,41 +1,26 @@
-use std::ffi::{CStr, c_void};
 use std::time::Duration;
 
 use anyhow::anyhow;
-use desktop_common::logger::ffi_boundary;
-use desktop_common::{ffi_utils::RustAllocatedRawPtr, logger::catch_panic};
+use desktop_common::logger::catch_panic;
 use log::debug;
 use smithay_client_toolkit::reexports::calloop::{EventLoop, channel};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 use smithay_client_toolkit::{
-    reexports::client::{
-        Connection, Proxy, QueueHandle,
-        globals::{GlobalList, registry_queue_init},
-    },
+    reexports::client::{Connection, Proxy, QueueHandle, globals::registry_queue_init},
     shell::WaylandSurface,
 };
 
-use super::application_state::EglInstance;
+use super::application_api::ApplicationCallbacks;
 use super::events::{EventHandler, LogicalPixels, LogicalSize, WindowId};
-use super::window::WindowParams;
-use super::xdg_desktop_settings::{XdgDesktopSetting, xdg_desktop_settings_notifier};
+use super::window_api::WindowParams;
+use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
+use super::xdg_desktop_settings_api::XdgDesktopSetting;
 use super::{application_state::ApplicationState, window::SimpleWindow};
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct ApplicationCallbacks {
-    // Returns true if application should terminate, otherwise termination will be canceled
-    pub on_should_terminate: extern "C" fn() -> bool,
-    pub on_will_terminate: extern "C" fn(),
-    pub on_display_configuration_change: extern "C" fn(),
-    pub on_xdg_desktop_settings_change: extern "C" fn(XdgDesktopSetting),
-}
-
 pub struct Application<'a> {
-    globals: GlobalList,
     event_loop: EventLoop<'a, ApplicationState>,
     qh: QueueHandle<ApplicationState>,
-    exit: bool,
+    pub exit: bool,
     pub state: ApplicationState,
 }
 
@@ -55,7 +40,6 @@ impl Application<'_> {
 
         let state = ApplicationState::new(&globals, &qh, callbacks);
         Ok(Self {
-            globals,
             event_loop,
             qh,
             exit: false,
@@ -63,7 +47,7 @@ impl Application<'_> {
         })
     }
 
-    fn run(&mut self) -> Result<(), anyhow::Error> {
+    pub fn run(&mut self) -> Result<(), anyhow::Error> {
         debug!("Start event loop");
 
         let (s, c) = channel::channel();
@@ -105,7 +89,6 @@ impl Application<'_> {
     pub fn new_window(&mut self, event_handler: EventHandler, params: &WindowParams) -> WindowId {
         let w = SimpleWindow::new(
             &self.state,
-            &self.globals,
             &self.qh,
             Box::new(move |e| catch_panic(|| Ok(event_handler(e))).unwrap_or(false)),
             params,
@@ -145,78 +128,5 @@ impl Application<'_> {
             width: LogicalPixels(w.width.get().into()),
             height: LogicalPixels(w.height.get().into()),
         })
-    }
-}
-
-pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
-
-#[unsafe(no_mangle)]
-pub extern "C" fn application_init(callbacks: ApplicationCallbacks) -> AppPtr<'static> {
-    let app = ffi_boundary("application_init", || {
-        debug!("Application Init");
-        Ok(Some(Application::new(callbacks)?))
-    });
-    AppPtr::from_value(app)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn application_run_event_loop(mut app_ptr: AppPtr) {
-    ffi_boundary("application_run_event_loop", || {
-        let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.run()
-    });
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn application_stop_event_loop(mut app_ptr: AppPtr) {
-    ffi_boundary("application_stop_event_loop", || {
-        debug!("Stop event loop");
-        let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.exit = true;
-        Ok(())
-    });
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn application_shutdown(app_ptr: AppPtr) {
-    ffi_boundary("application_shutdown", || {
-        let mut app = unsafe { app_ptr.to_owned::<Application>() };
-        app.exit = true;
-        Ok(())
-    });
-}
-
-#[repr(C)]
-pub struct GetEglProcFuncData {
-    pub f: extern "C" fn(ctx: *const c_void, name: *const std::ffi::c_char) -> *const c_void,
-    pub ctx: *const c_void,
-}
-
-extern "C" fn egl_get_gl_proc(ctx_ptr: *const c_void, name_ptr: *const std::ffi::c_char) -> *const c_void {
-    let name_cstr = unsafe { CStr::from_ptr(name_ptr) };
-    let name = name_cstr.to_str().unwrap();
-    debug!("egl_get_gl_proc for {name}");
-    let egl_ptr = ctx_ptr.cast::<EglInstance>();
-    let egl = unsafe { egl_ptr.as_ref() }.unwrap();
-    if let Some(f) = egl.get_proc_address(name) {
-        f as *const c_void
-    } else {
-        debug!("egl_get_gl_proc end for {name} returning null");
-        std::ptr::null()
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn application_get_egl_proc_func(app_ptr: AppPtr) -> GetEglProcFuncData {
-    debug!("application_get_egl_proc_func");
-    let app = unsafe { app_ptr.borrow::<Application>() };
-    let ctx_ptr: *const EglInstance = if let Some(r) = app.state.egl.as_ref() {
-        r
-    } else {
-        std::ptr::null()
-    };
-    GetEglProcFuncData {
-        f: egl_get_gl_proc,
-        ctx: ctx_ptr.cast(),
     }
 }
