@@ -10,12 +10,6 @@ use smithay_client_toolkit::{
     },
 };
 
-use super::{
-    keyboard::{KeyCode, KeyModifiers},
-    mouse::MouseButton,
-    window::WindowFrameAction,
-};
-
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
 
@@ -49,6 +43,88 @@ pub struct LogicalPoint {
 pub struct LogicalSize {
     pub width: LogicalPixels,
     pub height: LogicalPixels,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct MouseButton(pub u32);
+
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct MouseButtonsSet(pub u32);
+
+#[derive(Clone, Copy, Debug, Default)]
+#[repr(C)]
+pub struct KeyModifiers {
+    /// The "control" key
+    pub ctrl: bool,
+
+    /// The "alt" key
+    pub alt: bool,
+
+    /// The "shift" key
+    pub shift: bool,
+
+    /// The "Caps lock" key
+    pub caps_lock: bool,
+
+    /// The "logo" key
+    ///
+    /// Also known as the "windows" or "super" key on a keyboard.
+    pub logo: bool,
+
+    /// The "Num lock" key
+    pub num_lock: bool,
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct KeyCode(pub u32);
+
+#[repr(C)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum WindowResizeEdge {
+    /// Nothing is being dragged.
+    None,
+    /// The top edge is being dragged.
+    Top,
+    /// The bottom edge is being dragged.
+    Bottom,
+    /// The left edge is being dragged.
+    Left,
+    /// The top left corner is being dragged.
+    TopLeft,
+    /// The bottom left corner is being dragged.
+    BottomLeft,
+    /// The right edge is being dragged.
+    Right,
+    /// The top right corner is being dragged.
+    TopRight,
+    /// The bottom right corner is being dragged.
+    BottomRight,
+}
+
+#[repr(C)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum WindowFrameAction {
+    None,
+    /// The window should be minimized.
+    Minimize,
+    /// The window should be maximized.
+    Maximize,
+    /// The window should be unmaximized.
+    UnMaximize,
+    /// The window should be closed.
+    Close,
+    /// An interactive move should be started.
+    Move,
+    /// An interactive resize should be started with the provided edge.
+    Resize(WindowResizeEdge),
+    /// Show window menu.
+    ///
+    /// The coordinates are relative to the base surface, as in should be
+    /// directly passed to the `xdg_toplevel::show_window_menu`.
+    ShowMenu(i32, i32),
 }
 
 #[repr(C)]

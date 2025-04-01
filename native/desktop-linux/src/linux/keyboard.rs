@@ -4,8 +4,8 @@ use log::debug;
 use smithay_client_toolkit::seat::keyboard::{KeyEvent, Keysym, Modifiers};
 
 use super::{
-    events::{Event, KeyDownEvent},
-    window::{SimpleWindow, WindowFrameAction},
+    events::{Event, KeyDownEvent, WindowFrameAction},
+    window::SimpleWindow,
 };
 
 impl SimpleWindow {
@@ -38,31 +38,3 @@ impl SimpleWindow {
         (self.event_handler)(&Event::new_modifiers_changed_event(modifiers));
     }
 }
-
-#[derive(Clone, Copy, Debug, Default)]
-#[repr(C)]
-pub struct KeyModifiers {
-    /// The "control" key
-    pub ctrl: bool,
-
-    /// The "alt" key
-    pub alt: bool,
-
-    /// The "shift" key
-    pub shift: bool,
-
-    /// The "Caps lock" key
-    pub caps_lock: bool,
-
-    /// The "logo" key
-    ///
-    /// Also known as the "windows" or "super" key on a keyboard.
-    pub logo: bool,
-
-    /// The "Num lock" key
-    pub num_lock: bool,
-}
-
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
-pub struct KeyCode(pub u32);

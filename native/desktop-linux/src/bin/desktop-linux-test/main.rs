@@ -7,11 +7,10 @@ use desktop_common::{
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::{
-    application::{ApplicationCallbacks, application_init, application_run_event_loop},
+    application_api::{ApplicationCallbacks, application_init, application_run_event_loop},
     events::{Event, WindowDrawEvent},
-    window::WindowParams,
-    window_api::window_create,
-    xdg_desktop_settings::XdgDesktopSetting,
+    window_api::{WindowParams, window_create},
+    xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use gl_sys::{
     GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
