@@ -1,7 +1,7 @@
 [package]
 name = "desktop-macos"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [lib]
 crate-type = ["rlib", "cdylib"]
@@ -21,6 +21,7 @@ bitflags = "2.6.0"
 cbindgen.workspace = true
 
 [dev-dependencies]
+test-log.workspace = true
 quickcheck = "1"
 quickcheck_macros = "1"
 
@@ -59,5 +60,6 @@ objc2-app-kit = { version = "0.3.0", features = [
 objc2-quartz-core = { version = "0.3.0" }
 objc2-core-graphics = { version = "0.3.0" }
 objc2-metal = { version = "0.3.0" }
+objc2-uniform-type-identifiers = { version = "0.3.0" }
 num-traits = "0.2"
 num-derive = "0.4"

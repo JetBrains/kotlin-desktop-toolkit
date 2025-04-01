@@ -449,6 +449,7 @@ fn edit_operations<T: Eq>(source: &[T], target: &[T]) -> Vec<Operation> {
 mod tests {
     use std::{char, fmt::Debug};
 
+    use log::debug;
     use quickcheck_macros::quickcheck;
 
     use super::*;
@@ -502,8 +503,8 @@ mod tests {
         let target = chs(target);
         let mut operations = edit_operations(&source, &target);
         fix_positions(&mut operations);
-        eprintln!("src: {source:?}, dst: {target:?}");
-        eprintln!("{operations:?}");
+        debug!("src: {source:?}, dst: {target:?}");
+        debug!("{operations:?}");
         let result = apply_operations(&source, &target, &operations).unwrap();
         assert_eq!(result, target);
     }

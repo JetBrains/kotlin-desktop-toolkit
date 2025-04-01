@@ -580,6 +580,10 @@ NativeMetalTextureRef metal_view_next_texture(NativeMetalViewPtr view_ptr);
 
 void metal_deref_texture(NativeMetalTextureRef texture);
 
+void pasteboard_clear(void);
+
+void pasteboard_write_text(NativeBorrowedStrPtr text);
+
 NativeScreenInfoArray screen_list(void);
 
 void screen_list_drop(NativeScreenInfoArray arr);
@@ -652,5 +656,3 @@ void window_appearacne_set_follow_application(NativeWindowPtr window_ptr);
 enum NativeAppearance window_get_appearance(NativeWindowPtr window_ptr);
 
 void window_set_background(NativeWindowPtr window_ptr, struct NativeWindowBackground background);
-
-void pateboard_clear(void);

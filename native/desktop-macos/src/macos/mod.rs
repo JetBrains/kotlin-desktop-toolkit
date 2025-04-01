@@ -12,6 +12,7 @@ pub mod file_dialog;
 pub mod keyboard;
 pub mod metal_api;
 pub mod mouse;
+pub mod pasteboard;
 pub mod screen;
 pub mod string;
 pub mod text_input_client;
