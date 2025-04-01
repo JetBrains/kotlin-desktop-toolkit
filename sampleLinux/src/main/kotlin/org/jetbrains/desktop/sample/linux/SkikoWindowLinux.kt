@@ -12,6 +12,7 @@ import org.jetbrains.skia.BackendRenderTarget
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ColorSpace
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.DirectContext
 import org.jetbrains.skia.FramebufferFormat
@@ -47,7 +48,7 @@ abstract class SkikoWindowLinux(
     }
     val window = app.createWindow({ event -> handleEvent(event) }, params)
     private val creationTime = TimeSource.Monotonic.markNow()
-    private val backgroundColor = Color.makeRGB(128, 128, 128)
+    private val backgroundColor = Color.makeARGB(128, 128, 128, 128)
 
 //    init {
 //        window.minSize = LogicalSize(320.0, 240.0)
@@ -102,7 +103,7 @@ abstract class SkikoWindowLinux(
                 height = event.size.height,
                 colorType = ColorType.BGRA_8888,
                 alphaType = ColorAlphaType.OPAQUE,
-                colorSpace = null,
+                colorSpace = ColorSpace.sRGB,
             ),
             pixelsPtr = event.buffer!!,
             rowBytes = event.stride,
@@ -134,7 +135,7 @@ abstract class SkikoWindowLinux(
                 rt = renderTarget,
                 origin = SurfaceOrigin.BOTTOM_LEFT,
                 colorFormat = SurfaceColorFormat.RGBA_8888,
-                colorSpace = null,
+                colorSpace = ColorSpace.sRGB,
                 surfaceProps = null,
             )!!.use { surface ->
                 val time = creationTime.elapsedNow().inWholeMilliseconds
