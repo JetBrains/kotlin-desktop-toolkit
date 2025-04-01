@@ -176,7 +176,17 @@ impl SimpleWindow {
                     let egl_display = unsafe { egl.get_display(wayland_display_ptr.cast()).unwrap() };
                     egl.initialize(egl_display).unwrap();
 
-                    let egl_attributes = [egl::RED_SIZE, 8, egl::GREEN_SIZE, 8, egl::BLUE_SIZE, 8, egl::NONE];
+                    let egl_attributes = [
+                        egl::RED_SIZE,
+                        8,
+                        egl::GREEN_SIZE,
+                        8,
+                        egl::BLUE_SIZE,
+                        8,
+                        egl::ALPHA_SIZE,
+                        8,
+                        egl::NONE,
+                    ];
 
                     let egl_config = egl
                         .choose_first_config(egl_display, &egl_attributes)
