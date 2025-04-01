@@ -1,7 +1,6 @@
 mod application;
 pub mod application_api;
 mod application_state;
-mod dma;
 pub mod events;
 mod keyboard;
 mod mouse;
