@@ -210,7 +210,11 @@ extern "C" fn egl_get_gl_proc(ctx_ptr: *const c_void, name_ptr: *const std::ffi:
 pub extern "C" fn application_get_egl_proc_func(app_ptr: AppPtr) -> GetEglProcFuncData {
     debug!("application_get_egl_proc_func");
     let app = unsafe { app_ptr.borrow::<Application>() };
-    let ctx_ptr: *const EglInstance = &app.state.egl;
+    let ctx_ptr: *const EglInstance = if let Some(r) = app.state.egl.as_ref() {
+        r
+    } else {
+        std::ptr::null()
+    };
     GetEglProcFuncData {
         f: egl_get_gl_proc,
         ctx: ctx_ptr.cast(),

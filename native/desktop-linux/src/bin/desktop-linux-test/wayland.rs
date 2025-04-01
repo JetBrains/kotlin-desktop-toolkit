@@ -115,7 +115,7 @@ fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEven
     //    debug!("draw_opengl_triangle, program = {program}, event = {data:?}");
     const V_VERTICES: [f32; 6] = [0.0f32, 1.0, -1.0, -1.0, 1.0, -1.0];
     unsafe {
-        (gl.glViewport)(0, 0, data.width as i32, data.height as i32);
+        (gl.glViewport)(0, 0, data.physical_width, data.physical_height);
         (gl.glClear)(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
         (gl.glUseProgram)(program);
         //let v_position = (gl.glGetAttribLocation)(program, c"vPosition".as_ptr());
@@ -148,9 +148,9 @@ fn draw(data: &WindowDrawEvent) {
         draw_opengl_triangle_with_init(data);
         return;
     }
-    let canvas = unsafe { std::slice::from_raw_parts_mut(data.buffer, usize::try_from(data.height * data.stride).unwrap()) };
-    let w = f64::from(data.width);
-    let h = f64::from(data.height);
+    let canvas = unsafe { std::slice::from_raw_parts_mut(data.buffer, usize::try_from(data.physical_height * data.stride).unwrap()) };
+    let w = f64::from(data.physical_width);
+    let h = f64::from(data.physical_height);
     let scale = data.scale;
     let line_thickness = 5.0 * scale;
 

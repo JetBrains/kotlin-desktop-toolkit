@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use khronos_egl;
-use log::debug;
+use log::{debug, warn};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_output, delegate_pointer, delegate_registry, delegate_seat, delegate_shm,
@@ -45,6 +45,8 @@ use crate::linux::window::SimpleWindow;
 
 use super::{application::ApplicationCallbacks, events::WindowId};
 
+pub type EglInstance = khronos_egl::Instance<khronos_egl::Dynamic<libloading::Library, khronos_egl::EGL1_0>>;
+
 pub struct ApplicationState {
     pub callbacks: ApplicationCallbacks,
 
@@ -64,16 +66,14 @@ pub struct ApplicationState {
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
     pub key_surface: Option<ObjectId>,
-    pub egl: khronos_egl::Instance<khronos_egl::Dynamic<libloading::Library, khronos_egl::EGL1_4>>,
+    pub egl: Option<EglInstance>,
 }
 
 struct WindowData<'a> {
     window: &'a mut SimpleWindow,
     themed_pointer: Option<&'a mut ThemedPointer>,
-    egl: &'a EglInstance,
+    egl: Option<&'a EglInstance>,
 }
-
-pub(crate) type EglInstance = khronos_egl::Instance<khronos_egl::Dynamic<libloading::Library, khronos_egl::EGL1_4>>;
 
 impl ApplicationState {
     #[must_use]
@@ -85,9 +85,10 @@ impl ApplicationState {
         let shm_state = Shm::bind(globals, qh).expect("wl_shm not available");
         let xdg_shell_state = XdgShell::bind(globals, qh).expect("xdg shell not available");
         let dma_state = DmabufState::new(globals, qh);
-        let lib = unsafe { libloading::Library::new("libEGL.so.1").expect("unable to find libEGL.so.1") };
-        let egl: EglInstance =
-            unsafe { khronos_egl::DynamicInstance::<khronos_egl::EGL1_4>::load_required_from(lib).expect("unable to load libEGL.so.1") };
+        let egl = unsafe { libloading::Library::new("libEGL.so.1") }
+            .map_err(|e| warn!("{e}"))
+            .and_then(|lib| unsafe { EglInstance::load_required_from(lib) }.map_err(|e| warn!("{e}")))
+            .ok();
 
         debug!("DMA-BUF protocol version: {:?}", dma_state.version());
         Self {
@@ -121,7 +122,7 @@ impl ApplicationState {
         self.windows.get_mut(&surface.id()).map(|window| WindowData {
             window,
             themed_pointer: self.themed_pointer.as_mut(),
-            egl: &self.egl,
+            egl: self.egl.as_ref(),
         })
     }
 
