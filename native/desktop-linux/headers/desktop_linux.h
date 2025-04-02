@@ -3,6 +3,26 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum NativeFontAntialiasing {
+  NativeFontAntialiasing_None,
+  NativeFontAntialiasing_Grayscale,
+  NativeFontAntialiasing_Rgba,
+} NativeFontAntialiasing;
+
+typedef enum NativeFontHinting {
+  NativeFontHinting_None,
+  NativeFontHinting_Slight,
+  NativeFontHinting_Medium,
+  NativeFontHinting_Full,
+} NativeFontHinting;
+
+typedef enum NativeFontRgbaOrder {
+  NativeFontRgbaOrder_Rgb,
+  NativeFontRgbaOrder_Bgr,
+  NativeFontRgbaOrder_Vrgb,
+  NativeFontRgbaOrder_Vbgr,
+} NativeFontRgbaOrder;
+
 typedef enum NativeLogLevel {
   NativeLogLevel_Off,
   NativeLogLevel_Error,
@@ -224,6 +244,21 @@ typedef enum NativeWindowResizeEdge {
   NativeWindowResizeEdge_BottomRight,
 } NativeWindowResizeEdge;
 
+typedef enum NativeXdgDesktopColorScheme {
+  /**
+   * No preference
+   */
+  NativeXdgDesktopColorScheme_NoPreference,
+  /**
+   * Prefers dark appearance
+   */
+  NativeXdgDesktopColorScheme_PreferDark,
+  /**
+   * Prefers light appearance
+   */
+  NativeXdgDesktopColorScheme_PreferLight,
+} NativeXdgDesktopColorScheme;
+
 typedef const void *NativeGenericRawPtr_c_void;
 
 typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr_c_void;
@@ -242,9 +277,32 @@ typedef struct NativeTitlebarButtonLayout {
   struct NativeAutoDropArray_WindowButtonType right_side;
 } NativeTitlebarButtonLayout;
 
+typedef struct NativeColor {
+  double red;
+  double green;
+  double blue;
+  double alpha;
+} NativeColor;
+
 typedef enum NativeXdgDesktopSetting_Tag {
   NativeXdgDesktopSetting_TitlebarLayout,
   NativeXdgDesktopSetting_DoubleClickIntervalMs,
+  NativeXdgDesktopSetting_ColorScheme,
+  NativeXdgDesktopSetting_AccentColor,
+  NativeXdgDesktopSetting_FontAntialiasing,
+  NativeXdgDesktopSetting_FontHinting,
+  NativeXdgDesktopSetting_FontRgbaOrder,
+  NativeXdgDesktopSetting_CursorBlink,
+  /**
+   * Length of the cursor blink cycle, in milliseconds.
+   */
+  NativeXdgDesktopSetting_CursorBlinkTimeMs,
+  /**
+   * Time after which the cursor stops blinking.
+   */
+  NativeXdgDesktopSetting_CursorBlinkTimeoutMs,
+  NativeXdgDesktopSetting_OverlayScrolling,
+  NativeXdgDesktopSetting_AudibleBell,
 } NativeXdgDesktopSetting_Tag;
 
 typedef struct NativeXdgDesktopSetting {
@@ -255,6 +313,36 @@ typedef struct NativeXdgDesktopSetting {
     };
     struct {
       int32_t double_click_interval_ms;
+    };
+    struct {
+      enum NativeXdgDesktopColorScheme color_scheme;
+    };
+    struct {
+      struct NativeColor accent_color;
+    };
+    struct {
+      enum NativeFontAntialiasing font_antialiasing;
+    };
+    struct {
+      enum NativeFontHinting font_hinting;
+    };
+    struct {
+      enum NativeFontRgbaOrder font_rgba_order;
+    };
+    struct {
+      bool cursor_blink;
+    };
+    struct {
+      int32_t cursor_blink_time_ms;
+    };
+    struct {
+      int32_t cursor_blink_timeout_ms;
+    };
+    struct {
+      bool overlay_scrolling;
+    };
+    struct {
+      bool audible_bell;
     };
   };
 } NativeXdgDesktopSetting;
