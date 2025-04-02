@@ -399,6 +399,42 @@ typedef struct NativePhysicalSize {
 
 typedef void *NativeMetalTextureRef;
 
+typedef struct NativeCombinedItemElement {
+  NativeBorrowedStrPtr uniform_type_identifier;
+  NativeBorrowedStrPtr content;
+} NativeCombinedItemElement;
+
+typedef struct NativeBorrowedArray_CombinedItemElement {
+  const struct NativeCombinedItemElement *ptr;
+  NativeArraySize len;
+} NativeBorrowedArray_CombinedItemElement;
+
+typedef enum NativePasteboardItem_Tag {
+  NativePasteboardItem_URLItem,
+  NativePasteboardItem_CombinedItem,
+} NativePasteboardItem_Tag;
+
+typedef struct NativePasteboardItem_NativeURLItem_Body {
+  NativeBorrowedStrPtr url;
+} NativePasteboardItem_NativeURLItem_Body;
+
+typedef struct NativePasteboardItem_NativeCombinedItem_Body {
+  struct NativeBorrowedArray_CombinedItemElement elements;
+} NativePasteboardItem_NativeCombinedItem_Body;
+
+typedef struct NativePasteboardItem {
+  NativePasteboardItem_Tag tag;
+  union {
+    NativePasteboardItem_NativeURLItem_Body url_item;
+    NativePasteboardItem_NativeCombinedItem_Body combined_item;
+  };
+} NativePasteboardItem;
+
+typedef struct NativeBorrowedArray_PasteboardItem {
+  const struct NativePasteboardItem *ptr;
+  NativeArraySize len;
+} NativeBorrowedArray_PasteboardItem;
+
 typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
 
 typedef struct NativeScreenInfo {
@@ -580,9 +616,9 @@ NativeMetalTextureRef metal_view_next_texture(NativeMetalViewPtr view_ptr);
 
 void metal_deref_texture(NativeMetalTextureRef texture);
 
-void pasteboard_clear(void);
+intptr_t pasteboard_clear(void);
 
-void pasteboard_write_text(NativeBorrowedStrPtr text);
+bool pasteboard_write_objects(struct NativeBorrowedArray_PasteboardItem items);
 
 NativeScreenInfoArray screen_list(void);
 

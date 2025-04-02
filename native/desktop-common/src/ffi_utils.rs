@@ -7,7 +7,7 @@ use std::{
     ptr::NonNull,
 };
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use log::warn;
 
 #[derive(Debug, Clone, Copy)]
@@ -157,5 +157,23 @@ impl<T> Drop for AutoDropArray<T> {
             };
             std::mem::drop(array);
         }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct BorrowedArray<'a, T> {
+    pub ptr: *const T,
+    pub len: ArraySize,
+    phantom: PhantomData<&'a T>,
+}
+
+impl<'a, T> BorrowedArray<'a, T> {
+    pub fn as_slice(&'a self) -> anyhow::Result<&'a [T]> {
+        if self.ptr.is_null() {
+            bail!("Null pointer!")
+        }
+        let slice = unsafe { slice::from_raw_parts(self.ptr, self.len) };
+        Ok(slice)
     }
 }
