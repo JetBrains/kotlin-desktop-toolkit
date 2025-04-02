@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.linux
 
+import org.jetbrains.desktop.linux.generated.NativeColor
 import org.jetbrains.desktop.linux.generated.NativeKeyModifiers
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
 import org.jetbrains.desktop.linux.generated.NativeLogicalSize
@@ -9,6 +10,8 @@ import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
 import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
     width = NativeLogicalSize.width(s).toFloat(),
@@ -89,6 +92,13 @@ internal fun WindowCapabilities.Companion.fromNative(s: MemorySegment) = WindowC
     minimize = NativeWindowCapabilities.minimize(s),
 )
 
+internal fun Color.Companion.fromNative(s: MemorySegment) = Color(
+    red = NativeColor.red(s),
+    green = NativeColor.green(s),
+    blue = NativeColor.blue(s),
+    alpha = NativeColor.alpha(s),
+)
+
 internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDesktopSetting {
     val nativeTag = NativeXdgDesktopSetting.tag(s)
     return when (nativeTag) {
@@ -102,6 +112,54 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
         desktop_linux_h.NativeXdgDesktopSetting_DoubleClickIntervalMs() -> XdgDesktopSetting.DoubleClickInterval(
             intervalMs = NativeXdgDesktopSetting.double_click_interval_ms(s),
         )
+        desktop_linux_h.NativeXdgDesktopSetting_ColorScheme() -> XdgDesktopSetting.ColorScheme(
+            when (NativeXdgDesktopSetting.color_scheme(s)) {
+                desktop_linux_h.NativeXdgDesktopColorScheme_NoPreference() -> ColorSchemeValue.NoPreference
+                desktop_linux_h.NativeXdgDesktopColorScheme_PreferDark() -> ColorSchemeValue.PreferDark
+                desktop_linux_h.NativeXdgDesktopColorScheme_PreferLight() -> ColorSchemeValue.PreferLight
+                else -> error("Unexpected color scheme ${NativeXdgDesktopSetting.color_scheme(s)}")
+            },
+        )
+        desktop_linux_h.NativeXdgDesktopSetting_AccentColor() -> XdgDesktopSetting.AccentColor(
+            Color.fromNative(NativeXdgDesktopSetting.accent_color(s)),
+        )
+        desktop_linux_h.NativeXdgDesktopSetting_FontAntialiasing() -> XdgDesktopSetting.FontAntialiasing(
+            when (NativeXdgDesktopSetting.font_antialiasing(s)) {
+                desktop_linux_h.NativeFontAntialiasing_None() -> FontAntialiasingValue.None
+                desktop_linux_h.NativeFontAntialiasing_Grayscale() -> FontAntialiasingValue.Grayscale
+                desktop_linux_h.NativeFontAntialiasing_Rgba() -> FontAntialiasingValue.Rgba
+                else -> error("Unexpected font aliasing ${NativeXdgDesktopSetting.font_antialiasing(s)}")
+            },
+        )
+        desktop_linux_h.NativeXdgDesktopSetting_FontHinting() -> XdgDesktopSetting.FontHinting(
+            when (NativeXdgDesktopSetting.font_hinting(s)) {
+                desktop_linux_h.NativeFontHinting_None() -> FontHintingValue.None
+                desktop_linux_h.NativeFontHinting_Slight() -> FontHintingValue.Slight
+                desktop_linux_h.NativeFontHinting_Medium() -> FontHintingValue.Medium
+                desktop_linux_h.NativeFontHinting_Full() -> FontHintingValue.Full
+                else -> error("Unexpected font hinting ${NativeXdgDesktopSetting.font_hinting(s)}")
+            },
+        )
+        desktop_linux_h.NativeXdgDesktopSetting_FontRgbaOrder() -> XdgDesktopSetting.FontRgbaOrder(
+            when (NativeXdgDesktopSetting.font_rgba_order(s)) {
+                desktop_linux_h.NativeFontRgbaOrder_Rgb() -> FontRgbaOrderValue.Rgb
+                desktop_linux_h.NativeFontRgbaOrder_Bgr() -> FontRgbaOrderValue.Bgr
+                desktop_linux_h.NativeFontRgbaOrder_Vrgb() -> FontRgbaOrderValue.Vrgb
+                desktop_linux_h.NativeFontRgbaOrder_Vbgr() -> FontRgbaOrderValue.Vbgr
+                else -> error("Unexpected font rgba order ${NativeXdgDesktopSetting.font_rgba_order(s)}")
+            },
+        )
+        desktop_linux_h.NativeXdgDesktopSetting_CursorBlink() -> XdgDesktopSetting.CursorBlink(NativeXdgDesktopSetting.cursor_blink(s))
+        desktop_linux_h.NativeXdgDesktopSetting_CursorBlinkTimeMs() -> XdgDesktopSetting.CursorBlinkTime(
+            NativeXdgDesktopSetting.cursor_blink_time_ms(s).toDuration(DurationUnit.MILLISECONDS),
+        )
+        desktop_linux_h.NativeXdgDesktopSetting_CursorBlinkTimeoutMs() -> XdgDesktopSetting.CursorBlinkTimeout(
+            NativeXdgDesktopSetting.cursor_blink_timeout_ms(s).toDuration(DurationUnit.MILLISECONDS),
+        )
+        desktop_linux_h.NativeXdgDesktopSetting_OverlayScrolling() -> XdgDesktopSetting.OverlayScrolling(
+            NativeXdgDesktopSetting.overlay_scrolling(s),
+        )
+        desktop_linux_h.NativeXdgDesktopSetting_AudibleBell() -> XdgDesktopSetting.AudibleBell(NativeXdgDesktopSetting.audible_bell(s))
         else -> error("Unexpected setting $nativeTag")
     }
 }
