@@ -5,12 +5,9 @@ import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.PhysicalSize
-import org.jetbrains.desktop.linux.WindowButtonType
 import org.jetbrains.desktop.linux.WindowParams
-import org.jetbrains.desktop.linux.XdgDesktopSetting
 import org.jetbrains.skia.BackendRenderTarget
 import org.jetbrains.skia.Canvas
-import org.jetbrains.skia.Color
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorSpace
 import org.jetbrains.skia.ColorType
@@ -21,21 +18,6 @@ import org.jetbrains.skia.Surface
 import org.jetbrains.skia.SurfaceColorFormat
 import org.jetbrains.skia.SurfaceOrigin
 import kotlin.time.TimeSource
-
-data class XdgDesktopSettings(
-    var titlebarLayout: XdgDesktopSetting.TitlebarLayout = XdgDesktopSetting.TitlebarLayout(
-        layoutLeft = listOf(WindowButtonType.Icon),
-        layoutRight = listOf(WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close),
-    ),
-    var doubleClickIntervalMs: Int = 500,
-) {
-    fun update(s: XdgDesktopSetting) {
-        when (s) {
-            is XdgDesktopSetting.TitlebarLayout -> titlebarLayout = s
-            is XdgDesktopSetting.DoubleClickInterval -> doubleClickIntervalMs = s.intervalMs
-        }
-    }
-}
 
 abstract class SkikoWindowLinux(
     app: Application,
@@ -48,7 +30,6 @@ abstract class SkikoWindowLinux(
     }
     val window = app.createWindow({ event -> handleEvent(event) }, params)
     private val creationTime = TimeSource.Monotonic.markNow()
-    private val backgroundColor = Color.makeARGB(128, 128, 128, 128)
 
 //    init {
 //        window.minSize = LogicalSize(320.0, 240.0)
@@ -110,7 +91,6 @@ abstract class SkikoWindowLinux(
             surfaceProps = null,
         ).use { surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
-            surface.canvas.clear(backgroundColor)
             surface.canvas.draw(PhysicalSize(surface.width, surface.height), time)
             surface.flushAndSubmit()
         }
@@ -139,7 +119,6 @@ abstract class SkikoWindowLinux(
                 surfaceProps = null,
             )!!.use { surface ->
                 val time = creationTime.elapsedNow().inWholeMilliseconds
-                surface.canvas.clear(backgroundColor)
                 surface.canvas.draw(event.size, time)
                 surface.flushAndSubmit()
             }

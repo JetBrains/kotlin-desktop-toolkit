@@ -123,9 +123,64 @@ public sealed class WindowFrameAction {
     public data class ShowMenu(val point: LogicalPoint) : WindowFrameAction()
 }
 
+public enum class ColorSchemeValue {
+    /** No preference */
+    NoPreference,
+
+    /** Prefers dark appearance */
+    PreferDark,
+
+    /** Prefers light appearance */
+    PreferLight,
+}
+
+public enum class FontAntialiasingValue {
+    None,
+    Grayscale,
+    Rgba,
+}
+
+public enum class FontHintingValue {
+    None,
+    Slight,
+    Medium,
+    Full,
+}
+
+public enum class FontRgbaOrderValue {
+    Rgb,
+    Bgr,
+    Vrgb,
+    Vbgr,
+}
+
 public sealed class XdgDesktopSetting {
     public data class TitlebarLayout(val layoutLeft: List<WindowButtonType>, val layoutRight: List<WindowButtonType>) : XdgDesktopSetting()
+
     public data class DoubleClickInterval(val intervalMs: Int) : XdgDesktopSetting()
+
+    public data class ColorScheme(val value: ColorSchemeValue) : XdgDesktopSetting()
+
+    public data class AccentColor(val value: Color) : XdgDesktopSetting()
+
+    public data class FontAntialiasing(val value: FontAntialiasingValue) : XdgDesktopSetting()
+
+    public data class FontHinting(val value: FontHintingValue) : XdgDesktopSetting()
+
+    public data class FontRgbaOrder(val value: FontRgbaOrderValue) : XdgDesktopSetting()
+
+    public data class CursorBlink(val value: Boolean) : XdgDesktopSetting()
+
+    /** Length of the cursor blink cycle, in milliseconds. */
+    public data class CursorBlinkTime(val value: Duration) : XdgDesktopSetting()
+
+    /** Time after which the cursor stops blinking. */
+    public data class CursorBlinkTimeout(val value: Duration) : XdgDesktopSetting()
+
+    public data class OverlayScrolling(val value: Boolean) : XdgDesktopSetting()
+
+    public data class AudibleBell(val value: Boolean) : XdgDesktopSetting()
+
     internal companion object;
 }
 

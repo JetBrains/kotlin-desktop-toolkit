@@ -2,8 +2,12 @@ package org.jetbrains.desktop.sample.linux
 
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.ApplicationConfig
+import org.jetbrains.desktop.linux.ColorSchemeValue
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
+import org.jetbrains.desktop.linux.FontAntialiasingValue
+import org.jetbrains.desktop.linux.FontHintingValue
+import org.jetbrains.desktop.linux.FontRgbaOrderValue
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogLevel
 import org.jetbrains.desktop.linux.Logger
@@ -37,7 +41,53 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.time.Duration
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
+
+data class XdgDesktopSettings(
+    var titlebarLayout: TitlebarLayout = TitlebarLayout(
+        layoutLeft = listOf(WindowButtonType.Icon),
+        layoutRight = listOf(WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close),
+    ),
+    var doubleClickIntervalMs: Int = 500,
+    var colorScheme: ColorSchemeValue = ColorSchemeValue.NoPreference,
+    var accentColor: Int = Color.BLUE,
+    var fontAntialiasing: FontAntialiasingValue = FontAntialiasingValue.Grayscale,
+    var fontHinting: FontHintingValue = FontHintingValue.Medium,
+    var fontRgbaOrder: FontRgbaOrderValue = FontRgbaOrderValue.Rgb,
+    var cursorBlink: Boolean = true,
+    var cursorBlinkTime: Duration = 1200.toDuration(DurationUnit.MILLISECONDS),
+    var cursorBlinkTimeout: Duration = 10.toDuration(DurationUnit.SECONDS),
+    var overlayScrolling: Boolean = false,
+    var audibleBell: Boolean = true,
+) {
+    private fun colorDoubleToInt(v: Double): Int = (v * 255).roundToInt()
+
+    fun update(s: XdgDesktopSetting) {
+        when (s) {
+            is TitlebarLayout -> titlebarLayout = s
+            is XdgDesktopSetting.DoubleClickInterval -> doubleClickIntervalMs = s.intervalMs
+            is XdgDesktopSetting.ColorScheme -> colorScheme = s.value
+            is XdgDesktopSetting.AccentColor -> accentColor = Color.makeARGB(
+                a = colorDoubleToInt(s.value.alpha),
+                r = colorDoubleToInt(s.value.red),
+                g = colorDoubleToInt(s.value.green),
+                b = colorDoubleToInt(s.value.blue),
+            )
+            is XdgDesktopSetting.FontAntialiasing -> fontAntialiasing = s.value
+            is XdgDesktopSetting.FontHinting -> fontHinting = s.value
+            is XdgDesktopSetting.FontRgbaOrder -> fontRgbaOrder = s.value
+            is XdgDesktopSetting.AudibleBell -> audibleBell = s.value
+            is XdgDesktopSetting.CursorBlink -> cursorBlink = s.value
+            is XdgDesktopSetting.CursorBlinkTime -> cursorBlinkTime = s.value
+            is XdgDesktopSetting.CursorBlinkTimeout -> cursorBlinkTimeout = s.value
+            is XdgDesktopSetting.OverlayScrolling -> overlayScrolling = s.value
+        }
+    }
+}
 
 class CustomTitlebar(
     private var origin: LogicalPoint,
@@ -216,7 +266,7 @@ class CustomTitlebar(
         }
     }
 
-    fun draw(canvas: Canvas, scale: Float) {
+    fun draw(canvas: Canvas, scale: Float, xdgDesktopSettings: XdgDesktopSettings) {
         val physicalOrigin = origin.toPhysical(scale)
         val physicalSize = size.toPhysical(scale)
         val l = physicalOrigin.x.toFloat()
@@ -224,7 +274,7 @@ class CustomTitlebar(
         val w = physicalSize.width.toFloat()
         val h = physicalSize.height.toFloat()
         Paint().use { paint ->
-            paint.color = 0xFF404040.toInt()
+            paint.color = xdgDesktopSettings.accentColor
             canvas.drawRect(Rect.makeXYWH(l, t, w, h), paint)
         }
         for ((i, v) in rectangles.withIndex()) {
@@ -498,7 +548,18 @@ class WindowContainer(
     }
 
     fun draw(canvas: Canvas, time: Long, scale: Float) {
-        customTitlebar?.draw(canvas, scale)
+        val backgroundColor = if (xdgDesktopSettings.colorScheme == ColorSchemeValue.PreferDark) {
+            Color.makeARGB(
+                240,
+                32,
+                32,
+                32,
+            )
+        } else {
+            Color.makeARGB(240, 200, 200, 200)
+        }
+        canvas.clear(backgroundColor)
+        customTitlebar?.draw(canvas, scale, xdgDesktopSettings)
         contentArea.draw(canvas, time, scale)
     }
 }
@@ -551,7 +612,6 @@ class RotatingBallWindow(
 
     override fun Canvas.draw(size: PhysicalSize, time: Long) {
         val canvas = this
-//        canvas.clear(Color.TRANSPARENT) // use RED to debug
         windowContainer.draw(canvas, time, window.scaleFactor().toFloat())
     }
 }
