@@ -749,7 +749,7 @@ define_class!(
 
         #[unsafe(method(performKeyEquivalent:))]
         fn perform_key_eqivalent(&self, event: &NSEvent) -> bool {
-            info!("performKeyEquivalent: {event:?}");
+            debug!("performKeyEquivalent: {event:?}");
             false
         }
 
