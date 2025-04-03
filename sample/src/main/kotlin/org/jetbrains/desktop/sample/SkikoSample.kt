@@ -18,6 +18,7 @@ import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
+import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.PhysicalPoint
 import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.Screen
@@ -526,6 +527,29 @@ class ApplicationState : AutoCloseable {
                     },
                 ),
                 specialTag = AppMenuItem.SubMenu.SpecialTag.AppNameMenu,
+            ),
+            AppMenuItem.SubMenu(
+                title = "Edit",
+                AppMenuItem.Action(
+                    title = "Paste",
+                    keystroke = Keystroke(key = "v", modifiers = KeyModifiersSet.create(command = true)),
+                    perform = {
+                        Logger.info {
+                            Pasteboard.readItemsOfType(Pasteboard.STRING_TYPE).toString()
+                                .replace("\n", "\\n")
+                                .replace("\t", "\\t")
+                                .replace("\r", "\\r")
+                                .replace("\"", "\\\"")
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Paste Files",
+                    keystroke = Keystroke(key = "v", modifiers = KeyModifiersSet.create(command = true, shift = true)),
+                    perform = {
+                        Pasteboard.readFileItemPaths()
+                    },
+                )
             ),
             AppMenuItem.SubMenu(
                 title = "View",

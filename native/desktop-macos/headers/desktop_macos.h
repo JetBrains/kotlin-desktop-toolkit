@@ -435,6 +435,15 @@ typedef struct NativeBorrowedArray_PasteboardItem {
   NativeArraySize len;
 } NativeBorrowedArray_PasteboardItem;
 
+typedef struct NativeAutoDropArray_RustAllocatedStrPtr {
+  const NativeRustAllocatedStrPtr *ptr;
+  NativeArraySize len;
+} NativeAutoDropArray_RustAllocatedStrPtr;
+
+typedef struct NativePasteboardContentResult {
+  struct NativeAutoDropArray_RustAllocatedStrPtr items;
+} NativePasteboardContentResult;
+
 typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
 
 typedef struct NativeScreenInfo {
@@ -619,6 +628,12 @@ void metal_deref_texture(NativeMetalTextureRef texture);
 intptr_t pasteboard_clear(void);
 
 bool pasteboard_write_objects(struct NativeBorrowedArray_PasteboardItem items);
+
+struct NativePasteboardContentResult pasteboard_read_items_of_type(NativeBorrowedStrPtr uniform_type_identifier);
+
+struct NativePasteboardContentResult pasteboard_read_file_items(void);
+
+void pasteboard_content_drop(struct NativePasteboardContentResult content);
 
 NativeScreenInfoArray screen_list(void);
 

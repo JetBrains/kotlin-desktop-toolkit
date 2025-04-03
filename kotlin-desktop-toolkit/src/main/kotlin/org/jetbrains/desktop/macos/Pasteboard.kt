@@ -1,8 +1,10 @@
 package org.jetbrains.desktop.macos
 
+import org.jetbrains.desktop.macos.generated.NativeAutoDropArray_RustAllocatedStrPtr
 import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_CombinedItemElement
 import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_PasteboardItem
 import org.jetbrains.desktop.macos.generated.NativeCombinedItemElement
+import org.jetbrains.desktop.macos.generated.NativePasteboardContentResult
 import org.jetbrains.desktop.macos.generated.NativePasteboardItem
 import org.jetbrains.desktop.macos.generated.NativePasteboardItem_NativeCombinedItem_Body
 import org.jetbrains.desktop.macos.generated.NativePasteboardItem_NativeURLItem_Body
@@ -13,10 +15,15 @@ import java.lang.foreign.MemorySegment
 public object Pasteboard {
     public const val STRING_TYPE: String = "public.utf8-plain-text"
     public const val HTML_TYPE: String = "public.html"
+    public const val URL_TYPE: String = "public.url"
 
     public data class Element(val type: String, val content: String)
 
     public sealed class Item {
+        /**
+         * If you need to put files in clipboard
+         * use the Url("file:///absoulte/path/to/file.ext")
+         */
         public data class Url(val url: String) : Item()
         public data class Combined(val elements: List<Element>) : Item() {
             public constructor(vararg elements: Element) : this(elements.toList())
@@ -45,9 +52,48 @@ public object Pasteboard {
             ffiDownCall { desktop_macos_h.pasteboard_write_objects(items.toNative(arena)) }
         }
     }
+
+    public fun readItemsOfType(type: String): List<String> {
+        return Arena.ofConfined().use { arena ->
+            val nativeResult = ffiDownCall {
+                desktop_macos_h.pasteboard_read_items_of_type(arena, arena.allocateUtf8String(type))
+            }
+            val result = PastboardContentResult.fromNative(nativeResult)
+            ffiDownCall {
+                desktop_macos_h.pasteboard_content_drop(nativeResult)
+            }
+            result
+        }
+    }
+
+    public fun readFileItemPaths(): List<String> {
+        return Arena.ofConfined().use { arena ->
+            val nativeResult = ffiDownCall {
+                desktop_macos_h.pasteboard_read_file_items(arena)
+            }
+            val result = PastboardContentResult.fromNative(nativeResult)
+            ffiDownCall {
+                desktop_macos_h.pasteboard_content_drop(nativeResult)
+            }
+            result
+        }
+    }
 }
 
 // IMPL:
+
+internal object PastboardContentResult {
+    internal fun fromNative(segment: MemorySegment): List<String> {
+        val items = NativePasteboardContentResult.items(segment)
+        val ptr = NativeAutoDropArray_RustAllocatedStrPtr.ptr(items)
+        val len = NativeAutoDropArray_RustAllocatedStrPtr.len(items)
+
+        return (0 until len).map { i ->
+            val strPtr = ptr.getAtIndex(NativeAutoDropArray_RustAllocatedStrPtr.`ptr$layout`(), i)
+            strPtr.getUtf8String(0)
+        }.toList()
+    }
+}
 
 internal fun Pasteboard.Element.toNative(natiiveElement: MemorySegment, arena: Arena) = let { element ->
     NativeCombinedItemElement.uniform_type_identifier(natiiveElement, arena.allocateUtf8String(element.type))
