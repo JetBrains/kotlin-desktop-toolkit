@@ -723,6 +723,26 @@ void window_set_pointer_shape(NativeAppPtr app_ptr,
 
 struct NativeLogicalSize window_get_size(NativeAppPtr app_ptr, NativeWindowId window_id);
 
+bool window_is_key(NativeAppPtr app_ptr, NativeWindowId _window_id);
+
+bool window_is_main(NativeAppPtr app_ptr, NativeWindowId _window_id);
+
+void window_set_title(NativeAppPtr app_ptr,
+                      NativeWindowId window_id,
+                      NativeBorrowedStrPtr new_title);
+
+void window_set_max_size(NativeAppPtr app_ptr,
+                         NativeWindowId window_id,
+                         struct NativeLogicalSize size);
+
+void window_set_min_size(NativeAppPtr app_ptr,
+                         NativeWindowId window_id,
+                         struct NativeLogicalSize size);
+
+void window_set_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
+
+void window_unset_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
+
 struct NativeExceptionsArray logger_check_exceptions(void);
 
 void logger_clear_exceptions(void);
