@@ -100,6 +100,24 @@ class CustomTitlebar(
     private var fullscreen: Boolean = false
     private var lastHeaderMouseDownTime: Timestamp? = null
 
+    private data class TitleParams(private var fontSize: Float, private var title: String) {
+        private var titleLine: TextLine? = null
+
+        fun makeTitleLine(title: String, fontSize: Float): TextLine {
+            if (titleLine == null || this.title != title || this.fontSize != fontSize) {
+                this.title = title
+                this.fontSize = fontSize
+                val titlebarFont = FontMgr.default.matchFamilyStyle("sans-serif", FontStyle.BOLD)?.let { typeface ->
+                    Font(typeface, this.fontSize)
+                }
+                titleLine = TextLine.make(this.title, titlebarFont)
+            }
+            return titleLine!!
+        }
+    }
+
+    private var lastTitleParams = TitleParams(fontSize = 0f, title = "")
+
     companion object {
         const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55f
         const val BUTTON_LINE_WIDTH: LogicalPixels = 5f
@@ -203,7 +221,7 @@ class CustomTitlebar(
         return EventHandlerResult.Continue
     }
 
-    private fun drawButton(canvas: Canvas, button: WindowButtonType, rect: LogicalRect, highlighted: Boolean, scale: Float) {
+    private fun drawButton(canvas: Canvas, button: WindowButtonType, rect: LogicalRect, highlighted: Boolean, scale: Float, title: String) {
         val w = rect.size.width * scale
         val h = rect.size.height * scale
         val xOffset = rect.point.x * scale
@@ -257,16 +275,13 @@ class CustomTitlebar(
                 }
                 WindowButtonType.Title -> {
                     paint.color = Color.WHITE
-                    FontMgr.default.matchFamilyStyle("sans-serif", FontStyle.BOLD)?.use { typeface ->
-//                        Logger.info { "typeface: $typeface" }
-                        canvas.drawTextLine(TextLine.make("aaaaaaaaaaaaaaaaaaaaaa", font = Font(typeface, 32f)), xOffset, yOffset, paint)
-                    }
+                    canvas.drawTextLine(lastTitleParams.makeTitleLine(title, CUSTOM_TITLEBAR_HEIGHT * scale), xOffset, yBottom, paint)
                 }
             }
         }
     }
 
-    fun draw(canvas: Canvas, scale: Float, xdgDesktopSettings: XdgDesktopSettings) {
+    fun draw(canvas: Canvas, scale: Float, xdgDesktopSettings: XdgDesktopSettings, title: String) {
         val physicalOrigin = origin.toPhysical(scale)
         val physicalSize = size.toPhysical(scale)
         val l = physicalOrigin.x.toFloat()
@@ -278,7 +293,7 @@ class CustomTitlebar(
             canvas.drawRect(Rect.makeXYWH(l, t, w, h), paint)
         }
         for ((i, v) in rectangles.withIndex()) {
-            drawButton(canvas, v.second, v.first, highlighted = mouseOverRectIndex == i, scale)
+            drawButton(canvas, v.second, v.first, highlighted = mouseOverRectIndex == i, scale, title)
         }
     }
 }
@@ -547,7 +562,7 @@ class WindowContainer(
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Float) {
+    fun draw(canvas: Canvas, time: Long, scale: Float, title: String) {
         val backgroundColor = if (xdgDesktopSettings.colorScheme == ColorSchemeValue.PreferDark) {
             Color.makeARGB(
                 240,
@@ -559,7 +574,7 @@ class WindowContainer(
             Color.makeARGB(240, 200, 200, 200)
         }
         canvas.clear(backgroundColor)
-        customTitlebar?.draw(canvas, scale, xdgDesktopSettings)
+        customTitlebar?.draw(canvas, scale, xdgDesktopSettings, title)
         contentArea.draw(canvas, time, scale)
     }
 }
@@ -569,6 +584,8 @@ class RotatingBallWindow(
     app: Application,
     windowParams: WindowParams,
 ) : SkikoWindowLinux(app, windowParams) {
+    private var title: String = windowParams.title
+
     companion object {
         fun createWindow(app: Application, windowParams: WindowParams, xdgDesktopSettings: XdgDesktopSettings): RotatingBallWindow {
             val windowSize = LogicalSize(640f, 480f)
@@ -612,7 +629,7 @@ class RotatingBallWindow(
 
     override fun Canvas.draw(size: PhysicalSize, time: Long) {
         val canvas = this
-        windowContainer.draw(canvas, time, window.scaleFactor().toFloat())
+        windowContainer.draw(canvas, time, window.scaleFactor().toFloat(), title)
     }
 }
 
