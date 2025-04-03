@@ -13,7 +13,7 @@ pub struct ApplicationCallbacks {
     pub on_xdg_desktop_settings_change: extern "C" fn(XdgDesktopSetting),
 }
 
-pub type AppPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
+pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_init(callbacks: ApplicationCallbacks) -> AppPtr<'static> {

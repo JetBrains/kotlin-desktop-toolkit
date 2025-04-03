@@ -261,9 +261,9 @@ typedef enum NativeXdgDesktopColorScheme {
 
 typedef const void *NativeGenericRawPtr_c_void;
 
-typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr_c_void;
+typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr;
 
-typedef NativeRustAllocatedRawPtr_c_void NativeAppPtr;
+typedef NativeRustAllocatedRawPtr NativeAppPtr;
 
 typedef uintptr_t NativeArraySize;
 

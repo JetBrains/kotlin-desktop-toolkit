@@ -50,20 +50,11 @@ impl<'a> BorrowedOpaquePtr<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[repr(transparent)]
-pub struct RustAllocatedRawPtr<'a, T>(GenericRawPtr<'a, T>);
+pub struct RustAllocatedRawPtr<'a>(GenericRawPtr<'a, std::ffi::c_void>);
 
-impl<T> Clone for RustAllocatedRawPtr<'_, T> {
-    fn clone(&self) -> Self {
-        Self(GenericRawPtr {
-            ptr: self.0.ptr,
-            phantom: PhantomData,
-        })
-    }
-}
-
-impl<T> RustAllocatedRawPtr<'_, T> {
+impl RustAllocatedRawPtr<'_> {
     pub fn from_value<R>(value: Option<R>) -> Self {
         Self(GenericRawPtr {
             ptr: value.map_or(std::ptr::null(), |v| Box::into_raw(Box::new(v)).cast_const()).cast(),
