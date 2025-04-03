@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 
 use anyhow::{Context, Ok};
-use log::debug;
+use log::{debug, info};
 use objc2::{
     DeclaredClass, MainThreadOnly, define_class, msg_send,
     rc::Retained,
@@ -745,6 +745,12 @@ define_class!(
         fn wants_key_down_for_event(&self, event: &NSEvent) -> bool {
             debug!("_wantsKeyDownForEvent: {event:?}");
             return true.into();
+        }
+
+        #[unsafe(method(performKeyEquivalent:))]
+        fn perform_key_eqivalent(&self, event: &NSEvent) -> bool {
+            info!("performKeyEquivalent: {event:?}");
+            false
         }
 
         #[unsafe(method(keyDown:))]
