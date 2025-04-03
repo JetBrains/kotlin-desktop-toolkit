@@ -3,22 +3,26 @@ use std::sync::Mutex;
 use anyhow::Context;
 use desktop_common::{
     ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr, RustAllocatedStrPtr},
-    logger::{ffi_boundary, PanicDefault},
+    logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
-use objc2::{rc::Retained, runtime::{AnyObject, ProtocolObject}, ClassType};
+use objc2::{
+    ClassType,
+    rc::Retained,
+    runtime::{AnyObject, ProtocolObject},
+};
 use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardURLReadingFileURLsOnlyKey, NSPasteboardWriting};
 use objc2_foundation::{NSArray, NSDictionary, NSMutableArray, NSNumber, NSURL};
-
 
 use super::string::{copy_to_c_string, copy_to_ns_string};
 
 static GENERAL_PASTEBOARD_SHARED_TOKEN: Mutex<()> = Mutex::new(());
 
 #[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
 enum PasteboardType {
     Global,
-    WithUniqueName
+    WithUniqueName,
 }
 
 fn with_pasteboard<R, F: FnOnce(&NSPasteboard) -> R>(pasteboard_type: PasteboardType, f: F) -> R {
@@ -29,20 +33,18 @@ fn with_pasteboard<R, F: FnOnce(&NSPasteboard) -> R>(pasteboard_type: Pasteboard
             let _shared_token = GENERAL_PASTEBOARD_SHARED_TOKEN.lock();
             let pasteboard = unsafe { NSPasteboard::generalPasteboard() };
             f(&pasteboard)
-        },
+        }
         PasteboardType::WithUniqueName => {
             let pasteboard = unsafe { NSPasteboard::pasteboardWithUniqueName() };
             f(&pasteboard)
-        },
+        }
     }
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn pasteboard_clear() -> isize {
     ffi_boundary("pasteboard_clear", || {
-        let result = with_pasteboard(PasteboardType::Global, |pasteboard| {
-            unsafe { pasteboard.clearContents() }
-        });
+        let result = with_pasteboard(PasteboardType::Global, |pasteboard| unsafe { pasteboard.clearContents() });
         Ok(result)
     })
 }
@@ -110,12 +112,14 @@ pub extern "C" fn pasteboard_write_objects(items: BorrowedArray<PasteboardItem>)
 
 #[repr(C)]
 pub struct PasteboardContentResult {
-    items: AutoDropArray<RustAllocatedStrPtr>
+    items: AutoDropArray<RustAllocatedStrPtr>,
 }
 
 impl PanicDefault for PasteboardContentResult {
     fn default() -> Self {
-        PasteboardContentResult { items: AutoDropArray::new(Box::new([])) }
+        Self {
+            items: AutoDropArray::new(Box::new([])),
+        }
     }
 }
 
@@ -124,16 +128,12 @@ pub extern "C" fn pasteboard_read_items_of_type(uniform_type_identifier: Borrowe
     ffi_boundary("pasteboard_read_content_for_type", || {
         with_pasteboard(PasteboardType::Global, |pasteboard| {
             let uti = copy_to_ns_string(&uniform_type_identifier)?;
-            let items = unsafe {
-                pasteboard.pasteboardItems()
-            }.context("Can't retrieve items")?;
-            let items: anyhow::Result<Box<[_]>> = items.iter().filter_map(|item| {
-                unsafe {
-                    item.stringForType(&uti)
-                }
-            }).map(|item_str| {
-                copy_to_c_string(&item_str)
-            }).collect();
+            let items = unsafe { pasteboard.pasteboardItems() }.context("Can't retrieve items")?;
+            let items: anyhow::Result<Box<[_]>> = items
+                .iter()
+                .filter_map(|item| unsafe { item.stringForType(&uti) })
+                .map(|item_str| copy_to_c_string(&item_str))
+                .collect();
             Ok(PasteboardContentResult {
                 items: AutoDropArray::new(items?),
             })
@@ -149,18 +149,18 @@ pub extern "C" fn pasteboard_read_file_items() -> PasteboardContentResult {
 
             let options = NSDictionary::from_slices(
                 &[unsafe { NSPasteboardURLReadingFileURLsOnlyKey }],
-                &[&*Retained::<AnyObject>::from(NSNumber::numberWithBool(true))]
+                &[&*Retained::<AnyObject>::from(NSNumber::numberWithBool(true))],
             );
-            let urls = unsafe {
-                pasteboard.readObjectsForClasses_options(&class_array, Some(&*options))
-            }.context("No items")?;
+            let urls = unsafe { pasteboard.readObjectsForClasses_options(&class_array, Some(&*options)) }.context("No items")?;
 
-            let urls: anyhow::Result<Box<_>> = urls.iter().filter_map(|url| {
-                let url = url.downcast::<NSURL>().expect("It must be NSURL");
-                unsafe { url.filePathURL() }
-            }).map(|url_ns_str| {
-                copy_to_c_string(&*unsafe { url_ns_str.path().expect("Expected path here") })
-            }).collect();
+            let urls: anyhow::Result<Box<_>> = urls
+                .iter()
+                .filter_map(|url| {
+                    let url = url.downcast::<NSURL>().expect("It must be NSURL");
+                    unsafe { url.filePathURL() }
+                })
+                .map(|url_ns_str| copy_to_c_string(&*unsafe { url_ns_str.path().expect("Expected path here") }))
+                .collect();
 
             Ok(PasteboardContentResult {
                 items: AutoDropArray::new(urls?),
@@ -187,7 +187,7 @@ mod tests {
     use objc2_app_kit::{NSPasteboardItem, NSPasteboardType, NSPasteboardTypeString, NSURLNSPasteboardSupport};
     use objc2_foundation::{NSArray, NSObjectNSComparisonMethods, NSString, NSURL};
 
-    use crate::macos::pasteboard::{with_pasteboard, PasteboardType};
+    use crate::macos::pasteboard::{PasteboardType, with_pasteboard};
 
     #[test]
     fn test_pasteboard_can_store_and_return_string() {
@@ -211,9 +211,7 @@ mod tests {
             unsafe {
                 pasteboard.clearContents();
             }
-            let string_from_pasteboard = unsafe {
-                pasteboard.stringForType(NSPasteboardTypeString)
-            };
+            let string_from_pasteboard = unsafe { pasteboard.stringForType(NSPasteboardTypeString) };
             assert_eq!(None, string_from_pasteboard);
         });
     }

@@ -44,7 +44,7 @@ class PasteboardTest {
                                   <span style = "color: green">Hello World!!!</span>
                               </body>
                           </html>
-                        """.trimIndent()
+        """.trimIndent()
         val counter = GrandCentralDispatch.dispatchOnMainSync {
             Pasteboard.clear()
         }

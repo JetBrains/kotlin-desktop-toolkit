@@ -549,7 +549,7 @@ class ApplicationState : AutoCloseable {
                     perform = {
                         Pasteboard.readFileItemPaths()
                     },
-                )
+                ),
             ),
             AppMenuItem.SubMenu(
                 title = "View",

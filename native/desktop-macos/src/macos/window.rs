@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 
 use anyhow::{Context, Ok};
-use log::{debug, info};
+use log::debug;
 use objc2::{
     DeclaredClass, MainThreadOnly, define_class, msg_send,
     rc::Retained,
