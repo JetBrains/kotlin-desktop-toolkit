@@ -1,4 +1,9 @@
-use desktop_common::{ffi_utils::BorrowedStrPtr, logger::ffi_boundary};
+use anyhow::Context;
+use desktop_common::{
+    ffi_utils::BorrowedStrPtr,
+    logger::{PanicDefault, ffi_boundary},
+};
+use smithay_client_toolkit::shell::xdg::window::Window;
 
 use super::{
     application::Application,
@@ -52,35 +57,6 @@ pub extern "C" fn window_set_pointer_shape(mut app_ptr: AppPtr, window_id: Windo
     });
 }
 
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_get_screen_id(window_ptr: WindowPtr) -> ScreenId {
-//    ffi_boundary("window_get_screen_id", || {
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        Ok(window.ns_window.screen().unwrap().screen_id())
-//    })
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_set_title(window_ptr: WindowPtr, new_title: BorrowedStrPtr) {
-//    ffi_boundary("window_set_title", || {
-//        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-//        let new_title = copy_to_ns_string(&new_title)?;
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        window.ns_window.setTitle(&new_title);
-//        Ok(())
-//    });
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_get_title(window_ptr: WindowPtr) -> RustAllocatedStrPtr {
-//    ffi_boundary("window_get_title", || {
-//        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        let title = window.ns_window.title();
-//        copy_to_c_string(&title)
-//    })
-//}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> LogicalSize {
     ffi_boundary("window_get_size", || {
@@ -93,69 +69,72 @@ pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> Logic
     })
 }
 
-//fn with_window(app_ptr: AppPtr, window_id: WindowId, name: &str, f: impl FnOnce(&SimpleWindow)) {
-//    ffi_boundary("window_set_rect", || {
-//        let app = unsafe { app_ptr.borrow::<Application>() };
-//        let w = app.get_window(window_id).context("No window found")?;
-//        f(&w);
-//        Ok(())
-//    });
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_is_key(window_ptr: WindowPtr) -> bool {
-//    let window = unsafe { window_ptr.borrow::<Window>() };
-//    ffi_boundary("window_is_key", || Ok(window.ns_window.isKeyWindow()))
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_is_main(window_ptr: WindowPtr) -> bool {
-//    ffi_boundary("window_is_main", || {
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        let result = unsafe { window.ns_window.isMainWindow() };
-//        Ok(result)
-//    })
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_get_max_size(window_ptr: WindowPtr) -> LogicalSize {
-//    ffi_boundary("window_get_max_size", || {
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        Ok(window.ns_window.get_max_size())
-//    })
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_set_max_size(window_ptr: WindowPtr, size: LogicalSize) {
-//    ffi_boundary("window_set_max_size", || {
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        window.ns_window.set_max_size(size);
-//        Ok(())
-//    });
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_get_min_size(window_ptr: WindowPtr) -> LogicalSize {
-//    ffi_boundary("window_get_min_size", || {
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        Ok(window.ns_window.get_min_size())
-//    })
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) {
-//    ffi_boundary("window_set_min_size", || {
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        window.ns_window.set_min_size(size);
-//        Ok(())
-//    });
-//}
-//
-//#[unsafe(no_mangle)]
-//pub extern "C" fn window_toggle_full_screen(window_ptr: WindowPtr) {
-//    ffi_boundary("window_toggle_full_screen", || {
-//        let window = unsafe { window_ptr.borrow::<Window>() };
-//        window.ns_window.toggleFullScreen(None);
-//        Ok(())
-//    });
-//}
+#[unsafe(no_mangle)]
+pub extern "C" fn window_is_key(app_ptr: AppPtr, _window_id: WindowId) -> bool {
+    ffi_boundary("window_is_key", || {
+        let _app = unsafe { app_ptr.borrow::<Application>() };
+        //Ok(app.window_is_key(window_id))
+        Ok(Some(true))
+    })
+    .unwrap_or(false)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_is_main(app_ptr: AppPtr, _window_id: WindowId) -> bool {
+    ffi_boundary("window_is_main", || {
+        let _app = unsafe { app_ptr.borrow::<Application>() };
+        //Ok(app.window_is_main(window_id))
+        Ok(Some(true))
+    })
+    .unwrap_or(false)
+}
+
+fn with_window<R: PanicDefault>(app_ptr: &AppPtr, window_id: WindowId, name: &str, f: impl FnOnce(&Window) -> anyhow::Result<R>) {
+    ffi_boundary(name, || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let w = app.get_window(window_id).context("No window found")?;
+        f(&w.window)
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_title: BorrowedStrPtr) {
+    with_window(&app_ptr, window_id, "window_set_title", |w| {
+        w.set_title(new_title.as_str()?);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_max_size(app_ptr: AppPtr, window_id: WindowId, size: LogicalSize) {
+    with_window(&app_ptr, window_id, "window_set_max_size", |w| {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        w.set_max_size(Some((size.width.0 as u32, size.height.0 as u32))); // TODO: check
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_min_size(app_ptr: AppPtr, window_id: WindowId, size: LogicalSize) {
+    with_window(&app_ptr, window_id, "window_set_min_size", |w| {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        w.set_min_size(Some((size.width.0 as u32, size.height.0 as u32))); // TODO: check
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_fullscreen(app_ptr: AppPtr, window_id: WindowId) {
+    with_window(&app_ptr, window_id, "window_toggle_full_screen", |w| {
+        w.set_fullscreen(None /* output, let the compositor choose */);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_unset_fullscreen(app_ptr: AppPtr, window_id: WindowId) {
+    with_window(&app_ptr, window_id, "window_toggle_full_screen", |w| {
+        w.unset_fullscreen();
+        Ok(())
+    });
+}
