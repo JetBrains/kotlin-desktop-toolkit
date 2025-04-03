@@ -97,25 +97,37 @@ val cargoFmtTask = tasks.register<Exec>("cargoFmt") {
     commandLine("cargo", "fmt")
 }
 
-val clippyCheckTask = tasks.register<Exec>("clippyCheck") {
-    workingDir = layout.projectDirectory.dir("../native").asFile
-    commandLine("cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--", "--deny", "warnings")
+val clippyCheckMacOsTask = tasks.register<Exec>("clippyCheckMacOs") {
+    workingDir = layout.projectDirectory.dir("../native/desktop-macos").asFile
+    commandLine("cargo", "clippy", "--all-features", "--", "--deny", "warnings")
 }
 
-val clippyFixTask = tasks.register<Exec>("clippyFix") {
-    workingDir = layout.projectDirectory.dir("../native").asFile
-    commandLine("cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--fix", "--allow-dirty", "--allow-staged")
+val clippyCheckLinuxTask = tasks.register<Exec>("clippyCheckLinux") {
+    workingDir = layout.projectDirectory.dir("../native/desktop-linux").asFile
+    commandLine("cargo", "clippy", "--all-features", "--", "--deny", "warnings")
+}
+
+val clippyFixMacOsTask = tasks.register<Exec>("clippyFixMacOs") {
+    workingDir = layout.projectDirectory.dir("../native/desktop-macos").asFile
+    commandLine("cargo", "clippy", "--all-features", "--fix", "--allow-dirty", "--allow-staged")
+}
+
+val clippyFixLinuxTask = tasks.register<Exec>("clippyFixLinux") {
+    workingDir = layout.projectDirectory.dir("../native/desktop-linux").asFile
+    commandLine("cargo", "clippy", "--all-features", "--fix", "--allow-dirty", "--allow-staged")
 }
 
 task("lint") {
     dependsOn(tasks.named("ktlintCheck"))
-    dependsOn(clippyCheckTask)
+    dependsOn(clippyCheckMacOsTask)
+    dependsOn(clippyCheckLinuxTask)
     dependsOn(cargoFmtCheckTask)
 }
 
 task("autofix") {
     dependsOn(tasks.named("ktlintFormat"))
-    dependsOn(clippyFixTask)
+    dependsOn(clippyFixMacOsTask)
+    dependsOn(clippyFixLinuxTask)
     dependsOn(cargoFmtTask)
 }
 
