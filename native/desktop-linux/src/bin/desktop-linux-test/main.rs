@@ -1,13 +1,15 @@
 mod gl_sys;
 
-use std::{cell::OnceCell, ffi::CStr, sync::LazyLock};
+use std::{cell::OnceCell, ffi::CStr, sync::atomic::AtomicI8};
 
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::{
-    application_api::{ApplicationCallbacks, application_init, application_run_event_loop},
+    application_api::{
+        AppPtr, ApplicationCallbacks, GetEglProcFuncData, application_get_egl_proc_func, application_init, application_run_event_loop,
+    },
     events::{Event, WindowDrawEvent},
     window_api::{WindowParams, window_create},
     xdg_desktop_settings_api::XdgDesktopSetting,
@@ -16,7 +18,6 @@ use gl_sys::{
     GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
     GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
 };
-use libloading::Library;
 use log::debug;
 
 extern "C" fn on_should_terminate() -> bool {
@@ -36,11 +37,13 @@ fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
 }
 
-static OPENGL_LIB: LazyLock<Library> = LazyLock::new(|| unsafe { libloading::Library::new("libGLESv2.so") }.unwrap());
-static OPENGL: LazyLock<OpenGlFuncs> = LazyLock::new(|| OpenGlFuncs::new(&OPENGL_LIB).unwrap());
+static INSTANCE_COUNT: AtomicI8 = AtomicI8::new(0);
 
 thread_local! {
-    pub static OPENGL_PROGRAM: OnceCell<GLuint> = const { OnceCell::new() };
+    static APP_PTR: OnceCell<AppPtr<'static>> = const { OnceCell::new() };
+    static LIB: OnceCell<GetEglProcFuncData<'static>> = const { OnceCell::new() };
+    static OPENGL: OnceCell<OpenGlFuncs> = const { OnceCell::new() };
+    static OPENGL_PROGRAM: OnceCell<GLuint> = const { OnceCell::new() };
 }
 
 const V_POSITION: GLuint = 0;
@@ -129,16 +132,32 @@ fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEven
 }
 
 fn draw_opengl_triangle_with_init(data: &WindowDrawEvent) {
-    OPENGL_PROGRAM.with(|c| {
-        let gl: &OpenGlFuncs = &OPENGL;
-        if let Some(program) = c.get() {
+    OPENGL.with(|c| {
+        let gl = c.get_or_init(|| {
+            LIB.with(|lib_c| {
+                let lib = lib_c.get_or_init(|| {
+                    assert!(
+                        (INSTANCE_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0),
+                        "Tried to instanciate more than once"
+                    );
+                    APP_PTR.with(|app_ptr_mutex| {
+                        let app_ptr = app_ptr_mutex.get().unwrap();
+                        application_get_egl_proc_func(app_ptr.clone())
+                    })
+                });
+
+                OpenGlFuncs::new(lib).unwrap()
+            })
+        });
+
+        OPENGL_PROGRAM.with(|c| {
+            let program = c.get_or_init(|| {
+                let program = create_opengl_program(gl).unwrap();
+                debug!("draw_opengl_triangle_with_init, program = {program}, event = {data:?}");
+                program
+            });
             draw_opengl_triangle(gl, *program, data);
-        } else {
-            let program = create_opengl_program(gl).unwrap();
-            c.set(program).unwrap();
-            debug!("draw_opengl_triangle_with_init, program = {program}, event = {data:?}");
-            draw_opengl_triangle(gl, program, data);
-        }
+        });
     });
 }
 
@@ -246,5 +265,14 @@ pub fn main() {
             force_software_rendering: false,
         },
     );
+    APP_PTR.with(|c| {
+        c.set(application_init(ApplicationCallbacks {
+            on_should_terminate,
+            on_will_terminate,
+            on_display_configuration_change,
+            on_xdg_desktop_settings_change,
+        }))
+        .unwrap();
+    });
     application_run_event_loop(app_ptr);
 }
