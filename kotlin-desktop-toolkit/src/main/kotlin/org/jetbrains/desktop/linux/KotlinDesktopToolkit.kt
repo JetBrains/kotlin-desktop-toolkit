@@ -8,7 +8,7 @@ public object KotlinDesktopToolkit {
     private val isInitialized: AtomicBoolean = AtomicBoolean(false)
 
     public fun init(
-        libraryPath: Path = property("kdt.library.path"),
+        libraryFolderPath: Path = property("kdt.library.path"),
         logFilePath: Path = property("kdt.native.log.path"),
         consoleLogLevel: LogLevel = LogLevel.Info,
         fileLogLevel: LogLevel = LogLevel.Info,
@@ -16,6 +16,7 @@ public object KotlinDesktopToolkit {
     ) {
         if (isInitialized.compareAndSet(false, true)) {
             // todo check that native library version is consistent with Kotlin code
+            val libraryPath = libraryFolderPath.resolve("libdesktop_linux_arm64.so")
             load(libraryPath)
             initLogger(
                 logFile = logFilePath,

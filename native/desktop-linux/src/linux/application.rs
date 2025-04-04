@@ -125,6 +125,6 @@ impl Application<'_> {
 
     #[must_use]
     pub fn get_window_size(&self, window_id: WindowId) -> Option<LogicalSize> {
-        self.get_window(window_id).map(|w| w.size)
+        self.get_window(window_id).and_then(|w| w.size)
     }
 }

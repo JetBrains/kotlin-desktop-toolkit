@@ -4,6 +4,7 @@
  * This generated file contains a sample Kotlin library project to get you started.
  * For more details on building Java & JVM projects, please refer to https://docs.gradle.org/8.10.2/userguide/building_java_projects.html in the Gradle documentation.
  */
+import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.CompileRustTask
 import org.jetbrains.desktop.buildscripts.DownloadJExtractTask
 import org.jetbrains.desktop.buildscripts.GenerateJavaBindingsTask
@@ -11,6 +12,7 @@ import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.Os
+import org.jetbrains.desktop.buildscripts.Platform
 import org.jetbrains.desktop.buildscripts.buildOs
 
 plugins {
@@ -82,9 +84,9 @@ tasks.test {
 
 val compileDebugDesktopToolkitTask = tasks.register<CompileRustTask>("compileNative") {
     crateName = "desktop-$projectTargetOsName"
-    targetOs = projectTargetOs
+    rustTarget = Platform(projectTargetOs, Arch.AARCH64)
     rustProfile = "dev"
-    nativeDirectory = layout.projectDirectory.dir("../native")
+    workspaceRoot = layout.projectDirectory.dir("../native")
 }
 
 val cargoFmtCheckTask = tasks.register<Exec>("cargoFmtCheck") {
