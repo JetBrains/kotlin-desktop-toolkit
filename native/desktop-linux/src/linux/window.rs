@@ -1,51 +1,174 @@
-use std::num::NonZeroU32;
-
+use anyhow::Context;
 use khronos_egl as egl;
 use log::{debug, info, warn};
-use smithay_client_toolkit::compositor::SurfaceData;
-use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
-use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
-use smithay_client_toolkit::reexports::client::protocol::wl_shm;
-use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle};
-use smithay_client_toolkit::reexports::csd_frame::{WindowManagerCapabilities, WindowState};
-use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
-use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
-use smithay_client_toolkit::shell::xdg::window::{DecorationMode, WindowDecorations};
-use smithay_client_toolkit::shell::{
-    WaylandSurface,
-    xdg::{
-        XdgSurface,
-        window::{Window, WindowConfigure},
+use smithay_client_toolkit::{
+    compositor::SurfaceData,
+    reexports::{
+        client::{
+            Connection, Proxy, QueueHandle,
+            protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_shm, wl_surface::WlSurface},
+        },
+        csd_frame::{WindowManagerCapabilities, WindowState},
+        protocols::{wp::viewporter::client::wp_viewport::WpViewport, xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge},
+    },
+    seat::pointer::{CursorIcon, ThemedPointer},
+    shell::{
+        WaylandSurface,
+        xdg::{
+            XdgSurface,
+            window::{DecorationMode, Window, WindowConfigure, WindowDecorations},
+        },
+    },
+    shm::{
+        Shm,
+        slot::{Buffer, SlotPool},
     },
 };
 use wayland_egl::WlEglSurface;
 
-use crate::linux::application_state::ApplicationState;
-use crate::linux::events::{LogicalPixels, LogicalSize, WindowCapabilities, WindowResizeEvent};
-
-use smithay_client_toolkit::{
-    seat::pointer::{CursorIcon, ThemedPointer},
-    shm::slot::{Buffer, SlotPool},
-};
+use crate::linux::events::{WindowCapabilities, WindowResizeEvent};
+use crate::linux::geometry::LogicalSize;
+use crate::linux::{application_state::ApplicationState, geometry::LogicalPixels};
 
 use super::application_state::EglInstance;
-use super::events::{Event, InternalEventHandler, WindowDrawEvent, WindowFrameAction, WindowResizeEdge};
+use super::events::{Event, InternalEventHandler, SoftwareDrawData, WindowDrawEvent, WindowFrameAction, WindowResizeEdge};
+use super::geometry::PhysicalSize;
 use super::window_api::WindowParams;
 
-pub struct EglData {
+#[derive(Debug)]
+struct EglRendering {
     wl_egl_surface: WlEglSurface,
     egl_display: egl::Display,
     egl_window_surface: khronos_egl::Surface,
 }
 
+impl EglRendering {
+    fn new(conn: &Connection, egl: &EglInstance, surface: &WlSurface, size: PhysicalSize) -> anyhow::Result<Self> {
+        info!("Trying to use EGL rendering");
+
+        let wl_egl_surface = WlEglSurface::new(surface.id(), size.width.0, size.height.0).context("WlEglSurface::new")?;
+
+        let wayland_display_ptr = conn.display().id().as_ptr();
+        let egl_display = unsafe { egl.get_display(wayland_display_ptr.cast()) }.context("egl.get_display")?;
+        egl.initialize(egl_display).context("egl.initialize")?;
+
+        let egl_attributes = [
+            egl::RED_SIZE,
+            8,
+            egl::GREEN_SIZE,
+            8,
+            egl::BLUE_SIZE,
+            8,
+            egl::ALPHA_SIZE,
+            8,
+            egl::NONE,
+        ];
+
+        let egl_config = egl
+            .choose_first_config(egl_display, &egl_attributes)?
+            .context("unable to find an appropriate ELG configuration")?;
+
+        let egl_context_attributes = [egl::CONTEXT_MAJOR_VERSION, 3, egl::CONTEXT_MINOR_VERSION, 0, egl::NONE];
+
+        let egl_context = egl
+            .create_context(egl_display, egl_config, None, &egl_context_attributes)
+            .context("egl.create_context")?;
+
+        let egl_window_surface = unsafe { egl.create_window_surface(egl_display, egl_config, wl_egl_surface.ptr().cast_mut(), None) }
+            .context("egl.create_window_surface")?;
+
+        egl.make_current(egl_display, Some(egl_window_surface), Some(egl_window_surface), Some(egl_context))
+            .context("egl.make_current")?;
+
+        Ok(Self {
+            wl_egl_surface,
+            egl_display,
+            egl_window_surface,
+        })
+    }
+
+    fn draw<F: FnOnce(Option<SoftwareDrawData>)>(&self, surface: &WlSurface, egl: &EglInstance, do_draw: F) {
+        do_draw(None);
+
+        // Attach and commit to present.
+        egl.swap_buffers(self.egl_display, self.egl_window_surface).unwrap();
+        surface.commit();
+    }
+}
+
+#[derive(Debug)]
+struct SoftwareRendering {
+    pool: SlotPool,
+    buffer: Buffer,
+    stride: i32,
+}
+
+struct SoftwareBuffer<'a> {
+    buffer: Buffer,
+    canvas: &'a mut [u8],
+}
+
+impl SoftwareRendering {
+    const BYTES_PER_PIXEL: u8 = 4;
+
+    fn create_buffer(pool: &mut SlotPool, size: PhysicalSize) -> SoftwareBuffer {
+        let stride = size.width.0 * i32::from(Self::BYTES_PER_PIXEL);
+        let (buffer, canvas) = pool
+            .create_buffer(size.width.0, size.height.0, stride, wl_shm::Format::Argb8888)
+            .expect("create buffer");
+        SoftwareBuffer { buffer, canvas }
+    }
+
+    fn new(shm: &Shm, size: PhysicalSize) -> Self {
+        let stride = size.width.0 * i32::from(Self::BYTES_PER_PIXEL);
+        let mut pool = SlotPool::new(
+            (stride * size.height.0 * 2).try_into().unwrap(), // double buffered
+            shm,
+        )
+        .expect("Failed to create pool");
+        let buffer = Self::create_buffer(&mut pool, size).buffer;
+        Self { pool, buffer, stride }
+    }
+
+    fn resize(&mut self, shm: &Shm, size: PhysicalSize) {
+        let stride = size.width.0 * i32::from(Self::BYTES_PER_PIXEL);
+        if self.buffer.height() != size.height.0 || self.buffer.stride() != stride {
+            *self = Self::new(shm, size);
+        }
+    }
+
+    fn draw<F: FnOnce(Option<SoftwareDrawData>)>(&mut self, surface: &WlSurface, size: PhysicalSize, do_draw: F) {
+        let canvas = if let Some(canvas) = self.pool.canvas(&self.buffer) {
+            canvas
+        } else {
+            // This should be rare, but if the compositor has not released the previous
+            // buffer, we need double-buffering.
+            let second_draw_data = Self::create_buffer(&mut self.pool, size);
+            self.buffer = second_draw_data.buffer;
+            second_draw_data.canvas
+        };
+
+        do_draw(Some(SoftwareDrawData {
+            canvas: canvas.as_mut_ptr(),
+            stride: self.stride,
+        }));
+
+        // Attach and commit to present.
+        self.buffer.attach_to(surface).expect("buffer attach");
+        surface.commit();
+    }
+}
+
+#[derive(Debug)]
+enum RenderingData {
+    Egl(EglRendering),
+    Software(SoftwareRendering),
+}
+
 pub struct SimpleWindow {
     pub event_handler: Box<InternalEventHandler>,
     pub close: bool,
-    first_configure: bool,
-    pool: SlotPool,
-    pub width: NonZeroU32,
-    pub height: NonZeroU32,
-    buffer: Option<Buffer>,
+    pub size: LogicalSize,
     viewport: Option<WpViewport>,
     pub window: Window,
     pub keyboard_focus: bool,
@@ -53,8 +176,8 @@ pub struct SimpleWindow {
     decorations_cursor: CursorIcon,
     current_scale: f64,
     decoration_mode: DecorationMode,
+    rendering_data: Option<RenderingData>,
     force_software_rendering: bool,
-    egl_data: Option<EglData>,
 }
 
 impl SimpleWindow {
@@ -66,9 +189,6 @@ impl SimpleWindow {
         params: &WindowParams,
     ) -> Self {
         let state = app_state;
-        let width = NonZeroU32::new(params.width).unwrap();
-        let height = NonZeroU32::new(params.height).unwrap();
-        let pool = SlotPool::new(width.get() as usize * height.get() as usize * 4, &state.shm_state).expect("Failed to create pool");
 
         let window_surface = state.compositor_state.create_surface(qh);
 
@@ -91,7 +211,6 @@ impl SimpleWindow {
         let window = state.xdg_shell_state.create_window(window_surface, decorations, qh);
         window.set_title(params.title.as_str().unwrap());
         window.set_app_id(params.app_id.as_str().unwrap());
-        //window.set_min_size(Some((width.get(), height.get())));
 
         // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
         // For more info, see WaylandSurface::commit
@@ -104,11 +223,7 @@ impl SimpleWindow {
         Self {
             event_handler,
             close: false,
-            first_configure: true,
-            pool,
-            width,
-            height,
-            buffer: None,
+            size: params.size,
             viewport,
             window,
             keyboard_focus: false,
@@ -116,7 +231,7 @@ impl SimpleWindow {
             decorations_cursor: CursorIcon::Default,
             current_scale: 1.0,
             decoration_mode: DecorationMode::Client,
-            egl_data: None,
+            rendering_data: None,
             force_software_rendering: params.force_software_rendering,
         }
     }
@@ -126,109 +241,39 @@ impl SimpleWindow {
         self.close = true;
     }
 
-    fn get_physical_size(&self) -> (i32, i32) {
-        #[allow(clippy::cast_possible_truncation)]
-        let physical_width = (f64::from(self.width.get()) * self.current_scale).ceil() as i32;
-
-        #[allow(clippy::cast_possible_truncation)]
-        let physical_height = (f64::from(self.height.get()) * self.current_scale).ceil() as i32;
-
-        (physical_width, physical_height)
-    }
-
     pub fn configure(
         &mut self,
         conn: &Connection,
-        qh: &QueueHandle<ApplicationState>,
+        shm: &Shm,
         window: &Window,
         configure: &WindowConfigure,
-        themed_pointer: Option<&mut ThemedPointer>,
         egl: Option<&EglInstance>,
-    ) {
+    ) -> bool {
         debug!("Configure {configure:?}");
 
-        self.buffer = None;
         self.decoration_mode = configure.decoration_mode;
 
         // debug!("Supported formats: {:?}", shm.formats());
         // [Argb8888, Xrgb8888, Abgr8888, Xbgr8888, Rgb565, Argb2101010, Xrgb2101010, Abgr2101010, Xbgr2101010, Argb16161616f, Xrgb16161616f, Abgr16161616f, Xbgr16161616f, Yuyv, Nv12, P010, Yuv420]
 
-        let width = configure.new_size.0.unwrap_or(self.width);
-        let height = configure.new_size.1.unwrap_or(self.height);
-        window
-            .xdg_surface()
-            .set_window_geometry(0, 0, width.get() as i32, height.get() as i32);
-
-        // Update new width and height;
-        self.width = width;
-        self.height = height;
-
-        let (physical_width, physical_height) = self.get_physical_size();
-
-        if self.first_configure {
-            if self.force_software_rendering {
-                info!("Forcing software rendering");
-            } else if let Some(egl) = egl {
-                if let Ok(wl_egl_surface) = WlEglSurface::new(window.wl_surface().id(), physical_width, physical_height) {
-                    info!("Using EGL rendering");
-
-                    let wayland_display_ptr = conn.display().id().as_ptr();
-                    let egl_display = unsafe { egl.get_display(wayland_display_ptr.cast()).unwrap() };
-                    egl.initialize(egl_display).unwrap();
-
-                    let egl_attributes = [
-                        egl::RED_SIZE,
-                        8,
-                        egl::GREEN_SIZE,
-                        8,
-                        egl::BLUE_SIZE,
-                        8,
-                        egl::ALPHA_SIZE,
-                        8,
-                        egl::NONE,
-                    ];
-
-                    let egl_config = egl
-                        .choose_first_config(egl_display, &egl_attributes)
-                        .expect("unable to find an appropriate ELG configuration")
-                        .unwrap();
-
-                    let egl_context_attributes = [egl::CONTEXT_MAJOR_VERSION, 3, egl::CONTEXT_MINOR_VERSION, 0, egl::NONE];
-
-                    let egl_context = egl.create_context(egl_display, egl_config, None, &egl_context_attributes).unwrap();
-
-                    let egl_window_surface = unsafe {
-                        egl.create_window_surface(egl_display, egl_config, wl_egl_surface.ptr().cast_mut(), None)
-                            .unwrap()
-                    };
-                    egl.make_current(egl_display, Some(egl_window_surface), Some(egl_window_surface), Some(egl_context))
-                        .unwrap();
-
-                    self.egl_data = Some(EglData {
-                        wl_egl_surface,
-                        egl_display,
-                        egl_window_surface,
-                    });
-                } else {
-                    warn!("Failed to create EGL rendering, falling back to software rendering");
-                };
-            } else {
-                warn!("Couldn't load EGL library, falling back to software rendering");
-            }
-        } else if let Some(egl_data) = &mut self.egl_data {
-            egl_data.wl_egl_surface.resize(physical_width, physical_height, 0, 0);
+        if let Some(w) = configure.new_size.0 {
+            self.size.width = LogicalPixels(w.get().into());
+        }
+        if let Some(h) = configure.new_size.1 {
+            self.size.height = LogicalPixels(h.get().into());
         }
 
+        window
+            .xdg_surface()
+            .set_window_geometry(0, 0, self.size.width.round(), self.size.height.round());
+
         if let Some(viewport) = &self.viewport {
-            viewport.set_destination(self.width.get() as i32, self.height.get() as i32);
+            viewport.set_destination(self.size.width.round(), self.size.height.round());
         }
 
         (self.event_handler)(
             &WindowResizeEvent {
-                size: LogicalSize {
-                    width: LogicalPixels(width.get().into()),
-                    height: LogicalPixels(height.get().into()),
-                },
+                size: self.size,
                 maximized: configure.state.contains(WindowState::MAXIMIZED),
                 fullscreen: configure.state.contains(WindowState::FULLSCREEN),
                 client_side_decorations: configure.decoration_mode == DecorationMode::Client,
@@ -242,10 +287,35 @@ impl SimpleWindow {
             .into(),
         );
 
-        // Initiate the first draw.
-        if self.first_configure {
-            self.first_configure = false;
-            self.draw(conn, qh, themed_pointer, egl);
+        let physical_size = self.size.to_physical(self.current_scale);
+
+        if let Some(rendering_data) = &mut self.rendering_data {
+            match rendering_data {
+                RenderingData::Egl(egl_data) => {
+                    egl_data.wl_egl_surface.resize(physical_size.width.0, physical_size.height.0, 0, 0);
+                }
+                RenderingData::Software(data) => {
+                    data.resize(shm, physical_size);
+                }
+            }
+            false
+        } else {
+            self.rendering_data = if self.force_software_rendering {
+                info!("Forcing software rendering");
+                Some(RenderingData::Software(SoftwareRendering::new(shm, physical_size)))
+            } else if let Some(egl) = egl {
+                match EglRendering::new(conn, egl, window.wl_surface(), physical_size) {
+                    Ok(egl_rendering_data) => Some(RenderingData::Egl(egl_rendering_data)),
+                    Err(e) => {
+                        warn!("Failed to create EGL rendering, falling back to software rendering. Error: {e:?}");
+                        Some(RenderingData::Software(SoftwareRendering::new(shm, physical_size)))
+                    }
+                }
+            } else {
+                warn!("Couldn't load EGL library, falling back to software rendering");
+                Some(RenderingData::Software(SoftwareRendering::new(shm, physical_size)))
+            };
+            true
         }
     }
 
@@ -289,72 +359,42 @@ impl SimpleWindow {
             self.set_cursor = false;
         }
 
-        let (physical_width, physical_height) = self.get_physical_size();
-        let stride = physical_width * 4;
+        let physical_size = self.size.to_physical(self.current_scale);
 
-        let canvas = {
-            if self.egl_data.is_some() {
-                None
-            } else {
-                let buffer = self.buffer.get_or_insert_with(|| {
-                    self.pool
-                        .create_buffer(physical_width, physical_height, stride, wl_shm::Format::Argb8888)
-                        .expect("create buffer")
-                        .0
-                });
-
-                if let Some(canvas) = self.pool.canvas(buffer) {
-                    Some(canvas)
-                } else {
-                    // This should be rare, but if the compositor has not released the previous
-                    // buffer, we need double-buffering.
-                    let (second_buffer, canvas) = self
-                        .pool
-                        .create_buffer(physical_width, physical_height, stride, wl_shm::Format::Argb8888)
-                        .expect("create buffer");
-                    *buffer = second_buffer;
-                    Some(canvas)
+        let do_draw = |software_draw_data: Option<SoftwareDrawData>| {
+            (self.event_handler)(
+                &WindowDrawEvent {
+                    software_draw_data: software_draw_data.unwrap_or(SoftwareDrawData {
+                        canvas: std::ptr::null_mut(),
+                        stride: 0,
+                    }),
+                    physical_size,
+                    scale: self.current_scale,
                 }
+                .into(),
+            );
+
+            // Damage the entire window
+            surface.damage_buffer(0, 0, physical_size.width.0, physical_size.height.0);
+
+            if self.viewport.is_none() {
+                assert!(self.current_scale % 1.0 == 0.0);
+                #[allow(clippy::cast_possible_truncation)]
+                surface.set_buffer_scale(self.current_scale as i32);
             }
+
+            // Request our next frame
+            surface.frame(qh, surface.clone());
         };
-        (self.event_handler)(
-            &WindowDrawEvent {
-                buffer: canvas.map_or_else(std::ptr::null_mut, <[u8]>::as_mut_ptr),
-                physical_width,
-                physical_height,
-                stride,
-                scale: self.current_scale,
-            }
-            .into(),
-        );
 
-        // Damage the entire window
-        surface.damage_buffer(0, 0, physical_width, physical_height);
-
-        if self.viewport.is_none() {
-            assert!(self.current_scale % 1.0 == 0.0);
-            #[allow(clippy::cast_possible_truncation)]
-            surface.set_buffer_scale(self.current_scale as i32);
-        }
-
-        // Request our next frame
-        surface.frame(qh, surface.clone());
-
-        // Attach and commit to present.
-        match (egl, &self.egl_data) {
-            (Some(egl), Some(egl_data)) => {
-                egl.swap_buffers(egl_data.egl_display, egl_data.egl_window_surface).unwrap();
-            }
-            _ => {
-                if let Some(buffer) = &self.buffer {
-                    buffer.attach_to(surface).expect("buffer attach");
-                }
-            }
-        }
-        surface.commit();
+        match &mut self.rendering_data {
+            Some(RenderingData::Egl(r)) => r.draw(surface, egl.unwrap(), do_draw),
+            Some(RenderingData::Software(r)) => r.draw(surface, physical_size, do_draw),
+            None => warn!("Rendering data not initialized in draw"),
+        };
     }
 
-    pub fn output_changed(&mut self, output: &WlOutput) {
+    pub fn output_changed(&self, output: &WlOutput) {
         (self.event_handler)(&Event::new_window_screen_change_event(output));
     }
 

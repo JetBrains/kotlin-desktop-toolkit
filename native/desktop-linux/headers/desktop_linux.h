@@ -588,11 +588,21 @@ typedef struct NativeWindowFullScreenToggleEvent {
   bool is_full_screen;
 } NativeWindowFullScreenToggleEvent;
 
-typedef struct NativeWindowDrawEvent {
-  uint8_t *buffer;
-  int32_t physical_width;
-  int32_t physical_height;
+typedef struct NativeSoftwareDrawData {
+  uint8_t *canvas;
   int32_t stride;
+} NativeSoftwareDrawData;
+
+typedef int32_t NativePhysicalPixels;
+
+typedef struct NativePhysicalSize {
+  NativePhysicalPixels width;
+  NativePhysicalPixels height;
+} NativePhysicalSize;
+
+typedef struct NativeWindowDrawEvent {
+  struct NativeSoftwareDrawData software_draw_data;
+  struct NativePhysicalSize physical_size;
   double scale;
 } NativeWindowDrawEvent;
 
@@ -677,8 +687,7 @@ typedef struct NativeEvent {
 typedef bool (*NativeEventHandler)(const struct NativeEvent*);
 
 typedef struct NativeWindowParams {
-  uint32_t width;
-  uint32_t height;
+  struct NativeLogicalSize size;
   NativeBorrowedStrPtr title;
   /**
    * See <https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_app_id>

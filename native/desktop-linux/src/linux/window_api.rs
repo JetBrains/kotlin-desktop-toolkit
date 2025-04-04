@@ -8,15 +8,14 @@ use smithay_client_toolkit::shell::xdg::window::Window;
 use super::{
     application::Application,
     application_api::AppPtr,
-    events::{EventHandler, LogicalPixels, LogicalSize, WindowId},
+    events::{EventHandler, WindowId},
+    geometry::LogicalSize,
     pointer_shapes::PointerShape,
 };
 
 #[repr(C)]
 pub struct WindowParams<'a> {
-    pub width: u32,
-
-    pub height: u32,
+    pub size: LogicalSize,
 
     pub title: BorrowedStrPtr<'a>,
 
@@ -63,10 +62,7 @@ pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> Logic
         let app = unsafe { app_ptr.borrow::<Application>() };
         Ok(app.get_window_size(window_id))
     })
-    .unwrap_or(LogicalSize {
-        width: LogicalPixels(0.0),
-        height: LogicalPixels(0.0),
-    })
+    .unwrap_or_default()
 }
 
 #[unsafe(no_mangle)]
@@ -108,8 +104,8 @@ pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_tit
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_max_size(app_ptr: AppPtr, window_id: WindowId, size: LogicalSize) {
     with_window(&app_ptr, window_id, "window_set_max_size", |w| {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        w.set_max_size(Some((size.width.0 as u32, size.height.0 as u32))); // TODO: check
+        #[allow(clippy::cast_sign_loss)]
+        w.set_max_size(Some((size.width.round() as u32, size.height.round() as u32))); // TODO: check
         Ok(())
     });
 }
@@ -117,8 +113,8 @@ pub extern "C" fn window_set_max_size(app_ptr: AppPtr, window_id: WindowId, size
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_min_size(app_ptr: AppPtr, window_id: WindowId, size: LogicalSize) {
     with_window(&app_ptr, window_id, "window_set_min_size", |w| {
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        w.set_min_size(Some((size.width.0 as u32, size.height.0 as u32))); // TODO: check
+        #[allow(clippy::cast_sign_loss)]
+        w.set_min_size(Some((size.width.round() as u32, size.height.round() as u32))); // TODO: check
         Ok(())
     });
 }
