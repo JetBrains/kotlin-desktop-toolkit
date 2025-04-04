@@ -12,7 +12,8 @@ use desktop_linux::linux::{
     application_api::{
         AppPtr, ApplicationCallbacks, GetEglProcFuncData, application_get_egl_proc_func, application_init, application_run_event_loop,
     },
-    events::{Event, WindowDrawEvent},
+    events::{Event, SoftwareDrawData, WindowDrawEvent},
+    geometry::{LogicalPixels, LogicalSize, PhysicalSize},
     window_api::{WindowParams, window_create},
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
@@ -117,7 +118,7 @@ fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEven
     //    debug!("draw_opengl_triangle, program = {program}, event = {data:?}");
     const V_VERTICES: [f32; 6] = [0.0f32, 1.0, -1.0, -1.0, 1.0, -1.0];
     unsafe {
-        (gl.glViewport)(0, 0, data.physical_width, data.physical_height);
+        (gl.glViewport)(0, 0, data.physical_size.width.0, data.physical_size.height.0);
         (gl.glClear)(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
         (gl.glUseProgram)(program);
         //let v_position = (gl.glGetAttribLocation)(program, c"vPosition".as_ptr());
@@ -160,16 +161,11 @@ fn draw_opengl_triangle_with_init(data: &WindowDrawEvent) {
 }
 
 #[allow(clippy::many_single_char_names)]
-fn draw(data: &WindowDrawEvent) {
+fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f64) {
     const BYTES_PER_PIXEL: u8 = 4;
-    if data.buffer.is_null() {
-        draw_opengl_triangle_with_init(data);
-        return;
-    }
-    let canvas = unsafe { std::slice::from_raw_parts_mut(data.buffer, usize::try_from(data.physical_height * data.stride).unwrap()) };
-    let w = f64::from(data.physical_width);
-    let h = f64::from(data.physical_height);
-    let scale = data.scale;
+    let canvas = unsafe { std::slice::from_raw_parts_mut(data.canvas, usize::try_from(physical_size.height.0 * data.stride).unwrap()) };
+    let w = f64::from(physical_size.width.0);
+    let h = f64::from(physical_size.height.0);
     let line_thickness = 5.0 * scale;
 
     // Order of bytes in `pixel` is [b, g, r, a] (for the Argb8888 format)
@@ -191,6 +187,15 @@ fn draw(data: &WindowDrawEvent) {
         }
         pixel[2] = 255;
         pixel[3] = 255;
+    }
+}
+
+#[allow(clippy::many_single_char_names)]
+fn draw(event: &WindowDrawEvent) {
+    if event.software_draw_data.canvas.is_null() {
+        draw_opengl_triangle_with_init(event);
+    } else {
+        draw_software(&event.software_draw_data, event.physical_size, event.scale);
     }
 }
 
@@ -243,8 +248,10 @@ pub fn main() {
         app_ptr.clone(),
         event_handler_1,
         WindowParams {
-            width: 200,
-            height: 300,
+            size: LogicalSize {
+                width: LogicalPixels(200.),
+                height: LogicalPixels(300.),
+            },
             title: BorrowedStrPtr::new(c"Window 1"),
             app_id: BorrowedStrPtr::new(APP_ID),
             force_client_side_decoration: false,
@@ -255,8 +262,10 @@ pub fn main() {
         app_ptr.clone(),
         event_handler_2,
         WindowParams {
-            width: 300,
-            height: 200,
+            size: LogicalSize {
+                width: LogicalPixels(300.),
+                height: LogicalPixels(200.),
+            },
             title: BorrowedStrPtr::new(c"Window 2"),
             app_id: BorrowedStrPtr::new(APP_ID),
             force_client_side_decoration: true,
