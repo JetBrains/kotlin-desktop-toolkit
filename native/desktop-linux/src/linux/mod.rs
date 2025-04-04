@@ -2,6 +2,7 @@ mod application;
 pub mod application_api;
 mod application_state;
 pub mod events;
+pub mod geometry;
 mod keyboard;
 mod mouse;
 pub mod pointer_shapes;

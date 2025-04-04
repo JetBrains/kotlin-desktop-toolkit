@@ -5,6 +5,7 @@ import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.PhysicalSize
+import org.jetbrains.desktop.linux.SoftwareDrawData
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.skia.BackendRenderTarget
 import org.jetbrains.skia.Canvas
@@ -77,7 +78,7 @@ abstract class SkikoWindowLinux(
         }
     }
 
-    fun performSoftwareDrawing(event: Event.WindowDraw) {
+    fun performSoftwareDrawing(event: Event.WindowDraw, softwareDrawData: SoftwareDrawData) {
         Surface.makeRasterDirect(
             imageInfo = ImageInfo(
                 width = event.size.width,
@@ -86,8 +87,8 @@ abstract class SkikoWindowLinux(
                 alphaType = ColorAlphaType.OPAQUE,
                 colorSpace = ColorSpace.sRGB,
             ),
-            pixelsPtr = event.buffer!!,
-            rowBytes = event.stride,
+            pixelsPtr = softwareDrawData.canvas,
+            rowBytes = softwareDrawData.stride,
             surfaceProps = null,
         ).use { surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
@@ -97,8 +98,9 @@ abstract class SkikoWindowLinux(
     }
 
     fun performDrawing(event: Event.WindowDraw) {
-        if (event.buffer != null) {
-            performSoftwareDrawing(event)
+        val softwareDrawData = event.softwareDrawData
+        if (softwareDrawData != null) {
+            performSoftwareDrawing(event, softwareDrawData)
             return
         }
 

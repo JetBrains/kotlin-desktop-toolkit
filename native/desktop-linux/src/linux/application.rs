@@ -11,7 +11,8 @@ use smithay_client_toolkit::{
 };
 
 use super::application_api::ApplicationCallbacks;
-use super::events::{EventHandler, LogicalPixels, LogicalSize, WindowId};
+use super::events::{EventHandler, WindowId};
+use super::geometry::LogicalSize;
 use super::window_api::WindowParams;
 use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
 use super::xdg_desktop_settings_api::XdgDesktopSetting;
@@ -124,9 +125,6 @@ impl Application<'_> {
 
     #[must_use]
     pub fn get_window_size(&self, window_id: WindowId) -> Option<LogicalSize> {
-        self.get_window(window_id).map(|w| LogicalSize {
-            width: LogicalPixels(w.width.get().into()),
-            height: LogicalPixels(w.height.get().into()),
-        })
+        self.get_window(window_id).map(|w| w.size)
     }
 }

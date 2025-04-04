@@ -200,6 +200,10 @@ public data class WindowCapabilities(
     internal companion object;
 }
 
+public data class SoftwareDrawData(val canvas: Long, val stride: Int) {
+    internal companion object;
+}
+
 public sealed class Event {
     public companion object {
 //        public fun pressedMouseButtons(): MouseButtonsSet {
@@ -338,9 +342,8 @@ public sealed class Event {
     ) : Event()
 
     public data class WindowDraw(
-        val buffer: Long?,
+        val softwareDrawData: SoftwareDrawData?,
         val size: PhysicalSize,
-        val stride: Int,
         val scale: Double,
     ) : Event()
 
@@ -473,14 +476,9 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_h.NativeEvent_WindowDraw() -> {
             val nativeEvent = NativeEvent.window_draw(s)
-            val nativeBuffer = NativeWindowDrawEvent.buffer(nativeEvent)
             Event.WindowDraw(
-                buffer = if (nativeBuffer == MemorySegment.NULL) null else nativeBuffer.address(),
-                size = PhysicalSize(
-                    width = NativeWindowDrawEvent.physical_width(nativeEvent),
-                    height = NativeWindowDrawEvent.physical_height(nativeEvent),
-                ),
-                stride = NativeWindowDrawEvent.stride(nativeEvent),
+                softwareDrawData = SoftwareDrawData.fromNative(NativeWindowDrawEvent.software_draw_data(nativeEvent)),
+                size = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_size(nativeEvent)),
                 scale = NativeWindowDrawEvent.scale(nativeEvent),
             )
         }

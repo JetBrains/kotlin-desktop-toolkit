@@ -639,9 +639,9 @@ class ApplicationState(private val app: Application) : AutoCloseable {
 
     fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
         val windowParams = WindowParams(
-            width = 640,
-            height = 480,
+            size = LogicalSize(width = 640f, height = 480f),
             title = "Window ${windows.count()}",
+            appId = "org.jetbrains.desktop.linux.skikoSample1",
             forceClientSideDecoration = useCustomTitlebar,
             forceSoftwareRendering = forceSoftwareRendering,
         )

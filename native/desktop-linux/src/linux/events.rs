@@ -10,18 +10,16 @@ use smithay_client_toolkit::{
     },
 };
 
+use super::geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize};
+
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
 
-pub type InternalEventHandler = dyn FnMut(&Event) -> bool;
+pub type InternalEventHandler = dyn Fn(&Event) -> bool;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct Timestamp(pub u32);
-
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
-pub struct LogicalPixels(pub f64);
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -30,20 +28,6 @@ pub struct ScreenId(pub u32);
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct WindowId(pub u32);
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct LogicalPoint {
-    pub x: LogicalPixels,
-    pub y: LogicalPixels,
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct LogicalSize {
-    pub width: LogicalPixels,
-    pub height: LogicalPixels,
-}
 
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
@@ -370,11 +354,16 @@ impl From<WindowFullScreenToggleEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct WindowDrawEvent {
-    pub buffer: *mut u8,
-    pub physical_width: i32,
-    pub physical_height: i32,
+pub struct SoftwareDrawData {
+    pub canvas: *mut u8,
     pub stride: i32,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowDrawEvent {
+    pub software_draw_data: SoftwareDrawData,
+    pub physical_size: PhysicalSize,
     pub scale: f64,
 }
 
