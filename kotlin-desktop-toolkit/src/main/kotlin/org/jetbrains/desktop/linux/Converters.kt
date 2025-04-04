@@ -4,6 +4,8 @@ import org.jetbrains.desktop.linux.generated.NativeColor
 import org.jetbrains.desktop.linux.generated.NativeKeyModifiers
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
 import org.jetbrains.desktop.linux.generated.NativeLogicalSize
+import org.jetbrains.desktop.linux.generated.NativePhysicalSize
+import org.jetbrains.desktop.linux.generated.NativeSoftwareDrawData
 import org.jetbrains.desktop.linux.generated.NativeTitlebarButtonLayout
 import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
 import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
@@ -36,6 +38,11 @@ internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
     NativeLogicalPoint.y(result, y.toDouble())
     return result
 }
+
+internal fun PhysicalSize.Companion.fromNative(s: MemorySegment) = PhysicalSize(
+    width = NativePhysicalSize.width(s),
+    height = NativePhysicalSize.height(s),
+)
 
 internal fun KeyModifiers.Companion.fromNative(s: MemorySegment) = KeyModifiers(
     capsLock = NativeKeyModifiers.caps_lock(s),
@@ -162,4 +169,13 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
         desktop_linux_h.NativeXdgDesktopSetting_AudibleBell() -> XdgDesktopSetting.AudibleBell(NativeXdgDesktopSetting.audible_bell(s))
         else -> error("Unexpected setting $nativeTag")
     }
+}
+
+internal fun SoftwareDrawData.Companion.fromNative(nativeSoftwareDrawData: MemorySegment): SoftwareDrawData? {
+    val nativeCanvas = NativeSoftwareDrawData.canvas(nativeSoftwareDrawData)
+    if (nativeCanvas == MemorySegment.NULL) {
+        return null
+    }
+
+    return SoftwareDrawData(canvas = nativeCanvas.address(), stride = NativeSoftwareDrawData.stride(nativeSoftwareDrawData))
 }

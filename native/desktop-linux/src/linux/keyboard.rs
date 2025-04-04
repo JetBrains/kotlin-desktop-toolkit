@@ -20,7 +20,7 @@ impl SimpleWindow {
         (self.event_handler)(&Event::new_window_focus_change_event(false));
     }
 
-    pub fn press_key(&mut self, event: &KeyEvent) -> WindowFrameAction {
+    pub fn press_key(&self, event: &KeyEvent) -> WindowFrameAction {
         let characters = event.utf8.as_ref().map(|s| CString::from_str(s).unwrap());
         let key = event.keysym.name().map(|s| CString::from_str(s).unwrap());
         let e = KeyDownEvent::new(event, characters.as_ref(), key.as_ref());
@@ -28,13 +28,13 @@ impl SimpleWindow {
         e.frame_action_out
     }
 
-    pub fn release_key(&mut self, event: &KeyEvent) {
+    pub fn release_key(&self, event: &KeyEvent) {
         let characters = event.utf8.as_ref().map(|s| CString::from_str(s).unwrap());
         let key = event.keysym.name().map(|s| CString::from_str(s).unwrap());
         (self.event_handler)(&Event::new_key_up_event(event, characters.as_ref(), key.as_ref()));
     }
 
-    pub fn update_modifiers(&mut self, modifiers: Modifiers) {
+    pub fn update_modifiers(&self, modifiers: Modifiers) {
         (self.event_handler)(&Event::new_modifiers_changed_event(modifiers));
     }
 }

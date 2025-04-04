@@ -67,8 +67,9 @@ pub struct ApplicationState {
     pub egl: Option<EglInstance>,
 }
 
-struct WindowData<'a> {
+struct WindowWithData<'a> {
     window: &'a mut SimpleWindow,
+    shm: &'a Shm,
     themed_pointer: Option<&'a mut ThemedPointer>,
     egl: Option<&'a EglInstance>,
 }
@@ -109,13 +110,13 @@ impl ApplicationState {
 
     pub fn get_window(&mut self, surface: &WlSurface) -> Option<&mut SimpleWindow> {
         let surface_id: &ObjectId = &surface.id();
-        debug!("Getting window for {surface_id}");
         self.windows.get_mut(surface_id)
     }
 
-    fn get_window_data(&mut self, surface: &WlSurface) -> Option<WindowData> {
-        self.windows.get_mut(&surface.id()).map(|window| WindowData {
+    fn get_window_with_data(&mut self, surface: &WlSurface) -> Option<WindowWithData> {
+        self.windows.get_mut(&surface.id()).map(|window| WindowWithData {
             window,
+            shm: &self.shm_state,
             themed_pointer: self.themed_pointer.as_mut(),
             egl: self.egl.as_ref(),
         })
@@ -270,8 +271,8 @@ impl CompositorHandler for ApplicationState {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_factor: i32) {
         if self.fractional_scale_manager.is_none() {
             debug!("scale_factor_changed for {surface:?}: {new_factor}");
-            if let Some(window_data) = self.get_window_data(surface) {
-                window_data.window.scale_changed(new_factor.into());
+            if let Some(window) = self.get_window(surface) {
+                window.scale_changed(new_factor.into());
             }
         }
     }
@@ -281,20 +282,20 @@ impl CompositorHandler for ApplicationState {
     }
 
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, _time: u32) {
-        if let Some(window_data) = self.get_window_data(surface) {
+        if let Some(window_data) = self.get_window_with_data(surface) {
             window_data.window.draw(conn, qh, window_data.themed_pointer, window_data.egl);
         }
     }
 
     fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &wl_output::WlOutput) {
-        if let Some(window_data) = self.get_window_data(surface) {
-            window_data.window.output_changed(output);
+        if let Some(window) = self.get_window(surface) {
+            window.output_changed(output);
         }
     }
 
     fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &wl_output::WlOutput) {
-        if let Some(window_data) = self.get_window_data(surface) {
-            window_data.window.output_changed(output);
+        if let Some(window) = self.get_window(surface) {
+            window.output_changed(output);
         }
     }
 }
@@ -309,10 +310,14 @@ impl WindowHandler for ApplicationState {
     }
 
     fn configure(&mut self, conn: &Connection, qh: &QueueHandle<Self>, window: &Window, configure: WindowConfigure, _serial: u32) {
-        if let Some(window_data) = self.get_window_data(window.wl_surface()) {
-            window_data
+        if let Some(window_data) = self.get_window_with_data(window.wl_surface()) {
+            if window_data
                 .window
-                .configure(conn, qh, window, &configure, window_data.themed_pointer, window_data.egl);
+                .configure(conn, window_data.shm, window, &configure, window_data.egl)
+            {
+                // Initiate the first draw.
+                window_data.window.draw(conn, qh, window_data.themed_pointer, window_data.egl);
+            }
         }
     }
 }
@@ -324,8 +329,7 @@ delegate_subcompositor!(ApplicationState);
 impl PointerHandler for ApplicationState {
     fn pointer_frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
         for event in events {
-            //            debug!("pointer event with surface_id={}", event.surface.id());
-            for window in self.windows.values_mut() {
+            if let Some(window) = self.get_window(&event.surface) {
                 window.pointer_event(pointer, event);
             }
         }
@@ -349,13 +353,11 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
-        let Some(window) = this.windows.get_mut(surface_id) else {
-            return;
-        };
-
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
             debug!("wp_fractional_scale_v1::Event::PreferredScale: {scale}");
-            window.scale_changed(f64::from(scale) / 120.0);
+            if let Some(window) = this.windows.get_mut(surface_id) {
+                window.scale_changed(f64::from(scale) / 120.0);
+            };
         }
     }
 }

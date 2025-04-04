@@ -113,7 +113,7 @@ impl<'a> BorrowedStrPtr<'a> {
     pub fn as_str(&self) -> anyhow::Result<&str> {
         assert!(!self.0.ptr.is_null());
         let c_str = unsafe { CStr::from_ptr(self.0.ptr) };
-        c_str.to_str().with_context(|| format!("Invalid unicode in {c_str:?}"))
+        c_str.to_str().with_context(|| format!("Invalid UTF-8 in {c_str:?}"))
     }
 }
 

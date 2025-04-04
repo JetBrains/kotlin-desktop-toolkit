@@ -8,7 +8,7 @@ use desktop_common::{
 use super::{
     application::Application,
     application_api::AppPtr,
-    events::{LogicalPixels, LogicalPoint, LogicalSize},
+    geometry::{LogicalPixels, LogicalPoint, LogicalSize},
 };
 
 pub type ScreenId = u32;
@@ -57,16 +57,13 @@ pub extern "C" fn screen_list(app_ptr: AppPtr) -> ScreenInfoArray {
                             y: LogicalPixels(pos.1.into()),
                         },
                     ),
-                    size: info.logical_size.map_or(
-                        LogicalSize {
-                            width: LogicalPixels(0.0),
-                            height: LogicalPixels(0.0),
-                        },
-                        |size| LogicalSize {
-                            width: LogicalPixels(size.0.into()),
-                            height: LogicalPixels(size.1.into()),
-                        },
-                    ),
+                    size: info
+                        .logical_size
+                        .map(|size| LogicalSize {
+                            width: LogicalPixels(f64::from(size.0)),
+                            height: LogicalPixels(f64::from(size.1)),
+                        })
+                        .unwrap_or_default(),
                     scale: info.scale_factor.into(),
                 }
             })
