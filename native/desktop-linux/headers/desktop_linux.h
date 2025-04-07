@@ -158,10 +158,15 @@ typedef struct NativeWindowFullScreenToggleEvent {
 
 typedef struct NativeWindowDrawEvent {
   uint8_t *buffer;
-  int32_t width;
-  int32_t height;
-  int32_t stride;
+  uint32_t width;
+  uint32_t height;
+  uint32_t stride;
+  double scale;
 } NativeWindowDrawEvent;
+
+typedef struct NativeWindowScaleChangedEvent {
+  double new_scale;
+} NativeWindowScaleChangedEvent;
 
 typedef enum NativeEvent_Tag {
   NativeEvent_KeyDown,
@@ -181,6 +186,7 @@ typedef enum NativeEvent_Tag {
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowFullScreenToggle,
   NativeEvent_WindowDraw,
+  NativeEvent_WindowScaleChanged,
 } NativeEvent_Tag;
 
 typedef struct NativeEvent {
@@ -233,6 +239,9 @@ typedef struct NativeEvent {
     };
     struct {
       struct NativeWindowDrawEvent window_draw;
+    };
+    struct {
+      struct NativeWindowScaleChangedEvent window_scale_changed;
     };
   };
 } NativeEvent;

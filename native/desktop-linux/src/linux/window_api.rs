@@ -1,8 +1,9 @@
 use desktop_common::logger::ffi_boundary;
 
 use super::{
-    application::{AppPtr, Application, WindowParams},
+    application::{AppPtr, Application},
     events::{EventHandler, LogicalPixels, LogicalSize, WindowId},
+    window::WindowParams,
 };
 
 #[unsafe(no_mangle)]
