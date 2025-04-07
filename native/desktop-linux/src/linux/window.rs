@@ -168,7 +168,7 @@ enum RenderingData {
 pub struct SimpleWindow {
     pub event_handler: Box<InternalEventHandler>,
     pub close: bool,
-    pub size: LogicalSize,
+    pub size: Option<LogicalSize>,
     viewport: Option<WpViewport>,
     pub window: Window,
     pub keyboard_focus: bool,
@@ -212,6 +212,8 @@ impl SimpleWindow {
         window.set_title(params.title.as_str().unwrap());
         window.set_app_id(params.app_id.as_str().unwrap());
 
+        let size = if params.size.width.0 == 0.0 { None } else { Some(params.size) };
+
         // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
         // For more info, see WaylandSurface::commit
         //
@@ -223,7 +225,7 @@ impl SimpleWindow {
         Self {
             event_handler,
             close: false,
-            size: params.size,
+            size,
             viewport,
             window,
             keyboard_focus: false,
@@ -256,24 +258,36 @@ impl SimpleWindow {
         // debug!("Supported formats: {:?}", shm.formats());
         // [Argb8888, Xrgb8888, Abgr8888, Xbgr8888, Rgb565, Argb2101010, Xrgb2101010, Abgr2101010, Xbgr2101010, Argb16161616f, Xrgb16161616f, Abgr16161616f, Xbgr16161616f, Yuyv, Nv12, P010, Yuv420]
 
-        if let Some(w) = configure.new_size.0 {
-            self.size.width = LogicalPixels(w.get().into());
-        }
-        if let Some(h) = configure.new_size.1 {
-            self.size.height = LogicalPixels(h.get().into());
-        }
+        let width = LogicalPixels(
+            configure
+                .new_size
+                .0
+                .map(std::num::NonZero::get)
+                .or_else(|| configure.suggested_bounds.map(|(w, _h)| w))
+                .unwrap_or(640)
+                .into(),
+        );
+        let height = LogicalPixels(
+            configure
+                .new_size
+                .1
+                .map(std::num::NonZero::get)
+                .or_else(|| configure.suggested_bounds.map(|(_w, h)| h))
+                .unwrap_or(480)
+                .into(),
+        );
+        let size = LogicalSize { width, height };
+        self.size = Some(size);
 
-        window
-            .xdg_surface()
-            .set_window_geometry(0, 0, self.size.width.round(), self.size.height.round());
+        window.xdg_surface().set_window_geometry(0, 0, width.round(), height.round());
 
         if let Some(viewport) = &self.viewport {
-            viewport.set_destination(self.size.width.round(), self.size.height.round());
+            viewport.set_destination(width.round(), height.round());
         }
 
         (self.event_handler)(
             &WindowResizeEvent {
-                size: self.size,
+                size,
                 maximized: configure.state.contains(WindowState::MAXIMIZED),
                 fullscreen: configure.state.contains(WindowState::FULLSCREEN),
                 client_side_decorations: configure.decoration_mode == DecorationMode::Client,
@@ -287,7 +301,7 @@ impl SimpleWindow {
             .into(),
         );
 
-        let physical_size = self.size.to_physical(self.current_scale);
+        let physical_size = size.to_physical(self.current_scale);
 
         if let Some(rendering_data) = &mut self.rendering_data {
             match rendering_data {
@@ -359,7 +373,7 @@ impl SimpleWindow {
             self.set_cursor = false;
         }
 
-        let physical_size = self.size.to_physical(self.current_scale);
+        let physical_size = self.size.unwrap().to_physical(self.current_scale);
 
         let do_draw = |software_draw_data: Option<SoftwareDrawData>| {
             (self.event_handler)(
