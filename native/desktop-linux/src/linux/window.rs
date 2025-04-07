@@ -1,12 +1,13 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
 use log::debug;
 use smithay_client_toolkit::compositor::SurfaceData;
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
+use smithay_client_toolkit::reexports::csd_frame::WindowManagerCapabilities;
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
 use smithay_client_toolkit::shell::xdg::window::{DecorationMode, WindowDecorations};
@@ -25,6 +26,7 @@ use smithay_client_toolkit::{
 use crate::linux::application_state::ApplicationState;
 use crate::linux::cursors::CURSORS;
 use crate::linux::events::{LogicalPixels, LogicalSize, WindowResizeEvent};
+use crate::linux::xdg_desktop_settings::WindowButtonType;
 
 use smithay_client_toolkit::{
     seat::pointer::{CursorIcon, ThemedPointer},
@@ -33,6 +35,7 @@ use smithay_client_toolkit::{
 };
 
 use super::events::{Event, InternalEventHandler, WindowDrawEvent};
+use super::xdg_desktop_settings::{TitlebarButtonLayout, XdgDesktopSetting};
 
 #[repr(C)]
 pub struct WindowParams<'a> {
@@ -110,7 +113,10 @@ pub struct SimpleWindow {
     pub window_cursor_icon_idx: usize,
     pub decorations_cursor: Option<CursorIcon>,
     pub current_scale: f64,
+    //    pub csd_button_layout: Option<String>,
     pub decoration_mode: DecorationMode,
+    pub capabilities: Option<WindowManagerCapabilities>,
+    pub xdg_button_layout: TitlebarButtonLayout,
 }
 
 impl SimpleWindow {
@@ -177,12 +183,38 @@ impl SimpleWindow {
             decorations_cursor: None,
             current_scale: 1.0,
             decoration_mode: DecorationMode::Client,
+            xdg_button_layout: TitlebarButtonLayout {
+                left_side: vec![WindowButtonType::Icon],
+                right_side: vec![WindowButtonType::Minimize, WindowButtonType::Maximize, WindowButtonType::Close],
+            },
+            capabilities: None,
+        }
+    }
+
+    pub fn handle_xdg_desktop_setting(&mut self, s: &XdgDesktopSetting) {
+        match s {
+            XdgDesktopSetting::ButtonLayout(titlebar_button_layout) => self.xdg_button_layout = titlebar_button_layout.clone(),
+            XdgDesktopSetting::ActionDoubleClickTitlebar(_)
+            | XdgDesktopSetting::ActionRightClickTitlebar(_)
+            | XdgDesktopSetting::ActionMiddleClickTitlebar(_) => {}
         }
     }
 
     pub fn request_close(&mut self) {
         (self.event_handler)(&Event::WindowCloseRequest);
         self.close = true;
+    }
+
+    fn filter_unsupported_buttons(buttons: &[WindowButtonType], capabilities: WindowManagerCapabilities) -> Box<[WindowButtonType]> {
+        buttons
+            .iter()
+            .filter(|b| match b {
+                WindowButtonType::AppMenu | WindowButtonType::Icon | WindowButtonType::Spacer | WindowButtonType::Close => true,
+                WindowButtonType::Minimize => capabilities.contains(WindowManagerCapabilities::MINIMIZE),
+                WindowButtonType::Maximize => capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
+            })
+            .copied()
+            .collect()
     }
 
     pub fn configure(
@@ -217,16 +249,35 @@ impl SimpleWindow {
         if let Some(viewport) = &self.viewport {
             viewport.set_destination(self.width.get() as i32, self.height.get() as i32);
         }
-        (self.event_handler)(
-            &WindowResizeEvent {
-                size: LogicalSize {
-                    width: LogicalPixels(width.get().into()),
-                    height: LogicalPixels(height.get().into()),
-                },
-                draw_decoration: configure.decoration_mode == DecorationMode::Client,
-            }
-            .into(),
-        );
+        self.capabilities = Some(configure.capabilities);
+
+        if configure.decoration_mode == DecorationMode::Client {
+            let titlebar_layout_left = Self::filter_unsupported_buttons(&self.xdg_button_layout.left_side, configure.capabilities);
+            let titlebar_layout_right = Self::filter_unsupported_buttons(&self.xdg_button_layout.right_side, configure.capabilities);
+            (self.event_handler)(
+                &WindowResizeEvent {
+                    size: LogicalSize {
+                        width: LogicalPixels(width.get().into()),
+                        height: LogicalPixels(height.get().into()),
+                    },
+                    titlebar_layout_left: AutoDropArray::new(titlebar_layout_left),
+                    titlebar_layout_right: AutoDropArray::new(titlebar_layout_right),
+                }
+                .into(),
+            );
+        } else {
+            (self.event_handler)(
+                &WindowResizeEvent {
+                    size: LogicalSize {
+                        width: LogicalPixels(width.get().into()),
+                        height: LogicalPixels(height.get().into()),
+                    },
+                    titlebar_layout_left: AutoDropArray::null(),
+                    titlebar_layout_right: AutoDropArray::null(),
+                }
+                .into(),
+            );
+        }
 
         // Initiate the first draw.
         if self.first_configure {
