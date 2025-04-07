@@ -13,10 +13,22 @@ use super::{
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
-pub type Timestamp = u32;
 
-pub type LogicalPixels = f64;
-pub type ScreenId = u32;
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct Timestamp(pub u32);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct LogicalPixels(pub f64);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct ScreenId(pub u32);
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct WindowId(pub u32);
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -174,7 +186,7 @@ pub enum Event<'a> {
 impl Event<'_> {
     pub(crate) fn new_window_screen_change_event(output: &WlOutput) -> Self {
         Self::WindowScreenChange(WindowScreenChangeEvent {
-            new_screen_id: output.id().protocol_id(),
+            new_screen_id: ScreenId(output.id().protocol_id()),
         })
     }
 
@@ -228,10 +240,10 @@ impl Event<'_> {
     pub(crate) const fn new_mouse_move_event(event: &PointerEvent, time: u32) -> Self {
         Event::MouseMoved(MouseMovedEvent {
             location_in_window: LogicalPoint {
-                x: event.position.0,
-                y: event.position.1,
+                x: LogicalPixels(event.position.0),
+                y: LogicalPixels(event.position.1),
             },
-            timestamp: time,
+            timestamp: Timestamp(time),
         })
     }
     //
@@ -246,8 +258,8 @@ impl Event<'_> {
     pub(crate) const fn new_mouse_enter_event(event: &PointerEvent) -> Self {
         Event::MouseEntered(MouseEnteredEvent {
             location_in_window: LogicalPoint {
-                x: event.position.0,
-                y: event.position.1,
+                x: LogicalPixels(event.position.0),
+                y: LogicalPixels(event.position.1),
             },
         })
     }
@@ -255,8 +267,8 @@ impl Event<'_> {
     pub(crate) const fn new_mouse_exit_event(event: &PointerEvent) -> Self {
         Event::MouseExited(MouseExitedEvent {
             location_in_window: LogicalPoint {
-                x: event.position.0,
-                y: event.position.1,
+                x: LogicalPixels(event.position.0),
+                y: LogicalPixels(event.position.1),
             },
         })
     }
@@ -265,10 +277,10 @@ impl Event<'_> {
         Event::MouseDown(MouseDownEvent {
             button: MouseButton(button),
             location_in_window: LogicalPoint {
-                x: event.position.0,
-                y: event.position.1,
+                x: LogicalPixels(event.position.0),
+                y: LogicalPixels(event.position.1),
             },
-            timestamp: time,
+            timestamp: Timestamp(time),
         })
     }
 
@@ -276,22 +288,22 @@ impl Event<'_> {
         Event::MouseUp(MouseUpEvent {
             button: MouseButton(button),
             location_in_window: LogicalPoint {
-                x: event.position.0,
-                y: event.position.1,
+                x: LogicalPixels(event.position.0),
+                y: LogicalPixels(event.position.1),
             },
-            timestamp: time,
+            timestamp: Timestamp(time),
         })
     }
 
     pub(crate) const fn new_scroll_wheel_event(event: &PointerEvent, time: u32, horizontal: AxisScroll, vertical: AxisScroll) -> Self {
         Event::ScrollWheel(ScrollWheelEvent {
-            scrolling_delta_x: horizontal.absolute,
-            scrolling_delta_y: vertical.absolute,
+            scrolling_delta_x: LogicalPixels(horizontal.absolute),
+            scrolling_delta_y: LogicalPixels(vertical.absolute),
             location_in_window: LogicalPoint {
-                x: event.position.0,
-                y: event.position.1,
+                x: LogicalPixels(event.position.0),
+                y: LogicalPixels(event.position.1),
             },
-            timestamp: time,
+            timestamp: Timestamp(time),
         })
     }
 }
