@@ -3,8 +3,8 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use anyhow::Result;
-use desktop_common::ffi_utils::RustAllocatedRawPtr;
 use desktop_common::logger::ffi_boundary;
+use desktop_common::{ffi_utils::RustAllocatedRawPtr, logger::catch_panic};
 use log::debug;
 use smithay_client_toolkit::{
     compositor::CompositorState,
@@ -28,10 +28,6 @@ use super::{application_state::ApplicationState, window::SimpleWindow};
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct ApplicationConfig {}
-
-#[repr(C)]
-#[derive(Debug)]
 pub struct ApplicationCallbacks {
     // Returns true if application should terminate, otherwise termination will be canceled
     pub on_should_terminate: extern "C" fn() -> bool,
@@ -44,13 +40,11 @@ pub struct Application {
     event_queue: EventQueue<ApplicationState>,
     qh: QueueHandle<ApplicationState>,
     exit: bool,
-    state: ApplicationState,
+    pub state: ApplicationState,
 }
 
 #[repr(C)]
 pub struct WindowParams {
-    pub event_handler: EventHandler,
-
     //pub origin: LogicalPoint,
     pub width: u32,
     pub height: u32,
@@ -130,7 +124,7 @@ impl Application {
         }
     }
 
-    pub fn new_window(&mut self, params: &WindowParams) -> WindowId {
+    pub fn new_window(&mut self, event_handler: EventHandler, params: &WindowParams) -> WindowId {
         let state = &self.state;
         let width = NonZeroU32::new(params.width).unwrap();
         let height = NonZeroU32::new(params.height).unwrap();
@@ -159,7 +153,16 @@ impl Application {
 
         debug!("Created new window with surface_id={surface_id}");
         let w = SimpleWindow {
-            event_handler: params.event_handler,
+            event_handler: {
+                //let surface_id = surface_id.clone();
+                Box::new(move |e| {
+                    catch_panic(|| {
+                        //debug!("Calling event handler of {surface_id} for {e:?}");
+                        Ok(event_handler(e))
+                    })
+                    .unwrap_or(false)
+                })
+            },
             subcompositor_state: Arc::new(subcompositor_state),
             close: false,
             first_configure: true,
@@ -206,10 +209,9 @@ impl Application {
 pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_init(_config: &ApplicationConfig, callbacks: ApplicationCallbacks) -> AppPtr<'static> {
+pub extern "C" fn application_init(callbacks: ApplicationCallbacks) -> AppPtr<'static> {
     let app = ffi_boundary("application_init", || {
         debug!("Application Init");
-        // todo
         Ok(Some(Application::new(callbacks)?))
     });
     AppPtr::from_value(app)
