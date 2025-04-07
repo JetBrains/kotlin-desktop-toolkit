@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeApplicationCallbacks
+import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
 import org.jetbrains.desktop.linux.generated.NativeScreenInfo
 import org.jetbrains.desktop.linux.generated.NativeScreenInfoArray
 import org.jetbrains.desktop.linux.generated.NativeWindowParams
@@ -23,6 +24,7 @@ public data class WindowParams(
     val title: String = "Window",
     val appId: String = "org.jetbrains.desktop.linux.skikoSample1",
     val forceClientSideDecoration: Boolean = false,
+    val forceSoftwareRendering: Boolean = false,
 ) {
     internal fun toNative(arena: Arena): MemorySegment {
         val nativeWindowParams = NativeWindowParams.allocate(arena)
@@ -31,6 +33,7 @@ public data class WindowParams(
         NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
         NativeWindowParams.app_id(nativeWindowParams, arena.allocateUtf8String(appId))
         NativeWindowParams.force_client_side_decoration(nativeWindowParams, forceClientSideDecoration)
+        NativeWindowParams.force_software_rendering(nativeWindowParams, forceSoftwareRendering)
         return nativeWindowParams
     }
 }
@@ -135,6 +138,17 @@ public class Application() {
                 ffiDownCall { desktop_h.screen_list_drop(screenInfoArray) }
             }
             AllScreens(screens)
+        }
+    }
+
+    public data class EglProcFunc(val fPtr: Long, val ctxPtr: Long)
+
+    public fun getEglProcFunc(): EglProcFunc {
+        return Arena.ofConfined().use { arena ->
+            val s = desktop_h.application_get_egl_proc_func(arena, appPtr!!)
+            val f = NativeGetEglProcFuncData.f(s)
+            val ctx = NativeGetEglProcFuncData.ctx(s)
+            EglProcFunc(fPtr = f.address(), ctxPtr = ctx.address())
         }
     }
 }

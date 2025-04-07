@@ -492,22 +492,10 @@ class RotatingBallWindow(
     windowParams: WindowParams,
 ) : SkikoWindowLinux(app, windowParams) {
     companion object {
-        fun createWindow(
-            app: Application,
-            title: String,
-            useCustomTitlebar: Boolean,
-            xdgDesktopSettings: XdgDesktopSettings,
-        ): RotatingBallWindow {
+        fun createWindow(app: Application, windowParams: WindowParams, xdgDesktopSettings: XdgDesktopSettings): RotatingBallWindow {
             val windowSize = LogicalSize(640f, 480f)
             val windowContentSize = windowSize // todo it's incorrect
             val container = WindowContainer.create(windowContentSize, xdgDesktopSettings)
-
-            val windowParams = WindowParams(
-                width = 640,
-                height = 480,
-                title = title,
-                forceClientSideDecoration = useCustomTitlebar,
-            )
 
             return RotatingBallWindow(container, app, windowParams)
         }
@@ -555,12 +543,19 @@ class ApplicationState(private val app: Application) : AutoCloseable {
     private val windows = mutableListOf<RotatingBallWindow>()
     private var xdgDesktopSettings = XdgDesktopSettings()
 
-    fun createWindow(useCustomTitlebar: Boolean) {
+    fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
+        val windowParams = WindowParams(
+            width = 640,
+            height = 480,
+            title = "Window ${windows.count()}",
+            forceClientSideDecoration = useCustomTitlebar,
+            forceSoftwareRendering = forceSoftwareRendering,
+        )
+
         windows.add(
             RotatingBallWindow.createWindow(
                 app,
-                "Window ${windows.count()}",
-                useCustomTitlebar,
+                windowParams,
                 xdgDesktopSettings,
             ),
         )
@@ -586,7 +581,7 @@ fun main(args: Array<String>) {
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     val app = Application()
     ApplicationState(app).use { state ->
-        state.createWindow(useCustomTitlebar = true)
+        state.createWindow(useCustomTitlebar = true, forceSoftwareRendering = false)
         app.runEventLoop(ApplicationConfig(onXdgDesktopSettingsChange = { state.settingChanged(it) }))
     }
 }
