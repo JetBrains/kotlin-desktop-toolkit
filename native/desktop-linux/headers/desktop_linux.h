@@ -3,15 +3,20 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum NativeLogLevel {
+  NativeLogLevel_Off,
+  NativeLogLevel_Error,
+  NativeLogLevel_Warn,
+  NativeLogLevel_Info,
+  NativeLogLevel_Debug,
+  NativeLogLevel_Trace,
+} NativeLogLevel;
+
 typedef const void *NativeGenericRawPtr_c_void;
 
 typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr;
 
 typedef NativeRustAllocatedRawPtr NativeAppPtr;
-
-typedef struct NativeApplicationConfig {
-
-} NativeApplicationConfig;
 
 typedef struct NativeApplicationCallbacks {
   bool (*on_should_terminate)(void);
@@ -19,13 +24,49 @@ typedef struct NativeApplicationCallbacks {
   void (*on_display_configuration_change)(void);
 } NativeApplicationCallbacks;
 
+typedef uint32_t NativeScreenId;
+
+typedef const char *NativeGenericRawPtr_c_char;
+
+typedef NativeGenericRawPtr_c_char NativeRustAllocatedStrPtr;
+
+typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
+
+typedef double NativeLogicalPixels;
+
+typedef struct NativeLogicalPoint {
+  NativeLogicalPixels x;
+  NativeLogicalPixels y;
+} NativeLogicalPoint;
+
+typedef struct NativeLogicalSize {
+  NativeLogicalPixels width;
+  NativeLogicalPixels height;
+} NativeLogicalSize;
+
+typedef struct NativeScreenInfo {
+  NativeScreenId screen_id;
+  bool is_primary;
+  NativeAutoDropStrPtr name;
+  struct NativeLogicalPoint origin;
+  struct NativeLogicalSize size;
+  double scale;
+} NativeScreenInfo;
+
+typedef uintptr_t NativeArraySize;
+
+typedef struct NativeAutoDropArray_ScreenInfo {
+  const struct NativeScreenInfo *ptr;
+  NativeArraySize len;
+} NativeAutoDropArray_ScreenInfo;
+
+typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
+
 typedef uint32_t NativeWindowId;
 
 typedef uintptr_t NativeKeyModifiersSet;
 
 typedef uint16_t NativeKeyCode;
-
-typedef const char *NativeGenericRawPtr_c_char;
 
 typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
@@ -53,13 +94,6 @@ typedef struct NativeModifiersChangedEvent {
   NativeKeyCode code;
   NativeTimestamp timestamp;
 } NativeModifiersChangedEvent;
-
-typedef double NativeLogicalPixels;
-
-typedef struct NativeLogicalPoint {
-  NativeLogicalPixels x;
-  NativeLogicalPixels y;
-} NativeLogicalPoint;
 
 typedef struct NativeMouseMovedEvent {
   struct NativeLogicalPoint location_in_window;
@@ -101,16 +135,9 @@ typedef struct NativeScrollWheelEvent {
   NativeTimestamp timestamp;
 } NativeScrollWheelEvent;
 
-typedef uint32_t NativeScreenId;
-
 typedef struct NativeWindowScreenChangeEvent {
   NativeScreenId new_screen_id;
 } NativeWindowScreenChangeEvent;
-
-typedef struct NativeLogicalSize {
-  NativeLogicalPixels width;
-  NativeLogicalPixels height;
-} NativeLogicalSize;
 
 typedef struct NativeWindowResizeEvent {
   struct NativeLogicalSize size;
@@ -125,13 +152,16 @@ typedef struct NativeWindowFocusChangeEvent {
   bool is_main;
 } NativeWindowFocusChangeEvent;
 
-typedef struct NativeWindowCloseRequestEvent {
-
-} NativeWindowCloseRequestEvent;
-
 typedef struct NativeWindowFullScreenToggleEvent {
   bool is_full_screen;
 } NativeWindowFullScreenToggleEvent;
+
+typedef struct NativeWindowDrawEvent {
+  uint8_t *buffer;
+  int32_t width;
+  int32_t height;
+  int32_t stride;
+} NativeWindowDrawEvent;
 
 typedef enum NativeEvent_Tag {
   NativeEvent_KeyDown,
@@ -150,6 +180,7 @@ typedef enum NativeEvent_Tag {
   NativeEvent_WindowFocusChange,
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowFullScreenToggle,
+  NativeEvent_WindowDraw,
 } NativeEvent_Tag;
 
 typedef struct NativeEvent {
@@ -198,10 +229,10 @@ typedef struct NativeEvent {
       struct NativeWindowFocusChangeEvent window_focus_change;
     };
     struct {
-      struct NativeWindowCloseRequestEvent window_close_request;
+      struct NativeWindowFullScreenToggleEvent window_full_screen_toggle;
     };
     struct {
-      struct NativeWindowFullScreenToggleEvent window_full_screen_toggle;
+      struct NativeWindowDrawEvent window_draw;
     };
   };
 } NativeEvent;
@@ -209,13 +240,22 @@ typedef struct NativeEvent {
 typedef bool (*NativeEventHandler)(const struct NativeEvent*);
 
 typedef struct NativeWindowParams {
-  NativeEventHandler event_handler;
   uint32_t width;
   uint32_t height;
 } NativeWindowParams;
 
-NativeAppPtr application_init(const struct NativeApplicationConfig *_config,
-                              struct NativeApplicationCallbacks callbacks);
+typedef struct NativeExceptionsArray {
+  const NativeRustAllocatedStrPtr *items;
+  NativeArraySize count;
+} NativeExceptionsArray;
+
+typedef struct NativeLoggerConfiguration {
+  NativeBorrowedStrPtr file_path;
+  enum NativeLogLevel console_level;
+  enum NativeLogLevel file_level;
+} NativeLoggerConfiguration;
+
+NativeAppPtr application_init(struct NativeApplicationCallbacks callbacks);
 
 void application_run_event_loop(NativeAppPtr app_ptr);
 
@@ -223,8 +263,20 @@ void application_stop_event_loop(NativeAppPtr app_ptr);
 
 void application_shutdown(NativeAppPtr app_ptr);
 
-NativeWindowId window_create(NativeAppPtr app_ptr, struct NativeWindowParams params);
+NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
+
+void screen_list_drop(NativeScreenInfoArray arr);
+
+NativeWindowId window_create(NativeAppPtr app_ptr,
+                             NativeEventHandler event_handler,
+                             struct NativeWindowParams params);
 
 void window_drop(NativeAppPtr app_ptr, NativeWindowId window_id);
 
 struct NativeLogicalSize window_get_size(NativeAppPtr app_ptr, NativeWindowId window_id);
+
+struct NativeExceptionsArray logger_check_exceptions(void);
+
+void logger_clear_exceptions(void);
+
+void logger_init(const struct NativeLoggerConfiguration *logger_configuration);

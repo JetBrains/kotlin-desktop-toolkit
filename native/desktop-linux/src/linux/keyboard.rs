@@ -1,3 +1,4 @@
+use log::debug;
 use smithay_client_toolkit::seat::keyboard::{KeyEvent, Keysym, Modifiers};
 
 use crate::linux::cursors::CURSORS;
@@ -6,7 +7,7 @@ use super::{events::Event, window::SimpleWindow};
 
 impl SimpleWindow {
     pub fn keyboard_enter(&mut self, keysyms: &[Keysym]) {
-        println!("Keyboard focus on window with pressed syms: {keysyms:?}");
+        debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
         self.keyboard_focus = true;
         (self.event_handler)(&Event::new_window_focus_change_event(true));
     }
@@ -20,7 +21,7 @@ impl SimpleWindow {
         if event.keysym == Keysym::N {
             // Cycle through cursor icons.
             self.window_cursor_icon_idx = (self.window_cursor_icon_idx + 1) % CURSORS.len();
-            println!("Setting cursor icon to: {}", CURSORS[self.window_cursor_icon_idx].name());
+            debug!("Setting cursor icon to: {}", CURSORS[self.window_cursor_icon_idx].name());
             self.set_cursor = true;
         }
     }

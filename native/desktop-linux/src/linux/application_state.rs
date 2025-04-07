@@ -131,13 +131,13 @@ impl SeatHandler for ApplicationState {
 
     fn new_capability(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat, capability: Capability) {
         if capability == Capability::Keyboard && self.keyboard.is_none() {
-            println!("Set keyboard capability");
+            debug!("Set keyboard capability");
             let keyboard = self.seat_state.get_keyboard(qh, &seat, None).expect("Failed to create keyboard");
             self.keyboard = Some(keyboard);
         }
 
         if capability == Capability::Pointer && self.themed_pointer.is_none() {
-            println!("Set pointer capability");
+            debug!("Set pointer capability");
             let surface = self.compositor_state.create_surface(qh);
             let themed_pointer = self
                 .seat_state
@@ -150,14 +150,14 @@ impl SeatHandler for ApplicationState {
     fn remove_capability(&mut self, _conn: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, capability: Capability) {
         if capability == Capability::Keyboard {
             if let Some(keyboard) = self.keyboard.take() {
-                println!("Unset keyboard capability");
+                debug!("Unset keyboard capability");
                 keyboard.release();
             }
         }
 
         if capability == Capability::Pointer {
             if let Some(themed_pointer) = self.themed_pointer.take() {
-                println!("Unset pointer capability");
+                debug!("Unset pointer capability");
                 themed_pointer.pointer().release();
             }
         }
