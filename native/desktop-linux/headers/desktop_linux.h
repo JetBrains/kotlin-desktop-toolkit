@@ -348,6 +348,7 @@ typedef struct NativeXdgDesktopSetting {
 } NativeXdgDesktopSetting;
 
 typedef struct NativeApplicationCallbacks {
+  void (*on_application_started)(void);
   bool (*on_should_terminate)(void);
   void (*on_will_terminate)(void);
   void (*on_display_configuration_change)(void);
@@ -717,6 +718,10 @@ void application_stop_event_loop(NativeAppPtr app_ptr);
 void application_shutdown(NativeAppPtr app_ptr);
 
 struct NativeGetEglProcFuncData application_get_egl_proc_func(NativeAppPtr app_ptr);
+
+bool application_is_event_loop_thread(NativeAppPtr app_ptr);
+
+void application_run_on_event_loop_async(NativeAppPtr app_ptr, void (*f)(void));
 
 NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
 

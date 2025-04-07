@@ -1,4 +1,5 @@
 use super::{application::Application, application_state::EglInstance, xdg_desktop_settings_api::XdgDesktopSetting};
+use anyhow::bail;
 use desktop_common::ffi_utils::{BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr};
 use desktop_common::logger::ffi_boundary;
 use log::debug;
@@ -6,6 +7,7 @@ use log::debug;
 #[repr(C)]
 #[derive(Debug)]
 pub struct ApplicationCallbacks {
+    pub on_application_started: extern "C" fn(),
     // Returns true if application should terminate, otherwise termination will be canceled
     pub on_should_terminate: extern "C" fn() -> bool,
     pub on_will_terminate: extern "C" fn(),
@@ -73,4 +75,29 @@ pub extern "C" fn application_get_egl_proc_func(app_ptr: AppPtr<'_>) -> GetEglPr
         f: egl_get_proc_address,
         ctx: BorrowedOpaquePtr::new(app.state.egl.as_ref()),
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_is_event_loop_thread(app_ptr: AppPtr<'_>) -> bool {
+    ffi_boundary("application_is_event_loop_thread", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        if let Some(t) = app.state.event_loop_thread_id {
+            let current_thread_id = std::thread::current().id();
+            Ok(t == current_thread_id)
+        } else {
+            bail!("Event loop not yet started")
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr<'_>, f: extern "C" fn()) {
+    ffi_boundary("application_run_on_event_loop_async", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        if let Some(s) = &app.state.run_on_event_loop {
+            s.send(f).map_err(std::convert::Into::into)
+        } else {
+            bail!("Event loop not yet started")
+        }
+    });
 }
