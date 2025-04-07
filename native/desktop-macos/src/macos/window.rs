@@ -734,7 +734,7 @@ define_class!(
 
         #[unsafe(method(interpretKeyEvents:))]
         fn interpret_key_events(&self, event_array: &NSArray<NSEvent>) {
-            debug!("interpretKeyEvents: {:?}", event_array);
+            debug!("interpretKeyEvents: {event_array:?}");
             unsafe {
                 let _: () = msg_send![super(self), interpretKeyEvents: event_array];
             }
