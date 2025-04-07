@@ -1,6 +1,10 @@
 use core::f64;
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
+use smithay_client_toolkit::{
+    reexports::client::{Proxy, protocol::wl_output::WlOutput},
+    seat::pointer::{AxisScroll, PointerEvent},
+};
 
 use super::{
     keyboard::{KeyCode, KeyModifiersSet},
@@ -9,9 +13,10 @@ use super::{
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
-pub type Timestamp = f64;
+pub type Timestamp = u32;
 
 pub type LogicalPixels = f64;
+pub type ScreenId = u32;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -75,14 +80,14 @@ pub struct MouseDraggedEvent {
 #[derive(Debug)]
 pub struct MouseEnteredEvent {
     pub location_in_window: LogicalPoint,
-    pub timestamp: Timestamp,
+    //    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseExitedEvent {
     pub location_in_window: LogicalPoint,
-    pub timestamp: Timestamp,
+    //    pub timestamp: Timestamp,
 }
 
 #[repr(C)]
@@ -106,7 +111,6 @@ pub struct MouseUpEvent {
 pub struct ScrollWheelEvent {
     pub scrolling_delta_x: LogicalPixels,
     pub scrolling_delta_y: LogicalPixels,
-    pub has_precise_scrolling_deltas: bool,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
 }
@@ -114,7 +118,7 @@ pub struct ScrollWheelEvent {
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowScreenChangeEvent {
-    //    pub new_screen_id: ScreenId,
+    pub new_screen_id: ScreenId,
 }
 
 #[repr(C)]
@@ -168,38 +172,30 @@ pub enum Event<'a> {
 }
 
 impl Event<'_> {
-    //    pub(crate) fn new_window_screen_change_event(window: &NSWindow) -> Self {
-    //        Self::WindowScreenChange(WindowScreenChangeEvent {
-    //            // todo sometimes it panics when you close the lid
-    //            new_screen_id: window.screen().unwrap().screen_id(),
-    //        })
-    //    }
-    //
-    //    pub(crate) fn new_window_resize_event(window: &'a NSWindow) -> Self {
-    //        Self::WindowResize(WindowResizeEvent {
-    //            size: window.get_size(),
-    //        })
-    //    }
-    //
-    //    pub(crate) fn new_window_move_event(window: &NSWindow, mtm: MainThreadMarker) -> Self {
-    //        Self::WindowMove(WindowMoveEvent {
-    //            origin: window.get_origin(mtm).unwrap(), // todo
-    //        })
-    //    }
-    //
-    //    pub(crate) fn new_window_close_request_event(window: &NSWindow) -> Self {
-    //        Self::WindowCloseRequest(WindowCloseRequestEvent {
-    //        })
-    //    }
-    //
-    //    pub(crate) fn new_window_focus_change_event(window: &NSWindow) -> Self {
-    //        Self::WindowFocusChange(WindowFocusChangeEvent {
-    //
-    //            is_key: window.isKeyWindow(),
-    //            is_main: unsafe { window.isMainWindow() },
-    //        })
-    //    }
-    //
+    pub(crate) fn new_window_screen_change_event(output: &WlOutput) -> Self {
+        Self::WindowScreenChange(WindowScreenChangeEvent {
+            new_screen_id: output.id().protocol_id(),
+        })
+    }
+
+    pub(crate) const fn new_window_resize_event(size: LogicalSize) -> Self {
+        Self::WindowResize(WindowResizeEvent { size })
+    }
+
+    //        pub(crate) fn new_window_move_event(window: &NSWindow) -> Self {
+    //            Self::WindowMove(WindowMoveEvent {
+    //                origin: window.get_origin(mtm).unwrap(), // todo
+    //            })
+    //        }
+
+    pub(crate) const fn new_window_close_request_event() -> Self {
+        Self::WindowCloseRequest(WindowCloseRequestEvent {})
+    }
+
+    pub(crate) const fn new_window_focus_change_event(is_key: bool) -> Self {
+        Self::WindowFocusChange(WindowFocusChangeEvent { is_key, is_main: is_key })
+    }
+
     //    pub(crate) fn new_window_full_screen_toggle_event(window: &NSWindow) -> Self {
     //        Self::WindowFullScreenToggle(WindowFullScreenToggleEvent {
     //            is_full_screen: window.is_full_screen(),
@@ -229,12 +225,15 @@ impl Event<'_> {
     //        })
     //    }
     //
-    //    pub(crate) fn new_mouse_move_event(ns_event: &NSEvent, mtm: MainThreadMarker) -> Self {
-    //        Event::MouseMoved(MouseMovedEvent {
-    //            location_in_window: ns_event.cursor_location_in_window(mtm),
-    //            timestamp: unsafe { ns_event.timestamp() },
-    //        })
-    //    }
+    pub(crate) const fn new_mouse_move_event(event: &PointerEvent, time: u32) -> Self {
+        Event::MouseMoved(MouseMovedEvent {
+            location_in_window: LogicalPoint {
+                x: event.position.0,
+                y: event.position.1,
+            },
+            timestamp: time,
+        })
+    }
     //
     //    pub(crate) fn new_mouse_drag_event(ns_event: &NSEvent, mtm: MainThreadMarker) -> Self {
     //        Event::MouseDragged(MouseDraggedEvent {
@@ -244,43 +243,55 @@ impl Event<'_> {
     //        })
     //    }
     //
-    //    pub(crate) fn new_mouse_enter_event(ns_event: &NSEvent, mtm: MainThreadMarker) -> Self {
-    //        Event::MouseEntered(MouseEnteredEvent {
-    //            location_in_window: ns_event.cursor_location_in_window(mtm),
-    //            timestamp: unsafe { ns_event.timestamp() },
-    //        })
-    //    }
-    //
-    //    pub(crate) fn new_mouse_exit_event(ns_event: &NSEvent, mtm: MainThreadMarker) -> Self {
-    //        Event::MouseExited(MouseExitedEvent {
-    //            location_in_window: ns_event.cursor_location_in_window(mtm),
-    //            timestamp: unsafe { ns_event.timestamp() },
-    //        })
-    //    }
-    //
-    //    pub(crate) fn new_mouse_down_event(ns_event: &NSEvent, mtm: MainThreadMarker) -> Self {
-    //        Event::MouseDown(MouseDownEvent {
-    //            button: ns_event.mouse_button().unwrap(),
-    //            location_in_window: ns_event.cursor_location_in_window(mtm),
-    //            timestamp: unsafe { ns_event.timestamp() },
-    //        })
-    //    }
-    //
-    //    pub(crate) fn new_mouse_up_event(ns_event: &NSEvent, mtm: MainThreadMarker) -> Self {
-    //        Event::MouseUp(MouseUpEvent {
-    //            button: ns_event.mouse_button().unwrap(),
-    //            location_in_window: ns_event.cursor_location_in_window(mtm),
-    //            timestamp: unsafe { ns_event.timestamp() },
-    //        })
-    //    }
-    //
-    //    pub(crate) fn new_scroll_wheel_event(ns_event: &NSEvent, mtm: MainThreadMarker) -> Self {
-    //        Event::ScrollWheel(ScrollWheelEvent {
-    //            scrolling_delta_x: unsafe { ns_event.scrollingDeltaX() },
-    //            scrolling_delta_y: unsafe { ns_event.scrollingDeltaY() },
-    //            has_precise_scrolling_deltas: unsafe { ns_event.hasPreciseScrollingDeltas() },
-    //            location_in_window: ns_event.cursor_location_in_window(mtm),
-    //            timestamp: unsafe { ns_event.timestamp() },
-    //        })
-    //    }
+    pub(crate) const fn new_mouse_enter_event(event: &PointerEvent) -> Self {
+        Event::MouseEntered(MouseEnteredEvent {
+            location_in_window: LogicalPoint {
+                x: event.position.0,
+                y: event.position.1,
+            },
+        })
+    }
+
+    pub(crate) const fn new_mouse_exit_event(event: &PointerEvent) -> Self {
+        Event::MouseExited(MouseExitedEvent {
+            location_in_window: LogicalPoint {
+                x: event.position.0,
+                y: event.position.1,
+            },
+        })
+    }
+
+    pub(crate) const fn new_mouse_down_event(event: &PointerEvent, button: u32, time: u32) -> Self {
+        Event::MouseDown(MouseDownEvent {
+            button: MouseButton(button),
+            location_in_window: LogicalPoint {
+                x: event.position.0,
+                y: event.position.1,
+            },
+            timestamp: time,
+        })
+    }
+
+    pub(crate) const fn new_mouse_up_event(event: &PointerEvent, button: u32, time: u32) -> Self {
+        Event::MouseUp(MouseUpEvent {
+            button: MouseButton(button),
+            location_in_window: LogicalPoint {
+                x: event.position.0,
+                y: event.position.1,
+            },
+            timestamp: time,
+        })
+    }
+
+    pub(crate) const fn new_scroll_wheel_event(event: &PointerEvent, time: u32, horizontal: AxisScroll, vertical: AxisScroll) -> Self {
+        Event::ScrollWheel(ScrollWheelEvent {
+            scrolling_delta_x: horizontal.absolute,
+            scrolling_delta_y: vertical.absolute,
+            location_in_window: LogicalPoint {
+                x: event.position.0,
+                y: event.position.1,
+            },
+            timestamp: time,
+        })
+    }
 }

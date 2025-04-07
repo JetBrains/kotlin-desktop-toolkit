@@ -30,7 +30,11 @@ use smithay_client_toolkit::{
 
 use crate::linux::window::SimpleWindow;
 
+use super::application::ApplicationCallbacks;
+
 pub struct ApplicationState {
+    pub callbacks: ApplicationCallbacks,
+
     pub registry_state: RegistryState,
     pub seat_state: SeatState,
     pub output_state: OutputState,
@@ -175,11 +179,17 @@ impl OutputHandler for ApplicationState {
         &mut self.output_state
     }
 
-    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
+    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {
+        (self.callbacks.on_display_configuration_change)();
+    }
 
-    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
+    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {
+        (self.callbacks.on_display_configuration_change)();
+    }
 
-    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {}
+    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {
+        (self.callbacks.on_display_configuration_change)();
+    }
 }
 
 delegate_output!(ApplicationState);
@@ -213,8 +223,10 @@ impl CompositorHandler for ApplicationState {
         }
     }
 
-    fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &WlSurface, _output: &wl_output::WlOutput) {
-        // Not needed for this example.
+    fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &wl_output::WlOutput) {
+        if let Some(window_data) = self.get_window_data(surface) {
+            window_data.window.surface_enter(output);
+        }
     }
 
     fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _surface: &WlSurface, _output: &wl_output::WlOutput) {
@@ -249,7 +261,7 @@ impl PointerHandler for ApplicationState {
         for event in events {
             //            debug!("pointer event with surface_id={}", event.surface.id());
             for window in self.windows.values_mut() {
-                window.pointer_frame(pointer, event);
+                window.pointer_event(pointer, event);
             }
         }
     }
