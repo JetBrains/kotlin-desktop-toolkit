@@ -403,9 +403,9 @@ typedef struct NativeAppMenuStructure {
 
 typedef const void *NativeGenericRawPtr_c_void;
 
-typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr_c_void;
+typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr;
 
-typedef NativeRustAllocatedRawPtr_c_void NativeDisplayLinkPtr;
+typedef NativeRustAllocatedRawPtr NativeDisplayLinkPtr;
 
 typedef void (*NativeDisplayLinkCallback)(void);
 
@@ -435,7 +435,7 @@ typedef void *NativeMetalDeviceRef;
 
 typedef void *NativeMetalCommandQueueRef;
 
-typedef NativeRustAllocatedRawPtr_c_void NativeMetalViewPtr;
+typedef NativeRustAllocatedRawPtr NativeMetalViewPtr;
 
 typedef void (*NativeOnDisplayLayerCallback)(void);
 
@@ -507,7 +507,7 @@ typedef struct NativeAutoDropArray_ScreenInfo {
 
 typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
 
-typedef NativeRustAllocatedRawPtr_c_void NativeWindowPtr;
+typedef NativeRustAllocatedRawPtr NativeWindowPtr;
 
 typedef struct NativeWindowParams {
   struct NativeLogicalPoint origin;
