@@ -104,7 +104,7 @@ pub(crate) struct MetalView {
     drawable: Cell<Option<Retained<ProtocolObject<dyn CAMetalDrawable>>>>,
 }
 
-pub type MetalViewPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
+pub type MetalViewPtr<'a> = RustAllocatedRawPtr<'a>;
 
 pub(crate) struct MetalLayerViewIvars {}
 
