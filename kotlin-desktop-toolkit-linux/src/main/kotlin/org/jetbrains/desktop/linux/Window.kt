@@ -14,6 +14,7 @@ public class Window internal constructor(
 ) : AutoCloseable {
     public val windowId: WindowId
     private val arena = Arena.ofConfined()
+    private var scale: Double = 1.0
 
     private val nativeEventHandler = NativeEventHandler.allocate(::onEvent, arena)
 
@@ -27,6 +28,12 @@ public class Window internal constructor(
     private fun onEvent(nativeEvent: MemorySegment): Boolean {
 //        println("onEvent called")
         val event = Event.fromNative(nativeEvent)
+        when (event) {
+            is Event.WindowScaleChanged -> {
+                scale = event.newScale
+            }
+            else -> {}
+        }
         return ffiUpCall(defaultResult = false) {
             val result = eventHandler(event)
             when (result) {
@@ -45,11 +52,8 @@ public class Window internal constructor(
 //            desktop_h.window_get_screen_id(pointer)
 //        }
 //    }
-//
-    public fun scaleFactor(): Double {
-        return 1.0
-//        return ffiDownCall { desktop_h.window_scale_factor(pointer) }
-    }
+
+    public fun scaleFactor(): Double = scale
 
 //    public var title: String
 //        get() {

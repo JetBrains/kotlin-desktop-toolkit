@@ -2,9 +2,13 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use log::debug;
+use smithay_client_toolkit::compositor::SurfaceData;
+use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::reexports::csd_frame::{DecorationsFrame, FrameAction, ResizeEdge};
+use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
+use smithay_client_toolkit::shell::xdg::window::WindowDecorations;
 use smithay_client_toolkit::{
     reexports::client::{
         Connection, Proxy, QueueHandle,
@@ -36,6 +40,22 @@ use smithay_client_toolkit::{
 
 use super::events::{Event, InternalEventHandler};
 
+#[repr(C)]
+pub struct WindowParams {
+    //pub origin: LogicalPoint,
+    pub width: u32,
+    pub height: u32,
+    //pub title: BorrowedStrPtr<'a>,
+
+    //pub is_resizable: bool,
+    //pub is_closable: bool,
+    //pub is_miniaturizable: bool,
+
+    //pub is_full_screen_allowed: bool,
+    //pub use_custom_titlebar: bool,
+    //pub titlebar_height: LogicalPixels,
+}
+
 pub struct SimpleWindow {
     pub event_handler: Box<InternalEventHandler>,
     pub subcompositor_state: Arc<SubcompositorState>,
@@ -45,15 +65,80 @@ pub struct SimpleWindow {
     pub width: NonZeroU32,
     pub height: NonZeroU32,
     pub buffer: Option<Buffer>,
+    pub viewport: Option<WpViewport>,
     pub window: Window,
     pub window_frame: Option<FallbackFrame<ApplicationState>>,
     pub keyboard_focus: bool,
     pub set_cursor: bool,
     pub window_cursor_icon_idx: usize,
     pub decorations_cursor: Option<CursorIcon>,
+    pub current_scale: f64,
 }
 
 impl SimpleWindow {
+    #[must_use]
+    pub fn new(
+        app_state: &ApplicationState,
+        globals: &GlobalList,
+        qh: &QueueHandle<ApplicationState>,
+        event_handler: Box<InternalEventHandler>,
+        params: &WindowParams,
+    ) -> Self {
+        let state = app_state;
+        let width = NonZeroU32::new(params.width).unwrap();
+        let height = NonZeroU32::new(params.height).unwrap();
+        let pool = SlotPool::new(width.get() as usize * height.get() as usize * 4, &state.shm_state).expect("Failed to create pool");
+
+        let subcompositor_state =
+            SubcompositorState::bind(state.compositor_state.wl_compositor().clone(), globals, qh).expect("wl_subcompositor not available");
+        let window_surface = state.compositor_state.create_surface(qh);
+
+        let surface_id = window_surface.id();
+
+        if let Some(fractional_scale_manager) = state.fractional_scale_manager.as_ref() {
+            fractional_scale_manager.get_fractional_scale(&window_surface, qh, surface_id.clone());
+        }
+
+        let viewport = state.viewporter.as_ref().map(|vp| vp.get_viewport(&window_surface, qh, ()));
+
+        let d: Option<&SurfaceData> = window_surface.data();
+        dbg!(d);
+        let window = state
+            .xdg_shell_state
+            .create_window(window_surface, WindowDecorations::ServerDefault, qh);
+        window.set_title("A wayland window");
+        // GitHub does not let projects use the `org.github` domain but the `io.github` domain is fine.
+        window.set_app_id("io.github.smithay.client-toolkit.SimpleWindow");
+        window.set_min_size(Some((width.get(), height.get())));
+
+        // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
+        // For more info, see WaylandSurface::commit
+        //
+        // The compositor will respond with an initial configure that we can then use to present to the window with
+        // the correct options.
+        window.commit();
+
+        debug!("Created new window with surface_id={surface_id}");
+        Self {
+            event_handler,
+            subcompositor_state: Arc::new(subcompositor_state),
+            close: false,
+            first_configure: true,
+            pool,
+            width,
+            height,
+            buffer: None,
+            viewport,
+            window,
+            window_frame: None,
+            keyboard_focus: false,
+            set_cursor: false,
+            window_cursor_icon_idx: 0,
+            decorations_cursor: None,
+            current_scale: 1.0,
+        }
+    }
+
     pub fn request_close(&mut self) {
         (self.event_handler)(&Event::WindowCloseRequest);
         self.close = true;
@@ -134,6 +219,9 @@ impl SimpleWindow {
         self.width = width;
         self.height = height;
 
+        if let Some(viewport) = &self.viewport {
+            viewport.set_destination(self.width.get() as i32, self.height.get() as i32);
+        }
         (self.event_handler)(&Event::new_window_resize_event(LogicalSize {
             width: LogicalPixels(width.get().into()),
             height: LogicalPixels(height.get().into()),
@@ -176,19 +264,20 @@ impl SimpleWindow {
     }
 
     pub fn draw(&mut self, conn: &Connection, qh: &QueueHandle<ApplicationState>, themed_pointer: Option<&mut ThemedPointer>) {
+        let surface = self.window.wl_surface();
         if self.set_cursor {
-            debug!(
-                "Updating cursor to {} for {}",
-                self.window_cursor_icon_idx,
-                self.window.wl_surface().id()
-            );
+            debug!("Updating cursor to {} for {}", self.window_cursor_icon_idx, surface.id());
             let cursor_icon = self.decorations_cursor.unwrap_or(CURSORS[self.window_cursor_icon_idx]);
             themed_pointer.unwrap().set_cursor(conn, cursor_icon).unwrap();
             self.set_cursor = false;
         }
 
-        let width = self.width.get() as i32;
-        let height = self.height.get() as i32;
+        #[allow(clippy::cast_possible_truncation)]
+        let width = (f64::from(self.width.get()) * self.current_scale).ceil() as i32;
+
+        #[allow(clippy::cast_possible_truncation)]
+        let height = (f64::from(self.height.get()) * self.current_scale).ceil() as i32;
+
         let stride = width * 4;
 
         let buffer = self.buffer.get_or_insert_with(|| {
@@ -211,7 +300,13 @@ impl SimpleWindow {
             canvas
         };
 
-        (self.event_handler)(&Event::new_window_draw_event(canvas, width, height, stride));
+        (self.event_handler)(&Event::new_window_draw_event(
+            canvas,
+            u32::try_from(width).unwrap(),
+            u32::try_from(height).unwrap(),
+            u32::try_from(stride).unwrap(),
+            self.current_scale,
+        ));
 
         // Draw the decorations frame.
         if let Some(frame) = self.window_frame.as_mut() {
@@ -221,17 +316,28 @@ impl SimpleWindow {
         }
 
         // Damage the entire window
-        self.window.wl_surface().damage_buffer(0, 0, width, height);
+        surface.damage_buffer(0, 0, width, height);
+
+        if self.viewport.is_none() {
+            assert!(self.current_scale % 1.0 == 0.0);
+            #[allow(clippy::cast_possible_truncation)]
+            surface.set_buffer_scale(self.current_scale as i32);
+        }
 
         // Request our next frame
-        self.window.wl_surface().frame(qh, self.window.wl_surface().clone());
+        surface.frame(qh, surface.clone());
 
         // Attach and commit to present.
-        buffer.attach_to(self.window.wl_surface()).expect("buffer attach");
-        self.window.wl_surface().commit();
+        buffer.attach_to(surface).expect("buffer attach");
+        surface.commit();
     }
 
-    pub fn surface_enter(&mut self, output: &WlOutput) {
+    pub fn output_changed(&mut self, output: &WlOutput) {
         (self.event_handler)(&Event::new_window_screen_change_event(output));
+    }
+
+    pub fn scale_changed(&mut self, new_scale: f64) {
+        self.current_scale = new_scale;
+        (self.event_handler)(&Event::new_window_scale_changed_event(new_scale));
     }
 }
