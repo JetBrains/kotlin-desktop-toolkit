@@ -12,7 +12,7 @@ use display_link_sys::CGDirectDisplayID;
 use objc2_foundation::MainThreadMarker;
 
 pub type DisplayLinkCallback = extern "C" fn();
-pub type DisplayLinkPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
+pub type DisplayLinkPtr<'a> = RustAllocatedRawPtr<'a>;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLinkCallback) -> DisplayLinkPtr<'static> {
