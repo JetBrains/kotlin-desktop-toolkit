@@ -9,13 +9,48 @@ use std::{
 
 use anyhow::{Context, bail};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Copy)]
 #[repr(transparent)]
 struct GenericRawPtr<'a, T> {
     ptr: *const T,
     phantom: PhantomData<&'a T>,
 }
 
+impl<T> Clone for GenericRawPtr<'_, T> {
+    fn clone(&self) -> Self {
+        Self {
+            ptr: self.ptr,
+            phantom: PhantomData,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+#[repr(transparent)]
+pub struct BorrowedOpaquePtr<'a>(GenericRawPtr<'a, std::ffi::c_void>);
+
+impl<'a> BorrowedOpaquePtr<'a> {
+    #[must_use]
+    pub const fn new<T>(v: Option<&T>) -> Self {
+        Self(GenericRawPtr {
+            ptr: if let Some(r) = v {
+                let ptr: *const T = r;
+                ptr.cast()
+            } else {
+                std::ptr::null()
+            },
+            phantom: PhantomData,
+        })
+    }
+
+    #[must_use]
+    pub const unsafe fn borrow<R>(&self) -> Option<&'a R> {
+        let p: *const R = self.0.ptr.cast();
+        unsafe { p.as_ref() }
+    }
+}
+
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct RustAllocatedRawPtr<'a>(GenericRawPtr<'a, std::ffi::c_void>);
 

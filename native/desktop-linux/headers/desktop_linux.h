@@ -354,14 +354,18 @@ typedef struct NativeApplicationCallbacks {
   void (*on_xdg_desktop_settings_change)(struct NativeXdgDesktopSetting);
 } NativeApplicationCallbacks;
 
+typedef NativeGenericRawPtr_c_void NativeBorrowedOpaquePtr;
+
+typedef const char *NativeGenericRawPtr_c_char;
+
+typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
+
 typedef struct NativeGetEglProcFuncData {
-  const void *(*f)(const void *ctx, const char *name);
-  const void *ctx;
+  void (*(*f)(NativeBorrowedOpaquePtr ctx, NativeBorrowedStrPtr name))(void);
+  NativeBorrowedOpaquePtr ctx;
 } NativeGetEglProcFuncData;
 
 typedef uint32_t NativeScreenId;
-
-typedef const char *NativeGenericRawPtr_c_char;
 
 typedef NativeGenericRawPtr_c_char NativeRustAllocatedStrPtr;
 
@@ -427,8 +431,6 @@ typedef struct NativeKeyModifiers {
 } NativeKeyModifiers;
 
 typedef uint32_t NativeKeyCode;
-
-typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
 typedef uint32_t NativeTimestamp;
 
