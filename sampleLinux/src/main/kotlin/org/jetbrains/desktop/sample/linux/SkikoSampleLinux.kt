@@ -627,9 +627,9 @@ class RotatingBallWindow(
         }
     }
 
-    override fun Canvas.draw(size: PhysicalSize, time: Long) {
+    override fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long) {
         val canvas = this
-        windowContainer.draw(canvas, time, window.scaleFactor().toFloat(), title)
+        windowContainer.draw(canvas, time, scale.toFloat(), title)
     }
 }
 
@@ -675,7 +675,15 @@ fun main(args: Array<String>) {
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     val app = Application()
     ApplicationState(app).use { state ->
-        state.createWindow(useCustomTitlebar = true, forceSoftwareRendering = false)
-        app.runEventLoop(ApplicationConfig(onXdgDesktopSettingsChange = { state.settingChanged(it) }))
+        app.runEventLoop(
+            ApplicationConfig(
+                onApplicationStarted = {
+                    state.createWindow(useCustomTitlebar = true, forceSoftwareRendering = false)
+                },
+                onXdgDesktopSettingsChange = {
+                    state.settingChanged(it)
+                },
+            ),
+        )
     }
 }

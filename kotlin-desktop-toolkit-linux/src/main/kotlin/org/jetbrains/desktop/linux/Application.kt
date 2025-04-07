@@ -5,8 +5,10 @@ import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
 import org.jetbrains.desktop.linux.generated.NativeScreenInfo
 import org.jetbrains.desktop.linux.generated.NativeScreenInfoArray
 import org.jetbrains.desktop.linux.generated.NativeWindowParams
+import org.jetbrains.desktop.linux.generated.`application_run_on_event_loop_async$f`
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import java.util.concurrent.ConcurrentLinkedQueue
 import org.jetbrains.desktop.linux.generated.desktop_linux_h as desktop_h
 
 public enum class EventHandlerResult {
@@ -36,10 +38,20 @@ public data class WindowParams(
     }
 }
 
-public data class ApplicationConfig(val onXdgDesktopSettingsChange: (XdgDesktopSetting) -> Unit)
+public data class ApplicationConfig(
+    val onApplicationStarted: () -> Unit,
+    val onXdgDesktopSettingsChange: (XdgDesktopSetting) -> Unit,
+)
 
 public class Application() {
     private var applicationConfig: ApplicationConfig? = null
+
+    private val runOnEventLoopAsyncQueue = ConcurrentLinkedQueue<() -> Unit>()
+    private val runOnEventLoopAsyncFunc: MemorySegment = `application_run_on_event_loop_async$f`.allocate({
+        ffiUpCall {
+            runOnEventLoopAsyncQueue.poll().invoke()
+        }
+    }, Arena.global())
 
     init {
         ffiDownCall {
@@ -89,6 +101,10 @@ public class Application() {
         }
     }
 
+    private fun onApplicationStarted() {
+        applicationConfig?.onApplicationStarted()
+    }
+
     private fun onNativeXdgSettingsChanged(s: MemorySegment) {
         applicationConfig?.onXdgDesktopSettingsChange(XdgDesktopSetting.fromNative(s))
     }
@@ -96,6 +112,10 @@ public class Application() {
     private fun applicationCallbacks(): MemorySegment {
         val arena = Arena.global()
         val callbacks = NativeApplicationCallbacks.allocate(arena)
+        NativeApplicationCallbacks.on_application_started(
+            callbacks,
+            NativeApplicationCallbacks.on_application_started.allocate(::onApplicationStarted, arena),
+        )
         NativeApplicationCallbacks.on_should_terminate(
             callbacks,
             NativeApplicationCallbacks.on_should_terminate.allocate(::onShouldTerminate, arena),
@@ -119,6 +139,19 @@ public class Application() {
 
     public fun createWindow(eventHandler: EventHandler, params: WindowParams): Window {
         return Window(appPtr!!, eventHandler, params)
+    }
+
+    public fun isEventLoopThread(): Boolean {
+        return ffiDownCall {
+            desktop_h.application_is_event_loop_thread(appPtr)
+        }
+    }
+
+    public fun runOnEventLoopAsync(f: () -> Unit) {
+        ffiDownCall {
+            runOnEventLoopAsyncQueue.add(f)
+            desktop_h.application_run_on_event_loop_async(appPtr, runOnEventLoopAsyncFunc)
+        }
     }
 
     public fun allScreens(): AllScreens {
