@@ -1,7 +1,7 @@
 use std::{any::Any, cell::RefCell, panic::AssertUnwindSafe};
 
 use anyhow::Context;
-use log::error;
+use log::{debug, error};
 use log4rs::{
     Config,
     append::{
@@ -295,6 +295,7 @@ impl PanicDefault for RustAllocatedStrPtr {
 // some mutable data types invariants might be violated.
 // E.g. thread withdraw an amount form one account and panicked before entering it to another account.
 pub fn ffi_boundary<R: PanicDefault, F: FnOnce() -> anyhow::Result<R>>(name: &str, f: F) -> R {
+    debug!("{name}");
     match std::panic::catch_unwind(AssertUnwindSafe(f)) {
         Ok(Ok(result)) => result,
         Ok(Err(err)) => {

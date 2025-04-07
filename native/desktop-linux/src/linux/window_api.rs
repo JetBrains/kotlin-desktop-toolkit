@@ -2,14 +2,14 @@ use desktop_common::logger::ffi_boundary;
 
 use super::{
     application::{AppPtr, Application, WindowParams},
-    events::{LogicalPixels, LogicalSize, WindowId},
+    events::{EventHandler, LogicalPixels, LogicalSize, WindowId},
 };
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_create(mut app_ptr: AppPtr, params: WindowParams) -> WindowId {
+pub extern "C" fn window_create(mut app_ptr: AppPtr, event_handler: EventHandler, params: WindowParams) -> WindowId {
     let window_id = ffi_boundary("window_create", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        Ok(Some(app.new_window(&params)))
+        Ok(Some(app.new_window(event_handler, &params)))
     });
     window_id.unwrap_or(WindowId(0))
 }
