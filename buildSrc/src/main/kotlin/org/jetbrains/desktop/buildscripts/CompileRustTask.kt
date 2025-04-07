@@ -4,6 +4,7 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.file.Directory
 import org.gradle.api.file.FileTree
 import org.gradle.api.file.ProjectLayout
+import org.gradle.api.file.RegularFile
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Provider
 import org.gradle.api.provider.ProviderFactory
@@ -99,7 +100,7 @@ abstract class CompileRustTask @Inject constructor(
         execOperations.compileRust(
             workspaceRoot.get().asFile.toPath(),
             crateName.get(),
-            buildPlatformRustTarget(rustTarget.get()),
+            rustTarget.get(),
             rustProfile.get(),
             headerFile.get().asFile.toPath(),
             rustOutputLibraryFile.get().toPath(),
@@ -120,10 +121,10 @@ internal fun inCrateArtifactsPath(rustTarget: Platform, rustProfile: String): St
 /**
  * Finds the absolute path to [command]
  */
-internal fun ExecOperations.findCommand(command: String): Path? {
+internal fun ExecOperations.findCommand(command: String, os: Os): Path? {
     val output = ByteArrayOutputStream()
     val result = exec {
-        val cmd = when (currentOs()) {
+        val cmd = when (os) {
             Os.MACOS, Os.LINUX -> listOf("/bin/sh", "-c", "command -v $command")
             Os.WINDOWS -> listOf("cmd.exe", "/c", "where", command)
         }
@@ -143,7 +144,7 @@ internal fun ExecOperations.findCommand(command: String): Path? {
 private fun ExecOperations.compileRust(
     nativeDirectory: Path,
     crateName: String,
-    rustTarget: String,
+    rustTarget: Platform,
     rustProfile: String,
     headerFile: Path,
     rustOutputLibraryFile: Path,
@@ -152,11 +153,11 @@ private fun ExecOperations.compileRust(
     exec {
         workingDir = nativeDirectory.toFile()
         commandLine(
-            findCommand("cargo"),
+            findCommand("cargo", rustTarget.os),
             "build",
             "--package=$crateName",
             "--profile=$rustProfile",
-            "--target=$rustTarget",
+            "--target=${buildPlatformRustTarget(rustTarget)}",
             "--color=always",
         )
     }
@@ -191,4 +192,9 @@ internal fun ObjectFactory.rustWorkspaceFiles(workspaceRoot: Provider<Directory>
   setDir(workspaceRoot)
 }.matching {
   exclude("target/**/*")
+}
+
+
+fun getWorkspaceHeaderFile(dir: Directory, crateName: String): RegularFile {
+    return dir.dir(crateName).dir("headers").file("${crateName.replace("-", "_")}.h")
 }

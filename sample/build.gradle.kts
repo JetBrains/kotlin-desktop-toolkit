@@ -2,9 +2,8 @@ import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
-import org.jetbrains.desktop.buildscripts.Os
-import org.jetbrains.desktop.buildscripts.currentArch
-import org.jetbrains.desktop.buildscripts.currentOs
+import org.jetbrains.desktop.buildscripts.hostArch
+import org.jetbrains.desktop.buildscripts.targetArch
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -21,19 +20,15 @@ repositories {
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
 
-val targetOs = when (currentOs()) {
-    Os.LINUX -> "linux"
-    Os.MACOS -> "macos"
-    Os.WINDOWS -> "windows"
-}
+val skikoTargetOs = "macos"
 
-val targetArch = when (currentArch()) {
+val skikoTargetArch = when (targetArch(project) ?: hostArch()) {
     Arch.aarch64 -> "arm64"
     Arch.x86_64 -> "x64"
 }
 
 val skikoVersion = "0.8.18"
-val skikoTarget = "$targetOs-$targetArch"
+val skikoTarget = "$skikoTargetOs-$skikoTargetArch"
 dependencies {
     // Use the Kotlin JUnit 5 integration.
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")

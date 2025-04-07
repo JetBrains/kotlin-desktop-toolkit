@@ -22,7 +22,7 @@ abstract class DownloadJExtractTask @Inject constructor(
     private val archiveOperations: ArchiveOperations,
 ) : DefaultTask() {
     @get:Input
-    val platform = providerFactory.provider { jextractPlatform(currentPlatform()) }
+    val platform = providerFactory.provider { jextractPlatform(hostPlatform()) }
 
     @get:Input
     val slug = objectFactory.property<String>()
