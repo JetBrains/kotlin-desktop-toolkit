@@ -16,6 +16,7 @@ plugins {
 
 repositories {
     // Use Maven Central for resolving dependencies.
+    mavenLocal()
     mavenCentral()
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
@@ -27,7 +28,7 @@ val skikoTargetArch = when (targetArch(project) ?: hostArch()) {
     Arch.x86_64 -> "x64"
 }
 
-val skikoVersion = "0.8.18"
+val skikoVersion = "0.0.0-SNAPSHOT"
 val skikoTarget = "$skikoTargetOs-$skikoTargetArch"
 dependencies {
     // Use the Kotlin JUnit 5 integration.
