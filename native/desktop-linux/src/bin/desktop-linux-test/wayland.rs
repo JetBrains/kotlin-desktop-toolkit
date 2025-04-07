@@ -231,19 +231,9 @@ extern "C" fn on_xdg_desktop_settings_change(s: XdgDesktopSetting) {
     dbg!(s);
 }
 
-pub fn main() {
+extern "C" fn on_application_started() {
     const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
-    logger_init_impl(&LoggerConfiguration {
-        file_path: BorrowedStrPtr::new(c"/tmp/a"),
-        console_level: LogLevel::Debug,
-        file_level: LogLevel::Error,
-    });
-    let app_ptr = application_init(ApplicationCallbacks {
-        on_should_terminate,
-        on_will_terminate,
-        on_display_configuration_change,
-        on_xdg_desktop_settings_change,
-    });
+    let app_ptr = APP_PTR.with(|c| c.get().unwrap().clone());
     window_create(
         app_ptr.clone(),
         event_handler_1,
@@ -272,14 +262,23 @@ pub fn main() {
             force_software_rendering: false,
         },
     );
+}
+
+pub fn main() {
+    logger_init_impl(&LoggerConfiguration {
+        file_path: BorrowedStrPtr::new(c"/tmp/a"),
+        console_level: LogLevel::Debug,
+        file_level: LogLevel::Error,
+    });
+    let app_ptr = application_init(ApplicationCallbacks {
+        on_application_started,
+        on_should_terminate,
+        on_will_terminate,
+        on_display_configuration_change,
+        on_xdg_desktop_settings_change,
+    });
     APP_PTR.with(|c| {
-        c.set(application_init(ApplicationCallbacks {
-            on_should_terminate,
-            on_will_terminate,
-            on_display_configuration_change,
-            on_xdg_desktop_settings_change,
-        }))
-        .unwrap();
+        c.set(app_ptr.clone()).unwrap();
     });
     application_run_event_loop(app_ptr);
 }
