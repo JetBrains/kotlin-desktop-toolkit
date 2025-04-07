@@ -13,4 +13,5 @@ plugins {
 rootProject.name = "kotlin-desktop-toolkit"
 
 include("kotlin-desktop-toolkit")
+include("kotlin-desktop-toolkit-linux")
 include("sample")
