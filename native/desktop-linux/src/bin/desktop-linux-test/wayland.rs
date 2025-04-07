@@ -3,7 +3,7 @@ use desktop_common::{
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::{
-    application::{Application, ApplicationCallbacks},
+    application::{Application, ApplicationCallbacks, WindowParams},
     events::Event,
 };
 
@@ -42,7 +42,15 @@ pub fn main() {
         on_display_configuration_change,
     })
     .unwrap();
-    app.new_window(event_handler_1);
-    app.new_window(event_handler_2);
+    app.new_window(&WindowParams {
+        event_handler: event_handler_1,
+        width: 200,
+        height: 300,
+    });
+    app.new_window(&WindowParams {
+        event_handler: event_handler_2,
+        width: 300,
+        height: 200,
+    });
     app.run();
 }

@@ -26,7 +26,7 @@ use smithay_client_toolkit::{
 
 use crate::linux::application_state::ApplicationState;
 use crate::linux::cursors::CURSORS;
-use crate::linux::events::LogicalSize;
+use crate::linux::events::{LogicalPixels, LogicalSize};
 
 use smithay_client_toolkit::{
     seat::pointer::{CursorIcon, ThemedPointer},
@@ -133,8 +133,8 @@ impl SimpleWindow {
         self.height = height;
 
         (self.event_handler)(&Event::new_window_resize_event(LogicalSize {
-            width: width.get().into(),
-            height: height.get().into(),
+            width: LogicalPixels(width.get().into()),
+            height: LogicalPixels(height.get().into()),
         }));
 
         // Initiate the first draw.
