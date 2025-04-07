@@ -2,7 +2,33 @@ use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
-use desktop_linux::linux::application::Application;
+use desktop_linux::linux::{
+    application::{Application, ApplicationCallbacks},
+    events::Event,
+};
+
+extern "C" fn on_should_terminate() -> bool {
+    println!("on_should_terminate");
+    true
+}
+
+extern "C" fn on_will_terminate() {
+    println!("on_will_terminate");
+}
+
+extern "C" fn on_display_configuration_change() {
+    println!("on_display_configuration_change");
+}
+
+extern "C" fn event_handler_1(event: &Event) -> bool {
+    dbg!(event);
+    true
+}
+
+extern "C" fn event_handler_2(event: &Event) -> bool {
+    dbg!(event);
+    true
+}
 
 pub fn main() {
     logger_init_impl(&LoggerConfiguration {
@@ -10,8 +36,13 @@ pub fn main() {
         console_level: LogLevel::Debug,
         file_level: LogLevel::Error,
     });
-    let mut app = Application::new().unwrap();
-    app.new_window();
-    app.new_window();
+    let mut app = Application::new(ApplicationCallbacks {
+        on_should_terminate,
+        on_will_terminate,
+        on_display_configuration_change,
+    })
+    .unwrap();
+    app.new_window(event_handler_1);
+    app.new_window(event_handler_2);
     app.run();
 }
