@@ -103,7 +103,7 @@ fn copy_to_objects(items: &BorrowedArray<PasteboardItem>) -> anyhow::Result<Reta
 pub extern "C" fn pasteboard_write_objects(items: BorrowedArray<PasteboardItem>) -> bool {
     ffi_boundary("pasteboard_write_objects", || {
         with_pasteboard(PasteboardType::Global, |pasteboard| {
-            debug!("pasteboard_write_objects: {:?}", items);
+            debug!("pasteboard_write_objects: {items:?}");
             let objects = copy_to_objects(&items)?;
             Ok(unsafe { pasteboard.writeObjects(&objects) })
         })
@@ -194,7 +194,7 @@ mod tests {
         with_pasteboard(PasteboardType::WithUniqueName, |pasteboard| {
             let original_string = NSString::from_str("Hello");
             unsafe {
-                info!("NSPasteboardTypeString: {:?}", NSPasteboardTypeString);
+                info!("NSPasteboardTypeString: {NSPasteboardTypeString:?}");
                 pasteboard.clearContents();
                 pasteboard.setString_forType(&original_string, NSPasteboardTypeString);
                 let types = pasteboard.types();
@@ -227,7 +227,7 @@ mod tests {
                 // when we declare type it immediately shows in pasteboard types
                 // after clearContents it's gone
                 info!("types1: {:?}", pasteboard.types());
-                info!("change: {:?}", change_count);
+                info!("change: {change_count:?}");
                 pasteboard.setString_forType(&metadata_string, &my_pasteboard_type);
                 info!("types2: {:?}", pasteboard.types());
                 let string_from_pasteboard = pasteboard.stringForType(NSPasteboardTypeString);
@@ -250,7 +250,7 @@ mod tests {
                 let change_count = pasteboard.declareTypes_owner(&NSArray::from_slice(&[&*my_pasteboard_type]), None);
                 pasteboard.clearContents();
                 info!("types1: {:?}", pasteboard.types());
-                info!("change: {:?}", change_count);
+                info!("change: {change_count:?}");
                 pasteboard.setString_forType(&metadata_string, &my_pasteboard_type);
                 pasteboard.setString_forType(&original_string, NSPasteboardTypeString);
                 info!("types2: {:?}", pasteboard.types());
@@ -276,7 +276,7 @@ mod tests {
                 ]));
                 assert!(result);
                 let types = general.types();
-                info!("types: {:?}", types);
+                info!("types: {types:?}");
                 assert_eq!(Some(url1), NSURL::URLFromPasteboard(general));
                 assert_eq!(Some(2), general.pasteboardItems().map(|items| items.count()));
             }
@@ -309,7 +309,7 @@ mod tests {
                 ]));
                 general.setString_forType(&original_string, NSPasteboardTypeString);
                 let types = general.types();
-                info!("types: {:?}", types);
+                info!("types: {types:?}");
                 assert_eq!(Some(url1), NSURL::URLFromPasteboard(general));
                 let items = general.pasteboardItems().unwrap().to_vec();
                 assert_eq!(2, items.len());
