@@ -92,7 +92,7 @@ abstract class SkikoWindowLinux(
             surfaceProps = null,
         ).use { surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
-            surface.canvas.draw(PhysicalSize(surface.width, surface.height), time)
+            surface.canvas.draw(PhysicalSize(surface.width, surface.height), event.scale, time)
             surface.flushAndSubmit()
         }
     }
@@ -121,13 +121,13 @@ abstract class SkikoWindowLinux(
                 surfaceProps = null,
             )!!.use { surface ->
                 val time = creationTime.elapsedNow().inWholeMilliseconds
-                surface.canvas.draw(event.size, time)
+                surface.canvas.draw(event.size, event.scale, time)
                 surface.flushAndSubmit()
             }
         }
     }
 
-    abstract fun Canvas.draw(size: PhysicalSize, time: Long)
+    abstract fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long)
 
     override fun close() {
         window.close()

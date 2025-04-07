@@ -48,20 +48,42 @@ impl Application<'_> {
         })
     }
 
-    pub fn run(&mut self) -> Result<(), anyhow::Error> {
-        debug!("Start event loop");
-
-        let (s, c) = channel::channel();
-        async_std::task::spawn(xdg_desktop_settings_notifier(s));
+    fn init_xdg_desktop_settings_notifier(&self) {
+        let (xdg_settings_sender, xdg_settings_channel) = channel::channel();
+        async_std::task::spawn(xdg_desktop_settings_notifier(xdg_settings_sender));
 
         self.event_loop
             .handle()
-            .insert_source(c, move |event, _a, state| {
+            .insert_source(xdg_settings_channel, move |event, (), state| {
                 if let channel::Event::Msg(e) = event {
                     XdgDesktopSetting::with(e, |s| (state.callbacks.on_xdg_desktop_settings_change)(s));
                 }
             })
             .unwrap();
+    }
+
+    fn init_run_on_event_loop(&mut self) {
+        let (s, c) = channel::channel();
+        self.state.run_on_event_loop = Some(s);
+
+        self.event_loop
+            .handle()
+            .insert_source(c, move |event, (), _state| {
+                if let channel::Event::Msg(e) = event {
+                    e();
+                }
+            })
+            .unwrap();
+    }
+
+    pub fn run(&mut self) -> Result<(), anyhow::Error> {
+        debug!("Start event loop");
+
+        self.init_xdg_desktop_settings_notifier();
+        self.init_run_on_event_loop();
+
+        self.state.event_loop_thread_id = Some(std::thread::current().id());
+        (self.state.callbacks.on_application_started)();
 
         loop {
             self.event_loop.dispatch(Duration::from_millis(16), &mut self.state)?;

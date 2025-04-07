@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, thread::ThreadId};
 
 use khronos_egl;
 use log::{debug, warn};
@@ -8,6 +8,7 @@ use smithay_client_toolkit::{
     delegate_subcompositor, delegate_xdg_shell, delegate_xdg_window,
     output::{OutputHandler, OutputState},
     reexports::{
+        calloop::channel::Sender,
         client::{
             Connection, Dispatch, Proxy, QueueHandle,
             backend::ObjectId,
@@ -65,6 +66,8 @@ pub struct ApplicationState {
     pub windows: HashMap<ObjectId, SimpleWindow>,
     key_surface: Option<ObjectId>,
     pub egl: Option<EglInstance>,
+    pub event_loop_thread_id: Option<ThreadId>,
+    pub run_on_event_loop: Option<Sender<extern "C" fn()>>,
 }
 
 struct WindowWithData<'a> {
@@ -105,6 +108,8 @@ impl ApplicationState {
             windows: HashMap::new(),
             key_surface: None,
             egl,
+            event_loop_thread_id: None,
+            run_on_event_loop: None,
         }
     }
 
