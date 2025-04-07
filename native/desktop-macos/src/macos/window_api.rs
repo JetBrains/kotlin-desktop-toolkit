@@ -20,7 +20,7 @@ use super::{
 
 pub type WindowId = isize;
 
-pub type WindowPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
+pub type WindowPtr<'a> = RustAllocatedRawPtr<'a>;
 
 #[repr(C)]
 pub struct WindowParams<'a> {
