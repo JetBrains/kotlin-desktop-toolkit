@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.linux
 
+import org.jetbrains.desktop.linux.generated.NativeAutoDropArray_WindowButtonType
 import org.jetbrains.desktop.linux.generated.NativeEvent
 import org.jetbrains.desktop.linux.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.linux.generated.NativeKeyUpEvent
@@ -29,6 +30,42 @@ public value class Timestamp(
 ) {
     public fun toDuration(): Duration {
         return value.seconds
+    }
+}
+
+public enum class WindowButtonType {
+    AppMenu,
+    Icon,
+    Spacer,
+    Minimize,
+    Maximize,
+    Close,
+    ;
+
+    internal companion object {
+        fun fromNative(s: MemorySegment, index: Long): WindowButtonType {
+            val v = s.getAtIndex(desktop_h.NativeWindowButtonType, index)
+            return when (v) {
+                desktop_h.NativeWindowButtonType_AppMenu() -> AppMenu
+                desktop_h.NativeWindowButtonType_Icon() -> Icon
+                desktop_h.NativeWindowButtonType_Spacer() -> Spacer
+                desktop_h.NativeWindowButtonType_Minimize() -> Minimize
+                desktop_h.NativeWindowButtonType_Maximize() -> Maximize
+                desktop_h.NativeWindowButtonType_Close() -> Close
+                else -> error("Unexpected WindowButtonType tag $v")
+            }
+        }
+
+        fun fromNativeArray(nativeArray: MemorySegment): List<WindowButtonType>? {
+            if (nativeArray == MemorySegment.NULL) return null
+
+            val ptr = NativeAutoDropArray_WindowButtonType.ptr(nativeArray)
+            val len = NativeAutoDropArray_WindowButtonType.len(nativeArray)
+
+            return (0 until len).map {
+                WindowButtonType.fromNative(ptr, it)
+            }
+        }
     }
 }
 
@@ -115,7 +152,7 @@ public sealed class Event {
 
     public data class WindowResize(
         val size: LogicalSize,
-        val drawDecoration: Boolean,
+        val titlebarLayout: Pair<List<WindowButtonType>, List<WindowButtonType>>?,
     ) : Event()
 
     public data class WindowMove(
@@ -239,9 +276,16 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_h.NativeEvent_WindowResize() -> {
             val nativeEvent = NativeEvent.window_resize(s)
+            val titlebarLayoutLeft = WindowButtonType.fromNativeArray(NativeWindowResizeEvent.titlebar_layout_left(nativeEvent))
+            val titlebarLayoutRight = WindowButtonType.fromNativeArray(NativeWindowResizeEvent.titlebar_layout_right(nativeEvent))
+            val titlebarLayout = if (titlebarLayoutLeft != null && titlebarLayoutRight != null) {
+                Pair(titlebarLayoutLeft, titlebarLayoutRight)
+            } else {
+                null
+            }
             Event.WindowResize(
                 size = LogicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
-                drawDecoration = NativeWindowResizeEvent.draw_decoration(nativeEvent),
+                titlebarLayout,
             )
         }
         desktop_h.NativeEvent_WindowFocusChange() -> {

@@ -8,7 +8,6 @@ use std::{
 };
 
 use anyhow::{Context, bail};
-use log::warn;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
@@ -154,6 +153,7 @@ impl Drop for AutoDropStrPtr {
 pub type ArraySize = usize;
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct AutoDropArray<T> {
     pub ptr: *const T,
     pub len: ArraySize,
@@ -168,13 +168,19 @@ impl<T> AutoDropArray<T> {
             len: array.len(),
         }
     }
+
+    #[must_use]
+    pub const fn null() -> Self {
+        Self {
+            ptr: std::ptr::null(),
+            len: 0,
+        }
+    }
 }
 
 impl<T> Drop for AutoDropArray<T> {
     fn drop(&mut self) {
-        if self.ptr.is_null() {
-            warn!("Got null pointer in AutoDropArray");
-        } else {
+        if !self.ptr.is_null() {
             let array = unsafe {
                 let s = slice::from_raw_parts_mut(self.ptr.cast_mut(), self.len);
                 Box::from_raw(s)
