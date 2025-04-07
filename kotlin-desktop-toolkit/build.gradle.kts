@@ -15,7 +15,7 @@ import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.Os
 import org.jetbrains.desktop.buildscripts.Platform
 import org.jetbrains.desktop.buildscripts.buildPlatformRustTarget
-import org.jetbrains.desktop.buildscripts.currentPlatform
+import org.jetbrains.desktop.buildscripts.targetArch
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -58,7 +58,7 @@ java {
 }
 
 tasks.test {
-    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(currentPlatform(), "dev")]!!
+    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(Platform(Os.MACOS, targetArch(project)), "dev")]!!
     dependsOn(buildNativeTask)
     // Use JUnit Platform for unit tests.
     jvmArgs("--enable-preview")
@@ -108,21 +108,32 @@ val cargoFmtCheckTask = tasks.register<Exec>("cargoFmtCheck") {
 val cargoFmtTask = tasks.register<Exec>("cargoFmt") {
     workingDir = layout.projectDirectory.dir("../native").getAsFile()
     commandLine("cargo", "fmt")
+    mustRunAfter(clippyFixTask)
 }
 
-val clippyCheckTask = tasks.register<Exec>("clippyCheck") {
-    workingDir = layout.projectDirectory.dir("../native").getAsFile()
-    commandLine("cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--", "--deny", "warnings")
+val clippyCheckTasks = listOf(Arch.x86_64, Arch.aarch64).map { arch ->
+    val rustTarget = buildPlatformRustTarget(Platform(Os.MACOS, arch))
+    tasks.register<Exec>("clippyCheck-$rustTarget") {
+        workingDir = layout.projectDirectory.dir("../native").getAsFile()
+        commandLine(
+            "cargo", "clippy", "--target=$rustTarget", "--workspace", "--all-targets", "--all-features",
+            "--", "--deny", "warnings",
+        )
+    }
 }
 
 val clippyFixTask = tasks.register<Exec>("clippyFix") {
+    val rustTarget = buildPlatformRustTarget(Platform(Os.MACOS, targetArch(project)))
     workingDir = layout.projectDirectory.dir("../native").getAsFile()
-    commandLine("cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--fix", "--allow-dirty", "--allow-staged")
+    commandLine(
+        "cargo", "clippy", "--target=$rustTarget", "--workspace", "--all-targets", "--all-features",
+        "--fix", "--allow-dirty", "--allow-staged",
+    )
 }
 
 task("lint") {
     dependsOn(tasks.named("ktlintCheck"))
-    dependsOn(clippyCheckTask)
+    dependsOn(clippyCheckTasks)
     dependsOn(cargoFmtCheckTask)
 }
 
@@ -144,14 +155,14 @@ val nativeConsumable = configurations.consumable("nativeParts") {
     }
 }
 
-compileMacOSDesktopToolkitTaskByTarget[RustTarget(currentPlatform(), "dev")]?.let { buildNativeTask ->
+compileMacOSDesktopToolkitTaskByTarget[RustTarget(Platform(Os.MACOS, targetArch(project)), "dev")]?.let { buildNativeTask ->
     artifacts.add(nativeConsumable.name, buildNativeTask.flatMap { it.libraryFile }) {
         builtBy(buildNativeTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
     }
 }
 
 val generateBindingsTask = tasks.register<GenerateJavaBindingsTask>("generateBindings") {
-    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(currentPlatform(), "dev")]!!
+    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(Platform(Os.MACOS, targetArch(project)), "dev")]!!
     dependsOn(downloadJExtractTask)
     dependsOn(buildNativeTask)
 
@@ -176,7 +187,7 @@ tasks.named<Jar>("sourcesJar") {
 val generateNativeResources = tasks.register<Sync>("generateResourcesDir") {
     destinationDir = layout.buildDirectory.dir("native").get().asFile
 
-    compileMacOSDesktopToolkitTaskByTarget.forEach { (platform, task) ->
+    compileMacOSDesktopToolkitTaskByTarget.forEach { (_, task) ->
         from(task.map { it.libraryFile }) {
             into("")
         }
@@ -190,7 +201,7 @@ sourceSets.main {
 }
 
 tasks.processResources {
-    dependsOn(compileMacOSDesktopToolkitTaskByTarget[RustTarget(currentPlatform(), "dev")])
+    dependsOn(compileMacOSDesktopToolkitTaskByTarget[RustTarget(Platform(Os.MACOS, targetArch(project)), "dev")])
 }
 
 kotlin {

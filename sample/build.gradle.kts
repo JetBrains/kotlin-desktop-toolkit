@@ -2,9 +2,7 @@ import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
-import org.jetbrains.desktop.buildscripts.Os
-import org.jetbrains.desktop.buildscripts.currentArch
-import org.jetbrains.desktop.buildscripts.currentOs
+import org.jetbrains.desktop.buildscripts.targetArch
 
 plugins {
     // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
@@ -21,13 +19,9 @@ repositories {
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
 
-val targetOs = when (currentOs()) {
-    Os.LINUX -> "linux"
-    Os.MACOS -> "macos"
-    Os.WINDOWS -> "windows"
-}
+val targetOs = "macos"
 
-val targetArch = when (currentArch()) {
+val targetArch = when (targetArch(project)) {
     Arch.aarch64 -> "arm64"
     Arch.x86_64 -> "x64"
 }

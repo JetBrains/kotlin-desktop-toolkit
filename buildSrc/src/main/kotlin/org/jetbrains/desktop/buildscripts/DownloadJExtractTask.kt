@@ -16,13 +16,15 @@ import java.nio.file.Path
 import javax.inject.Inject
 import kotlin.io.path.createTempFile
 
+private fun hostPlatform(): Platform = Platform(hostOs(), hostArch())
+
 abstract class DownloadJExtractTask @Inject constructor(
     objectFactory: ObjectFactory,
     providerFactory: ProviderFactory,
     private val archiveOperations: ArchiveOperations,
 ) : DefaultTask() {
     @get:Input
-    val platform = providerFactory.provider { jextractPlatform(currentPlatform()) }
+    val platform = providerFactory.provider { jextractPlatform(hostPlatform()) }
 
     @get:Input
     val slug = objectFactory.property<String>()
