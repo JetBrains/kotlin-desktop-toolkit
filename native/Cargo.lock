@@ -584,9 +584,12 @@ dependencies = [
  "async-std",
  "cbindgen",
  "desktop-common",
+ "khronos-egl",
+ "libloading",
  "log",
  "log4rs",
  "smithay-client-toolkit",
+ "wayland-egl",
 ]
 
 [[package]]
@@ -643,6 +646,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.100",
+]
+
+[[package]]
+name = "dlib"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "330c60081dcc4c72131f8eb70510f1ac07223e5d4163db481a04a0befcffa412"
+dependencies = [
+ "libloading",
 ]
 
 [[package]]
@@ -1134,6 +1146,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "khronos-egl"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6aae1df220ece3c0ada96b8153459b67eebe9ae9212258bb0134ae60416fdf76"
+dependencies = [
+ "libc",
+ "libloading",
+]
+
+[[package]]
 name = "kv-log-macro"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1153,6 +1175,16 @@ name = "libc"
 version = "0.2.171"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c19937216e9d3aa9956d9bb8dfc0b0c8beb6058fc4f7a4dc4d850edf86a237d6"
+
+[[package]]
+name = "libloading"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
+dependencies = [
+ "cfg-if",
+ "windows-targets",
+]
 
 [[package]]
 name = "linux-raw-sys"
@@ -1849,6 +1881,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
+name = "scoped-tls"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
+
+[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2404,6 +2442,7 @@ dependencies = [
  "cc",
  "downcast-rs",
  "rustix 0.38.44",
+ "scoped-tls",
  "smallvec",
  "wayland-sys",
 ]
@@ -2440,6 +2479,16 @@ dependencies = [
  "rustix 0.38.44",
  "wayland-client",
  "xcursor",
+]
+
+[[package]]
+name = "wayland-egl"
+version = "0.32.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "504838241a10e271f48ffd429ac4033e0ac468b399fe7c2e2840f5c3a82d9902"
+dependencies = [
+ "wayland-backend",
+ "wayland-sys",
 ]
 
 [[package]]
@@ -2484,6 +2533,8 @@ version = "0.31.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dbcebb399c77d5aa9fa5db874806ee7b4eba4e73650948e8f93963f128896615"
 dependencies = [
+ "dlib",
+ "log",
  "pkg-config",
 ]
 

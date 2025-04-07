@@ -283,7 +283,7 @@ public sealed class Event {
     ) : Event()
 
     public data class WindowDraw(
-        val buffer: Long,
+        val buffer: Long?,
         val width: Int,
         val height: Int,
         val stride: Int,
@@ -419,8 +419,9 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_h.NativeEvent_WindowDraw() -> {
             val nativeEvent = NativeEvent.window_draw(s)
+            val nativeBuffer = NativeWindowDrawEvent.buffer(nativeEvent)
             Event.WindowDraw(
-                buffer = NativeWindowDrawEvent.buffer(nativeEvent).address(),
+                buffer = if (nativeBuffer == MemorySegment.NULL) null else nativeBuffer.address(),
                 width = NativeWindowDrawEvent.width(nativeEvent),
                 height = NativeWindowDrawEvent.height(nativeEvent),
                 stride = NativeWindowDrawEvent.stride(nativeEvent),

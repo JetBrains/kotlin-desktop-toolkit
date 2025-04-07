@@ -1,12 +1,14 @@
 use std::num::NonZeroU32;
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
-use log::debug;
+use khronos_egl as egl;
+use log::{debug, info, warn};
 use smithay_client_toolkit::compositor::SurfaceData;
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
-use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle, protocol::wl_shm};
+use smithay_client_toolkit::reexports::client::protocol::wl_shm;
+use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle};
 use smithay_client_toolkit::reexports::csd_frame::{WindowManagerCapabilities, WindowState};
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit::reexports::protocols::xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge;
@@ -18,6 +20,7 @@ use smithay_client_toolkit::shell::{
         window::{Window, WindowConfigure},
     },
 };
+use wayland_egl::WlEglSurface;
 
 use crate::linux::application_state::ApplicationState;
 use crate::linux::events::{LogicalPixels, LogicalSize, WindowCapabilities, WindowResizeEvent};
@@ -28,6 +31,7 @@ use smithay_client_toolkit::{
     subcompositor::SubcompositorState,
 };
 
+use super::application_state::EglInstance;
 use super::events::{Event, InternalEventHandler, WindowDrawEvent};
 use super::pointer_shapes::PointerShape;
 
@@ -43,6 +47,8 @@ pub struct WindowParams<'a> {
     pub app_id: BorrowedStrPtr<'a>,
 
     pub force_client_side_decoration: bool,
+
+    pub force_software_rendering: bool,
 }
 
 #[repr(C)]
@@ -91,6 +97,12 @@ pub enum WindowFrameAction {
     ShowMenu(i32, i32),
 }
 
+pub struct EglData {
+    pub egl_surface: WlEglSurface,
+    pub egl_display: Option<egl::Display>,
+    pub egl_window_surface: Option<khronos_egl::Surface>,
+}
+
 pub struct SimpleWindow {
     pub event_handler: Box<InternalEventHandler>,
     pub subcompositor_state: SubcompositorState,
@@ -107,6 +119,7 @@ pub struct SimpleWindow {
     pub decorations_cursor: CursorIcon,
     pub current_scale: f64,
     pub decoration_mode: DecorationMode,
+    pub egl_data: Option<EglData>,
 }
 
 impl SimpleWindow {
@@ -137,6 +150,17 @@ impl SimpleWindow {
 
         let d: Option<&SurfaceData> = window_surface.data();
         dbg!(d);
+
+        let egl_surface = if params.force_software_rendering {
+            info!("Forcing software rendering");
+            None
+        } else if let Ok(v) = WlEglSurface::new(surface_id.clone(), width.get() as i32, height.get() as i32) {
+            info!("Using EGL rendering");
+            Some(v)
+        } else {
+            warn!("Failed to create EGL rendering, falling back to software rendering");
+            None
+        };
 
         let decorations = if params.force_client_side_decoration {
             WindowDecorations::RequestClient
@@ -172,6 +196,11 @@ impl SimpleWindow {
             decorations_cursor: CursorIcon::Default,
             current_scale: 1.0,
             decoration_mode: DecorationMode::Client,
+            egl_data: egl_surface.map(|s| EglData {
+                egl_surface: s,
+                egl_display: None,
+                egl_window_surface: None,
+            }),
         }
     }
 
@@ -181,13 +210,14 @@ impl SimpleWindow {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn configure(
+    pub(crate) fn configure(
         &mut self,
         conn: &Connection,
         qh: &QueueHandle<ApplicationState>,
         window: &Window,
         configure: &WindowConfigure,
         themed_pointer: Option<&mut ThemedPointer>,
+        egl: &EglInstance,
     ) {
         self.buffer = None;
         self.decoration_mode = configure.decoration_mode;
@@ -208,6 +238,36 @@ impl SimpleWindow {
         // Update new width and height;
         self.width = width;
         self.height = height;
+        if let Some(egl_data) = &mut self.egl_data {
+            egl_data.egl_surface.resize(self.width.get() as i32, self.height.get() as i32, 0, 0);
+
+            if egl_data.egl_display.is_none() {
+                let wayland_display_ptr = conn.display().id().as_ptr();
+                let egl_display = unsafe { egl.get_display(wayland_display_ptr.cast()).unwrap() };
+                egl.initialize(egl_display).unwrap();
+
+                let egl_attributes = [egl::RED_SIZE, 8, egl::GREEN_SIZE, 8, egl::BLUE_SIZE, 8, egl::NONE];
+
+                let egl_config = egl
+                    .choose_first_config(egl_display, &egl_attributes)
+                    .expect("unable to find an appropriate ELG configuration")
+                    .unwrap();
+
+                let egl_context_attributes = [egl::CONTEXT_MAJOR_VERSION, 3, egl::CONTEXT_MINOR_VERSION, 0, egl::NONE];
+
+                let egl_context = egl.create_context(egl_display, egl_config, None, &egl_context_attributes).unwrap();
+
+                let egl_window_surface = unsafe {
+                    egl.create_window_surface(egl_display, egl_config, egl_data.egl_surface.ptr().cast_mut(), None)
+                        .unwrap()
+                };
+                egl.make_current(egl_display, Some(egl_window_surface), Some(egl_window_surface), Some(egl_context))
+                    .unwrap();
+
+                egl_data.egl_display = Some(egl_display);
+                egl_data.egl_window_surface = Some(egl_window_surface);
+            }
+        }
 
         if let Some(viewport) = &self.viewport {
             viewport.set_destination(self.width.get() as i32, self.height.get() as i32);
@@ -235,7 +295,7 @@ impl SimpleWindow {
         // Initiate the first draw.
         if self.first_configure {
             self.first_configure = false;
-            self.draw(conn, qh, themed_pointer);
+            self.draw(conn, qh, themed_pointer, egl);
         }
     }
 
@@ -265,7 +325,13 @@ impl SimpleWindow {
         }
     }
 
-    pub fn draw(&mut self, conn: &Connection, qh: &QueueHandle<ApplicationState>, themed_pointer: Option<&mut ThemedPointer>) {
+    pub fn draw(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<ApplicationState>,
+        themed_pointer: Option<&mut ThemedPointer>,
+        egl: &EglInstance,
+    ) {
         let surface = self.window.wl_surface();
         if self.set_cursor {
             debug!("Updating cursor to {} for {}", self.decorations_cursor, surface.id());
@@ -281,29 +347,34 @@ impl SimpleWindow {
 
         let stride = width * 4;
 
-        let buffer = self.buffer.get_or_insert_with(|| {
-            self.pool
-                .create_buffer(width, height, stride, wl_shm::Format::Argb8888)
-                .expect("create buffer")
-                .0
-        });
+        let canvas = {
+            if self.egl_data.is_some() {
+                None
+            } else {
+                let buffer = self.buffer.get_or_insert_with(|| {
+                    self.pool
+                        .create_buffer(width, height, stride, wl_shm::Format::Argb8888)
+                        .expect("create buffer")
+                        .0
+                });
 
-        let canvas = if let Some(canvas) = self.pool.canvas(buffer) {
-            canvas
-        } else {
-            // This should be rare, but if the compositor has not released the previous
-            // buffer, we need double-buffering.
-            let (second_buffer, canvas) = self
-                .pool
-                .create_buffer(width, height, stride, wl_shm::Format::Argb8888)
-                .expect("create buffer");
-            *buffer = second_buffer;
-            canvas
+                if let Some(canvas) = self.pool.canvas(buffer) {
+                    Some(canvas)
+                } else {
+                    // This should be rare, but if the compositor has not released the previous
+                    // buffer, we need double-buffering.
+                    let (second_buffer, canvas) = self
+                        .pool
+                        .create_buffer(width, height, stride, wl_shm::Format::Argb8888)
+                        .expect("create buffer");
+                    *buffer = second_buffer;
+                    Some(canvas)
+                }
+            }
         };
-
         (self.event_handler)(
             &WindowDrawEvent {
-                buffer: canvas.as_mut_ptr(),
+                buffer: canvas.map_or_else(std::ptr::null_mut, <[u8]>::as_mut_ptr),
                 width: u32::try_from(width).unwrap(),
                 height: u32::try_from(height).unwrap(),
                 stride: u32::try_from(stride).unwrap(),
@@ -325,7 +396,12 @@ impl SimpleWindow {
         surface.frame(qh, surface.clone());
 
         // Attach and commit to present.
-        buffer.attach_to(surface).expect("buffer attach");
+        if let Some(egl_data) = &self.egl_data {
+            egl.swap_buffers(egl_data.egl_display.unwrap(), egl_data.egl_window_surface.unwrap())
+                .unwrap();
+        } else if let Some(buffer) = &self.buffer {
+            buffer.attach_to(surface).expect("buffer attach");
+        }
         surface.commit();
     }
 

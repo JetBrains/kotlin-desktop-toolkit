@@ -266,6 +266,11 @@ typedef struct NativeApplicationCallbacks {
   void (*on_xdg_desktop_settings_change)(struct NativeXdgDesktopSetting);
 } NativeApplicationCallbacks;
 
+typedef struct NativeGetEglProcFuncData {
+  const void *(*f)(const void *ctx, const char *name);
+  const void *ctx;
+} NativeGetEglProcFuncData;
+
 typedef uint32_t NativeScreenId;
 
 typedef const char *NativeGenericRawPtr_c_char;
@@ -590,6 +595,7 @@ typedef struct NativeWindowParams {
    */
   NativeBorrowedStrPtr app_id;
   bool force_client_side_decoration;
+  bool force_software_rendering;
 } NativeWindowParams;
 
 typedef struct NativeExceptionsArray {
@@ -610,6 +616,8 @@ void application_run_event_loop(NativeAppPtr app_ptr);
 void application_stop_event_loop(NativeAppPtr app_ptr);
 
 void application_shutdown(NativeAppPtr app_ptr);
+
+struct NativeGetEglProcFuncData application_get_egl_proc_func(NativeAppPtr app_ptr);
 
 NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
 
