@@ -1,7 +1,7 @@
 use core::f64;
 use std::ffi::CString;
 
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
 use smithay_client_toolkit::{
     reexports::client::{Proxy, protocol::wl_output::WlOutput},
     seat::{
@@ -14,6 +14,7 @@ use super::{
     keyboard::{KeyCode, KeyModifiers},
     mouse::MouseButton,
     window::WindowFrameAction,
+    xdg_desktop_settings::WindowButtonType,
 };
 
 // return true if event was handled
@@ -239,7 +240,8 @@ impl From<WindowScreenChangeEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct WindowResizeEvent {
     pub size: LogicalSize,
-    pub draw_decoration: bool,
+    pub titlebar_layout_left: AutoDropArray<WindowButtonType>,
+    pub titlebar_layout_right: AutoDropArray<WindowButtonType>,
 }
 
 impl From<WindowResizeEvent> for Event<'_> {
