@@ -1,0 +1,10 @@
+#[cfg(target_os = "linux")]
+mod wayland;
+
+#[cfg(target_os = "linux")]
+pub fn main() {
+    wayland::main();
+}
+
+#[cfg(not(target_os = "linux"))]
+pub const fn main() {}
