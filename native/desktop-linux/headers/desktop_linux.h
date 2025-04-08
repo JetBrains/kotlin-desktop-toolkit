@@ -391,6 +391,7 @@ typedef struct NativeScreenInfo {
   struct NativeLogicalPoint origin;
   struct NativeLogicalSize size;
   double scale;
+  int32_t maximum_frames_per_second;
 } NativeScreenInfo;
 
 typedef struct NativeAutoDropArray_ScreenInfo {
