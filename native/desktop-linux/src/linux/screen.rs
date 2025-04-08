@@ -21,12 +21,14 @@ pub struct ScreenInfo {
     pub origin: LogicalPoint,
     pub size: LogicalSize,
     pub scale: f64,
+    pub maximum_frames_per_second: i32,
     // todo color space?
     // todo stable uuid?
 }
 
 impl ScreenInfo {
     pub fn new(info: OutputInfo) -> Self {
+        let current_mode = info.modes.iter().find(|m| m.current);
         Self {
             screen_id: info.id,
             // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
@@ -52,6 +54,7 @@ impl ScreenInfo {
                 })
                 .unwrap_or_default(),
             scale: info.scale_factor.into(),
+            maximum_frames_per_second: current_mode.map(|m| (f64::from(m.refresh_rate) / 1000.).round() as i32).unwrap_or_default()
         }
     }
 }

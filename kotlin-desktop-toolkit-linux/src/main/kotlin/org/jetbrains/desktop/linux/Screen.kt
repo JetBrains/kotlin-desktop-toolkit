@@ -12,6 +12,7 @@ public data class Screen(
     val origin: LogicalPoint,
     val size: LogicalSize,
     val scale: Double,
+    val maximumFramesPerSecond: Int,
 ) {
     public companion object {
         internal fun fromNative(s: MemorySegment): Screen {
@@ -23,6 +24,7 @@ public data class Screen(
                 origin = LogicalPoint.fromNative(NativeScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(NativeScreenInfo.size(s)),
                 scale = NativeScreenInfo.scale(s),
+                maximumFramesPerSecond = NativeScreenInfo.maximum_frames_per_second(s),
             )
         }
     }
