@@ -251,6 +251,8 @@ impl SimpleWindow {
         configure: &WindowConfigure,
         egl: Option<&EglInstance>,
     ) -> bool {
+        const DEFAULT_WIDTH: LogicalPixels = LogicalPixels(640.);
+        const DEFAULT_HEIGHT: LogicalPixels = LogicalPixels(480.);
         debug!("Configure {configure:?}");
 
         self.decoration_mode = configure.decoration_mode;
@@ -258,24 +260,20 @@ impl SimpleWindow {
         // debug!("Supported formats: {:?}", shm.formats());
         // [Argb8888, Xrgb8888, Abgr8888, Xbgr8888, Rgb565, Argb2101010, Xrgb2101010, Abgr2101010, Xbgr2101010, Argb16161616f, Xrgb16161616f, Abgr16161616f, Xbgr16161616f, Yuyv, Nv12, P010, Yuv420]
 
-        let width = LogicalPixels(
-            configure
+        let width = configure
                 .new_size
                 .0
-                .map(std::num::NonZero::get)
-                .or_else(|| configure.suggested_bounds.map(|(w, _h)| w))
-                .unwrap_or(640)
-                .into(),
-        );
-        let height = LogicalPixels(
-            configure
+                .map(|w| LogicalPixels(w.get().into()))
+                .or_else(|| self.size.map(|s| s.width))
+                .or_else(|| configure.suggested_bounds.map(|(w, _h)| LogicalPixels(w.into())))
+                .unwrap_or(DEFAULT_WIDTH);
+        let height = configure
                 .new_size
                 .1
-                .map(std::num::NonZero::get)
-                .or_else(|| configure.suggested_bounds.map(|(_w, h)| h))
-                .unwrap_or(480)
-                .into(),
-        );
+                .map(|h| LogicalPixels(h.get().into()))
+                .or_else(|| self.size.map(|s| s.height))
+                .or_else(|| configure.suggested_bounds.map(|(_w, h)| LogicalPixels(h.into())))
+                .unwrap_or(DEFAULT_HEIGHT);
         let size = LogicalSize { width, height };
         self.size = Some(size);
 
