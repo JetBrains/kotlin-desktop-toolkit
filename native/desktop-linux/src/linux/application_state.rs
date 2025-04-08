@@ -113,7 +113,12 @@ impl ApplicationState {
         }
     }
 
-    pub fn get_window(&mut self, surface: &WlSurface) -> Option<&mut SimpleWindow> {
+    pub fn get_window(&self, surface: &WlSurface) -> Option<&SimpleWindow> {
+        let surface_id: &ObjectId = &surface.id();
+        self.windows.get(surface_id)
+    }
+
+    pub fn get_window_mut(&mut self, surface: &WlSurface) -> Option<&mut SimpleWindow> {
         let surface_id: &ObjectId = &surface.id();
         self.windows.get_mut(surface_id)
     }
@@ -144,13 +149,13 @@ impl KeyboardHandler for ApplicationState {
         keysyms: &[Keysym],
     ) {
         self.key_surface = Some(surface.id());
-        if let Some(window) = self.get_window(surface) {
+        if let Some(window) = self.get_window_mut(surface) {
             window.keyboard_enter(keysyms);
         }
     }
 
     fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, surface: &WlSurface, _: u32) {
-        if let Some(window) = self.get_window(surface) {
+        if let Some(window) = self.get_window_mut(surface) {
             window.keyboard_leave();
         }
         self.key_surface = None;
@@ -276,7 +281,7 @@ impl CompositorHandler for ApplicationState {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_factor: i32) {
         if self.fractional_scale_manager.is_none() {
             debug!("scale_factor_changed for {surface:?}: {new_factor}");
-            if let Some(window) = self.get_window(surface) {
+            if let Some(window) = self.get_window_mut(surface) {
                 window.scale_changed(new_factor.into());
             }
         }
@@ -294,6 +299,7 @@ impl CompositorHandler for ApplicationState {
 
     fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &wl_output::WlOutput) {
         if let Some(window) = self.get_window(surface) {
+            //let screen_info = ScreenInfo::new(self.output_state.info(output));  // TODO?
             window.output_changed(output);
         }
     }
@@ -309,7 +315,7 @@ delegate_compositor!(ApplicationState);
 
 impl WindowHandler for ApplicationState {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &Window) {
-        if let Some(window) = self.get_window(window.wl_surface()) {
+        if let Some(window) = self.get_window_mut(window.wl_surface()) {
             window.request_close();
         }
     }
@@ -334,7 +340,7 @@ delegate_subcompositor!(ApplicationState);
 impl PointerHandler for ApplicationState {
     fn pointer_frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
         for event in events {
-            if let Some(window) = self.get_window(&event.surface) {
+            if let Some(window) = self.get_window_mut(&event.surface) {
                 window.pointer_event(pointer, event);
             }
         }

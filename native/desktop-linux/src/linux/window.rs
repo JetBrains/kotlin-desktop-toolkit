@@ -278,6 +278,7 @@ impl SimpleWindow {
         self.size = Some(size);
 
         window.xdg_surface().set_window_geometry(0, 0, width.round(), height.round());
+        // TODO: wl_surface::set_opaque_region?
 
         if let Some(viewport) = &self.viewport {
             viewport.set_destination(width.round(), height.round());
