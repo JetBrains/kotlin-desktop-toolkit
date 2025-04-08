@@ -165,9 +165,10 @@ impl RustAllocatedStrPtr {
     }
 
     pub fn deallocate(&mut self) {
-        assert!(!self.0.ptr.is_null());
-        let _s = unsafe { CString::from_raw(self.0.ptr.cast_mut()) };
-        self.0.ptr = std::ptr::null();
+        if !self.0.ptr.is_null() {
+            let _s = unsafe { CString::from_raw(self.0.ptr.cast_mut()) };
+            self.0.ptr = std::ptr::null();
+        }
     }
 
     #[must_use]
