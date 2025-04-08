@@ -129,12 +129,10 @@ impl TextInputClientHandler {
     }
 
     pub fn set_marked_text(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) -> anyhow::Result<()> {
-        // todo replacement range might be NOT_FOUND
         let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
         debug!(
             "setMarkedText, marked_text={ns_attributed_string:?}, string={text:?}, selected_range={selected_range:?}, replacement_range={replacement_range:?}",
         );
-        debug!("replacement_range == NSNotFound {:?}", replacement_range == NOT_FOUND_NS_RANGE);
         (self.client.set_marked_text)(SetMarkedTextArgs {
             text: borrow_ns_string(&text),
             selected_range: TextRange {
@@ -195,7 +193,6 @@ impl TextInputClientHandler {
     pub fn insert_text(&self, string: &AnyObject, replacement_range: NSRange) -> anyhow::Result<()> {
         let (_ns_attributed_string, text) = get_maybe_attributed_string(string)?;
         debug!("insertText string={text:?}, replacement_range={replacement_range:?}");
-        // todo replacement range might be not found
         (self.client.insert_text)(InsertTextArgs {
             text: borrow_ns_string(&text),
             replacement_range: replacement_range.into(),
