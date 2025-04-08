@@ -46,7 +46,7 @@ public object KotlinDesktopToolkit {
 
         val debugSuffix = if (useDebugBuild) "+debug" else ""
 
-        val libName = "desktop_macos_${targetSuffix}$debugSuffix"
+        val libName = "desktop_linux_${targetSuffix}$debugSuffix"
         return when (Platform.INSTANCE.type) {
             Platform.Type.Windows -> "$libName.dll"
             Platform.Type.Linux -> "lib$libName.so"
