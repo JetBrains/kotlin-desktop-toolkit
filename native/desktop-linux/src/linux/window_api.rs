@@ -37,10 +37,11 @@ pub extern "C" fn window_create(mut app_ptr: AppPtr, event_handler: EventHandler
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_drop(mut app_ptr: AppPtr, window_id: WindowId) {
+pub extern "C" fn window_close(mut app_ptr: AppPtr, window_id: WindowId) {
     ffi_boundary("window_drop", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.drop_window(window_id);
+        let w = app.get_window_mut(window_id).context("No window found")?;
+        w.request_close();
         Ok(())
     });
 }

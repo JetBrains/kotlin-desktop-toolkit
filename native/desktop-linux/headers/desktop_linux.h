@@ -732,7 +732,7 @@ NativeWindowId window_create(NativeAppPtr app_ptr,
                              NativeEventHandler event_handler,
                              struct NativeWindowParams params);
 
-void window_drop(NativeAppPtr app_ptr, NativeWindowId window_id);
+void window_close(NativeAppPtr app_ptr, NativeWindowId window_id);
 
 void window_set_pointer_shape(NativeAppPtr app_ptr,
                               NativeWindowId window_id,
