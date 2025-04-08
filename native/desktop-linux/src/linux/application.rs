@@ -123,12 +123,6 @@ impl Application<'_> {
         self.state.last_window_id
     }
 
-    pub fn drop_window(&mut self, window_id: WindowId) {
-        if let Some(surface_id) = self.state.window_id_to_surface_id.remove(&window_id) {
-            self.state.windows.remove(&surface_id);
-        }
-    }
-
     #[must_use]
     pub fn get_window(&self, window_id: WindowId) -> Option<&SimpleWindow> {
         self.state

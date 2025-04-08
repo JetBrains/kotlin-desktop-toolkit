@@ -105,7 +105,7 @@ public class Window internal constructor(
 
     override fun close() {
         ffiDownCall {
-            desktop_h.window_drop(appPtr, windowId)
+            desktop_h.window_close(appPtr, windowId)
         }
         arena.close()
     }
