@@ -238,6 +238,16 @@ pub unsafe extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u
     });
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn application_order_front_character_palete() {
+    ffi_boundary("application_order_front_character_palete", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        app.orderFrontCharacterPalette(None);
+        Ok(())
+    })
+}
+
 define_class!(
     #[unsafe(super(NSApplication))]
     #[name = "MyNSApplication"]

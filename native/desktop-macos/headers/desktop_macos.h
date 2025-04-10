@@ -606,6 +606,8 @@ void application_unhide_all_applications(void);
  */
 void application_set_dock_icon(uint8_t *data, uint64_t data_length);
 
+void application_order_front_character_palete(void);
+
 void main_menu_update(struct NativeAppMenuStructure menu);
 
 void main_menu_set_none(void);
