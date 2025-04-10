@@ -57,6 +57,11 @@ public object TextInputContext {
     }
 }
 
+/**
+ * If you need some inspiration for implementation, check out those links:
+ * https://developer.apple.com/library/archive/samplecode/TextInputView/Introduction/Intro.html
+ * https://github.com/jessegrosjean/NSTextInputClient
+ */
 public interface TextInputClient {
     public fun hasMarkedText(): Boolean
     /**
@@ -263,7 +268,7 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
     private fun firstRectForCharacterRangeCallback(args: MemorySegment) {
         ffiUpCall {
             val range = TextRange.fromNative(NativeFirstRectForCharacterRangeArgs.range_in(args))
-            assert(range.nullIfNotFound() != null)
+            assert(range.nullIfNotFound() != null) // may happen if you return null on selectionRange queries
             val rectAndRange = textInputClient.firstRectForCharacterRange(range)
             (rectAndRange.actualRange ?: TextRange.notFound).toNative(NativeFirstRectForCharacterRangeArgs.actual_range_out(args))
             rectAndRange.rect.toNative(NativeFirstRectForCharacterRangeArgs.first_rect_out(args))
