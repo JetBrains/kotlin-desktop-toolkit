@@ -57,7 +57,7 @@ abstract class SkikoWindow(
                 return null
             }
 
-            override fun insertText(text: String, replacementRange: TextRange) {
+            override fun insertText(text: String, replacementRange: TextRange?) {
                 Logger.info { "insertText: $text, $replacementRange" }
             }
 
@@ -71,8 +71,8 @@ abstract class SkikoWindow(
 
             override fun setMarkedText(
                 text: String,
-                selectedRange: TextRange,
-                replacementRange: TextRange
+                selectedRange: TextRange?,
+                replacementRange: TextRange?
             ) {
                 Logger.info { "setMarkedText: $text, $selectedRange, $replacementRange" }
             }
