@@ -751,11 +751,12 @@ define_class!(
         }
 
         #[unsafe(method(performKeyEquivalent:))]
-        fn perform_key_eqivalent(&self, ns_event: &NSEvent) -> bool {
+        fn perform_key_eqivalent(&self, ns_event: &NSEvent) -> bool { // todo fix typo equivalent
             debug!("performKeyEquivalent: {ns_event:?}");
-            catch_panic(|| {
-                handle_key_event(ns_event)
-            }).unwrap_or(false)
+//            catch_panic(|| {
+//                handle_key_event(ns_event)
+//            }).unwrap_or(false)
+            false
         }
 
         #[unsafe(method(keyDown:))]
