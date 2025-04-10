@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
-use std::ptr::NonNull;
+use std::{
+    fmt::{Display, Pointer, Write},
+    ptr::NonNull,
+};
 
 use anyhow::{Context, bail};
 use log::{debug, warn};
@@ -33,7 +36,7 @@ impl Default for TextRange {
     fn default() -> Self {
         Self {
             location: NSNotFound as usize,
-            length: 0
+            length: 0,
         }
     }
 }
@@ -110,28 +113,30 @@ impl TextInputClientHandler {
 
     pub fn has_marked_text(&self) -> bool {
         let ret = (self.client.has_marked_text)();
-        debug!("hasMarkedText: {ret:?}");
+        debug!("hasMarkedText() -> {ret:?}");
         ret
     }
 
     pub fn marked_range(&self) -> NSRange {
         let mut result = TextRange::default();
         (self.client.marked_range)(&mut result);
-        debug!("markedRange: {result:?}");
+        debug!("markedRange() -> {result:?}");
         result.into()
     }
 
     pub fn selected_range(&self) -> NSRange {
         let mut result = TextRange::default();
         (self.client.selected_range)(&mut result);
-        debug!("selectedRange: {result:?}");
+        debug!("selectedRange() -> {result:?}");
         result.into()
     }
 
     pub fn set_marked_text(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) -> anyhow::Result<()> {
         let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
         debug!(
-            "setMarkedText, marked_text={ns_attributed_string:?}, string={text:?}, selected_range={selected_range:?}, replacement_range={replacement_range:?}",
+            "setMarkedText(marked_text={text:?}, selected_range={:?}, replacement_range={:?})",
+            PrintableNSRange(selected_range),
+            PrintableNSRange(replacement_range)
         );
         (self.client.set_marked_text)(SetMarkedTextArgs {
             text: borrow_ns_string(&text),
@@ -148,28 +153,28 @@ impl TextInputClientHandler {
     }
 
     pub fn unmark_text(&self) {
-        debug!("unmarkText");
+        debug!("unmarkText()");
         (self.client.unmark_text)();
     }
 
     #[allow(clippy::unused_self)]
     pub fn valid_attributes_for_marked_text(&self) -> Retained<NSArray<NSAttributedStringKey>> {
-        debug!("validAttributesForMarkedText");
-//        let v = vec![
-//            NSString::from_str("NSFont"),
-//            NSString::from_str("NSUnderline"),
-//            NSString::from_str("NSColor"),
-//            NSString::from_str("NSBackgroundColor"),
-//            NSString::from_str("NSUnderlineColor"),
-//            NSString::from_str("NSMarkedClauseSegment"),
-//            NSString::from_str("NSLanguage"),
-//            NSString::from_str("NSTextInputReplacementRangeAttributeName"),
-//            NSString::from_str("NSGlyphInfo"),
-//            NSString::from_str("NSTextAlternatives"),
-//            NSString::from_str("NSTextInsertionUndoable"),
-//        ];
-//        NSArray::from_retained_slice(&v)
-          NSArray::new()
+        debug!("validAttributesForMarkedText() -> []");
+        //        let v = vec![
+        //            NSString::from_str("NSFont"),
+        //            NSString::from_str("NSUnderline"),
+        //            NSString::from_str("NSColor"),
+        //            NSString::from_str("NSBackgroundColor"),
+        //            NSString::from_str("NSUnderlineColor"),
+        //            NSString::from_str("NSMarkedClauseSegment"),
+        //            NSString::from_str("NSLanguage"),
+        //            NSString::from_str("NSTextInputReplacementRangeAttributeName"),
+        //            NSString::from_str("NSGlyphInfo"),
+        //            NSString::from_str("NSTextAlternatives"),
+        //            NSString::from_str("NSTextInsertionUndoable"),
+        //        ];
+        //        NSArray::from_retained_slice(&v)
+        NSArray::new()
     }
 
     pub fn attributed_substring_for_proposed_range(
@@ -177,31 +182,36 @@ impl TextInputClientHandler {
         range: NSRange,
         actual_range: NSRangePointer,
     ) -> anyhow::Result<Option<Retained<NSAttributedString>>> {
-        debug!("attributedSubstringForProposedRange, range={range:?}");
         let result = (self.client.attributed_string_for_range)(range.into());
-        let attributed_string = if result.string.is_not_null() {
+        let ns_string = if result.string.is_not_null() {
             let ns_string = copy_to_ns_string(&result.string)?;
-            Some(NSAttributedString::from_nsstring(&ns_string))
+            Some(ns_string)
         } else {
             None
         };
         write_to_range_ptr(actual_range, result.actual_range.into());
         (self.client.free_attributed_string_for_range)();
-        Ok(attributed_string)
+        debug!(
+            "attributedSubstringForProposedRange(range={:?}) -> {ns_string:?}",
+            PrintableNSRange(range)
+        );
+        Ok(ns_string.map(|s| NSAttributedString::from_nsstring(&s)))
     }
 
     pub fn insert_text(&self, string: &AnyObject, replacement_range: NSRange) -> anyhow::Result<()> {
         let (_ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-        debug!("insertText string={text:?}, replacement_range={replacement_range:?}");
         (self.client.insert_text)(InsertTextArgs {
             text: borrow_ns_string(&text),
             replacement_range: replacement_range.into(),
         });
+        debug!(
+            "insertText(string={text:?}, replacement_range={:?})",
+            PrintableNSRange(replacement_range)
+        );
         Ok(())
     }
 
     pub fn first_rect_for_character_range(&self, range: NSRange, actual_range: NSRangePointer) -> anyhow::Result<NSRect> {
-        debug!("firstRectForCharacterRange: range={range:?}");
         let mtm = MainThreadMarker::new().unwrap();
 
         let mut args = FirstRectForCharacterRangeArgs {
@@ -212,19 +222,21 @@ impl TextInputClientHandler {
         (self.client.first_rect_for_character_range)(&mut args);
 
         write_to_range_ptr(actual_range, args.actual_range_out.into());
-
         let screen_height = NSScreen::primary(mtm)?.height();
-        Ok(args.first_rect_out.as_macos_coords(screen_height))
+
+        let result_rect = args.first_rect_out.as_macos_coords(screen_height);
+        debug!("firstRectForCharacterRange(range={:?}) -> {result_rect:?}", PrintableNSRange(range));
+        Ok(result_rect)
     }
 
     pub fn character_index_for_point(&self, point: NSPoint) -> anyhow::Result<NSUInteger> {
-        debug!("characterIndexForPoint: {:?}", point);
         let mtm = MainThreadMarker::new().unwrap();
 
         let screen_height = NSScreen::primary(mtm)?.height();
         let logical_point = LogicalPoint::from_macos_coords(point, screen_height);
 
         let index = (self.client.character_index_for_point)(logical_point);
+        debug!("characterIndexForPoint(point = {point:?}) -> {index:?}");
         Ok(index)
     }
 
@@ -273,9 +285,7 @@ pub extern "C" fn text_input_context_invalidate_character_coordinates() {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn text_input_context_not_found_offset() -> isize {
-    ffi_boundary("text_input_context_not_found_offset", || {
-        Ok(NSNotFound)
-    })
+    ffi_boundary("text_input_context_not_found_offset", || Ok(NSNotFound))
 }
 
 #[unsafe(no_mangle)]
@@ -335,3 +345,16 @@ pub const NOT_FOUND_NS_RANGE: NSRange = NSRange {
     location: NSNotFound as usize,
     length: 0,
 };
+
+#[repr(transparent)]
+struct PrintableNSRange(NSRange);
+
+impl std::fmt::Debug for PrintableNSRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0 != NOT_FOUND_NS_RANGE {
+            write!(f, "{:?}", self.0)
+        } else {
+            write!(f, "NSRange::NotFound")
+        }
+    }
+}
