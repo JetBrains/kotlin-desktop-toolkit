@@ -36,8 +36,8 @@ pub extern "C" fn application_run_event_loop(mut app_ptr: AppPtr) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_stop_event_loop(mut app_ptr: AppPtr) {
+    debug!("application_stop_event_loop");
     ffi_boundary("application_stop_event_loop", || {
-        debug!("Stop event loop");
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         app.exit = true;
         Ok(())
@@ -46,6 +46,7 @@ pub extern "C" fn application_stop_event_loop(mut app_ptr: AppPtr) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_shutdown(app_ptr: AppPtr) {
+    debug!("application_shutdown");
     ffi_boundary("application_shutdown", || {
         let mut app = unsafe { app_ptr.to_owned::<Application>() };
         app.exit = true;

@@ -104,9 +104,11 @@ public class Window internal constructor(
     }
 
     override fun close() {
+        Logger.trace { "Window: closing window with id $windowId" }
         ffiDownCall {
             desktop_h.window_close(appPtr, windowId)
         }
         arena.close()
+        Logger.trace { "Window: closed window with id $windowId" }
     }
 }

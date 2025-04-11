@@ -77,7 +77,7 @@ impl Application<'_> {
     }
 
     pub fn run(&mut self) -> Result<(), anyhow::Error> {
-        debug!("Start event loop");
+        debug!("Application event loop: starting");
 
         self.init_xdg_desktop_settings_notifier();
         self.init_run_on_event_loop();
@@ -94,22 +94,24 @@ impl Application<'_> {
                     }
                     !v.close
                 });
-                if self.state.windows.is_empty() {
-                    self.exit = true;
-                }
             }
 
             if self.exit && (self.state.callbacks.on_should_terminate)() {
                 debug!("Exiting");
                 (self.state.callbacks.on_will_terminate)();
+                self.state.windows.clear();
                 break;
             }
-            // debug!("Continuing event loop");
+            // debug!("Application event loop: continuing");
         }
+        debug!("Application event loop: stopped");
         Ok(())
     }
 
     pub fn new_window(&mut self, event_handler: EventHandler, params: &WindowParams) -> WindowId {
+        let window_id = self.state.next_window_id;
+        self.state.next_window_id.0 += 1;
+
         let w = SimpleWindow::new(
             &self.state,
             &self.qh,
@@ -118,9 +120,8 @@ impl Application<'_> {
         );
         let surface_id = w.window.wl_surface().id();
         self.state.windows.insert(surface_id.clone(), w);
-        self.state.last_window_id.0 += 1;
-        self.state.window_id_to_surface_id.insert(self.state.last_window_id, surface_id);
-        self.state.last_window_id
+        self.state.window_id_to_surface_id.insert(window_id, surface_id);
+        window_id
     }
 
     #[must_use]

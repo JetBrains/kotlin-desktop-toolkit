@@ -41,9 +41,8 @@ use smithay_client_toolkit::{
     shm::{Shm, ShmHandler},
 };
 
-use crate::linux::window::SimpleWindow;
-
 use super::{application_api::ApplicationCallbacks, events::WindowId};
+use crate::linux::window::SimpleWindow;
 
 pub type EglInstance = khronos_egl::Instance<khronos_egl::Dynamic<libloading::Library, khronos_egl::EGL1_0>>;
 
@@ -61,7 +60,7 @@ pub struct ApplicationState {
     pub viewporter: Option<WpViewporter>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
 
-    pub last_window_id: WindowId,
+    pub next_window_id: WindowId,
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
     key_surface: Option<ObjectId>,
@@ -103,7 +102,7 @@ impl ApplicationState {
             themed_pointer: None,
             viewporter: globals.bind(qh, 1..=1, ()).ok(),
             fractional_scale_manager: globals.bind(qh, 1..=1, ()).ok(),
-            last_window_id: WindowId(0),
+            next_window_id: WindowId(0),
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             key_surface: None,
@@ -315,7 +314,7 @@ delegate_compositor!(ApplicationState);
 
 impl WindowHandler for ApplicationState {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &Window) {
-        if let Some(window) = self.get_window_mut(window.wl_surface()) {
+        if let Some(window) = self.get_window(window.wl_surface()) {
             window.request_close();
         }
     }
