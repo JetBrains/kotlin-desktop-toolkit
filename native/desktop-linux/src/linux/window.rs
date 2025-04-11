@@ -238,9 +238,13 @@ impl SimpleWindow {
         }
     }
 
-    pub fn request_close(&mut self) {
+    pub fn request_close(&self) {
         (self.event_handler)(&Event::WindowCloseRequest);
+    }
+
+    pub fn close(&mut self) {
         self.close = true;
+        self.event_handler = Box::new(|_| false);
     }
 
     pub fn configure(

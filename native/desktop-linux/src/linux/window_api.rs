@@ -3,6 +3,7 @@ use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger::{PanicDefault, ffi_boundary},
 };
+use log::debug;
 use smithay_client_toolkit::shell::xdg::window::Window;
 
 use super::{
@@ -30,6 +31,8 @@ pub struct WindowParams<'a> {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_create(mut app_ptr: AppPtr, event_handler: EventHandler, params: WindowParams) -> WindowId {
     let window_id = ffi_boundary("window_create", || {
+        debug!("window_create");
+
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         Ok(Some(app.new_window(event_handler, &params)))
     });
@@ -38,10 +41,11 @@ pub extern "C" fn window_create(mut app_ptr: AppPtr, event_handler: EventHandler
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_close(mut app_ptr: AppPtr, window_id: WindowId) {
-    ffi_boundary("window_drop", || {
+    ffi_boundary("window_close", || {
+        debug!("window_close");
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         let w = app.get_window_mut(window_id).context("No window found")?;
-        w.request_close();
+        w.close();
         Ok(())
     });
 }

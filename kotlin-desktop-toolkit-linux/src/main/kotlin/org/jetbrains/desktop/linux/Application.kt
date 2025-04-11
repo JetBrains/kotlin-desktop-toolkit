@@ -77,6 +77,12 @@ public class Application() {
         }
     }
 
+    public fun destroy() {
+        ffiDownCall {
+            desktop_h.application_shutdown(appPtr!!)
+        }
+    }
+
     public fun setQuitHandler(isSafeToQuit: () -> Boolean) {
         this.isSafeToQuit = isSafeToQuit
     }
