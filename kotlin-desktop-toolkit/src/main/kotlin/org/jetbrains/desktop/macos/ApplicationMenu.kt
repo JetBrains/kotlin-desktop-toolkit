@@ -142,6 +142,12 @@ public object AppMenuManager {
             desktop_macos_h.main_menu_set_none()
         }
     }
+
+    public fun offerCurrentEvent() {
+        ffiDownCall {
+            desktop_macos_h.main_menu_offer_current_event()
+        }
+    }
 }
 
 private fun Keystroke.toNative(arena: Arena): MemorySegment = let { keystroke ->

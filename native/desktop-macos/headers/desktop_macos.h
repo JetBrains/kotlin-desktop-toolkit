@@ -620,6 +620,8 @@ void main_menu_update(struct NativeAppMenuStructure menu);
 
 void main_menu_set_none(void);
 
+bool main_menu_offer_current_event(void);
+
 void cursor_push_hide(void);
 
 void cursor_pop_hide(void);

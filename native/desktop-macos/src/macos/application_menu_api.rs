@@ -98,3 +98,20 @@ pub extern "C" fn main_menu_set_none() {
         Ok(())
     });
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn main_menu_offer_current_event() -> bool {
+    ffi_boundary("main_menu_offer_current_event", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        let result = match (app.currentEvent(), unsafe { app.mainMenu() }) {
+            (Some(event), Some(menu)) => {
+                unsafe { menu.performKeyEquivalent(&event) }
+            }
+            _ => {
+                false
+            }
+        };
+        Ok(result)
+    })
+}
