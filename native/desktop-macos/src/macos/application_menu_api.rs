@@ -47,6 +47,14 @@ pub enum ActionItemState {
 }
 
 #[repr(C)]
+pub enum AppMenuTrigger {
+    Keystroke,
+    Other
+}
+
+pub type AppMenuItemCallback = extern "C" fn(trigger: AppMenuTrigger);
+
+#[repr(C)]
 #[derive(Debug)]
 pub enum AppMenuItem<'a> {
     ActionItem {
@@ -55,7 +63,7 @@ pub enum AppMenuItem<'a> {
         title: BorrowedStrPtr<'a>,
         special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<&'a AppMenuKeystroke<'a>>,
-        perform: extern "C" fn(),
+        perform: AppMenuItemCallback,
     },
     SeparatorItem,
     SubMenuItem {

@@ -1,11 +1,9 @@
 use std::cell::{Cell, RefCell};
 
 use anyhow::{Context, Ok};
-use log::debug;
+use log::{debug, trace, warn};
 use objc2::{
-    DeclaredClass, MainThreadOnly, define_class, msg_send,
-    rc::Retained,
-    runtime::{AnyObject, ProtocolObject, Sel},
+    define_class, msg_send, rc::Retained, runtime::{AnyObject, ProtocolObject, Sel}, DeclaredClass, MainThreadOnly, Message
 };
 use objc2_app_kit::{
     NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen,
@@ -23,7 +21,7 @@ use crate::{
     macos::{
         custom_titlebar::CustomTitlebar,
         events::{
-            handle_flags_change, handle_key_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
+            handle_flags_change, handle_key_up_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
             handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_close_request, handle_window_focus_change,
             handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change,
         },
@@ -34,12 +32,7 @@ use crate::{
 use desktop_common::logger::catch_panic;
 
 use super::{
-    application_api::MyNSApplication,
-    custom_titlebar::CustomTitlebarCell,
-    metal_api::MetalView,
-    screen::NSScreenExts,
-    text_input_client::{TextInputClient, TextInputClientHandler},
-    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
+    application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::handle_key_down_event, metal_api::MetalView, screen::NSScreenExts, text_input_client::{TextInputClient, TextInputClientHandler}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}
 };
 
 #[allow(clippy::struct_field_names)]
@@ -505,6 +498,7 @@ impl MyNSWindow {
 pub(crate) struct RootViewIvars {
     text_input_client_handler: TextInputClientHandler,
     tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
+    last_key_equiv_ns_event: Cell<Option<Retained<NSEvent>>>
 }
 
 define_class!(
@@ -625,7 +619,7 @@ define_class!(
         #[unsafe(method(updateTrackingArea))]
         fn update_tracking_area(&self) {
             catch_panic(|| {
-                let mtm = unsafe { MainThreadMarker::new_unchecked() };
+                let mtm = self.mtm();
                 self.update_tracking_area_impl(mtm);
                 Ok(())
             });
@@ -750,19 +744,32 @@ define_class!(
             return true.into();
         }
 
+        /// `NSKeyDown` is passed to `performKeyEquivalent` first if
+        /// * it has Cmd or Ctrl modifier pressed
+        /// * it's functional key e.g. F1, F2
+        /// * it's an arrow key, del key, maybe some other keys, but not enter or backspace
+        /// * basically it's set of keys which is plosable for a keystroke in terms of apple guidelines
+        ///
+        /// The path of KeyDownEvent is the following:
+        /// * If it meet conditions above it will be passed to `performKeyEquivalent`
+        /// * If the function retruned true then that's it
+        /// * If the function returned false and it meet conditions above it will be passed to application menu to handle
+        /// * If it triggered any action in application menu then that's it
+        /// * Otherwise it will be passed to `keyDown`
         #[unsafe(method(performKeyEquivalent:))]
-        fn perform_key_eqivalent(&self, ns_event: &NSEvent) -> bool { // todo fix typo equivalent
-            debug!("performKeyEquivalent: {ns_event:?}");
-//            catch_panic(|| {
-//                handle_key_event(ns_event)
-//            }).unwrap_or(false)
-            false
+        fn perform_key_equivalent(&self, ns_event: &NSEvent) -> bool {
+            catch_panic(|| {
+                let result = self.perform_key_equivalent_impl(&ns_event);
+                debug!("perform_key_equivalent(ns_event = {ns_event:?}) -> {result:?}");
+                result
+            }).unwrap_or(false)
         }
 
         #[unsafe(method(keyDown:))]
         fn key_down(&self, ns_event: &NSEvent) {
             catch_panic(|| {
-                handle_key_event(ns_event)?;
+                self.perform_key_down_impl(&ns_event)?;
+                debug!("key_down(ns_event = {ns_event:?})");
                 Ok(())
             });
         }
@@ -770,7 +777,7 @@ define_class!(
         #[unsafe(method(keyUp:))]
         fn key_up(&self, ns_event: &NSEvent) {
             catch_panic(|| {
-                handle_key_event(ns_event)?;
+                handle_key_up_event(ns_event)?;
                 Ok(())
             });
         }
@@ -814,6 +821,8 @@ impl RootView {
         let this = this.set_ivars(RootViewIvars {
             text_input_client_handler: TextInputClientHandler::new(text_input_client),
             tracking_area: Cell::new(None),
+            last_key_equiv_ns_event: Cell::new(None),
+
         });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {
@@ -826,6 +835,28 @@ impl RootView {
 
     fn text_input_client(&self) -> &TextInputClientHandler {
         &self.ivars().text_input_client_handler
+    }
+
+    fn perform_key_equivalent_impl(&self, ns_event: &NSEvent) -> anyhow::Result<bool> {
+        let result = handle_key_down_event(ns_event, true)?;
+        let ivars = &self.ivars();
+        if let Some(prev_event) = ivars.last_key_equiv_ns_event.replace(Some(ns_event.retain())) {
+            debug!("Replace perfromKeyEquivalent event: {prev_event:?} {ns_event:?}");
+        }
+        Ok(result)
+    }
+
+    fn perform_key_down_impl(&self, ns_event: &NSEvent) -> anyhow::Result<()> {
+        let ivars = &self.ivars();
+        match ivars.last_key_equiv_ns_event.take() {
+            Some(prev_event) if &*prev_event == ns_event => {
+                debug!("Skip {ns_event:?} we already handled it during performKeyEquivalent");
+            }
+            _ => {
+                handle_key_down_event(ns_event, false)?;
+            }
+        }
+        Ok(())
     }
 
     fn update_tracking_area_impl(&self, mtm: MainThreadMarker) {

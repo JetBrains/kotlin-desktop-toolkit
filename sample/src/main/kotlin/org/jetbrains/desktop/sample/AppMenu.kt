@@ -5,6 +5,7 @@ import org.jetbrains.desktop.macos.AppMenuStructure
 import org.jetbrains.desktop.macos.KeyModifiersSet
 import org.jetbrains.desktop.macos.Keystroke
 import org.jetbrains.desktop.macos.Logger
+import org.jetbrains.desktop.macos.Trigger
 import java.time.LocalDate
 
 private fun imLucky(): Boolean {
@@ -84,10 +85,10 @@ fun buildAppMenu(): AppMenuStructure {
                 // second letter is ignored
                 keystroke = Keystroke(key = "xy", modifiers = KeyModifiersSet.create()),
                 perform = if (imLucky()) {
-                    val f = { Logger.info { "Odd" } }
+                    val f = { trigger: Trigger -> Logger.info { "Odd" } }
                     f
                 } else {
-                    val f = { Logger.info { "Even" } }
+                    val f = { trigger: Trigger -> Logger.info { "Even" } }
                     f
                 },
             ),

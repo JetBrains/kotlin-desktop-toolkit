@@ -19,6 +19,11 @@ typedef enum NativeActionMenuItemSpecialTag {
   NativeActionMenuItemSpecialTag_Delete,
 } NativeActionMenuItemSpecialTag;
 
+typedef enum NativeAppMenuTrigger {
+  NativeAppMenuTrigger_Keystroke,
+  NativeAppMenuTrigger_Other,
+} NativeAppMenuTrigger;
+
 typedef enum NativeAppearance {
   NativeAppearance_Dark,
   NativeAppearance_Light,
@@ -124,6 +129,7 @@ typedef struct NativeKeyDownEvent {
   NativeBorrowedStrPtr characters;
   NativeBorrowedStrPtr key;
   bool is_repeat;
+  bool might_have_key_equivalent;
   NativeTimestamp timestamp;
 } NativeKeyDownEvent;
 
@@ -333,6 +339,8 @@ typedef struct NativeAppMenuKeystroke {
   NativeKeyModifiersSet modifiers;
 } NativeAppMenuKeystroke;
 
+typedef void (*NativeAppMenuItemCallback)(enum NativeAppMenuTrigger trigger);
+
 typedef enum NativeAppMenuItem_Tag {
   NativeAppMenuItem_ActionItem,
   NativeAppMenuItem_SeparatorItem,
@@ -345,7 +353,7 @@ typedef struct NativeAppMenuItem_NativeActionItem_Body {
   NativeBorrowedStrPtr title;
   enum NativeActionMenuItemSpecialTag special_tag;
   const struct NativeAppMenuKeystroke *keystroke;
-  void (*perform)(void);
+  NativeAppMenuItemCallback perform;
 } NativeAppMenuItem_NativeActionItem_Body;
 
 typedef struct NativeAppMenuItem_NativeSubMenuItem_Body {
