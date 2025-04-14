@@ -58,6 +58,7 @@ public sealed class Event {
         val key: String,
         val modifiers: KeyModifiersSet,
         val isRepeat: Boolean,
+        val mightHaveKeyEquivalent: Boolean,
         val timestamp: Timestamp,
     ) : Event()
 
@@ -195,6 +196,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 key = NativeKeyDownEvent.key(nativeEvent).getUtf8String(0),
                 modifiers = KeyModifiersSet(NativeKeyDownEvent.modifiers(nativeEvent)),
                 isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
+                mightHaveKeyEquivalent = NativeKeyDownEvent.might_have_key_equivalent(nativeEvent),
                 timestamp = Timestamp(NativeKeyDownEvent.timestamp(nativeEvent)),
             )
         }

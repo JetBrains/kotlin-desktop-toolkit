@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeAppMenuItem
+import org.jetbrains.desktop.macos.generated.NativeAppMenuItemCallback
 import org.jetbrains.desktop.macos.generated.NativeAppMenuItem_NativeActionItem_Body
 import org.jetbrains.desktop.macos.generated.NativeAppMenuItem_NativeSubMenuItem_Body
 import org.jetbrains.desktop.macos.generated.NativeAppMenuKeystroke
@@ -17,6 +18,22 @@ public data class Keystroke(
     val modifiers: KeyModifiersSet,
 )
 
+public enum class Trigger {
+    KEYSTROKE,
+    OTHER,
+    ;
+
+    public companion object {
+        internal fun fromNative(x: Int): Trigger {
+            return when (x) {
+                desktop_macos_h.NativeAppMenuTrigger_Keystroke() -> KEYSTROKE
+                desktop_macos_h.NativeAppMenuTrigger_Other() -> OTHER
+                else -> error("Unknown trigger: $x")
+            }
+        }
+    }
+}
+
 public sealed class AppMenuItem {
     public data class Action(
         val title: String,
@@ -24,7 +41,7 @@ public sealed class AppMenuItem {
         val state: ActionItemState = ActionItemState.Off,
         val keystroke: Keystroke? = null,
         val specialTag: SpecialTag = SpecialTag.None,
-        val perform: () -> Unit = {},
+        val perform: (Trigger) -> Unit = {},
     ) : AppMenuItem() {
         public enum class SpecialTag {
             None,
@@ -125,6 +142,12 @@ public object AppMenuManager {
             desktop_macos_h.main_menu_set_none()
         }
     }
+
+    public fun offerCurrentEvent() {
+        ffiDownCall {
+            desktop_macos_h.main_menu_offer_current_event()
+        }
+    }
 }
 
 private fun Keystroke.toNative(arena: Arena): MemorySegment = let { keystroke ->
@@ -147,12 +170,11 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             NativeAppMenuItem_NativeActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)
             NativeAppMenuItem_NativeActionItem_Body.perform(
                 actionItemBody,
-                NativeAppMenuItem_NativeActionItem_Body.perform.allocate(
-                    {
-                        ffiUpCall(menuItem.perform)
-                    },
-                    AppMenuManager.callbacksArena,
-                ),
+                NativeAppMenuItemCallback.allocate({ trigger ->
+                    ffiUpCall {
+                        menuItem.perform(Trigger.fromNative(trigger))
+                    }
+                }, AppMenuManager.callbacksArena),
             )
             NativeAppMenuItem.action_item(nativeItem, actionItemBody)
         }

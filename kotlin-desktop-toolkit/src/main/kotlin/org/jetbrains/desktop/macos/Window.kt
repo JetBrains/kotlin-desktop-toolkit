@@ -10,7 +10,7 @@ public typealias WindowId = Long
 
 public class Window internal constructor(
     ptr: MemorySegment,
-    public val textInputClientHolder: TextInputClientHolder,
+    internal val textInputClientHolder: TextInputClientHolder,
 ) : Managed(ptr, desktop_macos_h::window_drop) {
     public data class WindowParams(
         val origin: LogicalPoint = LogicalPoint(0.0, 0.0),
@@ -42,7 +42,7 @@ public class Window internal constructor(
     public companion object {
         public fun create(params: WindowParams): Window {
             return Arena.ofConfined().use { arena ->
-                val textInputClientHolder = TextInputClientHolder(null)
+                val textInputClientHolder = TextInputClientHolder()
                 Window(
                     ffiDownCall {
                         desktop_macos_h.window_create(params.toNative(arena), textInputClientHolder.toNative())
@@ -255,6 +255,12 @@ public class Window internal constructor(
                 }
             }
         }
+
+    public fun setTextInputClient(textInputClient: TextInputClient) {
+        textInputClientHolder.textInputClient = textInputClient
+    }
+
+    public val textInputContext: TextInputContext = TextInputContext(this)
 
     override fun close() {
         super.close()

@@ -3,12 +3,17 @@ use core::slice;
 use anyhow::{Result, anyhow};
 
 use objc2::{DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, sel};
-use objc2_app_kit::{NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSMenu, NSMenuItem};
+use objc2_app_kit::{
+    NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSEventType, NSMenu, NSMenuItem,
+};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSString};
 
 use super::{
     application_api::MyNSApplication,
-    application_menu_api::{ActionItemState, ActionMenuItemSpecialTag, AppMenuItem, AppMenuStructure, SubMenuItemSpecialTag},
+    application_menu_api::{
+        ActionItemState, ActionMenuItemSpecialTag, AppMenuItem, AppMenuItemCallback, AppMenuStructure, AppMenuTrigger,
+        SubMenuItemSpecialTag,
+    },
     keyboard::KeyModifiersSet,
     string::copy_to_ns_string,
 };
@@ -37,8 +42,6 @@ struct AppMenuKeystrokeSafe {
     modifiers: KeyModifiersSet,
 }
 
-type Callback = extern "C" fn();
-
 #[derive(Debug)]
 enum AppMenuItemSafe {
     Action {
@@ -47,7 +50,7 @@ enum AppMenuItemSafe {
         title: Retained<NSString>,
         special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<AppMenuKeystrokeSafe>,
-        perform: Callback,
+        perform: AppMenuItemCallback,
     },
     Separator,
     SubMenu {
@@ -135,7 +138,7 @@ impl AppMenuItemSafe {
         title: &Retained<NSString>,
         _special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<&AppMenuKeystrokeSafe>,
-        perform: Callback,
+        perform: AppMenuItemCallback,
         mtm: MainThreadMarker,
     ) {
         unsafe {
@@ -256,7 +259,7 @@ impl AppMenuItemSafe {
 
 #[derive(Debug)]
 struct MenuItemRepresenterIvars {
-    callback: Option<Callback>,
+    callback: Option<AppMenuItemCallback>,
 }
 
 define_class!(
@@ -273,16 +276,25 @@ define_class!(
         #[unsafe(method(itemCallback:))]
         fn item_callback(&self, _sender: &NSMenuItem) {
             if let Some(callback) = self.ivars().callback {
-                callback();
+                callback(self.guess_trigger());
             }
         }
     }
 );
 
 impl MenuItemRepresenter {
-    fn new(callback: Option<Callback>, mtm: MainThreadMarker) -> Retained<Self> {
+    fn new(callback: Option<AppMenuItemCallback>, mtm: MainThreadMarker) -> Retained<Self> {
         let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars { callback });
         unsafe { msg_send![super(obj), init] }
+    }
+
+    fn guess_trigger(&self) -> AppMenuTrigger {
+        let mtm = self.mtm();
+        let app = MyNSApplication::sharedApplication(mtm);
+        match app.currentEvent() {
+            Some(ns_event) if unsafe { ns_event.r#type() } == NSEventType::KeyDown => AppMenuTrigger::Keystroke,
+            _ => AppMenuTrigger::Other,
+        }
     }
 }
 

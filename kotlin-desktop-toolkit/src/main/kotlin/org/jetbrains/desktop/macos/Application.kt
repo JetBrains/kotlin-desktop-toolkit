@@ -102,6 +102,12 @@ public object Application {
         }
     }
 
+    public fun orderFrontCharactersPalette() {
+        ffiDownCall {
+            desktop_macos_h.application_order_front_character_palete()
+        }
+    }
+
     public fun setQuitHandler(isSafeToQuit: () -> Boolean) {
         this.isSafeToQuit = isSafeToQuit
     }

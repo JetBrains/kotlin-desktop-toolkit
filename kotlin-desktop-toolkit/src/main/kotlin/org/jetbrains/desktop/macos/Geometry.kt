@@ -23,7 +23,9 @@ public data class LogicalSize(
     val width: LogicalPixels,
     val height: LogicalPixels,
 ) {
-    public companion object {}
+    public companion object {
+        public val Zero: LogicalSize = LogicalSize(0.0, 0.0)
+    }
     public fun toPhysical(scale: Double): PhysicalSize = PhysicalSize(width * scale, height * scale)
 }
 
@@ -35,4 +37,10 @@ public data class LogicalPoint(
         public val Zero: LogicalPoint = LogicalPoint(0.0, 0.0)
     }
     public fun toPhysical(scale: Double): PhysicalPoint = PhysicalPoint(x * scale, y * scale)
+}
+
+public data class LogicalRect(val origin: LogicalPoint, val size: LogicalSize) {
+    public companion object {
+        public val Zero: LogicalRect = LogicalRect(LogicalPoint.Zero, LogicalSize.Zero)
+    }
 }

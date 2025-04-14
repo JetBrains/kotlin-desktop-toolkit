@@ -37,6 +37,7 @@ pub struct KeyDownEvent<'a> {
     pub characters: BorrowedStrPtr<'a>,
     pub key: BorrowedStrPtr<'a>,
     pub is_repeat: bool,
+    pub might_have_key_equivalent: bool,
     pub timestamp: Timestamp,
 }
 
@@ -194,7 +195,7 @@ pub enum Event<'a> {
     ApplicationAppearanceChange(ApplicationAppearanceChangeEvent),
 }
 
-pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
+pub(crate) fn handle_key_down_event(ns_event: &NSEvent, might_have_key_equivalent: bool) -> anyhow::Result<bool> {
     let handled = AppState::with(|state| match unsafe { ns_event.r#type() } {
         NSEventType::KeyDown => {
             let key_info = unpack_key_event(ns_event)?;
@@ -206,9 +207,17 @@ pub(crate) fn handle_key_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                 key: borrow_ns_string(&key_info.key),
                 modifiers: key_info.modifiers,
                 timestamp: unsafe { ns_event.timestamp() },
+                might_have_key_equivalent,
             });
             Ok((state.event_handler)(&event))
         }
+        _ => bail!("Unexpected type of event {:?}", ns_event),
+    });
+    handled
+}
+
+pub(crate) fn handle_key_up_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
+    let handled = AppState::with(|state| match unsafe { ns_event.r#type() } {
         NSEventType::KeyUp => {
             let key_info = unpack_key_event(ns_event)?;
             let event = Event::KeyUp(KeyUpEvent {

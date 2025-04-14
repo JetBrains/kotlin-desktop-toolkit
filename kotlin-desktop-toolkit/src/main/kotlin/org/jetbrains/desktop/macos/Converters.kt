@@ -2,6 +2,7 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeColor
 import org.jetbrains.desktop.macos.generated.NativeLogicalPoint
+import org.jetbrains.desktop.macos.generated.NativeLogicalRect
 import org.jetbrains.desktop.macos.generated.NativeLogicalSize
 import org.jetbrains.desktop.macos.generated.NativePhysicalSize
 import java.lang.foreign.Arena
@@ -47,6 +48,13 @@ internal fun PhysicalSize.toNative(arena: Arena): MemorySegment {
     NativePhysicalSize.width(result, width)
     NativePhysicalSize.height(result, height)
     return result
+}
+
+internal fun LogicalRect.toNative(s: MemorySegment) {
+    NativeLogicalPoint.x(NativeLogicalRect.origin(s), origin.x)
+    NativeLogicalPoint.y(NativeLogicalRect.origin(s), origin.y)
+    NativeLogicalSize.width(NativeLogicalRect.size(s), size.width)
+    NativeLogicalSize.height(NativeLogicalRect.size(s), size.height)
 }
 
 // internal fun PhysicalPoint.Companion.fromNative(s: MemorySegment): PhysicalPoint {

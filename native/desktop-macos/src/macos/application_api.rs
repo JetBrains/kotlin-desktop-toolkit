@@ -238,6 +238,16 @@ pub unsafe extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u
     });
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn application_order_front_character_palete() {
+    ffi_boundary("application_order_front_character_palete", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        app.orderFrontCharacterPalette(None);
+        Ok(())
+    });
+}
+
 define_class!(
     #[unsafe(super(NSApplication))]
     #[name = "MyNSApplication"]
@@ -250,7 +260,10 @@ define_class!(
     impl MyNSApplication {
         #[unsafe(method(sendEvent:))]
         fn send_event(&self, event: &NSEvent) {
-            self.send_event_impl(event);
+            catch_panic(|| {
+                self.send_event_impl(event);
+                Ok(())
+            });
         }
     }
 );
@@ -267,7 +280,7 @@ impl MyNSApplication {
     // command.  This one makes all modifiers consistent by always sending key ups.
     fn send_event_impl(&self, event: &NSEvent) {
         if unsafe { event.r#type() } == NSEventType::KeyUp {
-            let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+            let mtm: MainThreadMarker = self.mtm();
             if let Some(window) = unsafe { event.window(mtm) } {
                 window.sendEvent(event);
                 return;

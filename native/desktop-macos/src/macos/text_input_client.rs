@@ -1,139 +1,144 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
 use std::{cell::Cell, ptr::NonNull};
 
-use anyhow::bail;
-use log::debug;
+use anyhow::{Context, bail};
+use log::{debug, warn};
 use objc2::{
+    DefinedClass, MainThreadMarker,
     rc::Retained,
     runtime::{AnyObject, Sel},
 };
-use objc2_app_kit::{NSEvent, NSEventModifierFlags, NSEventType, NSTextInputContext};
+use objc2_app_kit::{NSBeep, NSScreen};
 use objc2_foundation::{
-    NSArray, NSAttributedString, NSAttributedStringKey, NSPoint, NSRange, NSRangePointer, NSRect, NSSize, NSString, NSUInteger,
+    NSArray, NSAttributedString, NSAttributedStringKey, NSNotFound, NSPoint, NSRange, NSRangePointer, NSRect, NSString, NSUInteger,
 };
 
-use crate::macos::keyboard::key_codes;
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use crate::{
+    geometry::{LogicalPoint, LogicalRect},
+    macos::{screen::NSScreenExts, string::copy_to_ns_string, window::Window},
+};
+use desktop_common::{ffi_utils::BorrowedStrPtr, logger::ffi_boundary};
 
-use super::string::borrow_ns_string;
+use super::{application_api::MyNSApplication, string::borrow_ns_string, window_api::WindowPtr};
 
 #[repr(C)]
-#[derive(Debug, Default)]
-// For the invalid (missing) value, all values are 0
+#[derive(Debug)]
 pub struct TextRange {
     pub location: usize,
     pub length: usize,
 }
 
-pub type OnDoCommand = extern "C" fn(command: BorrowedStrPtr) -> bool;
+impl Default for TextRange {
+    fn default() -> Self {
+        Self {
+            #[allow(clippy::cast_sign_loss)] // isize to usize
+            location: NSNotFound as usize,
+            length: 0,
+        }
+    }
+}
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct OnInsertTextArgs<'a> {
+pub struct InsertTextArgs<'a> {
     pub text: BorrowedStrPtr<'a>,
-    //pub composition_range: TextRange,
-    //pub composition_committed_range: TextRange,
-    //pub composition_selected_range: TextRange,
-    //pub replacement_range: TextRange,
+    pub replacement_range: TextRange,
 }
-pub type OnInsertText = extern "C" fn(args: OnInsertTextArgs);
 
 #[repr(C)]
-pub struct OnSetMarkedTextArgs<'a> {
+pub struct SetMarkedTextArgs<'a> {
     pub text: BorrowedStrPtr<'a>,
     pub selected_range: TextRange,
     pub replacement_range: TextRange,
 }
-pub type OnSetMarkedText = extern "C" fn(args: OnSetMarkedTextArgs);
 
-pub type OnUnmarkText = extern "C" fn();
+#[repr(C)]
+#[derive(Debug)]
+pub struct FirstRectForCharacterRangeArgs {
+    range_in: TextRange,
+    actual_range_out: TextRange,
+    first_rect_out: LogicalRect,
+}
+
+pub type HasMarkedTextCallback = extern "C" fn() -> bool;
+pub type MarkedRangeCallback = extern "C" fn(range_out: &mut TextRange);
+pub type SelectedRangeCallback = extern "C" fn(range_out: &mut TextRange);
+pub type InsertTextCallback = extern "C" fn(args: InsertTextArgs);
+pub type DoCommandCallback = extern "C" fn(command: BorrowedStrPtr) -> bool;
+pub type UnmarkTextCallback = extern "C" fn();
+pub type SetMarkedTextCallback = extern "C" fn(args: SetMarkedTextArgs);
+pub type FirstRectForCharacterRangeCallback = extern "C" fn(args: &mut FirstRectForCharacterRangeArgs);
+pub type CharacterIndexForPoint = extern "C" fn(LogicalPoint) -> usize;
+
+#[repr(C)]
+pub struct AttributedStringForRangeResult<'a> {
+    string: BorrowedStrPtr<'a>,
+    actual_range: TextRange,
+}
+
+pub type AttributedStringForRangeCallback = extern "C" fn(range: TextRange) -> AttributedStringForRangeResult<'static>;
+pub type FreeAttributedStringCallback = extern "C" fn();
 
 #[repr(C)]
 pub struct TextInputClient {
-    pub on_insert_text: OnInsertText,
-    pub on_do_command: OnDoCommand,
-    pub on_unmark_text: OnUnmarkText,
-    pub on_set_marked_text: OnSetMarkedText,
-}
+    pub has_marked_text: HasMarkedTextCallback,
+    pub marked_range: MarkedRangeCallback,
+    pub selected_range: SelectedRangeCallback,
+    pub insert_text: InsertTextCallback,
+    pub do_command: DoCommandCallback,
+    pub unmark_text: UnmarkTextCallback,
+    pub set_marked_text: SetMarkedTextCallback,
 
-const DEFAULT_NS_RANGE: NSRange = NSRange { location: 0, length: 0 };
-const DEFAULT_NS_RECT: NSRect = NSRect::new(NSPoint::new(0f64, 0f64), NSSize::new(0f64, 0f64));
+    // this two is kinda special because it returns Jvm allocated string
+    // and we need to free it somehow
+    pub attributed_string_for_range: AttributedStringForRangeCallback,
+    pub free_attributed_string_for_range: FreeAttributedStringCallback,
+    //
+    pub first_rect_for_character_range: FirstRectForCharacterRangeCallback,
+    pub character_index_for_point: CharacterIndexForPoint,
+}
 
 pub(crate) struct TextInputClientHandler {
     pub client: TextInputClient,
-    pub do_command_handled_event: Cell<bool>,
-    pub marked_text_range: Cell<Option<NSRange>>,
+    pub last_commnad_handler_result: Cell<Option<bool>>,
 }
 
+// https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/TextEditing/Tasks/TextViewTask.html
 impl TextInputClientHandler {
     pub const fn new(text_input_client: TextInputClient) -> Self {
         Self {
             client: text_input_client,
-            do_command_handled_event: Cell::new(false),
-            marked_text_range: Cell::new(None),
+            last_commnad_handler_result: Cell::new(None),
         }
-    }
-
-    fn send_event_to_input_context(&self, ns_event: &NSEvent, input_context: &NSTextInputContext) -> bool {
-        self.do_command_handled_event.set(true);
-        if unsafe { input_context.handleEvent(ns_event) } {
-            self.do_command_handled_event.get()
-        } else {
-            false
-        }
-    }
-
-    pub fn on_key_down<F>(
-        &self,
-        ns_event: &NSEvent,
-        input_context: Option<&Retained<NSTextInputContext>>,
-        emit_key_down: F,
-    ) -> anyhow::Result<bool>
-    where
-        F: FnOnce(&NSEvent) -> anyhow::Result<bool>,
-    {
-        assert!(unsafe { ns_event.r#type() } == NSEventType::KeyDown);
-        debug!("keyDown start: {ns_event:?}");
-        let handled: bool = if let Some(input_context) = input_context {
-            let modifiers = unsafe { ns_event.modifierFlags() };
-            if self.has_marked_text() || is_ime_navigation_key(ns_event) && !modifiers.contains(NSEventModifierFlags::Control) {
-                self.send_event_to_input_context(ns_event, input_context) || emit_key_down(ns_event)?
-            } else {
-                emit_key_down(ns_event)? || self.send_event_to_input_context(ns_event, input_context)
-            }
-        } else {
-            debug!("keyDown: input_context not found");
-            emit_key_down(ns_event)?
-        };
-
-        debug!("keyDown end: handled = {handled}");
-        Ok(handled)
     }
 
     pub fn has_marked_text(&self) -> bool {
-        let ret = self.marked_range().is_some();
-        debug!("hasMarkedText: {ret}");
+        let ret = (self.client.has_marked_text)();
+        debug!("hasMarkedText() -> {ret:?}");
         ret
     }
 
-    pub fn marked_range(&self) -> Option<NSRange> {
-        debug!("markedRange");
-        self.marked_text_range.get()
+    pub fn marked_range(&self) -> NSRange {
+        let mut result = TextRange::default();
+        (self.client.marked_range)(&mut result);
+        debug!("markedRange() -> {result:?}");
+        result.into()
     }
 
-    #[allow(clippy::unused_self)]
     pub fn selected_range(&self) -> NSRange {
-        debug!("selectedRange");
-        DEFAULT_NS_RANGE // TODO
+        let mut result = TextRange::default();
+        (self.client.selected_range)(&mut result);
+        debug!("selectedRange() -> {result:?}");
+        result.into()
     }
 
-    pub fn set_marked_text(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) -> anyhow::Result<bool> {
-        let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
+    pub fn set_marked_text(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) -> anyhow::Result<()> {
+        let (_ns_attributed_string, text) = get_maybe_attributed_string(string)?;
         debug!(
-            "setMarkedText, marked_text={ns_attributed_string:?}, string={text:?}, selected_range={selected_range:?}, replacement_range={replacement_range:?}"
+            "setMarkedText(marked_text={text:?}, selected_range={:?}, replacement_range={:?})",
+            PrintableNSRange(selected_range),
+            PrintableNSRange(replacement_range)
         );
-        (self.client.on_set_marked_text)(OnSetMarkedTextArgs {
+        (self.client.set_marked_text)(SetMarkedTextArgs {
             text: borrow_ns_string(&text),
             selected_range: TextRange {
                 location: selected_range.location,
@@ -144,92 +149,170 @@ impl TextInputClientHandler {
                 length: replacement_range.length,
             },
         });
-        self.marked_text_range.set(Some(selected_range));
-        Ok(true)
+        Ok(())
     }
 
-    pub fn unmark_text(&self) -> bool {
-        debug!("unmarkText");
-        self.marked_text_range.set(None);
-        (self.client.on_unmark_text)();
-        true
+    pub fn unmark_text(&self) {
+        debug!("unmarkText()");
+        (self.client.unmark_text)();
     }
 
     #[allow(clippy::unused_self)]
     pub fn valid_attributes_for_marked_text(&self) -> Retained<NSArray<NSAttributedStringKey>> {
-        debug!("validAttributesForMarkedText");
-        let v = vec![
-            NSString::from_str("NSFont"),
-            NSString::from_str("NSUnderline"),
-            NSString::from_str("NSColor"),
-            NSString::from_str("NSBackgroundColor"),
-            NSString::from_str("NSUnderlineColor"),
-            NSString::from_str("NSMarkedClauseSegment"),
-            NSString::from_str("NSLanguage"),
-            NSString::from_str("NSTextInputReplacementRangeAttributeName"),
-            NSString::from_str("NSGlyphInfo"),
-            NSString::from_str("NSTextAlternatives"),
-            NSString::from_str("NSTextInsertionUndoable"),
-        ];
-        NSArray::from_retained_slice(&v)
+        debug!("validAttributesForMarkedText() -> []");
+        //        let v = vec![
+        //            NSString::from_str("NSFont"),
+        //            NSString::from_str("NSUnderline"),
+        //            NSString::from_str("NSColor"),
+        //            NSString::from_str("NSBackgroundColor"),
+        //            NSString::from_str("NSUnderlineColor"),
+        //            NSString::from_str("NSMarkedClauseSegment"),
+        //            NSString::from_str("NSLanguage"),
+        //            NSString::from_str("NSTextInputReplacementRangeAttributeName"),
+        //            NSString::from_str("NSGlyphInfo"),
+        //            NSString::from_str("NSTextAlternatives"),
+        //            NSString::from_str("NSTextInsertionUndoable"),
+        //        ];
+        //        NSArray::from_retained_slice(&v)
+        NSArray::new()
     }
 
-    #[allow(clippy::unused_self)]
     pub fn attributed_substring_for_proposed_range(
         &self,
         range: NSRange,
         actual_range: NSRangePointer,
-    ) -> Option<Retained<NSAttributedString>> {
-        let actual_range = NonNull::new(actual_range);
+    ) -> anyhow::Result<Option<Retained<NSAttributedString>>> {
+        let result = (self.client.attributed_string_for_range)(range.into());
+        let ns_string = if result.string.is_not_null() {
+            let ns_string = copy_to_ns_string(&result.string)?;
+            Some(ns_string)
+        } else {
+            None
+        };
+        write_to_range_ptr(actual_range, result.actual_range.into());
+        (self.client.free_attributed_string_for_range)();
         debug!(
-            "attributedSubstringForProposedRange, range={:?}, actual_range={:?}",
-            range,
-            actual_range.map(|r| unsafe { r.read() })
+            "attributedSubstringForProposedRange(range={:?}) -> {ns_string:?}",
+            PrintableNSRange(range)
         );
-        None // TODO
+        Ok(ns_string.map(|s| NSAttributedString::from_nsstring(&s)))
     }
 
-    pub fn insert_text(&self, string: &AnyObject, replacement_range: NSRange) -> anyhow::Result<bool> {
-        let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-        debug!("insertText, marked_text={ns_attributed_string:?}, string={text:?}, replacement_range={replacement_range:?}");
-
-        (self.client.on_insert_text)(OnInsertTextArgs {
+    pub fn insert_text(&self, string: &AnyObject, replacement_range: NSRange) -> anyhow::Result<()> {
+        let (_ns_attributed_string, text) = get_maybe_attributed_string(string)?;
+        (self.client.insert_text)(InsertTextArgs {
             text: borrow_ns_string(&text),
+            replacement_range: replacement_range.into(),
         });
-        self.marked_text_range.set(None);
-        Ok(true)
-    }
-
-    #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
-    pub fn first_rect_for_character_range(&self, range: NSRange, actual_range: NSRangePointer) -> anyhow::Result<NSRect> {
-        let actual_range = NonNull::new(actual_range);
         debug!(
-            "firstRectForCharacterRange: range={:?}, actual_range={:?}",
-            range,
-            actual_range.map(|r| unsafe { r.read() })
+            "insertText(string={text:?}, replacement_range={:?})",
+            PrintableNSRange(replacement_range)
         );
-        Ok(DEFAULT_NS_RECT) // TODO
+        Ok(())
     }
 
-    #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
+    pub fn first_rect_for_character_range(&self, range: NSRange, actual_range: NSRangePointer) -> anyhow::Result<NSRect> {
+        let mtm = MainThreadMarker::new().unwrap();
+
+        let mut args = FirstRectForCharacterRangeArgs {
+            range_in: range.into(),
+            actual_range_out: TextRange::default(),
+            first_rect_out: LogicalRect::default(),
+        };
+        (self.client.first_rect_for_character_range)(&mut args);
+
+        write_to_range_ptr(actual_range, args.actual_range_out.into());
+        let screen_height = NSScreen::primary(mtm)?.height();
+
+        let result_rect = args.first_rect_out.as_macos_coords(screen_height);
+        debug!("firstRectForCharacterRange(range={:?}) -> {result_rect:?}", PrintableNSRange(range));
+        Ok(result_rect)
+    }
+
     pub fn character_index_for_point(&self, point: NSPoint) -> anyhow::Result<NSUInteger> {
-        debug!("characterIndexForPoint: {point:?}");
-        Ok(0) // TODO
+        let mtm = MainThreadMarker::new().unwrap();
+
+        let screen_height = NSScreen::primary(mtm)?.height();
+        let logical_point = LogicalPoint::from_macos_coords(point, screen_height);
+
+        let index = (self.client.character_index_for_point)(logical_point);
+        debug!("characterIndexForPoint(point = {point:?}) -> {index:?}");
+        Ok(index)
     }
 
-    pub fn do_command(&self, selector: Sel) -> bool {
-        let s = selector.name();
-        if s == c"noop:" {
-            debug!("Ignoring the noop: selector, forwarding the raw event");
-            self.do_command_handled_event.set(false);
-            return false;
+    pub fn do_command(&self, selector: Sel) {
+        debug!("doCommand: {selector:?}");
+        let was_handled = (self.client.do_command)(BorrowedStrPtr::new(selector.name()));
+        let prev_value = self.last_commnad_handler_result.replace(Some(was_handled));
+        if prev_value.is_some() {
+            warn!("Overwrite some doCommand result: {prev_value:?}");
         }
-        debug!("do_command_by_selector: {s:?}");
-        if !(self.client.on_do_command)(BorrowedStrPtr::new(s)) {
-            self.do_command_handled_event.set(false);
-        }
-        true
     }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_context_handle_current_event(window_ptr: WindowPtr) -> bool {
+    ffi_boundary("text_input_context_handle_current_event", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let input_context = window.root_view.inputContext();
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        let current_event = app.currentEvent().context("Should be called from event handler")?;
+        debug!("input_context.handleEvent start {current_event:?}");
+        let result = match input_context {
+            Some(input_context) => {
+                let command_result_cell = &window.root_view.ivars().text_input_client_handler.last_commnad_handler_result;
+                let prev_value = command_result_cell.replace(None);
+                if prev_value.is_some() {
+                    warn!("Overwrite some doCommand result: {prev_value:?}");
+                }
+                let was_event_handled = unsafe { input_context.handleEvent(&current_event) };
+                if was_event_handled {
+                    command_result_cell.replace(None).unwrap_or(true)
+                } else {
+                    false
+                }
+            }
+            None => false,
+        };
+        debug!("input_context.handleEvent end retuned: {result:?}");
+        Ok(result)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_context_discard_marked_text(window_ptr: WindowPtr) {
+    ffi_boundary("text_input_context_discard_marked_text", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let input_context = window.root_view.inputContext().context("No Input Context")?;
+        input_context.discardMarkedText();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_context_invalidate_character_coordinates(window_ptr: WindowPtr) {
+    ffi_boundary("text_input_context_invalidate_character_coordinates", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let input_context = window.root_view.inputContext().context("No InputContext")?;
+        input_context.invalidateCharacterCoordinates();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_context_not_found_offset() -> isize {
+    ffi_boundary("text_input_context_not_found_offset", || Ok(NSNotFound))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_context_beep() {
+    ffi_boundary("text_input_context_beep", || {
+        unsafe {
+            NSBeep();
+        }
+        Ok(())
+    });
 }
 
 fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttributedString>, Retained<NSString>), anyhow::Error> {
@@ -244,14 +327,51 @@ fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttribut
     }
 }
 
-fn is_ime_navigation_key(ns_event: &NSEvent) -> bool {
-    // TODO: improve heuristic, e.g. Ctrl+J in Fleet Shortcut binding window
-    [
-        key_codes::VK_Escape,
-        key_codes::VK_LeftArrow,
-        key_codes::VK_RightArrow,
-        key_codes::VK_DownArrow,
-        key_codes::VK_UpArrow,
-    ]
-    .contains(&unsafe { ns_event.keyCode() })
+fn write_to_range_ptr(range_ptr: NSRangePointer, range: NSRange) {
+    let mut range_ptr = NonNull::new(range_ptr);
+    match &mut range_ptr {
+        Some(range_ptr) => unsafe {
+            range_ptr.write(range);
+        },
+        None => {
+            warn!("Got Null as actual_range which is unexpected");
+        }
+    }
+}
+
+impl From<TextRange> for NSRange {
+    fn from(value: TextRange) -> Self {
+        Self {
+            location: value.location,
+            length: value.length,
+        }
+    }
+}
+
+impl From<NSRange> for TextRange {
+    fn from(value: NSRange) -> Self {
+        Self {
+            location: value.location,
+            length: value.length,
+        }
+    }
+}
+
+#[allow(clippy::cast_sign_loss)] // isize to usize
+pub const NOT_FOUND_NS_RANGE: NSRange = NSRange {
+    location: NSNotFound as usize,
+    length: 0,
+};
+
+#[repr(transparent)]
+struct PrintableNSRange(NSRange);
+
+impl std::fmt::Debug for PrintableNSRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.0 == NOT_FOUND_NS_RANGE {
+            write!(f, "NSRange::NotFound")
+        } else {
+            write!(f, "{:?}", self.0)
+        }
+    }
 }

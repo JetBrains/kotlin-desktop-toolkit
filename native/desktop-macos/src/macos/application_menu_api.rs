@@ -47,6 +47,14 @@ pub enum ActionItemState {
 }
 
 #[repr(C)]
+pub enum AppMenuTrigger {
+    Keystroke,
+    Other,
+}
+
+pub type AppMenuItemCallback = extern "C" fn(trigger: AppMenuTrigger);
+
+#[repr(C)]
 #[derive(Debug)]
 pub enum AppMenuItem<'a> {
     ActionItem {
@@ -55,7 +63,7 @@ pub enum AppMenuItem<'a> {
         title: BorrowedStrPtr<'a>,
         special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<&'a AppMenuKeystroke<'a>>,
-        perform: extern "C" fn(),
+        perform: AppMenuItemCallback,
     },
     SeparatorItem,
     SubMenuItem {
@@ -89,4 +97,17 @@ pub extern "C" fn main_menu_set_none() {
         app.setMainMenu(None);
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn main_menu_offer_current_event() -> bool {
+    ffi_boundary("main_menu_offer_current_event", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        let result = match (app.currentEvent(), unsafe { app.mainMenu() }) {
+            (Some(event), Some(menu)) => unsafe { menu.performKeyEquivalent(&event) },
+            _ => false,
+        };
+        Ok(result)
+    })
 }

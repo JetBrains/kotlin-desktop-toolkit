@@ -64,6 +64,11 @@ impl<'a> BorrowedStrPtr<'a> {
         NonNull::new(self.0.ptr.cast_mut())
     }
 
+    #[must_use]
+    pub const fn is_not_null(&self) -> bool {
+        !self.0.ptr.is_null()
+    }
+
     pub fn as_str(&self) -> anyhow::Result<&str> {
         assert!(!self.0.ptr.is_null());
         let c_str = unsafe { CStr::from_ptr(self.0.ptr) };
