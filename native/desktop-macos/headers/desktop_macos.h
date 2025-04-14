@@ -477,34 +477,72 @@ typedef struct NativeWindowParams {
   NativeLogicalPixels titlebar_height;
 } NativeWindowParams;
 
-typedef struct NativeOnInsertTextArgs {
-  NativeBorrowedStrPtr text;
-} NativeOnInsertTextArgs;
-
-typedef void (*NativeOnInsertText)(struct NativeOnInsertTextArgs args);
-
-typedef bool (*NativeOnDoCommand)(NativeBorrowedStrPtr command);
-
-typedef void (*NativeOnUnmarkText)(void);
+typedef bool (*NativeHasMarkedTextCallback)(void);
 
 typedef struct NativeTextRange {
   uintptr_t location;
   uintptr_t length;
 } NativeTextRange;
 
-typedef struct NativeOnSetMarkedTextArgs {
+typedef void (*NativeMarkedRangeCallback)(struct NativeTextRange *range_out);
+
+typedef void (*NativeSelectedRangeCallback)(struct NativeTextRange *range_out);
+
+typedef struct NativeInsertTextArgs {
+  NativeBorrowedStrPtr text;
+  struct NativeTextRange replacement_range;
+} NativeInsertTextArgs;
+
+typedef void (*NativeInsertTextCallback)(struct NativeInsertTextArgs args);
+
+typedef void (*NativeDoCommandCallback)(NativeBorrowedStrPtr command);
+
+typedef void (*NativeUnmarkTextCallback)(void);
+
+typedef struct NativeSetMarkedTextArgs {
   NativeBorrowedStrPtr text;
   struct NativeTextRange selected_range;
   struct NativeTextRange replacement_range;
-} NativeOnSetMarkedTextArgs;
+} NativeSetMarkedTextArgs;
 
-typedef void (*NativeOnSetMarkedText)(struct NativeOnSetMarkedTextArgs args);
+typedef void (*NativeSetMarkedTextCallback)(struct NativeSetMarkedTextArgs args);
+
+typedef struct NativeAttributedStringForRangeResult {
+  NativeBorrowedStrPtr string;
+  struct NativeTextRange actual_range;
+} NativeAttributedStringForRangeResult;
+
+typedef struct NativeAttributedStringForRangeResult (*NativeAttributedStringForRangeCallback)(struct NativeTextRange range);
+
+typedef void (*NativeFreeAttributedStringCallback)(void);
+
+typedef struct NativeLogicalRect {
+  struct NativeLogicalPoint origin;
+  struct NativeLogicalSize size;
+} NativeLogicalRect;
+
+typedef struct NativeFirstRectForCharacterRangeArgs {
+  struct NativeTextRange range_in;
+  struct NativeTextRange actual_range_out;
+  struct NativeLogicalRect first_rect_out;
+} NativeFirstRectForCharacterRangeArgs;
+
+typedef void (*NativeFirstRectForCharacterRangeCallback)(struct NativeFirstRectForCharacterRangeArgs *args);
+
+typedef uintptr_t (*NativeCharacterIndexForPoint)(struct NativeLogicalPoint);
 
 typedef struct NativeTextInputClient {
-  NativeOnInsertText on_insert_text;
-  NativeOnDoCommand on_do_command;
-  NativeOnUnmarkText on_unmark_text;
-  NativeOnSetMarkedText on_set_marked_text;
+  NativeHasMarkedTextCallback has_marked_text;
+  NativeMarkedRangeCallback marked_range;
+  NativeSelectedRangeCallback selected_range;
+  NativeInsertTextCallback insert_text;
+  NativeDoCommandCallback do_command;
+  NativeUnmarkTextCallback unmark_text;
+  NativeSetMarkedTextCallback set_marked_text;
+  NativeAttributedStringForRangeCallback attributed_string_for_range;
+  NativeFreeAttributedStringCallback free_attributed_string_for_range;
+  NativeFirstRectForCharacterRangeCallback first_rect_for_character_range;
+  NativeCharacterIndexForPoint character_index_for_point;
 } NativeTextInputClient;
 
 typedef struct NativeColor {
@@ -531,6 +569,8 @@ typedef struct NativeWindowBackground {
     };
   };
 } NativeWindowBackground;
+
+
 
 struct NativeExceptionsArray logger_check_exceptions(void);
 
@@ -642,6 +682,16 @@ void screen_list_drop(NativeScreenInfoArray arr);
 NativeScreenId screen_get_main_screen_id(void);
 
 void string_drop(NativeRustAllocatedStrPtr str_ptr);
+
+bool text_input_context_handle_current_event(void);
+
+void text_input_context_discard_marked_text(void);
+
+void text_input_context_invalidate_character_coordinates(void);
+
+intptr_t text_input_context_not_found_offset(void);
+
+void text_input_context_beep(void);
 
 NativeWindowPtr window_create(struct NativeWindowParams params,
                               struct NativeTextInputClient text_input_client);

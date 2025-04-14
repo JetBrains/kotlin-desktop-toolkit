@@ -16,20 +16,21 @@ pub struct PhysicalPoint {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct LogicalSize {
     pub width: LogicalPixels,
     pub height: LogicalPixels,
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct LogicalPoint {
     pub x: LogicalPixels,
     pub y: LogicalPixels,
 }
 
-#[derive(Debug)]
+#[repr(C)]
+#[derive(Debug, Default)]
 pub struct LogicalRect {
     // the point closest to coordinates origin
     pub origin: LogicalPoint,

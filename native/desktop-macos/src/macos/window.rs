@@ -28,6 +28,7 @@ use crate::{
             handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change,
         },
         string::copy_to_ns_string,
+        text_input_client::NOT_FOUND_NS_RANGE,
     },
 };
 use desktop_common::logger::catch_panic;
@@ -528,14 +529,14 @@ define_class!(
         unsafe fn marked_range(&self) -> NSRange {
             catch_panic(|| {
                 Ok(self.text_input_client().marked_range())
-            }).flatten().unwrap_or(NSRange { location: 0, length: 0 })
+            }).unwrap_or(NOT_FOUND_NS_RANGE)
         }
 
         #[unsafe(method(selectedRange))]
         unsafe fn selected_range(&self) -> NSRange {
             catch_panic(|| {
                 Ok(self.text_input_client().selected_range())
-            }).unwrap_or(NSRange { location: 0, length: 0 })
+            }).unwrap_or(NOT_FOUND_NS_RANGE)
         }
 
         #[unsafe(method(setMarkedText:selectedRange:replacementRange:))]
@@ -546,14 +547,16 @@ define_class!(
             replacement_range: NSRange,
         ) {
             catch_panic(|| {
-                self.text_input_client().set_marked_text(string, selected_range, replacement_range)
+                self.text_input_client().set_marked_text(string, selected_range, replacement_range)?;
+                Ok(())
             });
         }
 
         #[unsafe(method(unmarkText))]
         unsafe fn unmark_text(&self) {
             catch_panic(|| {
-                Ok(self.text_input_client().unmark_text())
+                self.text_input_client().unmark_text();
+                Ok(())
             });
         }
 
@@ -573,7 +576,7 @@ define_class!(
             actual_range: NSRangePointer,
         ) -> Option<Retained<NSAttributedString>> {
             catch_panic(|| {
-                Ok(self.text_input_client().attributed_substring_for_proposed_range(range, actual_range))
+                Ok(self.text_input_client().attributed_substring_for_proposed_range(range, actual_range)?)
             }).unwrap_or(None)
         }
 
@@ -748,18 +751,17 @@ define_class!(
         }
 
         #[unsafe(method(performKeyEquivalent:))]
-        fn perform_key_eqivalent(&self, event: &NSEvent) -> bool {
-            debug!("performKeyEquivalent: {event:?}");
-            false
+        fn perform_key_eqivalent(&self, ns_event: &NSEvent) -> bool {
+            debug!("performKeyEquivalent: {ns_event:?}");
+            catch_panic(|| {
+                handle_key_event(ns_event)
+            }).unwrap_or(false)
         }
 
         #[unsafe(method(keyDown:))]
         fn key_down(&self, ns_event: &NSEvent) {
             catch_panic(|| {
-                let input_context = self.inputContext();
-                self.ivars().text_input_client_handler.on_key_down(ns_event, input_context.as_ref(), |ns_event| {
-                    handle_key_event(ns_event)
-                })?;
+                handle_key_event(ns_event)?;
                 Ok(())
             });
         }
