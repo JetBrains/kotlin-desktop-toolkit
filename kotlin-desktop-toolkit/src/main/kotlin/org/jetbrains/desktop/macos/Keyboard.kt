@@ -509,6 +509,7 @@ public object CodepointConstants {
             RedoFunctionKey,
             FindFunctionKey,
             HelpFunctionKey,
-            ModeSwitchFunctionKey)
+            ModeSwitchFunctionKey,
+        )
     }
 }

@@ -49,7 +49,7 @@ pub enum ActionItemState {
 #[repr(C)]
 pub enum AppMenuTrigger {
     Keystroke,
-    Other
+    Other,
 }
 
 pub type AppMenuItemCallback = extern "C" fn(trigger: AppMenuTrigger);
@@ -105,12 +105,8 @@ pub extern "C" fn main_menu_offer_current_event() -> bool {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
         let result = match (app.currentEvent(), unsafe { app.mainMenu() }) {
-            (Some(event), Some(menu)) => {
-                unsafe { menu.performKeyEquivalent(&event) }
-            }
-            _ => {
-                false
-            }
+            (Some(event), Some(menu)) => unsafe { menu.performKeyEquivalent(&event) },
+            _ => false,
         };
         Ok(result)
     })

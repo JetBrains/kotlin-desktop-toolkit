@@ -20,7 +20,7 @@ public data class Keystroke(
 
 public enum class Trigger {
     KEYSTROKE,
-    OTHER
+    OTHER,
     ;
 
     public companion object {
@@ -174,7 +174,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
                     ffiUpCall {
                         menuItem.perform(Trigger.fromNative(trigger))
                     }
-                }, AppMenuManager.callbacksArena)
+                }, AppMenuManager.callbacksArena),
             )
             NativeAppMenuItem.action_item(nativeItem, actionItemBody)
         }

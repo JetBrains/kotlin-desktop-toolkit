@@ -1,9 +1,11 @@
 use std::cell::{Cell, RefCell};
 
 use anyhow::{Context, Ok};
-use log::{debug, trace, warn};
+use log::debug;
 use objc2::{
-    define_class, msg_send, rc::Retained, runtime::{AnyObject, ProtocolObject, Sel}, DeclaredClass, MainThreadOnly, Message
+    DeclaredClass, MainThreadOnly, Message, define_class, msg_send,
+    rc::Retained,
+    runtime::{AnyObject, ProtocolObject, Sel},
 };
 use objc2_app_kit::{
     NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen,
@@ -32,7 +34,13 @@ use crate::{
 use desktop_common::logger::catch_panic;
 
 use super::{
-    application_api::MyNSApplication, custom_titlebar::CustomTitlebarCell, events::handle_key_down_event, metal_api::MetalView, screen::NSScreenExts, text_input_client::{TextInputClient, TextInputClientHandler}, window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect}
+    application_api::MyNSApplication,
+    custom_titlebar::CustomTitlebarCell,
+    events::handle_key_down_event,
+    metal_api::MetalView,
+    screen::NSScreenExts,
+    text_input_client::{TextInputClient, TextInputClientHandler},
+    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
 
 #[allow(clippy::struct_field_names)]
@@ -498,7 +506,7 @@ impl MyNSWindow {
 pub(crate) struct RootViewIvars {
     pub(crate) text_input_client_handler: TextInputClientHandler,
     tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
-    last_key_equiv_ns_event: Cell<Option<Retained<NSEvent>>>
+    last_key_equiv_ns_event: Cell<Option<Retained<NSEvent>>>,
 }
 
 define_class!(
@@ -762,7 +770,7 @@ define_class!(
         #[unsafe(method(performKeyEquivalent:))]
         fn perform_key_equivalent(&self, ns_event: &NSEvent) -> bool {
             catch_panic(|| {
-                let result = self.perform_key_equivalent_impl(&ns_event);
+                let result = self.perform_key_equivalent_impl(ns_event);
                 debug!("perform_key_equivalent(ns_event = {ns_event:?}) -> {result:?}");
                 result
             }).unwrap_or(false)
@@ -771,7 +779,7 @@ define_class!(
         #[unsafe(method(keyDown:))]
         fn key_down(&self, ns_event: &NSEvent) {
             catch_panic(|| {
-                self.key_down_impl(&ns_event)?;
+                self.key_down_impl(ns_event)?;
                 debug!("key_down(ns_event = {ns_event:?})");
                 Ok(())
             });
@@ -825,7 +833,6 @@ impl RootView {
             text_input_client_handler: TextInputClientHandler::new(text_input_client),
             tracking_area: Cell::new(None),
             last_key_equiv_ns_event: Cell::new(None),
-
         });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
         unsafe {

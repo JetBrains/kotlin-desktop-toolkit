@@ -70,11 +70,7 @@ abstract class SkikoWindow(
                 Logger.info { "unmarkText" }
             }
 
-            override fun setMarkedText(
-                text: String,
-                selectedRange: TextRange?,
-                replacementRange: TextRange?
-            ) {
+            override fun setMarkedText(text: String, selectedRange: TextRange?, replacementRange: TextRange?) {
                 Logger.info { "setMarkedText: $text, $selectedRange, $replacementRange" }
             }
 

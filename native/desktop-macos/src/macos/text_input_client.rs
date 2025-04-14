@@ -1,22 +1,20 @@
-#![allow(dead_code)]
-#![allow(unused_variables)]
-use std::{
-    cell::Cell, fmt::{Display, Pointer, Write}, ptr::NonNull
-};
+use std::{cell::Cell, ptr::NonNull};
 
 use anyhow::{Context, bail};
 use log::{debug, warn};
 use objc2::{
-    rc::Retained, runtime::{AnyObject, Sel}, DefinedClass, MainThreadMarker
+    DefinedClass, MainThreadMarker,
+    rc::Retained,
+    runtime::{AnyObject, Sel},
 };
-use objc2_app_kit::{NSBeep, NSScreen, NSTextInputContext};
+use objc2_app_kit::{NSBeep, NSScreen};
 use objc2_foundation::{
     NSArray, NSAttributedString, NSAttributedStringKey, NSNotFound, NSPoint, NSRange, NSRangePointer, NSRect, NSString, NSUInteger,
 };
 
 use crate::{
     geometry::{LogicalPoint, LogicalRect},
-    macos::{screen::NSScreenExts, string::copy_to_ns_string, text_input_client, window::Window},
+    macos::{screen::NSScreenExts, string::copy_to_ns_string, window::Window},
 };
 use desktop_common::{ffi_utils::BorrowedStrPtr, logger::ffi_boundary};
 
@@ -32,6 +30,7 @@ pub struct TextRange {
 impl Default for TextRange {
     fn default() -> Self {
         Self {
+            #[allow(clippy::cast_sign_loss)] // isize to usize
             location: NSNotFound as usize,
             length: 0,
         }
@@ -100,13 +99,16 @@ pub struct TextInputClient {
 
 pub(crate) struct TextInputClientHandler {
     pub client: TextInputClient,
-    pub last_commnad_handler_result: Cell<Option<bool>>
+    pub last_commnad_handler_result: Cell<Option<bool>>,
 }
 
 // https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/TextEditing/Tasks/TextViewTask.html
 impl TextInputClientHandler {
     pub const fn new(text_input_client: TextInputClient) -> Self {
-        Self { client: text_input_client, last_commnad_handler_result: Cell::new(None) }
+        Self {
+            client: text_input_client,
+            last_commnad_handler_result: Cell::new(None),
+        }
     }
 
     pub fn has_marked_text(&self) -> bool {
@@ -130,7 +132,7 @@ impl TextInputClientHandler {
     }
 
     pub fn set_marked_text(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) -> anyhow::Result<()> {
-        let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
+        let (_ns_attributed_string, text) = get_maybe_attributed_string(string)?;
         debug!(
             "setMarkedText(marked_text={text:?}, selected_range={:?}, replacement_range={:?})",
             PrintableNSRange(selected_range),
@@ -242,7 +244,7 @@ impl TextInputClientHandler {
         debug!("doCommand: {selector:?}");
         let was_handled = (self.client.do_command)(BorrowedStrPtr::new(selector.name()));
         let prev_value = self.last_commnad_handler_result.replace(Some(was_handled));
-        if prev_value != None {
+        if prev_value.is_some() {
             warn!("Overwrite some doCommand result: {prev_value:?}");
         }
     }
@@ -261,19 +263,16 @@ pub extern "C" fn text_input_context_handle_current_event(window_ptr: WindowPtr)
             Some(input_context) => {
                 let command_result_cell = &window.root_view.ivars().text_input_client_handler.last_commnad_handler_result;
                 let prev_value = command_result_cell.replace(None);
-                if prev_value != None {
-                    warn!("Overwrite some doCommand result: {prev_value:?}")
+                if prev_value.is_some() {
+                    warn!("Overwrite some doCommand result: {prev_value:?}");
                 }
                 let was_event_handled = unsafe { input_context.handleEvent(&current_event) };
                 if was_event_handled {
-                    match command_result_cell.replace(None) {
-                        Some(command_result) => command_result,
-                        None => true,
-                    }
+                    command_result_cell.replace(None).unwrap_or(true)
                 } else {
                     false
                 }
-            },
+            }
             None => false,
         };
         debug!("input_context.handleEvent end retuned: {result:?}");
@@ -313,7 +312,7 @@ pub extern "C" fn text_input_context_beep() {
             NSBeep();
         }
         Ok(())
-    })
+    });
 }
 
 fn get_maybe_attributed_string(string: &AnyObject) -> Result<(Option<&NSAttributedString>, Retained<NSString>), anyhow::Error> {
@@ -369,10 +368,10 @@ struct PrintableNSRange(NSRange);
 
 impl std::fmt::Debug for PrintableNSRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.0 != NOT_FOUND_NS_RANGE {
-            write!(f, "{:?}", self.0)
-        } else {
+        if self.0 == NOT_FOUND_NS_RANGE {
             write!(f, "NSRange::NotFound")
+        } else {
+            write!(f, "{:?}", self.0)
         }
     }
 }

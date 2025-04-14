@@ -3,12 +3,17 @@ use core::slice;
 use anyhow::{Result, anyhow};
 
 use objc2::{DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, sel};
-use objc2_app_kit::{NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSEventType, NSMenu, NSMenuItem};
+use objc2_app_kit::{
+    NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSEventType, NSMenu, NSMenuItem,
+};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSString};
 
 use super::{
     application_api::MyNSApplication,
-    application_menu_api::{ActionItemState, ActionMenuItemSpecialTag, AppMenuItem, AppMenuStructure, AppMenuItemCallback, SubMenuItemSpecialTag, AppMenuTrigger},
+    application_menu_api::{
+        ActionItemState, ActionMenuItemSpecialTag, AppMenuItem, AppMenuItemCallback, AppMenuStructure, AppMenuTrigger,
+        SubMenuItemSpecialTag,
+    },
     keyboard::KeyModifiersSet,
     string::copy_to_ns_string,
 };
@@ -286,13 +291,9 @@ impl MenuItemRepresenter {
     fn guess_trigger(&self) -> AppMenuTrigger {
         let mtm = self.mtm();
         let app = MyNSApplication::sharedApplication(mtm);
-        return match app.currentEvent() {
-            Some(ns_event) if unsafe { ns_event.r#type() } == NSEventType::KeyDown => {
-                AppMenuTrigger::Keystroke
-            }
-            _ => {
-                AppMenuTrigger::Other
-            }
+        match app.currentEvent() {
+            Some(ns_event) if unsafe { ns_event.r#type() } == NSEventType::KeyDown => AppMenuTrigger::Keystroke,
+            _ => AppMenuTrigger::Other,
         }
     }
 }

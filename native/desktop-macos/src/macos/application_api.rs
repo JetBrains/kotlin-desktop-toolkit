@@ -1,18 +1,19 @@
-use std::{cell::OnceCell, ffi::c_void, panic::AssertUnwindSafe};
+use std::{cell::OnceCell, ffi::c_void};
 
 use anyhow::{Context, anyhow};
 use desktop_common::{
     ffi_utils::RustAllocatedStrPtr,
     logger::{catch_panic, ffi_boundary},
 };
-use log::{error, info};
+use log::info;
 use objc2::{
     ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send,
     rc::Retained,
     runtime::{AnyObject, ProtocolObject},
 };
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventSubtype, NSEventType, NSImage, NSRunningApplication
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
+    NSEventType, NSImage, NSRunningApplication,
 };
 use objc2_foundation::{
     MainThreadMarker, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
@@ -238,13 +239,13 @@ pub unsafe extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn application_order_front_character_palete() {
+pub extern "C" fn application_order_front_character_palete() {
     ffi_boundary("application_order_front_character_palete", || {
         let mtm = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
         app.orderFrontCharacterPalette(None);
         Ok(())
-    })
+    });
 }
 
 define_class!(

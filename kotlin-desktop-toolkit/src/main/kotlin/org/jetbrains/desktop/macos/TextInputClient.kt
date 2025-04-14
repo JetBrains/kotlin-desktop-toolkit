@@ -66,16 +66,19 @@ public class TextInputContext(internal val window: Window) {
  */
 public interface TextInputClient {
     public fun hasMarkedText(): Boolean
+
     /**
      * The returned range measures from the start of the receiver’s text storage.
      */
     public fun markedRange(): TextRange?
+
     /**
      * The returned range measures from the start of the receiver’s text storage, that is, from 0 to the document length.
      */
     public fun selectedRange(): TextRange?
     public fun insertText(text: String, replacementRange: TextRange?)
     public fun doCommand(command: String): Boolean
+
     /**
      * The receiver removes any marking from pending input text and disposes of the marked text as it wishes.
      * The text view should accept the marked text as if it had been inserted normally.
@@ -94,9 +97,12 @@ public interface TextInputClient {
 
     public data class StringAndRange(val text: String?, val actualRange: TextRange?)
     public fun attributedStringForRange(range: TextRange): StringAndRange
-    public data class RectAndRange(val rect: LogicalRect,
-                                   val actualRange: TextRange?)
+    public data class RectAndRange(
+        val rect: LogicalRect,
+        val actualRange: TextRange?,
+    )
     public fun firstRectForCharacterRange(range: TextRange): RectAndRange
+
     /**
      * The character index, measured from the start of the receiver’s text storage,
      *  of the character containing the given point.
@@ -118,7 +124,6 @@ public interface TextInputClient {
         }
 
         override fun insertText(text: String, replacementRange: TextRange?) {
-
         }
 
         override fun doCommand(command: String): Boolean {
@@ -128,12 +133,7 @@ public interface TextInputClient {
         override fun unmarkText() {
         }
 
-        override fun setMarkedText(
-            text: String,
-            selectedRange: TextRange?,
-            replacementRange: TextRange?
-        ) {
-
+        override fun setMarkedText(text: String, selectedRange: TextRange?, replacementRange: TextRange?) {
         }
 
         override fun attributedStringForRange(range: TextRange): StringAndRange {
@@ -147,7 +147,6 @@ public interface TextInputClient {
         override fun characterIndexForPoint(point: LogicalPoint): Long? {
             return null
         }
-
     }
 }
 
@@ -159,8 +158,10 @@ public data class TextRange(
     public val length: Long,
 ) {
     public companion object {
-        internal val notFound: TextRange = TextRange(location = TextInputContext.notFoundOffset,
-                                                     length = 0)
+        internal val notFound: TextRange = TextRange(
+            location = TextInputContext.notFoundOffset,
+            length = 0,
+        )
 
         internal fun fromNative(native: MemorySegment): TextRange {
             return TextRange(NativeTextRange.location(native), NativeTextRange.length(native))
@@ -301,12 +302,24 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
         NativeTextInputClient.set_marked_text(native, NativeSetMarkedTextCallback.allocate(this::setMarkedTextCallback, arena))
         NativeTextInputClient.unmark_text(native, NativeUnmarkTextCallback.allocate(this::unmarkTextCallback, arena))
 
-        NativeTextInputClient.attributed_string_for_range(native, NativeAttributedStringForRangeCallback.allocate(this::attributedStringForRangeCallback, arena))
-        NativeTextInputClient.free_attributed_string_for_range(native, NativeFreeAttributedStringCallback.allocate(this::freeAttributedStringForRangeCallback, arena))
+        NativeTextInputClient.attributed_string_for_range(
+            native,
+            NativeAttributedStringForRangeCallback.allocate(this::attributedStringForRangeCallback, arena),
+        )
+        NativeTextInputClient.free_attributed_string_for_range(
+            native,
+            NativeFreeAttributedStringCallback.allocate(this::freeAttributedStringForRangeCallback, arena),
+        )
 
         NativeTextInputClient.insert_text(native, NativeInsertTextCallback.allocate(this::insertTextCallback, arena))
-        NativeTextInputClient.first_rect_for_character_range(native, NativeFirstRectForCharacterRangeCallback.allocate(this::firstRectForCharacterRangeCallback, arena))
-        NativeTextInputClient.character_index_for_point(native, NativeFirstRectForCharacterRangeCallback.allocate(this::characterIndexForPointCallback, arena))
+        NativeTextInputClient.first_rect_for_character_range(
+            native,
+            NativeFirstRectForCharacterRangeCallback.allocate(this::firstRectForCharacterRangeCallback, arena),
+        )
+        NativeTextInputClient.character_index_for_point(
+            native,
+            NativeFirstRectForCharacterRangeCallback.allocate(this::characterIndexForPointCallback, arena),
+        )
         NativeTextInputClient.do_command(native, NativeDoCommandCallback.allocate(this::doCommandCallback, arena))
 
         return native
