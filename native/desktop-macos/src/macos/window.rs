@@ -731,10 +731,13 @@ define_class!(
 
         #[unsafe(method(interpretKeyEvents:))]
         fn interpret_key_events(&self, event_array: &NSArray<NSEvent>) {
-            debug!("interpretKeyEvents: {event_array:?}");
-            unsafe {
-                let _: () = msg_send![super(self), interpretKeyEvents: event_array];
-            }
+            catch_panic(|| {
+                debug!("interpretKeyEvents: {:?}", event_array);
+                unsafe {
+                    let _: () = msg_send![super(self), interpretKeyEvents: event_array];
+                }
+                Ok(())
+            });
         }
 
         // Needed for e.g. Ctrl+Tab event reporting
@@ -768,7 +771,7 @@ define_class!(
         #[unsafe(method(keyDown:))]
         fn key_down(&self, ns_event: &NSEvent) {
             catch_panic(|| {
-                self.perform_key_down_impl(&ns_event)?;
+                self.key_down_impl(&ns_event)?;
                 debug!("key_down(ns_event = {ns_event:?})");
                 Ok(())
             });
@@ -846,7 +849,7 @@ impl RootView {
         Ok(result)
     }
 
-    fn perform_key_down_impl(&self, ns_event: &NSEvent) -> anyhow::Result<()> {
+    fn key_down_impl(&self, ns_event: &NSEvent) -> anyhow::Result<()> {
         let ivars = &self.ivars();
         match ivars.last_key_equiv_ns_event.take() {
             Some(prev_event) if &*prev_event == ns_event => {

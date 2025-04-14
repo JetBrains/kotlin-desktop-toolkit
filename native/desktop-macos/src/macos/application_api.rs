@@ -1,19 +1,18 @@
-use std::{cell::OnceCell, ffi::c_void};
+use std::{cell::OnceCell, ffi::c_void, panic::AssertUnwindSafe};
 
 use anyhow::{Context, anyhow};
 use desktop_common::{
     ffi_utils::RustAllocatedStrPtr,
     logger::{catch_panic, ffi_boundary},
 };
-use log::info;
+use log::{error, info};
 use objc2::{
     ClassType, DeclaredClass, MainThreadOnly, define_class, msg_send,
     rc::Retained,
     runtime::{AnyObject, ProtocolObject},
 };
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
-    NSEventType, NSImage, NSRunningApplication,
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventSubtype, NSEventType, NSImage, NSRunningApplication
 };
 use objc2_foundation::{
     MainThreadMarker, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
@@ -260,7 +259,10 @@ define_class!(
     impl MyNSApplication {
         #[unsafe(method(sendEvent:))]
         fn send_event(&self, event: &NSEvent) {
-            self.send_event_impl(event);
+            catch_panic(|| {
+                self.send_event_impl(event);
+                Ok(())
+            });
         }
     }
 );
@@ -277,7 +279,7 @@ impl MyNSApplication {
     // command.  This one makes all modifiers consistent by always sending key ups.
     fn send_event_impl(&self, event: &NSEvent) {
         if unsafe { event.r#type() } == NSEventType::KeyUp {
-            let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+            let mtm: MainThreadMarker = self.mtm();
             if let Some(window) = unsafe { event.window(mtm) } {
                 window.sendEvent(event);
                 return;
