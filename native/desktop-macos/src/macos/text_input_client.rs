@@ -1,16 +1,13 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 use std::{
-    fmt::{Display, Pointer, Write},
-    ptr::NonNull,
+    cell::Cell, fmt::{Display, Pointer, Write}, ptr::NonNull
 };
 
 use anyhow::{Context, bail};
 use log::{debug, warn};
 use objc2::{
-    MainThreadMarker,
-    rc::Retained,
-    runtime::{AnyObject, Sel},
+    rc::Retained, runtime::{AnyObject, Sel}, DefinedClass, MainThreadMarker
 };
 use objc2_app_kit::{NSBeep, NSScreen, NSTextInputContext};
 use objc2_foundation::{
@@ -19,11 +16,11 @@ use objc2_foundation::{
 
 use crate::{
     geometry::{LogicalPoint, LogicalRect},
-    macos::{screen::NSScreenExts, string::copy_to_ns_string},
+    macos::{screen::NSScreenExts, string::copy_to_ns_string, text_input_client, window::Window},
 };
 use desktop_common::{ffi_utils::BorrowedStrPtr, logger::ffi_boundary};
 
-use super::{application_api::MyNSApplication, string::borrow_ns_string};
+use super::{application_api::MyNSApplication, string::borrow_ns_string, window_api::WindowPtr};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -67,7 +64,7 @@ pub type HasMarkedTextCallback = extern "C" fn() -> bool;
 pub type MarkedRangeCallback = extern "C" fn(range_out: &mut TextRange);
 pub type SelectedRangeCallback = extern "C" fn(range_out: &mut TextRange);
 pub type InsertTextCallback = extern "C" fn(args: InsertTextArgs);
-pub type DoCommandCallback = extern "C" fn(command: BorrowedStrPtr);
+pub type DoCommandCallback = extern "C" fn(command: BorrowedStrPtr) -> bool;
 pub type UnmarkTextCallback = extern "C" fn();
 pub type SetMarkedTextCallback = extern "C" fn(args: SetMarkedTextArgs);
 pub type FirstRectForCharacterRangeCallback = extern "C" fn(args: &mut FirstRectForCharacterRangeArgs);
@@ -103,12 +100,13 @@ pub struct TextInputClient {
 
 pub(crate) struct TextInputClientHandler {
     pub client: TextInputClient,
+    pub last_commnad_handler_result: Cell<Option<bool>>
 }
 
 // https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/TextEditing/Tasks/TextViewTask.html
 impl TextInputClientHandler {
     pub const fn new(text_input_client: TextInputClient) -> Self {
-        Self { client: text_input_client }
+        Self { client: text_input_client, last_commnad_handler_result: Cell::new(None) }
     }
 
     pub fn has_marked_text(&self) -> bool {
@@ -242,20 +240,40 @@ impl TextInputClientHandler {
 
     pub fn do_command(&self, selector: Sel) {
         debug!("doCommand: {selector:?}");
-        (self.client.do_command)(BorrowedStrPtr::new(selector.name()));
+        let was_handled = (self.client.do_command)(BorrowedStrPtr::new(selector.name()));
+        let prev_value = self.last_commnad_handler_result.replace(Some(was_handled));
+        if prev_value != None {
+            warn!("Overwrite some doCommand result: {prev_value:?}");
+        }
     }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn text_input_context_handle_current_event() -> bool {
+pub extern "C" fn text_input_context_handle_current_event(window_ptr: WindowPtr) -> bool {
     ffi_boundary("text_input_context_handle_current_event", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let input_context = window.root_view.inputContext();
         let mtm = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
         let current_event = app.currentEvent().context("Should be called from event handler")?;
-        let input_context = unsafe { NSTextInputContext::currentInputContext(mtm) };
         debug!("input_context.handleEvent start {current_event:?}");
         let result = match input_context {
-            Some(input_context) => unsafe { input_context.handleEvent(&current_event) },
+            Some(input_context) => {
+                let command_result_cell = &window.root_view.ivars().text_input_client_handler.last_commnad_handler_result;
+                let prev_value = command_result_cell.replace(None);
+                if prev_value != None {
+                    warn!("Overwrite some doCommand result: {prev_value:?}")
+                }
+                let was_event_handled = unsafe { input_context.handleEvent(&current_event) };
+                if was_event_handled {
+                    match command_result_cell.replace(None) {
+                        Some(command_result) => command_result,
+                        None => true,
+                    }
+                } else {
+                    false
+                }
+            },
             None => false,
         };
         debug!("input_context.handleEvent end retuned: {result:?}");
@@ -264,20 +282,20 @@ pub extern "C" fn text_input_context_handle_current_event() -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn text_input_context_discard_marked_text() {
+pub extern "C" fn text_input_context_discard_marked_text(window_ptr: WindowPtr) {
     ffi_boundary("text_input_context_discard_marked_text", || {
-        let mtm = MainThreadMarker::new().unwrap();
-        let input_context = unsafe { NSTextInputContext::currentInputContext(mtm) }.context("No InputContext")?;
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let input_context = window.root_view.inputContext().context("No Input Context")?;
         input_context.discardMarkedText();
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn text_input_context_invalidate_character_coordinates() {
+pub extern "C" fn text_input_context_invalidate_character_coordinates(window_ptr: WindowPtr) {
     ffi_boundary("text_input_context_invalidate_character_coordinates", || {
-        let mtm = MainThreadMarker::new().unwrap();
-        let input_context = unsafe { NSTextInputContext::currentInputContext(mtm) }.context("No InputContext")?;
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let input_context = window.root_view.inputContext().context("No InputContext")?;
         input_context.invalidateCharacterCoordinates();
         Ok(())
     });

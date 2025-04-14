@@ -260,6 +260,8 @@ public class Window internal constructor(
         textInputClientHolder.textInputClient = textInputClient
     }
 
+    public val textInputContext: TextInputContext = TextInputContext(this)
+
     override fun close() {
         super.close()
         textInputClientHolder.close()

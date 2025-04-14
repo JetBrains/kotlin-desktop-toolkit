@@ -503,7 +503,7 @@ typedef struct NativeInsertTextArgs {
 
 typedef void (*NativeInsertTextCallback)(struct NativeInsertTextArgs args);
 
-typedef void (*NativeDoCommandCallback)(NativeBorrowedStrPtr command);
+typedef bool (*NativeDoCommandCallback)(NativeBorrowedStrPtr command);
 
 typedef void (*NativeUnmarkTextCallback)(void);
 
@@ -695,11 +695,11 @@ NativeScreenId screen_get_main_screen_id(void);
 
 void string_drop(NativeRustAllocatedStrPtr str_ptr);
 
-bool text_input_context_handle_current_event(void);
+bool text_input_context_handle_current_event(NativeWindowPtr window_ptr);
 
-void text_input_context_discard_marked_text(void);
+void text_input_context_discard_marked_text(NativeWindowPtr window_ptr);
 
-void text_input_context_invalidate_character_coordinates(void);
+void text_input_context_invalidate_character_coordinates(NativeWindowPtr window_ptr);
 
 intptr_t text_input_context_not_found_offset(void);
 

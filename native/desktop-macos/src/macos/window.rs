@@ -496,7 +496,7 @@ impl MyNSWindow {
 }
 
 pub(crate) struct RootViewIvars {
-    text_input_client_handler: TextInputClientHandler,
+    pub(crate) text_input_client_handler: TextInputClientHandler,
     tracking_area: Cell<Option<Retained<NSTrackingArea>>>,
     last_key_equiv_ns_event: Cell<Option<Retained<NSEvent>>>
 }

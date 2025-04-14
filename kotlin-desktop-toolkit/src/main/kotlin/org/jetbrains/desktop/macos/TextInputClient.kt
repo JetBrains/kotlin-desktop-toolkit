@@ -20,10 +20,10 @@ import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
-public object TextInputContext {
+public class TextInputContext(internal val window: Window) {
     public fun handleCurrentEvent(): EventHandlerResult {
         val wasHandled = ffiDownCall {
-            desktop_macos_h.text_input_context_handle_current_event()
+            desktop_macos_h.text_input_context_handle_current_event(window.pointer)
         }
         return if (wasHandled) {
             EventHandlerResult.Stop
@@ -34,25 +34,27 @@ public object TextInputContext {
 
     public fun discardMarkedText() {
         ffiDownCall {
-            desktop_macos_h.text_input_context_discard_marked_text()
+            desktop_macos_h.text_input_context_discard_marked_text(window.pointer)
         }
     }
 
     public fun invalidateCharacterCoordinates() {
         ffiDownCall {
-            desktop_macos_h.text_input_context_invalidate_character_coordinates()
+            desktop_macos_h.text_input_context_invalidate_character_coordinates(window.pointer)
         }
     }
 
-    public fun beep() {
-        ffiDownCall {
-            desktop_macos_h.text_input_context_beep()
+    public companion object {
+        public fun beep() {
+            ffiDownCall {
+                desktop_macos_h.text_input_context_beep()
+            }
         }
-    }
 
-    internal val notFoundOffset by lazy {
-        ffiDownCall {
-            desktop_macos_h.text_input_context_not_found_offset()
+        internal val notFoundOffset by lazy {
+            ffiDownCall {
+                desktop_macos_h.text_input_context_not_found_offset()
+            }
         }
     }
 }
@@ -73,7 +75,7 @@ public interface TextInputClient {
      */
     public fun selectedRange(): TextRange?
     public fun insertText(text: String, replacementRange: TextRange?)
-    public fun doCommand(command: String)
+    public fun doCommand(command: String): Boolean
     /**
      * The receiver removes any marking from pending input text and disposes of the marked text as it wishes.
      * The text view should accept the marked text as if it had been inserted normally.
@@ -119,7 +121,8 @@ public interface TextInputClient {
 
         }
 
-        override fun doCommand(command: String) {
+        override fun doCommand(command: String): Boolean {
+            return false
         }
 
         override fun unmarkText() {
@@ -283,8 +286,8 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
     }
 
     // called from native code
-    private fun doCommandCallback(command: MemorySegment) {
-        return ffiUpCall {
+    private fun doCommandCallback(command: MemorySegment): Boolean {
+        return ffiUpCall(defaultResult = false) {
             textInputClient.doCommand(command.getUtf8String(0))
         }
     }

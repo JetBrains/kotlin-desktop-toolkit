@@ -61,8 +61,9 @@ abstract class SkikoWindow(
                 Logger.info { "insertText: $text, $replacementRange" }
             }
 
-            override fun doCommand(command: String) {
+            override fun doCommand(command: String): Boolean {
                 Logger.info { "doCommand: $command" }
+                return false
             }
 
             override fun unmarkText() {
