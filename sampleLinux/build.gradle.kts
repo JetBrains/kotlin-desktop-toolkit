@@ -65,12 +65,12 @@ application {
     )
 }
 
-val depScope = configurations.dependencyScope("native") {
+val depScope = configurations.dependencyScope("linuxNative") {
     withDependencies {
-        add(project.dependencies.project(":kotlin-desktop-toolkit"))
+        add(project.dependencies.project(":kotlin-desktop-toolkit-linux"))
     }
 }
-val nativeLib = configurations.resolvable("nativeParts") {
+val nativeLib = configurations.resolvable("linuxNativeParts") {
     extendsFrom(depScope.get())
     attributes {
         attribute(KotlinDesktopToolkitAttributes.TYPE, KotlingDesktopToolkitArtifactType.NATIVE_LIBRARY)
@@ -112,7 +112,7 @@ tasks.register<JavaExec>("runSkikoSampleLinux") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
-//    setUpLoggingAndLibraryPath()
+    setUpLoggingAndLibraryPath()
 }
 
 tasks.named<Test>("test") {

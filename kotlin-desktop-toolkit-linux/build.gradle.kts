@@ -155,7 +155,7 @@ val downloadJExtractTask = tasks.register<DownloadJExtractTask>("downloadJExtrac
     jextractDirectory = layout.buildDirectory.dir("jextract")
 }
 
-val nativeConsumable = configurations.consumable("nativeParts") {
+val nativeConsumable = configurations.consumable("linuxNativeParts") {
     attributes {
         attribute(KotlinDesktopToolkitAttributes.TYPE, KotlingDesktopToolkitArtifactType.NATIVE_LIBRARY)
         attribute(KotlinDesktopToolkitAttributes.PROFILE, KotlingDesktopToolkitNativeProfile.DEBUG)
@@ -212,7 +212,9 @@ sourceSets.main {
 }
 
 tasks.processResources {
-    dependsOn(compileLinuxDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")])
+    compileLinuxDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let {
+        dependsOn(it)
+    }
 }
 
 kotlin {
