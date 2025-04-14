@@ -1,5 +1,6 @@
 # Kotlin Window Management library
 
+trigger build!
 
 ## Goals
 * Provide a simple enough Kotlin API for interacting with OS
