@@ -37,6 +37,7 @@ import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.TextLine
 import java.lang.AutoCloseable
+import java.lang.ref.WeakReference
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.math.PI
@@ -583,16 +584,22 @@ class RotatingBallWindow(
     private val windowContainer: WindowContainer,
     app: Application,
     windowParams: WindowParams,
+    private val closeWindow: (SkikoWindowLinux) -> Unit,
 ) : SkikoWindowLinux(app, windowParams) {
     private var title: String = windowParams.title
 
     companion object {
-        fun createWindow(app: Application, windowParams: WindowParams, xdgDesktopSettings: XdgDesktopSettings): RotatingBallWindow {
+        fun createWindow(
+            app: Application,
+            windowParams: WindowParams,
+            xdgDesktopSettings: XdgDesktopSettings,
+            closeWindow: (SkikoWindowLinux) -> Unit,
+        ): RotatingBallWindow {
             val windowSize = LogicalSize(640f, 480f)
             val windowContentSize = windowSize // todo it's incorrect
             val container = WindowContainer.create(windowContentSize, xdgDesktopSettings)
 
-            return RotatingBallWindow(container, app, windowParams)
+            return RotatingBallWindow(container, app, windowParams, closeWindow)
         }
     }
 
@@ -603,6 +610,10 @@ class RotatingBallWindow(
     override fun handleEvent(event: Event): EventHandlerResult {
         return if (super.handleEvent(event) == EventHandlerResult.Continue) {
             when (event) {
+                is Event.WindowCloseRequest -> {
+                    closeWindow(this)
+                    EventHandlerResult.Stop
+                }
                 is Event.WindowResize -> {
                     windowContainer.resize(event)
                     // performDrawing(syncWithCA = true)
@@ -636,6 +647,17 @@ class RotatingBallWindow(
 class ApplicationState(private val app: Application) : AutoCloseable {
     private val windows = mutableListOf<RotatingBallWindow>()
     private var xdgDesktopSettings = XdgDesktopSettings()
+    companion object {
+        private fun closeWindow(window: SkikoWindowLinux, state: WeakReference<ApplicationState>) {
+            window.close()
+            state.get()?.also {
+                it.windows.remove(window)
+                if (it.windows.isEmpty()) {
+                    it.app.stopEventLoop()
+                }
+            }
+        }
+    }
 
     fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
         val windowParams = WindowParams(
@@ -651,7 +673,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
                 app,
                 windowParams,
                 xdgDesktopSettings,
-            ),
+            ) { window -> closeWindow(window, WeakReference(this)) },
         )
     }
 
@@ -675,15 +697,19 @@ fun main(args: Array<String>) {
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     val app = Application()
     ApplicationState(app).use { state ->
-        app.runEventLoop(
-            ApplicationConfig(
-                onApplicationStarted = {
-                    state.createWindow(useCustomTitlebar = true, forceSoftwareRendering = false)
-                },
-                onXdgDesktopSettingsChange = {
-                    state.settingChanged(it)
-                },
-            ),
-        )
+        try {
+            app.runEventLoop(
+                ApplicationConfig(
+                    onApplicationStarted = {
+                        state.createWindow(useCustomTitlebar = true, forceSoftwareRendering = false)
+                    },
+                    onXdgDesktopSettingsChange = {
+                        state.settingChanged(it)
+                    },
+                ),
+            )
+        } finally {
+            app.destroy()
+        }
     }
 }

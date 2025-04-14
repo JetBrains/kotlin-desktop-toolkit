@@ -336,9 +336,9 @@ impl SimpleWindow {
         }
     }
 
-    pub fn frame_action(&mut self, seat: &WlSeat, serial: u32, action: WindowFrameAction) {
+    pub fn frame_action(&self, seat: &WlSeat, serial: u32, action: WindowFrameAction) {
         match action {
-            WindowFrameAction::Close => self.close = true,
+            WindowFrameAction::Close => self.request_close(),
             WindowFrameAction::Minimize => self.window.set_minimized(),
             WindowFrameAction::Maximize => self.window.set_maximized(),
             WindowFrameAction::UnMaximize => self.window.unset_maximized(),

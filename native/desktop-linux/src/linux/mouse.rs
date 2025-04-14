@@ -1,10 +1,7 @@
 use smithay_client_toolkit::reexports::client::Proxy;
 use smithay_client_toolkit::reexports::client::protocol::wl_pointer;
 use smithay_client_toolkit::seat::pointer::PointerData;
-use smithay_client_toolkit::{
-    seat::pointer::{PointerEvent, PointerEventKind},
-    shell::WaylandSurface,
-};
+use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind};
 
 use crate::linux::events::Event;
 
@@ -13,9 +10,6 @@ use super::window::SimpleWindow;
 
 impl SimpleWindow {
     pub fn pointer_event(&mut self, pointer: &wl_pointer::WlPointer, event: &PointerEvent) {
-        if &event.surface != self.window.wl_surface() {
-            return;
-        }
         match event.kind {
             PointerEventKind::Enter { .. } => {
                 self.set_cursor = true;

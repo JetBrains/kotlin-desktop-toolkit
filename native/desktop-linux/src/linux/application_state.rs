@@ -131,8 +131,8 @@ impl ApplicationState {
         })
     }
 
-    fn get_key_window(&mut self) -> Option<&mut SimpleWindow> {
-        self.key_surface.as_mut().and_then(|surface_id| self.windows.get_mut(surface_id))
+    fn get_key_window(&mut self) -> Option<&SimpleWindow> {
+        self.key_surface.as_mut().and_then(|surface_id| self.windows.get(surface_id))
     }
 }
 
