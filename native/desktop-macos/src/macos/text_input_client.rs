@@ -131,8 +131,7 @@ impl TextInputClientHandler {
     pub fn set_marked_text(&self, string: &AnyObject, selected_range: NSRange, replacement_range: NSRange) -> anyhow::Result<bool> {
         let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
         debug!(
-            "setMarkedText, marked_text={:?}, string={:?}, selected_range={:?}, replacement_range={:?}",
-            ns_attributed_string, text, selected_range, replacement_range
+            "setMarkedText, marked_text={ns_attributed_string:?}, string={text:?}, selected_range={selected_range:?}, replacement_range={replacement_range:?}"
         );
         (self.client.on_set_marked_text)(OnSetMarkedTextArgs {
             text: borrow_ns_string(&text),
@@ -192,10 +191,7 @@ impl TextInputClientHandler {
 
     pub fn insert_text(&self, string: &AnyObject, replacement_range: NSRange) -> anyhow::Result<bool> {
         let (ns_attributed_string, text) = get_maybe_attributed_string(string)?;
-        debug!(
-            "insertText, marked_text={:?}, string={:?}, replacement_range={:?}",
-            ns_attributed_string, text, replacement_range
-        );
+        debug!("insertText, marked_text={ns_attributed_string:?}, string={text:?}, replacement_range={replacement_range:?}");
 
         (self.client.on_insert_text)(OnInsertTextArgs {
             text: borrow_ns_string(&text),
@@ -217,7 +213,7 @@ impl TextInputClientHandler {
 
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
     pub fn character_index_for_point(&self, point: NSPoint) -> anyhow::Result<NSUInteger> {
-        debug!("characterIndexForPoint: {:?}", point);
+        debug!("characterIndexForPoint: {point:?}");
         Ok(0) // TODO
     }
 

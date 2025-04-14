@@ -7,9 +7,11 @@ fn main() {
     // Get the crate name from Cargo environment variable
 
     let artifact_name = env::var("CARGO_PKG_NAME").unwrap().replace('-', "_");
-    let dylib_name = format!("lib{artifact_name}.dylib");
     let header_name = format!("{artifact_name}.h");
-    println!("cargo:rustc-link-arg=-Wl,-install_name,./{dylib_name}");
+    if build_target::target_os().unwrap() == build_target::Os::MacOs {
+        let dylib_name = format!("lib{artifact_name}.dylib");
+        println!("cargo:rustc-link-arg=-Wl,-install_name,./{dylib_name}");
+    }
 
     cbindgen::generate(crate_dir)
         //.expect("Unable to generate bindings")
