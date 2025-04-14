@@ -3,6 +3,10 @@ name = "desktop-macos"
 version.workspace = true
 edition.workspace = true
 
+# todo filter supported targets
+# when cargo will implement it
+# https://github.com/rust-lang/cargo/issues/6179
+
 [lib]
 crate-type = ["rlib", "cdylib"]
 name = "desktop_macos"

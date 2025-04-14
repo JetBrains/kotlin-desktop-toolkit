@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [ "desktop-common", "desktop-linux","desktop-macos"]
+members = [ "desktop-common", "desktop-linux", "desktop-macos" ]
 
 [workspace.package]
 version = "0.1.0"
