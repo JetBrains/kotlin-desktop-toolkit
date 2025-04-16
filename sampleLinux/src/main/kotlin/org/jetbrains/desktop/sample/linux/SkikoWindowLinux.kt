@@ -14,10 +14,12 @@ import org.jetbrains.skia.ColorSpace
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.DirectContext
 import org.jetbrains.skia.FramebufferFormat
+import org.jetbrains.skia.GLAssembledInterface
 import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.Surface
 import org.jetbrains.skia.SurfaceColorFormat
 import org.jetbrains.skia.SurfaceOrigin
+import org.jetbrains.skia.makeGLWithInterface
 import kotlin.time.TimeSource
 
 abstract class SkikoWindowLinux(
@@ -26,7 +28,7 @@ abstract class SkikoWindowLinux(
 ) : AutoCloseable {
     private val directContext: DirectContext by lazy {
         val eglFunc = app.getEglProcFunc()!!
-        val openGlInterace = DirectContext.makeGlAssembledInterface(ctxPtr = eglFunc.ctxPtr, fPtr = eglFunc.fPtr)
+        val openGlInterace = GLAssembledInterface.createFromNativePointers(ctxPtr = eglFunc.ctxPtr, fPtr = eglFunc.fPtr)
         DirectContext.makeGLWithInterface(openGlInterace)
     }
     val window = app.createWindow({ event -> handleEvent(event) }, params)
