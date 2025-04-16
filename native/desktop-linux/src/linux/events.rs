@@ -13,9 +13,9 @@ use smithay_client_toolkit::{
 use super::geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize};
 
 // return true if event was handled
-pub type EventHandler = extern "C" fn(&Event) -> bool;
+pub type EventHandler = extern "C" fn(&Event, WindowId) -> bool;
 
-pub type InternalEventHandler = dyn Fn(&Event) -> bool;
+pub(crate) type InternalEventHandler = dyn Fn(&Event) -> bool;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]

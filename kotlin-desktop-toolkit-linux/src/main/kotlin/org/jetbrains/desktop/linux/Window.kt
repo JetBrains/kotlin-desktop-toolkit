@@ -27,7 +27,7 @@ public class Window internal constructor(
     }
 
     // called from native
-    private fun onEvent(nativeEvent: MemorySegment): Boolean {
+    private fun onEvent(nativeEvent: MemorySegment, windowId: WindowId): Boolean {
 //        println("onEvent called")
         val event = Event.fromNative(nativeEvent)
         return ffiUpCall(defaultResult = false) {

@@ -115,7 +115,7 @@ impl Application<'_> {
         let w = SimpleWindow::new(
             &self.state,
             &self.qh,
-            Box::new(move |e| catch_panic(|| Ok(event_handler(e))).unwrap_or(false)),
+            Box::new(move |e| catch_panic(|| Ok(event_handler(e, window_id))).unwrap_or(false)),
             params,
         );
         let surface_id = w.window.wl_surface().id();

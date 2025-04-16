@@ -48,8 +48,7 @@ pub extern "C" fn application_stop_event_loop(mut app_ptr: AppPtr) {
 pub extern "C" fn application_shutdown(app_ptr: AppPtr) {
     debug!("application_shutdown");
     ffi_boundary("application_shutdown", || {
-        let mut app = unsafe { app_ptr.to_owned::<Application>() };
-        app.exit = true;
+        let _app = unsafe { app_ptr.to_owned::<Application>() };
         Ok(())
     });
 }
@@ -64,7 +63,7 @@ pub struct GetEglProcFuncData<'a> {
 extern "C" fn egl_get_proc_address(ctx_ptr: BorrowedOpaquePtr<'_>, name_ptr: BorrowedStrPtr) -> Option<extern "system" fn()> {
     let name = name_ptr.as_str().unwrap();
     debug!("egl_get_gl_proc for {name}");
-    let egl = unsafe { ctx_ptr.borrow::<EglInstance>() }.unwrap();
+    let egl = unsafe { ctx_ptr.borrow::<EglInstance>() }.expect("egl_get_proc_address: EGL Library not loaded");
     egl.get_proc_address(name)
 }
 

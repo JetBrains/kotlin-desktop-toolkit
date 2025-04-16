@@ -686,7 +686,7 @@ typedef struct NativeEvent {
   };
 } NativeEvent;
 
-typedef bool (*NativeEventHandler)(const struct NativeEvent*);
+typedef bool (*NativeEventHandler)(const struct NativeEvent*, NativeWindowId);
 
 typedef struct NativeWindowParams {
   struct NativeLogicalSize size;

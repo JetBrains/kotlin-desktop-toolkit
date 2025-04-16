@@ -1,4 +1,4 @@
-use std::{cell::OnceCell, ffi::CStr, sync::atomic::AtomicI8};
+use std::{cell::RefCell, ffi::CStr};
 
 use crate::gl_sys::{
     GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
@@ -10,11 +10,12 @@ use desktop_common::{
 };
 use desktop_linux::linux::{
     application_api::{
-        AppPtr, ApplicationCallbacks, GetEglProcFuncData, application_get_egl_proc_func, application_init, application_run_event_loop,
+        AppPtr, ApplicationCallbacks, application_get_egl_proc_func, application_init, application_run_event_loop, application_shutdown,
+        application_stop_event_loop,
     },
-    events::{Event, SoftwareDrawData, WindowDrawEvent},
+    events::{Event, SoftwareDrawData, WindowDrawEvent, WindowId},
     geometry::{LogicalPixels, LogicalSize, PhysicalSize},
-    window_api::{WindowParams, window_create},
+    window_api::{WindowParams, window_close, window_create},
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use log::debug;
@@ -36,13 +37,21 @@ fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
 }
 
-static INSTANCE_COUNT: AtomicI8 = AtomicI8::new(0);
+#[derive(Debug)]
+struct OpenglState {
+    funcs: OpenGlFuncs,
+    program: GLuint,
+}
+
+#[derive(Debug)]
+struct State {
+    app_ptr: AppPtr<'static>,
+    windows: Vec<WindowId>,
+    opengl: Option<OpenglState>,
+}
 
 thread_local! {
-    static APP_PTR: OnceCell<AppPtr<'static>> = const { OnceCell::new() };
-    static LIB: OnceCell<GetEglProcFuncData<'static>> = const { OnceCell::new() };
-    static OPENGL: OnceCell<OpenGlFuncs> = const { OnceCell::new() };
-    static OPENGL_PROGRAM: OnceCell<GLuint> = const { OnceCell::new() };
+    static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
 }
 
 const V_POSITION: GLuint = 0;
@@ -61,7 +70,6 @@ fn load_shader(gl: &OpenGlFuncs, shader_type: GLenum, shader_src: *const GLchar)
     {
         let mut compiled: GLint = 0;
         unsafe { (gl.glGetShaderiv)(shader, GL_COMPILE_STATUS, &mut compiled) };
-        dbg!(compiled);
         if compiled == 0 {
             unsafe { (gl.glDeleteShader)(shader) };
             return None;
@@ -102,7 +110,6 @@ void main()
         {
             let mut linked: GLint = 0;
             (gl.glGetProgramiv)(program, GL_LINK_STATUS, &mut linked);
-            dbg!(linked);
             if linked == 0 {
                 (gl.glDeleteProgram)(program);
                 return None;
@@ -131,32 +138,18 @@ fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEven
 }
 
 fn draw_opengl_triangle_with_init(data: &WindowDrawEvent) {
-    OPENGL.with(|c| {
-        let gl = c.get_or_init(|| {
-            LIB.with(|lib_c| {
-                let lib = lib_c.get_or_init(|| {
-                    assert!(
-                        (INSTANCE_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0),
-                        "Tried to instanciate more than once"
-                    );
-                    APP_PTR.with(|app_ptr_mutex| {
-                        let app_ptr = app_ptr_mutex.get().unwrap();
-                        application_get_egl_proc_func(app_ptr.clone())
-                    })
-                });
-
-                OpenGlFuncs::new(lib).unwrap()
-            })
+    STATE.with(|c| {
+        let mut state = c.borrow_mut();
+        let state = state.as_mut().unwrap();
+        let opengl_state = state.opengl.get_or_insert_with(|| {
+            let egl_lib = application_get_egl_proc_func(state.app_ptr.clone());
+            let funcs = OpenGlFuncs::new(&egl_lib).unwrap();
+            let program = create_opengl_program(&funcs).unwrap();
+            debug!("draw_opengl_triangle_with_init, program = {program}, event = {data:?}");
+            OpenglState { funcs, program }
         });
 
-        OPENGL_PROGRAM.with(|c| {
-            let program = c.get_or_init(|| {
-                let program = create_opengl_program(gl).unwrap();
-                debug!("draw_opengl_triangle_with_init, program = {program}, event = {data:?}");
-                program
-            });
-            draw_opengl_triangle(gl, *program, data);
-        });
+        draw_opengl_triangle(&opengl_state.funcs, opengl_state.program, data);
     });
 }
 
@@ -199,69 +192,77 @@ fn draw(event: &WindowDrawEvent) {
     }
 }
 
-extern "C" fn event_handler_1(event: &Event) -> bool {
+fn log_event(event: &Event, window_id: WindowId) {
     match event {
-        Event::WindowDraw(data) => {
-            draw(data);
-            return true;
-        }
-        Event::MouseMoved(_) => {}
+        Event::WindowDraw(_) | Event::MouseMoved(_) => {}
         _ => {
-            dbg!(event);
+            debug!("{window_id:?} : {event:?}");
         }
     }
-    true
 }
 
-extern "C" fn event_handler_2(event: &Event) -> bool {
+extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
+    log_event(event, window_id);
     match event {
         Event::WindowDraw(data) => {
             draw(data);
             return true;
         }
-        Event::MouseMoved(_) => {}
-        _ => {
-            dbg!(event);
-        }
+        Event::WindowCloseRequest => STATE.with(|c| {
+            let mut state = c.borrow_mut();
+            let state = state.as_mut().unwrap();
+            state.windows.retain(|&e| e != window_id);
+            window_close(state.app_ptr.clone(), window_id);
+            if state.windows.is_empty() {
+                application_stop_event_loop(state.app_ptr.clone());
+            }
+        }),
+        _ => {}
     }
     true
 }
 
 extern "C" fn on_xdg_desktop_settings_change(s: XdgDesktopSetting) {
-    dbg!(s);
+    debug!("{s:?}");
 }
 
 extern "C" fn on_application_started() {
     const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
-    let app_ptr = APP_PTR.with(|c| c.get().unwrap().clone());
-    window_create(
-        app_ptr.clone(),
-        event_handler_1,
-        WindowParams {
-            size: LogicalSize {
-                width: LogicalPixels(200.),
-                height: LogicalPixels(300.),
+    STATE.with(|c| {
+        let mut state = c.borrow_mut();
+        let state = state.as_mut().unwrap();
+        let window_1_id = window_create(
+            state.app_ptr.clone(),
+            event_handler,
+            WindowParams {
+                size: LogicalSize {
+                    width: LogicalPixels(200.),
+                    height: LogicalPixels(300.),
+                },
+                title: BorrowedStrPtr::new(c"Window 1"),
+                app_id: BorrowedStrPtr::new(APP_ID),
+                force_client_side_decoration: false,
+                force_software_rendering: true,
             },
-            title: BorrowedStrPtr::new(c"Window 1"),
-            app_id: BorrowedStrPtr::new(APP_ID),
-            force_client_side_decoration: false,
-            force_software_rendering: true,
-        },
-    );
-    window_create(
-        app_ptr.clone(),
-        event_handler_2,
-        WindowParams {
-            size: LogicalSize {
-                width: LogicalPixels(300.),
-                height: LogicalPixels(200.),
+        );
+        state.windows.push(window_1_id);
+
+        let window_2_id = window_create(
+            state.app_ptr.clone(),
+            event_handler,
+            WindowParams {
+                size: LogicalSize {
+                    width: LogicalPixels(300.),
+                    height: LogicalPixels(200.),
+                },
+                title: BorrowedStrPtr::new(c"Window 2"),
+                app_id: BorrowedStrPtr::new(APP_ID),
+                force_client_side_decoration: true,
+                force_software_rendering: false,
             },
-            title: BorrowedStrPtr::new(c"Window 2"),
-            app_id: BorrowedStrPtr::new(APP_ID),
-            force_client_side_decoration: true,
-            force_software_rendering: false,
-        },
-    );
+        );
+        state.windows.push(window_2_id);
+    });
 }
 
 pub fn main() {
@@ -277,8 +278,13 @@ pub fn main() {
         on_display_configuration_change,
         on_xdg_desktop_settings_change,
     });
-    APP_PTR.with(|c| {
-        c.set(app_ptr.clone()).unwrap();
+    STATE.with(|c| {
+        c.replace(Some(State {
+            app_ptr: app_ptr.clone(),
+            windows: Vec::new(),
+            opengl: None,
+        }));
     });
-    application_run_event_loop(app_ptr);
+    application_run_event_loop(app_ptr.clone());
+    application_shutdown(app_ptr);
 }
