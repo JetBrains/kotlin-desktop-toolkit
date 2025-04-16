@@ -1,3 +1,4 @@
+use super::events::EventHandler;
 use super::{application::Application, application_state::EglInstance, xdg_desktop_settings_api::XdgDesktopSetting};
 use anyhow::bail;
 use desktop_common::ffi_utils::{BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr};
@@ -13,6 +14,7 @@ pub struct ApplicationCallbacks {
     pub on_will_terminate: extern "C" fn(),
     pub on_display_configuration_change: extern "C" fn(),
     pub on_xdg_desktop_settings_change: extern "C" fn(XdgDesktopSetting),
+    pub event_handler: EventHandler,
 }
 
 pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;

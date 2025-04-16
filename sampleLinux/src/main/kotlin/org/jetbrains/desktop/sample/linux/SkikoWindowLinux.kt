@@ -31,7 +31,7 @@ abstract class SkikoWindowLinux(
         val openGlInterace = GLAssembledInterface.createFromNativePointers(ctxPtr = eglFunc.ctxPtr, fPtr = eglFunc.fPtr)
         DirectContext.makeGLWithInterface(openGlInterace)
     }
-    val window = app.createWindow({ event -> handleEvent(event) }, params)
+    val window = app.createWindow(params)
     private val creationTime = TimeSource.Monotonic.markNow()
 
 //    init {

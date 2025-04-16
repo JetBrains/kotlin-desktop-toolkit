@@ -1,6 +1,5 @@
 package org.jetbrains.desktop.linux
 
-import org.jetbrains.desktop.linux.generated.NativeEventHandler
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import org.jetbrains.desktop.linux.generated.desktop_linux_h as desktop_h
@@ -9,32 +8,15 @@ public typealias WindowId = Int
 
 public class Window internal constructor(
     private val appPtr: MemorySegment,
-    private val eventHandler: EventHandler,
     params: WindowParams,
 ) : AutoCloseable {
-    public val windowId: WindowId
-    private val arena = Arena.ofConfined()
+    public val windowId: WindowId = params.windowId
     private var pointerShape = PointerShape.Default
-
-    private val nativeEventHandler = NativeEventHandler.allocate(::onEvent, arena)
 
     init {
         Arena.ofConfined().use { arena ->
-            windowId = ffiDownCall {
-                desktop_h.window_create(appPtr, nativeEventHandler, params.toNative(arena))
-            }
-        }
-    }
-
-    // called from native
-    private fun onEvent(nativeEvent: MemorySegment, windowId: WindowId): Boolean {
-//        println("onEvent called")
-        val event = Event.fromNative(nativeEvent)
-        return ffiUpCall(defaultResult = false) {
-            val result = eventHandler(event)
-            when (result) {
-                EventHandlerResult.Continue -> false
-                EventHandlerResult.Stop -> true
+            ffiDownCall {
+                desktop_h.window_create(appPtr, params.toNative(arena))
             }
         }
     }
@@ -108,7 +90,6 @@ public class Window internal constructor(
         ffiDownCall {
             desktop_h.window_close(appPtr, windowId)
         }
-        arena.close()
         Logger.trace { "Window: closed window with id $windowId" }
     }
 }

@@ -6,16 +6,12 @@ use desktop_common::{
 use log::debug;
 use smithay_client_toolkit::shell::xdg::window::Window;
 
-use super::{
-    application::Application,
-    application_api::AppPtr,
-    events::{EventHandler, WindowId},
-    geometry::LogicalSize,
-    pointer_shapes::PointerShape,
-};
+use super::{application::Application, application_api::AppPtr, events::WindowId, geometry::LogicalSize, pointer_shapes::PointerShape};
 
 #[repr(C)]
 pub struct WindowParams<'a> {
+    pub window_id: WindowId,
+
     pub size: LogicalSize,
 
     pub title: BorrowedStrPtr<'a>,
@@ -29,14 +25,14 @@ pub struct WindowParams<'a> {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_create(mut app_ptr: AppPtr, event_handler: EventHandler, params: WindowParams) -> WindowId {
-    let window_id = ffi_boundary("window_create", || {
+pub extern "C" fn window_create(mut app_ptr: AppPtr, params: WindowParams) {
+    ffi_boundary("window_create", || {
         debug!("window_create");
 
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        Ok(Some(app.new_window(event_handler, &params)))
+        app.new_window(&params);
+        Ok(())
     });
-    window_id.unwrap_or(WindowId(0))
 }
 
 #[unsafe(no_mangle)]

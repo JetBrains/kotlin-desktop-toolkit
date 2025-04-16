@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeApplicationCallbacks
+import org.jetbrains.desktop.linux.generated.NativeEventHandler
 import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
 import org.jetbrains.desktop.linux.generated.NativeScreenInfo
 import org.jetbrains.desktop.linux.generated.NativeScreenInfoArray
@@ -16,11 +17,12 @@ public enum class EventHandlerResult {
     Stop,
 }
 
-public typealias EventHandler = (Event) -> EventHandlerResult
+public typealias EventHandler = (Event, WindowId) -> EventHandlerResult
 
 public class CustomTitlebarParams()
 
 public data class WindowParams(
+    val windowId: WindowId,
     val appId: String,
     val title: String,
     val size: LogicalSize? = null,
@@ -41,9 +43,10 @@ public data class WindowParams(
 public data class ApplicationConfig(
     val onApplicationStarted: () -> Unit,
     val onXdgDesktopSettingsChange: (XdgDesktopSetting) -> Unit,
+    val eventHandler: EventHandler,
 )
 
-public class Application() {
+public class Application() : AutoCloseable {
     private var applicationConfig: ApplicationConfig? = null
 
     private val runOnEventLoopAsyncQueue = ConcurrentLinkedQueue<() -> Unit>()
@@ -64,6 +67,19 @@ public class Application() {
     public lateinit var screens: AllScreens
     private var appPtr: MemorySegment? = null
 
+    // called from native
+    private fun onEvent(nativeEvent: MemorySegment, windowId: WindowId): Boolean {
+        val event = Event.fromNative(nativeEvent)
+        return ffiUpCall(defaultResult = false) {
+            val result = applicationConfig?.eventHandler(event, windowId)
+            when (result) {
+                EventHandlerResult.Continue -> false
+                EventHandlerResult.Stop -> true
+                null -> false
+            }
+        }
+    }
+
     public fun runEventLoop(applicationConfig: ApplicationConfig) {
         this.applicationConfig = applicationConfig
         ffiDownCall {
@@ -77,7 +93,7 @@ public class Application() {
         }
     }
 
-    public fun destroy() {
+    public override fun close() {
         ffiDownCall {
             desktop_h.application_shutdown(appPtr!!)
         }
@@ -140,11 +156,12 @@ public class Application() {
             callbacks,
             NativeApplicationCallbacks.on_xdg_desktop_settings_change.allocate(::onNativeXdgSettingsChanged, arena),
         )
+        NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
         return callbacks
     }
 
-    public fun createWindow(eventHandler: EventHandler, params: WindowParams): Window {
-        return Window(appPtr!!, eventHandler, params)
+    public fun createWindow(params: WindowParams): Window {
+        return Window(appPtr!!, params)
     }
 
     public fun isEventLoopThread(): Boolean {

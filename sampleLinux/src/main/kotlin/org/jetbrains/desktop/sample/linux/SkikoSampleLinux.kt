@@ -23,6 +23,7 @@ import org.jetbrains.desktop.linux.Timestamp
 import org.jetbrains.desktop.linux.WindowButtonType
 import org.jetbrains.desktop.linux.WindowCapabilities
 import org.jetbrains.desktop.linux.WindowFrameAction
+import org.jetbrains.desktop.linux.WindowId
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
 import org.jetbrains.desktop.linux.XdgDesktopSetting
@@ -37,7 +38,6 @@ import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.TextLine
 import java.lang.AutoCloseable
-import java.lang.ref.WeakReference
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.math.PI
@@ -584,22 +584,16 @@ class RotatingBallWindow(
     private val windowContainer: WindowContainer,
     app: Application,
     windowParams: WindowParams,
-    private val closeWindow: (SkikoWindowLinux) -> Unit,
 ) : SkikoWindowLinux(app, windowParams) {
     private var title: String = windowParams.title
 
     companion object {
-        fun createWindow(
-            app: Application,
-            windowParams: WindowParams,
-            xdgDesktopSettings: XdgDesktopSettings,
-            closeWindow: (SkikoWindowLinux) -> Unit,
-        ): RotatingBallWindow {
+        fun createWindow(app: Application, windowParams: WindowParams, xdgDesktopSettings: XdgDesktopSettings): RotatingBallWindow {
             val windowSize = LogicalSize(640f, 480f)
             val windowContentSize = windowSize // todo it's incorrect
             val container = WindowContainer.create(windowContentSize, xdgDesktopSettings)
 
-            return RotatingBallWindow(container, app, windowParams, closeWindow)
+            return RotatingBallWindow(container, app, windowParams)
         }
     }
 
@@ -610,10 +604,6 @@ class RotatingBallWindow(
     override fun handleEvent(event: Event): EventHandlerResult {
         return if (super.handleEvent(event) == EventHandlerResult.Continue) {
             when (event) {
-                is Event.WindowCloseRequest -> {
-                    closeWindow(this)
-                    EventHandlerResult.Stop
-                }
                 is Event.WindowResize -> {
                     windowContainer.resize(event)
                     // performDrawing(syncWithCA = true)
@@ -645,22 +635,13 @@ class RotatingBallWindow(
 }
 
 class ApplicationState(private val app: Application) : AutoCloseable {
-    private val windows = mutableListOf<RotatingBallWindow>()
+    private val windows = mutableMapOf<WindowId, RotatingBallWindow>()
     private var xdgDesktopSettings = XdgDesktopSettings()
-    companion object {
-        private fun closeWindow(window: SkikoWindowLinux, state: WeakReference<ApplicationState>) {
-            window.close()
-            state.get()?.also {
-                it.windows.remove(window)
-                if (it.windows.isEmpty()) {
-                    it.app.stopEventLoop()
-                }
-            }
-        }
-    }
 
     fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
+        val windowId = windows.count()
         val windowParams = WindowParams(
+            windowId = windowId,
             size = LogicalSize(width = 640f, height = 480f),
             title = "Window ${windows.count()}",
             appId = "org.jetbrains.desktop.linux.skikoSample1",
@@ -668,24 +649,37 @@ class ApplicationState(private val app: Application) : AutoCloseable {
             forceSoftwareRendering = forceSoftwareRendering,
         )
 
-        windows.add(
-            RotatingBallWindow.createWindow(
-                app,
-                windowParams,
-                xdgDesktopSettings,
-            ) { window -> closeWindow(window, WeakReference(this)) },
+        windows[windowId] = RotatingBallWindow.createWindow(
+            app,
+            windowParams,
+            xdgDesktopSettings,
         )
+    }
+
+    fun handleEvent(event: Event, windowId: WindowId): EventHandlerResult {
+        val window = windows[windowId] ?: return EventHandlerResult.Continue
+        return when (event) {
+            is Event.WindowCloseRequest -> {
+                window.close()
+                windows.remove(windowId)
+                if (windows.isEmpty()) {
+                    app.stopEventLoop()
+                }
+                EventHandlerResult.Stop
+            }
+            else -> window.handleEvent(event)
+        }
     }
 
     fun settingChanged(s: XdgDesktopSetting) {
         this.xdgDesktopSettings.update(s)
-        windows.forEach { it.settingsChanged(xdgDesktopSettings) }
+        windows.values.forEach { it.settingsChanged(xdgDesktopSettings) }
     }
 
     override fun close() {
-        windows.forEach {
-            it.close()
-        }
+        windows.values.forEach(AutoCloseable::close)
+        windows.clear()
+        app.close()
     }
 }
 
@@ -697,19 +691,16 @@ fun main(args: Array<String>) {
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     val app = Application()
     ApplicationState(app).use { state ->
-        try {
-            app.runEventLoop(
-                ApplicationConfig(
-                    onApplicationStarted = {
-                        state.createWindow(useCustomTitlebar = true, forceSoftwareRendering = false)
-                    },
-                    onXdgDesktopSettingsChange = {
-                        state.settingChanged(it)
-                    },
-                ),
-            )
-        } finally {
-            app.destroy()
-        }
+        app.runEventLoop(
+            ApplicationConfig(
+                onApplicationStarted = {
+                    state.createWindow(useCustomTitlebar = true, forceSoftwareRendering = false)
+                },
+                onXdgDesktopSettingsChange = {
+                    state.settingChanged(it)
+                },
+                eventHandler = { event, windowId -> state.handleEvent(event, windowId) },
+            ),
+        )
     }
 }

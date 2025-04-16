@@ -347,62 +347,6 @@ typedef struct NativeXdgDesktopSetting {
   };
 } NativeXdgDesktopSetting;
 
-typedef struct NativeApplicationCallbacks {
-  void (*on_application_started)(void);
-  bool (*on_should_terminate)(void);
-  void (*on_will_terminate)(void);
-  void (*on_display_configuration_change)(void);
-  void (*on_xdg_desktop_settings_change)(struct NativeXdgDesktopSetting);
-} NativeApplicationCallbacks;
-
-typedef NativeGenericRawPtr_c_void NativeBorrowedOpaquePtr;
-
-typedef const char *NativeGenericRawPtr_c_char;
-
-typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
-
-typedef struct NativeGetEglProcFuncData {
-  void (*(*f)(NativeBorrowedOpaquePtr ctx, NativeBorrowedStrPtr name))(void);
-  NativeBorrowedOpaquePtr ctx;
-} NativeGetEglProcFuncData;
-
-typedef uint32_t NativeScreenId;
-
-typedef NativeGenericRawPtr_c_char NativeRustAllocatedStrPtr;
-
-typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
-
-typedef double NativeLogicalPixels;
-
-typedef struct NativeLogicalPoint {
-  NativeLogicalPixels x;
-  NativeLogicalPixels y;
-} NativeLogicalPoint;
-
-typedef struct NativeLogicalSize {
-  NativeLogicalPixels width;
-  NativeLogicalPixels height;
-} NativeLogicalSize;
-
-typedef struct NativeScreenInfo {
-  NativeScreenId screen_id;
-  bool is_primary;
-  NativeAutoDropStrPtr name;
-  struct NativeLogicalPoint origin;
-  struct NativeLogicalSize size;
-  double scale;
-  int32_t maximum_frames_per_second;
-} NativeScreenInfo;
-
-typedef struct NativeAutoDropArray_ScreenInfo {
-  const struct NativeScreenInfo *ptr;
-  NativeArraySize len;
-} NativeAutoDropArray_ScreenInfo;
-
-typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
-
-typedef uint32_t NativeWindowId;
-
 typedef struct NativeKeyModifiers {
   /**
    * The "control" key
@@ -433,6 +377,10 @@ typedef struct NativeKeyModifiers {
 } NativeKeyModifiers;
 
 typedef uint32_t NativeKeyCode;
+
+typedef const char *NativeGenericRawPtr_c_char;
+
+typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
 typedef uint32_t NativeTimestamp;
 
@@ -509,6 +457,13 @@ typedef struct NativeModifiersChangedEvent {
   NativeTimestamp timestamp;
 } NativeModifiersChangedEvent;
 
+typedef double NativeLogicalPixels;
+
+typedef struct NativeLogicalPoint {
+  NativeLogicalPixels x;
+  NativeLogicalPixels y;
+} NativeLogicalPoint;
+
 typedef struct NativeMouseMovedEvent {
   struct NativeLogicalPoint location_in_window;
   NativeTimestamp timestamp;
@@ -550,9 +505,16 @@ typedef struct NativeScrollWheelEvent {
   NativeTimestamp timestamp;
 } NativeScrollWheelEvent;
 
+typedef uint32_t NativeScreenId;
+
 typedef struct NativeWindowScreenChangeEvent {
   NativeScreenId new_screen_id;
 } NativeWindowScreenChangeEvent;
+
+typedef struct NativeLogicalSize {
+  NativeLogicalPixels width;
+  NativeLogicalPixels height;
+} NativeLogicalSize;
 
 typedef struct NativeWindowCapabilities {
   /**
@@ -686,9 +648,49 @@ typedef struct NativeEvent {
   };
 } NativeEvent;
 
+typedef uint32_t NativeWindowId;
+
 typedef bool (*NativeEventHandler)(const struct NativeEvent*, NativeWindowId);
 
+typedef struct NativeApplicationCallbacks {
+  void (*on_application_started)(void);
+  bool (*on_should_terminate)(void);
+  void (*on_will_terminate)(void);
+  void (*on_display_configuration_change)(void);
+  void (*on_xdg_desktop_settings_change)(struct NativeXdgDesktopSetting);
+  NativeEventHandler event_handler;
+} NativeApplicationCallbacks;
+
+typedef NativeGenericRawPtr_c_void NativeBorrowedOpaquePtr;
+
+typedef struct NativeGetEglProcFuncData {
+  void (*(*f)(NativeBorrowedOpaquePtr ctx, NativeBorrowedStrPtr name))(void);
+  NativeBorrowedOpaquePtr ctx;
+} NativeGetEglProcFuncData;
+
+typedef NativeGenericRawPtr_c_char NativeRustAllocatedStrPtr;
+
+typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
+
+typedef struct NativeScreenInfo {
+  NativeScreenId screen_id;
+  bool is_primary;
+  NativeAutoDropStrPtr name;
+  struct NativeLogicalPoint origin;
+  struct NativeLogicalSize size;
+  double scale;
+  int32_t maximum_frames_per_second;
+} NativeScreenInfo;
+
+typedef struct NativeAutoDropArray_ScreenInfo {
+  const struct NativeScreenInfo *ptr;
+  NativeArraySize len;
+} NativeAutoDropArray_ScreenInfo;
+
+typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
+
 typedef struct NativeWindowParams {
+  NativeWindowId window_id;
   struct NativeLogicalSize size;
   NativeBorrowedStrPtr title;
   /**
@@ -728,9 +730,7 @@ NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
 
 void screen_list_drop(NativeScreenInfoArray arr);
 
-NativeWindowId window_create(NativeAppPtr app_ptr,
-                             NativeEventHandler event_handler,
-                             struct NativeWindowParams params);
+void window_create(NativeAppPtr app_ptr, struct NativeWindowParams params);
 
 void window_close(NativeAppPtr app_ptr, NativeWindowId window_id);
 

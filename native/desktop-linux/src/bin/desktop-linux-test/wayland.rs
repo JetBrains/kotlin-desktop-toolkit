@@ -231,10 +231,11 @@ extern "C" fn on_application_started() {
     STATE.with(|c| {
         let mut state = c.borrow_mut();
         let state = state.as_mut().unwrap();
-        let window_1_id = window_create(
+        let window_1_id = WindowId(1);
+        window_create(
             state.app_ptr.clone(),
-            event_handler,
             WindowParams {
+                window_id: window_1_id,
                 size: LogicalSize {
                     width: LogicalPixels(200.),
                     height: LogicalPixels(300.),
@@ -247,10 +248,11 @@ extern "C" fn on_application_started() {
         );
         state.windows.push(window_1_id);
 
-        let window_2_id = window_create(
+        let window_2_id = WindowId(2);
+        window_create(
             state.app_ptr.clone(),
-            event_handler,
             WindowParams {
+                window_id: window_2_id,
                 size: LogicalSize {
                     width: LogicalPixels(300.),
                     height: LogicalPixels(200.),
@@ -277,6 +279,7 @@ pub fn main() {
         on_will_terminate,
         on_display_configuration_change,
         on_xdg_desktop_settings_change,
+        event_handler,
     });
     STATE.with(|c| {
         c.replace(Some(State {

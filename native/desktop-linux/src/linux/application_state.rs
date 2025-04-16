@@ -60,7 +60,6 @@ pub struct ApplicationState {
     pub viewporter: Option<WpViewporter>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
 
-    pub next_window_id: WindowId,
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
     key_surface: Option<ObjectId>,
@@ -102,7 +101,6 @@ impl ApplicationState {
             themed_pointer: None,
             viewporter: globals.bind(qh, 1..=1, ()).ok(),
             fractional_scale_manager: globals.bind(qh, 1..=1, ()).ok(),
-            next_window_id: WindowId(0),
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             key_surface: None,

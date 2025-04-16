@@ -11,7 +11,7 @@ use smithay_client_toolkit::{
 };
 
 use super::application_api::ApplicationCallbacks;
-use super::events::{EventHandler, WindowId};
+use super::events::WindowId;
 use super::geometry::LogicalSize;
 use super::window_api::WindowParams;
 use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
@@ -108,10 +108,9 @@ impl Application<'_> {
         Ok(())
     }
 
-    pub fn new_window(&mut self, event_handler: EventHandler, params: &WindowParams) -> WindowId {
-        let window_id = self.state.next_window_id;
-        self.state.next_window_id.0 += 1;
-
+    pub fn new_window(&mut self, params: &WindowParams) {
+        let window_id = params.window_id;
+        let event_handler = self.state.callbacks.event_handler;
         let w = SimpleWindow::new(
             &self.state,
             &self.qh,
@@ -121,7 +120,6 @@ impl Application<'_> {
         let surface_id = w.window.wl_surface().id();
         self.state.windows.insert(surface_id.clone(), w);
         self.state.window_id_to_surface_id.insert(window_id, surface_id);
-        window_id
     }
 
     #[must_use]
