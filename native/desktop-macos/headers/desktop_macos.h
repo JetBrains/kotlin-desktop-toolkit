@@ -128,6 +128,7 @@ typedef struct NativeKeyDownEvent {
   NativeKeyCode code;
   NativeBorrowedStrPtr characters;
   NativeBorrowedStrPtr key;
+  NativeBorrowedStrPtr key_with_modifiers;
   bool is_repeat;
   bool might_have_key_equivalent;
   NativeTimestamp timestamp;
@@ -139,6 +140,7 @@ typedef struct NativeKeyUpEvent {
   NativeKeyCode code;
   NativeBorrowedStrPtr characters;
   NativeBorrowedStrPtr key;
+  NativeBorrowedStrPtr key_with_modifiers;
   NativeTimestamp timestamp;
 } NativeKeyUpEvent;
 

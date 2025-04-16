@@ -20,15 +20,17 @@ pub(crate) struct KeyEventInfo {
     // It may contain codepoint constants listed in this file,
     // e.g. for F1 it will be value of `NSF1FunctionKey` constant.
     // For dead keys it will be empty.
-    pub(crate) chars: Retained<NSString>,
+    pub(crate) typed_chars: Retained<NSString>,
 
     // Can be considered as a name of the key
     // Depends on keyboard layout but ignores modifiers
     // For keys that depend on keyboard layout it will be the symbol typed for default layer
     // For functional keys it will try to produce some meaningful codepoint, but not the same as for `characters`
     // For dead keys it will produce text from deafult layer
-    #[allow(dead_code)]
     pub(crate) key: Retained<NSString>,
+
+    // The same as key but also takes pressed modifiers into account
+    pub(crate) key_with_modifiers: Retained<NSString>,
 
     pub(crate) modifiers: KeyModifiersSet,
 }
@@ -37,7 +39,7 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
     let is_repeat = unsafe { ns_event.isARepeat() };
     let code = unsafe { ns_event.keyCode() };
 
-    let chars = unsafe { ns_event.characters() }.with_context(|| format!("No characters field in {ns_event:?}"))?;
+    let typed_chars = unsafe { ns_event.characters() }.with_context(|| format!("No characters field in {ns_event:?}"))?;
 
     let key = unsafe { ns_event.charactersByApplyingModifiers(NSEventModifierFlags::empty()) }
         .with_context(|| format!("Event contains invalid data: {ns_event:?}"))?;
@@ -48,16 +50,18 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
     // * for for keys like F1..F12 characters will contain codepoints from private use area defined in `KeyCodePoints`,
     // but this function will try to return some meaniingful code points
     // * for all F1..F16 keys this function will return the same codepoint: \u{10} for F17 it will be empty line
-    //let _with_modifiers = unsafe {
-    //    ns_event.charactersByApplyingModifiers(ns_event.modifierFlags())
-    //}.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
+    let key_with_modifiers = unsafe {
+        ns_event.charactersByApplyingModifiers(ns_event.modifierFlags())
+    }.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
+
     let modifiers = unsafe { ns_event.modifierFlags() }.into();
 
     let key_info = KeyEventInfo {
         is_repeat,
         code: KeyCode(code),
-        chars,
+        typed_chars,
         key,
+        key_with_modifiers,
         modifiers,
     };
     Ok(key_info)
