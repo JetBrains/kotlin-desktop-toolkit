@@ -192,7 +192,7 @@ mod tests {
     #[test]
     fn test_pasteboard_can_store_and_return_string() {
         with_pasteboard(PasteboardType::WithUniqueName, |pasteboard| {
-            let original_string = NSString::from_str("Hello");
+            let original_string = NSString::from_str("Hello😃World");
             unsafe {
                 info!("NSPasteboardTypeString: {NSPasteboardTypeString:?}");
                 pasteboard.clearContents();

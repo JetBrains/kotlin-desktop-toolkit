@@ -153,4 +153,25 @@ class PasteboardTest {
         }
         assertEquals(listOf(url), urls)
     }
+
+    @Test
+    fun putEmoji() {
+        KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
+        val counter = GrandCentralDispatch.dispatchOnMainSync {
+            Pasteboard.clear()
+        }
+        assert(counter > 0L)
+
+        val emojiString = "😃"
+        val success = GrandCentralDispatch.dispatchOnMainSync {
+            Pasteboard.writeObjects(
+                Pasteboard.Item.of(type = Pasteboard.STRING_TYPE, content = emojiString),
+            )
+        }
+        assertTrue(success)
+        val result = GrandCentralDispatch.dispatchOnMainSync {
+            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
+        }
+        assertEquals(listOf(emojiString), result)
+    }
 }

@@ -121,6 +121,12 @@ impl RustAllocatedStrPtr {
     pub const fn to_auto_drop(self) -> AutoDropStrPtr {
         AutoDropStrPtr(self)
     }
+
+    pub fn as_str(&self) -> anyhow::Result<&str> {
+        assert!(!self.0.ptr.is_null());
+        let c_str = unsafe { CStr::from_ptr(self.0.ptr) };
+        c_str.to_str().with_context(|| format!("Invalid unicode in {c_str:?}"))
+    }
 }
 
 #[repr(transparent)]
