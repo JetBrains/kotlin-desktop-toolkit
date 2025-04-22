@@ -20,9 +20,9 @@ import org.jetbrains.desktop.linux.PhysicalPoint
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.PointerShape
 import org.jetbrains.desktop.linux.Timestamp
+import org.jetbrains.desktop.linux.Window
 import org.jetbrains.desktop.linux.WindowButtonType
 import org.jetbrains.desktop.linux.WindowCapabilities
-import org.jetbrains.desktop.linux.WindowFrameAction
 import org.jetbrains.desktop.linux.WindowId
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
@@ -94,12 +94,15 @@ class CustomTitlebar(
     private var origin: LogicalPoint,
     var size: LogicalSize,
     var buttonLayout: TitlebarLayout,
+    val requestClose: () -> Unit,
 ) {
     private var rectangles = ArrayList<Pair<LogicalRect, WindowButtonType>>()
     private var mouseOverRectIndex: Int? = null
     private var maximized: Boolean = false
     private var fullscreen: Boolean = false
     private var lastHeaderMouseDownTime: Timestamp? = null
+    private var isLeftMouseClick: Boolean = false
+    private var isDragging: Boolean = false
 
     private data class TitleParams(private var fontSize: Float, private var title: String) {
         private var titleLine: TextLine? = null
@@ -160,51 +163,56 @@ class CustomTitlebar(
         }
     }
 
-    private fun toMouseClickAction(
-        windowButton: WindowButtonType,
-        mouseButton: MouseButton,
-        locationInWindow: LogicalPoint,
-    ): WindowFrameAction? {
-        return when (windowButton) {
-            WindowButtonType.AppMenu -> WindowFrameAction.ShowMenu(locationInWindow)
-            WindowButtonType.Icon -> WindowFrameAction.ShowMenu(locationInWindow)
+    private fun toWindowAction(windowButton: WindowButtonType, mouseButton: MouseButton, locationInWindow: LogicalPoint, window: Window) {
+        when (windowButton) {
+            WindowButtonType.AppMenu -> window.showMenu(locationInWindow)
+            WindowButtonType.Icon -> window.showMenu(locationInWindow)
             WindowButtonType.Spacer,
             WindowButtonType.Title,
             -> when (mouseButton) {
-                MouseButton.LEFT -> WindowFrameAction.Move
-                MouseButton.RIGHT -> WindowFrameAction.ShowMenu(locationInWindow)
+                MouseButton.LEFT -> window.startMove()
+                MouseButton.RIGHT -> window.showMenu(locationInWindow)
                 else -> null
             }
-            WindowButtonType.Minimize -> WindowFrameAction.Minimize
-            WindowButtonType.Maximize -> if (maximized) WindowFrameAction.UnMaximize else WindowFrameAction.Maximize
-            WindowButtonType.Close -> WindowFrameAction.Close
+            WindowButtonType.Minimize -> window.minimize()
+            WindowButtonType.Maximize -> if (maximized) window.unmaximize() else window.maximize()
+            WindowButtonType.Close -> requestClose()
         }
     }
 
-    fun handleEvent(event: Event, xdgDesktopSettings: XdgDesktopSettings): EventHandlerResult {
+    fun handleEvent(event: Event, xdgDesktopSettings: XdgDesktopSettings, window: Window): EventHandlerResult {
         when (event) {
             is Event.MouseDown -> {
-                for ((rect, windowButton) in rectangles) {
-                    if (rect.contains(event.locationInWindow)) {
-                        if (windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) {
-                            val prevTime = lastHeaderMouseDownTime
-                            if (prevTime != null) {
-                                val timeDiff = (event.timestamp.toDuration() - prevTime.toDuration()).inWholeMilliseconds
-                                Logger.info { "timeDiff: $timeDiff" }
-                                if (timeDiff <= xdgDesktopSettings.doubleClickIntervalMs) {
-                                    event.setFrameAction(if (maximized) WindowFrameAction.UnMaximize else WindowFrameAction.Maximize)
-                                    lastHeaderMouseDownTime = event.timestamp
-                                    return EventHandlerResult.Stop
+                if (event.button == MouseButton.LEFT) {
+                    for ((rect, windowButton) in rectangles) {
+                        if (rect.contains(event.locationInWindow)) {
+                            if (windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) {
+                                val prevTime = lastHeaderMouseDownTime
+                                if (prevTime != null) {
+                                    val timeDiff = (event.timestamp.toDuration() - prevTime.toDuration()).inWholeMilliseconds
+                                    Logger.info { "timeDiff: $timeDiff" }
+                                    if (timeDiff <= xdgDesktopSettings.doubleClickIntervalMs) {
+                                        if (maximized) {
+                                            window.unmaximize()
+                                        } else {
+                                            window.maximize()
+                                        }
+                                        lastHeaderMouseDownTime = event.timestamp
+                                        return EventHandlerResult.Stop
+                                    }
                                 }
+                                lastHeaderMouseDownTime = event.timestamp
                             }
-                            lastHeaderMouseDownTime = event.timestamp
+                            toWindowAction(windowButton, event.button, event.locationInWindow, window)
+                            break
                         }
-                        toMouseClickAction(windowButton, event.button, event.locationInWindow)?.let {
-                            event.setFrameAction(it)
-                            return EventHandlerResult.Stop
-                        }
-                        break
                     }
+                }
+            }
+            is Event.MouseUp -> {
+                if (event.button == MouseButton.LEFT) {
+                    isLeftMouseClick = false
+                    isDragging = false
                 }
             }
             is Event.MouseMoved -> {
@@ -215,6 +223,10 @@ class CustomTitlebar(
                         mouseOverRectIndex = i
                         break
                     }
+                }
+                if (isLeftMouseClick && !isDragging) {
+                    isDragging = true
+                    window.startMove()
                 }
             }
             else -> {}
@@ -472,12 +484,12 @@ class CustomBorders {
         return null
     }
 
-    fun handleEvent(event: Event): EventHandlerResult {
+    fun handleEvent(event: Event, window: Window): EventHandlerResult {
         when (event) {
             is Event.MouseDown -> {
                 val edge = toEdge(event.locationInWindow)
                 if (edge != null) {
-                    event.setFrameAction(WindowFrameAction.Resize(edge))
+                    window.startResize(edge)
                     return EventHandlerResult.Stop
                 }
             }
@@ -494,13 +506,14 @@ class WindowContainer(
     var customBorders: CustomBorders?,
     private val contentArea: ContentArea,
     private var xdgDesktopSettings: XdgDesktopSettings,
+    val requestClose: () -> Unit,
 ) {
     private var capabilities: WindowCapabilities? = null
 
     companion object {
-        fun create(windowContentSize: LogicalSize, xdgDesktopSettings: XdgDesktopSettings): WindowContainer {
+        fun create(windowContentSize: LogicalSize, xdgDesktopSettings: XdgDesktopSettings, requestClose: () -> Unit): WindowContainer {
             val contentArea = ContentArea(LogicalPoint.Zero, windowContentSize)
-            return WindowContainer(null, customBorders = null, contentArea, xdgDesktopSettings)
+            return WindowContainer(null, customBorders = null, contentArea, xdgDesktopSettings, requestClose)
         }
 
         private fun filterUnsupportedButtons(buttons: List<WindowButtonType>, capabilities: WindowCapabilities): List<WindowButtonType> {
@@ -540,7 +553,9 @@ class WindowContainer(
                 layoutRight = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutRight, event.capabilities),
             )
             val titlebarSize = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
-            val titlebar = customTitlebar ?: CustomTitlebar(origin = LogicalPoint.Zero, size = titlebarSize, titlebarLayout).also {
+            val titlebar = customTitlebar ?: CustomTitlebar(
+                origin = LogicalPoint.Zero, size = titlebarSize, titlebarLayout, requestClose,
+            ).also {
                 customTitlebar = it
             }
             titlebar.resize(event, titlebarLayout)
@@ -554,10 +569,10 @@ class WindowContainer(
         }
     }
 
-    fun handleEvent(event: Event): EventHandlerResult {
+    fun handleEvent(event: Event, window: Window): EventHandlerResult {
         return when {
-            customBorders?.handleEvent(event) == EventHandlerResult.Stop -> EventHandlerResult.Stop
-            customTitlebar?.handleEvent(event, xdgDesktopSettings) == EventHandlerResult.Stop -> EventHandlerResult.Stop
+            customBorders?.handleEvent(event, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
+            customTitlebar?.handleEvent(event, xdgDesktopSettings, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             contentArea.handleEvent(event) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             else -> EventHandlerResult.Continue
         }
@@ -588,10 +603,15 @@ class RotatingBallWindow(
     private var title: String = windowParams.title
 
     companion object {
-        fun createWindow(app: Application, windowParams: WindowParams, xdgDesktopSettings: XdgDesktopSettings): RotatingBallWindow {
+        fun createWindow(
+            app: Application,
+            windowParams: WindowParams,
+            xdgDesktopSettings: XdgDesktopSettings,
+            requestClose: () -> Unit,
+        ): RotatingBallWindow {
             val windowSize = LogicalSize(640f, 480f)
             val windowContentSize = windowSize // todo it's incorrect
-            val container = WindowContainer.create(windowContentSize, xdgDesktopSettings)
+            val container = WindowContainer.create(windowContentSize, xdgDesktopSettings, requestClose)
 
             return RotatingBallWindow(container, app, windowParams)
         }
@@ -616,11 +636,11 @@ class RotatingBallWindow(
                         EventHandlerResult.Stop
                     } else {
                         window.setPointerShape(PointerShape.Default)
-                        windowContainer.handleEvent(event)
+                        windowContainer.handleEvent(event, window)
                     }
                 }
                 else -> {
-                    windowContainer.handleEvent(event)
+                    windowContainer.handleEvent(event, window)
                 }
             }
         } else {
@@ -639,7 +659,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
     private var xdgDesktopSettings = XdgDesktopSettings()
 
     fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
-        val windowId = windows.count()
+        val windowId = windows.count().toLong()
         val windowParams = WindowParams(
             windowId = windowId,
             size = LogicalSize(width = 640f, height = 480f),
@@ -653,7 +673,9 @@ class ApplicationState(private val app: Application) : AutoCloseable {
             app,
             windowParams,
             xdgDesktopSettings,
-        )
+        ) {
+            handleEvent(Event.WindowCloseRequest, windowId)
+        }
     }
 
     fun handleEvent(event: Event, windowId: WindowId): EventHandlerResult {

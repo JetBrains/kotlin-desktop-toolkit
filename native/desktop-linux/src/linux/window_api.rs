@@ -6,7 +6,13 @@ use desktop_common::{
 use log::debug;
 use smithay_client_toolkit::shell::xdg::window::Window;
 
-use super::{application::Application, application_api::AppPtr, events::WindowId, geometry::LogicalSize, pointer_shapes::PointerShape};
+use super::{
+    application::Application,
+    application_api::AppPtr,
+    events::{WindowId, WindowResizeEdge},
+    geometry::{LogicalPoint, LogicalSize},
+    pointer_shapes::PointerShape,
+};
 
 #[repr(C)]
 pub struct WindowParams<'a> {
@@ -98,6 +104,63 @@ fn with_window<R: PanicDefault>(app_ptr: &AppPtr, window_id: WindowId, name: &st
 pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_title: BorrowedStrPtr) {
     with_window(&app_ptr, window_id, "window_set_title", |w| {
         w.set_title(new_title.as_str()?);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_start_move(app_ptr: AppPtr, window_id: WindowId) {
+    ffi_boundary("window_start_move", || {
+        debug!("window_start_move");
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let w = app.get_window(window_id).context("No window found")?;
+        w.start_move();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_start_resize(app_ptr: AppPtr, window_id: WindowId, edge: WindowResizeEdge) {
+    ffi_boundary("window_start_resize", || {
+        debug!("window_start_resize");
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let w = app.get_window(window_id).context("No window found")?;
+        w.start_resize(edge);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_show_menu(app_ptr: AppPtr, window_id: WindowId, position: LogicalPoint) {
+    ffi_boundary("window_show_menu", || {
+        debug!("window_show_menu");
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let w = app.get_window(window_id).context("No window found")?;
+        w.show_menu(position);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_maximize(app_ptr: AppPtr, window_id: WindowId) {
+    with_window(&app_ptr, window_id, "window_maximize", |w| {
+        w.set_maximized();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_unmaximize(app_ptr: AppPtr, window_id: WindowId) {
+    with_window(&app_ptr, window_id, "window_maximize", |w| {
+        w.unset_maximized();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_minimize(app_ptr: AppPtr, window_id: WindowId) {
+    with_window(&app_ptr, window_id, "window_minimize", |w| {
+        w.set_minimized();
         Ok(())
     });
 }

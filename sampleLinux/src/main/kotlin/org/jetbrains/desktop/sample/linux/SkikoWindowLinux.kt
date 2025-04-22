@@ -54,7 +54,6 @@ abstract class SkikoWindowLinux(
             is Event.WindowCloseRequest,
             is Event.WindowFocusChange,
             is Event.WindowFullScreenToggle,
-            is Event.WindowMove,
             is Event.WindowResize,
             is Event.WindowScaleChanged,
             is Event.WindowScreenChange,

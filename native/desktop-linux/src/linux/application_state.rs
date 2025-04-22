@@ -28,7 +28,7 @@ use smithay_client_toolkit::{
     registry_handlers,
     seat::{
         Capability, SeatHandler, SeatState,
-        keyboard::{KeyEvent, KeyboardData, KeyboardHandler, Keysym, Modifiers},
+        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
         pointer::{PointerEvent, PointerHandler, ThemeSpec, ThemedPointer},
     },
     shell::{
@@ -141,8 +141,8 @@ impl KeyboardHandler for ApplicationState {
         _: &QueueHandle<Self>,
         _: &wl_keyboard::WlKeyboard,
         surface: &WlSurface,
-        _: u32,
-        _: &[u32],
+        _serial: u32,
+        _raw: &[u32],
         keysyms: &[Keysym],
     ) {
         self.key_surface = Some(surface.id());
@@ -151,24 +151,27 @@ impl KeyboardHandler for ApplicationState {
         }
     }
 
-    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, surface: &WlSurface, _: u32) {
+    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, surface: &WlSurface, _serial: u32) {
         if let Some(window) = self.get_window_mut(surface) {
             window.keyboard_leave();
         }
         self.key_surface = None;
     }
 
-    fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, keyboard: &wl_keyboard::WlKeyboard, serial: u32, event: KeyEvent) {
+    fn press_key(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _keyboard: &wl_keyboard::WlKeyboard,
+        _serial: u32,
+        event: KeyEvent,
+    ) {
         if let Some(window) = self.get_key_window() {
-            let frame_action = window.press_key(&event);
-            if let Some(keyboard_data) = keyboard.data::<KeyboardData<Self>>() {
-                let seat = keyboard_data.seat();
-                window.frame_action(seat, serial, frame_action);
-            }
+            window.press_key(&event);
         }
     }
 
-    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
+    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _serial: u32, event: KeyEvent) {
         if let Some(window) = self.get_key_window() {
             window.release_key(&event);
         }

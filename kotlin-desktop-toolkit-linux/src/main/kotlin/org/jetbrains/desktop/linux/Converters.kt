@@ -179,3 +179,16 @@ internal fun SoftwareDrawData.Companion.fromNative(nativeSoftwareDrawData: Memor
 
     return SoftwareDrawData(canvas = nativeCanvas.address(), stride = NativeSoftwareDrawData.stride(nativeSoftwareDrawData))
 }
+
+internal fun WindowResizeEdge.toNative(): Int {
+    return when (this) {
+        WindowResizeEdge.Top -> desktop_linux_h.NativeWindowResizeEdge_Top()
+        WindowResizeEdge.Bottom -> desktop_linux_h.NativeWindowResizeEdge_Bottom()
+        WindowResizeEdge.Left -> desktop_linux_h.NativeWindowResizeEdge_Left()
+        WindowResizeEdge.TopLeft -> desktop_linux_h.NativeWindowResizeEdge_TopLeft()
+        WindowResizeEdge.BottomLeft -> desktop_linux_h.NativeWindowResizeEdge_BottomLeft()
+        WindowResizeEdge.Right -> desktop_linux_h.NativeWindowResizeEdge_Right()
+        WindowResizeEdge.TopRight -> desktop_linux_h.NativeWindowResizeEdge_TopRight()
+        WindowResizeEdge.BottomRight -> desktop_linux_h.NativeWindowResizeEdge_BottomRight()
+    }
+}

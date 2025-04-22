@@ -384,56 +384,6 @@ typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
 typedef uint32_t NativeTimestamp;
 
-typedef enum NativeWindowFrameAction_Tag {
-  NativeWindowFrameAction_None,
-  /**
-   * The window should be minimized.
-   */
-  NativeWindowFrameAction_Minimize,
-  /**
-   * The window should be maximized.
-   */
-  NativeWindowFrameAction_Maximize,
-  /**
-   * The window should be unmaximized.
-   */
-  NativeWindowFrameAction_UnMaximize,
-  /**
-   * The window should be closed.
-   */
-  NativeWindowFrameAction_Close,
-  /**
-   * An interactive move should be started.
-   */
-  NativeWindowFrameAction_Move,
-  /**
-   * An interactive resize should be started with the provided edge.
-   */
-  NativeWindowFrameAction_Resize,
-  /**
-   * Show window menu.
-   *
-   * The coordinates are relative to the base surface, as in should be
-   * directly passed to the `xdg_toplevel::show_window_menu`.
-   */
-  NativeWindowFrameAction_ShowMenu,
-} NativeWindowFrameAction_Tag;
-
-typedef struct NativeWindowFrameAction_NativeShowMenu_Body {
-  int32_t _0;
-  int32_t _1;
-} NativeWindowFrameAction_NativeShowMenu_Body;
-
-typedef struct NativeWindowFrameAction {
-  NativeWindowFrameAction_Tag tag;
-  union {
-    struct {
-      enum NativeWindowResizeEdge resize;
-    };
-    NativeWindowFrameAction_NativeShowMenu_Body show_menu;
-  };
-} NativeWindowFrameAction;
-
 typedef struct NativeKeyDownEvent {
   struct NativeKeyModifiers modifiers;
   NativeKeyCode code;
@@ -441,7 +391,6 @@ typedef struct NativeKeyDownEvent {
   NativeBorrowedStrPtr key;
   bool is_repeat;
   NativeTimestamp timestamp;
-  struct NativeWindowFrameAction frame_action_out;
 } NativeKeyDownEvent;
 
 typedef struct NativeKeyUpEvent {
@@ -489,7 +438,6 @@ typedef struct NativeMouseDownEvent {
   NativeMouseButton button;
   struct NativeLogicalPoint location_in_window;
   NativeTimestamp timestamp;
-  struct NativeWindowFrameAction frame_action_out;
 } NativeMouseDownEvent;
 
 typedef struct NativeMouseUpEvent {
@@ -648,7 +596,7 @@ typedef struct NativeEvent {
   };
 } NativeEvent;
 
-typedef uint32_t NativeWindowId;
+typedef int64_t NativeWindowId;
 
 typedef bool (*NativeEventHandler)(const struct NativeEvent*, NativeWindowId);
 
@@ -747,6 +695,22 @@ bool window_is_main(NativeAppPtr app_ptr, NativeWindowId _window_id);
 void window_set_title(NativeAppPtr app_ptr,
                       NativeWindowId window_id,
                       NativeBorrowedStrPtr new_title);
+
+void window_start_move(NativeAppPtr app_ptr, NativeWindowId window_id);
+
+void window_start_resize(NativeAppPtr app_ptr,
+                         NativeWindowId window_id,
+                         enum NativeWindowResizeEdge edge);
+
+void window_show_menu(NativeAppPtr app_ptr,
+                      NativeWindowId window_id,
+                      struct NativeLogicalPoint position);
+
+void window_maximize(NativeAppPtr app_ptr, NativeWindowId window_id);
+
+void window_unmaximize(NativeAppPtr app_ptr, NativeWindowId window_id);
+
+void window_minimize(NativeAppPtr app_ptr, NativeWindowId window_id);
 
 void window_set_max_size(NativeAppPtr app_ptr,
                          NativeWindowId window_id,

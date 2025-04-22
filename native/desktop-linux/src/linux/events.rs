@@ -27,7 +27,7 @@ pub struct ScreenId(pub u32);
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct WindowId(pub u32);
+pub struct WindowId(pub i64);
 
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
@@ -66,7 +66,7 @@ pub struct KeyModifiers {
 pub struct KeyCode(pub u32);
 
 #[repr(C)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WindowResizeEdge {
     /// Nothing is being dragged.
     None,
@@ -89,29 +89,6 @@ pub enum WindowResizeEdge {
 }
 
 #[repr(C)]
-#[derive(Debug, PartialEq, Eq)]
-pub enum WindowFrameAction {
-    None,
-    /// The window should be minimized.
-    Minimize,
-    /// The window should be maximized.
-    Maximize,
-    /// The window should be unmaximized.
-    UnMaximize,
-    /// The window should be closed.
-    Close,
-    /// An interactive move should be started.
-    Move,
-    /// An interactive resize should be started with the provided edge.
-    Resize(WindowResizeEdge),
-    /// Show window menu.
-    ///
-    /// The coordinates are relative to the base surface, as in should be
-    /// directly passed to the `xdg_toplevel::show_window_menu`.
-    ShowMenu(i32, i32),
-}
-
-#[repr(C)]
 #[derive(Debug)]
 pub struct KeyDownEvent<'a> {
     pub modifiers: KeyModifiers,
@@ -120,7 +97,6 @@ pub struct KeyDownEvent<'a> {
     pub key: BorrowedStrPtr<'a>,
     pub is_repeat: bool,
     pub timestamp: Timestamp,
-    pub frame_action_out: WindowFrameAction,
 }
 
 impl<'a> From<&'a KeyDownEvent<'a>> for Event<'a> {
@@ -138,7 +114,6 @@ impl<'a> KeyDownEvent<'a> {
             key: BorrowedStrPtr::new_optional(key),
             is_repeat: false,        // TODO
             timestamp: Timestamp(0), // TODO
-            frame_action_out: WindowFrameAction::None,
         }
     }
 }
@@ -231,7 +206,6 @@ pub struct MouseDownEvent {
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
-    pub frame_action_out: WindowFrameAction,
 }
 
 impl<'a> From<&'a MouseDownEvent> for Event<'a> {
@@ -249,7 +223,6 @@ impl MouseDownEvent {
                 y: LogicalPixels(event.position.1),
             },
             timestamp: Timestamp(time),
-            frame_action_out: WindowFrameAction::None,
         }
     }
 }

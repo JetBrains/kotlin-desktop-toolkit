@@ -30,10 +30,10 @@ use crate::linux::events::{WindowCapabilities, WindowResizeEvent};
 use crate::linux::geometry::LogicalSize;
 use crate::linux::{application_state::ApplicationState, geometry::LogicalPixels};
 
-use super::application_state::EglInstance;
-use super::events::{Event, InternalEventHandler, SoftwareDrawData, WindowDrawEvent, WindowFrameAction, WindowResizeEdge};
+use super::events::{Event, InternalEventHandler, SoftwareDrawData, WindowDrawEvent, WindowResizeEdge};
 use super::geometry::PhysicalSize;
 use super::window_api::WindowParams;
+use super::{application_state::EglInstance, geometry::LogicalPoint};
 
 #[derive(Debug)]
 struct EglRendering {
@@ -178,6 +178,8 @@ pub struct SimpleWindow {
     decoration_mode: DecorationMode,
     rendering_data: Option<RenderingData>,
     force_software_rendering: bool,
+    pub current_mouse_down_seat: Option<WlSeat>,
+    pub current_mouse_down_serial: Option<u32>,
 }
 
 impl SimpleWindow {
@@ -235,6 +237,8 @@ impl SimpleWindow {
             decoration_mode: DecorationMode::Client,
             rendering_data: None,
             force_software_rendering: params.force_software_rendering,
+            current_mouse_down_seat: None,
+            current_mouse_down_serial: None,
         }
     }
 
@@ -336,32 +340,6 @@ impl SimpleWindow {
         }
     }
 
-    pub fn frame_action(&self, seat: &WlSeat, serial: u32, action: WindowFrameAction) {
-        match action {
-            WindowFrameAction::Close => self.request_close(),
-            WindowFrameAction::Minimize => self.window.set_minimized(),
-            WindowFrameAction::Maximize => self.window.set_maximized(),
-            WindowFrameAction::UnMaximize => self.window.unset_maximized(),
-            WindowFrameAction::ShowMenu(x, y) => self.window.show_window_menu(seat, serial, (x, y)),
-            WindowFrameAction::Resize(edge) => {
-                let edge = match edge {
-                    WindowResizeEdge::None => XdgResizeEdge::None,
-                    WindowResizeEdge::Top => XdgResizeEdge::Top,
-                    WindowResizeEdge::Bottom => XdgResizeEdge::Bottom,
-                    WindowResizeEdge::Left => XdgResizeEdge::Left,
-                    WindowResizeEdge::TopLeft => XdgResizeEdge::TopLeft,
-                    WindowResizeEdge::BottomLeft => XdgResizeEdge::BottomLeft,
-                    WindowResizeEdge::Right => XdgResizeEdge::Right,
-                    WindowResizeEdge::TopRight => XdgResizeEdge::TopRight,
-                    WindowResizeEdge::BottomRight => XdgResizeEdge::BottomRight,
-                };
-                self.window.resize(seat, serial, edge);
-            }
-            WindowFrameAction::Move => self.window.move_(seat, serial),
-            WindowFrameAction::None => (),
-        }
-    }
-
     pub fn draw(
         &mut self,
         conn: &Connection,
@@ -424,5 +402,34 @@ impl SimpleWindow {
     pub fn set_cursor_icon(&mut self, cursor_icon: CursorIcon) {
         self.set_cursor = true;
         self.decorations_cursor = cursor_icon;
+    }
+
+    pub fn start_move(&self) {
+        let serial = self.current_mouse_down_serial.unwrap();
+        let seat = self.current_mouse_down_seat.as_ref().unwrap();
+        self.window.move_(seat, serial);
+    }
+
+    pub fn start_resize(&self, edge: WindowResizeEdge) {
+        let serial = self.current_mouse_down_serial.unwrap();
+        let seat = self.current_mouse_down_seat.as_ref().unwrap();
+        let edge = match edge {
+            WindowResizeEdge::None => XdgResizeEdge::None,
+            WindowResizeEdge::Top => XdgResizeEdge::Top,
+            WindowResizeEdge::Bottom => XdgResizeEdge::Bottom,
+            WindowResizeEdge::Left => XdgResizeEdge::Left,
+            WindowResizeEdge::TopLeft => XdgResizeEdge::TopLeft,
+            WindowResizeEdge::BottomLeft => XdgResizeEdge::BottomLeft,
+            WindowResizeEdge::Right => XdgResizeEdge::Right,
+            WindowResizeEdge::TopRight => XdgResizeEdge::TopRight,
+            WindowResizeEdge::BottomRight => XdgResizeEdge::BottomRight,
+        };
+        self.window.resize(seat, serial, edge);
+    }
+
+    pub fn show_menu(&self, position: LogicalPoint) {
+        let serial = self.current_mouse_down_serial.unwrap();
+        let seat = self.current_mouse_down_seat.as_ref().unwrap();
+        self.window.show_window_menu(seat, serial, (position.x.round(), position.y.round()));
     }
 }

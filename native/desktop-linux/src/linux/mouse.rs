@@ -5,7 +5,7 @@ use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind};
 
 use crate::linux::events::Event;
 
-use super::events::{MouseDownEvent, WindowFrameAction};
+use super::events::MouseDownEvent;
 use super::window::SimpleWindow;
 
 impl SimpleWindow {
@@ -23,14 +23,15 @@ impl SimpleWindow {
             }
             PointerEventKind::Press { button, serial, time } => {
                 let e = MouseDownEvent::new(event, button, time);
+                let pointer_data = pointer.data::<PointerData>().unwrap();
+                let seat = pointer_data.seat();
+                self.current_mouse_down_seat = Some(seat.clone());
+                self.current_mouse_down_serial = Some(serial);
                 (self.event_handler)(&(&e).into());
-                if e.frame_action_out != WindowFrameAction::None {
-                    let pointer_data = pointer.data::<PointerData>().unwrap();
-                    let seat = pointer_data.seat();
-                    self.frame_action(seat, serial, e.frame_action_out);
-                }
             }
             PointerEventKind::Release { button, serial: _, time } => {
+                //self.current_mouse_down_seat = None;
+                //self.current_mouse_down_serial = None;
                 (self.event_handler)(&Event::new_mouse_up_event(event, button, time));
             }
             PointerEventKind::Axis {

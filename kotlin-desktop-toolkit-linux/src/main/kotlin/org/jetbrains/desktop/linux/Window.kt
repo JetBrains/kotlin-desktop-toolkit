@@ -4,7 +4,7 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import org.jetbrains.desktop.linux.generated.desktop_linux_h as desktop_h
 
-public typealias WindowId = Int
+public typealias WindowId = Long
 
 public class Window internal constructor(
     private val appPtr: MemorySegment,
@@ -47,6 +47,44 @@ public class Window internal constructor(
     public fun unsetFullScreen() {
         ffiDownCall {
             desktop_h.window_unset_fullscreen(appPtr, windowId)
+        }
+    }
+
+    public fun maximize() {
+        ffiDownCall {
+            desktop_h.window_maximize(appPtr, windowId)
+        }
+    }
+
+    public fun unmaximize() {
+        ffiDownCall {
+            desktop_h.window_unmaximize(appPtr, windowId)
+        }
+    }
+
+    public fun minimize() {
+        ffiDownCall {
+            desktop_h.window_minimize(appPtr, windowId)
+        }
+    }
+
+    public fun startMove() {
+        ffiDownCall {
+            desktop_h.window_start_move(appPtr, windowId)
+        }
+    }
+
+    public fun startResize(edge: WindowResizeEdge) {
+        ffiDownCall {
+            desktop_h.window_start_resize(appPtr, windowId, edge.toNative())
+        }
+    }
+
+    public fun showMenu(position: LogicalPoint) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_h.window_show_menu(appPtr, windowId, position.toNative(arena))
+            }
         }
     }
 
