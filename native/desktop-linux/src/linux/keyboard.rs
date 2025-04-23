@@ -28,13 +28,13 @@ impl KeyboardHandler for ApplicationState {
         keysyms: &[Keysym],
     ) {
         self.key_surface = Some(surface.id());
-        if let Some(window) = self.get_window_mut(surface) {
+        if let Some(window) = self.get_window(surface) {
             window.keyboard_enter(keysyms);
         }
     }
 
     fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, surface: &WlSurface, _serial: u32) {
-        if let Some(window) = self.get_window_mut(surface) {
+        if let Some(window) = self.get_window(surface) {
             window.keyboard_leave();
         }
         self.key_surface = None;
@@ -74,14 +74,12 @@ impl KeyboardHandler for ApplicationState {
 delegate_keyboard!(ApplicationState);
 
 impl SimpleWindow {
-    pub fn keyboard_enter(&mut self, keysyms: &[Keysym]) {
+    pub fn keyboard_enter(&self, keysyms: &[Keysym]) {
         debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
-        self.keyboard_focus = true;
         (self.event_handler)(&Event::new_window_focus_change_event(true));
     }
 
-    pub fn keyboard_leave(&mut self) {
-        self.keyboard_focus = false;
+    pub fn keyboard_leave(&self) {
         (self.event_handler)(&Event::new_window_focus_change_event(false));
     }
 
