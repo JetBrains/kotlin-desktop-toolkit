@@ -189,6 +189,7 @@ typedef struct NativeMouseDownEvent {
   NativeWindowId window_id;
   NativeMouseButton button;
   struct NativeLogicalPoint location_in_window;
+  intptr_t click_count;
   NativeTimestamp timestamp;
 } NativeMouseDownEvent;
 
@@ -196,6 +197,7 @@ typedef struct NativeMouseUpEvent {
   NativeWindowId window_id;
   NativeMouseButton button;
   struct NativeLogicalPoint location_in_window;
+  intptr_t click_count;
   NativeTimestamp timestamp;
 } NativeMouseUpEvent;
 

@@ -102,6 +102,7 @@ pub struct MouseDownEvent {
     pub window_id: WindowId,
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
+    pub click_count: isize,
     pub timestamp: Timestamp,
 }
 
@@ -111,6 +112,7 @@ pub struct MouseUpEvent {
     pub window_id: WindowId,
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
+    pub click_count: isize,
     pub timestamp: Timestamp,
 }
 
@@ -308,6 +310,7 @@ pub(crate) fn handle_mouse_down(ns_event: &NSEvent) -> bool {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            click_count: unsafe { ns_event.clickCount() },
             timestamp: unsafe { ns_event.timestamp() },
         });
         (state.event_handler)(&event)
@@ -321,6 +324,7 @@ pub(crate) fn handle_mouse_up(ns_event: &NSEvent) -> bool {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
+            click_count: unsafe { ns_event.clickCount() },
             timestamp: unsafe { ns_event.timestamp() },
         });
         (state.event_handler)(&event)

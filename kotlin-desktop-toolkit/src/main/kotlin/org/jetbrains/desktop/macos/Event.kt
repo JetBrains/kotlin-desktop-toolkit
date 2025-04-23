@@ -109,6 +109,7 @@ public sealed class Event {
         val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
+        val clickCount: Long,
         val timestamp: Timestamp,
     ) : Event()
 
@@ -116,6 +117,7 @@ public sealed class Event {
         val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
+        val clickCount: Long,
         val timestamp: Timestamp,
     ) : Event()
 
@@ -263,6 +265,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 windowId = NativeMouseUpEvent.window_id(nativeEvent),
                 button = MouseButton(NativeMouseUpEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseUpEvent.location_in_window(nativeEvent)),
+                clickCount = NativeMouseUpEvent.click_count(nativeEvent),
                 timestamp = Timestamp(NativeMouseUpEvent.timestamp(nativeEvent)),
             )
         }
@@ -272,6 +275,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 windowId = NativeMouseDownEvent.window_id(nativeEvent),
                 button = MouseButton(NativeMouseDownEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseDownEvent.location_in_window(nativeEvent)),
+                clickCount = NativeMouseUpEvent.click_count(nativeEvent),
                 timestamp = Timestamp(NativeMouseDownEvent.timestamp(nativeEvent)),
             )
         }
