@@ -19,7 +19,7 @@ pub enum PointerShape {
     Pointer,
 
     /// A progress indicator. The program is performing some processing, but is
-    /// different from [`CursorIcon::Wait`] in that the user may still interact
+    /// different from [`PointerShape::Wait`] in that the user may still interact
     /// with the program.
     Progress,
 
@@ -130,43 +130,43 @@ pub enum PointerShape {
     ZoomOut,
 }
 
-impl PointerShape {
-    pub(crate) const fn to_cursor_icon(self) -> CursorIcon {
-        match self {
-            Self::Default => CursorIcon::Default,
-            Self::ContextMenu => CursorIcon::ContextMenu,
-            Self::Help => CursorIcon::Help,
-            Self::Pointer => CursorIcon::Pointer,
-            Self::Progress => CursorIcon::Progress,
-            Self::Wait => CursorIcon::Wait,
-            Self::Cell => CursorIcon::Cell,
-            Self::Crosshair => CursorIcon::Crosshair,
-            Self::Text => CursorIcon::Text,
-            Self::VerticalText => CursorIcon::VerticalText,
-            Self::Alias => CursorIcon::Alias,
-            Self::Copy => CursorIcon::Copy,
-            Self::Move => CursorIcon::Move,
-            Self::NoDrop => CursorIcon::NoDrop,
-            Self::NotAllowed => CursorIcon::NotAllowed,
-            Self::Grab => CursorIcon::Grab,
-            Self::Grabbing => CursorIcon::Grabbing,
-            Self::EResize => CursorIcon::EResize,
-            Self::NResize => CursorIcon::NResize,
-            Self::NeResize => CursorIcon::NeResize,
-            Self::NwResize => CursorIcon::NwResize,
-            Self::SResize => CursorIcon::SResize,
-            Self::SeResize => CursorIcon::SeResize,
-            Self::SwResize => CursorIcon::SwResize,
-            Self::WResize => CursorIcon::WResize,
-            Self::EwResize => CursorIcon::EwResize,
-            Self::NsResize => CursorIcon::NsResize,
-            Self::NeswResize => CursorIcon::NeswResize,
-            Self::NwseResize => CursorIcon::NwseResize,
-            Self::ColResize => CursorIcon::ColResize,
-            Self::RowResize => CursorIcon::RowResize,
-            Self::AllScroll => CursorIcon::AllScroll,
-            Self::ZoomIn => CursorIcon::ZoomIn,
-            Self::ZoomOut => CursorIcon::ZoomOut,
+impl From<PointerShape> for CursorIcon {
+    fn from(value: PointerShape) -> Self {
+        match value {
+            PointerShape::Default => Self::Default,
+            PointerShape::ContextMenu => Self::ContextMenu,
+            PointerShape::Help => Self::Help,
+            PointerShape::Pointer => Self::Pointer,
+            PointerShape::Progress => Self::Progress,
+            PointerShape::Wait => Self::Wait,
+            PointerShape::Cell => Self::Cell,
+            PointerShape::Crosshair => Self::Crosshair,
+            PointerShape::Text => Self::Text,
+            PointerShape::VerticalText => Self::VerticalText,
+            PointerShape::Alias => Self::Alias,
+            PointerShape::Copy => Self::Copy,
+            PointerShape::Move => Self::Move,
+            PointerShape::NoDrop => Self::NoDrop,
+            PointerShape::NotAllowed => Self::NotAllowed,
+            PointerShape::Grab => Self::Grab,
+            PointerShape::Grabbing => Self::Grabbing,
+            PointerShape::EResize => Self::EResize,
+            PointerShape::NResize => Self::NResize,
+            PointerShape::NeResize => Self::NeResize,
+            PointerShape::NwResize => Self::NwResize,
+            PointerShape::SResize => Self::SResize,
+            PointerShape::SeResize => Self::SeResize,
+            PointerShape::SwResize => Self::SwResize,
+            PointerShape::WResize => Self::WResize,
+            PointerShape::EwResize => Self::EwResize,
+            PointerShape::NsResize => Self::NsResize,
+            PointerShape::NeswResize => Self::NeswResize,
+            PointerShape::NwseResize => Self::NwseResize,
+            PointerShape::ColResize => Self::ColResize,
+            PointerShape::RowResize => Self::RowResize,
+            PointerShape::AllScroll => Self::AllScroll,
+            PointerShape::ZoomIn => Self::ZoomIn,
+            PointerShape::ZoomOut => Self::ZoomOut,
         }
     }
 }

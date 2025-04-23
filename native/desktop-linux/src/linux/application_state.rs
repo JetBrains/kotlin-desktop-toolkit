@@ -4,8 +4,8 @@ use khronos_egl;
 use log::{debug, warn};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
-    delegate_compositor, delegate_keyboard, delegate_output, delegate_pointer, delegate_registry, delegate_seat, delegate_shm,
-    delegate_subcompositor, delegate_xdg_shell, delegate_xdg_window,
+    delegate_compositor, delegate_output, delegate_registry, delegate_seat, delegate_shm, delegate_subcompositor, delegate_xdg_shell,
+    delegate_xdg_window,
     output::{OutputHandler, OutputState},
     reexports::{
         calloop::channel::Sender,
@@ -14,7 +14,7 @@ use smithay_client_toolkit::{
             backend::ObjectId,
             delegate_noop,
             globals::GlobalList,
-            protocol::{wl_keyboard, wl_output, wl_pointer::WlPointer, wl_seat, wl_surface::WlSurface},
+            protocol::{wl_keyboard, wl_output, wl_seat, wl_surface::WlSurface},
         },
         protocols::wp::{
             fractional_scale::v1::client::{
@@ -28,8 +28,7 @@ use smithay_client_toolkit::{
     registry_handlers,
     seat::{
         Capability, SeatHandler, SeatState,
-        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
-        pointer::{PointerEvent, PointerHandler, ThemeSpec, ThemedPointer},
+        pointer::{ThemeSpec, ThemedPointer},
     },
     shell::{
         WaylandSurface,
@@ -62,7 +61,7 @@ pub struct ApplicationState {
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
-    key_surface: Option<ObjectId>,
+    pub(crate) key_surface: Option<ObjectId>,
     pub egl: Option<EglInstance>,
     pub event_loop_thread_id: Option<ThreadId>,
     pub run_on_event_loop: Option<Sender<extern "C" fn()>>,
@@ -129,70 +128,10 @@ impl ApplicationState {
         })
     }
 
-    fn get_key_window(&mut self) -> Option<&SimpleWindow> {
+    pub(crate) fn get_key_window(&mut self) -> Option<&SimpleWindow> {
         self.key_surface.as_mut().and_then(|surface_id| self.windows.get(surface_id))
     }
 }
-
-impl KeyboardHandler for ApplicationState {
-    fn enter(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
-        surface: &WlSurface,
-        _serial: u32,
-        _raw: &[u32],
-        keysyms: &[Keysym],
-    ) {
-        self.key_surface = Some(surface.id());
-        if let Some(window) = self.get_window_mut(surface) {
-            window.keyboard_enter(keysyms);
-        }
-    }
-
-    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, surface: &WlSurface, _serial: u32) {
-        if let Some(window) = self.get_window_mut(surface) {
-            window.keyboard_leave();
-        }
-        self.key_surface = None;
-    }
-
-    fn press_key(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _keyboard: &wl_keyboard::WlKeyboard,
-        _serial: u32,
-        event: KeyEvent,
-    ) {
-        if let Some(window) = self.get_key_window() {
-            window.press_key(&event);
-        }
-    }
-
-    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _serial: u32, event: KeyEvent) {
-        if let Some(window) = self.get_key_window() {
-            window.release_key(&event);
-        }
-    }
-
-    fn update_modifiers(
-        &mut self,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-        _: &wl_keyboard::WlKeyboard,
-        _serial: u32,
-        modifiers: Modifiers,
-        _layout: u32,
-    ) {
-        if let Some(window) = self.get_key_window() {
-            window.update_modifiers(modifiers);
-        }
-    }
-}
-
-delegate_keyboard!(ApplicationState);
 
 impl SeatHandler for ApplicationState {
     fn seat_state(&mut self) -> &mut SeatState {
@@ -333,22 +272,11 @@ impl WindowHandler for ApplicationState {
     }
 }
 
+delegate_xdg_window!(ApplicationState);
+
 delegate_xdg_shell!(ApplicationState);
 
 delegate_subcompositor!(ApplicationState);
-
-impl PointerHandler for ApplicationState {
-    fn pointer_frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
-        for event in events {
-            if let Some(window) = self.get_window_mut(&event.surface) {
-                window.pointer_event(pointer, event);
-            }
-        }
-    }
-}
-
-delegate_pointer!(ApplicationState);
-delegate_xdg_window!(ApplicationState);
 
 delegate_noop!(ApplicationState: ignore WpFractionalScaleManagerV1);
 delegate_noop!(ApplicationState: ignore WpFractionalScaleV1);

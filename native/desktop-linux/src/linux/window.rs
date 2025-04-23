@@ -1,15 +1,13 @@
-use anyhow::Context;
-use khronos_egl as egl;
 use log::{debug, info, warn};
 use smithay_client_toolkit::{
     compositor::SurfaceData,
     reexports::{
         client::{
             Connection, Proxy, QueueHandle,
-            protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_shm, wl_surface::WlSurface},
+            protocol::{wl_output::WlOutput, wl_seat::WlSeat},
         },
         csd_frame::{WindowManagerCapabilities, WindowState},
-        protocols::{wp::viewporter::client::wp_viewport::WpViewport, xdg::shell::client::xdg_toplevel::ResizeEdge as XdgResizeEdge},
+        protocols::wp::viewporter::client::wp_viewport::WpViewport,
     },
     seat::pointer::{CursorIcon, ThemedPointer},
     shell::{
@@ -19,145 +17,20 @@ use smithay_client_toolkit::{
             window::{DecorationMode, Window, WindowConfigure, WindowDecorations},
         },
     },
-    shm::{
-        Shm,
-        slot::{Buffer, SlotPool},
-    },
+    shm::Shm,
 };
-use wayland_egl::WlEglSurface;
 
 use crate::linux::events::{WindowCapabilities, WindowResizeEvent};
 use crate::linux::geometry::LogicalSize;
 use crate::linux::{application_state::ApplicationState, geometry::LogicalPixels};
 
-use super::events::{Event, InternalEventHandler, SoftwareDrawData, WindowDrawEvent, WindowResizeEdge};
-use super::geometry::PhysicalSize;
-use super::window_api::WindowParams;
 use super::{application_state::EglInstance, geometry::LogicalPoint};
-
-#[derive(Debug)]
-struct EglRendering {
-    wl_egl_surface: WlEglSurface,
-    egl_display: egl::Display,
-    egl_window_surface: khronos_egl::Surface,
-}
-
-impl EglRendering {
-    fn new(conn: &Connection, egl: &EglInstance, surface: &WlSurface, size: PhysicalSize) -> anyhow::Result<Self> {
-        info!("Trying to use EGL rendering");
-
-        let wl_egl_surface = WlEglSurface::new(surface.id(), size.width.0, size.height.0).context("WlEglSurface::new")?;
-
-        let wayland_display_ptr = conn.display().id().as_ptr();
-        let egl_display = unsafe { egl.get_display(wayland_display_ptr.cast()) }.context("egl.get_display")?;
-        egl.initialize(egl_display).context("egl.initialize")?;
-
-        let egl_attributes = [
-            egl::RED_SIZE,
-            8,
-            egl::GREEN_SIZE,
-            8,
-            egl::BLUE_SIZE,
-            8,
-            egl::ALPHA_SIZE,
-            8,
-            egl::NONE,
-        ];
-
-        let egl_config = egl
-            .choose_first_config(egl_display, &egl_attributes)?
-            .context("unable to find an appropriate ELG configuration")?;
-
-        let egl_context_attributes = [egl::CONTEXT_MAJOR_VERSION, 3, egl::CONTEXT_MINOR_VERSION, 0, egl::NONE];
-
-        let egl_context = egl
-            .create_context(egl_display, egl_config, None, &egl_context_attributes)
-            .context("egl.create_context")?;
-
-        let egl_window_surface = unsafe { egl.create_window_surface(egl_display, egl_config, wl_egl_surface.ptr().cast_mut(), None) }
-            .context("egl.create_window_surface")?;
-
-        egl.make_current(egl_display, Some(egl_window_surface), Some(egl_window_surface), Some(egl_context))
-            .context("egl.make_current")?;
-
-        Ok(Self {
-            wl_egl_surface,
-            egl_display,
-            egl_window_surface,
-        })
-    }
-
-    fn draw<F: FnOnce(Option<SoftwareDrawData>)>(&self, surface: &WlSurface, egl: &EglInstance, do_draw: F) {
-        do_draw(None);
-
-        // Attach and commit to present.
-        egl.swap_buffers(self.egl_display, self.egl_window_surface).unwrap();
-        surface.commit();
-    }
-}
-
-#[derive(Debug)]
-struct SoftwareRendering {
-    pool: SlotPool,
-    buffer: Buffer,
-    stride: i32,
-}
-
-struct SoftwareBuffer<'a> {
-    buffer: Buffer,
-    canvas: &'a mut [u8],
-}
-
-impl SoftwareRendering {
-    const BYTES_PER_PIXEL: u8 = 4;
-
-    fn create_buffer(pool: &mut SlotPool, size: PhysicalSize) -> SoftwareBuffer {
-        let stride = size.width.0 * i32::from(Self::BYTES_PER_PIXEL);
-        let (buffer, canvas) = pool
-            .create_buffer(size.width.0, size.height.0, stride, wl_shm::Format::Argb8888)
-            .expect("create buffer");
-        SoftwareBuffer { buffer, canvas }
-    }
-
-    fn new(shm: &Shm, size: PhysicalSize) -> Self {
-        let stride = size.width.0 * i32::from(Self::BYTES_PER_PIXEL);
-        let mut pool = SlotPool::new(
-            (stride * size.height.0 * 2).try_into().unwrap(), // double buffered
-            shm,
-        )
-        .expect("Failed to create pool");
-        let buffer = Self::create_buffer(&mut pool, size).buffer;
-        Self { pool, buffer, stride }
-    }
-
-    fn resize(&mut self, shm: &Shm, size: PhysicalSize) {
-        let stride = size.width.0 * i32::from(Self::BYTES_PER_PIXEL);
-        if self.buffer.height() != size.height.0 || self.buffer.stride() != stride {
-            *self = Self::new(shm, size);
-        }
-    }
-
-    fn draw<F: FnOnce(Option<SoftwareDrawData>)>(&mut self, surface: &WlSurface, size: PhysicalSize, do_draw: F) {
-        let canvas = if let Some(canvas) = self.pool.canvas(&self.buffer) {
-            canvas
-        } else {
-            // This should be rare, but if the compositor has not released the previous
-            // buffer, we need double-buffering.
-            let second_draw_data = Self::create_buffer(&mut self.pool, size);
-            self.buffer = second_draw_data.buffer;
-            second_draw_data.canvas
-        };
-
-        do_draw(Some(SoftwareDrawData {
-            canvas: canvas.as_mut_ptr(),
-            stride: self.stride,
-        }));
-
-        // Attach and commit to present.
-        self.buffer.attach_to(surface).expect("buffer attach");
-        surface.commit();
-    }
-}
+use super::{
+    events::{Event, InternalEventHandler, SoftwareDrawData, WindowDrawEvent},
+    rendering_egl::EglRendering,
+    rendering_software::SoftwareRendering,
+};
+use super::{window_api::WindowParams, window_resize_edge::WindowResizeEdge};
 
 #[derive(Debug)]
 enum RenderingData {
@@ -313,7 +186,7 @@ impl SimpleWindow {
         if let Some(rendering_data) = &mut self.rendering_data {
             match rendering_data {
                 RenderingData::Egl(egl_data) => {
-                    egl_data.wl_egl_surface.resize(physical_size.width.0, physical_size.height.0, 0, 0);
+                    egl_data.resize(physical_size);
                 }
                 RenderingData::Software(data) => {
                     data.resize(shm, physical_size);
@@ -413,18 +286,7 @@ impl SimpleWindow {
     pub fn start_resize(&self, edge: WindowResizeEdge) {
         let serial = self.current_mouse_down_serial.unwrap();
         let seat = self.current_mouse_down_seat.as_ref().unwrap();
-        let edge = match edge {
-            WindowResizeEdge::None => XdgResizeEdge::None,
-            WindowResizeEdge::Top => XdgResizeEdge::Top,
-            WindowResizeEdge::Bottom => XdgResizeEdge::Bottom,
-            WindowResizeEdge::Left => XdgResizeEdge::Left,
-            WindowResizeEdge::TopLeft => XdgResizeEdge::TopLeft,
-            WindowResizeEdge::BottomLeft => XdgResizeEdge::BottomLeft,
-            WindowResizeEdge::Right => XdgResizeEdge::Right,
-            WindowResizeEdge::TopRight => XdgResizeEdge::TopRight,
-            WindowResizeEdge::BottomRight => XdgResizeEdge::BottomRight,
-        };
-        self.window.resize(seat, serial, edge);
+        self.window.resize(seat, serial, edge.into());
     }
 
     pub fn show_menu(&self, position: LogicalPoint) {

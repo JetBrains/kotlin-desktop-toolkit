@@ -9,9 +9,10 @@ use smithay_client_toolkit::shell::xdg::window::Window;
 use super::{
     application::Application,
     application_api::AppPtr,
-    events::{WindowId, WindowResizeEdge},
+    events::WindowId,
     geometry::{LogicalPoint, LogicalSize},
     pointer_shapes::PointerShape,
+    window_resize_edge::WindowResizeEdge,
 };
 
 #[repr(C)]
@@ -57,7 +58,7 @@ pub extern "C" fn window_set_pointer_shape(mut app_ptr: AppPtr, window_id: Windo
     ffi_boundary("window_set_pointer_shape", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         if let Some(window) = app.get_window_mut(window_id) {
-            window.set_cursor_icon(pointer_shape.to_cursor_icon());
+            window.set_cursor_icon(pointer_shape.into());
         }
         Ok(())
     });

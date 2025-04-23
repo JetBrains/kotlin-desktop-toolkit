@@ -54,7 +54,7 @@ typedef enum NativePointerShape {
   NativePointerShape_Pointer,
   /**
    * A progress indicator. The program is performing some processing, but is
-   * different from [`CursorIcon::Wait`] in that the user may still interact
+   * different from [`PointerShape::Wait`] in that the user may still interact
    * with the program.
    */
   NativePointerShape_Progress,
