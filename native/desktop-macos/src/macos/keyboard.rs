@@ -50,9 +50,8 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
     // * for for keys like F1..F12 characters will contain codepoints from private use area defined in `KeyCodePoints`,
     // but this function will try to return some meaniingful code points
     // * for all F1..F16 keys this function will return the same codepoint: \u{10} for F17 it will be empty line
-    let key_with_modifiers = unsafe {
-        ns_event.charactersByApplyingModifiers(ns_event.modifierFlags())
-    }.with_context(|| { format!("Event contains invalid data: {ns_event:?}") })?;
+    let key_with_modifiers = unsafe { ns_event.charactersByApplyingModifiers(ns_event.modifierFlags()) }
+        .with_context(|| format!("Event contains invalid data: {ns_event:?}"))?;
 
     let modifiers = unsafe { ns_event.modifierFlags() }.into();
 

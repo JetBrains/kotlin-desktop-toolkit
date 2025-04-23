@@ -17,7 +17,7 @@ pub extern "C" fn string_drop(mut str_ptr: RustAllocatedStrPtr) {
     });
 }
 
-pub(crate) fn borrow_ns_string<'a>(s: &'a NSString) -> BorrowedStrPtr<'a> {
+pub(crate) fn borrow_ns_string(s: &NSString) -> BorrowedStrPtr<'_> {
     let c_str = unsafe { CStr::from_ptr(s.UTF8String()) };
     BorrowedStrPtr::new(c_str)
 }
@@ -54,7 +54,7 @@ mod tests {
         let ns_string = NSString::from_str("Hello😃World\nOne More Line");
         let c_str = copy_to_c_string(&ns_string).unwrap();
         let str = c_str.as_str().unwrap();
-        let new_ns_string = NSString::from_str(&str);
+        let new_ns_string = NSString::from_str(str);
         assert_eq!(ns_string, new_ns_string);
     }
 }
