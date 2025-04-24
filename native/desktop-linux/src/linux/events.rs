@@ -76,8 +76,8 @@ pub struct KeyDownEvent<'a> {
     pub timestamp: Timestamp,
 }
 
-impl<'a> From<&'a KeyDownEvent<'a>> for Event<'a> {
-    fn from(value: &'a KeyDownEvent<'a>) -> Self {
+impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
+    fn from(value: KeyDownEvent<'a>) -> Self {
         Self::KeyDown(value)
     }
 }
@@ -185,8 +185,8 @@ pub struct MouseDownEvent {
     pub timestamp: Timestamp,
 }
 
-impl<'a> From<&'a MouseDownEvent> for Event<'a> {
-    fn from(value: &'a MouseDownEvent) -> Self {
+impl From<MouseDownEvent> for Event<'_> {
+    fn from(value: MouseDownEvent) -> Self {
         Self::MouseDown(value)
     }
 }
@@ -339,14 +339,14 @@ impl From<WindowScaleChangedEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub enum Event<'a> {
-    KeyDown(&'a KeyDownEvent<'a>),
+    KeyDown(KeyDownEvent<'a>),
     KeyUp(KeyUpEvent<'a>),
     ModifiersChanged(ModifiersChangedEvent),
     MouseMoved(MouseMovedEvent),
     MouseDragged(MouseDraggedEvent),
     MouseEntered(MouseEnteredEvent),
     MouseExited(MouseExitedEvent),
-    MouseDown(&'a MouseDownEvent),
+    MouseDown(MouseDownEvent),
     MouseUp(MouseUpEvent),
     ScrollWheel(ScrollWheelEvent),
     WindowScreenChange(WindowScreenChangeEvent),

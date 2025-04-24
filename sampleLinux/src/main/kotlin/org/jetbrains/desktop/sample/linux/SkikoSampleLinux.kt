@@ -61,6 +61,8 @@ data class XdgDesktopSettings(
     var fontAntialiasing: FontAntialiasingValue = FontAntialiasingValue.Grayscale,
     var fontHinting: FontHintingValue = FontHintingValue.Medium,
     var fontRgbaOrder: FontRgbaOrderValue = FontRgbaOrderValue.Rgb,
+    var cursorSize: Int? = null,
+    var cursorTheme: String? = null,
     var cursorBlink: Boolean = true,
     var cursorBlinkTime: Duration = 1200.toDuration(DurationUnit.MILLISECONDS),
     var cursorBlinkTimeout: Duration = 10.toDuration(DurationUnit.SECONDS),
@@ -88,6 +90,8 @@ data class XdgDesktopSettings(
             is XdgDesktopSetting.CursorBlinkTime -> cursorBlinkTime = s.value
             is XdgDesktopSetting.CursorBlinkTimeout -> cursorBlinkTimeout = s.value
             is XdgDesktopSetting.OverlayScrolling -> overlayScrolling = s.value
+            is XdgDesktopSetting.CursorSize -> cursorSize = s.value
+            is XdgDesktopSetting.CursorTheme -> cursorTheme = s.value
         }
     }
 }
@@ -724,7 +728,7 @@ class RotatingBallWindow(
 
 class ApplicationState(private val app: Application) : AutoCloseable {
     private val windows = mutableMapOf<WindowId, RotatingBallWindow>()
-    private var xdgDesktopSettings = XdgDesktopSettings()
+    private val xdgDesktopSettings = XdgDesktopSettings()
 
     fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
         val windowId = windows.count().toLong()

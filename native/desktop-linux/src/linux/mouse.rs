@@ -1,8 +1,5 @@
 use smithay_client_toolkit::delegate_pointer;
-use smithay_client_toolkit::reexports::client::{
-    Connection, Proxy, QueueHandle,
-    protocol::wl_pointer::{self, WlPointer},
-};
+use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle, protocol::wl_pointer::WlPointer};
 use smithay_client_toolkit::seat::pointer::{PointerData, PointerEvent, PointerEventKind, PointerHandler};
 
 use crate::linux::events::Event;
@@ -24,7 +21,7 @@ impl PointerHandler for ApplicationState {
 delegate_pointer!(ApplicationState);
 
 impl SimpleWindow {
-    pub fn pointer_event(&mut self, pointer: &wl_pointer::WlPointer, event: &PointerEvent) {
+    pub fn pointer_event(&mut self, pointer: &WlPointer, event: &PointerEvent) {
         match event.kind {
             PointerEventKind::Enter { .. } => {
                 self.set_cursor = true;
@@ -42,7 +39,7 @@ impl SimpleWindow {
                 let seat = pointer_data.seat();
                 self.current_mouse_down_seat = Some(seat.clone());
                 self.current_mouse_down_serial = Some(serial);
-                (self.event_handler)(&(&e).into());
+                (self.event_handler)(&e.into());
             }
             PointerEventKind::Release { button, serial: _, time } => {
                 //self.current_mouse_down_seat = None;

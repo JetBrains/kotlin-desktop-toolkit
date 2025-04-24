@@ -87,7 +87,7 @@ impl SimpleWindow {
         let characters = event.utf8.as_ref().map(|s| CString::from_str(s).unwrap());
         let key = event.keysym.name().map(|s| CString::from_str(s).unwrap());
         let e = KeyDownEvent::new(event, characters.as_ref(), key.as_ref());
-        (self.event_handler)(&(&e).into());
+        (self.event_handler)(&e.into());
     }
 
     pub fn release_key(&self, event: &KeyEvent) {

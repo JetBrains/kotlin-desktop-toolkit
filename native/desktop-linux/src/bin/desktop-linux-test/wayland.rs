@@ -194,7 +194,9 @@ fn draw(event: &WindowDrawEvent) {
 
 fn log_event(event: &Event, window_id: WindowId) {
     match event {
-        Event::WindowDraw(_) | Event::MouseMoved(_) => {}
+        Event::WindowDraw(_)
+//        | Event::MouseMoved(_)
+        => {}
         _ => {
             debug!("{window_id:?} : {event:?}");
         }
@@ -222,7 +224,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
     true
 }
 
-extern "C" fn on_xdg_desktop_settings_change(s: XdgDesktopSetting) {
+extern "C" fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting) {
     debug!("{s:?}");
 }
 

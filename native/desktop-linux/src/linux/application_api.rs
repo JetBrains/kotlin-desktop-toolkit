@@ -13,7 +13,7 @@ pub struct ApplicationCallbacks {
     pub on_should_terminate: extern "C" fn() -> bool,
     pub on_will_terminate: extern "C" fn(),
     pub on_display_configuration_change: extern "C" fn(),
-    pub on_xdg_desktop_settings_change: extern "C" fn(XdgDesktopSetting),
+    pub on_xdg_desktop_settings_change: extern "C" fn(&XdgDesktopSetting),
     pub event_handler: EventHandler,
 }
 

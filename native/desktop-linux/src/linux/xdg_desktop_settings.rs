@@ -1,16 +1,16 @@
+use super::xdg_desktop_settings_api::{
+    Color, FontAntialiasing, FontHinting, FontRgbaOrder, TitlebarButtonLayout, WindowButtonType, XdgDesktopColorScheme, XdgDesktopSetting,
+};
 use anyhow::{Context, bail};
 use ashpd::{
     desktop::settings::{ACCENT_COLOR_SCHEME_KEY, APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY, ColorScheme, Namespace, Settings},
     zvariant::{OwnedValue, Structure},
 };
 use async_std::stream::StreamExt;
-use desktop_common::ffi_utils::AutoDropArray;
+use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
 use log::{debug, error};
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
-
-use super::xdg_desktop_settings_api::{
-    Color, FontAntialiasing, FontHinting, FontRgbaOrder, TitlebarButtonLayout, WindowButtonType, XdgDesktopColorScheme, XdgDesktopSetting,
-};
+use std::ffi::CString;
 
 const GNOME_DESKTOP_INTERFACE_NAMESPACE: &str = "org.gnome.desktop.interface";
 const GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE: &str = "org.gnome.desktop.peripherals.mouse";
@@ -53,6 +53,8 @@ pub enum InternalXdgDesktopSetting {
     FontRgbaOrder(FontRgbaOrder),
 
     CursorBlink(bool),
+    CursorSize(i32),
+    CursorTheme(String),
 
     /// Length of the cursor blink cycle, in milliseconds.
     CursorBlinkTimeMs(i32),
@@ -114,30 +116,35 @@ impl FontRgbaOrder {
     }
 }
 
-impl XdgDesktopSetting {
-    pub fn with(s: InternalXdgDesktopSetting, f: impl FnOnce(Self)) {
+impl XdgDesktopSetting<'_> {
+    pub fn with(s: InternalXdgDesktopSetting, f: impl FnOnce(&XdgDesktopSetting)) {
         match s {
             InternalXdgDesktopSetting::TitlebarLayout(v) => {
-                f(Self::TitlebarLayout(TitlebarButtonLayout {
+                f(&Self::TitlebarLayout(TitlebarButtonLayout {
                     left_side: AutoDropArray::new(v.left_side),
                     right_side: AutoDropArray::new(v.right_side),
                 }));
             }
-            InternalXdgDesktopSetting::DoubleClickIntervalMs(v) => f(Self::DoubleClickIntervalMs(v)),
-            InternalXdgDesktopSetting::ColorScheme(v) => f(Self::ColorScheme(match v {
+            InternalXdgDesktopSetting::DoubleClickIntervalMs(v) => f(&Self::DoubleClickIntervalMs(v)),
+            InternalXdgDesktopSetting::ColorScheme(v) => f(&Self::ColorScheme(match v {
                 ColorScheme::NoPreference => XdgDesktopColorScheme::NoPreference,
                 ColorScheme::PreferDark => XdgDesktopColorScheme::PreferDark,
                 ColorScheme::PreferLight => XdgDesktopColorScheme::PreferLight,
             })),
-            InternalXdgDesktopSetting::AccentColor(v) => f(Self::AccentColor(v)),
-            InternalXdgDesktopSetting::FontAntialiasing(v) => f(Self::FontAntialiasing(v)),
-            InternalXdgDesktopSetting::FontHinting(v) => f(Self::FontHinting(v)),
-            InternalXdgDesktopSetting::FontRgbaOrder(v) => f(Self::FontRgbaOrder(v)),
-            InternalXdgDesktopSetting::CursorBlink(v) => f(Self::CursorBlink(v)),
-            InternalXdgDesktopSetting::CursorBlinkTimeMs(v) => f(Self::CursorBlinkTimeMs(v)),
-            InternalXdgDesktopSetting::CursorBlinkTimeoutMs(v) => f(Self::CursorBlinkTimeoutMs(v)),
-            InternalXdgDesktopSetting::OverlayScrolling(v) => f(Self::OverlayScrolling(v)),
-            InternalXdgDesktopSetting::AudibleBell(v) => f(Self::AudibleBell(v)),
+            InternalXdgDesktopSetting::AccentColor(v) => f(&Self::AccentColor(v)),
+            InternalXdgDesktopSetting::FontAntialiasing(v) => f(&Self::FontAntialiasing(v)),
+            InternalXdgDesktopSetting::FontHinting(v) => f(&Self::FontHinting(v)),
+            InternalXdgDesktopSetting::FontRgbaOrder(v) => f(&Self::FontRgbaOrder(v)),
+            InternalXdgDesktopSetting::CursorBlink(v) => f(&Self::CursorBlink(v)),
+            InternalXdgDesktopSetting::CursorBlinkTimeMs(v) => f(&Self::CursorBlinkTimeMs(v)),
+            InternalXdgDesktopSetting::CursorBlinkTimeoutMs(v) => f(&Self::CursorBlinkTimeoutMs(v)),
+            InternalXdgDesktopSetting::OverlayScrolling(v) => f(&Self::OverlayScrolling(v)),
+            InternalXdgDesktopSetting::AudibleBell(v) => f(&Self::AudibleBell(v)),
+            InternalXdgDesktopSetting::CursorSize(v) => f(&Self::CursorSize(v)),
+            InternalXdgDesktopSetting::CursorTheme(v) => {
+                let cs = CString::new(v).unwrap();
+                f(&XdgDesktopSetting::CursorTheme(BorrowedStrPtr::new(&cs)));
+            }
         }
     }
 }
@@ -213,6 +220,8 @@ impl InternalXdgDesktopSetting {
                 "cursor-blink" => Some(Self::CursorBlink(read_bool(value)?)),
                 "cursor-blink-time" => Some(Self::CursorBlinkTimeMs(read_i32(value)?)),
                 "cursor-blink-timeout" => Some(Self::CursorBlinkTimeoutMs(read_i32(value)? * 1000)),
+                "cursor-theme" => Some(Self::CursorTheme(read_string(value)?)),
+                "cursor-size" => Some(Self::CursorSize(read_i32(value)?)),
                 "overlay-scrolling" => Some(Self::OverlayScrolling(read_bool(value)?)),
                 "font-antialiasing" => Some(Self::FontAntialiasing(FontAntialiasing::parse(&read_string(value)?)?)),
                 "font-hinting" => Some(Self::FontHinting(FontHinting::parse(&read_string(value)?)?)),

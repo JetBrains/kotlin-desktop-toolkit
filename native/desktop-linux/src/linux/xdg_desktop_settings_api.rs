@@ -1,4 +1,4 @@
-use desktop_common::ffi_utils::AutoDropArray;
+use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
 
 #[repr(i32)]
 #[derive(Copy, Clone, Debug)]
@@ -66,7 +66,7 @@ pub struct Color {
 
 #[repr(C)]
 #[derive(Debug)]
-pub enum XdgDesktopSetting {
+pub enum XdgDesktopSetting<'a> {
     TitlebarLayout(TitlebarButtonLayout),
     DoubleClickIntervalMs(i32),
     ColorScheme(XdgDesktopColorScheme),
@@ -75,6 +75,8 @@ pub enum XdgDesktopSetting {
     FontHinting(FontHinting),
     FontRgbaOrder(FontRgbaOrder),
     CursorBlink(bool),
+    CursorSize(i32),
+    CursorTheme(BorrowedStrPtr<'a>),
 
     /// Length of the cursor blink cycle, in milliseconds.
     CursorBlinkTimeMs(i32),

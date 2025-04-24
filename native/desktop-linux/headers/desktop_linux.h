@@ -284,6 +284,10 @@ typedef struct NativeColor {
   double alpha;
 } NativeColor;
 
+typedef const char *NativeGenericRawPtr_c_char;
+
+typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
+
 typedef enum NativeXdgDesktopSetting_Tag {
   NativeXdgDesktopSetting_TitlebarLayout,
   NativeXdgDesktopSetting_DoubleClickIntervalMs,
@@ -293,6 +297,8 @@ typedef enum NativeXdgDesktopSetting_Tag {
   NativeXdgDesktopSetting_FontHinting,
   NativeXdgDesktopSetting_FontRgbaOrder,
   NativeXdgDesktopSetting_CursorBlink,
+  NativeXdgDesktopSetting_CursorSize,
+  NativeXdgDesktopSetting_CursorTheme,
   /**
    * Length of the cursor blink cycle, in milliseconds.
    */
@@ -331,6 +337,12 @@ typedef struct NativeXdgDesktopSetting {
     };
     struct {
       bool cursor_blink;
+    };
+    struct {
+      int32_t cursor_size;
+    };
+    struct {
+      NativeBorrowedStrPtr cursor_theme;
     };
     struct {
       int32_t cursor_blink_time_ms;
@@ -377,10 +389,6 @@ typedef struct NativeKeyModifiers {
 } NativeKeyModifiers;
 
 typedef uint32_t NativeKeyCode;
-
-typedef const char *NativeGenericRawPtr_c_char;
-
-typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
 typedef uint32_t NativeTimestamp;
 
@@ -547,7 +555,7 @@ typedef struct NativeEvent {
   NativeEvent_Tag tag;
   union {
     struct {
-      const struct NativeKeyDownEvent *key_down;
+      struct NativeKeyDownEvent key_down;
     };
     struct {
       struct NativeKeyUpEvent key_up;
@@ -568,7 +576,7 @@ typedef struct NativeEvent {
       struct NativeMouseExitedEvent mouse_exited;
     };
     struct {
-      const struct NativeMouseDownEvent *mouse_down;
+      struct NativeMouseDownEvent mouse_down;
     };
     struct {
       struct NativeMouseUpEvent mouse_up;
@@ -606,7 +614,7 @@ typedef struct NativeApplicationCallbacks {
   bool (*on_should_terminate)(void);
   void (*on_will_terminate)(void);
   void (*on_display_configuration_change)(void);
-  void (*on_xdg_desktop_settings_change)(struct NativeXdgDesktopSetting);
+  void (*on_xdg_desktop_settings_change)(const struct NativeXdgDesktopSetting*);
   NativeEventHandler event_handler;
 } NativeApplicationCallbacks;
 
