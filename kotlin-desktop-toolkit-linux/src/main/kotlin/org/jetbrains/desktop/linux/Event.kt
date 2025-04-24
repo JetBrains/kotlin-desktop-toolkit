@@ -259,6 +259,7 @@ public sealed class Event {
 
     public data class WindowResize(
         val size: LogicalSize,
+        val active: Boolean,
         val maximized: Boolean,
         val fullscreen: Boolean,
         val clientSideDecorations: Boolean,
@@ -381,12 +382,11 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_h.NativeEvent_WindowResize() -> {
             val nativeEvent = NativeEvent.window_resize(s)
-            val maximized = NativeWindowResizeEvent.maximized(nativeEvent)
-            val fullscreen = NativeWindowResizeEvent.fullscreen(nativeEvent)
             Event.WindowResize(
                 size = LogicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
-                maximized,
-                fullscreen,
+                active = NativeWindowResizeEvent.active(nativeEvent),
+                maximized = NativeWindowResizeEvent.maximized(nativeEvent),
+                fullscreen = NativeWindowResizeEvent.fullscreen(nativeEvent),
                 clientSideDecorations = NativeWindowResizeEvent.client_side_decorations(nativeEvent),
                 capabilities = WindowCapabilities.fromNative(NativeWindowResizeEvent.capabilities(nativeEvent)),
             )

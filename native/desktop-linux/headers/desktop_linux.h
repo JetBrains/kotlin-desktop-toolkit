@@ -485,6 +485,7 @@ typedef struct NativeWindowCapabilities {
 
 typedef struct NativeWindowResizeEvent {
   struct NativeLogicalSize size;
+  bool active;
   bool maximized;
   bool fullscreen;
   bool client_side_decorations;

@@ -6,7 +6,7 @@ use smithay_client_toolkit::{
             Connection, Proxy, QueueHandle,
             protocol::{wl_output::WlOutput, wl_seat::WlSeat},
         },
-        csd_frame::{WindowManagerCapabilities, WindowState},
+        csd_frame::WindowManagerCapabilities,
         protocols::wp::viewporter::client::wp_viewport::WpViewport,
     },
     seat::pointer::{CursorIcon, ThemedPointer},
@@ -166,8 +166,9 @@ impl SimpleWindow {
         (self.event_handler)(
             &WindowResizeEvent {
                 size,
-                maximized: configure.state.contains(WindowState::MAXIMIZED),
-                fullscreen: configure.state.contains(WindowState::FULLSCREEN),
+                active: configure.is_activated(),
+                maximized: configure.is_maximized(),
+                fullscreen: configure.is_fullscreen(),
                 client_side_decorations: configure.decoration_mode == DecorationMode::Client,
                 capabilities: WindowCapabilities {
                     window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),

@@ -265,6 +265,7 @@ pub struct WindowCapabilities {
 #[derive(Debug)]
 pub struct WindowResizeEvent {
     pub size: LogicalSize,
+    pub active: bool,
     pub maximized: bool,
     pub fullscreen: bool,
     pub client_side_decorations: bool,
