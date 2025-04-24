@@ -95,7 +95,7 @@ data class RustTarget(
 )
 
 val enabledPlatforms = listOf(Platform(Os.LINUX, Arch.x86_64), Platform(Os.LINUX, Arch.aarch64)).filter { crossCompilation.enabled(it) }
-val profiles = listOf("dev", "release")
+val profiles = listOf("dev")
 
 val compileLinuxDesktopToolkitTaskByTarget = buildMap {
     for (platform in enabledPlatforms) {
