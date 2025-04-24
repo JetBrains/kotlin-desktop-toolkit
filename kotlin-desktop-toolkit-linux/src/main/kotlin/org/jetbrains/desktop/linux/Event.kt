@@ -128,7 +128,7 @@ public enum class FontRgbaOrderValue {
 public sealed class XdgDesktopSetting {
     public data class TitlebarLayout(val layoutLeft: List<WindowButtonType>, val layoutRight: List<WindowButtonType>) : XdgDesktopSetting()
 
-    public data class DoubleClickInterval(val intervalMs: Int) : XdgDesktopSetting()
+    public data class DoubleClickInterval(val value: Duration) : XdgDesktopSetting()
 
     public data class ColorScheme(val value: ColorSchemeValue) : XdgDesktopSetting()
 

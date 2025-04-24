@@ -12,6 +12,7 @@ import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
 import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
@@ -117,7 +118,7 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
             )
         }
         desktop_linux_h.NativeXdgDesktopSetting_DoubleClickIntervalMs() -> XdgDesktopSetting.DoubleClickInterval(
-            intervalMs = NativeXdgDesktopSetting.double_click_interval_ms(s),
+            value = NativeXdgDesktopSetting.double_click_interval_ms(s).milliseconds,
         )
         desktop_linux_h.NativeXdgDesktopSetting_ColorScheme() -> XdgDesktopSetting.ColorScheme(
             when (NativeXdgDesktopSetting.color_scheme(s)) {

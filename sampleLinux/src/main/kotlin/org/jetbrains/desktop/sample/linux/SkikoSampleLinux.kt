@@ -42,9 +42,11 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
@@ -53,7 +55,7 @@ data class XdgDesktopSettings(
         layoutLeft = listOf(WindowButtonType.Icon),
         layoutRight = listOf(WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close),
     ),
-    var doubleClickIntervalMs: Int = 500,
+    var doubleClickInterval: Duration = 500.milliseconds,
     var colorScheme: ColorSchemeValue = ColorSchemeValue.NoPreference,
     var accentColor: Int = Color.BLUE,
     var fontAntialiasing: FontAntialiasingValue = FontAntialiasingValue.Grayscale,
@@ -70,7 +72,7 @@ data class XdgDesktopSettings(
     fun update(s: XdgDesktopSetting) {
         when (s) {
             is TitlebarLayout -> titlebarLayout = s
-            is XdgDesktopSetting.DoubleClickInterval -> doubleClickIntervalMs = s.intervalMs
+            is XdgDesktopSetting.DoubleClickInterval -> doubleClickInterval = s.value
             is XdgDesktopSetting.ColorScheme -> colorScheme = s.value
             is XdgDesktopSetting.AccentColor -> accentColor = Color.makeARGB(
                 a = colorDoubleToInt(s.value.alpha),
@@ -90,6 +92,12 @@ data class XdgDesktopSettings(
     }
 }
 
+private fun LogicalPoint.isInsideCircle(center: LogicalPoint, radius: LogicalPixels): Boolean {
+    val xDiff = this.x - center.x
+    val yDiff = this.y - center.y
+    return xDiff.pow(2) + yDiff.pow(2) <= radius.pow(2)
+}
+
 class CustomTitlebar(
     private var origin: LogicalPoint,
     var size: LogicalSize,
@@ -97,11 +105,12 @@ class CustomTitlebar(
     val requestClose: () -> Unit,
 ) {
     private var rectangles = ArrayList<Pair<LogicalRect, WindowButtonType>>()
-    private var mouseOverRectIndex: Int? = null
+    private var active: Boolean = false
     private var maximized: Boolean = false
     private var fullscreen: Boolean = false
     private var lastHeaderMouseDownTime: Timestamp? = null
-    private var isLeftMouseClick: Boolean = false
+    private var lastMouseLocation: LogicalPoint? = null
+    private var leftClickStartLocation: LogicalPoint? = null
     private var isDragging: Boolean = false
 
     private data class TitleParams(private var fontSize: Float, private var title: String) {
@@ -125,6 +134,9 @@ class CustomTitlebar(
     companion object {
         const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55f
         const val BUTTON_LINE_WIDTH: LogicalPixels = 5f
+        const val MOVE_RADIUS: LogicalPixels = 3f
+        val COLOR_DARK_GRAY = Color.makeRGB(128, 128, 128)
+        val COLOR_LIGHT_GRAY = Color.makeRGB(211, 211, 211)
         val BUTTON_SIZE = LogicalSize(CUSTOM_TITLEBAR_HEIGHT, CUSTOM_TITLEBAR_HEIGHT)
 
         val APP_ICON = Image.makeFromEncoded(Files.readAllBytes(Path.of("resources/jb-logo.png")))
@@ -132,10 +144,18 @@ class CustomTitlebar(
 
     fun resize(event: Event.WindowResize, layout: TitlebarLayout) {
         size = LogicalSize(width = event.size.width, height = CUSTOM_TITLEBAR_HEIGHT)
+        active = event.active
         maximized = event.maximized
         fullscreen = event.fullscreen
-        mouseOverRectIndex = null
         setLayout(layout)
+    }
+
+    fun toggleMaximize(window: Window) {
+        if (maximized) {
+            window.unmaximize()
+        } else {
+            window.maximize()
+        }
     }
 
     fun setLayout(layout: TitlebarLayout) {
@@ -163,78 +183,124 @@ class CustomTitlebar(
         }
     }
 
-    private fun toWindowAction(windowButton: WindowButtonType, mouseButton: MouseButton, locationInWindow: LogicalPoint, window: Window) {
-        when (windowButton) {
-            WindowButtonType.AppMenu -> window.showMenu(locationInWindow)
-            WindowButtonType.Icon -> window.showMenu(locationInWindow)
+    private fun executeWindowAction(
+        windowButton: WindowButtonType,
+        mouseButton: MouseButton,
+        locationInWindow: LogicalPoint,
+        window: Window,
+    ): Boolean {
+        return when (windowButton) {
+            WindowButtonType.AppMenu, WindowButtonType.Icon -> {
+                window.showMenu(locationInWindow)
+                true
+            }
             WindowButtonType.Spacer,
             WindowButtonType.Title,
-            -> when (mouseButton) {
-                MouseButton.LEFT -> window.startMove()
-                MouseButton.RIGHT -> window.showMenu(locationInWindow)
-                else -> null
+            -> if (mouseButton == MouseButton.RIGHT) {
+                window.showMenu(locationInWindow)
+                true
+            } else {
+                false
             }
-            WindowButtonType.Minimize -> window.minimize()
-            WindowButtonType.Maximize -> if (maximized) window.unmaximize() else window.maximize()
-            WindowButtonType.Close -> requestClose()
+            WindowButtonType.Minimize -> {
+                window.minimize()
+                true
+            }
+            WindowButtonType.Maximize -> {
+                toggleMaximize(window)
+                true
+            }
+            WindowButtonType.Close -> {
+                requestClose()
+                true
+            }
         }
     }
 
+    private fun handlePotentialDoubleClick(timestamp: Timestamp, doubleClickInterval: Duration): Boolean {
+        val prevTime = lastHeaderMouseDownTime
+        if (prevTime != null) {
+            val timeDiff = (timestamp.toDuration() - prevTime.toDuration())
+            Logger.info { "timeDiff: $timeDiff" }
+            if (timeDiff <= doubleClickInterval) {
+                lastHeaderMouseDownTime = timestamp
+                return true
+            }
+        }
+        lastHeaderMouseDownTime = timestamp
+        return false
+    }
+
     fun handleEvent(event: Event, xdgDesktopSettings: XdgDesktopSettings, window: Window): EventHandlerResult {
-        when (event) {
+        val headerRect = LogicalRect(origin, size)
+        val handled: Boolean = when (event) {
             is Event.MouseDown -> {
-                if (event.button == MouseButton.LEFT) {
-                    for ((rect, windowButton) in rectangles) {
-                        if (rect.contains(event.locationInWindow)) {
-                            if (windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) {
-                                val prevTime = lastHeaderMouseDownTime
-                                if (prevTime != null) {
-                                    val timeDiff = (event.timestamp.toDuration() - prevTime.toDuration()).inWholeMilliseconds
-                                    Logger.info { "timeDiff: $timeDiff" }
-                                    if (timeDiff <= xdgDesktopSettings.doubleClickIntervalMs) {
-                                        if (maximized) {
-                                            window.unmaximize()
-                                        } else {
-                                            window.maximize()
-                                        }
-                                        lastHeaderMouseDownTime = event.timestamp
-                                        return EventHandlerResult.Stop
-                                    }
-                                }
-                                lastHeaderMouseDownTime = event.timestamp
-                            }
-                            toWindowAction(windowButton, event.button, event.locationInWindow, window)
-                            break
-                        }
-                    }
+                if (headerRect.contains(event.locationInWindow) && event.button == MouseButton.LEFT) {
+                    leftClickStartLocation = event.locationInWindow
+                    isDragging = false
+                    true
+                } else {
+                    false
                 }
             }
             is Event.MouseUp -> {
                 if (event.button == MouseButton.LEFT) {
-                    isLeftMouseClick = false
+                    leftClickStartLocation = null
                     isDragging = false
+                    if (headerRect.contains(event.locationInWindow)) {
+                        rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second?.let { windowButton ->
+                            if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
+                                handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
+                            ) {
+                                toggleMaximize(window)
+                                true
+                            } else {
+                                executeWindowAction(windowButton, event.button, event.locationInWindow, window)
+                            }
+                        } ?: false
+                    } else {
+                        false
+                    }
+                } else {
+                    false
                 }
             }
             is Event.MouseMoved -> {
-                mouseOverRectIndex = null
-                for ((i, v) in rectangles.withIndex()) {
-                    val rect = v.first
-                    if (rect.contains(event.locationInWindow)) {
-                        mouseOverRectIndex = i
-                        break
-                    }
-                }
-                if (isLeftMouseClick && !isDragging) {
+                lastMouseLocation = event.locationInWindow
+                if (headerRect.contains(event.locationInWindow) &&
+                    !isDragging &&
+                    (leftClickStartLocation?.isInsideCircle(event.locationInWindow, MOVE_RADIUS) == false)
+                ) {
                     isDragging = true
+                    leftClickStartLocation = null
                     window.startMove()
+                    true
+                } else {
+                    false
                 }
             }
-            else -> {}
+            is Event.MouseExited -> {
+                leftClickStartLocation = null
+                false
+            }
+            is Event.MouseEntered -> {
+                isDragging = false
+                false
+            }
+            else -> false
         }
-        return EventHandlerResult.Continue
+        return if (handled) EventHandlerResult.Stop else EventHandlerResult.Continue
     }
 
-    private fun drawButton(canvas: Canvas, button: WindowButtonType, rect: LogicalRect, highlighted: Boolean, scale: Float, title: String) {
+    private fun drawButton(
+        canvas: Canvas,
+        button: WindowButtonType,
+        rect: LogicalRect,
+        highlighted: Boolean,
+        hovered: Boolean,
+        scale: Float,
+        title: String,
+    ) {
         val w = rect.size.width * scale
         val h = rect.size.height * scale
         val xOffset = rect.point.x * scale
@@ -243,7 +309,7 @@ class CustomTitlebar(
         when (button) {
             WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close -> {
                 Paint().use { paint ->
-                    paint.color = if (highlighted) Color.WHITE else 0xFFD3D3D3.toInt()
+                    paint.color = if (highlighted) COLOR_LIGHT_GRAY else if (hovered) COLOR_DARK_GRAY else Color.BLACK
                     canvas.drawRect(Rect.makeXYWH(xOffset, yOffset, w, h), paint)
                 }
             }
@@ -251,7 +317,7 @@ class CustomTitlebar(
         }
 
         Paint().use { paint ->
-            paint.color = Color.BLACK
+            paint.color = Color.WHITE
             paint.strokeWidth = BUTTON_LINE_WIDTH * scale
 
             val yTop = yOffset + (paint.strokeWidth / 2)
@@ -287,7 +353,7 @@ class CustomTitlebar(
                     canvas.drawLine(xOffset + w, yOffset, xOffset, yBottom, paint)
                 }
                 WindowButtonType.Title -> {
-                    paint.color = Color.WHITE
+                    paint.color = if (active) Color.WHITE else COLOR_LIGHT_GRAY
                     canvas.drawTextLine(lastTitleParams.makeTitleLine(title, CUSTOM_TITLEBAR_HEIGHT * scale), xOffset, yBottom, paint)
                 }
             }
@@ -305,8 +371,10 @@ class CustomTitlebar(
             paint.color = xdgDesktopSettings.accentColor
             canvas.drawRect(Rect.makeXYWH(l, t, w, h), paint)
         }
-        for ((i, v) in rectangles.withIndex()) {
-            drawButton(canvas, v.second, v.first, highlighted = mouseOverRectIndex == i, scale, title)
+        for ((rect, button) in rectangles) {
+            val hovered = !isDragging && (lastMouseLocation?.let { rect.contains(it) } == true)
+            val highlighted = hovered && (leftClickStartLocation?.let { rect.contains(it) } == true)
+            drawButton(canvas, button, rect, highlighted = highlighted, hovered = hovered, scale, title)
         }
     }
 }
