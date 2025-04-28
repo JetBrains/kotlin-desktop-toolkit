@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::{cell::RefCell, ffi::CStr};
 
 use crate::gl_sys::{
@@ -40,7 +41,7 @@ fn between(val: f64, min: f64, max: f64) -> bool {
 #[derive(Debug)]
 struct OpenglState {
     funcs: OpenGlFuncs,
-    program: GLuint,
+    programs: HashMap<WindowId, GLuint>,
 }
 
 #[derive(Debug)]
@@ -137,7 +138,7 @@ fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEven
     }
 }
 
-fn draw_opengl_triangle_with_init(data: &WindowDrawEvent) {
+fn draw_opengl_triangle_with_init(data: &WindowDrawEvent, window_id: WindowId) {
     STATE.with(|c| {
         let mut state = c.borrow_mut();
         let state = state.as_mut().unwrap();
@@ -146,10 +147,16 @@ fn draw_opengl_triangle_with_init(data: &WindowDrawEvent) {
             let funcs = OpenGlFuncs::new(&egl_lib).unwrap();
             let program = create_opengl_program(&funcs).unwrap();
             debug!("draw_opengl_triangle_with_init, program = {program}, event = {data:?}");
-            OpenglState { funcs, program }
+            let mut programs = HashMap::new();
+            programs.insert(window_id, program);
+            OpenglState { funcs, programs }
         });
+        let program = opengl_state
+            .programs
+            .entry(window_id)
+            .or_insert_with(|| create_opengl_program(&opengl_state.funcs).unwrap());
 
-        draw_opengl_triangle(&opengl_state.funcs, opengl_state.program, data);
+        draw_opengl_triangle(&opengl_state.funcs, *program, data);
     });
 }
 
@@ -184,9 +191,9 @@ fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f6
 }
 
 #[allow(clippy::many_single_char_names)]
-fn draw(event: &WindowDrawEvent) {
+fn draw(event: &WindowDrawEvent, window_id: WindowId) {
     if event.software_draw_data.canvas.is_null() {
-        draw_opengl_triangle_with_init(event);
+        draw_opengl_triangle_with_init(event, window_id);
     } else {
         draw_software(&event.software_draw_data, event.physical_size, event.scale);
     }
@@ -207,7 +214,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
     log_event(event, window_id);
     match event {
         Event::WindowDraw(data) => {
-            draw(data);
+            draw(data, window_id);
             return true;
         }
         Event::WindowCloseRequest => STATE.with(|c| {

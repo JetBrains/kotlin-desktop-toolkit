@@ -95,7 +95,7 @@ impl SimpleWindow {
         // the correct options.
         window.commit();
 
-        debug!("Creating new window with surface_id={surface_id}");
+        debug!("Creating new window with id={:?} and surface_id={surface_id}", params.window_id);
         Self {
             event_handler,
             close: false,

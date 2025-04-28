@@ -91,6 +91,7 @@ impl Application<'_> {
                 self.state.windows.retain(|k, v| {
                     if v.close {
                         debug!("Closing window {k}");
+                        self.state.window_id_to_surface_id.retain(|_window_id, surface_id| k != surface_id);
                     }
                     !v.close
                 });

@@ -11,6 +11,7 @@ pub struct EglRendering {
     wl_egl_surface: WlEglSurface,
     egl_display: egl::Display,
     egl_window_surface: khronos_egl::Surface,
+    egl_context: egl::Context,
 }
 
 impl EglRendering {
@@ -55,6 +56,7 @@ impl EglRendering {
             wl_egl_surface,
             egl_display,
             egl_window_surface,
+            egl_context,
         })
     }
 
@@ -63,10 +65,21 @@ impl EglRendering {
     }
 
     pub fn draw<F: FnOnce(Option<SoftwareDrawData>)>(&self, surface: &WlSurface, egl: &EglInstance, do_draw: F) {
+        egl.make_current(
+            self.egl_display,
+            Some(self.egl_window_surface),
+            Some(self.egl_window_surface),
+            Some(self.egl_context),
+        )
+        .context("egl.make_current")
+        .unwrap();
+
         do_draw(None);
 
         // Attach and commit to present.
-        egl.swap_buffers(self.egl_display, self.egl_window_surface).unwrap();
+        egl.swap_buffers(self.egl_display, self.egl_window_surface)
+            .context(surface.id())
+            .unwrap();
         surface.commit();
     }
 }

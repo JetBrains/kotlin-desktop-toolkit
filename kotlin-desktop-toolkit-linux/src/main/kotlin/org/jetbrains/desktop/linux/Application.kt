@@ -36,6 +36,7 @@ public data class WindowParams(
         NativeWindowParams.app_id(nativeWindowParams, arena.allocateUtf8String(appId))
         NativeWindowParams.force_client_side_decoration(nativeWindowParams, forceClientSideDecoration)
         NativeWindowParams.force_software_rendering(nativeWindowParams, forceSoftwareRendering)
+        NativeWindowParams.window_id(nativeWindowParams, windowId)
         return nativeWindowParams
     }
 }

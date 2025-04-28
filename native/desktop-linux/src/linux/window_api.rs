@@ -96,7 +96,9 @@ pub extern "C" fn window_is_main(app_ptr: AppPtr, _window_id: WindowId) -> bool 
 fn with_window<R: PanicDefault>(app_ptr: &AppPtr, window_id: WindowId, name: &str, f: impl FnOnce(&Window) -> anyhow::Result<R>) {
     ffi_boundary(name, || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        let w = app.get_window(window_id).context("No window found")?;
+        let w = app
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
         f(&w.window)
     });
 }
@@ -114,7 +116,9 @@ pub extern "C" fn window_start_move(app_ptr: AppPtr, window_id: WindowId) {
     ffi_boundary("window_start_move", || {
         debug!("window_start_move");
         let app = unsafe { app_ptr.borrow::<Application>() };
-        let w = app.get_window(window_id).context("No window found")?;
+        let w = app
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
         w.start_move();
         Ok(())
     });
@@ -125,7 +129,9 @@ pub extern "C" fn window_start_resize(app_ptr: AppPtr, window_id: WindowId, edge
     ffi_boundary("window_start_resize", || {
         debug!("window_start_resize");
         let app = unsafe { app_ptr.borrow::<Application>() };
-        let w = app.get_window(window_id).context("No window found")?;
+        let w = app
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
         w.start_resize(edge);
         Ok(())
     });
