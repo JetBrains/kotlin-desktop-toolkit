@@ -143,4 +143,8 @@ impl Application<'_> {
     pub fn get_window_size(&self, window_id: WindowId) -> Option<LogicalSize> {
         self.get_window(window_id).and_then(|w| w.size)
     }
+
+    pub fn set_cursor_theme(&mut self, name: &str, size: u32) -> anyhow::Result<()> {
+        self.state.set_cursor_theme(&self.qh, name, size)
+    }
 }

@@ -1,6 +1,3 @@
-use std::collections::HashMap;
-use std::{cell::RefCell, ffi::CStr};
-
 use crate::gl_sys::{
     GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
     GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
@@ -9,6 +6,7 @@ use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
+use desktop_linux::linux::application_api::application_set_cursor_theme;
 use desktop_linux::linux::{
     application_api::{
         AppPtr, ApplicationCallbacks, application_get_egl_proc_func, application_init, application_run_event_loop, application_shutdown,
@@ -20,6 +18,9 @@ use desktop_linux::linux::{
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use log::debug;
+use std::collections::HashMap;
+use std::ffi::CString;
+use std::{cell::RefCell, ffi::CStr};
 
 extern "C" fn on_should_terminate() -> bool {
     println!("on_should_terminate");
@@ -44,11 +45,18 @@ struct OpenglState {
     programs: HashMap<WindowId, GLuint>,
 }
 
+#[derive(Debug, Default)]
+struct Settings {
+    cursor_theme_name: Option<CString>,
+    cursor_theme_size: Option<u32>,
+}
+
 #[derive(Debug)]
 struct State {
     app_ptr: AppPtr<'static>,
     windows: Vec<WindowId>,
     opengl: Option<OpenglState>,
+    settings: Settings,
 }
 
 thread_local! {
@@ -201,9 +209,7 @@ fn draw(event: &WindowDrawEvent, window_id: WindowId) {
 
 fn log_event(event: &Event, window_id: WindowId) {
     match event {
-        Event::WindowDraw(_)
-//        | Event::MouseMoved(_)
-        => {}
+        Event::WindowDraw(_) | Event::MouseMoved(_) => {}
         _ => {
             debug!("{window_id:?} : {event:?}");
         }
@@ -233,6 +239,27 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
 
 extern "C" fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting) {
     debug!("{s:?}");
+    STATE.with(|c| {
+        let mut state = c.borrow_mut();
+        let state = state.as_mut().unwrap();
+        match s {
+            XdgDesktopSetting::CursorSize(v) => {
+                let size = (*v).try_into().unwrap();
+                if let Some(name) = &state.settings.cursor_theme_name {
+                    application_set_cursor_theme(state.app_ptr.clone(), BorrowedStrPtr::new(name), size);
+                }
+                state.settings.cursor_theme_size = Some(size);
+            }
+            XdgDesktopSetting::CursorTheme(v) => {
+                let name = CString::new(v.as_str().unwrap()).unwrap();
+                if let Some(size) = state.settings.cursor_theme_size {
+                    application_set_cursor_theme(state.app_ptr.clone(), BorrowedStrPtr::new(&name), size);
+                }
+                state.settings.cursor_theme_name = Some(name);
+            }
+            _ => {}
+        };
+    });
 }
 
 extern "C" fn on_application_started() {
@@ -295,6 +322,7 @@ pub fn main() {
             app_ptr: app_ptr.clone(),
             windows: Vec::new(),
             opengl: None,
+            settings: Settings::default(),
         }));
     });
     application_run_event_loop(app_ptr.clone());

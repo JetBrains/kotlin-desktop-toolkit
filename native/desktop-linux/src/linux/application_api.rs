@@ -103,3 +103,12 @@ pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr<'_>, f: ex
         }
     });
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_set_cursor_theme(mut app_ptr: AppPtr<'_>, name: BorrowedStrPtr, size: u32) {
+    debug!("application_set_cursor_theme");
+    ffi_boundary("application_set_cursor_theme", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        app.set_cursor_theme(name.as_str().unwrap(), size)
+    });
+}

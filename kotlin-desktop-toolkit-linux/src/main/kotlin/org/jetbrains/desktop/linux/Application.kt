@@ -165,6 +165,12 @@ public class Application() : AutoCloseable {
         return Window(appPtr!!, params)
     }
 
+    public fun setCursorTheme(name: String, size: Int) {
+        Arena.ofConfined().use { arena ->
+            desktop_h.application_set_cursor_theme(appPtr, arena.allocateUtf8String(name), size)
+        }
+    }
+
     public fun isEventLoopThread(): Boolean {
         return ffiDownCall {
             desktop_h.application_is_event_loop_thread(appPtr)

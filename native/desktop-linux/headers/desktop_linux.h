@@ -683,6 +683,8 @@ bool application_is_event_loop_thread(NativeAppPtr app_ptr);
 
 void application_run_on_event_loop_async(NativeAppPtr app_ptr, void (*f)(void));
 
+void application_set_cursor_theme(NativeAppPtr app_ptr, NativeBorrowedStrPtr name, uint32_t size);
+
 NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
 
 void screen_list_drop(NativeScreenInfoArray arr);

@@ -767,6 +767,11 @@ class ApplicationState(private val app: Application) : AutoCloseable {
 
     fun settingChanged(s: XdgDesktopSetting) {
         this.xdgDesktopSettings.update(s)
+        xdgDesktopSettings.cursorTheme?.let { cursorTheme ->
+            xdgDesktopSettings.cursorSize?.let { cursorSize ->
+                app.setCursorTheme(cursorTheme, cursorSize)
+            }
+        }
         windows.values.forEach { it.settingsChanged(xdgDesktopSettings) }
     }
 

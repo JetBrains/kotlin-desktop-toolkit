@@ -140,11 +140,11 @@ public sealed class XdgDesktopSetting {
 
     public data class FontRgbaOrder(val value: FontRgbaOrderValue) : XdgDesktopSetting()
 
-    public data class CursorBlink(val value: Boolean) : XdgDesktopSetting()
-
     public data class CursorSize(val value: Int) : XdgDesktopSetting()
 
     public data class CursorTheme(val value: String) : XdgDesktopSetting()
+
+    public data class CursorBlink(val value: Boolean) : XdgDesktopSetting()
 
     /** Length of the cursor blink cycle, in milliseconds. */
     public data class CursorBlinkTime(val value: Duration) : XdgDesktopSetting()

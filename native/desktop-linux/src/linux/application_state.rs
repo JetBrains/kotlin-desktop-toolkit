@@ -1,7 +1,9 @@
-use std::{collections::HashMap, thread::ThreadId};
-
+use super::{application_api::ApplicationCallbacks, events::WindowId};
+use crate::linux::window::SimpleWindow;
 use khronos_egl;
 use log::{debug, warn};
+use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
+use smithay_client_toolkit::seat::pointer::PointerData;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_output, delegate_registry, delegate_seat, delegate_shm, delegate_subcompositor, delegate_xdg_shell,
@@ -14,7 +16,7 @@ use smithay_client_toolkit::{
             backend::ObjectId,
             delegate_noop,
             globals::GlobalList,
-            protocol::{wl_keyboard, wl_output, wl_seat, wl_surface::WlSurface},
+            protocol::{wl_keyboard, wl_output, wl_surface::WlSurface},
         },
         protocols::wp::{
             fractional_scale::v1::client::{
@@ -39,9 +41,7 @@ use smithay_client_toolkit::{
     },
     shm::{Shm, ShmHandler},
 };
-
-use super::{application_api::ApplicationCallbacks, events::WindowId};
-use crate::linux::window::SimpleWindow;
+use std::{collections::HashMap, thread::ThreadId};
 
 pub type EglInstance = khronos_egl::Instance<khronos_egl::Dynamic<libloading::Library, khronos_egl::EGL1_0>>;
 
@@ -55,6 +55,7 @@ pub struct ApplicationState {
     pub shm_state: Shm,
     pub xdg_shell_state: XdgShell,
     keyboard: Option<wl_keyboard::WlKeyboard>,
+    cursor_theme: Option<(String, u32)>,
     themed_pointer: Option<ThemedPointer>,
     pub viewporter: Option<WpViewporter>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
@@ -97,6 +98,7 @@ impl ApplicationState {
             shm_state,
             xdg_shell_state,
             keyboard: None,
+            cursor_theme: None,
             themed_pointer: None,
             viewporter: globals.bind(qh, 1..=1, ()).ok(),
             fractional_scale_manager: globals.bind(qh, 1..=1, ()).ok(),
@@ -131,6 +133,38 @@ impl ApplicationState {
     pub(crate) fn get_key_window(&mut self) -> Option<&SimpleWindow> {
         self.key_surface.as_mut().and_then(|surface_id| self.windows.get(surface_id))
     }
+
+    fn update_themed_cursor_with_seat(&mut self, qh: &QueueHandle<Self>, seat: &WlSeat) -> anyhow::Result<()> {
+        let theme = self
+            .cursor_theme
+            .as_ref()
+            .map(|cursor_theme| ThemeSpec::Named {
+                name: &cursor_theme.0,
+                size: cursor_theme.1,
+            })
+            .unwrap_or_default();
+        let surface = self.compositor_state.create_surface(qh);
+        debug!("Created cursor surface {}", surface.id());
+
+        let new_themed_pointer = self
+            .seat_state
+            .get_pointer_with_theme(qh, seat, self.shm_state.wl_shm(), surface, theme)?;
+        self.themed_pointer = Some(new_themed_pointer);
+        Ok(())
+    }
+
+    fn update_themed_cursor(&mut self, qh: &QueueHandle<Self>) -> anyhow::Result<()> {
+        if let Some(themed_pointer) = self.themed_pointer.take() {
+            let seat = themed_pointer.pointer().data::<PointerData>().unwrap().seat();
+            self.update_themed_cursor_with_seat(qh, seat)?;
+        }
+        Ok(())
+    }
+
+    pub fn set_cursor_theme(&mut self, qh: &QueueHandle<Self>, name: &str, size: u32) -> anyhow::Result<()> {
+        self.cursor_theme = Some((name.to_string(), size));
+        self.update_themed_cursor(qh)
+    }
 }
 
 impl SeatHandler for ApplicationState {
@@ -138,9 +172,9 @@ impl SeatHandler for ApplicationState {
         &mut self.seat_state
     }
 
-    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlSeat) {}
 
-    fn new_capability(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat, capability: Capability) {
+    fn new_capability(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat, capability: Capability) {
         if capability == Capability::Keyboard && self.keyboard.is_none() {
             debug!("Set keyboard capability");
             let keyboard = self.seat_state.get_keyboard(qh, &seat, None).expect("Failed to create keyboard");
@@ -149,16 +183,11 @@ impl SeatHandler for ApplicationState {
 
         if capability == Capability::Pointer && self.themed_pointer.is_none() {
             debug!("Set pointer capability");
-            let surface = self.compositor_state.create_surface(qh);
-            let themed_pointer = self
-                .seat_state
-                .get_pointer_with_theme(qh, &seat, self.shm_state.wl_shm(), surface, ThemeSpec::default())
-                .expect("Failed to create pointer");
-            self.themed_pointer.replace(themed_pointer);
+            self.update_themed_cursor_with_seat(qh, &seat).expect("Failed to create pointer");
         }
     }
 
-    fn remove_capability(&mut self, _conn: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, capability: Capability) {
+    fn remove_capability(&mut self, _conn: &Connection, _: &QueueHandle<Self>, _: WlSeat, capability: Capability) {
         if capability == Capability::Keyboard {
             if let Some(keyboard) = self.keyboard.take() {
                 debug!("Unset keyboard capability");
@@ -174,7 +203,7 @@ impl SeatHandler for ApplicationState {
         }
     }
 
-    fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+    fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlSeat) {}
 }
 
 delegate_seat!(ApplicationState);

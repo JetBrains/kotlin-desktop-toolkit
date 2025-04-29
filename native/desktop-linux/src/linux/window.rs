@@ -1,6 +1,8 @@
-use log::{debug, info, warn};
+use crate::linux::events::{WindowCapabilities, WindowResizeEvent};
+use crate::linux::geometry::LogicalSize;
+use crate::linux::{application_state::ApplicationState, geometry::LogicalPixels};
+use log::{debug, error, info, warn};
 use smithay_client_toolkit::{
-    compositor::SurfaceData,
     reexports::{
         client::{
             Connection, Proxy, QueueHandle,
@@ -19,10 +21,6 @@ use smithay_client_toolkit::{
     },
     shm::Shm,
 };
-
-use crate::linux::events::{WindowCapabilities, WindowResizeEvent};
-use crate::linux::geometry::LogicalSize;
-use crate::linux::{application_state::ApplicationState, geometry::LogicalPixels};
 
 use super::{application_state::EglInstance, geometry::LogicalPoint};
 use super::{
@@ -73,9 +71,6 @@ impl SimpleWindow {
         }
 
         let viewport = state.viewporter.as_ref().map(|vp| vp.get_viewport(&window_surface, qh, ()));
-
-        let d: Option<&SurfaceData> = window_surface.data();
-        dbg!(d);
 
         let decorations = if params.force_client_side_decoration {
             WindowDecorations::RequestClient
@@ -221,9 +216,17 @@ impl SimpleWindow {
     ) {
         let surface = self.window.wl_surface();
         if self.set_cursor {
-            debug!("Updating cursor to {} for {}", self.decorations_cursor, surface.id());
-            themed_pointer.unwrap().set_cursor(conn, self.decorations_cursor).unwrap();
-            self.set_cursor = false;
+            if let Some(themed_pointer) = themed_pointer {
+                debug!("Updating cursor to {} for {}", self.decorations_cursor, surface.id());
+                match themed_pointer.set_cursor(conn, self.decorations_cursor) {
+                    Ok(()) => {
+                        self.set_cursor = false;
+                    }
+                    Err(e) => {
+                        error!("Failed to set cursor, error: {e:?}");
+                    }
+                }
+            }
         }
 
         let physical_size = self.size.unwrap().to_physical(self.current_scale);
