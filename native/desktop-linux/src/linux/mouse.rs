@@ -1,5 +1,9 @@
+use log::debug;
+use smithay_client_toolkit::compositor::SurfaceData;
 use smithay_client_toolkit::delegate_pointer;
-use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle, protocol::wl_pointer::WlPointer};
+use smithay_client_toolkit::reexports::client::protocol::wl_surface;
+use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
+use smithay_client_toolkit::reexports::client::{Connection, Dispatch, Proxy, QueueHandle, protocol::wl_pointer::WlPointer};
 use smithay_client_toolkit::seat::pointer::{PointerData, PointerEvent, PointerEventKind, PointerHandler};
 
 use crate::linux::events::Event;
@@ -9,10 +13,33 @@ use super::events::MouseDownEvent;
 use super::window::SimpleWindow;
 
 impl PointerHandler for ApplicationState {
-    fn pointer_frame(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
+    fn pointer_frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
         for event in events {
-            if let Some(window) = self.get_window_mut(&event.surface) {
+            #[allow(clippy::cast_possible_truncation)]
+            let scale = if let Some(window) = self.get_window_mut(&event.surface) {
                 window.pointer_event(pointer, event);
+                window.current_scale.round() as i32
+            } else {
+                1
+            };
+
+            if let PointerEventKind::Enter { .. } = event.kind {
+                if let Some(themed_pointer) = self.themed_pointer.take() {
+                    let pointer_surface = themed_pointer.surface();
+                    if let Some(pointer_surface_data) = pointer_surface.data() {
+                        let pointer_surface_event = wl_surface::Event::PreferredBufferScale { factor: scale };
+                        debug!("Setting cursor scale to {scale:?}");
+                        Dispatch::<WlSurface, SurfaceData>::event(
+                            self,
+                            pointer_surface,
+                            pointer_surface_event,
+                            pointer_surface_data,
+                            conn,
+                            qh,
+                        );
+                    }
+                    self.themed_pointer = Some(themed_pointer);
+                }
             }
         }
     }

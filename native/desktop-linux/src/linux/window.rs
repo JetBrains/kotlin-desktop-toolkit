@@ -44,7 +44,7 @@ pub struct SimpleWindow {
     pub window: Window,
     pub set_cursor: bool,
     decorations_cursor: CursorIcon,
-    current_scale: f64,
+    pub current_scale: f64,
     decoration_mode: DecorationMode,
     rendering_data: Option<RenderingData>,
     force_software_rendering: bool,

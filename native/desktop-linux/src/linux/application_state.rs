@@ -56,7 +56,7 @@ pub struct ApplicationState {
     pub xdg_shell_state: XdgShell,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     cursor_theme: Option<(String, u32)>,
-    themed_pointer: Option<ThemedPointer>,
+    pub themed_pointer: Option<ThemedPointer>,
     pub viewporter: Option<WpViewporter>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
 
@@ -247,8 +247,8 @@ delegate_shm!(ApplicationState);
 
 impl CompositorHandler for ApplicationState {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_factor: i32) {
+        debug!("scale_factor_changed for {surface:?}: {new_factor}");
         if self.fractional_scale_manager.is_none() {
-            debug!("scale_factor_changed for {surface:?}: {new_factor}");
             if let Some(window) = self.get_window_mut(surface) {
                 window.scale_changed(new_factor.into());
             }
@@ -266,6 +266,7 @@ impl CompositorHandler for ApplicationState {
     }
 
     fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &wl_output::WlOutput) {
+        debug!("surface_enter for {}: {}", surface.id(), output.id());
         if let Some(window) = self.get_window(surface) {
             //let screen_info = ScreenInfo::new(self.output_state.info(output));  // TODO?
             window.output_changed(output);
@@ -273,6 +274,7 @@ impl CompositorHandler for ApplicationState {
     }
 
     fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &wl_output::WlOutput) {
+        debug!("surface_leave for {}: {}", surface.id(), output.id());
         if let Some(window) = self.get_window(surface) {
             window.output_changed(output);
         }
