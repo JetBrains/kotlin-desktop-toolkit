@@ -57,6 +57,8 @@ abstract class SkikoWindowLinux(
             is Event.WindowResize,
             is Event.WindowScaleChanged,
             is Event.WindowScreenChange,
+            is Event.ComposedTextChanged,
+            is Event.TextInput,
             -> {
                 Logger.info { "$event" }
             }

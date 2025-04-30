@@ -85,15 +85,13 @@ impl SimpleWindow {
 
     pub fn press_key(&self, event: &KeyEvent) {
         let characters = event.utf8.as_ref().map(|s| CString::from_str(s).unwrap());
-        let key = event.keysym.name().map(|s| CString::from_str(s).unwrap());
-        let e = KeyDownEvent::new(event, characters.as_ref(), key.as_ref());
+        let e = KeyDownEvent::new(event, characters.as_ref());
         (self.event_handler)(&e.into());
     }
 
     pub fn release_key(&self, event: &KeyEvent) {
         let characters = event.utf8.as_ref().map(|s| CString::from_str(s).unwrap());
-        let key = event.keysym.name().map(|s| CString::from_str(s).unwrap());
-        (self.event_handler)(&Event::new_key_up_event(event, characters.as_ref(), key.as_ref()));
+        (self.event_handler)(&Event::new_key_up_event(event, characters.as_ref()));
     }
 
     pub fn update_modifiers(&self, modifiers: Modifiers) {

@@ -9,6 +9,7 @@ pub mod pointer_shapes;
 mod rendering_egl;
 mod rendering_software;
 pub mod screen;
+mod text_input;
 mod window;
 pub mod window_api;
 pub mod window_resize_edge;

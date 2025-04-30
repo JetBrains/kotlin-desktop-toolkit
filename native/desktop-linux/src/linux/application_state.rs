@@ -3,6 +3,7 @@ use crate::linux::window::SimpleWindow;
 use khronos_egl;
 use log::{debug, warn};
 use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
+use smithay_client_toolkit::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
 use smithay_client_toolkit::seat::pointer::PointerData;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
@@ -59,6 +60,7 @@ pub struct ApplicationState {
     pub themed_pointer: Option<ThemedPointer>,
     pub viewporter: Option<WpViewporter>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
+    pub text_input_manager: Option<ZwpTextInputManagerV3>,
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
@@ -102,6 +104,7 @@ impl ApplicationState {
             themed_pointer: None,
             viewporter: globals.bind(qh, 1..=1, ()).ok(),
             fractional_scale_manager: globals.bind(qh, 1..=1, ()).ok(),
+            text_input_manager: globals.bind(qh, 1..=1, ()).ok(),
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             key_surface: None,
@@ -179,6 +182,10 @@ impl SeatHandler for ApplicationState {
             debug!("Set keyboard capability");
             let keyboard = self.seat_state.get_keyboard(qh, &seat, None).expect("Failed to create keyboard");
             self.keyboard = Some(keyboard);
+
+            if let Some(text_input_manager) = self.text_input_manager.as_ref() {
+                text_input_manager.get_text_input(&seat, qh, 42);
+            }
         }
 
         if capability == Capability::Pointer && self.themed_pointer.is_none() {

@@ -3,7 +3,7 @@ use std::ffi::CString;
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use smithay_client_toolkit::{
-    reexports::client::{Proxy, protocol::wl_output::WlOutput},
+    reexports::client::{protocol::wl_output::WlOutput, Proxy},
     seat::{
         keyboard::{KeyEvent, Modifiers},
         pointer::{AxisScroll, PointerEvent},
@@ -71,7 +71,7 @@ pub struct KeyDownEvent<'a> {
     pub modifiers: KeyModifiers,
     pub code: KeyCode,
     pub characters: BorrowedStrPtr<'a>,
-    pub key: BorrowedStrPtr<'a>,
+    pub key: u32,
     pub is_repeat: bool,
     pub timestamp: Timestamp,
 }
@@ -83,12 +83,12 @@ impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
 }
 
 impl<'a> KeyDownEvent<'a> {
-    pub(crate) fn new(event: &KeyEvent, characters: Option<&'a CString>, key: Option<&'a CString>) -> Self {
+    pub(crate) fn new(event: &KeyEvent, characters: Option<&'a CString>) -> Self {
         Self {
             modifiers: KeyModifiers::default(), // TODO
             code: KeyCode(event.raw_code),
             characters: BorrowedStrPtr::new_optional(characters),
-            key: BorrowedStrPtr::new_optional(key),
+            key: event.keysym.raw(),
             is_repeat: false,        // TODO
             timestamp: Timestamp(0), // TODO
         }
@@ -101,7 +101,7 @@ pub struct KeyUpEvent<'a> {
     pub modifiers: KeyModifiers,
     pub code: KeyCode,
     pub characters: BorrowedStrPtr<'a>,
-    pub key: BorrowedStrPtr<'a>,
+    pub key: u32,
     pub timestamp: Timestamp,
 }
 
@@ -121,6 +121,50 @@ pub struct ModifiersChangedEvent {
 impl From<ModifiersChangedEvent> for Event<'_> {
     fn from(value: ModifiersChangedEvent) -> Self {
         Self::ModifiersChanged(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct ComposedTextChangedEvent<'a> {
+    pub text: BorrowedStrPtr<'a>,
+    pub cursor_begin: i32,
+    pub cursor_end: i32,
+}
+
+impl<'a> From<ComposedTextChangedEvent<'a>> for Event<'a> {
+    fn from(value: ComposedTextChangedEvent<'a>) -> Self {
+        Self::ComposedTextChanged(value)
+    }
+}
+
+impl<'a> ComposedTextChangedEvent<'a> {
+    pub(crate) fn new(text: Option<&'a CString>, cursor_begin: i32, cursor_end: i32) -> Self {
+        Self {
+            text: BorrowedStrPtr::new_optional(text),
+            cursor_begin,
+            cursor_end,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct TextInputEvent<'a> {
+    pub text: BorrowedStrPtr<'a>,
+}
+
+impl<'a> From<TextInputEvent<'a>> for Event<'a> {
+    fn from(value: TextInputEvent<'a>) -> Self {
+        Self::TextInput(value)
+    }
+}
+
+impl<'a> TextInputEvent<'a> {
+    pub(crate) fn new(text: Option<&'a CString>) -> Self {
+        Self {
+            text: BorrowedStrPtr::new_optional(text),
+        }
     }
 }
 
@@ -341,6 +385,8 @@ impl From<WindowScaleChangedEvent> for Event<'_> {
 pub enum Event<'a> {
     KeyDown(KeyDownEvent<'a>),
     KeyUp(KeyUpEvent<'a>),
+    ComposedTextChanged(ComposedTextChangedEvent<'a>),
+    TextInput(TextInputEvent<'a>),
     ModifiersChanged(ModifiersChangedEvent),
     MouseMoved(MouseMovedEvent),
     MouseDragged(MouseDraggedEvent),
@@ -376,12 +422,12 @@ impl Event<'_> {
     //        })
     //    }
 
-    pub(crate) fn new_key_up_event<'a>(event: &KeyEvent, characters: Option<&'a CString>, key: Option<&'a CString>) -> Event<'a> {
+    pub(crate) fn new_key_up_event<'a>(event: &KeyEvent, characters: Option<&'a CString>) -> Event<'a> {
         Event::KeyUp(KeyUpEvent {
             modifiers: KeyModifiers::default(), // TODO
             code: KeyCode(event.raw_code),
             characters: BorrowedStrPtr::new_optional(characters),
-            key: BorrowedStrPtr::new_optional(key),
+            key: event.keysym.raw(),
             timestamp: Timestamp(0), // TODO
         })
     }

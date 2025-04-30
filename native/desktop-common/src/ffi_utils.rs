@@ -2,9 +2,7 @@
 
 use core::slice;
 use std::{
-    ffi::{CStr, CString, NulError},
-    marker::PhantomData,
-    ptr::NonNull,
+    ffi::{CStr, CString, NulError}, fmt::Write, marker::PhantomData, ptr::NonNull
 };
 
 use anyhow::{Context, bail};
@@ -138,11 +136,16 @@ impl std::fmt::Debug for BorrowedStrPtr<'_> {
         }
         match self.as_str() {
             Ok(s) => {
-                if s.is_ascii() {
-                    f.write_str(s)
-                } else {
-                    write!(f, "{}", s.escape_unicode())
+                f.write_char('"')?;
+                for c in s.chars() {
+                    if c.is_ascii() && !c.is_ascii_control() && !c.is_ascii_whitespace() {
+                        f.write_char(c)?;
+                    } else {
+                        write!(f, "{}", c.escape_unicode())?;
+                    }
                 }
+                f.write_char('"')?;
+                Ok(())
             }
             Err(e) => write!(f, "{e}"),
         }

@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeAutoDropArray_WindowButtonType
+import org.jetbrains.desktop.linux.generated.NativeComposedTextChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeEvent
 import org.jetbrains.desktop.linux.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.linux.generated.NativeKeyUpEvent
@@ -12,6 +13,7 @@ import org.jetbrains.desktop.linux.generated.NativeMouseExitedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseUpEvent
 import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
+import org.jetbrains.desktop.linux.generated.NativeTextInputEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowFocusChangeEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowFullScreenToggleEvent
@@ -62,7 +64,7 @@ public enum class WindowButtonType {
             val len = NativeAutoDropArray_WindowButtonType.len(nativeArray)
 
             return (0 until len).map {
-                WindowButtonType.fromNative(ptr, it)
+                fromNative(ptr, it)
             }
         }
     }
@@ -199,7 +201,7 @@ public sealed class Event {
     public data class KeyDown(
         val keyCode: KeyCode,
         val characters: String?,
-        val key: String?,
+        val key: KeySym,
         val modifiers: KeyModifiers,
         val isRepeat: Boolean,
         val timestamp: Timestamp,
@@ -208,9 +210,19 @@ public sealed class Event {
     public data class KeyUp(
         val keyCode: KeyCode,
         val characters: String?,
-        val key: String?,
+        val key: KeySym,
         val modifiers: KeyModifiers,
         val timestamp: Timestamp,
+    ) : Event()
+
+    public data class TextInput(
+        val text: String?,
+    ) : Event()
+
+    public data class ComposedTextChanged(
+        val text: String?,
+        val cursorBegin: Int,
+        val cursorEnd: Int,
     ) : Event()
 
     public data class ModifiersChanged(
@@ -301,9 +313,9 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
             Event.KeyDown(
-                keyCode = KeyCode.fromNative(NativeKeyDownEvent.code(nativeEvent)),
+                keyCode = KeyCode(NativeKeyDownEvent.code(nativeEvent)),
                 characters = fromOptionalNativeString(NativeKeyDownEvent.characters(nativeEvent)),
-                key = fromOptionalNativeString(NativeKeyDownEvent.key(nativeEvent)),
+                key = KeySym(NativeKeyDownEvent.key(nativeEvent)),
                 modifiers = KeyModifiers.fromNative(NativeKeyDownEvent.modifiers(nativeEvent)),
                 isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
                 timestamp = Timestamp(NativeKeyDownEvent.timestamp(nativeEvent)),
@@ -313,11 +325,23 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             val nativeEvent = NativeEvent.key_up(s)
             Event.KeyUp(
                 characters = fromOptionalNativeString(NativeKeyUpEvent.characters(nativeEvent)),
-                key = fromOptionalNativeString(NativeKeyUpEvent.key(nativeEvent)),
+                key = KeySym(NativeKeyUpEvent.key(nativeEvent)),
                 modifiers = KeyModifiers.fromNative(NativeKeyUpEvent.modifiers(nativeEvent)),
-                keyCode = KeyCode.fromNative(NativeKeyUpEvent.code(nativeEvent)),
+                keyCode = KeyCode(NativeKeyUpEvent.code(nativeEvent)),
                 timestamp = Timestamp(NativeKeyUpEvent.timestamp(nativeEvent)),
             )
+        }
+        desktop_h.NativeEvent_ComposedTextChanged() -> {
+            val nativeEvent = NativeEvent.composed_text_changed(s)
+            Event.ComposedTextChanged(
+                text = fromOptionalNativeString(NativeComposedTextChangedEvent.text(nativeEvent)),
+                cursorBegin = NativeComposedTextChangedEvent.cursor_begin(nativeEvent),
+                cursorEnd = NativeComposedTextChangedEvent.cursor_end(nativeEvent),
+            )
+        }
+        desktop_h.NativeEvent_TextInput() -> {
+            val nativeEvent = NativeEvent.text_input(s)
+            Event.TextInput(text = fromOptionalNativeString(NativeTextInputEvent.text(nativeEvent)))
         }
         desktop_h.NativeEvent_ModifiersChanged() -> {
             val nativeEvent = NativeEvent.modifiers_changed(s)

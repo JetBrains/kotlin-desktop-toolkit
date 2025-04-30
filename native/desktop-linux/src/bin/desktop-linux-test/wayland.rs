@@ -52,9 +52,14 @@ struct Settings {
 }
 
 #[derive(Debug)]
+struct WindowState {
+    text: String,
+}
+
+#[derive(Debug)]
 struct State {
     app_ptr: AppPtr<'static>,
-    windows: Vec<WindowId>,
+    windows: HashMap<WindowId, WindowState>,
     opengl: Option<OpenglState>,
     settings: Settings,
 }
@@ -226,11 +231,39 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
         Event::WindowCloseRequest => STATE.with(|c| {
             let mut state = c.borrow_mut();
             let state = state.as_mut().unwrap();
-            state.windows.retain(|&e| e != window_id);
+            state.windows.retain(|&k, _v| k != window_id);
             window_close(state.app_ptr.clone(), window_id);
             if state.windows.is_empty() {
                 application_stop_event_loop(state.app_ptr.clone());
             }
+        }),
+        Event::KeyDown(data) => STATE.with(|c| {
+            let mut state = c.borrow_mut();
+            let state = state.as_mut().unwrap();
+            let window_state = state.windows.get_mut(&window_id).unwrap();
+            match data.code.0 {
+                14 => {
+                    window_state.text.pop();
+                }
+                _ => {
+                    if data.characters.is_not_null() {
+                        let event_chars = data.characters.as_str().unwrap();
+                        window_state.text += event_chars;
+                    }
+                }
+            }
+
+            debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
+        }),
+        Event::TextInput(data) => STATE.with(|c| {
+            let mut state = c.borrow_mut();
+            let state = state.as_mut().unwrap();
+            let window_state = state.windows.get_mut(&window_id).unwrap();
+            if data.text.is_not_null() {
+                let event_text = data.text.as_str().unwrap();
+                window_state.text += event_text;
+            }
+            debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
         }),
         _ => {}
     }
@@ -282,7 +315,7 @@ extern "C" fn on_application_started() {
                 force_software_rendering: true,
             },
         );
-        state.windows.push(window_1_id);
+        state.windows.insert(window_1_id, WindowState { text: String::new() });
 
         let window_2_id = WindowId(2);
         window_create(
@@ -299,7 +332,7 @@ extern "C" fn on_application_started() {
                 force_software_rendering: false,
             },
         );
-        state.windows.push(window_2_id);
+        state.windows.insert(window_2_id, WindowState { text: String::new() });
     });
 }
 
@@ -320,7 +353,7 @@ pub fn main() {
     STATE.with(|c| {
         c.replace(Some(State {
             app_ptr: app_ptr.clone(),
-            windows: Vec::new(),
+            windows: HashMap::new(),
             opengl: None,
             settings: Settings::default(),
         }));

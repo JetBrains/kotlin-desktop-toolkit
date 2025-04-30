@@ -396,7 +396,7 @@ typedef struct NativeKeyDownEvent {
   struct NativeKeyModifiers modifiers;
   NativeKeyCode code;
   NativeBorrowedStrPtr characters;
-  NativeBorrowedStrPtr key;
+  uint32_t key;
   bool is_repeat;
   NativeTimestamp timestamp;
 } NativeKeyDownEvent;
@@ -405,9 +405,19 @@ typedef struct NativeKeyUpEvent {
   struct NativeKeyModifiers modifiers;
   NativeKeyCode code;
   NativeBorrowedStrPtr characters;
-  NativeBorrowedStrPtr key;
+  uint32_t key;
   NativeTimestamp timestamp;
 } NativeKeyUpEvent;
+
+typedef struct NativeComposedTextChangedEvent {
+  NativeBorrowedStrPtr text;
+  int32_t cursor_begin;
+  int32_t cursor_end;
+} NativeComposedTextChangedEvent;
+
+typedef struct NativeTextInputEvent {
+  NativeBorrowedStrPtr text;
+} NativeTextInputEvent;
 
 typedef struct NativeModifiersChangedEvent {
   struct NativeKeyModifiers modifiers;
@@ -534,6 +544,8 @@ typedef struct NativeWindowScaleChangedEvent {
 typedef enum NativeEvent_Tag {
   NativeEvent_KeyDown,
   NativeEvent_KeyUp,
+  NativeEvent_ComposedTextChanged,
+  NativeEvent_TextInput,
   NativeEvent_ModifiersChanged,
   NativeEvent_MouseMoved,
   NativeEvent_MouseDragged,
@@ -559,6 +571,12 @@ typedef struct NativeEvent {
     };
     struct {
       struct NativeKeyUpEvent key_up;
+    };
+    struct {
+      struct NativeComposedTextChangedEvent composed_text_changed;
+    };
+    struct {
+      struct NativeTextInputEvent text_input;
     };
     struct {
       struct NativeModifiersChangedEvent modifiers_changed;
