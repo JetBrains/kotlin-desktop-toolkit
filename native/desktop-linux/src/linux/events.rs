@@ -1,9 +1,9 @@
 use core::f64;
 use std::ffi::CString;
 
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::{BorrowedArray, BorrowedStrPtr};
 use smithay_client_toolkit::{
-    reexports::client::{protocol::wl_output::WlOutput, Proxy},
+    reexports::client::{Proxy, protocol::wl_output::WlOutput},
     seat::{
         keyboard::{KeyEvent, Modifiers},
         pointer::{AxisScroll, PointerEvent},
@@ -126,45 +126,51 @@ impl From<ModifiersChangedEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct ComposedTextChangedEvent<'a> {
-    pub text: BorrowedStrPtr<'a>,
-    pub cursor_begin: i32,
-    pub cursor_end: i32,
+pub struct TextInputPreeditStringData<'a> {
+    /// Can be null
+    pub text_bytes: BorrowedArray<'a, u8>,
+    pub cursor_begin_byte_pos: i32,
+    pub cursor_end_byte_pos: i32,
 }
 
-impl<'a> From<ComposedTextChangedEvent<'a>> for Event<'a> {
-    fn from(value: ComposedTextChangedEvent<'a>) -> Self {
-        Self::ComposedTextChanged(value)
-    }
-}
-
-impl<'a> ComposedTextChangedEvent<'a> {
-    pub(crate) fn new(text: Option<&'a CString>, cursor_begin: i32, cursor_end: i32) -> Self {
+impl Default for TextInputPreeditStringData<'_> {
+    fn default() -> Self {
         Self {
-            text: BorrowedStrPtr::new_optional(text),
-            cursor_begin,
-            cursor_end,
+            text_bytes: BorrowedArray::null(),
+            cursor_begin_byte_pos: 0,
+            cursor_end_byte_pos: 0,
         }
     }
 }
 
 #[repr(C)]
+#[derive(Debug, Default)]
+pub struct TextInputDeleteSurroundingTextData {
+    pub before_length_in_bytes: u32,
+    pub after_length_in_bytes: u32,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct TextInputAvailabilityEvent {
+    pub available: bool,
+}
+
+#[repr(C)]
 #[derive(Debug)]
 pub struct TextInputEvent<'a> {
-    pub text: BorrowedStrPtr<'a>,
+    pub has_preedit_string: bool,
+    pub preedit_string: TextInputPreeditStringData<'a>,
+    pub has_commit_string: bool,
+    /// Can be null
+    pub commit_string: BorrowedArray<'a, u8>,
+    pub has_delete_surrounding_text: bool,
+    pub delete_surrounding_text: TextInputDeleteSurroundingTextData,
 }
 
 impl<'a> From<TextInputEvent<'a>> for Event<'a> {
     fn from(value: TextInputEvent<'a>) -> Self {
         Self::TextInput(value)
-    }
-}
-
-impl<'a> TextInputEvent<'a> {
-    pub(crate) fn new(text: Option<&'a CString>) -> Self {
-        Self {
-            text: BorrowedStrPtr::new_optional(text),
-        }
     }
 }
 
@@ -385,7 +391,7 @@ impl From<WindowScaleChangedEvent> for Event<'_> {
 pub enum Event<'a> {
     KeyDown(KeyDownEvent<'a>),
     KeyUp(KeyUpEvent<'a>),
-    ComposedTextChanged(ComposedTextChangedEvent<'a>),
+    TextInputAvailability(TextInputAvailabilityEvent),
     TextInput(TextInputEvent<'a>),
     ModifiersChanged(ModifiersChangedEvent),
     MouseMoved(MouseMovedEvent),

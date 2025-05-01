@@ -1,4 +1,4 @@
-use super::{application_api::ApplicationCallbacks, events::WindowId};
+use super::{application_api::ApplicationCallbacks, events::WindowId, text_input::PendingTextInputEvent};
 use crate::linux::window::SimpleWindow;
 use khronos_egl;
 use log::{debug, warn};
@@ -24,6 +24,7 @@ use smithay_client_toolkit::{
                 wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
                 wp_fractional_scale_v1::{self, WpFractionalScaleV1},
             },
+            text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3,
             viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
         },
     },
@@ -65,6 +66,8 @@ pub struct ApplicationState {
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
     pub(crate) key_surface: Option<ObjectId>,
+    pub(crate) active_text_input: Option<ZwpTextInputV3>,
+    pub(crate) pending_text_input_event: PendingTextInputEvent,
     pub egl: Option<EglInstance>,
     pub event_loop_thread_id: Option<ThreadId>,
     pub run_on_event_loop: Option<Sender<extern "C" fn()>>,
@@ -108,6 +111,8 @@ impl ApplicationState {
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             key_surface: None,
+            active_text_input: None,
+            pending_text_input_event: PendingTextInputEvent::default(),
             egl,
             event_loop_thread_id: None,
             run_on_event_loop: None,

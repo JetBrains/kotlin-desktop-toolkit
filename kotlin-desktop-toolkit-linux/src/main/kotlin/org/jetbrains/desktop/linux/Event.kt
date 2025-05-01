@@ -1,7 +1,6 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeAutoDropArray_WindowButtonType
-import org.jetbrains.desktop.linux.generated.NativeComposedTextChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeEvent
 import org.jetbrains.desktop.linux.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.linux.generated.NativeKeyUpEvent
@@ -13,6 +12,7 @@ import org.jetbrains.desktop.linux.generated.NativeMouseExitedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseUpEvent
 import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
+import org.jetbrains.desktop.linux.generated.NativeTextInputAvailabilityEvent
 import org.jetbrains.desktop.linux.generated.NativeTextInputEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowFocusChangeEvent
@@ -20,6 +20,7 @@ import org.jetbrains.desktop.linux.generated.NativeWindowFullScreenToggleEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
+import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -215,8 +216,12 @@ public sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
+    public data class TextInputAvailability(val available: Boolean) : Event()
+
     public data class TextInput(
-        val text: String?,
+        val preeditStringData: TextInputPreeditStringData?,
+        val commitStringData: TextInputCommitStringData?,
+        val deleteSurroundingTextData: TextInputDeleteSurroundingTextData?,
     ) : Event()
 
     public data class ComposedTextChanged(
@@ -304,10 +309,6 @@ public sealed class Event {
     public data object WindowCloseRequest : Event()
 }
 
-private fun fromOptionalNativeString(s: MemorySegment): String? {
-    return if (s == MemorySegment.NULL) null else s.getUtf8String(0)
-}
-
 internal fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
         desktop_h.NativeEvent_KeyDown() -> {
@@ -331,17 +332,34 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 timestamp = Timestamp(NativeKeyUpEvent.timestamp(nativeEvent)),
             )
         }
-        desktop_h.NativeEvent_ComposedTextChanged() -> {
-            val nativeEvent = NativeEvent.composed_text_changed(s)
-            Event.ComposedTextChanged(
-                text = fromOptionalNativeString(NativeComposedTextChangedEvent.text(nativeEvent)),
-                cursorBegin = NativeComposedTextChangedEvent.cursor_begin(nativeEvent),
-                cursorEnd = NativeComposedTextChangedEvent.cursor_end(nativeEvent),
-            )
+        desktop_h.NativeEvent_TextInputAvailability() -> {
+            val nativeEvent = NativeEvent.text_input(s)
+            Event.TextInputAvailability(NativeTextInputAvailabilityEvent.available(nativeEvent))
         }
         desktop_h.NativeEvent_TextInput() -> {
             val nativeEvent = NativeEvent.text_input(s)
-            Event.TextInput(text = fromOptionalNativeString(NativeTextInputEvent.text(nativeEvent)))
+            return Arena.ofConfined().use { arena ->
+
+                Event.TextInput(
+                    preeditStringData = if (NativeTextInputEvent.has_preedit_string(nativeEvent)) {
+                        TextInputPreeditStringData.fromNative(NativeTextInputEvent.preedit_string(nativeEvent), arena)
+                    } else {
+                        null
+                    },
+                    commitStringData = if (NativeTextInputEvent.has_commit_string(nativeEvent)) {
+                        TextInputCommitStringData(
+                            text = optionalNativeStringToByteArray(NativeTextInputEvent.commit_string(nativeEvent), arena),
+                        )
+                    } else {
+                        null
+                    },
+                    deleteSurroundingTextData = if (NativeTextInputEvent.has_delete_surrounding_text(nativeEvent)) {
+                        TextInputDeleteSurroundingTextData.fromNative(NativeTextInputEvent.delete_surrounding_text(nativeEvent))
+                    } else {
+                        null
+                    },
+                )
+            }
         }
         desktop_h.NativeEvent_ModifiersChanged() -> {
             val nativeEvent = NativeEvent.modifiers_changed(s)

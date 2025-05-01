@@ -42,27 +42,9 @@ abstract class SkikoWindowLinux(
 
     private fun logEvents(event: Event) {
         when (event) {
-            is Event.KeyDown,
-            is Event.KeyUp,
-            is Event.ModifiersChanged,
-            is Event.MouseEntered,
-            is Event.MouseExited,
-            is Event.MouseDragged,
-            is Event.MouseDown,
-            is Event.MouseUp,
-            is Event.ScrollWheel,
-            is Event.WindowCloseRequest,
-            is Event.WindowFocusChange,
-            is Event.WindowFullScreenToggle,
-            is Event.WindowResize,
-            is Event.WindowScaleChanged,
-            is Event.WindowScreenChange,
-            is Event.ComposedTextChanged,
-            is Event.TextInput,
-            -> {
+            is Event.MouseMoved, is Event.WindowDraw -> {}
+            else -> {
                 Logger.info { "$event" }
-            }
-            is Event.MouseMoved, is Event.WindowDraw -> {
             }
         }
     }

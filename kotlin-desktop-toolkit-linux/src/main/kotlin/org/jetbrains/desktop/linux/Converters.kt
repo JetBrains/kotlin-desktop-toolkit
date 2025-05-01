@@ -1,11 +1,16 @@
 package org.jetbrains.desktop.linux
 
+import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
 import org.jetbrains.desktop.linux.generated.NativeKeyModifiers
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
+import org.jetbrains.desktop.linux.generated.NativeLogicalRect
 import org.jetbrains.desktop.linux.generated.NativeLogicalSize
 import org.jetbrains.desktop.linux.generated.NativePhysicalSize
 import org.jetbrains.desktop.linux.generated.NativeSoftwareDrawData
+import org.jetbrains.desktop.linux.generated.NativeTextInputContext
+import org.jetbrains.desktop.linux.generated.NativeTextInputDeleteSurroundingTextData
+import org.jetbrains.desktop.linux.generated.NativeTextInputPreeditStringData
 import org.jetbrains.desktop.linux.generated.NativeTitlebarButtonLayout
 import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
 import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
@@ -15,6 +20,24 @@ import java.lang.foreign.MemorySegment
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
+
+internal fun fromOptionalNativeString(s: MemorySegment): String? {
+    return if (s == MemorySegment.NULL) null else s.getUtf8String(0)
+}
+
+internal fun optionalNativeStringToByteArray(s: MemorySegment, arena: Arena): ByteArray? {
+    return if (s == MemorySegment.NULL) {
+        null
+    } else {
+        val ptr = NativeBorrowedArray_u8.ptr(s)
+        val len = NativeBorrowedArray_u8.len(s)
+        val utf8 = ByteArray(len.toInt())
+        for (i in 0 until len) {
+            utf8[i.toInt()] = ptr.get(desktop_linux_h.C_CHAR, i)
+        }
+        utf8
+    }
+}
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
     width = NativeLogicalSize.width(s).toFloat(),
@@ -37,6 +60,13 @@ internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalPoint.allocate(arena)
     NativeLogicalPoint.x(result, x.toDouble())
     NativeLogicalPoint.y(result, y.toDouble())
+    return result
+}
+
+internal fun LogicalRect.toNative(arena: Arena): MemorySegment {
+    val result = NativeLogicalRect.allocate(arena)
+    NativeLogicalRect.origin(result, point.toNative(arena))
+    NativeLogicalRect.size(result, size.toNative(arena))
     return result
 }
 
@@ -196,4 +226,50 @@ internal fun WindowResizeEdge.toNative(): Int {
         WindowResizeEdge.TopRight -> desktop_linux_h.NativeWindowResizeEdge_TopRight()
         WindowResizeEdge.BottomRight -> desktop_linux_h.NativeWindowResizeEdge_BottomRight()
     }
+}
+
+internal fun TextInputContentPurpose.toNative(): Int {
+    return when (this) {
+        TextInputContentPurpose.Normal -> desktop_linux_h.NativeTextInputContentPurpose_Normal()
+        TextInputContentPurpose.Alpha -> desktop_linux_h.NativeTextInputContentPurpose_Alpha()
+        TextInputContentPurpose.Digits -> desktop_linux_h.NativeTextInputContentPurpose_Digits()
+        TextInputContentPurpose.Number -> desktop_linux_h.NativeTextInputContentPurpose_Number()
+        TextInputContentPurpose.Phone -> desktop_linux_h.NativeTextInputContentPurpose_Phone()
+        TextInputContentPurpose.Url -> desktop_linux_h.NativeTextInputContentPurpose_Url()
+        TextInputContentPurpose.Email -> desktop_linux_h.NativeTextInputContentPurpose_Email()
+        TextInputContentPurpose.Name -> desktop_linux_h.NativeTextInputContentPurpose_Name()
+        TextInputContentPurpose.Password -> desktop_linux_h.NativeTextInputContentPurpose_Password()
+        TextInputContentPurpose.Pin -> desktop_linux_h.NativeTextInputContentPurpose_Pin()
+        TextInputContentPurpose.Date -> desktop_linux_h.NativeTextInputContentPurpose_Date()
+        TextInputContentPurpose.Time -> desktop_linux_h.NativeTextInputContentPurpose_Time()
+        TextInputContentPurpose.Datetime -> desktop_linux_h.NativeTextInputContentPurpose_Datetime()
+        TextInputContentPurpose.Terminal -> desktop_linux_h.NativeTextInputContentPurpose_Terminal()
+    }
+}
+
+internal fun TextInputPreeditStringData.Companion.fromNative(s: MemorySegment, arena: Arena): TextInputPreeditStringData {
+    return TextInputPreeditStringData(
+        text = optionalNativeStringToByteArray(NativeTextInputPreeditStringData.text_bytes(s), arena),
+        cursorBeginBytePos = NativeTextInputPreeditStringData.cursor_begin_byte_pos(s),
+        cursorEndBytePos = NativeTextInputPreeditStringData.cursor_end_byte_pos(s),
+    )
+}
+
+internal fun TextInputDeleteSurroundingTextData.Companion.fromNative(s: MemorySegment): TextInputDeleteSurroundingTextData {
+    return TextInputDeleteSurroundingTextData(
+        beforeLengthInBytes = NativeTextInputDeleteSurroundingTextData.before_length_in_bytes(s),
+        afterLengthInBytes = NativeTextInputDeleteSurroundingTextData.after_length_in_bytes(s),
+    )
+}
+
+internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
+    val result = NativeTextInputContext.allocate(arena)
+    NativeTextInputContext.surrounding_text(result, arena.allocateUtf8String(surroundingText))
+    NativeTextInputContext.cursor_pos_bytes(result, cursorPosBytes)
+    NativeTextInputContext.selection_start_pos_bytes(result, selectionStartPosBytes)
+    NativeTextInputContext.is_multiline(result, isMultiline)
+    NativeTextInputContext.content_purpose(result, contentPurpose.toNative())
+    NativeTextInputContext.cursor_rectangle(result, cursorRectangle.toNative(arena))
+    NativeTextInputContext.change_caused_by_input_method(result, changeCausedByInputMethod)
+    return result
 }

@@ -212,4 +212,26 @@ public class Application() : AutoCloseable {
             if (ctx == MemorySegment.NULL) null else EglProcFunc(fPtr = f.address(), ctxPtr = ctx.address())
         }
     }
+
+    public fun textInputEnable(context: TextInputContext) {
+        ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_h.application_text_input_enable(appPtr, context.toNative(arena))
+            }
+        }
+    }
+
+    public fun textInputUpdate(context: TextInputContext) {
+        ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_h.application_text_input_update(appPtr, context.toNative(arena))
+            }
+        }
+    }
+
+    public fun textInputDisable() {
+        ffiDownCall {
+            desktop_h.application_text_input_disable(appPtr)
+        }
+    }
 }

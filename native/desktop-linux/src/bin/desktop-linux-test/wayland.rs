@@ -2,11 +2,12 @@ use crate::gl_sys::{
     GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
     GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
 };
+use anyhow::Context;
+use core::str;
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
-use desktop_linux::linux::application_api::application_set_cursor_theme;
 use desktop_linux::linux::{
     application_api::{
         AppPtr, ApplicationCallbacks, application_get_egl_proc_func, application_init, application_run_event_loop, application_shutdown,
@@ -17,10 +18,17 @@ use desktop_linux::linux::{
     window_api::{WindowParams, window_close, window_create},
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
+use desktop_linux::linux::{
+    application_api::{
+        TextInputContentPurpose, TextInputContext, application_set_cursor_theme, application_text_input_disable,
+        application_text_input_enable, application_text_input_update,
+    },
+    geometry::{LogicalPoint, LogicalRect},
+};
 use log::debug;
-use std::collections::HashMap;
 use std::ffi::CString;
 use std::{cell::RefCell, ffi::CStr};
+use std::{collections::HashMap, str::FromStr};
 
 extern "C" fn on_should_terminate() -> bool {
     println!("on_should_terminate");
@@ -51,8 +59,9 @@ struct Settings {
     cursor_theme_size: Option<u32>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct WindowState {
+    composed_text: String,
     text: String,
 }
 
@@ -221,6 +230,36 @@ fn log_event(event: &Event, window_id: WindowId) {
     }
 }
 
+fn create_text_input_context(text: &CString, text_len: i32, change_caused_by_input_method: bool) -> TextInputContext {
+    TextInputContext {
+        surrounding_text: BorrowedStrPtr::new(text),
+        cursor_pos_bytes: text_len,
+        selection_start_pos_bytes: text_len,
+        is_multiline: true,
+        content_purpose: TextInputContentPurpose::Normal,
+        cursor_rectangle: LogicalRect {
+            origin: LogicalPoint {
+                x: LogicalPixels(f64::from(text_len) * 10.0),
+                y: LogicalPixels(100.0),
+            },
+            size: LogicalSize {
+                width: LogicalPixels(5.0),
+                height: LogicalPixels(10.0),
+            },
+        },
+        change_caused_by_input_method,
+    }
+}
+
+fn update_text_input_context(app_ptr: AppPtr<'_>, text: &str, change_caused_by_input_method: bool) {
+    let text_len = i32::try_from(text.len()).unwrap();
+    let surrounding_text_cstring = CString::from_str(text).unwrap();
+    application_text_input_update(
+        app_ptr,
+        create_text_input_context(&surrounding_text_cstring, text_len, change_caused_by_input_method),
+    );
+}
+
 extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
     log_event(event, window_id);
     match event {
@@ -244,26 +283,65 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
             match data.code.0 {
                 14 => {
                     window_state.text.pop();
+                    update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
                 }
                 _ => {
                     if data.characters.is_not_null() {
                         let event_chars = data.characters.as_str().unwrap();
                         window_state.text += event_chars;
+                        update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
                     }
                 }
             }
 
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
         }),
+        Event::TextInputAvailability(data) => STATE.with(|c| {
+            let mut state = c.borrow_mut();
+            let state = state.as_mut().unwrap();
+            let window_state = state.windows.get_mut(&window_id).unwrap();
+            if data.available {
+                let surrounding_text_cstring = CString::from_str(&window_state.text).unwrap();
+                let text_len = i32::try_from(window_state.text.len()).unwrap();
+                application_text_input_enable(
+                    state.app_ptr.clone(),
+                    create_text_input_context(&surrounding_text_cstring, text_len, false),
+                );
+            } else {
+                application_text_input_disable(state.app_ptr.clone());
+            }
+        }),
         Event::TextInput(data) => STATE.with(|c| {
             let mut state = c.borrow_mut();
             let state = state.as_mut().unwrap();
             let window_state = state.windows.get_mut(&window_id).unwrap();
-            if data.text.is_not_null() {
-                let event_text = data.text.as_str().unwrap();
-                window_state.text += event_text;
+            window_state.composed_text.clear();
+            if data.has_delete_surrounding_text {
+                let cursor_pos = window_state.text.len();
+                let range = (cursor_pos - data.delete_surrounding_text.before_length_in_bytes as usize)
+                    ..(cursor_pos + data.delete_surrounding_text.after_length_in_bytes as usize);
+                window_state.text.drain(range);
             }
-            debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
+            if data.has_commit_string {
+                if let Ok(bytes) = data.commit_string.as_slice() {
+                    let commit_string = str::from_utf8(bytes).with_context(|| format!("{bytes:?}")).unwrap();
+                    debug!("{window_id:?} commit_string: {commit_string}");
+                    window_state.text += commit_string;
+                }
+            }
+            if data.has_delete_surrounding_text || data.has_commit_string {
+                update_text_input_context(state.app_ptr.clone(), &window_state.text, true);
+            }
+
+            if data.has_preedit_string {
+                if data.preedit_string.cursor_begin_byte_pos == -1 && data.preedit_string.cursor_end_byte_pos == -1 {
+                    // TODO: hide cursor
+                } else if let Ok(bytes) = data.preedit_string.text_bytes.as_slice() {
+                    window_state.composed_text.push_str(str::from_utf8(bytes).unwrap());
+                }
+            }
+
+            debug!("{window_id:?} : {} : {:?}", window_state.text.len(), window_state);
         }),
         _ => {}
     }
@@ -315,7 +393,7 @@ extern "C" fn on_application_started() {
                 force_software_rendering: true,
             },
         );
-        state.windows.insert(window_1_id, WindowState { text: String::new() });
+        state.windows.insert(window_1_id, WindowState::default());
 
         let window_2_id = WindowId(2);
         window_create(
@@ -332,7 +410,7 @@ extern "C" fn on_application_started() {
                 force_software_rendering: false,
             },
         );
-        state.windows.insert(window_2_id, WindowState { text: String::new() });
+        state.windows.insert(window_2_id, WindowState::default());
     });
 }
 

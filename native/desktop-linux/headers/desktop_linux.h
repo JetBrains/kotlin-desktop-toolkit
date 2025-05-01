@@ -195,6 +195,56 @@ typedef enum NativePointerShape {
   NativePointerShape_ZoomOut,
 } NativePointerShape;
 
+typedef enum NativeTextInputContentPurpose {
+  /**
+   * default input, allowing all characters
+   */
+  NativeTextInputContentPurpose_Normal,
+  /**
+   * allow only alphabetic characters
+   */
+  NativeTextInputContentPurpose_Alpha,
+  /**
+   * allow only digits
+   */
+  NativeTextInputContentPurpose_Digits,
+  /**
+   * input a number (including decimal separator and sign)
+   */
+  NativeTextInputContentPurpose_Number,
+  /**
+   * input a phone number
+   */
+  NativeTextInputContentPurpose_Phone,
+  NativeTextInputContentPurpose_Url,
+  /**
+   * input an URL
+   */
+  NativeTextInputContentPurpose_Email,
+  /**
+   * input an email address
+   */
+  NativeTextInputContentPurpose_Name,
+  /**
+   * input a name of a person
+   */
+  NativeTextInputContentPurpose_Password,
+  /**
+   * input a password (combine with `sensitive_data` hint)
+   */
+  NativeTextInputContentPurpose_Pin,
+  /**
+   * input is a numeric password (combine with `sensitive_data` hint)
+   */
+  NativeTextInputContentPurpose_Date,
+  /**
+   * input a date
+   */
+  NativeTextInputContentPurpose_Time,
+  NativeTextInputContentPurpose_Datetime,
+  NativeTextInputContentPurpose_Terminal,
+} NativeTextInputContentPurpose;
+
 enum NativeWindowButtonType {
   NativeWindowButtonType_AppMenu,
   NativeWindowButtonType_Icon,
@@ -409,14 +459,39 @@ typedef struct NativeKeyUpEvent {
   NativeTimestamp timestamp;
 } NativeKeyUpEvent;
 
-typedef struct NativeComposedTextChangedEvent {
-  NativeBorrowedStrPtr text;
-  int32_t cursor_begin;
-  int32_t cursor_end;
-} NativeComposedTextChangedEvent;
+typedef struct NativeTextInputAvailabilityEvent {
+  bool available;
+} NativeTextInputAvailabilityEvent;
+
+typedef struct NativeBorrowedArray_u8 {
+  const uint8_t *ptr;
+  NativeArraySize len;
+} NativeBorrowedArray_u8;
+
+typedef struct NativeTextInputPreeditStringData {
+  /**
+   * Can be null
+   */
+  struct NativeBorrowedArray_u8 text_bytes;
+  int32_t cursor_begin_byte_pos;
+  int32_t cursor_end_byte_pos;
+} NativeTextInputPreeditStringData;
+
+typedef struct NativeTextInputDeleteSurroundingTextData {
+  uint32_t before_length_in_bytes;
+  uint32_t after_length_in_bytes;
+} NativeTextInputDeleteSurroundingTextData;
 
 typedef struct NativeTextInputEvent {
-  NativeBorrowedStrPtr text;
+  bool has_preedit_string;
+  struct NativeTextInputPreeditStringData preedit_string;
+  bool has_commit_string;
+  /**
+   * Can be null
+   */
+  struct NativeBorrowedArray_u8 commit_string;
+  bool has_delete_surrounding_text;
+  struct NativeTextInputDeleteSurroundingTextData delete_surrounding_text;
 } NativeTextInputEvent;
 
 typedef struct NativeModifiersChangedEvent {
@@ -544,7 +619,7 @@ typedef struct NativeWindowScaleChangedEvent {
 typedef enum NativeEvent_Tag {
   NativeEvent_KeyDown,
   NativeEvent_KeyUp,
-  NativeEvent_ComposedTextChanged,
+  NativeEvent_TextInputAvailability,
   NativeEvent_TextInput,
   NativeEvent_ModifiersChanged,
   NativeEvent_MouseMoved,
@@ -573,7 +648,7 @@ typedef struct NativeEvent {
       struct NativeKeyUpEvent key_up;
     };
     struct {
-      struct NativeComposedTextChangedEvent composed_text_changed;
+      struct NativeTextInputAvailabilityEvent text_input_availability;
     };
     struct {
       struct NativeTextInputEvent text_input;
@@ -643,6 +718,21 @@ typedef struct NativeGetEglProcFuncData {
   NativeBorrowedOpaquePtr ctx;
 } NativeGetEglProcFuncData;
 
+typedef struct NativeLogicalRect {
+  struct NativeLogicalPoint origin;
+  struct NativeLogicalSize size;
+} NativeLogicalRect;
+
+typedef struct NativeTextInputContext {
+  NativeBorrowedStrPtr surrounding_text;
+  int32_t cursor_pos_bytes;
+  int32_t selection_start_pos_bytes;
+  bool is_multiline;
+  enum NativeTextInputContentPurpose content_purpose;
+  struct NativeLogicalRect cursor_rectangle;
+  bool change_caused_by_input_method;
+} NativeTextInputContext;
+
 typedef NativeGenericRawPtr_c_char NativeRustAllocatedStrPtr;
 
 typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
@@ -702,6 +792,12 @@ bool application_is_event_loop_thread(NativeAppPtr app_ptr);
 void application_run_on_event_loop_async(NativeAppPtr app_ptr, void (*f)(void));
 
 void application_set_cursor_theme(NativeAppPtr app_ptr, NativeBorrowedStrPtr name, uint32_t size);
+
+void application_text_input_enable(NativeAppPtr app_ptr, struct NativeTextInputContext context);
+
+void application_text_input_update(NativeAppPtr app_ptr, struct NativeTextInputContext context);
+
+void application_text_input_disable(NativeAppPtr app_ptr);
 
 NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
 

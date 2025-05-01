@@ -8,6 +8,7 @@ import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.FontAntialiasingValue
 import org.jetbrains.desktop.linux.FontHintingValue
 import org.jetbrains.desktop.linux.FontRgbaOrderValue
+import org.jetbrains.desktop.linux.KeySym
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogLevel
 import org.jetbrains.desktop.linux.Logger
@@ -19,6 +20,8 @@ import org.jetbrains.desktop.linux.MouseButton
 import org.jetbrains.desktop.linux.PhysicalPoint
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.PointerShape
+import org.jetbrains.desktop.linux.TextInputContentPurpose
+import org.jetbrains.desktop.linux.TextInputContext
 import org.jetbrains.desktop.linux.Timestamp
 import org.jetbrains.desktop.linux.Window
 import org.jetbrains.desktop.linux.WindowButtonType
@@ -102,6 +105,43 @@ private fun LogicalPoint.isInsideCircle(center: LogicalPoint, radius: LogicalPix
     return xDiff.pow(2) + yDiff.pow(2) <= radius.pow(2)
 }
 
+private fun createTextInputContext(text: String, changeCausedByInputMethod: Boolean): TextInputContext {
+    return TextInputContext(
+        surroundingText = text,
+        cursorPosBytes = text.encodeToByteArray().size,
+        selectionStartPosBytes = 0,
+        isMultiline = true,
+        contentPurpose = TextInputContentPurpose.Normal,
+        cursorRectangle = LogicalRect(
+            point = LogicalPoint(
+                x = text.length * 10f,
+                y = 100f,
+            ),
+            size = LogicalSize(
+                width = 5f,
+                height = 10f,
+            ),
+        ),
+        changeCausedByInputMethod = changeCausedByInputMethod,
+    )
+}
+
+private data class TextLineCreator(private var fontSize: Float, private var text: String) {
+    private var textLine: TextLine? = null
+
+    fun makeTextLine(text: String, fontSize: Float): TextLine {
+        if (textLine == null || this.text != text || this.fontSize != fontSize) {
+            this.text = text
+            this.fontSize = fontSize
+            val font = FontMgr.default.matchFamilyStyle("sans-serif", FontStyle.BOLD)?.let { typeface ->
+                Font(typeface, this.fontSize)
+            }
+            textLine = TextLine.make(this.text, font)
+        }
+        return textLine!!
+    }
+}
+
 class CustomTitlebar(
     private var origin: LogicalPoint,
     var size: LogicalSize,
@@ -117,23 +157,7 @@ class CustomTitlebar(
     private var leftClickStartLocation: LogicalPoint? = null
     private var isDragging: Boolean = false
 
-    private data class TitleParams(private var fontSize: Float, private var title: String) {
-        private var titleLine: TextLine? = null
-
-        fun makeTitleLine(title: String, fontSize: Float): TextLine {
-            if (titleLine == null || this.title != title || this.fontSize != fontSize) {
-                this.title = title
-                this.fontSize = fontSize
-                val titlebarFont = FontMgr.default.matchFamilyStyle("sans-serif", FontStyle.BOLD)?.let { typeface ->
-                    Font(typeface, this.fontSize)
-                }
-                titleLine = TextLine.make(this.title, titlebarFont)
-            }
-            return titleLine!!
-        }
-    }
-
-    private var lastTitleParams = TitleParams(fontSize = 0f, title = "")
+    private var titleTextLineCreator = TextLineCreator(fontSize = 0f, text = "")
 
     companion object {
         const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55f
@@ -358,7 +382,7 @@ class CustomTitlebar(
                 }
                 WindowButtonType.Title -> {
                     paint.color = if (active) Color.WHITE else COLOR_LIGHT_GRAY
-                    canvas.drawTextLine(lastTitleParams.makeTitleLine(title, CUSTOM_TITLEBAR_HEIGHT * scale), xOffset, yBottom, paint)
+                    canvas.drawTextLine(titleTextLineCreator.makeTextLine(title, CUSTOM_TITLEBAR_HEIGHT * scale), xOffset, yBottom, paint)
                 }
             }
         }
@@ -388,18 +412,26 @@ class ContentArea(
     var size: LogicalSize,
 ) {
     private var markerPosition: LogicalPoint? = null
+    private var textLineCreator = TextLineCreator(fontSize = 0f, text = "")
+    private var composedTextLineCreator = TextLineCreator(fontSize = 0f, text = "")
 
     fun handleEvent(event: Event): EventHandlerResult {
-        if (event is Event.MouseMoved) {
-            markerPosition = LogicalPoint(
-                event.locationInWindow.x - origin.x,
-                event.locationInWindow.y - origin.y,
-            )
+        return when (event) {
+            is Event.MouseMoved -> {
+                markerPosition = LogicalPoint(
+                    event.locationInWindow.x - origin.x,
+                    event.locationInWindow.y - origin.y,
+                )
+                EventHandlerResult.Continue
+            }
+            is Event.TextInput -> {
+                EventHandlerResult.Stop
+            }
+            else -> EventHandlerResult.Continue
         }
-        return EventHandlerResult.Continue
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Float) {
+    fun draw(canvas: Canvas, time: Long, composedText: String, text: String, scale: Float) {
         val contentOrigin = origin.toPhysical(scale)
         val contentSize = size.toPhysical(scale)
         Paint().use { paint ->
@@ -428,6 +460,7 @@ class ContentArea(
             }
         }
         canvas.drawSpiningCircle(contentOrigin, contentSize, time)
+        canvas.drawText(composedText, text, contentSize.height / 2f, scale)
         canvas.drawWindowBorders(contentOrigin, contentSize, scale)
         canvas.drawCursor(contentOrigin, contentSize, scale)
     }
@@ -442,6 +475,19 @@ class ContentArea(
         Paint().use { paint ->
             paint.color = Color.GREEN
             drawCircle(x, y, 30f, paint)
+        }
+    }
+
+    private fun Canvas.drawText(composedText: String, text: String, y: Float, scale: Float) {
+        val textLine = textLineCreator.makeTextLine(text, CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT * scale)
+        val composedTextLine = composedTextLineCreator.makeTextLine(composedText, CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT * scale)
+        Paint().use { paint ->
+            paint.color = Color.WHITE
+            drawTextLine(textLine, 0f, y, paint)
+        }
+        Paint().use { paint ->
+            paint.color = Color.YELLOW
+            drawTextLine(composedTextLine, textLine.width, y, paint)
         }
     }
 
@@ -650,7 +696,7 @@ class WindowContainer(
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Float, title: String) {
+    fun draw(canvas: Canvas, time: Long, composedText: String, text: String, scale: Float, title: String) {
         val backgroundColor = if (xdgDesktopSettings.colorScheme == ColorSchemeValue.PreferDark) {
             Color.makeARGB(
                 240,
@@ -663,7 +709,7 @@ class WindowContainer(
         }
         canvas.clear(backgroundColor)
         customTitlebar?.draw(canvas, scale, xdgDesktopSettings, title)
-        contentArea.draw(canvas, time, scale)
+        contentArea.draw(canvas, time, composedText, text, scale)
     }
 }
 
@@ -673,6 +719,8 @@ class RotatingBallWindow(
     windowParams: WindowParams,
 ) : SkikoWindowLinux(app, windowParams) {
     private var title: String = windowParams.title
+    var composedText: String = ""
+    var text: String = ""
 
     companion object {
         fun createWindow(
@@ -722,7 +770,7 @@ class RotatingBallWindow(
 
     override fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long) {
         val canvas = this
-        windowContainer.draw(canvas, time, scale.toFloat(), title)
+        windowContainer.draw(canvas, time, composedText, text, scale.toFloat(), title)
     }
 }
 
@@ -758,6 +806,39 @@ class ApplicationState(private val app: Application) : AutoCloseable {
                 windows.remove(windowId)
                 if (windows.isEmpty()) {
                     app.stopEventLoop()
+                }
+                EventHandlerResult.Stop
+            }
+            is Event.KeyDown -> {
+                if (event.key.value == KeySym.BackSpace) {
+                    window.text = window.text.dropLast(1)
+                } else if (event.characters != null) {
+                    window.text += event.characters
+                }
+                app.textInputUpdate(createTextInputContext(window.text, changeCausedByInputMethod = false))
+                EventHandlerResult.Stop
+            }
+            is Event.TextInputAvailability -> {
+                if (event.available) {
+                    app.textInputEnable(createTextInputContext(window.text, changeCausedByInputMethod = false))
+                } else {
+                    app.textInputDisable()
+                }
+                EventHandlerResult.Stop
+            }
+            is Event.TextInput -> {
+                window.composedText = ""
+                event.deleteSurroundingTextData?.let { deleteSurroundingTextData ->
+                }
+                event.commitStringData?.let { commitStringData ->
+                    window.text += commitStringData.text?.decodeToString() ?: ""
+                }
+                event.preeditStringData?.let { preeditStringData ->
+                    Logger.info { "Preediting string data: ${preeditStringData.text} (${preeditStringData.text?.size})" }
+                    window.composedText = preeditStringData.text?.decodeToString() ?: ""
+                }
+                if (event.deleteSurroundingTextData != null || event.commitStringData != null) {
+                    app.textInputUpdate(createTextInputContext(window.text, changeCausedByInputMethod = true))
                 }
                 EventHandlerResult.Stop
             }

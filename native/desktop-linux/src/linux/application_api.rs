@@ -1,9 +1,11 @@
 use super::events::EventHandler;
+use super::geometry::LogicalRect;
 use super::{application::Application, application_state::EglInstance, xdg_desktop_settings_api::XdgDesktopSetting};
-use anyhow::bail;
+use anyhow::{Context, bail};
 use desktop_common::ffi_utils::{BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr};
 use desktop_common::logger::ffi_boundary;
 use log::debug;
+use smithay_client_toolkit::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -110,5 +112,128 @@ pub extern "C" fn application_set_cursor_theme(mut app_ptr: AppPtr<'_>, name: Bo
     ffi_boundary("application_set_cursor_theme", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         app.set_cursor_theme(name.as_str().unwrap(), size)
+    });
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub enum TextInputContentPurpose {
+    /// default input, allowing all characters
+    Normal,
+    /// allow only alphabetic characters
+    Alpha,
+    /// allow only digits
+    Digits,
+    /// input a number (including decimal separator and sign)
+    Number,
+    /// input a phone number
+    Phone,
+    Url,
+    /// input an URL
+    Email,
+    /// input an email address
+    Name,
+    /// input a name of a person
+    Password,
+    /// input a password (combine with `sensitive_data` hint)
+    Pin,
+    /// input is a numeric password (combine with `sensitive_data` hint)
+    Date,
+    /// input a date
+    Time,
+    Datetime,
+    Terminal,
+}
+
+impl TextInputContentPurpose {
+    const fn to_system(&self) -> zwp_text_input_v3::ContentPurpose {
+        match self {
+            Self::Normal => zwp_text_input_v3::ContentPurpose::Normal,
+            Self::Alpha => zwp_text_input_v3::ContentPurpose::Alpha,
+            Self::Digits => zwp_text_input_v3::ContentPurpose::Digits,
+            Self::Number => zwp_text_input_v3::ContentPurpose::Number,
+            Self::Phone => zwp_text_input_v3::ContentPurpose::Phone,
+            Self::Url => zwp_text_input_v3::ContentPurpose::Url,
+            Self::Email => zwp_text_input_v3::ContentPurpose::Email,
+            Self::Name => zwp_text_input_v3::ContentPurpose::Name,
+            Self::Password => zwp_text_input_v3::ContentPurpose::Password,
+            Self::Pin => zwp_text_input_v3::ContentPurpose::Pin,
+            Self::Date => zwp_text_input_v3::ContentPurpose::Date,
+            Self::Time => zwp_text_input_v3::ContentPurpose::Time,
+            Self::Datetime => zwp_text_input_v3::ContentPurpose::Datetime,
+            Self::Terminal => zwp_text_input_v3::ContentPurpose::Terminal,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct TextInputContext<'a> {
+    pub surrounding_text: BorrowedStrPtr<'a>,
+    pub cursor_pos_bytes: i32,
+    pub selection_start_pos_bytes: i32,
+    pub is_multiline: bool,
+    pub content_purpose: TextInputContentPurpose,
+    pub cursor_rectangle: LogicalRect,
+    pub change_caused_by_input_method: bool,
+}
+
+impl TextInputContext<'_> {
+    fn apply(&self, text_input: &zwp_text_input_v3::ZwpTextInputV3) -> anyhow::Result<()> {
+        let surrounding_text = self.surrounding_text.as_str()?.to_owned();
+        let content_hint = if self.is_multiline {
+            zwp_text_input_v3::ContentHint::Multiline
+        } else {
+            zwp_text_input_v3::ContentHint::None
+        };
+        text_input.set_surrounding_text(surrounding_text, self.cursor_pos_bytes, self.selection_start_pos_bytes);
+        text_input.set_content_type(content_hint, self.content_purpose.to_system());
+        text_input.set_text_change_cause(if self.change_caused_by_input_method {
+            zwp_text_input_v3::ChangeCause::InputMethod
+        } else {
+            zwp_text_input_v3::ChangeCause::Other
+        });
+        text_input.set_cursor_rectangle(
+            self.cursor_rectangle.origin.x.round(),
+            self.cursor_rectangle.origin.y.round(),
+            self.cursor_rectangle.size.width.round(),
+            self.cursor_rectangle.size.height.round(),
+        );
+        text_input.commit();
+        Ok(())
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_text_input_enable(mut app_ptr: AppPtr<'_>, context: TextInputContext) {
+    debug!("application_text_input_enable");
+    ffi_boundary("application_text_input_enable", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        let text_input = app.state.active_text_input.as_mut().context("Active text input")?;
+        text_input.enable();
+        context.apply(text_input)
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_text_input_update(mut app_ptr: AppPtr<'_>, context: TextInputContext) {
+    debug!("application_text_input_update");
+    ffi_boundary("application_text_input_update", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        let text_input = app.state.active_text_input.as_mut().context("Active text input")?;
+        context.apply(text_input)
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr<'_>) {
+    debug!("application_text_input_disable");
+    ffi_boundary("application_text_input_disable", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        if let Some(text_input) = app.state.active_text_input.as_mut() {
+            text_input.disable();
+            text_input.commit();
+        }
+        Ok(())
     });
 }

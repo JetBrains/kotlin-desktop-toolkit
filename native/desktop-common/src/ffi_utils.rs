@@ -1,8 +1,12 @@
 #![allow(clippy::missing_safety_doc)]
 
 use core::slice;
+use log::debug;
 use std::{
-    ffi::{CStr, CString, NulError}, fmt::Write, marker::PhantomData, ptr::NonNull
+    ffi::{CStr, CString, NulError},
+    fmt::Write,
+    marker::PhantomData,
+    ptr::NonNull,
 };
 
 use anyhow::{Context, bail};
@@ -237,12 +241,29 @@ impl<T> Drop for AutoDropArray<T> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct BorrowedArray<'a, T> {
-    pub ptr: *const T,
-    pub len: ArraySize,
+    ptr: *const T,
+    len: ArraySize,
     phantom: PhantomData<&'a T>,
 }
 
-impl<'a, T> BorrowedArray<'a, T> {
+impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
+    pub fn from_slice(s: &'a [T]) -> Self {
+        debug!("BorrowedArray::from_slice: {s:?}");
+        Self {
+            ptr: s.as_ptr(),
+            len: s.len(),
+            phantom: PhantomData,
+        }
+    }
+
+    pub fn null() -> Self {
+        Self {
+            ptr: std::ptr::null(),
+            len: 0,
+            phantom: PhantomData,
+        }
+    }
+
     pub fn as_slice(&'a self) -> anyhow::Result<&'a [T]> {
         if self.ptr.is_null() {
             bail!("Null pointer!")
