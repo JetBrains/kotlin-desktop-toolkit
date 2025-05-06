@@ -1,7 +1,7 @@
 use core::f64;
 use std::ffi::CString;
 
-use desktop_common::ffi_utils::{BorrowedArray, BorrowedStrPtr};
+use desktop_common::ffi_utils::BorrowedStrPtr;
 use smithay_client_toolkit::{
     reexports::client::{Proxy, protocol::wl_output::WlOutput},
     seat::{
@@ -68,7 +68,6 @@ pub struct KeyCode(pub u32);
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyDownEvent<'a> {
-    pub modifiers: KeyModifiers,
     pub code: KeyCode,
     pub characters: BorrowedStrPtr<'a>,
     pub key: u32,
@@ -85,7 +84,6 @@ impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
 impl<'a> KeyDownEvent<'a> {
     pub(crate) fn new(event: &KeyEvent, characters: Option<&'a CString>) -> Self {
         Self {
-            modifiers: KeyModifiers::default(), // TODO
             code: KeyCode(event.raw_code),
             characters: BorrowedStrPtr::new_optional(characters),
             key: event.keysym.raw(),
@@ -98,7 +96,6 @@ impl<'a> KeyDownEvent<'a> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyUpEvent<'a> {
-    pub modifiers: KeyModifiers,
     pub code: KeyCode,
     pub characters: BorrowedStrPtr<'a>,
     pub key: u32,
@@ -128,7 +125,7 @@ impl From<ModifiersChangedEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct TextInputPreeditStringData<'a> {
     /// Can be null
-    pub text_bytes: BorrowedArray<'a, u8>,
+    pub text: BorrowedStrPtr<'a>,
     pub cursor_begin_byte_pos: i32,
     pub cursor_end_byte_pos: i32,
 }
@@ -136,7 +133,7 @@ pub struct TextInputPreeditStringData<'a> {
 impl Default for TextInputPreeditStringData<'_> {
     fn default() -> Self {
         Self {
-            text_bytes: BorrowedArray::null(),
+            text: BorrowedStrPtr::new_optional(None),
             cursor_begin_byte_pos: 0,
             cursor_end_byte_pos: 0,
         }
@@ -163,7 +160,7 @@ pub struct TextInputEvent<'a> {
     pub preedit_string: TextInputPreeditStringData<'a>,
     pub has_commit_string: bool,
     /// Can be null
-    pub commit_string: BorrowedArray<'a, u8>,
+    pub commit_string: BorrowedStrPtr<'a>,
     pub has_delete_surrounding_text: bool,
     pub delete_surrounding_text: TextInputDeleteSurroundingTextData,
 }
@@ -430,7 +427,6 @@ impl Event<'_> {
 
     pub(crate) fn new_key_up_event<'a>(event: &KeyEvent, characters: Option<&'a CString>) -> Event<'a> {
         Event::KeyUp(KeyUpEvent {
-            modifiers: KeyModifiers::default(), // TODO
             code: KeyCode(event.raw_code),
             characters: BorrowedStrPtr::new_optional(characters),
             key: event.keysym.raw(),

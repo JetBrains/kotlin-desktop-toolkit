@@ -2,7 +2,7 @@ use super::events::EventHandler;
 use super::geometry::LogicalRect;
 use super::{application::Application, application_state::EglInstance, xdg_desktop_settings_api::XdgDesktopSetting};
 use anyhow::{Context, bail};
-use desktop_common::ffi_utils::{BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr};
+use desktop_common::ffi_utils::{BorrowedArray, BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr};
 use desktop_common::logger::ffi_boundary;
 use log::debug;
 use smithay_client_toolkit::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3;
@@ -169,7 +169,7 @@ impl TextInputContentPurpose {
 #[repr(C)]
 #[derive(Debug)]
 pub struct TextInputContext<'a> {
-    pub surrounding_text: BorrowedStrPtr<'a>,
+    pub surrounding_text: BorrowedArray<'a, u8>,
     pub cursor_pos_bytes: i32,
     pub selection_start_pos_bytes: i32,
     pub is_multiline: bool,
@@ -180,7 +180,7 @@ pub struct TextInputContext<'a> {
 
 impl TextInputContext<'_> {
     fn apply(&self, text_input: &zwp_text_input_v3::ZwpTextInputV3) -> anyhow::Result<()> {
-        let surrounding_text = self.surrounding_text.as_str()?.to_owned();
+        let surrounding_text = String::from_utf8(self.surrounding_text.as_slice()?.into())?;
         let content_hint = if self.is_multiline {
             zwp_text_input_v3::ContentHint::Multiline
         } else {
@@ -206,7 +206,7 @@ impl TextInputContext<'_> {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_text_input_enable(mut app_ptr: AppPtr<'_>, context: TextInputContext) {
-    debug!("application_text_input_enable");
+    debug!("application_text_input_enable {context:?}");
     ffi_boundary("application_text_input_enable", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         let text_input = app.state.active_text_input.as_mut().context("Active text input")?;
@@ -217,7 +217,7 @@ pub extern "C" fn application_text_input_enable(mut app_ptr: AppPtr<'_>, context
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_text_input_update(mut app_ptr: AppPtr<'_>, context: TextInputContext) {
-    debug!("application_text_input_update");
+    debug!("application_text_input_update {context:?}");
     ffi_boundary("application_text_input_update", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         let text_input = app.state.active_text_input.as_mut().context("Active text input")?;

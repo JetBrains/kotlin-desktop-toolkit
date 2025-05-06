@@ -3,7 +3,6 @@ package org.jetbrains.desktop.sample.linux
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
-import org.jetbrains.desktop.linux.Logger
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.SoftwareDrawData
 import org.jetbrains.desktop.linux.WindowParams
@@ -40,17 +39,7 @@ abstract class SkikoWindowLinux(
 //        window.attachView(view)
 //    }
 
-    private fun logEvents(event: Event) {
-        when (event) {
-            is Event.MouseMoved, is Event.WindowDraw -> {}
-            else -> {
-                Logger.info { "$event" }
-            }
-        }
-    }
-
     open fun handleEvent(event: Event): EventHandlerResult {
-        logEvents(event)
         return when (event) {
             is Event.WindowDraw -> {
                 performDrawing(event)

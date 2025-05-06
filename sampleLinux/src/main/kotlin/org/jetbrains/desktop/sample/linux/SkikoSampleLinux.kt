@@ -8,6 +8,7 @@ import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.FontAntialiasingValue
 import org.jetbrains.desktop.linux.FontHintingValue
 import org.jetbrains.desktop.linux.FontRgbaOrderValue
+import org.jetbrains.desktop.linux.KeyModifiers
 import org.jetbrains.desktop.linux.KeySym
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogLevel
@@ -31,6 +32,7 @@ import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
 import org.jetbrains.desktop.linux.XdgDesktopSetting
 import org.jetbrains.desktop.linux.XdgDesktopSetting.TitlebarLayout
+import org.jetbrains.desktop.linux.utf8OffsetToUtf16Offset
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.Font
@@ -45,6 +47,8 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -99,44 +103,268 @@ data class XdgDesktopSettings(
     }
 }
 
+class EditorState() {
+    private var composedText: String = ""
+    private var composedTextStartOffset: Int? = null
+    private var composedTextEndOffset: Int? = null
+    private var text: StringBuilder = StringBuilder()
+    private var cursorVisible = true
+    private var cursorCodepoint: Int = 0
+    private var cursorRectangle = LogicalRect(LogicalPoint(0f, 0f), LogicalSize(0f, 0f))
+    private var selectionStartCodepoint: Int? = null
+    private var selectionEndCodepoint: Int? = null
+    private var modifiers = KeyModifiers(
+        capsLock = false,
+        shift = false,
+        control = false,
+        alt = false,
+        logo = false,
+        numLock = false,
+    )
+    private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    private var statsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+
+    fun createTextInputContext(changeCausedByInputMethod: Boolean): TextInputContext {
+        Logger.info { "createTextInputContext: $text" }
+        val cursorPosBytes = text.substring(0, text.offsetByCodePoints(0, cursorCodepoint)).toByteArray().size
+        return TextInputContext(
+            surroundingText = text.toString().toByteArray(),
+            cursorPosBytes = cursorPosBytes,
+            selectionStartPosBytes = selectionStartCodepoint?.let {
+                text.substring(0, text.offsetByCodePoints(0, it)).toByteArray().size
+            } ?: cursorPosBytes,
+            isMultiline = true,
+            contentPurpose = TextInputContentPurpose.Normal,
+            cursorRectangle = cursorRectangle,
+            changeCausedByInputMethod = changeCausedByInputMethod,
+        )
+    }
+
+    fun draw(canvas: Canvas, y: Float, scale: Float) {
+        val textLineStats = statsTextLineCreator.makeTextLine(
+            "Cursor pos: $cursorCodepoint, compose: $composedTextStartOffset - $composedTextEndOffset",
+            20 * scale,
+        )
+        val composedTextStartOffset = this.composedTextStartOffset
+        val cursorOffset = text.offsetByCodePoints(0, cursorCodepoint)
+        val stringLine = if (composedText.isEmpty()) {
+            text
+        } else {
+            text.substring(0, cursorOffset) + composedText + text.substring(cursorOffset, text.length)
+        }
+        val textLine = textLineCreator.makeTextLine(stringLine.toString(), CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT * scale)
+        if (composedText.isNotEmpty()) {
+            Paint().use { paint ->
+                paint.color = Color.YELLOW
+                paint.strokeWidth = 5 * scale
+                val x0 = textLine.getCoordAtOffset(cursorOffset)
+                val x1 = textLine.getCoordAtOffset(cursorOffset + composedText.length)
+                canvas.drawLine(x0 = x0, y0 = y + (5 * scale), x1 = x1, y1 = y + (5 * scale), paint = paint)
+            }
+        }
+        val selectionStartOffset = selectionStartCodepoint?.let { text.offsetByCodePoints(0, it) }
+        val selectionEndOffset = selectionEndCodepoint?.let { text.offsetByCodePoints(0, it) }
+        if (selectionStartOffset != null && selectionEndOffset != null) {
+            Paint().use { paint ->
+                paint.color = Color.BLUE
+                val x0 = textLine.getCoordAtOffset(selectionStartOffset)
+                val x1 = textLine.getCoordAtOffset(selectionEndOffset)
+                canvas.drawRect(r = Rect(left = x0, top = y - textLine.height, right = x1, bottom = y), paint = paint)
+            }
+        }
+        Paint().use { paint ->
+            paint.color = Color.WHITE
+            canvas.drawTextLine(textLineStats, 0f, y / 2, paint)
+            canvas.drawTextLine(textLine, 0f, y, paint)
+        }
+        if (cursorVisible) {
+            Paint().use { paint ->
+                val coord = textLine.getCoordAtOffset(text.offsetByCodePoints(0, cursorCodepoint) + (composedTextStartOffset ?: 0))
+
+                cursorRectangle = LogicalRect(
+                    LogicalPoint(x = coord / scale, y = (y - textLine.height + (10 * scale)) / scale),
+                    LogicalSize(width = 5f, height = textLine.height / scale),
+                )
+                paint.color = Color.GREEN
+                paint.strokeWidth = cursorRectangle.size.width
+
+                canvas.drawLine(
+                    x0 = cursorRectangle.point.x * scale,
+                    y0 = cursorRectangle.point.y * scale,
+                    x1 = cursorRectangle.point.x * scale,
+                    y1 = (cursorRectangle.point.y + cursorRectangle.size.height) * scale,
+                    paint = paint,
+                )
+            }
+        }
+    }
+
+    private fun removeSelection(): Boolean {
+        selectionStartCodepoint.let { selectionStartCodepoint ->
+            selectionEndCodepoint.let { selectionEndCodepoint ->
+                if (selectionStartCodepoint != null && selectionEndCodepoint != null) {
+                    val a = text.offsetByCodePoints(0, selectionStartCodepoint)
+                    val b = text.offsetByCodePoints(0, selectionEndCodepoint)
+                    val start = min(a, b)
+                    text.delete(start, max(a, b))
+                    cursorCodepoint = start
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    fun handleEvent(event: Event, app: Application): EventHandlerResult {
+        return when (event) {
+            is Event.ModifiersChanged -> {
+                modifiers = event.modifiers
+                EventHandlerResult.Stop
+            }
+            is Event.KeyDown -> {
+                when (event.key.value) {
+                    KeySym.BackSpace -> {
+                        if (!removeSelection() && cursorCodepoint > 0) {
+                            text.deleteAt(text.codePointCount(0, cursorCodepoint - 1))
+                            cursorCodepoint -= 1
+                        }
+                    }
+
+                    KeySym.Up -> {
+                        if (modifiers.shift) {
+                            if (selectionStartCodepoint == null) {
+                                selectionStartCodepoint = cursorCodepoint
+                            }
+                            selectionEndCodepoint = 0
+                            cursorCodepoint = 0
+                        } else {
+                            cursorCodepoint = 0
+                        }
+                    }
+
+                    KeySym.Down -> {
+                        if (modifiers.shift) {
+                            if (selectionStartCodepoint == null) {
+                                selectionStartCodepoint = cursorCodepoint
+                            }
+                            val end = text.codePointCount(0, text.length)
+                            selectionEndCodepoint = end
+                            cursorCodepoint = end
+                        } else {
+                            cursorCodepoint = text.codePointCount(0, text.length)
+                        }
+                    }
+
+                    KeySym.Left -> {
+                        if (modifiers.shift) {
+                            if (selectionStartCodepoint == null) {
+                                selectionStartCodepoint = cursorCodepoint
+                            }
+                            cursorCodepoint = max(0, cursorCodepoint - 1)
+                            selectionEndCodepoint = cursorCodepoint
+                        } else {
+                            cursorCodepoint = max(0, cursorCodepoint - 1)
+                        }
+                    }
+
+                    KeySym.Right -> {
+                        if (modifiers.shift) {
+                            if (selectionStartCodepoint == null) {
+                                selectionStartCodepoint = cursorCodepoint
+                            }
+                            cursorCodepoint = min(cursorCodepoint + 1, text.codePointCount(0, text.length))
+                            selectionEndCodepoint = cursorCodepoint
+                        } else {
+                            cursorCodepoint = min(cursorCodepoint + 1, text.codePointCount(0, text.length))
+                        }
+                    }
+
+                    else -> {
+                        removeSelection()
+                        event.characters?.let { characters ->
+                            text.insert(text.offsetByCodePoints(0, cursorCodepoint), characters)
+                            cursorCodepoint += 1
+                        }
+                    }
+                }
+
+                if (!modifiers.shift) {
+                    selectionStartCodepoint = null
+                    selectionEndCodepoint = null
+                }
+
+                cursorCodepoint = max(0, cursorCodepoint)
+                app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+                EventHandlerResult.Stop
+            }
+            is Event.TextInputAvailability -> {
+                if (event.available) {
+                    app.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
+                } else {
+                    app.textInputDisable()
+                }
+                EventHandlerResult.Stop
+            }
+            is Event.TextInput -> {
+                composedText = ""
+                event.deleteSurroundingTextData?.let { deleteSurroundingTextData ->
+                }
+                event.commitStringData?.let { commitStringData ->
+                    commitStringData.text?.let { commitString ->
+                        this.text.insert(text.offsetByCodePoints(0, cursorCodepoint), commitString)
+                        cursorCodepoint += commitString.codePointCount(0, commitString.length)
+                    }
+                }
+                event.preeditStringData?.let { preeditStringData ->
+                    if (preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1) {
+                        cursorVisible = false
+                    } else {
+                        cursorVisible = true
+                    }
+                    preeditStringData.text?.let { preeditString ->
+                        composedText = preeditString
+                        composedTextStartOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBeginBytePos)
+                        composedTextEndOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorEndBytePos)
+                    }
+                } ?: run {
+                    composedTextStartOffset = null
+                    composedTextEndOffset = null
+                    cursorVisible = true
+                }
+                if (event.deleteSurroundingTextData != null || event.commitStringData != null) {
+                    app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = true))
+                }
+                EventHandlerResult.Stop
+            }
+            else -> EventHandlerResult.Continue
+        }
+    }
+}
+
 private fun LogicalPoint.isInsideCircle(center: LogicalPoint, radius: LogicalPixels): Boolean {
     val xDiff = this.x - center.x
     val yDiff = this.y - center.y
     return xDiff.pow(2) + yDiff.pow(2) <= radius.pow(2)
 }
 
-private fun createTextInputContext(text: String, changeCausedByInputMethod: Boolean): TextInputContext {
-    return TextInputContext(
-        surroundingText = text,
-        cursorPosBytes = text.encodeToByteArray().size,
-        selectionStartPosBytes = 0,
-        isMultiline = true,
-        contentPurpose = TextInputContentPurpose.Normal,
-        cursorRectangle = LogicalRect(
-            point = LogicalPoint(
-                x = text.length * 10f,
-                y = 100f,
-            ),
-            size = LogicalSize(
-                width = 5f,
-                height = 10f,
-            ),
-        ),
-        changeCausedByInputMethod = changeCausedByInputMethod,
-    )
-}
-
-private data class TextLineCreator(private var fontSize: Float, private var text: String) {
+private data class TextLineCreator(private var cachedFontSize: Float, private var cachedText: String) {
     private var textLine: TextLine? = null
 
+    init {
+        Logger.info { "makeTextLine init: $cachedText" }
+    }
+
     fun makeTextLine(text: String, fontSize: Float): TextLine {
-        if (textLine == null || this.text != text || this.fontSize != fontSize) {
-            this.text = text
-            this.fontSize = fontSize
+        if (textLine == null || this.cachedText != text || this.cachedFontSize != fontSize) {
+            Logger.info { "makeTextLine update: $text" }
+            this.cachedText = text
+            this.cachedFontSize = fontSize
             val font = FontMgr.default.matchFamilyStyle("sans-serif", FontStyle.BOLD)?.let { typeface ->
-                Font(typeface, this.fontSize)
+                Font(typeface, fontSize)
             }
-            textLine = TextLine.make(this.text, font)
+            textLine = TextLine.make(text, font)
+        } else {
+//            Logger.info { "makeTextLine: $text == ${this.text}" }
         }
         return textLine!!
     }
@@ -157,7 +385,7 @@ class CustomTitlebar(
     private var leftClickStartLocation: LogicalPoint? = null
     private var isDragging: Boolean = false
 
-    private var titleTextLineCreator = TextLineCreator(fontSize = 0f, text = "")
+    private var titleTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
 
     companion object {
         const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55f
@@ -412,8 +640,6 @@ class ContentArea(
     var size: LogicalSize,
 ) {
     private var markerPosition: LogicalPoint? = null
-    private var textLineCreator = TextLineCreator(fontSize = 0f, text = "")
-    private var composedTextLineCreator = TextLineCreator(fontSize = 0f, text = "")
 
     fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
@@ -431,7 +657,7 @@ class ContentArea(
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, composedText: String, text: String, scale: Float) {
+    fun draw(canvas: Canvas, time: Long, scale: Float, editorState: EditorState) {
         val contentOrigin = origin.toPhysical(scale)
         val contentSize = size.toPhysical(scale)
         Paint().use { paint ->
@@ -460,7 +686,7 @@ class ContentArea(
             }
         }
         canvas.drawSpiningCircle(contentOrigin, contentSize, time)
-        canvas.drawText(composedText, text, contentSize.height / 2f, scale)
+        editorState.draw(canvas, contentSize.height / 2f, scale)
         canvas.drawWindowBorders(contentOrigin, contentSize, scale)
         canvas.drawCursor(contentOrigin, contentSize, scale)
     }
@@ -475,19 +701,6 @@ class ContentArea(
         Paint().use { paint ->
             paint.color = Color.GREEN
             drawCircle(x, y, 30f, paint)
-        }
-    }
-
-    private fun Canvas.drawText(composedText: String, text: String, y: Float, scale: Float) {
-        val textLine = textLineCreator.makeTextLine(text, CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT * scale)
-        val composedTextLine = composedTextLineCreator.makeTextLine(composedText, CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT * scale)
-        Paint().use { paint ->
-            paint.color = Color.WHITE
-            drawTextLine(textLine, 0f, y, paint)
-        }
-        Paint().use { paint ->
-            paint.color = Color.YELLOW
-            drawTextLine(composedTextLine, textLine.width, y, paint)
         }
     }
 
@@ -696,7 +909,7 @@ class WindowContainer(
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, composedText: String, text: String, scale: Float, title: String) {
+    fun draw(canvas: Canvas, time: Long, scale: Float, title: String, editorState: EditorState) {
         val backgroundColor = if (xdgDesktopSettings.colorScheme == ColorSchemeValue.PreferDark) {
             Color.makeARGB(
                 240,
@@ -709,7 +922,7 @@ class WindowContainer(
         }
         canvas.clear(backgroundColor)
         customTitlebar?.draw(canvas, scale, xdgDesktopSettings, title)
-        contentArea.draw(canvas, time, composedText, text, scale)
+        contentArea.draw(canvas, time, scale, editorState)
     }
 }
 
@@ -719,8 +932,7 @@ class RotatingBallWindow(
     windowParams: WindowParams,
 ) : SkikoWindowLinux(app, windowParams) {
     private var title: String = windowParams.title
-    var composedText: String = ""
-    var text: String = ""
+    val editorState = EditorState()
 
     companion object {
         fun createWindow(
@@ -770,7 +982,7 @@ class RotatingBallWindow(
 
     override fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long) {
         val canvas = this
-        windowContainer.draw(canvas, time, composedText, text, scale.toFloat(), title)
+        windowContainer.draw(canvas, time, scale.toFloat(), title, editorState)
     }
 }
 
@@ -798,47 +1010,27 @@ class ApplicationState(private val app: Application) : AutoCloseable {
         }
     }
 
+    private fun logEvents(event: Event) {
+        when (event) {
+            is Event.MouseMoved, is Event.WindowDraw -> {}
+            else -> {
+                Logger.info { "$event" }
+            }
+        }
+    }
+
     fun handleEvent(event: Event, windowId: WindowId): EventHandlerResult {
+        logEvents(event)
         val window = windows[windowId] ?: return EventHandlerResult.Continue
+        if (window.editorState.handleEvent(event, app) == EventHandlerResult.Stop) {
+            return EventHandlerResult.Stop
+        }
         return when (event) {
             is Event.WindowCloseRequest -> {
                 window.close()
                 windows.remove(windowId)
                 if (windows.isEmpty()) {
                     app.stopEventLoop()
-                }
-                EventHandlerResult.Stop
-            }
-            is Event.KeyDown -> {
-                if (event.key.value == KeySym.BackSpace) {
-                    window.text = window.text.dropLast(1)
-                } else if (event.characters != null) {
-                    window.text += event.characters
-                }
-                app.textInputUpdate(createTextInputContext(window.text, changeCausedByInputMethod = false))
-                EventHandlerResult.Stop
-            }
-            is Event.TextInputAvailability -> {
-                if (event.available) {
-                    app.textInputEnable(createTextInputContext(window.text, changeCausedByInputMethod = false))
-                } else {
-                    app.textInputDisable()
-                }
-                EventHandlerResult.Stop
-            }
-            is Event.TextInput -> {
-                window.composedText = ""
-                event.deleteSurroundingTextData?.let { deleteSurroundingTextData ->
-                }
-                event.commitStringData?.let { commitStringData ->
-                    window.text += commitStringData.text?.decodeToString() ?: ""
-                }
-                event.preeditStringData?.let { preeditStringData ->
-                    Logger.info { "Preediting string data: ${preeditStringData.text} (${preeditStringData.text?.size})" }
-                    window.composedText = preeditStringData.text?.decodeToString() ?: ""
-                }
-                if (event.deleteSurroundingTextData != null || event.commitStringData != null) {
-                    app.textInputUpdate(createTextInputContext(window.text, changeCausedByInputMethod = true))
                 }
                 EventHandlerResult.Stop
             }

@@ -409,6 +409,55 @@ typedef struct NativeXdgDesktopSetting {
   };
 } NativeXdgDesktopSetting;
 
+typedef uint32_t NativeKeyCode;
+
+typedef uint32_t NativeTimestamp;
+
+typedef struct NativeKeyDownEvent {
+  NativeKeyCode code;
+  NativeBorrowedStrPtr characters;
+  uint32_t key;
+  bool is_repeat;
+  NativeTimestamp timestamp;
+} NativeKeyDownEvent;
+
+typedef struct NativeKeyUpEvent {
+  NativeKeyCode code;
+  NativeBorrowedStrPtr characters;
+  uint32_t key;
+  NativeTimestamp timestamp;
+} NativeKeyUpEvent;
+
+typedef struct NativeTextInputAvailabilityEvent {
+  bool available;
+} NativeTextInputAvailabilityEvent;
+
+typedef struct NativeTextInputPreeditStringData {
+  /**
+   * Can be null
+   */
+  NativeBorrowedStrPtr text;
+  int32_t cursor_begin_byte_pos;
+  int32_t cursor_end_byte_pos;
+} NativeTextInputPreeditStringData;
+
+typedef struct NativeTextInputDeleteSurroundingTextData {
+  uint32_t before_length_in_bytes;
+  uint32_t after_length_in_bytes;
+} NativeTextInputDeleteSurroundingTextData;
+
+typedef struct NativeTextInputEvent {
+  bool has_preedit_string;
+  struct NativeTextInputPreeditStringData preedit_string;
+  bool has_commit_string;
+  /**
+   * Can be null
+   */
+  NativeBorrowedStrPtr commit_string;
+  bool has_delete_surrounding_text;
+  struct NativeTextInputDeleteSurroundingTextData delete_surrounding_text;
+} NativeTextInputEvent;
+
 typedef struct NativeKeyModifiers {
   /**
    * The "control" key
@@ -437,62 +486,6 @@ typedef struct NativeKeyModifiers {
    */
   bool num_lock;
 } NativeKeyModifiers;
-
-typedef uint32_t NativeKeyCode;
-
-typedef uint32_t NativeTimestamp;
-
-typedef struct NativeKeyDownEvent {
-  struct NativeKeyModifiers modifiers;
-  NativeKeyCode code;
-  NativeBorrowedStrPtr characters;
-  uint32_t key;
-  bool is_repeat;
-  NativeTimestamp timestamp;
-} NativeKeyDownEvent;
-
-typedef struct NativeKeyUpEvent {
-  struct NativeKeyModifiers modifiers;
-  NativeKeyCode code;
-  NativeBorrowedStrPtr characters;
-  uint32_t key;
-  NativeTimestamp timestamp;
-} NativeKeyUpEvent;
-
-typedef struct NativeTextInputAvailabilityEvent {
-  bool available;
-} NativeTextInputAvailabilityEvent;
-
-typedef struct NativeBorrowedArray_u8 {
-  const uint8_t *ptr;
-  NativeArraySize len;
-} NativeBorrowedArray_u8;
-
-typedef struct NativeTextInputPreeditStringData {
-  /**
-   * Can be null
-   */
-  struct NativeBorrowedArray_u8 text_bytes;
-  int32_t cursor_begin_byte_pos;
-  int32_t cursor_end_byte_pos;
-} NativeTextInputPreeditStringData;
-
-typedef struct NativeTextInputDeleteSurroundingTextData {
-  uint32_t before_length_in_bytes;
-  uint32_t after_length_in_bytes;
-} NativeTextInputDeleteSurroundingTextData;
-
-typedef struct NativeTextInputEvent {
-  bool has_preedit_string;
-  struct NativeTextInputPreeditStringData preedit_string;
-  bool has_commit_string;
-  /**
-   * Can be null
-   */
-  struct NativeBorrowedArray_u8 commit_string;
-  bool has_delete_surrounding_text;
-  struct NativeTextInputDeleteSurroundingTextData delete_surrounding_text;
-} NativeTextInputEvent;
 
 typedef struct NativeModifiersChangedEvent {
   struct NativeKeyModifiers modifiers;
@@ -718,13 +711,18 @@ typedef struct NativeGetEglProcFuncData {
   NativeBorrowedOpaquePtr ctx;
 } NativeGetEglProcFuncData;
 
+typedef struct NativeBorrowedArray_u8 {
+  const uint8_t *ptr;
+  NativeArraySize len;
+} NativeBorrowedArray_u8;
+
 typedef struct NativeLogicalRect {
   struct NativeLogicalPoint origin;
   struct NativeLogicalSize size;
 } NativeLogicalRect;
 
 typedef struct NativeTextInputContext {
-  NativeBorrowedStrPtr surrounding_text;
+  struct NativeBorrowedArray_u8 surrounding_text;
   int32_t cursor_pos_bytes;
   int32_t selection_start_pos_bytes;
   bool is_multiline;

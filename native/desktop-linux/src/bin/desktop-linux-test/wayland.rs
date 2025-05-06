@@ -2,8 +2,8 @@ use crate::gl_sys::{
     GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
     GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
 };
-use anyhow::Context;
 use core::str;
+use desktop_common::ffi_utils::BorrowedArray;
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
@@ -232,7 +232,7 @@ fn log_event(event: &Event, window_id: WindowId) {
 
 fn create_text_input_context(text: &CString, text_len: i32, change_caused_by_input_method: bool) -> TextInputContext {
     TextInputContext {
-        surrounding_text: BorrowedStrPtr::new(text),
+        surrounding_text: BorrowedArray::from_slice(text.as_bytes()),
         cursor_pos_bytes: text_len,
         selection_start_pos_bytes: text_len,
         is_multiline: true,
@@ -323,8 +323,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                 window_state.text.drain(range);
             }
             if data.has_commit_string {
-                if let Ok(bytes) = data.commit_string.as_slice() {
-                    let commit_string = str::from_utf8(bytes).with_context(|| format!("{bytes:?}")).unwrap();
+                if let Ok(commit_string) = data.commit_string.as_str() {
                     debug!("{window_id:?} commit_string: {commit_string}");
                     window_state.text += commit_string;
                 }
@@ -336,8 +335,8 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
             if data.has_preedit_string {
                 if data.preedit_string.cursor_begin_byte_pos == -1 && data.preedit_string.cursor_end_byte_pos == -1 {
                     // TODO: hide cursor
-                } else if let Ok(bytes) = data.preedit_string.text_bytes.as_slice() {
-                    window_state.composed_text.push_str(str::from_utf8(bytes).unwrap());
+                } else if let Ok(preedit_string) = data.preedit_string.text.as_str() {
+                    window_state.composed_text.push_str(preedit_string);
                 }
             }
 

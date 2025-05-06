@@ -39,6 +39,34 @@ internal fun optionalNativeStringToByteArray(s: MemorySegment, arena: Arena): By
     }
 }
 
+/**
+ * Converts UTF-8 offset to UTF-16 offset.
+ */
+public fun utf8OffsetToUtf16Offset(string: CharSequence, offset: Int): Int {
+    if (offset == 0) {
+        return 0
+    }
+    var utf8Offset = offset
+    var utf16Offset = 0
+    for (codePoint in string.codePoints()) {
+        utf8Offset -= when {
+            codePoint < 128 -> 1
+            codePoint < 2048 -> 2
+            codePoint < 65536 -> 3
+            else -> 4
+        }
+
+        utf16Offset += 1
+        // Code points from the supplementary planes are encoded as a surrogate pair in utf-16,
+        // meaning we'll have one extra utf-16 code unit for every code point in this range.
+        if (codePoint >= 65536) utf16Offset += 1
+
+        if (utf8Offset <= 0) break
+    }
+
+    return utf16Offset
+}
+
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
     width = NativeLogicalSize.width(s).toFloat(),
     height = NativeLogicalSize.height(s).toFloat(),
@@ -247,9 +275,9 @@ internal fun TextInputContentPurpose.toNative(): Int {
     }
 }
 
-internal fun TextInputPreeditStringData.Companion.fromNative(s: MemorySegment, arena: Arena): TextInputPreeditStringData {
+internal fun TextInputPreeditStringData.Companion.fromNative(s: MemorySegment): TextInputPreeditStringData {
     return TextInputPreeditStringData(
-        text = optionalNativeStringToByteArray(NativeTextInputPreeditStringData.text_bytes(s), arena),
+        text = fromOptionalNativeString(NativeTextInputPreeditStringData.text(s)),
         cursorBeginBytePos = NativeTextInputPreeditStringData.cursor_begin_byte_pos(s),
         cursorEndBytePos = NativeTextInputPreeditStringData.cursor_end_byte_pos(s),
     )
@@ -264,7 +292,10 @@ internal fun TextInputDeleteSurroundingTextData.Companion.fromNative(s: MemorySe
 
 internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
     val result = NativeTextInputContext.allocate(arena)
-    NativeTextInputContext.surrounding_text(result, arena.allocateUtf8String(surroundingText))
+    val nativeSurroundingText = NativeBorrowedArray_u8.allocate(arena)
+    NativeBorrowedArray_u8.len(nativeSurroundingText, surroundingText.size.toLong())
+    NativeBorrowedArray_u8.ptr(nativeSurroundingText, arena.allocateArray(desktop_linux_h.C_CHAR, *surroundingText))
+    NativeTextInputContext.surrounding_text(result, nativeSurroundingText)
     NativeTextInputContext.cursor_pos_bytes(result, cursorPosBytes)
     NativeTextInputContext.selection_start_pos_bytes(result, selectionStartPosBytes)
     NativeTextInputContext.is_multiline(result, isMultiline)

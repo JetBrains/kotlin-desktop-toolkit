@@ -20,7 +20,6 @@ import org.jetbrains.desktop.linux.generated.NativeWindowFullScreenToggleEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
-import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -203,7 +202,6 @@ public sealed class Event {
         val keyCode: KeyCode,
         val characters: String?,
         val key: KeySym,
-        val modifiers: KeyModifiers,
         val isRepeat: Boolean,
         val timestamp: Timestamp,
     ) : Event()
@@ -212,7 +210,6 @@ public sealed class Event {
         val keyCode: KeyCode,
         val characters: String?,
         val key: KeySym,
-        val modifiers: KeyModifiers,
         val timestamp: Timestamp,
     ) : Event()
 
@@ -317,7 +314,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 keyCode = KeyCode(NativeKeyDownEvent.code(nativeEvent)),
                 characters = fromOptionalNativeString(NativeKeyDownEvent.characters(nativeEvent)),
                 key = KeySym(NativeKeyDownEvent.key(nativeEvent)),
-                modifiers = KeyModifiers.fromNative(NativeKeyDownEvent.modifiers(nativeEvent)),
                 isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
                 timestamp = Timestamp(NativeKeyDownEvent.timestamp(nativeEvent)),
             )
@@ -327,7 +323,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.KeyUp(
                 characters = fromOptionalNativeString(NativeKeyUpEvent.characters(nativeEvent)),
                 key = KeySym(NativeKeyUpEvent.key(nativeEvent)),
-                modifiers = KeyModifiers.fromNative(NativeKeyUpEvent.modifiers(nativeEvent)),
                 keyCode = KeyCode(NativeKeyUpEvent.code(nativeEvent)),
                 timestamp = Timestamp(NativeKeyUpEvent.timestamp(nativeEvent)),
             )
@@ -338,28 +333,25 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_h.NativeEvent_TextInput() -> {
             val nativeEvent = NativeEvent.text_input(s)
-            return Arena.ofConfined().use { arena ->
-
-                Event.TextInput(
-                    preeditStringData = if (NativeTextInputEvent.has_preedit_string(nativeEvent)) {
-                        TextInputPreeditStringData.fromNative(NativeTextInputEvent.preedit_string(nativeEvent), arena)
-                    } else {
-                        null
-                    },
-                    commitStringData = if (NativeTextInputEvent.has_commit_string(nativeEvent)) {
-                        TextInputCommitStringData(
-                            text = optionalNativeStringToByteArray(NativeTextInputEvent.commit_string(nativeEvent), arena),
-                        )
-                    } else {
-                        null
-                    },
-                    deleteSurroundingTextData = if (NativeTextInputEvent.has_delete_surrounding_text(nativeEvent)) {
-                        TextInputDeleteSurroundingTextData.fromNative(NativeTextInputEvent.delete_surrounding_text(nativeEvent))
-                    } else {
-                        null
-                    },
-                )
-            }
+            Event.TextInput(
+                preeditStringData = if (NativeTextInputEvent.has_preedit_string(nativeEvent)) {
+                    TextInputPreeditStringData.fromNative(NativeTextInputEvent.preedit_string(nativeEvent))
+                } else {
+                    null
+                },
+                commitStringData = if (NativeTextInputEvent.has_commit_string(nativeEvent)) {
+                    TextInputCommitStringData(
+                        text = fromOptionalNativeString(NativeTextInputEvent.commit_string(nativeEvent)),
+                    )
+                } else {
+                    null
+                },
+                deleteSurroundingTextData = if (NativeTextInputEvent.has_delete_surrounding_text(nativeEvent)) {
+                    TextInputDeleteSurroundingTextData.fromNative(NativeTextInputEvent.delete_surrounding_text(nativeEvent))
+                } else {
+                    null
+                },
+            )
         }
         desktop_h.NativeEvent_ModifiersChanged() -> {
             val nativeEvent = NativeEvent.modifiers_changed(s)

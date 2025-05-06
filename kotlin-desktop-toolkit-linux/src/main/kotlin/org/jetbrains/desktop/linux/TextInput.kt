@@ -1,14 +1,23 @@
 package org.jetbrains.desktop.linux
 
-public class TextInputPreeditStringData(public val text: ByteArray?, public val cursorBeginBytePos: Int, public val cursorEndBytePos: Int) {
+public data class TextInputPreeditStringData(
+    public val text: String?,
+    public val cursorBeginBytePos: Int,
+    public val cursorEndBytePos: Int,
+) {
     internal companion object
 }
 
-public class TextInputCommitStringData(public val text: ByteArray?) {
+public data class TextInputCommitStringData(
+    public val text: String?,
+) {
     internal companion object
 }
 
-public data class TextInputDeleteSurroundingTextData(public val beforeLengthInBytes: Int, public val afterLengthInBytes: Int) {
+public data class TextInputDeleteSurroundingTextData(
+    public val beforeLengthInBytes: Int,
+    public val afterLengthInBytes: Int,
+) {
     internal companion object
 }
 
@@ -53,8 +62,8 @@ public enum class TextInputContentPurpose {
     internal companion object
 }
 
-public data class TextInputContext(
-    public val surroundingText: String,
+public class TextInputContext(
+    public val surroundingText: ByteArray,
     public val cursorPosBytes: Int,
     public val selectionStartPosBytes: Int,
     public val isMultiline: Boolean,
