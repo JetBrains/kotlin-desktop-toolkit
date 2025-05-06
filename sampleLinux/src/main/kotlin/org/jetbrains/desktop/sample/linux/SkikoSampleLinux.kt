@@ -109,10 +109,10 @@ class EditorState() {
     private var composedTextEndOffset: Int? = null
     private var text: StringBuilder = StringBuilder()
     private var cursorVisible = true
-    private var cursorCodepoint: Int = 0
+    private var cursorOffset: Int = 0
     private var cursorRectangle = LogicalRect(LogicalPoint(0f, 0f), LogicalSize(0f, 0f))
-    private var selectionStartCodepoint: Int? = null
-    private var selectionEndCodepoint: Int? = null
+    private var selectionStartOffset: Int? = null
+    private var selectionEndOffset: Int? = null
     private var modifiers = KeyModifiers(
         capsLock = false,
         shift = false,
@@ -126,13 +126,11 @@ class EditorState() {
 
     fun createTextInputContext(changeCausedByInputMethod: Boolean): TextInputContext {
         Logger.info { "createTextInputContext: $text" }
-        val cursorPosBytes = text.substring(0, text.offsetByCodePoints(0, cursorCodepoint)).toByteArray().size
+        val cursorCodepoint = text.codePointAt(cursorOffset).toShort()
         return TextInputContext(
-            surroundingText = text.toString().toByteArray(),
-            cursorPosBytes = cursorPosBytes,
-            selectionStartPosBytes = selectionStartCodepoint?.let {
-                text.substring(0, text.offsetByCodePoints(0, it)).toByteArray().size
-            } ?: cursorPosBytes,
+            surroundingText = text.toString(),
+            cursorCodepointOffset = cursorCodepoint,
+            selectionStartCodepointOffset = selectionStartOffset?.let { text.codePointAt(it).toShort() } ?: cursorCodepoint,
             isMultiline = true,
             contentPurpose = TextInputContentPurpose.Normal,
             cursorRectangle = cursorRectangle,
@@ -142,11 +140,11 @@ class EditorState() {
 
     fun draw(canvas: Canvas, y: Float, scale: Float) {
         val textLineStats = statsTextLineCreator.makeTextLine(
-            "Cursor pos: $cursorCodepoint, compose: $composedTextStartOffset - $composedTextEndOffset",
+            "Cursor pos: $cursorOffset, compose: $composedTextStartOffset - $composedTextEndOffset",
             20 * scale,
         )
         val composedTextStartOffset = this.composedTextStartOffset
-        val cursorOffset = text.offsetByCodePoints(0, cursorCodepoint)
+        val cursorOffset = cursorOffset
         val stringLine = if (composedText.isEmpty()) {
             text
         } else {
@@ -162,8 +160,8 @@ class EditorState() {
                 canvas.drawLine(x0 = x0, y0 = y + (5 * scale), x1 = x1, y1 = y + (5 * scale), paint = paint)
             }
         }
-        val selectionStartOffset = selectionStartCodepoint?.let { text.offsetByCodePoints(0, it) }
-        val selectionEndOffset = selectionEndCodepoint?.let { text.offsetByCodePoints(0, it) }
+        val selectionStartOffset = selectionStartOffset
+        val selectionEndOffset = selectionEndOffset
         if (selectionStartOffset != null && selectionEndOffset != null) {
             Paint().use { paint ->
                 paint.color = Color.BLUE
@@ -179,7 +177,7 @@ class EditorState() {
         }
         if (cursorVisible) {
             Paint().use { paint ->
-                val coord = textLine.getCoordAtOffset(text.offsetByCodePoints(0, cursorCodepoint) + (composedTextStartOffset ?: 0))
+                val coord = textLine.getCoordAtOffset(cursorOffset + (composedTextStartOffset ?: 0))
 
                 cursorRectangle = LogicalRect(
                     LogicalPoint(x = coord / scale, y = (y - textLine.height + (10 * scale)) / scale),
@@ -200,17 +198,13 @@ class EditorState() {
     }
 
     private fun removeSelection(): Boolean {
-        selectionStartCodepoint.let { selectionStartCodepoint ->
-            selectionEndCodepoint.let { selectionEndCodepoint ->
-                if (selectionStartCodepoint != null && selectionEndCodepoint != null) {
-                    val a = text.offsetByCodePoints(0, selectionStartCodepoint)
-                    val b = text.offsetByCodePoints(0, selectionEndCodepoint)
-                    val start = min(a, b)
-                    text.delete(start, max(a, b))
-                    cursorCodepoint = start
-                    return true
-                }
-            }
+        val selectionStartOffset = selectionStartOffset
+        val selectionEndOffset = selectionEndOffset
+        if (selectionStartOffset != null && selectionEndOffset != null) {
+            val start = min(selectionStartOffset, selectionEndOffset)
+            text.delete(start, max(selectionStartOffset, selectionEndOffset))
+            cursorOffset = start
+            return true
         }
         return false
     }
@@ -224,76 +218,76 @@ class EditorState() {
             is Event.KeyDown -> {
                 when (event.key.value) {
                     KeySym.BackSpace -> {
-                        if (!removeSelection() && cursorCodepoint > 0) {
-                            text.deleteAt(text.codePointCount(0, cursorCodepoint - 1))
-                            cursorCodepoint -= 1
+                        if (!removeSelection() && cursorOffset > 0) {
+                            text.deleteAt(cursorOffset - 1)
+                            cursorOffset -= 1
                         }
                     }
 
                     KeySym.Up -> {
                         if (modifiers.shift) {
-                            if (selectionStartCodepoint == null) {
-                                selectionStartCodepoint = cursorCodepoint
+                            if (selectionStartOffset == null) {
+                                selectionStartOffset = cursorOffset
                             }
-                            selectionEndCodepoint = 0
-                            cursorCodepoint = 0
+                            selectionEndOffset = 0
+                            cursorOffset = 0
                         } else {
-                            cursorCodepoint = 0
+                            cursorOffset = 0
                         }
                     }
 
                     KeySym.Down -> {
                         if (modifiers.shift) {
-                            if (selectionStartCodepoint == null) {
-                                selectionStartCodepoint = cursorCodepoint
+                            if (selectionStartOffset == null) {
+                                selectionStartOffset = cursorOffset
                             }
-                            val end = text.codePointCount(0, text.length)
-                            selectionEndCodepoint = end
-                            cursorCodepoint = end
+                            val end = text.length
+                            selectionEndOffset = end
+                            cursorOffset = end
                         } else {
-                            cursorCodepoint = text.codePointCount(0, text.length)
+                            cursorOffset = text.length
                         }
                     }
 
                     KeySym.Left -> {
                         if (modifiers.shift) {
-                            if (selectionStartCodepoint == null) {
-                                selectionStartCodepoint = cursorCodepoint
+                            if (selectionStartOffset == null) {
+                                selectionStartOffset = cursorOffset
                             }
-                            cursorCodepoint = max(0, cursorCodepoint - 1)
-                            selectionEndCodepoint = cursorCodepoint
+                            cursorOffset = max(0, cursorOffset - 1)
+                            selectionEndOffset = cursorOffset
                         } else {
-                            cursorCodepoint = max(0, cursorCodepoint - 1)
+                            cursorOffset = max(0, cursorOffset - 1)
                         }
                     }
 
                     KeySym.Right -> {
                         if (modifiers.shift) {
-                            if (selectionStartCodepoint == null) {
-                                selectionStartCodepoint = cursorCodepoint
+                            if (selectionStartOffset == null) {
+                                selectionStartOffset = cursorOffset
                             }
-                            cursorCodepoint = min(cursorCodepoint + 1, text.codePointCount(0, text.length))
-                            selectionEndCodepoint = cursorCodepoint
+                            cursorOffset = min(cursorOffset + 1, text.length)
+                            selectionEndOffset = cursorOffset
                         } else {
-                            cursorCodepoint = min(cursorCodepoint + 1, text.codePointCount(0, text.length))
+                            cursorOffset = min(cursorOffset + 1, text.length)
                         }
                     }
 
                     else -> {
                         removeSelection()
                         event.characters?.let { characters ->
-                            text.insert(text.offsetByCodePoints(0, cursorCodepoint), characters)
-                            cursorCodepoint += 1
+                            text.insert(cursorOffset, characters)
+                            cursorOffset += 1
                         }
                     }
                 }
 
                 if (!modifiers.shift) {
-                    selectionStartCodepoint = null
-                    selectionEndCodepoint = null
+                    selectionStartOffset = null
+                    selectionEndOffset = null
                 }
 
-                cursorCodepoint = max(0, cursorCodepoint)
+                cursorOffset = max(0, cursorOffset)
                 app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
                 EventHandlerResult.Stop
             }
@@ -308,11 +302,14 @@ class EditorState() {
             is Event.TextInput -> {
                 composedText = ""
                 event.deleteSurroundingTextData?.let { deleteSurroundingTextData ->
+                    val deleteStart = cursorOffset - utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.beforeLengthInBytes)
+                    val deleteEnd = cursorOffset + utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.afterLengthInBytes)
+                    this.text.delete(deleteStart, deleteEnd)
                 }
                 event.commitStringData?.let { commitStringData ->
                     commitStringData.text?.let { commitString ->
-                        this.text.insert(text.offsetByCodePoints(0, cursorCodepoint), commitString)
-                        cursorCodepoint += commitString.codePointCount(0, commitString.length)
+                        this.text.insert(cursorOffset, commitString)
+                        cursorOffset += commitString.length
                     }
                 }
                 event.preeditStringData?.let { preeditStringData ->

@@ -1,6 +1,5 @@
 package org.jetbrains.desktop.linux
 
-import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
 import org.jetbrains.desktop.linux.generated.NativeKeyModifiers
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
@@ -23,20 +22,6 @@ import kotlin.time.toDuration
 
 internal fun fromOptionalNativeString(s: MemorySegment): String? {
     return if (s == MemorySegment.NULL) null else s.getUtf8String(0)
-}
-
-internal fun optionalNativeStringToByteArray(s: MemorySegment, arena: Arena): ByteArray? {
-    return if (s == MemorySegment.NULL) {
-        null
-    } else {
-        val ptr = NativeBorrowedArray_u8.ptr(s)
-        val len = NativeBorrowedArray_u8.len(s)
-        val utf8 = ByteArray(len.toInt())
-        for (i in 0 until len) {
-            utf8[i.toInt()] = ptr.get(desktop_linux_h.C_CHAR, i)
-        }
-        utf8
-    }
 }
 
 /**
@@ -292,12 +277,9 @@ internal fun TextInputDeleteSurroundingTextData.Companion.fromNative(s: MemorySe
 
 internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
     val result = NativeTextInputContext.allocate(arena)
-    val nativeSurroundingText = NativeBorrowedArray_u8.allocate(arena)
-    NativeBorrowedArray_u8.len(nativeSurroundingText, surroundingText.size.toLong())
-    NativeBorrowedArray_u8.ptr(nativeSurroundingText, arena.allocateArray(desktop_linux_h.C_CHAR, *surroundingText))
-    NativeTextInputContext.surrounding_text(result, nativeSurroundingText)
-    NativeTextInputContext.cursor_pos_bytes(result, cursorPosBytes)
-    NativeTextInputContext.selection_start_pos_bytes(result, selectionStartPosBytes)
+    NativeTextInputContext.surrounding_text(result, arena.allocateUtf8String(surroundingText))
+    NativeTextInputContext.cursor_codepoint_offset(result, cursorCodepointOffset)
+    NativeTextInputContext.selection_start_codepoint_offset(result, selectionStartCodepointOffset)
     NativeTextInputContext.is_multiline(result, isMultiline)
     NativeTextInputContext.content_purpose(result, contentPurpose.toNative())
     NativeTextInputContext.cursor_rectangle(result, cursorRectangle.toNative(arena))

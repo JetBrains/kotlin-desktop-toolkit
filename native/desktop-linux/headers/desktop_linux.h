@@ -711,20 +711,15 @@ typedef struct NativeGetEglProcFuncData {
   NativeBorrowedOpaquePtr ctx;
 } NativeGetEglProcFuncData;
 
-typedef struct NativeBorrowedArray_u8 {
-  const uint8_t *ptr;
-  NativeArraySize len;
-} NativeBorrowedArray_u8;
-
 typedef struct NativeLogicalRect {
   struct NativeLogicalPoint origin;
   struct NativeLogicalSize size;
 } NativeLogicalRect;
 
 typedef struct NativeTextInputContext {
-  struct NativeBorrowedArray_u8 surrounding_text;
-  int32_t cursor_pos_bytes;
-  int32_t selection_start_pos_bytes;
+  NativeBorrowedStrPtr surrounding_text;
+  uint16_t cursor_codepoint_offset;
+  uint16_t selection_start_codepoint_offset;
   bool is_multiline;
   enum NativeTextInputContentPurpose content_purpose;
   struct NativeLogicalRect cursor_rectangle;

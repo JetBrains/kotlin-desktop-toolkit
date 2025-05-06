@@ -3,7 +3,6 @@ use crate::gl_sys::{
     GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
 };
 use core::str;
-use desktop_common::ffi_utils::BorrowedArray;
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
@@ -230,16 +229,20 @@ fn log_event(event: &Event, window_id: WindowId) {
     }
 }
 
-fn create_text_input_context(text: &CString, text_len: i32, change_caused_by_input_method: bool) -> TextInputContext {
+fn create_text_input_context<'a>(text: &str, text_cstring: &'a CString, change_caused_by_input_method: bool) -> TextInputContext<'a> {
+    let mut codepoints_count = 0;
+    for _ in text.chars() {
+        codepoints_count += 1;
+    }
     TextInputContext {
-        surrounding_text: BorrowedArray::from_slice(text.as_bytes()),
-        cursor_pos_bytes: text_len,
-        selection_start_pos_bytes: text_len,
+        surrounding_text: BorrowedStrPtr::new(text_cstring),
+        cursor_codepoint_offset: codepoints_count,
+        selection_start_codepoint_offset: codepoints_count,
         is_multiline: true,
         content_purpose: TextInputContentPurpose::Normal,
         cursor_rectangle: LogicalRect {
             origin: LogicalPoint {
-                x: LogicalPixels(f64::from(text_len) * 10.0),
+                x: LogicalPixels(f64::from(codepoints_count) * 10.0),
                 y: LogicalPixels(100.0),
             },
             size: LogicalSize {
@@ -252,11 +255,10 @@ fn create_text_input_context(text: &CString, text_len: i32, change_caused_by_inp
 }
 
 fn update_text_input_context(app_ptr: AppPtr<'_>, text: &str, change_caused_by_input_method: bool) {
-    let text_len = i32::try_from(text.len()).unwrap();
     let surrounding_text_cstring = CString::from_str(text).unwrap();
     application_text_input_update(
         app_ptr,
-        create_text_input_context(&surrounding_text_cstring, text_len, change_caused_by_input_method),
+        create_text_input_context(text, &surrounding_text_cstring, change_caused_by_input_method),
     );
 }
 
@@ -302,10 +304,10 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
             let window_state = state.windows.get_mut(&window_id).unwrap();
             if data.available {
                 let surrounding_text_cstring = CString::from_str(&window_state.text).unwrap();
-                let text_len = i32::try_from(window_state.text.len()).unwrap();
+                // window_state.text.chars()
                 application_text_input_enable(
                     state.app_ptr.clone(),
-                    create_text_input_context(&surrounding_text_cstring, text_len, false),
+                    create_text_input_context(&window_state.text, &surrounding_text_cstring, false),
                 );
             } else {
                 application_text_input_disable(state.app_ptr.clone());

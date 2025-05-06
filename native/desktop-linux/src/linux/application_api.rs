@@ -2,7 +2,7 @@ use super::events::EventHandler;
 use super::geometry::LogicalRect;
 use super::{application::Application, application_state::EglInstance, xdg_desktop_settings_api::XdgDesktopSetting};
 use anyhow::{Context, bail};
-use desktop_common::ffi_utils::{BorrowedArray, BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr};
+use desktop_common::ffi_utils::{BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr};
 use desktop_common::logger::ffi_boundary;
 use log::debug;
 use smithay_client_toolkit::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3;
@@ -169,9 +169,9 @@ impl TextInputContentPurpose {
 #[repr(C)]
 #[derive(Debug)]
 pub struct TextInputContext<'a> {
-    pub surrounding_text: BorrowedArray<'a, u8>,
-    pub cursor_pos_bytes: i32,
-    pub selection_start_pos_bytes: i32,
+    pub surrounding_text: BorrowedStrPtr<'a>,
+    pub cursor_codepoint_offset: u16,
+    pub selection_start_codepoint_offset: u16,
     pub is_multiline: bool,
     pub content_purpose: TextInputContentPurpose,
     pub cursor_rectangle: LogicalRect,
@@ -180,13 +180,28 @@ pub struct TextInputContext<'a> {
 
 impl TextInputContext<'_> {
     fn apply(&self, text_input: &zwp_text_input_v3::ZwpTextInputV3) -> anyhow::Result<()> {
-        let surrounding_text = String::from_utf8(self.surrounding_text.as_slice()?.into())?;
+        let surrounding_text = self.surrounding_text.as_str()?;
         let content_hint = if self.is_multiline {
             zwp_text_input_v3::ContentHint::Multiline
         } else {
             zwp_text_input_v3::ContentHint::None
         };
-        text_input.set_surrounding_text(surrounding_text, self.cursor_pos_bytes, self.selection_start_pos_bytes);
+        let cursor_pos_bytes = surrounding_text.char_indices().nth(self.cursor_codepoint_offset.into()).unwrap().0;
+        let selection_start_pos_bytes = if self.selection_start_codepoint_offset == self.cursor_codepoint_offset {
+            cursor_pos_bytes
+        } else {
+            surrounding_text
+                .char_indices()
+                .nth(self.selection_start_codepoint_offset.into())
+                .unwrap()
+                .0
+        };
+        #[allow(clippy::cast_possible_truncation)]
+        text_input.set_surrounding_text(
+            surrounding_text.to_owned(),
+            cursor_pos_bytes as i32,
+            selection_start_pos_bytes as i32,
+        );
         text_input.set_content_type(content_hint, self.content_purpose.to_system());
         text_input.set_text_change_cause(if self.change_caused_by_input_method {
             zwp_text_input_v3::ChangeCause::InputMethod

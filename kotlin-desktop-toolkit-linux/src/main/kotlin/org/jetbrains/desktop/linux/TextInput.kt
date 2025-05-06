@@ -63,9 +63,9 @@ public enum class TextInputContentPurpose {
 }
 
 public class TextInputContext(
-    public val surroundingText: ByteArray,
-    public val cursorPosBytes: Int,
-    public val selectionStartPosBytes: Int,
+    public val surroundingText: String,
+    public val cursorCodepointOffset: Short,
+    public val selectionStartCodepointOffset: Short,
     public val isMultiline: Boolean,
     public val contentPurpose: TextInputContentPurpose,
     public val cursorRectangle: LogicalRect,
