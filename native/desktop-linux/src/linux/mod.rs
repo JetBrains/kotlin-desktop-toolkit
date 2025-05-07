@@ -11,6 +11,7 @@ mod rendering_egl;
 mod rendering_software;
 pub mod screen;
 mod text_input;
+pub mod text_input_api;
 mod window;
 pub mod window_api;
 pub mod window_resize_edge;

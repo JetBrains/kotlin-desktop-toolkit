@@ -9,6 +9,7 @@ use desktop_common::{
 };
 use desktop_linux::linux::application_api::{application_clipboard_paste, application_clipboard_put};
 use desktop_linux::linux::events::KeyModifiers;
+use desktop_linux::linux::text_input_api::{TextInputContentPurpose, TextInputContext};
 use desktop_linux::linux::{
     application_api::{
         AppPtr, ApplicationCallbacks, application_get_egl_proc_func, application_init, application_run_event_loop, application_shutdown,
@@ -21,8 +22,7 @@ use desktop_linux::linux::{
 };
 use desktop_linux::linux::{
     application_api::{
-        TextInputContentPurpose, TextInputContext, application_set_cursor_theme, application_text_input_disable,
-        application_text_input_enable, application_text_input_update,
+        application_set_cursor_theme, application_text_input_disable, application_text_input_enable, application_text_input_update,
     },
     geometry::{LogicalPoint, LogicalRect},
 };

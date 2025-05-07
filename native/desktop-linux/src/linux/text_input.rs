@@ -1,3 +1,5 @@
+use super::{application_state::ApplicationState, events::TextInputPreeditStringData};
+use crate::linux::events::{Event, TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent};
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use log::{debug, warn};
 use smithay_client_toolkit::reexports::{
@@ -8,10 +10,6 @@ use smithay_client_toolkit::reexports::{
     },
 };
 use std::ffi::CString;
-
-use crate::linux::events::{Event, TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent};
-
-use super::{application_state::ApplicationState, events::TextInputPreeditStringData};
 
 delegate_noop!(ApplicationState: ignore ZwpTextInputManagerV3);
 
@@ -35,11 +33,6 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
             zwp_text_input_v3::Event::Enter { surface } => {
                 debug!("zwp_text_input_v3::Event::Enter: {}", surface.id());
                 this.active_text_input = Some(text_input.clone());
-                //                text_input.enable();
-                //                text_input.set_surrounding_text(String::new(), 0, 0);
-                //                text_input.set_content_type(zwp_text_input_v3::ContentHint::Multiline, zwp_text_input_v3::ContentPurpose::Normal);
-                //                text_input.set_cursor_rectangle(0, 0, 5, 10);
-                //                text_input.commit();
                 if let Some(w) = this.get_key_window() {
                     (w.event_handler)(&Event::TextInputAvailability(TextInputAvailabilityEvent { available: true }));
                 }
