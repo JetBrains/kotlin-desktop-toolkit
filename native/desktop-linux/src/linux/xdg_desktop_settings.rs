@@ -196,7 +196,7 @@ impl InternalXdgDesktopSetting {
         match Self::new_impl(namespace, key, value) {
             Ok(Some(v)) => Some(v),
             Ok(None) => {
-                debug!("Ignoring unknown setting {namespace} : {key} ({value:?})");
+                // debug!("Ignoring unknown setting {namespace} : {key} ({value:?})");
                 None
             }
             Err(e) => {
@@ -288,6 +288,8 @@ async fn read_initial_xdg_desktop_settings(settings: &Settings<'_>, tx: &Sender<
 }
 
 pub async fn xdg_desktop_settings_notifier(tx: Sender<InternalXdgDesktopSetting>) -> anyhow::Result<()> {
+    // let d = ashpd::desktop::remote_desktop::RemoteDesktop::new().await?;
+    // let c = ashpd::desktop::clipboard::Clipboard::new().await?;
     let xdg_desktop_settings = Settings::new().await?;
     read_initial_xdg_desktop_settings(&xdg_desktop_settings, &tx).await?;
 

@@ -66,7 +66,7 @@ pub struct GetEglProcFuncData<'a> {
 
 extern "C" fn egl_get_proc_address(ctx_ptr: BorrowedOpaquePtr<'_>, name_ptr: BorrowedStrPtr) -> Option<extern "system" fn()> {
     let name = name_ptr.as_str().unwrap();
-    debug!("egl_get_gl_proc for {name}");
+    // debug!("egl_get_gl_proc for {name}");
     let egl = unsafe { ctx_ptr.borrow::<EglInstance>() }.expect("egl_get_proc_address: EGL Library not loaded");
     egl.get_proc_address(name)
 }
