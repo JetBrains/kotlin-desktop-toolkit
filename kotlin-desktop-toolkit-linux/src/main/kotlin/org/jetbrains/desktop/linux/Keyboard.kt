@@ -18,7 +18,16 @@ public typealias RawKeysym = Int
 
 @JvmInline
 public value class KeySym internal constructor(public val value: Int) {
-    @Suppress("MemberVisibilityCanBePrivate", "ConstPropertyName")
+    public fun isModifierKey(): Boolean {
+        return (
+            value in Shift_L..Hyper_R ||
+                value in ISO_Lock..ISO_Level5_Lock ||
+                value == Mode_switch ||
+                value == Num_Lock
+            )
+    }
+
+    @Suppress("MemberVisibilityCanBePrivate", "ConstPropertyName", "ktlint:standard:property-naming")
     public companion object {
         public const val BackSpace: RawKeysym = 0xff08
         public const val Tab: RawKeysym = 0xff09
@@ -191,7 +200,14 @@ public value class KeySym internal constructor(public val value: Int) {
         public const val Super_R: RawKeysym = 0xffec
         public const val Hyper_L: RawKeysym = 0xffed
         public const val Hyper_R: RawKeysym = 0xffee
+        public const val ISO_Lock: RawKeysym = 0xfe01
+        public const val ISO_Level2_Latch: RawKeysym = 0xfe02
         public const val ISO_Level3_Shift: RawKeysym = 0xfe03
+        public const val ISO_Level3_Latch: RawKeysym = 0xfe04
+        public const val ISO_Level3_Lock: RawKeysym = 0xfe05
+        public const val ISO_Level5_Shift: RawKeysym = 0xfe11
+        public const val ISO_Level5_Latch: RawKeysym = 0xfe12
+        public const val ISO_Level5_Lock: RawKeysym = 0xfe13
         public const val ISO_Enter: RawKeysym = 0xfe34
         public const val space: RawKeysym = 0x20
         public const val exclam: RawKeysym = 0x21

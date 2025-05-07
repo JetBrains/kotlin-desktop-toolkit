@@ -1,3 +1,5 @@
+use crate::linux::events::TextInputDeleteSurroundingTextData;
+use crate::linux::events::TextInputPreeditStringData;
 use std::ffi::CStr;
 use std::io::Read;
 use std::time::Duration;
@@ -151,7 +153,7 @@ impl Application<'_> {
         self.state.set_cursor_theme(&self.qh, name, size)
     }
 
-    pub fn clipboard_put(&mut self, s: String) -> Result<(), anyhow::Error> {
+    pub fn clipboard_put(&mut self, s: String) {
         if let Some(data_device) = self.state.data_device.as_ref() {
             if let Some(serial) = self.state.last_key_down_serial {
                 self.state.clipboard_content = Some(s);
@@ -162,15 +164,14 @@ impl Application<'_> {
         } else {
             warn!("application_clipboard_put: No data device");
         }
-        Ok(())
     }
 
-    pub fn clipboard_paste(&self) -> Result<(), anyhow::Error> {
+    pub fn clipboard_paste(&self) {
         if let Some(data_device) = self.state.data_device.as_ref() {
             if let Some(offer) = data_device.data().selection_offer() {
                 offer.with_mime_types(|mime_types| {
-                    debug!("application_clipboard_paste: offer MIME types: {:?}", mime_types);
-                    if mime_types.iter().find(|&e| e == TEXT_MIME_TYPE).is_some() {
+                    debug!("application_clipboard_paste: offer MIME types: {mime_types:?}");
+                    if mime_types.iter().any(|e| e == TEXT_MIME_TYPE) {
                         let read_pipe = offer.receive(TEXT_MIME_TYPE.to_owned()).unwrap();
                         self.event_loop
                             .handle()
@@ -185,11 +186,11 @@ impl Application<'_> {
                                 if let Some(key_window) = state.get_key_window() {
                                     (key_window.event_handler)(&Event::TextInput(TextInputEvent {
                                         has_preedit_string: false,
-                                        preedit_string: Default::default(),
+                                        preedit_string: TextInputPreeditStringData::default(),
                                         has_commit_string: true,
-                                        commit_string: BorrowedStrPtr::new(&str),
+                                        commit_string: BorrowedStrPtr::new(str),
                                         has_delete_surrounding_text: false,
-                                        delete_surrounding_text: Default::default(),
+                                        delete_surrounding_text: TextInputDeleteSurroundingTextData::default(),
                                     }));
                                 } else {
                                     warn!("application_clipboard_paste: No key window");
@@ -206,6 +207,5 @@ impl Application<'_> {
         } else {
             warn!("application_clipboard_paste: No data device available");
         }
-        Ok(())
     }
 }

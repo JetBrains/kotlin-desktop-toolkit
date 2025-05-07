@@ -127,7 +127,7 @@ impl<'a> BorrowedStrPtr<'a> {
 
     pub fn as_optional_str(&self) -> anyhow::Result<Option<&str>> {
         if self.0.ptr.is_null() {
-            return Ok(None)
+            return Ok(None);
         }
         let c_str = unsafe { CStr::from_ptr(self.0.ptr) };
         Some(c_str.to_str().with_context(|| format!("Invalid UTF-8 in {c_str:?}"))).transpose()

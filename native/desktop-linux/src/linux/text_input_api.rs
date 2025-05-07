@@ -33,7 +33,9 @@ impl TextInputContext<'_> {
                 .0
         };
 
-        let selection_start_pos_bytes = if self.selection_start_codepoint_offset == self.cursor_codepoint_offset {
+        let selection_start_pos_bytes = if self.selection_start_codepoint_offset == 0 {
+            0
+        } else if self.selection_start_codepoint_offset == self.cursor_codepoint_offset {
             cursor_pos_bytes
         } else {
             surrounding_text

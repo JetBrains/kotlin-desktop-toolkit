@@ -45,6 +45,7 @@ import org.jetbrains.skia.TextLine
 import java.lang.AutoCloseable
 import java.nio.file.Files
 import java.nio.file.Path
+import java.text.BreakIterator
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -124,13 +125,19 @@ class EditorState() {
     private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
     private var statsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
 
+    companion object {
+        private fun codepointFromOffset(sb: StringBuilder, offset: Int): Short {
+            return sb.codePointCount(0, offset).toShort()
+        }
+    }
+
     fun createTextInputContext(changeCausedByInputMethod: Boolean): TextInputContext {
         Logger.info { "createTextInputContext: $text" }
-        val cursorCodepoint = text.codePointAt(cursorOffset).toShort()
+        val cursorCodepoint = codepointFromOffset(text, cursorOffset)
         return TextInputContext(
             surroundingText = text.toString(),
             cursorCodepointOffset = cursorCodepoint,
-            selectionStartCodepointOffset = selectionStartOffset?.let { text.codePointAt(it).toShort() } ?: cursorCodepoint,
+            selectionStartCodepointOffset = selectionStartOffset?.let { codepointFromOffset(text, it) } ?: cursorCodepoint,
             isMultiline = true,
             contentPurpose = TextInputContentPurpose.Normal,
             cursorRectangle = cursorRectangle,
@@ -197,16 +204,38 @@ class EditorState() {
         }
     }
 
-    private fun removeSelection(): Boolean {
+    private fun getSelectionRange(): Pair<Int, Int>? {
         val selectionStartOffset = selectionStartOffset
         val selectionEndOffset = selectionEndOffset
         if (selectionStartOffset != null && selectionEndOffset != null) {
-            val start = min(selectionStartOffset, selectionEndOffset)
-            text.delete(start, max(selectionStartOffset, selectionEndOffset))
-            cursorOffset = start
+            val range = Pair(selectionStartOffset, selectionEndOffset)
+            if (range.first > range.second) {
+                return Pair(range.second, range.first)
+            }
+            return range
+        }
+        return null
+    }
+
+    private fun deleteSelection(): Boolean {
+        getSelectionRange()?.let {
+            text.delete(it.first, it.second)
+            cursorOffset = it.first
             return true
         }
         return false
+    }
+
+    private fun getPreviousGlyphOffset(): Int {
+        val bi = BreakIterator.getCharacterInstance()
+        bi.setText(text.toString())
+        return bi.preceding(cursorOffset)
+    }
+
+    private fun getNextGlyphOffset(): Int {
+        val bi = BreakIterator.getCharacterInstance()
+        bi.setText(text.toString())
+        return bi.following(cursorOffset)
     }
 
     fun handleEvent(event: Event, app: Application): EventHandlerResult {
@@ -216,80 +245,100 @@ class EditorState() {
                 EventHandlerResult.Stop
             }
             is Event.KeyDown -> {
-                when (event.key.value) {
-                    KeySym.BackSpace -> {
-                        if (!removeSelection() && cursorOffset > 0) {
-                            text.deleteAt(cursorOffset - 1)
-                            cursorOffset -= 1
+                if (modifiers.logo) {
+                    EventHandlerResult.Continue
+                } else if (modifiers.control) {
+                    when (event.key.value) {
+                        KeySym.v -> {
+                            app.clipboardPaste()
+                            EventHandlerResult.Stop
                         }
+                        KeySym.c -> {
+                            getSelectionRange()?.let {
+                                val selection = text.substring(it.first, it.second)
+                                app.clipboardPut(selection)
+                                EventHandlerResult.Stop
+                            } ?: EventHandlerResult.Continue
+                        }
+                        else -> EventHandlerResult.Continue
                     }
-
-                    KeySym.Up -> {
-                        if (modifiers.shift) {
-                            if (selectionStartOffset == null) {
-                                selectionStartOffset = cursorOffset
+                } else {
+                    when (event.key.value) {
+                        KeySym.BackSpace -> {
+                            if (!deleteSelection() && cursorOffset > 0) {
+                                val newCursorOffset = getPreviousGlyphOffset()
+                                text.delete(newCursorOffset, cursorOffset)
+                                cursorOffset = newCursorOffset
                             }
-                            selectionEndOffset = 0
-                            cursorOffset = 0
-                        } else {
-                            cursorOffset = 0
                         }
-                    }
 
-                    KeySym.Down -> {
-                        if (modifiers.shift) {
-                            if (selectionStartOffset == null) {
-                                selectionStartOffset = cursorOffset
+                        KeySym.Up -> {
+                            if (modifiers.shift) {
+                                if (selectionStartOffset == null) {
+                                    selectionStartOffset = cursorOffset
+                                }
+                                selectionEndOffset = 0
+                                cursorOffset = 0
+                            } else {
+                                cursorOffset = 0
                             }
-                            val end = text.length
-                            selectionEndOffset = end
-                            cursorOffset = end
-                        } else {
-                            cursorOffset = text.length
                         }
-                    }
 
-                    KeySym.Left -> {
-                        if (modifiers.shift) {
-                            if (selectionStartOffset == null) {
-                                selectionStartOffset = cursorOffset
+                        KeySym.Down -> {
+                            if (modifiers.shift) {
+                                if (selectionStartOffset == null) {
+                                    selectionStartOffset = cursorOffset
+                                }
+                                val end = text.length
+                                selectionEndOffset = end
+                                cursorOffset = end
+                            } else {
+                                cursorOffset = text.length
                             }
-                            cursorOffset = max(0, cursorOffset - 1)
-                            selectionEndOffset = cursorOffset
-                        } else {
-                            cursorOffset = max(0, cursorOffset - 1)
                         }
-                    }
 
-                    KeySym.Right -> {
-                        if (modifiers.shift) {
-                            if (selectionStartOffset == null) {
-                                selectionStartOffset = cursorOffset
+                        KeySym.Left -> {
+                            if (modifiers.shift) {
+                                if (selectionStartOffset == null) {
+                                    selectionStartOffset = cursorOffset
+                                }
+                                cursorOffset = max(0, getPreviousGlyphOffset())
+                                selectionEndOffset = cursorOffset
+                            } else {
+                                cursorOffset = max(0, getPreviousGlyphOffset())
                             }
-                            cursorOffset = min(cursorOffset + 1, text.length)
-                            selectionEndOffset = cursorOffset
-                        } else {
-                            cursorOffset = min(cursorOffset + 1, text.length)
+                        }
+
+                        KeySym.Right -> {
+                            if (modifiers.shift) {
+                                if (selectionStartOffset == null) {
+                                    selectionStartOffset = cursorOffset
+                                }
+                                cursorOffset = min(getNextGlyphOffset(), text.length)
+                                selectionEndOffset = cursorOffset
+                            } else {
+                                cursorOffset = min(getNextGlyphOffset(), text.length)
+                            }
+                        }
+
+                        else -> {
+                            event.characters?.let { characters ->
+                                deleteSelection()
+                                text.insert(cursorOffset, characters)
+                                cursorOffset += characters.length
+                            }
                         }
                     }
 
-                    else -> {
-                        removeSelection()
-                        event.characters?.let { characters ->
-                            text.insert(cursorOffset, characters)
-                            cursorOffset += 1
-                        }
+                    if (!modifiers.shift && !modifiers.control && !modifiers.logo && !event.key.isModifierKey()) {
+                        selectionStartOffset = null
+                        selectionEndOffset = null
                     }
+
+                    cursorOffset = max(0, cursorOffset)
+                    app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+                    EventHandlerResult.Stop
                 }
-
-                if (!modifiers.shift) {
-                    selectionStartOffset = null
-                    selectionEndOffset = null
-                }
-
-                cursorOffset = max(0, cursorOffset)
-                app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
-                EventHandlerResult.Stop
             }
             is Event.TextInputAvailability -> {
                 if (event.available) {
@@ -313,11 +362,7 @@ class EditorState() {
                     }
                 }
                 event.preeditStringData?.let { preeditStringData ->
-                    if (preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1) {
-                        cursorVisible = false
-                    } else {
-                        cursorVisible = true
-                    }
+                    cursorVisible = !(preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1)
                     preeditStringData.text?.let { preeditString ->
                         composedText = preeditString
                         composedTextStartOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBeginBytePos)

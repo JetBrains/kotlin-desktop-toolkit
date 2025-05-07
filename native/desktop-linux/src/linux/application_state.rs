@@ -104,7 +104,7 @@ impl ApplicationState {
             .and_then(|lib| unsafe { EglInstance::load_required_from(lib) }.map_err(|e| warn!("{e}")))
             .ok();
         let data_device_manager_state = DataDeviceManagerState::bind(globals, qh).expect("wl_data_device not available");
-        let copy_paste_source = data_device_manager_state.create_copy_paste_source(qh, &[TEXT_MIME_TYPE]);
+        let copy_paste_source = data_device_manager_state.create_copy_paste_source(qh, [TEXT_MIME_TYPE]);
 
         Self {
             callbacks,

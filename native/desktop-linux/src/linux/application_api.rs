@@ -153,7 +153,8 @@ pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr<'_>, str: Borrow
     debug!("application_clipboard_put");
     ffi_boundary("application_clipboard_put", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.clipboard_put(str.as_str().unwrap().to_owned())
+        app.clipboard_put(str.as_str().unwrap().to_owned());
+        Ok(())
     });
 }
 
@@ -162,6 +163,7 @@ pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>) {
     debug!("application_clipboard_paste");
     ffi_boundary("application_clipboard_paste", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.clipboard_paste()
+        app.clipboard_paste();
+        Ok(())
     });
 }

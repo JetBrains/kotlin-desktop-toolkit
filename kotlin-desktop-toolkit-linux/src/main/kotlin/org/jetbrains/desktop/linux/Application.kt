@@ -234,4 +234,19 @@ public class Application() : AutoCloseable {
             desktop_h.application_text_input_disable(appPtr)
         }
     }
+
+    public fun clipboardPaste() {
+        ffiDownCall {
+            desktop_h.application_clipboard_paste(appPtr)
+        }
+    }
+
+    public fun clipboardPut(s: String) {
+        Arena.ofConfined().use { arena ->
+            val nativeClipboardString = arena.allocateUtf8String(s)
+            ffiDownCall {
+                desktop_h.application_clipboard_put(appPtr, nativeClipboardString)
+            }
+        }
+    }
 }
