@@ -792,6 +792,10 @@ void application_text_input_update(NativeAppPtr app_ptr, struct NativeTextInputC
 
 void application_text_input_disable(NativeAppPtr app_ptr);
 
+void application_clipboard_put(NativeAppPtr app_ptr, NativeBorrowedStrPtr str);
+
+void application_clipboard_paste(NativeAppPtr app_ptr);
+
 NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
 
 void screen_list_drop(NativeScreenInfoArray arr);

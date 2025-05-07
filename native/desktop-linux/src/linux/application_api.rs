@@ -4,7 +4,7 @@ use super::{application::Application, application_state::EglInstance, xdg_deskto
 use anyhow::{Context, bail};
 use desktop_common::ffi_utils::{BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr};
 use desktop_common::logger::ffi_boundary;
-use log::debug;
+use log::{debug, warn};
 use smithay_client_toolkit::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3;
 
 #[repr(C)]
@@ -186,16 +186,27 @@ impl TextInputContext<'_> {
         } else {
             zwp_text_input_v3::ContentHint::None
         };
-        let cursor_pos_bytes = surrounding_text.char_indices().nth(self.cursor_codepoint_offset.into()).unwrap().0;
+
+        let cursor_pos_bytes = if self.cursor_codepoint_offset == 0 {
+            0
+        } else {
+            surrounding_text
+                .char_indices()
+                .nth((self.cursor_codepoint_offset - 1).into())
+                .unwrap()
+                .0
+        };
+
         let selection_start_pos_bytes = if self.selection_start_codepoint_offset == self.cursor_codepoint_offset {
             cursor_pos_bytes
         } else {
             surrounding_text
                 .char_indices()
-                .nth(self.selection_start_codepoint_offset.into())
+                .nth((self.selection_start_codepoint_offset - 1).into())
                 .unwrap()
                 .0
         };
+
         #[allow(clippy::cast_possible_truncation)]
         text_input.set_surrounding_text(
             surrounding_text.to_owned(),
@@ -250,5 +261,23 @@ pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr<'_>) {
             text_input.commit();
         }
         Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr<'_>, str: BorrowedStrPtr) {
+    debug!("application_clipboard_put");
+    ffi_boundary("application_clipboard_put", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        app.clipboard_put(str.as_str().unwrap().to_owned())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>) {
+    debug!("application_clipboard_paste");
+    ffi_boundary("application_clipboard_paste", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        app.clipboard_paste()
     });
 }

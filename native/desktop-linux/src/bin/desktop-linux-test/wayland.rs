@@ -7,6 +7,8 @@ use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
+use desktop_linux::linux::application_api::{application_clipboard_paste, application_clipboard_put};
+use desktop_linux::linux::events::KeyModifiers;
 use desktop_linux::linux::{
     application_api::{
         AppPtr, ApplicationCallbacks, application_get_egl_proc_func, application_init, application_run_event_loop, application_shutdown,
@@ -62,6 +64,7 @@ struct Settings {
 struct WindowState {
     composed_text: String,
     text: String,
+    key_modifiers: KeyModifiers,
 }
 
 #[derive(Debug)]
@@ -278,6 +281,12 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                 application_stop_event_loop(state.app_ptr.clone());
             }
         }),
+        Event::ModifiersChanged(data) => STATE.with(|c| {
+            let mut state = c.borrow_mut();
+            let state = state.as_mut().unwrap();
+            let window_state = state.windows.get_mut(&window_id).unwrap();
+            window_state.key_modifiers = data.modifiers;
+        }),
         Event::KeyDown(data) => STATE.with(|c| {
             let mut state = c.borrow_mut();
             let state = state.as_mut().unwrap();
@@ -288,8 +297,12 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                     update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
                 }
                 _ => {
-                    if data.characters.is_not_null() {
-                        let event_chars = data.characters.as_str().unwrap();
+                    if data.code.0 == 47 && window_state.key_modifiers.ctrl {
+                        application_clipboard_paste(state.app_ptr.clone());
+                    } else if data.code.0 == 46 && window_state.key_modifiers.ctrl {
+                        let s = c"demo app clipboard put";
+                        application_clipboard_put(state.app_ptr.clone(), BorrowedStrPtr::new(s));
+                    } else if let Some(event_chars) = data.characters.as_optional_str().unwrap() {
                         window_state.text += event_chars;
                         update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
                     }
@@ -304,7 +317,6 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
             let window_state = state.windows.get_mut(&window_id).unwrap();
             if data.available {
                 let surrounding_text_cstring = CString::from_str(&window_state.text).unwrap();
-                // window_state.text.chars()
                 application_text_input_enable(
                     state.app_ptr.clone(),
                     create_text_input_context(&window_state.text, &surrounding_text_cstring, false),
@@ -325,7 +337,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                 window_state.text.drain(range);
             }
             if data.has_commit_string {
-                if let Ok(commit_string) = data.commit_string.as_str() {
+                if let Some(commit_string) = data.commit_string.as_optional_str().unwrap() {
                     debug!("{window_id:?} commit_string: {commit_string}");
                     window_state.text += commit_string;
                 }
@@ -337,7 +349,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
             if data.has_preedit_string {
                 if data.preedit_string.cursor_begin_byte_pos == -1 && data.preedit_string.cursor_end_byte_pos == -1 {
                     // TODO: hide cursor
-                } else if let Ok(preedit_string) = data.preedit_string.text.as_str() {
+                } else if let Some(preedit_string) = data.preedit_string.text.as_optional_str().unwrap() {
                     window_state.composed_text.push_str(preedit_string);
                 }
             }

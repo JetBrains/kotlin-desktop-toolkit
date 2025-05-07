@@ -121,25 +121,24 @@ impl<'a> BorrowedStrPtr<'a> {
         NonNull::new(self.0.ptr.cast_mut())
     }
 
-    #[must_use]
-    pub const fn is_not_null(&self) -> bool {
-        !self.0.ptr.is_null()
+    pub fn as_str(&self) -> anyhow::Result<&str> {
+        self.as_optional_str().transpose().expect("BorrowedStrPtr has null pointer")
     }
 
-    pub fn as_str(&self) -> anyhow::Result<&str> {
-        assert!(!self.0.ptr.is_null());
+    pub fn as_optional_str(&self) -> anyhow::Result<Option<&str>> {
+        if self.0.ptr.is_null() {
+            return Ok(None)
+        }
         let c_str = unsafe { CStr::from_ptr(self.0.ptr) };
-        c_str.to_str().with_context(|| format!("Invalid UTF-8 in {c_str:?}"))
+        Some(c_str.to_str().with_context(|| format!("Invalid UTF-8 in {c_str:?}"))).transpose()
     }
 }
 
 impl std::fmt::Debug for BorrowedStrPtr<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.0.ptr.is_null() {
-            return write!(f, "null");
-        }
-        match self.as_str() {
-            Ok(s) => {
+        match self.as_optional_str() {
+            Ok(None) => write!(f, "null"),
+            Ok(Some(s)) => {
                 f.write_char('"')?;
                 for c in s.chars() {
                     if c.is_ascii() && !c.is_ascii_control() && !c.is_ascii_whitespace() {
@@ -191,6 +190,13 @@ impl RustAllocatedStrPtr {
 
 #[repr(transparent)]
 pub struct AutoDropStrPtr(RustAllocatedStrPtr);
+
+impl AutoDropStrPtr {
+    #[must_use]
+    pub fn borrow(&self) -> BorrowedStrPtr {
+        BorrowedStrPtr(self.0.0.clone())
+    }
+}
 
 impl Drop for AutoDropStrPtr {
     fn drop(&mut self) {

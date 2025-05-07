@@ -5,7 +5,7 @@ use desktop_common::ffi_utils::BorrowedStrPtr;
 use smithay_client_toolkit::{
     reexports::client::{Proxy, protocol::wl_output::WlOutput},
     seat::{
-        keyboard::{KeyEvent, Modifiers},
+        keyboard::Modifiers,
         pointer::{AxisScroll, PointerEvent},
     },
 };
@@ -82,11 +82,11 @@ impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
 }
 
 impl<'a> KeyDownEvent<'a> {
-    pub(crate) fn new(event: &KeyEvent, characters: Option<&'a CString>) -> Self {
+    pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a CString>) -> Self {
         Self {
-            code: KeyCode(event.raw_code),
+            code,
             characters: BorrowedStrPtr::new_optional(characters),
-            key: event.keysym.raw(),
+            key,
             is_repeat: false,        // TODO
             timestamp: Timestamp(0), // TODO
         }
@@ -425,11 +425,11 @@ impl Event<'_> {
     //        })
     //    }
 
-    pub(crate) fn new_key_up_event<'a>(event: &KeyEvent, characters: Option<&'a CString>) -> Event<'a> {
+    pub(crate) fn new_key_up_event(code: KeyCode, key: u32, characters: Option<&CString>) -> Event {
         Event::KeyUp(KeyUpEvent {
-            code: KeyCode(event.raw_code),
+            code,
             characters: BorrowedStrPtr::new_optional(characters),
-            key: event.keysym.raw(),
+            key,
             timestamp: Timestamp(0), // TODO
         })
     }

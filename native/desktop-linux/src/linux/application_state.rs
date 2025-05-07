@@ -1,12 +1,12 @@
-use super::{application_api::ApplicationCallbacks, events::WindowId, text_input::PendingTextInputEvent};
-use crate::linux::window::SimpleWindow;
+use super::{application_api::ApplicationCallbacks, events::WindowId, text_input::PendingTextInputEvent, window::SimpleWindow};
+use crate::linux::clipboard::TEXT_MIME_TYPE;
 use khronos_egl;
 use log::{debug, warn};
-use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
-use smithay_client_toolkit::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_manager_v3::ZwpTextInputManagerV3;
-use smithay_client_toolkit::seat::pointer::PointerData;
+use smithay_client_toolkit::data_device_manager::data_device::DataDevice;
+use smithay_client_toolkit::data_device_manager::data_source::CopyPasteSource;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
+    data_device_manager::DataDeviceManagerState,
     delegate_compositor, delegate_output, delegate_registry, delegate_seat, delegate_shm, delegate_subcompositor, delegate_xdg_shell,
     delegate_xdg_window,
     output::{OutputHandler, OutputState},
@@ -17,14 +17,19 @@ use smithay_client_toolkit::{
             backend::ObjectId,
             delegate_noop,
             globals::GlobalList,
-            protocol::{wl_keyboard, wl_output, wl_surface::WlSurface},
+            protocol::{
+                wl_keyboard::WlKeyboard,
+                wl_output::{self, WlOutput},
+                wl_seat::WlSeat,
+                wl_surface::WlSurface,
+            },
         },
         protocols::wp::{
             fractional_scale::v1::client::{
                 wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
                 wp_fractional_scale_v1::{self, WpFractionalScaleV1},
             },
-            text_input::zv3::client::zwp_text_input_v3::ZwpTextInputV3,
+            text_input::zv3::client::{zwp_text_input_manager_v3::ZwpTextInputManagerV3, zwp_text_input_v3::ZwpTextInputV3},
             viewporter::client::{wp_viewport::WpViewport, wp_viewporter::WpViewporter},
         },
     },
@@ -32,7 +37,7 @@ use smithay_client_toolkit::{
     registry_handlers,
     seat::{
         Capability, SeatHandler, SeatState,
-        pointer::{ThemeSpec, ThemedPointer},
+        pointer::{PointerData, ThemeSpec, ThemedPointer},
     },
     shell::{
         WaylandSurface,
@@ -56,15 +61,20 @@ pub struct ApplicationState {
     pub compositor_state: CompositorState,
     pub shm_state: Shm,
     pub xdg_shell_state: XdgShell,
-    keyboard: Option<wl_keyboard::WlKeyboard>,
+    keyboard: Option<WlKeyboard>,
     cursor_theme: Option<(String, u32)>,
     pub themed_pointer: Option<ThemedPointer>,
     pub viewporter: Option<WpViewporter>,
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
     pub text_input_manager: Option<ZwpTextInputManagerV3>,
+    pub data_device_manager_state: DataDeviceManagerState,
+    pub copy_paste_source: CopyPasteSource,
+    pub data_device: Option<DataDevice>,
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
+    pub(crate) last_key_down_serial: Option<u32>,
+    pub(crate) clipboard_content: Option<String>,
     pub(crate) key_surface: Option<ObjectId>,
     pub(crate) active_text_input: Option<ZwpTextInputV3>,
     pub(crate) pending_text_input_event: PendingTextInputEvent,
@@ -93,6 +103,8 @@ impl ApplicationState {
             .map_err(|e| warn!("{e}"))
             .and_then(|lib| unsafe { EglInstance::load_required_from(lib) }.map_err(|e| warn!("{e}")))
             .ok();
+        let data_device_manager_state = DataDeviceManagerState::bind(globals, qh).expect("wl_data_device not available");
+        let copy_paste_source = data_device_manager_state.create_copy_paste_source(qh, &[TEXT_MIME_TYPE]);
 
         Self {
             callbacks,
@@ -108,8 +120,13 @@ impl ApplicationState {
             viewporter: globals.bind(qh, 1..=1, ()).ok(),
             fractional_scale_manager: globals.bind(qh, 1..=1, ()).ok(),
             text_input_manager: globals.bind(qh, 1..=1, ()).ok(),
+            data_device_manager_state,
+            copy_paste_source,
+            data_device: None,
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
+            last_key_down_serial: None,
+            clipboard_content: None,
             key_surface: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
@@ -138,8 +155,8 @@ impl ApplicationState {
         })
     }
 
-    pub(crate) fn get_key_window(&mut self) -> Option<&SimpleWindow> {
-        self.key_surface.as_mut().and_then(|surface_id| self.windows.get(surface_id))
+    pub(crate) fn get_key_window(&self) -> Option<&SimpleWindow> {
+        self.key_surface.as_ref().and_then(|surface_id| self.windows.get(surface_id))
     }
 
     fn update_themed_cursor_with_seat(&mut self, qh: &QueueHandle<Self>, seat: &WlSeat) -> anyhow::Result<()> {
@@ -180,9 +197,15 @@ impl SeatHandler for ApplicationState {
         &mut self.seat_state
     }
 
-    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlSeat) {}
+    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: WlSeat) {
+        debug!("SeatHandler::new_seat");
+    }
 
     fn new_capability(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat, capability: Capability) {
+        if self.data_device.is_none() {
+            self.data_device = Some(self.data_device_manager_state.get_data_device(qh, &seat));
+        }
+
         if capability == Capability::Keyboard && self.keyboard.is_none() {
             debug!("Set keyboard capability");
             let keyboard = self.seat_state.get_keyboard(qh, &seat, None).expect("Failed to create keyboard");
@@ -234,15 +257,15 @@ impl OutputHandler for ApplicationState {
         &mut self.output_state
     }
 
-    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {
+    fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
         (self.callbacks.on_display_configuration_change)();
     }
 
-    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {
+    fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
         (self.callbacks.on_display_configuration_change)();
     }
 
-    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: wl_output::WlOutput) {
+    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
         (self.callbacks.on_display_configuration_change)();
     }
 }
@@ -277,7 +300,7 @@ impl CompositorHandler for ApplicationState {
         }
     }
 
-    fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &wl_output::WlOutput) {
+    fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &WlOutput) {
         debug!("surface_enter for {}: {}", surface.id(), output.id());
         if let Some(window) = self.get_window(surface) {
             //let screen_info = ScreenInfo::new(self.output_state.info(output));  // TODO?
@@ -285,7 +308,7 @@ impl CompositorHandler for ApplicationState {
         }
     }
 
-    fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &wl_output::WlOutput) {
+    fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &WlOutput) {
         debug!("surface_leave for {}: {}", surface.id(), output.id());
         if let Some(window) = self.get_window(surface) {
             window.output_changed(output);

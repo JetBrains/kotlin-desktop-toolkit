@@ -1,25 +1,28 @@
+use std::ffi::CStr;
+use std::io::Read;
 use std::time::Duration;
 
+use super::application_api::ApplicationCallbacks;
+use super::events::{Event, TextInputEvent, WindowId};
+use super::geometry::LogicalSize;
+use super::window_api::WindowParams;
+use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
+use super::xdg_desktop_settings_api::XdgDesktopSetting;
+use super::{application_state::ApplicationState, window::SimpleWindow};
+use crate::linux::clipboard::TEXT_MIME_TYPE;
 use anyhow::anyhow;
+use desktop_common::ffi_utils::BorrowedStrPtr;
 use desktop_common::logger::catch_panic;
-use log::debug;
-use smithay_client_toolkit::reexports::calloop::{EventLoop, channel};
+use log::{debug, warn};
+use smithay_client_toolkit::reexports::calloop::{EventLoop, PostAction, channel};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 use smithay_client_toolkit::{
     reexports::client::{Connection, Proxy, QueueHandle, globals::registry_queue_init},
     shell::WaylandSurface,
 };
 
-use super::application_api::ApplicationCallbacks;
-use super::events::WindowId;
-use super::geometry::LogicalSize;
-use super::window_api::WindowParams;
-use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
-use super::xdg_desktop_settings_api::XdgDesktopSetting;
-use super::{application_state::ApplicationState, window::SimpleWindow};
-
 pub struct Application<'a> {
-    event_loop: EventLoop<'a, ApplicationState>,
+    pub event_loop: EventLoop<'a, ApplicationState>,
     qh: QueueHandle<ApplicationState>,
     pub exit: bool,
     pub state: ApplicationState,
@@ -146,5 +149,63 @@ impl Application<'_> {
 
     pub fn set_cursor_theme(&mut self, name: &str, size: u32) -> anyhow::Result<()> {
         self.state.set_cursor_theme(&self.qh, name, size)
+    }
+
+    pub fn clipboard_put(&mut self, s: String) -> Result<(), anyhow::Error> {
+        if let Some(data_device) = self.state.data_device.as_ref() {
+            if let Some(serial) = self.state.last_key_down_serial {
+                self.state.clipboard_content = Some(s);
+                self.state.copy_paste_source.set_selection(data_device, serial);
+            } else {
+                warn!("application_clipboard_put: No last key down serial");
+            }
+        } else {
+            warn!("application_clipboard_put: No data device");
+        }
+        Ok(())
+    }
+
+    pub fn clipboard_paste(&self) -> Result<(), anyhow::Error> {
+        if let Some(data_device) = self.state.data_device.as_ref() {
+            if let Some(offer) = data_device.data().selection_offer() {
+                offer.with_mime_types(|mime_types| {
+                    debug!("application_clipboard_paste: offer MIME types: {:?}", mime_types);
+                    if mime_types.iter().find(|&e| e == TEXT_MIME_TYPE).is_some() {
+                        let read_pipe = offer.receive(TEXT_MIME_TYPE.to_owned()).unwrap();
+                        self.event_loop
+                            .handle()
+                            .insert_source(read_pipe, move |(), res, state| {
+                                let f = unsafe { res.get_mut() };
+                                let mut buf = Vec::new();
+                                let size = f.read_to_end(&mut buf).unwrap();
+                                buf.push(0);
+                                let str = CStr::from_bytes_with_nul(&buf).unwrap();
+
+                                debug!("application_clipboard_paste read {size} bytes");
+                                if let Some(key_window) = state.get_key_window() {
+                                    (key_window.event_handler)(&Event::TextInput(TextInputEvent {
+                                        has_preedit_string: false,
+                                        preedit_string: Default::default(),
+                                        has_commit_string: true,
+                                        commit_string: BorrowedStrPtr::new(&str),
+                                        has_delete_surrounding_text: false,
+                                        delete_surrounding_text: Default::default(),
+                                    }));
+                                } else {
+                                    warn!("application_clipboard_paste: No key window");
+                                }
+
+                                PostAction::Remove
+                            })
+                            .unwrap();
+                    }
+                });
+            } else {
+                warn!("application_clipboard_paste: No selection offer found");
+            }
+        } else {
+            warn!("application_clipboard_paste: No data device available");
+        }
+        Ok(())
     }
 }

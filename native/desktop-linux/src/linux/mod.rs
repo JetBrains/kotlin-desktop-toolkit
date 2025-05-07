@@ -1,6 +1,7 @@
 mod application;
 pub mod application_api;
 mod application_state;
+mod clipboard;
 pub mod events;
 pub mod geometry;
 mod keyboard;
