@@ -59,6 +59,9 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
+const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
+const val URI_LIST_MIME_TYPE = "text/uri-list"
+
 data class XdgDesktopSettings(
     var titlebarLayout: TitlebarLayout = TitlebarLayout(
         layoutLeft = listOf(WindowButtonType.Icon),
@@ -251,17 +254,18 @@ class EditorState() {
                 } else if (modifiers.control) {
                     when (event.key.value) {
                         KeySym.v -> {
-                            app.clipboardPaste()
+                            app.clipboardPaste(listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
                             EventHandlerResult.Stop
                         }
                         KeySym.C -> {
                             app.clipboardPut(
-                                ClipboardData.UriList(
-                                    listOf(
+                                ClipboardData(
+                                    data = listOf(
                                         "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
                                         "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
                                         "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
-                                    ),
+                                    ).joinToString("\n").encodeToByteArray(),
+                                    mimeTypes = listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE),
                                 ),
                             )
                             EventHandlerResult.Stop
@@ -269,7 +273,12 @@ class EditorState() {
                         KeySym.c -> {
                             getSelectionRange()?.let {
                                 val selection = text.substring(it.first, it.second)
-                                app.clipboardPut(ClipboardData.Text(selection))
+                                app.clipboardPut(
+                                    ClipboardData(
+                                        data = selection.encodeToByteArray(),
+                                        mimeTypes = listOf(TEXT_MIME_TYPE),
+                                    ),
+                                )
                                 EventHandlerResult.Stop
                             } ?: EventHandlerResult.Continue
                         }
@@ -355,19 +364,14 @@ class EditorState() {
             }
             is Event.ClipboardPaste -> {
                 val data = event.data
-                when (data) {
-                    is ClipboardData.Text -> {
-                        deleteSelection()
-                        text.insert(cursorOffset, data.value)
-                        cursorOffset += data.value.length
-                    }
-                    is ClipboardData.UriList -> {
-                        val files = data.value
-                        Logger.info { "Pasted files $files" }
-                    }
-                    null -> {
-                        Logger.info { "Pasted from empty clipboard" }
-                    }
+                if (data.mimeTypes.contains(URI_LIST_MIME_TYPE)) {
+                    val files = data.data.decodeToString().split("\n")
+                    Logger.info { "Pasted files $files" }
+                } else if (data.mimeTypes.contains(TEXT_MIME_TYPE)) {
+                    deleteSelection()
+                    val pastedText = data.data.decodeToString()
+                    text.insert(cursorOffset, pastedText)
+                    cursorOffset += pastedText.length
                 }
                 EventHandlerResult.Stop
             }
@@ -726,10 +730,13 @@ class ContentArea(
             }
             is Event.MouseDown -> {
                 window.startDrag(
-                    listOf(
-                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
-                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
-                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
+                    ClipboardData(
+                        data = listOf(
+                            "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
+                            "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
+                            "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
+                        ).joinToString("\n").encodeToByteArray(),
+                        mimeTypes = listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE),
                     ),
                 )
                 EventHandlerResult.Stop
@@ -1156,6 +1163,7 @@ fun main(args: Array<String>) {
                     state.settingChanged(it)
                 },
                 eventHandler = { event, windowId -> state.handleEvent(event, windowId) },
+                dragAndDropQueryHandler = { queryData -> listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE) },
             ),
         )
     }

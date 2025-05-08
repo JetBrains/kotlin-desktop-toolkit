@@ -1,7 +1,6 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeApplicationCallbacks
-import org.jetbrains.desktop.linux.generated.NativeClipboardDataFFI
 import org.jetbrains.desktop.linux.generated.NativeEventHandler
 import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
 import org.jetbrains.desktop.linux.generated.NativeScreenInfo
@@ -46,6 +45,7 @@ public data class ApplicationConfig(
     val onApplicationStarted: () -> Unit,
     val onXdgDesktopSettingsChange: (XdgDesktopSetting) -> Unit,
     val eventHandler: EventHandler,
+    val dragAndDropQueryHandler: (DragAndDropQueryData) -> List<String>,
 )
 
 public class Application() : AutoCloseable {
@@ -58,6 +58,10 @@ public class Application() : AutoCloseable {
         }
     }, Arena.global())
 
+    public lateinit var screens: AllScreens
+    private val mimeTypeReturnCache: HashMap<List<String>, MemorySegment> = hashMapOf()
+    private var appPtr: MemorySegment? = null
+
     init {
         ffiDownCall {
             Arena.ofConfined().use { arena ->
@@ -65,9 +69,6 @@ public class Application() : AutoCloseable {
             }
         }
     }
-
-    public lateinit var screens: AllScreens
-    private var appPtr: MemorySegment? = null
 
     // called from native
     private fun onEvent(nativeEvent: MemorySegment, windowId: WindowId): Boolean {
@@ -79,6 +80,21 @@ public class Application() : AutoCloseable {
                 EventHandlerResult.Stop -> true
                 null -> false
             }
+        }
+    }
+
+    private fun mimeTypesToNative(mimeTypes: List<String>): MemorySegment {
+        return mimeTypeReturnCache.getOrPut(mimeTypes) {
+            Arena.global().allocateUtf8String(mimeTypes.joinToString(","))
+        }
+    }
+
+    // called from native
+    private fun onDragAndDropQuery(nativeQueryData: MemorySegment): MemorySegment {
+        val queryData = DragAndDropQueryData.fromNative(nativeQueryData)
+        return ffiUpCall(defaultResult = MemorySegment.NULL) {
+            val result = applicationConfig?.dragAndDropQueryHandler(queryData) ?: emptyList()
+            mimeTypesToNative(result)
         }
     }
 
@@ -159,6 +175,10 @@ public class Application() : AutoCloseable {
             NativeApplicationCallbacks.on_xdg_desktop_settings_change.allocate(::onNativeXdgSettingsChanged, arena),
         )
         NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
+        NativeApplicationCallbacks.drag_and_drop_query_handler(
+            callbacks,
+            NativeApplicationCallbacks.drag_and_drop_query_handler.allocate(::onDragAndDropQuery, arena),
+        )
         return callbacks
     }
 
@@ -236,28 +256,18 @@ public class Application() : AutoCloseable {
         }
     }
 
-    public fun clipboardPaste() {
-        ffiDownCall {
-            desktop_h.application_clipboard_paste(appPtr)
+    public fun clipboardPaste(supportedMimeTypes: List<String>) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_h.application_clipboard_paste(appPtr, mimeTypesToNative(supportedMimeTypes))
+            }
         }
     }
 
     public fun clipboardPut(data: ClipboardData) {
         Arena.ofConfined().use { arena ->
-            val nativeClipboardData = NativeClipboardDataFFI.allocate(arena)
-            when (data) {
-                is ClipboardData.Text -> {
-                    NativeClipboardDataFFI.tag(nativeClipboardData, desktop_h.NativeClipboardDataFFI_Text())
-                    NativeClipboardDataFFI.text(nativeClipboardData, arena.allocateUtf8String(data.value))
-                }
-                is ClipboardData.UriList -> {
-                    NativeClipboardDataFFI.tag(nativeClipboardData, desktop_h.NativeClipboardDataFFI_FileList())
-                    NativeClipboardDataFFI.text(nativeClipboardData, arena.allocateUtf8String(data.value.joinToString("\n")))
-                }
-            }
-
             ffiDownCall {
-                desktop_h.application_clipboard_put(appPtr, nativeClipboardData)
+                desktop_h.application_clipboard_put(appPtr, data.toNative(arena, ::mimeTypesToNative))
             }
         }
     }

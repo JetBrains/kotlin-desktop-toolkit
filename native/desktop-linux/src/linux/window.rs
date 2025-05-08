@@ -1,4 +1,4 @@
-use crate::linux::events::{WindowCapabilities, WindowResizeEvent};
+use crate::linux::events::{WindowCapabilities, WindowId, WindowResizeEvent};
 use crate::linux::geometry::LogicalSize;
 use crate::linux::{application_state::ApplicationState, geometry::LogicalPixels};
 use log::{debug, error, info, warn};
@@ -37,6 +37,7 @@ enum RenderingData {
 }
 
 pub struct SimpleWindow {
+    pub window_id: WindowId,
     pub event_handler: Box<InternalEventHandler>,
     pub close: bool,
     pub size: Option<LogicalSize>,
@@ -55,6 +56,7 @@ pub struct SimpleWindow {
 impl SimpleWindow {
     #[must_use]
     pub fn new(
+        window_id: WindowId,
         app_state: &ApplicationState,
         qh: &QueueHandle<ApplicationState>,
         event_handler: Box<InternalEventHandler>,
@@ -92,6 +94,7 @@ impl SimpleWindow {
 
         debug!("Creating new window with id={:?} and surface_id={surface_id}", params.window_id);
         Self {
+            window_id,
             event_handler,
             close: false,
             size,

@@ -1,8 +1,7 @@
-use core::f64;
-use std::ffi::{CStr, CString};
-
 use super::geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize};
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use crate::linux::clipboard::ClipboardContent;
+use core::f64;
+use desktop_common::ffi_utils::{BorrowedArray, BorrowedStrPtr};
 use smithay_client_toolkit::{
     reexports::client::{Proxy, protocol::wl_output::WlOutput},
     seat::{
@@ -10,6 +9,7 @@ use smithay_client_toolkit::{
         pointer::{AxisScroll, PointerEvent},
     },
 };
+use std::ffi::{CStr, CString};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event, WindowId) -> bool;
@@ -384,34 +384,35 @@ impl From<WindowScaleChangedEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub enum ClipboardDataFFI<'a> {
-    None,
-    Text(BorrowedStrPtr<'a>),
-    FileList(BorrowedStrPtr<'a>),
+pub struct DataWithMimeFFI<'a> {
+    pub data: BorrowedArray<'a, u8>,
+    pub mime_types: BorrowedStrPtr<'a>,
 }
 
-impl<'a> From<ClipboardDataFFI<'a>> for Event<'a> {
-    fn from(value: ClipboardDataFFI<'a>) -> Self {
+impl<'a> From<DataWithMimeFFI<'a>> for Event<'a> {
+    fn from(value: DataWithMimeFFI<'a>) -> Self {
         Self::ClipboardPaste(value)
     }
 }
 
-impl<'a> ClipboardDataFFI<'a> {
+impl<'a> DataWithMimeFFI<'a> {
     #[must_use]
-    pub const fn new_string(s: &'a CStr) -> Self {
-        Self::Text(BorrowedStrPtr::new(s))
+    pub fn new(data: &'a [u8], mime_types: &'a CStr) -> Self {
+        Self {
+            data: BorrowedArray::from_slice(data),
+            mime_types: BorrowedStrPtr::new(mime_types),
+        }
     }
 
-    #[must_use]
-    pub const fn new_file_list(s: &'a CStr) -> Self {
-        Self::FileList(BorrowedStrPtr::new(s))
+    pub fn to_clipboard_content(&self) -> anyhow::Result<ClipboardContent> {
+        Ok(ClipboardContent::new(self.data.as_slice()?, self.mime_types.as_str()?))
     }
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub enum Event<'a> {
-    ClipboardPaste(ClipboardDataFFI<'a>),
+    ClipboardPaste(DataWithMimeFFI<'a>),
     KeyDown(KeyDownEvent<'a>),
     KeyUp(KeyUpEvent<'a>),
     TextInputAvailability(TextInputAvailabilityEvent),

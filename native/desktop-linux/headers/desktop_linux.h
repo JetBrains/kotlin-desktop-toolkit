@@ -409,23 +409,15 @@ typedef struct NativeXdgDesktopSetting {
   };
 } NativeXdgDesktopSetting;
 
-typedef enum NativeClipboardDataFFI_Tag {
-  NativeClipboardDataFFI_None,
-  NativeClipboardDataFFI_Text,
-  NativeClipboardDataFFI_FileList,
-} NativeClipboardDataFFI_Tag;
+typedef struct NativeBorrowedArray_u8 {
+  const uint8_t *ptr;
+  NativeArraySize len;
+} NativeBorrowedArray_u8;
 
-typedef struct NativeClipboardDataFFI {
-  NativeClipboardDataFFI_Tag tag;
-  union {
-    struct {
-      NativeBorrowedStrPtr text;
-    };
-    struct {
-      NativeBorrowedStrPtr file_list;
-    };
-  };
-} NativeClipboardDataFFI;
+typedef struct NativeDataWithMimeFFI {
+  struct NativeBorrowedArray_u8 data;
+  NativeBorrowedStrPtr mime_types;
+} NativeDataWithMimeFFI;
 
 typedef uint32_t NativeKeyCode;
 
@@ -654,7 +646,7 @@ typedef struct NativeEvent {
   NativeEvent_Tag tag;
   union {
     struct {
-      struct NativeClipboardDataFFI clipboard_paste;
+      struct NativeDataWithMimeFFI clipboard_paste;
     };
     struct {
       struct NativeKeyDownEvent key_down;
@@ -717,6 +709,11 @@ typedef int64_t NativeWindowId;
 
 typedef bool (*NativeEventHandler)(const struct NativeEvent*, NativeWindowId);
 
+typedef struct NativeDragAndDropQueryData {
+  NativeWindowId window_id;
+  struct NativeLogicalPoint point;
+} NativeDragAndDropQueryData;
+
 typedef struct NativeApplicationCallbacks {
   void (*on_application_started)(void);
   bool (*on_should_terminate)(void);
@@ -724,6 +721,7 @@ typedef struct NativeApplicationCallbacks {
   void (*on_display_configuration_change)(void);
   void (*on_xdg_desktop_settings_change)(const struct NativeXdgDesktopSetting*);
   NativeEventHandler event_handler;
+  NativeBorrowedStrPtr (*drag_and_drop_query_handler)(const struct NativeDragAndDropQueryData*);
 } NativeApplicationCallbacks;
 
 typedef NativeGenericRawPtr_c_void NativeBorrowedOpaquePtr;
@@ -814,9 +812,9 @@ void application_text_input_update(NativeAppPtr app_ptr, struct NativeTextInputC
 
 void application_text_input_disable(NativeAppPtr app_ptr);
 
-void application_clipboard_put(NativeAppPtr app_ptr, struct NativeClipboardDataFFI data);
+void application_clipboard_put(NativeAppPtr app_ptr, struct NativeDataWithMimeFFI data);
 
-void application_clipboard_paste(NativeAppPtr app_ptr);
+void application_clipboard_paste(NativeAppPtr app_ptr, NativeBorrowedStrPtr supported_mime_types);
 
 NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
 
@@ -870,7 +868,7 @@ void window_unset_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
 
 void window_start_drag(NativeAppPtr app_ptr,
                        NativeWindowId window_id,
-                       NativeBorrowedStrPtr file_list_str);
+                       struct NativeDataWithMimeFFI data);
 
 struct NativeExceptionsArray logger_check_exceptions(void);
 

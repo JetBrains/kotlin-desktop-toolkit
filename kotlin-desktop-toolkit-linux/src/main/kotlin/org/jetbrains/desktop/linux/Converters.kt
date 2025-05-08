@@ -1,7 +1,9 @@
 package org.jetbrains.desktop.linux
 
-import org.jetbrains.desktop.linux.generated.NativeClipboardDataFFI
+import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
+import org.jetbrains.desktop.linux.generated.NativeDataWithMimeFFI
+import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
 import org.jetbrains.desktop.linux.generated.NativeKeyModifiers
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
 import org.jetbrains.desktop.linux.generated.NativeLogicalRect
@@ -16,6 +18,7 @@ import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
 import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
 import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
+import java.lang.foreign.MemoryLayout
 import java.lang.foreign.MemorySegment
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
@@ -288,18 +291,41 @@ internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
     return result
 }
 
-internal fun ClipboardData.Companion.fromNative(s: MemorySegment): ClipboardData? {
-    val nativeTag = NativeClipboardDataFFI.tag(s)
-    return when (nativeTag) {
-        desktop_linux_h.NativeClipboardDataFFI_None() -> {
-            null
-        }
-        desktop_linux_h.NativeClipboardDataFFI_Text() -> ClipboardData.Text(
-            value = NativeClipboardDataFFI.text(s).getUtf8String(0),
-        )
-        desktop_linux_h.NativeClipboardDataFFI_FileList() -> ClipboardData.UriList(
-            value = NativeClipboardDataFFI.file_list(s).getUtf8String(0).split('\n'),
-        )
-        else -> error("Unexpected clipboard data type $nativeTag")
+internal fun ClipboardData.Companion.fromNative(s: MemorySegment): ClipboardData {
+    val mimeTypesString = NativeDataWithMimeFFI.mime_types(s).getUtf8String(0)
+    val nativeU8Array = NativeDataWithMimeFFI.data(s)
+    val len = NativeBorrowedArray_u8.len(nativeU8Array)
+    val buf = ByteArray(len.toInt())
+    val dataPtr = NativeBorrowedArray_u8.ptr(nativeU8Array)
+    for (i in 0 until len) {
+        buf[i.toInt()] = dataPtr.getAtIndex(desktop_linux_h.C_CHAR, i)
     }
+    return ClipboardData(
+        data = buf,
+        mimeTypes = mimeTypesString.split(','),
+    )
+}
+
+internal fun ClipboardData.toNative(arena: Arena, mimeTypesToNative: (List<String>) -> MemorySegment): MemorySegment {
+    val nativeClipboardData = NativeDataWithMimeFFI.allocate(arena)
+    val nativeMimeTypes = mimeTypesToNative(mimeTypes)
+    val nativeDataArray = NativeBorrowedArray_u8.allocate(arena)
+    NativeBorrowedArray_u8.len(nativeDataArray, data.size.toLong())
+    val nativeArray = arena.allocate(MemoryLayout.sequenceLayout(data.size.toLong(), desktop_linux_h.C_CHAR))
+    data.forEachIndexed { i, b ->
+        nativeArray.setAtIndex(desktop_linux_h.C_CHAR, i.toLong(), b)
+    }
+
+    NativeBorrowedArray_u8.ptr(nativeDataArray, nativeArray)
+    NativeDataWithMimeFFI.mime_types(nativeClipboardData, nativeMimeTypes)
+    NativeDataWithMimeFFI.data(nativeClipboardData, nativeDataArray)
+
+    return nativeClipboardData
+}
+
+internal fun DragAndDropQueryData.Companion.fromNative(s: MemorySegment): DragAndDropQueryData {
+    return DragAndDropQueryData(
+        windowId = NativeDragAndDropQueryData.window_id(s),
+        point = LogicalPoint.fromNative(NativeDragAndDropQueryData.point(s)),
+    )
 }

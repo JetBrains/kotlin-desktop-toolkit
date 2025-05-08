@@ -123,11 +123,10 @@ public class Window internal constructor(
         }
     }
 
-    public fun startDrag(uris: List<String>) {
+    public fun startDrag(data: ClipboardData) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                val nativeList = arena.allocateUtf8String(uris.joinToString("\n"))
-                desktop_h.window_start_drag(appPtr, windowId, nativeList)
+                desktop_h.window_start_drag(appPtr, windowId, data.toNative(arena))
             }
         }
     }

@@ -1,11 +1,19 @@
-use super::events::{ClipboardDataFFI, EventHandler};
+use super::events::{DataWithMimeFFI, EventHandler, WindowId};
 use super::{application::Application, application_state::EglInstance, xdg_desktop_settings_api::XdgDesktopSetting};
 use crate::linux::clipboard::ClipboardContent;
+use crate::linux::geometry::LogicalPoint;
 use crate::linux::text_input_api::TextInputContext;
 use anyhow::{Context, bail};
 use desktop_common::ffi_utils::{BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr};
 use desktop_common::logger::ffi_boundary;
 use log::debug;
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct DragAndDropQueryData {
+    pub window_id: WindowId,
+    pub point: LogicalPoint,
+}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -17,6 +25,7 @@ pub struct ApplicationCallbacks {
     pub on_display_configuration_change: extern "C" fn(),
     pub on_xdg_desktop_settings_change: extern "C" fn(&XdgDesktopSetting),
     pub event_handler: EventHandler,
+    pub drag_and_drop_query_handler: extern "C" fn(&DragAndDropQueryData) -> BorrowedStrPtr<'static>,
 }
 
 pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
@@ -150,22 +159,21 @@ pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr<'_>) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr<'_>, data: ClipboardDataFFI) {
+pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr<'_>, data: DataWithMimeFFI) {
     debug!("application_clipboard_put");
     ffi_boundary("application_clipboard_put", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        let clipboard_content = ClipboardContent::new(data)?;
-        app.clipboard_put(clipboard_content);
+        let clipboard_content = ClipboardContent::new(data.data.as_slice()?, data.mime_types.as_str()?);
+        app.clipboard_put(Some(clipboard_content));
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>) {
+pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, supported_mime_types: BorrowedStrPtr) {
     debug!("application_clipboard_paste");
     ffi_boundary("application_clipboard_paste", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.clipboard_paste();
-        Ok(())
+        app.clipboard_paste(supported_mime_types.as_str()?)
     });
 }

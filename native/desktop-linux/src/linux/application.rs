@@ -1,8 +1,3 @@
-use crate::linux::events::ClipboardDataFFI;
-use std::ffi::CStr;
-use std::io::Read;
-use std::time::Duration;
-
 use super::application_api::ApplicationCallbacks;
 use super::events::WindowId;
 use super::geometry::LogicalSize;
@@ -10,7 +5,8 @@ use super::window_api::WindowParams;
 use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
 use super::xdg_desktop_settings_api::XdgDesktopSetting;
 use super::{application_state::ApplicationState, window::SimpleWindow};
-use crate::linux::clipboard::{ClipboardContent, TEXT_MIME_TYPE, URI_LIST_MIME_TYPE};
+use crate::linux::clipboard::ClipboardContent;
+use crate::linux::events::DataWithMimeFFI;
 use anyhow::{Context, anyhow};
 use desktop_common::logger::catch_panic;
 use log::{debug, warn};
@@ -21,6 +17,10 @@ use smithay_client_toolkit::{
     reexports::client::{Connection, Proxy, QueueHandle, globals::registry_queue_init},
     shell::WaylandSurface,
 };
+use std::ffi::CString;
+use std::io::Read;
+use std::str::FromStr;
+use std::time::Duration;
 
 pub struct Application<'a> {
     pub event_loop: EventLoop<'a, ApplicationState>,
@@ -117,6 +117,7 @@ impl Application<'static> {
         let window_id = params.window_id;
         let event_handler = self.state.callbacks.event_handler;
         let w = SimpleWindow::new(
+            window_id,
             &self.state,
             &self.qh,
             Box::new(move |e| catch_panic(|| Ok(event_handler(e, window_id))).unwrap_or(false)),
@@ -152,76 +153,76 @@ impl Application<'static> {
         self.state.set_cursor_theme(&self.qh, name, size)
     }
 
-    pub fn clipboard_put(&mut self, clipboard_content: ClipboardContent) {
+    pub fn clipboard_put(&mut self, clipboard_content: Option<ClipboardContent>) {
         self.state.clipboard_content = clipboard_content;
-        if matches!(self.state.clipboard_content, ClipboardContent::None) {
+        let Some(clipboard_content) = &self.state.clipboard_content else {
             self.state.copy_paste_source = None;
             warn!("application_clipboard_put: None");
-        } else if let Some(data_device) = self.state.data_device.as_ref() {
-            if let Some(serial) = self.state.last_key_down_serial {
-                let mime_types = self.state.clipboard_content.mime_types();
-                let copy_paste_source = self.state.data_device_manager_state.create_copy_paste_source(&self.qh, mime_types);
-                copy_paste_source.set_selection(data_device, serial);
-                self.state.copy_paste_source = Some(copy_paste_source);
-            } else {
-                warn!("application_clipboard_put: No last key down serial");
-            }
-        } else {
+            return;
+        };
+        let Some(data_device) = self.state.data_device.as_ref() else {
             warn!("application_clipboard_put: No data device");
-        }
-    }
-
-    pub fn clipboard_paste(&self) {
-        if let Some(data_device) = self.state.data_device.as_ref() {
-            if let Some(offer) = data_device.data().selection_offer() {
-                offer.with_mime_types(|mime_types| {
-                    debug!("application_clipboard_paste: offer MIME types: {mime_types:?}");
-                    if mime_types.iter().any(|e| e == TEXT_MIME_TYPE) {
-                        let is_uri_list = mime_types.iter().any(|e| e == URI_LIST_MIME_TYPE);
-                        let read_pipe = offer
-                            .receive(if is_uri_list { URI_LIST_MIME_TYPE } else { TEXT_MIME_TYPE }.to_owned())
-                            .unwrap();
-                        self.event_loop
-                            .handle()
-                            .insert_source(read_pipe, move |(), res, state| {
-                                let f = unsafe { res.get_mut() };
-                                let mut buf = Vec::new();
-                                let size = f.read_to_end(&mut buf).unwrap();
-                                buf.push(0);
-                                let cstr = CStr::from_bytes_with_nul(&buf).unwrap();
-
-                                debug!("application_clipboard_paste read {size} bytes");
-                                if let Some(key_window) = state.get_key_window() {
-                                    if is_uri_list {
-                                        (key_window.event_handler)(&ClipboardDataFFI::new_file_list(cstr).into());
-                                    } else {
-                                        (key_window.event_handler)(&ClipboardDataFFI::new_string(cstr).into());
-                                    }
-                                } else {
-                                    warn!("application_clipboard_paste: No key window");
-                                }
-
-                                PostAction::Remove
-                            })
-                            .unwrap();
-                    }
-                });
-            } else {
-                warn!("application_clipboard_paste: No selection offer found");
-            }
+            return;
+        };
+        if let Some(serial) = self.state.last_key_down_serial {
+            let copy_paste_source = self
+                .state
+                .data_device_manager_state
+                .create_copy_paste_source(&self.qh, &clipboard_content.mime_types);
+            copy_paste_source.set_selection(data_device, serial);
+            self.state.copy_paste_source = Some(copy_paste_source);
         } else {
-            warn!("application_clipboard_paste: No data device available");
+            warn!("application_clipboard_put: No last key down serial");
         }
     }
 
-    pub fn start_drag(&mut self, window_id: WindowId, file_list_str: String) -> anyhow::Result<()> {
+    pub fn clipboard_paste(&self, supported_mime_types: &str) -> anyhow::Result<()> {
+        let Some(data_device) = self.state.data_device.as_ref() else {
+            warn!("application_clipboard_paste: No data device available");
+            return Ok(());
+        };
+        let Some(offer) = data_device.data().selection_offer() else {
+            debug!("application_clipboard_paste: No selection offer found");
+            return Ok(());
+        };
+        let Some(mime_type) = offer.with_mime_types(|mime_types| {
+            debug!("application_clipboard_paste: offer MIME types: {mime_types:?}");
+            supported_mime_types
+                .split(',')
+                .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
+                .map(str::to_owned)
+        }) else {
+            debug!("application_clipboard_paste: clipboard content not supported");
+            return Ok(());
+        };
+
+        let read_pipe = offer.receive(mime_type.clone())?;
+        self.event_loop.handle().insert_source(read_pipe, move |(), res, state| {
+            let f = unsafe { res.get_mut() };
+            let mut buf = Vec::new();
+            let size = f.read_to_end(&mut buf).unwrap();
+
+            debug!("application_clipboard_paste read {size} bytes");
+            if let Some(key_window) = state.get_key_window() {
+                let mime_type_cstr = CString::from_str(&mime_type).unwrap();
+                (key_window.event_handler)(&DataWithMimeFFI::new(&buf, &mime_type_cstr).into());
+            } else {
+                warn!("application_clipboard_paste: No key window");
+            }
+
+            PostAction::Remove
+        })?;
+        Ok(())
+    }
+
+    pub fn start_drag(&mut self, window_id: WindowId, content: ClipboardContent) -> anyhow::Result<()> {
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
         let drag_source = self
             .state
             .data_device_manager_state
-            .create_drag_and_drop_source(&self.qh, [URI_LIST_MIME_TYPE], DndAction::Copy);
+            .create_drag_and_drop_source(&self.qh, &content.mime_types, DndAction::Copy);
         let d = self.state.data_device.as_ref().context("No data device found")?;
         d.inner().start_drag(
             Some(drag_source.inner()),
@@ -230,7 +231,7 @@ impl Application<'static> {
             w.current_mouse_down_serial.unwrap(),
         );
         self.state.drag_source = Some(drag_source);
-        self.state.drag_content = Some(file_list_str);
+        self.state.drag_content = Some(content);
         Ok(())
     }
 }

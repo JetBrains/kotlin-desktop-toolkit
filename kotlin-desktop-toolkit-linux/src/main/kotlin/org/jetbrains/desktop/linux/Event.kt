@@ -181,9 +181,11 @@ public data class SoftwareDrawData(val canvas: Long, val stride: Int) {
     internal companion object;
 }
 
-public sealed class ClipboardData {
-    public data class Text(val value: String) : ClipboardData()
-    public data class UriList(val value: List<String>) : ClipboardData()
+public class ClipboardData(public val data: ByteArray, public val mimeTypes: List<String>) {
+    internal companion object;
+}
+
+public data class DragAndDropQueryData(public val windowId: WindowId, public val point: LogicalPoint) {
     internal companion object;
 }
 
@@ -205,7 +207,7 @@ public sealed class Event {
     }
 
     public data class ClipboardPaste(
-        val data: ClipboardData?,
+        val data: ClipboardData,
     ) : Event()
 
     public data class KeyDown(

@@ -1,6 +1,9 @@
 use super::application_state::ApplicationState;
-use crate::linux::events::ClipboardDataFFI;
+use crate::linux::application_api::DragAndDropQueryData;
+use crate::linux::events::DataWithMimeFFI;
+use crate::linux::geometry::{LogicalPixels, LogicalPoint};
 use log::{debug, warn};
+use smithay_client_toolkit::data_device_manager::data_source::{CopyPasteSource, DragSource};
 use smithay_client_toolkit::reexports::calloop::PostAction;
 use smithay_client_toolkit::{
     data_device_manager::{
@@ -15,17 +18,24 @@ use smithay_client_toolkit::{
         protocol::{wl_data_device::WlDataDevice, wl_data_device_manager::DndAction, wl_data_source::WlDataSource, wl_surface::WlSurface},
     },
 };
-use std::ffi::CStr;
+use std::ffi::CString;
 use std::io::{Read, Write};
-
-pub const TEXT_MIME_TYPE: &str = "text/plain;charset=utf-8";
-pub const URI_LIST_MIME_TYPE: &str = "text/uri-list";
+use std::str::FromStr;
 
 delegate_data_device!(ApplicationState);
 
 impl DataDeviceHandler for ApplicationState {
     fn enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice, x: f64, y: f64, wl_surface: &WlSurface) {
         debug!("DataDeviceHandler::enter: {}, {x}x{y}", wl_surface.id());
+    }
+
+    fn leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice) {
+        debug!("DataDeviceHandler::leave");
+        self.drag_destination_mime_type = None;
+    }
+
+    fn motion(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice, x: f64, y: f64) {
+        debug!("DataDeviceHandler::motion: {x}x{y}");
 
         let Some(data_device) = &self.data_device else {
             return;
@@ -35,24 +45,26 @@ impl DataDeviceHandler for ApplicationState {
         };
 
         drag_offer.with_mime_types(|mime_types| {
-            debug!("DataDeviceHandler::enter: mime_types={mime_types:?}");
-            if mime_types.iter().any(|e| e == URI_LIST_MIME_TYPE) {
-                drag_offer.accept_mime_type(0, Some(URI_LIST_MIME_TYPE.to_owned()));
-            } else if mime_types.iter().any(|e| e == TEXT_MIME_TYPE) {
-                drag_offer.accept_mime_type(0, Some(TEXT_MIME_TYPE.to_owned()));
+            let drag_and_drop_query_data = DragAndDropQueryData {
+                window_id: self.get_window(&drag_offer.surface).unwrap().window_id,
+                point: LogicalPoint {
+                    x: LogicalPixels(x),
+                    y: LogicalPixels(y),
+                },
+            };
+            let supported_mime_types = (self.callbacks.drag_and_drop_query_handler)(&drag_and_drop_query_data);
+
+            for supported_mime_type in supported_mime_types.as_str().unwrap().split(',') {
+                if mime_types.iter().any(|s| s == supported_mime_type) {
+                    debug!("DataDeviceHandler::motion: accepted mime_type={supported_mime_type}");
+                    drag_offer.accept_mime_type(0, Some(supported_mime_type.to_owned()));
+                    // Accept the action now just in case
+                    drag_offer.set_actions(DndAction::Copy, DndAction::Copy);
+                    return;
+                }
             }
+            debug!("DataDeviceHandler::motion: didn't accept any of the mime_types={mime_types:?}");
         });
-
-        // Accept the action now just in case
-        drag_offer.set_actions(DndAction::Copy, DndAction::Copy);
-    }
-
-    fn leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice) {
-        debug!("DataDeviceHandler::leave");
-    }
-
-    fn motion(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice, x: f64, y: f64) {
-        debug!("DataDeviceHandler::motion: {x}x{y}");
     }
 
     fn selection(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice) {
@@ -75,35 +87,21 @@ impl DataDeviceHandler for ApplicationState {
             return;
         };
 
-        let Some(mime) = drag_offer.with_mime_types(|mime_types| {
-            debug!("DataDeviceHandler::enter: mime_types={mime_types:?}");
-            if mime_types.iter().any(|e| e == URI_LIST_MIME_TYPE) {
-                Some(URI_LIST_MIME_TYPE)
-            } else if mime_types.iter().any(|e| e == TEXT_MIME_TYPE) {
-                Some(TEXT_MIME_TYPE)
-            } else {
-                None
-            }
-        }) else {
+        let Some(mime_type) = self.drag_destination_mime_type.take() else {
             return;
         };
-        let read_pipe = drag_offer.receive(mime.to_owned()).unwrap();
+        let read_pipe = drag_offer.receive(mime_type.clone()).unwrap();
         self.loop_handle
             .insert_source(read_pipe, move |(), res, state| {
                 let f = unsafe { res.get_mut() };
                 let mut buf = Vec::new();
                 let size = f.read_to_end(&mut buf).unwrap();
-                buf.push(0);
-                let cstr = CStr::from_bytes_with_nul(&buf).unwrap();
 
                 debug!("DataDeviceHandler::drop_performed read {size} bytes");
-                debug!("DataDeviceHandler::drop_performed value: {cstr:?}");
+                debug!("DataDeviceHandler::drop_performed value: {buf:?}");
                 if let Some(key_window) = state.get_window(&drag_offer.surface) {
-                    if mime == URI_LIST_MIME_TYPE {
-                        (key_window.event_handler)(&ClipboardDataFFI::new_file_list(cstr).into());
-                    } else {
-                        (key_window.event_handler)(&ClipboardDataFFI::new_string(cstr).into());
-                    }
+                    let mime_type_cstr = CString::from_str(&mime_type).unwrap();
+                    (key_window.event_handler)(&DataWithMimeFFI::new(&buf, &mime_type_cstr).into());
                 } else {
                     warn!("DataDeviceHandler::drop_performed: No target window");
                 }
@@ -132,26 +130,13 @@ impl DataSourceHandler for ApplicationState {
     fn send_request(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &WlDataSource, mime: String, mut fd: WritePipe) {
         debug!("DataSourceHandler::send_request: {mime}");
 
-        if self
-            .copy_paste_source
-            .as_ref()
-            .map(smithay_client_toolkit::data_device_manager::data_source::CopyPasteSource::inner)
-            == Some(source)
-        {
-            match &self.clipboard_content {
-                ClipboardContent::Text(s) | ClipboardContent::FileList(s) => {
-                    fd.write_all(s.as_bytes()).unwrap();
-                }
-                ClipboardContent::None => {}
+        if self.copy_paste_source.as_ref().map(CopyPasteSource::inner) == Some(source) {
+            if let Some(clipboard_content) = &self.clipboard_content {
+                fd.write_all(&clipboard_content.data).unwrap();
             }
-        } else if self
-            .drag_source
-            .as_ref()
-            .map(smithay_client_toolkit::data_device_manager::data_source::DragSource::inner)
-            == Some(source)
-        {
+        } else if self.drag_source.as_ref().map(DragSource::inner) == Some(source) {
             if let Some(drag_content) = &self.drag_content {
-                fd.write_all(drag_content.as_bytes()).unwrap();
+                fd.write_all(&drag_content.data).unwrap();
             }
         }
     }
@@ -164,7 +149,7 @@ impl DataSourceHandler for ApplicationState {
             .map(smithay_client_toolkit::data_device_manager::data_source::CopyPasteSource::inner)
             == Some(source)
         {
-            self.clipboard_content = ClipboardContent::None;
+            self.clipboard_content = None;
             self.copy_paste_source = None;
         } else if self
             .drag_source
@@ -179,10 +164,12 @@ impl DataSourceHandler for ApplicationState {
 
     fn dnd_dropped(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {
         debug!("DataSourceHandler::dnd_dropped");
+        self.drag_destination_mime_type = None;
     }
 
     fn dnd_finished(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {
         debug!("DataSourceHandler::dnd_finished");
+        self.drag_destination_mime_type = None;
     }
 
     fn action(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource, action: DndAction) {
@@ -190,26 +177,16 @@ impl DataSourceHandler for ApplicationState {
     }
 }
 
-pub enum ClipboardContent {
-    None,
-    Text(String),
-    FileList(String),
+pub struct ClipboardContent {
+    pub data: Vec<u8>,
+    pub mime_types: Vec<String>,
 }
 
 impl ClipboardContent {
-    pub fn new(d: ClipboardDataFFI) -> anyhow::Result<Self> {
-        match d {
-            ClipboardDataFFI::None => Ok(Self::None),
-            ClipboardDataFFI::Text(s) => Ok(Self::Text(s.as_str()?.to_owned())),
-            ClipboardDataFFI::FileList(s) => Ok(Self::FileList(s.as_str()?.to_owned())),
-        }
-    }
-
-    pub fn mime_types(&self) -> Vec<&'static str> {
-        match self {
-            Self::None => Vec::new(),
-            Self::Text(_) => vec![TEXT_MIME_TYPE],
-            Self::FileList(_) => vec![TEXT_MIME_TYPE, URI_LIST_MIME_TYPE],
+    pub(crate) fn new(data: &[u8], mime_types_str: &str) -> Self {
+        Self {
+            data: data.to_owned(),
+            mime_types: mime_types_str.split(',').map(str::to_owned).collect(),
         }
     }
 }

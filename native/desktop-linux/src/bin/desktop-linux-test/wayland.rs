@@ -7,8 +7,8 @@ use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
-use desktop_linux::linux::application_api::{application_clipboard_paste, application_clipboard_put};
-use desktop_linux::linux::events::{ClipboardDataFFI, KeyModifiers};
+use desktop_linux::linux::application_api::{DragAndDropQueryData, application_clipboard_paste, application_clipboard_put};
+use desktop_linux::linux::events::{DataWithMimeFFI, KeyModifiers};
 use desktop_linux::linux::text_input_api::{TextInputContentPurpose, TextInputContext};
 use desktop_linux::linux::{
     application_api::{
@@ -47,6 +47,11 @@ extern "C" fn on_display_configuration_change() {
 fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
 }
+
+pub const TEXT_MIME_TYPE: &CStr = c"text/plain;charset=utf-8";
+pub const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
+
+pub const ALL_MIMES: &CStr = c"text/uri-list,text/plain;charset=utf-8";
 
 #[derive(Debug)]
 struct OpenglState {
@@ -299,10 +304,10 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                 }
                 _ => {
                     if data.code.0 == 47 && window_state.key_modifiers.ctrl {
-                        application_clipboard_paste(state.app_ptr.clone());
+                        application_clipboard_paste(state.app_ptr.clone(), BorrowedStrPtr::new(TEXT_MIME_TYPE));
                     } else if data.code.0 == 46 && window_state.key_modifiers.ctrl {
-                        let s = c"demo app clipboard put";
-                        application_clipboard_put(state.app_ptr.clone(), ClipboardDataFFI::Text(BorrowedStrPtr::new(s)));
+                        let s = "demo app clipboard put";
+                        application_clipboard_put(state.app_ptr.clone(), DataWithMimeFFI::new(s.as_bytes(), TEXT_MIME_TYPE));
                     } else if let Some(event_chars) = data.characters.as_optional_str().unwrap() {
                         window_state.text += event_chars;
                         update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
@@ -312,21 +317,33 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
 
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
         }),
-        Event::ClipboardPaste(data) => match data {
-            ClipboardDataFFI::Text(text) => STATE.with(|c| {
-                let mut state = c.borrow_mut();
-                let state = state.as_mut().unwrap();
-                let window_state = state.windows.get_mut(&window_id).unwrap();
-                window_state.text += text.as_str().unwrap();
-            }),
-            ClipboardDataFFI::None => {
-                info!("No clipboard data");
-            }
-            ClipboardDataFFI::FileList(list_str) => {
-                let list = list_str.as_str().unwrap().split('\n').collect::<Vec<_>>();
+        Event::ClipboardPaste(data) => {
+            if data
+                .mime_types
+                .as_str()
+                .unwrap()
+                .split(',')
+                .any(|s| s == URI_LIST_MIME_TYPE.to_str().unwrap())
+            {
+                let list_str = str::from_utf8(data.data.as_slice().unwrap()).unwrap();
+                let list = list_str.split('\n').collect::<Vec<_>>();
                 info!("Pasted file list: {list:?}");
+            } else if data
+                .mime_types
+                .as_str()
+                .unwrap()
+                .split(',')
+                .any(|s| s == TEXT_MIME_TYPE.to_str().unwrap())
+            {
+                STATE.with(|c| {
+                    let mut state = c.borrow_mut();
+                    let state = state.as_mut().unwrap();
+                    let window_state = state.windows.get_mut(&window_id).unwrap();
+                    let data_str = str::from_utf8(data.data.as_slice().unwrap()).unwrap();
+                    window_state.text += data_str;
+                });
             }
-        },
+        }
         Event::TextInputAvailability(data) => STATE.with(|c| {
             let mut state = c.borrow_mut();
             let state = state.as_mut().unwrap();
@@ -443,6 +460,14 @@ extern "C" fn on_application_started() {
     });
 }
 
+extern "C" fn drag_and_drop_query_handler(data: &DragAndDropQueryData) -> BorrowedStrPtr<'static> {
+    if data.point.x.0 < 100. {
+        BorrowedStrPtr::new(ALL_MIMES)
+    } else {
+        BorrowedStrPtr::new(c"")
+    }
+}
+
 pub fn main() {
     logger_init_impl(&LoggerConfiguration {
         file_path: BorrowedStrPtr::new(c"/tmp/a"),
@@ -456,6 +481,7 @@ pub fn main() {
         on_display_configuration_change,
         on_xdg_desktop_settings_change,
         event_handler,
+        drag_and_drop_query_handler,
     });
     STATE.with(|c| {
         c.replace(Some(State {
