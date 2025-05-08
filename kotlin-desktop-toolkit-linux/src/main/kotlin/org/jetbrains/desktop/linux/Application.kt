@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeApplicationCallbacks
+import org.jetbrains.desktop.linux.generated.NativeClipboardDataFFI
 import org.jetbrains.desktop.linux.generated.NativeEventHandler
 import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
 import org.jetbrains.desktop.linux.generated.NativeScreenInfo
@@ -241,11 +242,22 @@ public class Application() : AutoCloseable {
         }
     }
 
-    public fun clipboardPut(s: String) {
+    public fun clipboardPut(data: ClipboardData) {
         Arena.ofConfined().use { arena ->
-            val nativeClipboardString = arena.allocateUtf8String(s)
+            val nativeClipboardData = NativeClipboardDataFFI.allocate(arena)
+            when (data) {
+                is ClipboardData.Text -> {
+                    NativeClipboardDataFFI.tag(nativeClipboardData, desktop_h.NativeClipboardDataFFI_Text())
+                    NativeClipboardDataFFI.text(nativeClipboardData, arena.allocateUtf8String(data.value))
+                }
+                is ClipboardData.UriList -> {
+                    NativeClipboardDataFFI.tag(nativeClipboardData, desktop_h.NativeClipboardDataFFI_FileList())
+                    NativeClipboardDataFFI.text(nativeClipboardData, arena.allocateUtf8String(data.value.joinToString("\n")))
+                }
+            }
+
             ffiDownCall {
-                desktop_h.application_clipboard_put(appPtr, nativeClipboardString)
+                desktop_h.application_clipboard_put(appPtr, nativeClipboardData)
             }
         }
     }

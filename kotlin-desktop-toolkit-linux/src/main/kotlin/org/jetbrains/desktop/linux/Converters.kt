@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.linux
 
+import org.jetbrains.desktop.linux.generated.NativeClipboardDataFFI
 import org.jetbrains.desktop.linux.generated.NativeColor
 import org.jetbrains.desktop.linux.generated.NativeKeyModifiers
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
@@ -285,4 +286,20 @@ internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
     NativeTextInputContext.cursor_rectangle(result, cursorRectangle.toNative(arena))
     NativeTextInputContext.change_caused_by_input_method(result, changeCausedByInputMethod)
     return result
+}
+
+internal fun ClipboardData.Companion.fromNative(s: MemorySegment): ClipboardData? {
+    val nativeTag = NativeClipboardDataFFI.tag(s)
+    return when (nativeTag) {
+        desktop_linux_h.NativeClipboardDataFFI_None() -> {
+            null
+        }
+        desktop_linux_h.NativeClipboardDataFFI_Text() -> ClipboardData.Text(
+            value = NativeClipboardDataFFI.text(s).getUtf8String(0),
+        )
+        desktop_linux_h.NativeClipboardDataFFI_FileList() -> ClipboardData.UriList(
+            value = NativeClipboardDataFFI.file_list(s).getUtf8String(0).split('\n'),
+        )
+        else -> error("Unexpected clipboard data type $nativeTag")
+    }
 }

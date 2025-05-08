@@ -1,5 +1,6 @@
-use super::events::EventHandler;
+use super::events::{ClipboardDataFFI, EventHandler};
 use super::{application::Application, application_state::EglInstance, xdg_desktop_settings_api::XdgDesktopSetting};
+use crate::linux::clipboard::ClipboardContent;
 use crate::linux::text_input_api::TextInputContext;
 use anyhow::{Context, bail};
 use desktop_common::ffi_utils::{BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr};
@@ -149,11 +150,12 @@ pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr<'_>) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr<'_>, str: BorrowedStrPtr) {
+pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr<'_>, data: ClipboardDataFFI) {
     debug!("application_clipboard_put");
     ffi_boundary("application_clipboard_put", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.clipboard_put(str.as_str().unwrap().to_owned());
+        let clipboard_content = ClipboardContent::new(data)?;
+        app.clipboard_put(clipboard_content);
         Ok(())
     });
 }

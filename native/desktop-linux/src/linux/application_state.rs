@@ -1,5 +1,5 @@
 use super::{application_api::ApplicationCallbacks, events::WindowId, text_input::PendingTextInputEvent, window::SimpleWindow};
-use crate::linux::clipboard::TEXT_MIME_TYPE;
+use crate::linux::clipboard::ClipboardContent;
 use khronos_egl;
 use log::{debug, warn};
 use smithay_client_toolkit::data_device_manager::data_device::DataDevice;
@@ -68,13 +68,13 @@ pub struct ApplicationState {
     pub fractional_scale_manager: Option<WpFractionalScaleManagerV1>,
     pub text_input_manager: Option<ZwpTextInputManagerV3>,
     pub data_device_manager_state: DataDeviceManagerState,
-    pub copy_paste_source: CopyPasteSource,
+    pub copy_paste_source: Option<CopyPasteSource>,
     pub data_device: Option<DataDevice>,
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
     pub(crate) last_key_down_serial: Option<u32>,
-    pub(crate) clipboard_content: Option<String>,
+    pub(crate) clipboard_content: ClipboardContent,
     pub(crate) key_surface: Option<ObjectId>,
     pub(crate) active_text_input: Option<ZwpTextInputV3>,
     pub(crate) pending_text_input_event: PendingTextInputEvent,
@@ -104,7 +104,6 @@ impl ApplicationState {
             .and_then(|lib| unsafe { EglInstance::load_required_from(lib) }.map_err(|e| warn!("{e}")))
             .ok();
         let data_device_manager_state = DataDeviceManagerState::bind(globals, qh).expect("wl_data_device not available");
-        let copy_paste_source = data_device_manager_state.create_copy_paste_source(qh, [TEXT_MIME_TYPE]);
 
         Self {
             callbacks,
@@ -121,12 +120,12 @@ impl ApplicationState {
             fractional_scale_manager: globals.bind(qh, 1..=1, ()).ok(),
             text_input_manager: globals.bind(qh, 1..=1, ()).ok(),
             data_device_manager_state,
-            copy_paste_source,
+            copy_paste_source: None,
             data_device: None,
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             last_key_down_serial: None,
-            clipboard_content: None,
+            clipboard_content: ClipboardContent::None,
             key_surface: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
@@ -282,7 +281,7 @@ delegate_shm!(ApplicationState);
 
 impl CompositorHandler for ApplicationState {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_factor: i32) {
-        debug!("scale_factor_changed for {surface:?}: {new_factor}");
+        debug!("scale_factor_changed for {}: {new_factor}", surface.id());
         if self.fractional_scale_manager.is_none() {
             if let Some(window) = self.get_window_mut(surface) {
                 window.scale_changed(new_factor.into());
@@ -291,7 +290,7 @@ impl CompositorHandler for ApplicationState {
     }
 
     fn transform_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_transform: wl_output::Transform) {
-        debug!("transform_changed for {surface:?}: {new_transform:?}");
+        debug!("transform_changed for {}: {new_transform:?}", surface.id());
     }
 
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, _time: u32) {

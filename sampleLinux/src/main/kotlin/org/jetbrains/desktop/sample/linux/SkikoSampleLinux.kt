@@ -2,6 +2,7 @@ package org.jetbrains.desktop.sample.linux
 
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.ApplicationConfig
+import org.jetbrains.desktop.linux.ClipboardData
 import org.jetbrains.desktop.linux.ColorSchemeValue
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
@@ -174,7 +175,7 @@ class EditorState() {
                 paint.color = Color.BLUE
                 val x0 = textLine.getCoordAtOffset(selectionStartOffset)
                 val x1 = textLine.getCoordAtOffset(selectionEndOffset)
-                canvas.drawRect(r = Rect(left = x0, top = y - textLine.height, right = x1, bottom = y), paint = paint)
+                canvas.drawRect(r = Rect(left = x0, top = y + textLine.ascent, right = x1, bottom = y + textLine.descent), paint = paint)
             }
         }
         Paint().use { paint ->
@@ -187,8 +188,8 @@ class EditorState() {
                 val coord = textLine.getCoordAtOffset(cursorOffset + (composedTextStartOffset ?: 0))
 
                 cursorRectangle = LogicalRect(
-                    LogicalPoint(x = coord / scale, y = (y - textLine.height + (10 * scale)) / scale),
-                    LogicalSize(width = 5f, height = textLine.height / scale),
+                    LogicalPoint(x = coord / scale, y = (y + textLine.ascent) / scale),
+                    LogicalSize(width = 5f, height = (textLine.descent - textLine.ascent) / scale),
                 )
                 paint.color = Color.GREEN
                 paint.strokeWidth = cursorRectangle.size.width
@@ -253,10 +254,22 @@ class EditorState() {
                             app.clipboardPaste()
                             EventHandlerResult.Stop
                         }
+                        KeySym.C -> {
+                            app.clipboardPut(
+                                ClipboardData.UriList(
+                                    listOf(
+                                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
+                                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
+                                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
+                                    ),
+                                ),
+                            )
+                            EventHandlerResult.Stop
+                        }
                         KeySym.c -> {
                             getSelectionRange()?.let {
                                 val selection = text.substring(it.first, it.second)
-                                app.clipboardPut(selection)
+                                app.clipboardPut(ClipboardData.Text(selection))
                                 EventHandlerResult.Stop
                             } ?: EventHandlerResult.Continue
                         }
@@ -340,6 +353,24 @@ class EditorState() {
                     EventHandlerResult.Stop
                 }
             }
+            is Event.ClipboardPaste -> {
+                val data = event.data
+                when (data) {
+                    is ClipboardData.Text -> {
+                        deleteSelection()
+                        text.insert(cursorOffset, data.value)
+                        cursorOffset += data.value.length
+                    }
+                    is ClipboardData.UriList -> {
+                        val files = data.value
+                        Logger.info { "Pasted files $files" }
+                    }
+                    null -> {
+                        Logger.info { "Pasted from empty clipboard" }
+                    }
+                }
+                EventHandlerResult.Stop
+            }
             is Event.TextInputAvailability -> {
                 if (event.available) {
                     app.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
@@ -362,6 +393,7 @@ class EditorState() {
                     }
                 }
                 event.preeditStringData?.let { preeditStringData ->
+                    deleteSelection()
                     cursorVisible = !(preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1)
                     preeditStringData.text?.let { preeditString ->
                         composedText = preeditString

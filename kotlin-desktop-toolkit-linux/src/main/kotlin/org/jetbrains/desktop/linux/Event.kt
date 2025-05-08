@@ -181,6 +181,12 @@ public data class SoftwareDrawData(val canvas: Long, val stride: Int) {
     internal companion object;
 }
 
+public sealed class ClipboardData {
+    public data class Text(val value: String) : ClipboardData()
+    public data class UriList(val value: List<String>) : ClipboardData()
+    internal companion object;
+}
+
 public sealed class Event {
     public companion object {
 //        public fun pressedMouseButtons(): MouseButtonsSet {
@@ -197,6 +203,10 @@ public sealed class Event {
 //            }
 //        }
     }
+
+    public data class ClipboardPaste(
+        val data: ClipboardData?,
+    ) : Event()
 
     public data class KeyDown(
         val keyCode: KeyCode,
@@ -308,6 +318,10 @@ public sealed class Event {
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
+        desktop_h.NativeEvent_ClipboardPaste() -> {
+            val nativeEvent = NativeEvent.clipboard_paste(s)
+            Event.ClipboardPaste(data = ClipboardData.fromNative(nativeEvent))
+        }
         desktop_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
             Event.KeyDown(

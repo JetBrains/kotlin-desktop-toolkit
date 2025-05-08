@@ -1,6 +1,7 @@
 use core::f64;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 
+use super::geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize};
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use smithay_client_toolkit::{
     reexports::client::{Proxy, protocol::wl_output::WlOutput},
@@ -9,8 +10,6 @@ use smithay_client_toolkit::{
         pointer::{AxisScroll, PointerEvent},
     },
 };
-
-use super::geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event, WindowId) -> bool;
@@ -385,7 +384,34 @@ impl From<WindowScaleChangedEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub enum ClipboardDataFFI<'a> {
+    None,
+    Text(BorrowedStrPtr<'a>),
+    FileList(BorrowedStrPtr<'a>),
+}
+
+impl<'a> From<ClipboardDataFFI<'a>> for Event<'a> {
+    fn from(value: ClipboardDataFFI<'a>) -> Self {
+        Self::ClipboardPaste(value)
+    }
+}
+
+impl<'a> ClipboardDataFFI<'a> {
+    #[must_use]
+    pub const fn new_string(s: &'a CStr) -> Self {
+        Self::Text(BorrowedStrPtr::new(s))
+    }
+
+    #[must_use]
+    pub const fn new_file_list(s: &'a CStr) -> Self {
+        Self::FileList(BorrowedStrPtr::new(s))
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub enum Event<'a> {
+    ClipboardPaste(ClipboardDataFFI<'a>),
     KeyDown(KeyDownEvent<'a>),
     KeyUp(KeyUpEvent<'a>),
     TextInputAvailability(TextInputAvailabilityEvent),

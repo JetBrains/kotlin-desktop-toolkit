@@ -1,19 +1,17 @@
-use crate::linux::events::TextInputDeleteSurroundingTextData;
-use crate::linux::events::TextInputPreeditStringData;
+use crate::linux::events::ClipboardDataFFI;
 use std::ffi::CStr;
 use std::io::Read;
 use std::time::Duration;
 
 use super::application_api::ApplicationCallbacks;
-use super::events::{Event, TextInputEvent, WindowId};
+use super::events::WindowId;
 use super::geometry::LogicalSize;
 use super::window_api::WindowParams;
 use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
 use super::xdg_desktop_settings_api::XdgDesktopSetting;
 use super::{application_state::ApplicationState, window::SimpleWindow};
-use crate::linux::clipboard::TEXT_MIME_TYPE;
+use crate::linux::clipboard::{ClipboardContent, TEXT_MIME_TYPE, URI_LIST_MIME_TYPE};
 use anyhow::anyhow;
-use desktop_common::ffi_utils::BorrowedStrPtr;
 use desktop_common::logger::catch_panic;
 use log::{debug, warn};
 use smithay_client_toolkit::reexports::calloop::{EventLoop, PostAction, channel};
@@ -153,11 +151,17 @@ impl Application<'_> {
         self.state.set_cursor_theme(&self.qh, name, size)
     }
 
-    pub fn clipboard_put(&mut self, s: String) {
-        if let Some(data_device) = self.state.data_device.as_ref() {
+    pub fn clipboard_put(&mut self, clipboard_content: ClipboardContent) {
+        self.state.clipboard_content = clipboard_content;
+        if matches!(self.state.clipboard_content, ClipboardContent::None) {
+            self.state.copy_paste_source = None;
+            warn!("application_clipboard_put: None");
+        } else if let Some(data_device) = self.state.data_device.as_ref() {
             if let Some(serial) = self.state.last_key_down_serial {
-                self.state.clipboard_content = Some(s);
-                self.state.copy_paste_source.set_selection(data_device, serial);
+                let mime_types = self.state.clipboard_content.mime_types();
+                let copy_paste_source = self.state.data_device_manager_state.create_copy_paste_source(&self.qh, mime_types);
+                copy_paste_source.set_selection(data_device, serial);
+                self.state.copy_paste_source = Some(copy_paste_source);
             } else {
                 warn!("application_clipboard_put: No last key down serial");
             }
@@ -172,7 +176,10 @@ impl Application<'_> {
                 offer.with_mime_types(|mime_types| {
                     debug!("application_clipboard_paste: offer MIME types: {mime_types:?}");
                     if mime_types.iter().any(|e| e == TEXT_MIME_TYPE) {
-                        let read_pipe = offer.receive(TEXT_MIME_TYPE.to_owned()).unwrap();
+                        let is_uri_list = mime_types.iter().any(|e| e == URI_LIST_MIME_TYPE);
+                        let read_pipe = offer
+                            .receive(if is_uri_list { URI_LIST_MIME_TYPE } else { TEXT_MIME_TYPE }.to_owned())
+                            .unwrap();
                         self.event_loop
                             .handle()
                             .insert_source(read_pipe, move |(), res, state| {
@@ -180,18 +187,15 @@ impl Application<'_> {
                                 let mut buf = Vec::new();
                                 let size = f.read_to_end(&mut buf).unwrap();
                                 buf.push(0);
-                                let str = CStr::from_bytes_with_nul(&buf).unwrap();
+                                let cstr = CStr::from_bytes_with_nul(&buf).unwrap();
 
                                 debug!("application_clipboard_paste read {size} bytes");
                                 if let Some(key_window) = state.get_key_window() {
-                                    (key_window.event_handler)(&Event::TextInput(TextInputEvent {
-                                        has_preedit_string: false,
-                                        preedit_string: TextInputPreeditStringData::default(),
-                                        has_commit_string: true,
-                                        commit_string: BorrowedStrPtr::new(str),
-                                        has_delete_surrounding_text: false,
-                                        delete_surrounding_text: TextInputDeleteSurroundingTextData::default(),
-                                    }));
+                                    if is_uri_list {
+                                        (key_window.event_handler)(&ClipboardDataFFI::new_file_list(cstr).into());
+                                    } else {
+                                        (key_window.event_handler)(&ClipboardDataFFI::new_string(cstr).into());
+                                    }
                                 } else {
                                     warn!("application_clipboard_paste: No key window");
                                 }

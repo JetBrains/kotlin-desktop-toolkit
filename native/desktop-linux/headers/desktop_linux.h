@@ -409,6 +409,24 @@ typedef struct NativeXdgDesktopSetting {
   };
 } NativeXdgDesktopSetting;
 
+typedef enum NativeClipboardDataFFI_Tag {
+  NativeClipboardDataFFI_None,
+  NativeClipboardDataFFI_Text,
+  NativeClipboardDataFFI_FileList,
+} NativeClipboardDataFFI_Tag;
+
+typedef struct NativeClipboardDataFFI {
+  NativeClipboardDataFFI_Tag tag;
+  union {
+    struct {
+      NativeBorrowedStrPtr text;
+    };
+    struct {
+      NativeBorrowedStrPtr file_list;
+    };
+  };
+} NativeClipboardDataFFI;
+
 typedef uint32_t NativeKeyCode;
 
 typedef uint32_t NativeTimestamp;
@@ -610,6 +628,7 @@ typedef struct NativeWindowScaleChangedEvent {
 } NativeWindowScaleChangedEvent;
 
 typedef enum NativeEvent_Tag {
+  NativeEvent_ClipboardPaste,
   NativeEvent_KeyDown,
   NativeEvent_KeyUp,
   NativeEvent_TextInputAvailability,
@@ -634,6 +653,9 @@ typedef enum NativeEvent_Tag {
 typedef struct NativeEvent {
   NativeEvent_Tag tag;
   union {
+    struct {
+      struct NativeClipboardDataFFI clipboard_paste;
+    };
     struct {
       struct NativeKeyDownEvent key_down;
     };
@@ -792,7 +814,7 @@ void application_text_input_update(NativeAppPtr app_ptr, struct NativeTextInputC
 
 void application_text_input_disable(NativeAppPtr app_ptr);
 
-void application_clipboard_put(NativeAppPtr app_ptr, NativeBorrowedStrPtr str);
+void application_clipboard_put(NativeAppPtr app_ptr, struct NativeClipboardDataFFI data);
 
 void application_clipboard_paste(NativeAppPtr app_ptr);
 

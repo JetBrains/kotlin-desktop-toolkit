@@ -8,7 +8,7 @@ use desktop_common::{
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::application_api::{application_clipboard_paste, application_clipboard_put};
-use desktop_linux::linux::events::KeyModifiers;
+use desktop_linux::linux::events::{ClipboardDataFFI, KeyModifiers};
 use desktop_linux::linux::text_input_api::{TextInputContentPurpose, TextInputContext};
 use desktop_linux::linux::{
     application_api::{
@@ -26,7 +26,7 @@ use desktop_linux::linux::{
     },
     geometry::{LogicalPoint, LogicalRect},
 };
-use log::debug;
+use log::{debug, info};
 use std::ffi::CString;
 use std::{cell::RefCell, ffi::CStr};
 use std::{collections::HashMap, str::FromStr};
@@ -265,6 +265,7 @@ fn update_text_input_context(app_ptr: AppPtr<'_>, text: &str, change_caused_by_i
     );
 }
 
+#[allow(clippy::too_many_lines)]
 extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
     log_event(event, window_id);
     match event {
@@ -301,7 +302,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                         application_clipboard_paste(state.app_ptr.clone());
                     } else if data.code.0 == 46 && window_state.key_modifiers.ctrl {
                         let s = c"demo app clipboard put";
-                        application_clipboard_put(state.app_ptr.clone(), BorrowedStrPtr::new(s));
+                        application_clipboard_put(state.app_ptr.clone(), ClipboardDataFFI::Text(BorrowedStrPtr::new(s)));
                     } else if let Some(event_chars) = data.characters.as_optional_str().unwrap() {
                         window_state.text += event_chars;
                         update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
@@ -311,6 +312,21 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
 
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
         }),
+        Event::ClipboardPaste(data) => match data {
+            ClipboardDataFFI::Text(text) => STATE.with(|c| {
+                let mut state = c.borrow_mut();
+                let state = state.as_mut().unwrap();
+                let window_state = state.windows.get_mut(&window_id).unwrap();
+                window_state.text += text.as_str().unwrap();
+            }),
+            ClipboardDataFFI::None => {
+                info!("No clipboard data");
+            }
+            ClipboardDataFFI::FileList(list_str) => {
+                let list = list_str.as_str().unwrap().split('\n').collect::<Vec<_>>();
+                info!("Pasted file list: {list:?}");
+            }
+        },
         Event::TextInputAvailability(data) => STATE.with(|c| {
             let mut state = c.borrow_mut();
             let state = state.as_mut().unwrap();

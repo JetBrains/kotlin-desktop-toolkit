@@ -1,4 +1,5 @@
 use super::application_state::ApplicationState;
+use crate::linux::events::ClipboardDataFFI;
 use log::debug;
 use smithay_client_toolkit::{
     data_device_manager::{
@@ -16,6 +17,7 @@ use smithay_client_toolkit::{
 use std::io::Write;
 
 pub const TEXT_MIME_TYPE: &str = "text/plain;charset=utf-8";
+pub const URI_LIST_MIME_TYPE: &str = "text/uri-list";
 
 delegate_data_device!(ApplicationState);
 
@@ -58,13 +60,18 @@ impl DataSourceHandler for ApplicationState {
 
     fn send_request(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource, mime: String, mut fd: WritePipe) {
         debug!("DataSourceHandler::send_request: {mime}");
-        if let Some(s) = self.clipboard_content.as_ref() {
-            fd.write_all(s.as_bytes()).unwrap();
+        match &self.clipboard_content {
+            ClipboardContent::Text(s) | ClipboardContent::FileList(s) => {
+                fd.write_all(s.as_bytes()).unwrap();
+            }
+            ClipboardContent::None => {}
         }
     }
 
     fn cancelled(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {
         debug!("DataSourceHandler::cancelled");
+        self.clipboard_content = ClipboardContent::None;
+        self.copy_paste_source = None;
     }
 
     fn dnd_dropped(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {
@@ -77,5 +84,29 @@ impl DataSourceHandler for ApplicationState {
 
     fn action(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource, action: DndAction) {
         debug!("DataSourceHandler::action: {action:?}");
+    }
+}
+
+pub enum ClipboardContent {
+    None,
+    Text(String),
+    FileList(String),
+}
+
+impl ClipboardContent {
+    pub fn new(d: ClipboardDataFFI) -> anyhow::Result<Self> {
+        match d {
+            ClipboardDataFFI::None => Ok(Self::None),
+            ClipboardDataFFI::Text(s) => Ok(Self::Text(s.as_str()?.to_owned())),
+            ClipboardDataFFI::FileList(s) => Ok(Self::FileList(s.as_str()?.to_owned())),
+        }
+    }
+
+    pub fn mime_types(&self) -> Vec<&'static str> {
+        match self {
+            Self::None => Vec::new(),
+            Self::Text(_) => vec![TEXT_MIME_TYPE],
+            Self::FileList(_) => vec![TEXT_MIME_TYPE, URI_LIST_MIME_TYPE],
+        }
     }
 }
