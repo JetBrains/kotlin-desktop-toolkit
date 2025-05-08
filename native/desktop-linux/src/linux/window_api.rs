@@ -4,8 +4,9 @@ use desktop_common::{
     logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
+use smithay_client_toolkit::reexports::client::protocol::wl_data_device_manager::DndAction;
 use smithay_client_toolkit::shell::xdg::window::Window;
-
+use crate::linux::clipboard::URI_LIST_MIME_TYPE;
 use super::{
     application::Application,
     application_api::AppPtr,
@@ -203,5 +204,13 @@ pub extern "C" fn window_unset_fullscreen(app_ptr: AppPtr, window_id: WindowId) 
     with_window(&app_ptr, window_id, "window_toggle_full_screen", |w| {
         w.unset_fullscreen();
         Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_start_drag(mut app_ptr: AppPtr, window_id: WindowId, file_list_str: BorrowedStrPtr) {
+    ffi_boundary("window_show_menu", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        app.start_drag(window_id, file_list_str.as_str()?.to_owned())
     });
 }

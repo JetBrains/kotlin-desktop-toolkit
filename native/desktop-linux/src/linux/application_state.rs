@@ -3,7 +3,7 @@ use crate::linux::clipboard::ClipboardContent;
 use khronos_egl;
 use log::{debug, warn};
 use smithay_client_toolkit::data_device_manager::data_device::DataDevice;
-use smithay_client_toolkit::data_device_manager::data_source::CopyPasteSource;
+use smithay_client_toolkit::data_device_manager::data_source::{CopyPasteSource, DragSource};
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     data_device_manager::DataDeviceManagerState,
@@ -69,12 +69,14 @@ pub struct ApplicationState {
     pub text_input_manager: Option<ZwpTextInputManagerV3>,
     pub data_device_manager_state: DataDeviceManagerState,
     pub copy_paste_source: Option<CopyPasteSource>,
+    pub drag_source: Option<DragSource>,
     pub data_device: Option<DataDevice>,
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
     pub(crate) last_key_down_serial: Option<u32>,
     pub(crate) clipboard_content: ClipboardContent,
+    pub(crate) drag_content: Option<String>,
     pub(crate) key_surface: Option<ObjectId>,
     pub(crate) active_text_input: Option<ZwpTextInputV3>,
     pub(crate) pending_text_input_event: PendingTextInputEvent,
@@ -121,11 +123,13 @@ impl ApplicationState {
             text_input_manager: globals.bind(qh, 1..=1, ()).ok(),
             data_device_manager_state,
             copy_paste_source: None,
+            drag_source: None,
             data_device: None,
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             last_key_down_serial: None,
             clipboard_content: ClipboardContent::None,
+            drag_content: None,
             key_surface: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),

@@ -868,6 +868,10 @@ void window_set_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
 
 void window_unset_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
 
+void window_start_drag(NativeAppPtr app_ptr,
+                       NativeWindowId window_id,
+                       NativeBorrowedStrPtr file_list_str);
+
 struct NativeExceptionsArray logger_check_exceptions(void);
 
 void logger_clear_exceptions(void);

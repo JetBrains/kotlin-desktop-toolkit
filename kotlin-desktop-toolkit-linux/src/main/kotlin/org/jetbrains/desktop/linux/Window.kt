@@ -123,6 +123,15 @@ public class Window internal constructor(
         }
     }
 
+    public fun startDrag(uris: List<String>) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                val nativeList = arena.allocateUtf8String(uris.joinToString("\n"))
+                desktop_h.window_start_drag(appPtr, windowId, nativeList)
+            }
+        }
+    }
+
     override fun close() {
         Logger.trace { "Window: closing window with id $windowId" }
         ffiDownCall {

@@ -58,20 +58,32 @@ impl DataSourceHandler for ApplicationState {
         debug!("DataSourceHandler::accept_mime: {mime:?}");
     }
 
-    fn send_request(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource, mime: String, mut fd: WritePipe) {
+    fn send_request(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &WlDataSource, mime: String, mut fd: WritePipe) {
         debug!("DataSourceHandler::send_request: {mime}");
-        match &self.clipboard_content {
-            ClipboardContent::Text(s) | ClipboardContent::FileList(s) => {
-                fd.write_all(s.as_bytes()).unwrap();
+
+        if self.copy_paste_source.as_ref().map(|s| s.inner()) == Some(source) {
+            match &self.clipboard_content {
+                ClipboardContent::Text(s) | ClipboardContent::FileList(s) => {
+                    fd.write_all(s.as_bytes()).unwrap();
+                }
+                ClipboardContent::None => {}
             }
-            ClipboardContent::None => {}
+        } else if self.drag_source.as_ref().map(|s| s.inner()) == Some(source) {
+            if let Some(drag_content) = &self.drag_content {
+                fd.write_all(drag_content.as_bytes()).unwrap();
+            }
         }
     }
 
-    fn cancelled(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {
+    fn cancelled(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &WlDataSource) {
         debug!("DataSourceHandler::cancelled");
-        self.clipboard_content = ClipboardContent::None;
-        self.copy_paste_source = None;
+        if self.copy_paste_source.as_ref().map(|s| s.inner()) == Some(source) {
+            self.clipboard_content = ClipboardContent::None;
+            self.copy_paste_source = None;
+        } else if self.drag_source.as_ref().map(|s| s.inner()) == Some(source) {
+            self.drag_content = None;
+            self.drag_source = None;
+        }
     }
 
     fn dnd_dropped(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {

@@ -715,7 +715,7 @@ class ContentArea(
 ) {
     private var markerPosition: LogicalPoint? = null
 
-    fun handleEvent(event: Event): EventHandlerResult {
+    fun handleEvent(event: Event, window: Window): EventHandlerResult {
         return when (event) {
             is Event.MouseMoved -> {
                 markerPosition = LogicalPoint(
@@ -723,6 +723,14 @@ class ContentArea(
                     event.locationInWindow.y - origin.y,
                 )
                 EventHandlerResult.Continue
+            }
+            is Event.MouseDown -> {
+                window.startDrag(listOf(
+                    "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
+                    "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
+                    "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
+                ))
+                EventHandlerResult.Stop
             }
             is Event.TextInput -> {
                 EventHandlerResult.Stop
@@ -978,7 +986,7 @@ class WindowContainer(
         return when {
             customBorders?.handleEvent(event, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             customTitlebar?.handleEvent(event, xdgDesktopSettings, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
-            contentArea.handleEvent(event) == EventHandlerResult.Stop -> EventHandlerResult.Stop
+            contentArea.handleEvent(event, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             else -> EventHandlerResult.Continue
         }
     }
