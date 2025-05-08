@@ -3,6 +3,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum NativeDataSource {
+  NativeDataSource_Clipboard,
+  NativeDataSource_DragAndDrop,
+} NativeDataSource;
+
 typedef enum NativeFontAntialiasing {
   NativeFontAntialiasing_None,
   NativeFontAntialiasing_Grayscale,
@@ -412,6 +417,7 @@ typedef struct NativeXdgDesktopSetting {
 typedef struct NativeBorrowedArray_u8 {
   const uint8_t *ptr;
   NativeArraySize len;
+  void (*deinit)(const uint8_t*, NativeArraySize);
 } NativeBorrowedArray_u8;
 
 typedef struct NativeDataWithMimeFFI {
@@ -722,6 +728,7 @@ typedef struct NativeApplicationCallbacks {
   void (*on_xdg_desktop_settings_change)(const struct NativeXdgDesktopSetting*);
   NativeEventHandler event_handler;
   NativeBorrowedStrPtr (*drag_and_drop_query_handler)(const struct NativeDragAndDropQueryData*);
+  struct NativeBorrowedArray_u8 (*get_data_source_data)(enum NativeDataSource, NativeBorrowedStrPtr);
 } NativeApplicationCallbacks;
 
 typedef NativeGenericRawPtr_c_void NativeBorrowedOpaquePtr;
@@ -812,7 +819,7 @@ void application_text_input_update(NativeAppPtr app_ptr, struct NativeTextInputC
 
 void application_text_input_disable(NativeAppPtr app_ptr);
 
-void application_clipboard_put(NativeAppPtr app_ptr, struct NativeDataWithMimeFFI data);
+void application_clipboard_put(NativeAppPtr app_ptr, NativeBorrowedStrPtr mime_types);
 
 void application_clipboard_paste(NativeAppPtr app_ptr, NativeBorrowedStrPtr supported_mime_types);
 
@@ -868,7 +875,7 @@ void window_unset_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
 
 void window_start_drag(NativeAppPtr app_ptr,
                        NativeWindowId window_id,
-                       struct NativeDataWithMimeFFI data);
+                       NativeBorrowedStrPtr mime_types);
 
 struct NativeExceptionsArray logger_check_exceptions(void);
 

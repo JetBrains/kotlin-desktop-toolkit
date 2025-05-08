@@ -123,10 +123,10 @@ public class Window internal constructor(
         }
     }
 
-    public fun startDrag(data: ClipboardData) {
+    public fun startDrag(mimeTypes: List<String>) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_h.window_start_drag(appPtr, windowId, data.toNative(arena))
+                desktop_h.window_start_drag(appPtr, windowId, mimeTypesToNative(arena, mimeTypes))
             }
         }
     }

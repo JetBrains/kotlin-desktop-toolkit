@@ -6,7 +6,7 @@ use super::{
     pointer_shapes::PointerShape,
     window_resize_edge::WindowResizeEdge,
 };
-use crate::linux::events::DataWithMimeFFI;
+use crate::linux::clipboard::MimeTypes;
 use anyhow::Context;
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
@@ -207,9 +207,9 @@ pub extern "C" fn window_unset_fullscreen(app_ptr: AppPtr, window_id: WindowId) 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_start_drag(mut app_ptr: AppPtr, window_id: WindowId, data: DataWithMimeFFI) {
+pub extern "C" fn window_start_drag(mut app_ptr: AppPtr, window_id: WindowId, mime_types: BorrowedStrPtr) {
     ffi_boundary("window_show_menu", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.start_drag(window_id, data.to_clipboard_content()?)
+        app.start_drag(window_id, MimeTypes::new(mime_types.as_str()?))
     });
 }

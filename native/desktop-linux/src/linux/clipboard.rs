@@ -1,7 +1,8 @@
 use super::application_state::ApplicationState;
-use crate::linux::application_api::DragAndDropQueryData;
+use crate::linux::application_api::{DataSource, DragAndDropQueryData};
 use crate::linux::events::DataWithMimeFFI;
 use crate::linux::geometry::{LogicalPixels, LogicalPoint};
+use desktop_common::ffi_utils::BorrowedStrPtr;
 use log::{debug, warn};
 use smithay_client_toolkit::data_device_manager::data_source::{CopyPasteSource, DragSource};
 use smithay_client_toolkit::reexports::calloop::PostAction;
@@ -129,35 +130,34 @@ impl DataSourceHandler for ApplicationState {
 
     fn send_request(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &WlDataSource, mime: String, mut fd: WritePipe) {
         debug!("DataSourceHandler::send_request: {mime}");
-
-        if self.copy_paste_source.as_ref().map(CopyPasteSource::inner) == Some(source) {
-            if let Some(clipboard_content) = &self.clipboard_content {
-                fd.write_all(&clipboard_content.data).unwrap();
-            }
+        //
+        // if let Some(clipboard_content) = self.clipboard_content.as_ref().map(|c| c.data.clone()) {
+        //     self.loop_handle
+        //         .insert_source(fd,move |(), res, _state| {
+        //             let f = unsafe { res.get_mut() };
+        //             f.write_all(&clipboard_content).unwrap();
+        //             PostAction::Remove
+        //         })
+        //         .unwrap();
+        // }
+        let data_type = if self.copy_paste_source.as_ref().map(CopyPasteSource::inner) == Some(source) {
+            DataSource::Clipboard
         } else if self.drag_source.as_ref().map(DragSource::inner) == Some(source) {
-            if let Some(drag_content) = &self.drag_content {
-                fd.write_all(&drag_content.data).unwrap();
-            }
-        }
+            DataSource::DragAndDrop
+        } else {
+            return;
+        };
+        let mime_cstr = CString::new(mime).unwrap();
+        let data = (self.callbacks.get_data_source_data)(data_type, BorrowedStrPtr::new(&mime_cstr));
+        fd.write_all(data.as_slice().unwrap()).unwrap();
+        data.deinit();
     }
 
     fn cancelled(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &WlDataSource) {
         debug!("DataSourceHandler::cancelled");
-        if self
-            .copy_paste_source
-            .as_ref()
-            .map(smithay_client_toolkit::data_device_manager::data_source::CopyPasteSource::inner)
-            == Some(source)
-        {
-            self.clipboard_content = None;
+        if self.copy_paste_source.as_ref().map(CopyPasteSource::inner) == Some(source) {
             self.copy_paste_source = None;
-        } else if self
-            .drag_source
-            .as_ref()
-            .map(smithay_client_toolkit::data_device_manager::data_source::DragSource::inner)
-            == Some(source)
-        {
-            self.drag_content = None;
+        } else if self.drag_source.as_ref().map(DragSource::inner) == Some(source) {
             self.drag_source = None;
         }
     }
@@ -174,6 +174,18 @@ impl DataSourceHandler for ApplicationState {
 
     fn action(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource, action: DndAction) {
         debug!("DataSourceHandler::action: {action:?}");
+    }
+}
+
+pub struct MimeTypes {
+    pub val: Vec<String>,
+}
+
+impl MimeTypes {
+    pub fn new(mime_types_str: &str) -> Self {
+        Self {
+            val: mime_types_str.split(',').map(str::to_owned).collect(),
+        }
     }
 }
 

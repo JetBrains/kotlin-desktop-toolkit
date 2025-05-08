@@ -125,12 +125,17 @@ impl<'a> BorrowedStrPtr<'a> {
         self.as_optional_str().transpose().expect("BorrowedStrPtr has null pointer")
     }
 
-    pub fn as_optional_str(&self) -> anyhow::Result<Option<&str>> {
+    pub fn as_optional_cstr(&self) -> anyhow::Result<Option<&CStr>> {
         if self.0.ptr.is_null() {
             return Ok(None);
         }
-        let c_str = unsafe { CStr::from_ptr(self.0.ptr) };
-        Some(c_str.to_str().with_context(|| format!("Invalid UTF-8 in {c_str:?}"))).transpose()
+        Ok(Some(unsafe { CStr::from_ptr(self.0.ptr) }))
+    }
+
+    pub fn as_optional_str(&self) -> anyhow::Result<Option<&str>> {
+        self.as_optional_cstr()?
+            .map(|cstr| cstr.to_str().with_context(|| format!("Invalid UTF-8 in {cstr:?}")))
+            .transpose()
     }
 }
 
@@ -249,6 +254,7 @@ impl<T> Drop for AutoDropArray<T> {
 pub struct BorrowedArray<'a, T> {
     ptr: *const T,
     len: ArraySize,
+    pub deinit: Option<extern "C" fn(*const T, ArraySize)>,
     phantom: PhantomData<&'a T>,
 }
 
@@ -258,7 +264,14 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
         Self {
             ptr: s.as_ptr(),
             len: s.len(),
+            deinit: None,
             phantom: PhantomData,
+        }
+    }
+
+    pub fn deinit(&self) {
+        if let Some(d) = self.deinit {
+            d(self.ptr, self.len)
         }
     }
 
@@ -266,6 +279,7 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
         Self {
             ptr: std::ptr::null(),
             len: 0,
+            deinit: None,
             phantom: PhantomData,
         }
     }

@@ -1,5 +1,4 @@
 use super::{application_api::ApplicationCallbacks, events::WindowId, text_input::PendingTextInputEvent, window::SimpleWindow};
-use crate::linux::clipboard::ClipboardContent;
 use khronos_egl;
 use log::{debug, warn};
 use smithay_client_toolkit::data_device_manager::data_device::DataDevice;
@@ -78,8 +77,6 @@ pub struct ApplicationState {
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
     pub(crate) last_key_down_serial: Option<u32>,
-    pub(crate) clipboard_content: Option<ClipboardContent>,
-    pub(crate) drag_content: Option<ClipboardContent>,
     pub(crate) key_surface: Option<ObjectId>,
     pub(crate) active_text_input: Option<ZwpTextInputV3>,
     pub(crate) pending_text_input_event: PendingTextInputEvent,
@@ -138,8 +135,6 @@ impl ApplicationState {
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             last_key_down_serial: None,
-            clipboard_content: None,
-            drag_content: None,
             key_surface: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),

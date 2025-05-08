@@ -306,21 +306,21 @@ internal fun ClipboardData.Companion.fromNative(s: MemorySegment): ClipboardData
     )
 }
 
-internal fun ClipboardData.toNative(arena: Arena, mimeTypesToNative: (List<String>) -> MemorySegment): MemorySegment {
-    val nativeClipboardData = NativeDataWithMimeFFI.allocate(arena)
-    val nativeMimeTypes = mimeTypesToNative(mimeTypes)
+internal fun mimeTypesToNative(arena: Arena, mimeTypes: List<String>): MemorySegment {
+    return arena.allocateUtf8String(mimeTypes.joinToString(","))
+}
+
+internal fun ByteArray.toNative(arena: Arena): MemorySegment {
     val nativeDataArray = NativeBorrowedArray_u8.allocate(arena)
-    NativeBorrowedArray_u8.len(nativeDataArray, data.size.toLong())
-    val nativeArray = arena.allocate(MemoryLayout.sequenceLayout(data.size.toLong(), desktop_linux_h.C_CHAR))
-    data.forEachIndexed { i, b ->
+    NativeBorrowedArray_u8.len(nativeDataArray, size.toLong())
+    val nativeArray = arena.allocate(MemoryLayout.sequenceLayout(size.toLong(), desktop_linux_h.C_CHAR))
+    this.forEachIndexed { i, b ->
         nativeArray.setAtIndex(desktop_linux_h.C_CHAR, i.toLong(), b)
     }
 
     NativeBorrowedArray_u8.ptr(nativeDataArray, nativeArray)
-    NativeDataWithMimeFFI.mime_types(nativeClipboardData, nativeMimeTypes)
-    NativeDataWithMimeFFI.data(nativeClipboardData, nativeDataArray)
 
-    return nativeClipboardData
+    return nativeDataArray
 }
 
 internal fun DragAndDropQueryData.Companion.fromNative(s: MemorySegment): DragAndDropQueryData {

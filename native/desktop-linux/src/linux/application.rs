@@ -5,7 +5,7 @@ use super::window_api::WindowParams;
 use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
 use super::xdg_desktop_settings_api::XdgDesktopSetting;
 use super::{application_state::ApplicationState, window::SimpleWindow};
-use crate::linux::clipboard::ClipboardContent;
+use crate::linux::clipboard::MimeTypes;
 use crate::linux::events::DataWithMimeFFI;
 use anyhow::{Context, anyhow};
 use desktop_common::logger::catch_panic;
@@ -153,9 +153,8 @@ impl Application<'static> {
         self.state.set_cursor_theme(&self.qh, name, size)
     }
 
-    pub fn clipboard_put(&mut self, clipboard_content: Option<ClipboardContent>) {
-        self.state.clipboard_content = clipboard_content;
-        let Some(clipboard_content) = &self.state.clipboard_content else {
+    pub fn clipboard_put(&mut self, mime_types: MimeTypes) {
+        if mime_types.val.is_empty() {
             self.state.copy_paste_source = None;
             warn!("application_clipboard_put: None");
             return;
@@ -168,7 +167,7 @@ impl Application<'static> {
             let copy_paste_source = self
                 .state
                 .data_device_manager_state
-                .create_copy_paste_source(&self.qh, &clipboard_content.mime_types);
+                .create_copy_paste_source(&self.qh, mime_types.val);
             copy_paste_source.set_selection(data_device, serial);
             self.state.copy_paste_source = Some(copy_paste_source);
         } else {
@@ -215,14 +214,18 @@ impl Application<'static> {
         Ok(())
     }
 
-    pub fn start_drag(&mut self, window_id: WindowId, content: ClipboardContent) -> anyhow::Result<()> {
+    pub fn start_drag(&mut self, window_id: WindowId, mime_types: MimeTypes) -> anyhow::Result<()> {
+        if mime_types.val.is_empty() {
+            self.state.drag_source = None;
+            return Ok(());
+        }
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
         let drag_source = self
             .state
             .data_device_manager_state
-            .create_drag_and_drop_source(&self.qh, &content.mime_types, DndAction::Copy);
+            .create_drag_and_drop_source(&self.qh, mime_types.val, DndAction::Copy);
         let d = self.state.data_device.as_ref().context("No data device found")?;
         d.inner().start_drag(
             Some(drag_source.inner()),
@@ -231,7 +234,6 @@ impl Application<'static> {
             w.current_mouse_down_serial.unwrap(),
         );
         self.state.drag_source = Some(drag_source);
-        self.state.drag_content = Some(content);
         Ok(())
     }
 }

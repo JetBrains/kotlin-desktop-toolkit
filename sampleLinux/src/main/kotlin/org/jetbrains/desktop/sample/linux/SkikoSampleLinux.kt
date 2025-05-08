@@ -2,8 +2,8 @@ package org.jetbrains.desktop.sample.linux
 
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.ApplicationConfig
-import org.jetbrains.desktop.linux.ClipboardData
 import org.jetbrains.desktop.linux.ColorSchemeValue
+import org.jetbrains.desktop.linux.DataSource
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.FontAntialiasingValue
@@ -62,6 +62,19 @@ import kotlin.time.toDuration
 const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
 const val URI_LIST_MIME_TYPE = "text/uri-list"
 
+val EXAMPLE_FILES: List<String> = listOf(
+    "/home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
+    "/home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
+    "/home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
+    "/etc/hosts",
+    "/boot/efi/",
+)
+
+sealed class ClipboardContent {
+    data class Text(val text: String) : ClipboardContent()
+    data class UriList(val files: List<String>) : ClipboardContent()
+}
+
 data class XdgDesktopSettings(
     var titlebarLayout: TitlebarLayout = TitlebarLayout(
         layoutLeft = listOf(WindowButtonType.Icon),
@@ -118,7 +131,7 @@ class EditorState() {
     private var cursorRectangle = LogicalRect(LogicalPoint(0f, 0f), LogicalSize(0f, 0f))
     private var selectionStartOffset: Int? = null
     private var selectionEndOffset: Int? = null
-    private var modifiers = KeyModifiers(
+    var modifiers = KeyModifiers(
         capsLock = false,
         shift = false,
         control = false,
@@ -128,6 +141,7 @@ class EditorState() {
     )
     private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
     private var statsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    var currentClipboard: ClipboardContent? = null
 
     companion object {
         private fun codepointFromOffset(sb: StringBuilder, offset: Int): Short {
@@ -221,6 +235,10 @@ class EditorState() {
         return null
     }
 
+    fun getCurrentSelection(): String? {
+        return getSelectionRange()?.let { text.substring(it.first, it.second) }
+    }
+
     private fun deleteSelection(): Boolean {
         getSelectionRange()?.let {
             text.delete(it.first, it.second)
@@ -258,27 +276,14 @@ class EditorState() {
                             EventHandlerResult.Stop
                         }
                         KeySym.C -> {
-                            app.clipboardPut(
-                                ClipboardData(
-                                    data = listOf(
-                                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
-                                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
-                                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
-                                    ).joinToString("\n").encodeToByteArray(),
-                                    mimeTypes = listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE),
-                                ),
-                            )
+                            app.clipboardPut(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                            currentClipboard = ClipboardContent.UriList(EXAMPLE_FILES)
                             EventHandlerResult.Stop
                         }
                         KeySym.c -> {
-                            getSelectionRange()?.let {
-                                val selection = text.substring(it.first, it.second)
-                                app.clipboardPut(
-                                    ClipboardData(
-                                        data = selection.encodeToByteArray(),
-                                        mimeTypes = listOf(TEXT_MIME_TYPE),
-                                    ),
-                                )
+                            getCurrentSelection()?.let { selection ->
+                                app.clipboardPut(listOf(TEXT_MIME_TYPE))
+                                currentClipboard = ClipboardContent.Text(selection)
                                 EventHandlerResult.Stop
                             } ?: EventHandlerResult.Continue
                         }
@@ -718,8 +723,9 @@ class ContentArea(
     var size: LogicalSize,
 ) {
     private var markerPosition: LogicalPoint? = null
+    var currentDragContent: ClipboardContent? = null
 
-    fun handleEvent(event: Event, window: Window): EventHandlerResult {
+    fun handleEvent(event: Event, window: Window, editorState: EditorState): EventHandlerResult {
         return when (event) {
             is Event.MouseMoved -> {
                 markerPosition = LogicalPoint(
@@ -729,16 +735,17 @@ class ContentArea(
                 EventHandlerResult.Continue
             }
             is Event.MouseDown -> {
-                window.startDrag(
-                    ClipboardData(
-                        data = listOf(
-                            "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
-                            "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
-                            "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
-                        ).joinToString("\n").encodeToByteArray(),
-                        mimeTypes = listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE),
-                    ),
-                )
+                if (editorState.modifiers.shift) {
+                    window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                    currentDragContent = ClipboardContent.UriList(EXAMPLE_FILES)
+                } else {
+                    window.startDrag(listOf(TEXT_MIME_TYPE))
+                    currentDragContent = editorState.getCurrentSelection()?.let { ClipboardContent.Text(it) }
+                }
+                EventHandlerResult.Stop
+            }
+            is Event.MouseUp -> {
+                currentDragContent = null
                 EventHandlerResult.Stop
             }
             is Event.TextInput -> {
@@ -926,7 +933,7 @@ class CustomBorders {
 class WindowContainer(
     var customTitlebar: CustomTitlebar?,
     var customBorders: CustomBorders?,
-    private val contentArea: ContentArea,
+    val contentArea: ContentArea,
     private var xdgDesktopSettings: XdgDesktopSettings,
     val requestClose: () -> Unit,
 ) {
@@ -991,11 +998,11 @@ class WindowContainer(
         }
     }
 
-    fun handleEvent(event: Event, window: Window): EventHandlerResult {
+    fun handleEvent(event: Event, window: Window, editorState: EditorState): EventHandlerResult {
         return when {
             customBorders?.handleEvent(event, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             customTitlebar?.handleEvent(event, xdgDesktopSettings, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
-            contentArea.handleEvent(event, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
+            contentArea.handleEvent(event, window, editorState) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             else -> EventHandlerResult.Continue
         }
     }
@@ -1018,16 +1025,17 @@ class WindowContainer(
 }
 
 class RotatingBallWindow(
-    private val windowContainer: WindowContainer,
+    val windowContainer: WindowContainer,
     app: Application,
+    val editorState: EditorState,
     windowParams: WindowParams,
 ) : SkikoWindowLinux(app, windowParams) {
     private var title: String = windowParams.title
-    val editorState = EditorState()
 
     companion object {
         fun createWindow(
             app: Application,
+            editorState: EditorState,
             windowParams: WindowParams,
             xdgDesktopSettings: XdgDesktopSettings,
             requestClose: () -> Unit,
@@ -1036,7 +1044,7 @@ class RotatingBallWindow(
             val windowContentSize = windowSize // todo it's incorrect
             val container = WindowContainer.create(windowContentSize, xdgDesktopSettings, requestClose)
 
-            return RotatingBallWindow(container, app, windowParams)
+            return RotatingBallWindow(container, app, editorState, windowParams)
         }
     }
 
@@ -1059,11 +1067,11 @@ class RotatingBallWindow(
                         EventHandlerResult.Stop
                     } else {
                         window.setPointerShape(PointerShape.Default)
-                        windowContainer.handleEvent(event, window)
+                        windowContainer.handleEvent(event, window, editorState)
                     }
                 }
                 else -> {
-                    windowContainer.handleEvent(event, window)
+                    windowContainer.handleEvent(event, window, editorState)
                 }
             }
         } else {
@@ -1080,6 +1088,7 @@ class RotatingBallWindow(
 class ApplicationState(private val app: Application) : AutoCloseable {
     private val windows = mutableMapOf<WindowId, RotatingBallWindow>()
     private val xdgDesktopSettings = XdgDesktopSettings()
+    private val editorState = EditorState()
 
     fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
         val windowId = windows.count().toLong()
@@ -1094,6 +1103,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
 
         windows[windowId] = RotatingBallWindow.createWindow(
             app,
+            editorState,
             windowParams,
             xdgDesktopSettings,
         ) {
@@ -1139,6 +1149,37 @@ class ApplicationState(private val app: Application) : AutoCloseable {
         windows.values.forEach { it.settingsChanged(xdgDesktopSettings) }
     }
 
+    fun getDataSourceData(dataSource: DataSource, mimeType: String): ByteArray {
+        val content = when (dataSource) {
+            DataSource.Clipboard -> editorState.currentClipboard
+            DataSource.DragAndDrop -> {
+                windows.values.firstNotNullOf { it.windowContainer.contentArea.currentDragContent }
+            }
+        }
+        return when (content) {
+            is ClipboardContent.Text -> {
+                check(mimeType == TEXT_MIME_TYPE) { "Unsupported mime type for text clipboard content: $mimeType" }
+                content.text.encodeToByteArray()
+            }
+            is ClipboardContent.UriList -> {
+                when (mimeType) {
+                    TEXT_MIME_TYPE -> {
+                        content.files.joinToString("\n").encodeToByteArray()
+                    }
+                    URI_LIST_MIME_TYPE -> {
+                        content.files.joinToString("\n") { "file://$it" }.encodeToByteArray()
+                    }
+                    else -> {
+                        error("Unsupported mime type: $mimeType")
+                    }
+                }
+            }
+            null -> {
+                error("Trying to paste from $dataSource with empty content")
+            }
+        }
+    }
+
     override fun close() {
         windows.values.forEach(AutoCloseable::close)
         windows.clear()
@@ -1164,6 +1205,9 @@ fun main(args: Array<String>) {
                 },
                 eventHandler = { event, windowId -> state.handleEvent(event, windowId) },
                 dragAndDropQueryHandler = { queryData -> listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE) },
+                getDataSourceData = { dataSource, mimeType ->
+                    state.getDataSourceData(dataSource, mimeType)
+                },
             ),
         )
     }

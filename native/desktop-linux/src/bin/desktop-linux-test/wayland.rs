@@ -3,13 +3,15 @@ use crate::gl_sys::{
     GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
 };
 use core::str;
+use desktop_common::ffi_utils::{ArraySize, BorrowedArray};
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
-use desktop_linux::linux::application_api::{DragAndDropQueryData, application_clipboard_paste, application_clipboard_put};
-use desktop_linux::linux::events::{DataWithMimeFFI, KeyModifiers};
+use desktop_linux::linux::application_api::{DataSource, DragAndDropQueryData, application_clipboard_paste, application_clipboard_put};
+use desktop_linux::linux::events::KeyModifiers;
 use desktop_linux::linux::text_input_api::{TextInputContentPurpose, TextInputContext};
+use desktop_linux::linux::window_api::window_start_drag;
 use desktop_linux::linux::{
     application_api::{
         AppPtr, ApplicationCallbacks, application_get_egl_proc_func, application_init, application_run_event_loop, application_shutdown,
@@ -287,6 +289,11 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                 application_stop_event_loop(state.app_ptr.clone());
             }
         }),
+        Event::MouseDown(_) => STATE.with(|c| {
+            let mut state = c.borrow_mut();
+            let state = state.as_mut().unwrap();
+            window_start_drag(state.app_ptr.clone(), window_id, BorrowedStrPtr::new(ALL_MIMES));
+        }),
         Event::ModifiersChanged(data) => STATE.with(|c| {
             let mut state = c.borrow_mut();
             let state = state.as_mut().unwrap();
@@ -306,8 +313,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                     if data.code.0 == 47 && window_state.key_modifiers.ctrl {
                         application_clipboard_paste(state.app_ptr.clone(), BorrowedStrPtr::new(TEXT_MIME_TYPE));
                     } else if data.code.0 == 46 && window_state.key_modifiers.ctrl {
-                        let s = "demo app clipboard put";
-                        application_clipboard_put(state.app_ptr.clone(), DataWithMimeFFI::new(s.as_bytes(), TEXT_MIME_TYPE));
+                        application_clipboard_put(state.app_ptr.clone(), BorrowedStrPtr::new(ALL_MIMES));
                     } else if let Some(event_chars) = data.characters.as_optional_str().unwrap() {
                         window_state.text += event_chars;
                         update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
@@ -468,6 +474,38 @@ extern "C" fn drag_and_drop_query_handler(data: &DragAndDropQueryData) -> Borrow
     }
 }
 
+extern "C" fn deinit_u8_vec(ptr: *const u8, len: ArraySize) {
+    let _ = unsafe {
+        let s = std::slice::from_raw_parts_mut(ptr.cast_mut(), len);
+        Box::from_raw(s)
+    };
+}
+
+fn leaked_string_data(s: &str) -> &'static [u8] {
+    Box::leak(s.to_owned().into_boxed_str().into_boxed_bytes())
+}
+
+extern "C" fn get_data_source_data(source: DataSource, mime_type: BorrowedStrPtr) -> BorrowedArray<'static, u8> {
+    let mime_type_cstr = mime_type.as_optional_cstr().unwrap().unwrap();
+    let v = if mime_type_cstr == URI_LIST_MIME_TYPE {
+        match source {
+            DataSource::Clipboard => leaked_string_data("file:///tmp"),
+            DataSource::DragAndDrop => leaked_string_data("file:///home"),
+        }
+    } else if mime_type_cstr == TEXT_MIME_TYPE {
+        match source {
+            DataSource::Clipboard => leaked_string_data("/tmp (from clipboard)"),
+            DataSource::DragAndDrop => leaked_string_data("/home (from d&d)"),
+        }
+    } else {
+        leaked_string_data(mime_type_cstr.to_str().unwrap())
+    };
+
+    let mut a = BorrowedArray::from_slice(v);
+    a.deinit = Some(deinit_u8_vec);
+    a
+}
+
 pub fn main() {
     logger_init_impl(&LoggerConfiguration {
         file_path: BorrowedStrPtr::new(c"/tmp/a"),
@@ -482,6 +520,7 @@ pub fn main() {
         on_xdg_desktop_settings_change,
         event_handler,
         drag_and_drop_query_handler,
+        get_data_source_data,
     });
     STATE.with(|c| {
         c.replace(Some(State {

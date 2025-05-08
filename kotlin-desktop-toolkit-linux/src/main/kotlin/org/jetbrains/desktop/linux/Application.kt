@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeApplicationCallbacks
+import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeEventHandler
 import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
 import org.jetbrains.desktop.linux.generated.NativeScreenInfo
@@ -41,11 +42,17 @@ public data class WindowParams(
     }
 }
 
+public enum class DataSource {
+    Clipboard,
+    DragAndDrop,
+}
+
 public data class ApplicationConfig(
     val onApplicationStarted: () -> Unit,
     val onXdgDesktopSettingsChange: (XdgDesktopSetting) -> Unit,
     val eventHandler: EventHandler,
     val dragAndDropQueryHandler: (DragAndDropQueryData) -> List<String>,
+    val getDataSourceData: (DataSource, String) -> ByteArray,
 )
 
 public class Application() : AutoCloseable {
@@ -90,6 +97,28 @@ public class Application() : AutoCloseable {
     }
 
     // called from native
+    private fun onGetDataSourceData(nativeDataSource: Int, nativeMimeType: MemorySegment): MemorySegment {
+        val dataSource = when (nativeDataSource) {
+            desktop_h.NativeDataSource_Clipboard() -> DataSource.Clipboard
+            desktop_h.NativeDataSource_DragAndDrop() -> DataSource.DragAndDrop
+            else -> error("Unexpected data source type $nativeDataSource")
+        }
+        val mimeType = nativeMimeType.getUtf8String(0)
+        return ffiUpCall(defaultResult = MemorySegment.NULL) {
+            val result = applicationConfig?.getDataSourceData(dataSource, mimeType) ?: ByteArray(0)
+            val arena = Arena.ofConfined()
+            val nativeResult = result.toNative(arena)
+            NativeBorrowedArray_u8.deinit(
+                nativeResult,
+                NativeBorrowedArray_u8.deinit.allocate({ ptr, len ->
+                    arena.close()
+                }, arena),
+            )
+            nativeResult
+        }
+    }
+
+    // called from native
     private fun onDragAndDropQuery(nativeQueryData: MemorySegment): MemorySegment {
         val queryData = DragAndDropQueryData.fromNative(nativeQueryData)
         return ffiUpCall(defaultResult = MemorySegment.NULL) {
@@ -97,7 +126,6 @@ public class Application() : AutoCloseable {
             mimeTypesToNative(result)
         }
     }
-
     public fun runEventLoop(applicationConfig: ApplicationConfig) {
         this.applicationConfig = applicationConfig
         ffiDownCall {
@@ -178,6 +206,10 @@ public class Application() : AutoCloseable {
         NativeApplicationCallbacks.drag_and_drop_query_handler(
             callbacks,
             NativeApplicationCallbacks.drag_and_drop_query_handler.allocate(::onDragAndDropQuery, arena),
+        )
+        NativeApplicationCallbacks.get_data_source_data(
+            callbacks,
+            NativeApplicationCallbacks.get_data_source_data.allocate(::onGetDataSourceData, arena),
         )
         return callbacks
     }
@@ -264,10 +296,10 @@ public class Application() : AutoCloseable {
         }
     }
 
-    public fun clipboardPut(data: ClipboardData) {
+    public fun clipboardPut(mimeTypes: List<String>) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_h.application_clipboard_put(appPtr, data.toNative(arena, ::mimeTypesToNative))
+                desktop_h.application_clipboard_put(appPtr, mimeTypesToNative(arena, mimeTypes))
             }
         }
     }
