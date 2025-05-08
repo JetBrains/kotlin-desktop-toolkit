@@ -1,12 +1,3 @@
-use anyhow::Context;
-use desktop_common::{
-    ffi_utils::BorrowedStrPtr,
-    logger::{PanicDefault, ffi_boundary},
-};
-use log::debug;
-use smithay_client_toolkit::reexports::client::protocol::wl_data_device_manager::DndAction;
-use smithay_client_toolkit::shell::xdg::window::Window;
-use crate::linux::clipboard::URI_LIST_MIME_TYPE;
 use super::{
     application::Application,
     application_api::AppPtr,
@@ -15,6 +6,13 @@ use super::{
     pointer_shapes::PointerShape,
     window_resize_edge::WindowResizeEdge,
 };
+use anyhow::Context;
+use desktop_common::{
+    ffi_utils::BorrowedStrPtr,
+    logger::{PanicDefault, ffi_boundary},
+};
+use log::debug;
+use smithay_client_toolkit::shell::xdg::window::Window;
 
 #[repr(C)]
 pub struct WindowParams<'a> {

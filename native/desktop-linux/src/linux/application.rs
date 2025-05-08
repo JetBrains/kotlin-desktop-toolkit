@@ -11,16 +11,16 @@ use super::xdg_desktop_settings::xdg_desktop_settings_notifier;
 use super::xdg_desktop_settings_api::XdgDesktopSetting;
 use super::{application_state::ApplicationState, window::SimpleWindow};
 use crate::linux::clipboard::{ClipboardContent, TEXT_MIME_TYPE, URI_LIST_MIME_TYPE};
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use desktop_common::logger::catch_panic;
 use log::{debug, warn};
 use smithay_client_toolkit::reexports::calloop::{EventLoop, PostAction, channel};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
+use smithay_client_toolkit::reexports::client::protocol::wl_data_device_manager::DndAction;
 use smithay_client_toolkit::{
     reexports::client::{Connection, Proxy, QueueHandle, globals::registry_queue_init},
     shell::WaylandSurface,
 };
-use smithay_client_toolkit::reexports::client::protocol::wl_data_device_manager::DndAction;
 
 pub struct Application<'a> {
     pub event_loop: EventLoop<'a, ApplicationState>,
@@ -29,7 +29,7 @@ pub struct Application<'a> {
     pub state: ApplicationState,
 }
 
-impl Application<'_> {
+impl Application<'static> {
     pub fn new(callbacks: ApplicationCallbacks) -> anyhow::Result<Self> {
         let conn = Connection::connect_to_env()?;
 
@@ -43,7 +43,7 @@ impl Application<'_> {
             .insert(loop_handle)
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        let state = ApplicationState::new(&globals, &qh, callbacks);
+        let state = ApplicationState::new(&globals, &qh, callbacks, event_loop.handle());
         Ok(Self {
             event_loop,
             qh,
@@ -218,9 +218,17 @@ impl Application<'_> {
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
-        let drag_source = self.state.data_device_manager_state.create_drag_and_drop_source(&self.qh, [URI_LIST_MIME_TYPE], DndAction::Copy);
+        let drag_source = self
+            .state
+            .data_device_manager_state
+            .create_drag_and_drop_source(&self.qh, [URI_LIST_MIME_TYPE], DndAction::Copy);
         let d = self.state.data_device.as_ref().context("No data device found")?;
-        d.inner().start_drag(Some(drag_source.inner()), w.window.wl_surface(), None, w.current_mouse_down_serial.unwrap());
+        d.inner().start_drag(
+            Some(drag_source.inner()),
+            w.window.wl_surface(),
+            None,
+            w.current_mouse_down_serial.unwrap(),
+        );
         self.state.drag_source = Some(drag_source);
         self.state.drag_content = Some(file_list_str);
         Ok(())

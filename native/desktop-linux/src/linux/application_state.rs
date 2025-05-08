@@ -4,6 +4,7 @@ use khronos_egl;
 use log::{debug, warn};
 use smithay_client_toolkit::data_device_manager::data_device::DataDevice;
 use smithay_client_toolkit::data_device_manager::data_source::{CopyPasteSource, DragSource};
+use smithay_client_toolkit::reexports::calloop::LoopHandle;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     data_device_manager::DataDeviceManagerState,
@@ -57,6 +58,7 @@ pub struct ApplicationState {
 
     registry_state: RegistryState,
     seat_state: SeatState,
+    pub loop_handle: LoopHandle<'static, ApplicationState>,
     pub output_state: OutputState,
     pub compositor_state: CompositorState,
     pub shm_state: Shm,
@@ -94,7 +96,12 @@ struct WindowWithData<'a> {
 
 impl ApplicationState {
     #[must_use]
-    pub fn new(globals: &GlobalList, qh: &QueueHandle<Self>, callbacks: ApplicationCallbacks) -> Self {
+    pub fn new(
+        globals: &GlobalList,
+        qh: &QueueHandle<Self>,
+        callbacks: ApplicationCallbacks,
+        loop_handle: LoopHandle<'static, Self>,
+    ) -> Self {
         let registry_state = RegistryState::new(globals);
         let seat_state = SeatState::new(globals, qh);
         let output_state = OutputState::new(globals, qh);
@@ -111,6 +118,7 @@ impl ApplicationState {
             callbacks,
             registry_state,
             seat_state,
+            loop_handle,
             output_state,
             compositor_state,
             shm_state,

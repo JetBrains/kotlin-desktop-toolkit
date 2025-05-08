@@ -725,11 +725,13 @@ class ContentArea(
                 EventHandlerResult.Continue
             }
             is Event.MouseDown -> {
-                window.startDrag(listOf(
-                    "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
-                    "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
-                    "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
-                ))
+                window.startDrag(
+                    listOf(
+                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
+                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
+                        "file:///home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
+                    ),
+                )
                 EventHandlerResult.Stop
             }
             is Event.TextInput -> {
