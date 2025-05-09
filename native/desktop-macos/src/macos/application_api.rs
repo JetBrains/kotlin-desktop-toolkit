@@ -2,7 +2,7 @@ use std::{cell::OnceCell, ffi::c_void};
 
 use anyhow::{Context, anyhow};
 use desktop_common::{
-    ffi_utils::RustAllocatedStrPtr,
+    ffi_utils::{BorrowedStrPtr, RustAllocatedStrPtr},
     logger::{catch_panic, ffi_boundary},
 };
 use log::info;
@@ -13,18 +13,22 @@ use objc2::{
 };
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
-    NSEventType, NSImage, NSRunningApplication,
+    NSEventType, NSImage, NSRunningApplication, NSWorkspace,
 };
 use objc2_foundation::{
     MainThreadMarker, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
-    NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSUserDefaults,
+    NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults,
 };
 
 use crate::macos::events::{
     handle_application_appearance_change, handle_application_did_finish_launching, handle_display_configuration_change,
 };
 
-use super::{appearance::Appearance, events::EventHandler, string::copy_to_c_string};
+use super::{
+    appearance::Appearance,
+    events::EventHandler,
+    string::{copy_to_c_string, copy_to_ns_string},
+};
 
 thread_local! {
     pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
@@ -246,6 +250,16 @@ pub extern "C" fn application_order_front_character_palete() {
         app.orderFrontCharacterPalette(None);
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_open_url(url: BorrowedStrPtr) -> bool {
+    ffi_boundary("application_open_url", || {
+        let url_string = copy_to_ns_string(&url)?;
+        let url = unsafe { NSURL::URLWithString(&url_string).context("Can't create NSURL from string")? };
+        let was_openned = unsafe { NSWorkspace::sharedWorkspace().openURL(&url) };
+        Ok(was_openned)
+    })
 }
 
 define_class!(

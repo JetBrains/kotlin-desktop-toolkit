@@ -112,6 +112,14 @@ public object Application {
         this.isSafeToQuit = isSafeToQuit
     }
 
+    public fun openURL(url: String) {
+        ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_macos_h.application_open_url(arena.allocateUtf8String(url))
+            }
+        }
+    }
+
     private var isSafeToQuit: () -> Boolean = { true }
 
     // called from native
