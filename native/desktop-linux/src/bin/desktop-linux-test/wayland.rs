@@ -11,7 +11,7 @@ use desktop_common::{
 use desktop_linux::linux::application_api::{DataSource, DragAndDropQueryData, application_clipboard_paste, application_clipboard_put};
 use desktop_linux::linux::events::KeyModifiers;
 use desktop_linux::linux::text_input_api::{TextInputContentPurpose, TextInputContext};
-use desktop_linux::linux::window_api::window_start_drag;
+use desktop_linux::linux::window_api::{DragAction, window_start_drag};
 use desktop_linux::linux::{
     application_api::{
         AppPtr, ApplicationCallbacks, application_get_egl_proc_func, application_init, application_run_event_loop, application_shutdown,
@@ -292,7 +292,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
         Event::MouseDown(_) => STATE.with(|c| {
             let mut state = c.borrow_mut();
             let state = state.as_mut().unwrap();
-            window_start_drag(state.app_ptr.clone(), window_id, BorrowedStrPtr::new(ALL_MIMES));
+            window_start_drag(state.app_ptr.clone(), window_id, BorrowedStrPtr::new(ALL_MIMES), DragAction::Copy);
         }),
         Event::ModifiersChanged(data) => STATE.with(|c| {
             let mut state = c.borrow_mut();
@@ -489,13 +489,13 @@ extern "C" fn get_data_source_data(source: DataSource, mime_type: BorrowedStrPtr
     let mime_type_cstr = mime_type.as_optional_cstr().unwrap().unwrap();
     let v = if mime_type_cstr == URI_LIST_MIME_TYPE {
         match source {
-            DataSource::Clipboard => leaked_string_data("file:///tmp"),
-            DataSource::DragAndDrop => leaked_string_data("file:///home"),
+            DataSource::Clipboard => leaked_string_data("file:///etc/hosts"),
+            DataSource::DragAndDrop => leaked_string_data("file:///boot/efi/"),
         }
     } else if mime_type_cstr == TEXT_MIME_TYPE {
         match source {
-            DataSource::Clipboard => leaked_string_data("/tmp (from clipboard)"),
-            DataSource::DragAndDrop => leaked_string_data("/home (from d&d)"),
+            DataSource::Clipboard => leaked_string_data("/etc/hosts (from clipboard)"),
+            DataSource::DragAndDrop => leaked_string_data("/boot/efi/ (from d&d)"),
         }
     } else {
         leaked_string_data(mime_type_cstr.to_str().unwrap())

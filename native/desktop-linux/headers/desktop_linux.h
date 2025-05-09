@@ -8,6 +8,12 @@ typedef enum NativeDataSource {
   NativeDataSource_DragAndDrop,
 } NativeDataSource;
 
+typedef enum NativeDragAction {
+  NativeDragAction_Copy,
+  NativeDragAction_Move,
+  NativeDragAction_Ask,
+} NativeDragAction;
+
 typedef enum NativeFontAntialiasing {
   NativeFontAntialiasing_None,
   NativeFontAntialiasing_Grayscale,
@@ -875,7 +881,8 @@ void window_unset_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
 
 void window_start_drag(NativeAppPtr app_ptr,
                        NativeWindowId window_id,
-                       NativeBorrowedStrPtr mime_types);
+                       NativeBorrowedStrPtr mime_types,
+                       enum NativeDragAction action);
 
 struct NativeExceptionsArray logger_check_exceptions(void);
 

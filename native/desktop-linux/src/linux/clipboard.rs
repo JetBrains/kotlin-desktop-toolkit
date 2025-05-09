@@ -45,7 +45,7 @@ impl DataDeviceHandler for ApplicationState {
             return;
         };
 
-        drag_offer.with_mime_types(|mime_types| {
+        let Some(supported_mime_type) = drag_offer.with_mime_types(|mime_types| {
             let drag_and_drop_query_data = DragAndDropQueryData {
                 window_id: self.get_window(&drag_offer.surface).unwrap().window_id,
                 point: LogicalPoint {
@@ -55,17 +55,19 @@ impl DataDeviceHandler for ApplicationState {
             };
             let supported_mime_types = (self.callbacks.drag_and_drop_query_handler)(&drag_and_drop_query_data);
 
-            for supported_mime_type in supported_mime_types.as_str().unwrap().split(',') {
-                if mime_types.iter().any(|s| s == supported_mime_type) {
-                    debug!("DataDeviceHandler::motion: accepted mime_type={supported_mime_type}");
-                    drag_offer.accept_mime_type(0, Some(supported_mime_type.to_owned()));
-                    // Accept the action now just in case
-                    drag_offer.set_actions(DndAction::Copy, DndAction::Copy);
-                    return;
-                }
-            }
-            debug!("DataDeviceHandler::motion: didn't accept any of the mime_types={mime_types:?}");
-        });
+            supported_mime_types
+                .as_str()
+                .unwrap()
+                .split(',')
+                .find(|supported_mime_type| mime_types.iter().any(|s| s == supported_mime_type))
+                .map(str::to_owned)
+        }) else {
+            debug!("DataDeviceHandler::motion: didn't accept any of the mime_types");
+            return;
+        };
+        drag_offer.accept_mime_type(0, Some(supported_mime_type));
+        // Accept the action now just in case
+        drag_offer.set_actions(DndAction::all(), DndAction::all());
     }
 
     fn selection(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice) {

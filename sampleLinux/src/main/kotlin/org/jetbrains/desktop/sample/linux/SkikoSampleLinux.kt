@@ -4,6 +4,7 @@ import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.ApplicationConfig
 import org.jetbrains.desktop.linux.ColorSchemeValue
 import org.jetbrains.desktop.linux.DataSource
+import org.jetbrains.desktop.linux.DragAction
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.FontAntialiasingValue
@@ -65,9 +66,9 @@ const val URI_LIST_MIME_TYPE = "text/uri-list"
 val EXAMPLE_FILES: List<String> = listOf(
     "/home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 12-08-34.png",
     "/home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 13-55-25.png",
-    "/home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
-    "/etc/hosts",
-    "/boot/efi/",
+//    "/home/nikola/Pictures/Screenshots/Screenshot From 2025-01-15 14-02-45.png",
+//    "/etc/hosts",
+//    "/boot/efi/",
 )
 
 sealed class ClipboardContent {
@@ -271,6 +272,10 @@ class EditorState() {
                     EventHandlerResult.Continue
                 } else if (modifiers.control) {
                     when (event.key.value) {
+                        KeySym.V -> {
+                            app.clipboardPaste(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                            EventHandlerResult.Stop
+                        }
                         KeySym.v -> {
                             app.clipboardPaste(listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
                             EventHandlerResult.Stop
@@ -736,10 +741,13 @@ class ContentArea(
             }
             is Event.MouseDown -> {
                 if (editorState.modifiers.shift) {
-                    window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                    window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Move)
+                    currentDragContent = ClipboardContent.UriList(EXAMPLE_FILES)
+                } else if (editorState.modifiers.control) {
+                    window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Copy)
                     currentDragContent = ClipboardContent.UriList(EXAMPLE_FILES)
                 } else {
-                    window.startDrag(listOf(TEXT_MIME_TYPE))
+                    window.startDrag(listOf(TEXT_MIME_TYPE), DragAction.Copy)
                     currentDragContent = editorState.getCurrentSelection()?.let { ClipboardContent.Text(it) }
                 }
                 EventHandlerResult.Stop

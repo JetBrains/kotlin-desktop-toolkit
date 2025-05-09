@@ -180,11 +180,11 @@ impl Application<'static> {
             warn!("application_clipboard_paste: No data device available");
             return Ok(());
         };
-        let Some(offer) = data_device.data().selection_offer() else {
+        let Some(selection_offer) = data_device.data().selection_offer() else {
             debug!("application_clipboard_paste: No selection offer found");
             return Ok(());
         };
-        let Some(mime_type) = offer.with_mime_types(|mime_types| {
+        let Some(mime_type) = selection_offer.with_mime_types(|mime_types| {
             debug!("application_clipboard_paste: offer MIME types: {mime_types:?}");
             supported_mime_types
                 .split(',')
@@ -195,7 +195,8 @@ impl Application<'static> {
             return Ok(());
         };
 
-        let read_pipe = offer.receive(mime_type.clone())?;
+        debug!("application_clipboard_paste reading {mime_type}");
+        let read_pipe = selection_offer.receive(mime_type.clone())?;
         self.event_loop.handle().insert_source(read_pipe, move |(), res, state| {
             let f = unsafe { res.get_mut() };
             let mut buf = Vec::new();
@@ -214,7 +215,7 @@ impl Application<'static> {
         Ok(())
     }
 
-    pub fn start_drag(&mut self, window_id: WindowId, mime_types: MimeTypes) -> anyhow::Result<()> {
+    pub fn start_drag(&mut self, window_id: WindowId, mime_types: MimeTypes, action: DndAction) -> anyhow::Result<()> {
         if mime_types.val.is_empty() {
             self.state.drag_source = None;
             return Ok(());
@@ -225,7 +226,7 @@ impl Application<'static> {
         let drag_source = self
             .state
             .data_device_manager_state
-            .create_drag_and_drop_source(&self.qh, mime_types.val, DndAction::Copy);
+            .create_drag_and_drop_source(&self.qh, mime_types.val, action);
         let d = self.state.data_device.as_ref().context("No data device found")?;
         d.inner().start_drag(
             Some(drag_source.inner()),

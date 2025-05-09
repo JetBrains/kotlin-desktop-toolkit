@@ -13,6 +13,7 @@ use desktop_common::{
     logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
+use smithay_client_toolkit::reexports::client::protocol::wl_data_device_manager::DndAction;
 use smithay_client_toolkit::shell::xdg::window::Window;
 
 #[repr(C)]
@@ -206,10 +207,27 @@ pub extern "C" fn window_unset_fullscreen(app_ptr: AppPtr, window_id: WindowId) 
     });
 }
 
+#[repr(C)]
+pub enum DragAction {
+    Copy,
+    Move,
+    Ask,
+}
+
+impl From<DragAction> for DndAction {
+    fn from(value: DragAction) -> Self {
+        match value {
+            DragAction::Copy => Self::Copy,
+            DragAction::Move => Self::Move,
+            DragAction::Ask => Self::Ask,
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
-pub extern "C" fn window_start_drag(mut app_ptr: AppPtr, window_id: WindowId, mime_types: BorrowedStrPtr) {
+pub extern "C" fn window_start_drag(mut app_ptr: AppPtr, window_id: WindowId, mime_types: BorrowedStrPtr, action: DragAction) {
     ffi_boundary("window_show_menu", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.start_drag(window_id, MimeTypes::new(mime_types.as_str()?))
+        app.start_drag(window_id, MimeTypes::new(mime_types.as_str()?), action.into())
     });
 }

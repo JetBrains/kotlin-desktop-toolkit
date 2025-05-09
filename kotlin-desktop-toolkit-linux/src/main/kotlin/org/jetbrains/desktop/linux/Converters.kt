@@ -329,3 +329,9 @@ internal fun DragAndDropQueryData.Companion.fromNative(s: MemorySegment): DragAn
         point = LogicalPoint.fromNative(NativeDragAndDropQueryData.point(s)),
     )
 }
+
+internal fun DragAction.toNative(): Int = when (this) {
+    DragAction.Copy -> desktop_linux_h.NativeDragAction_Copy()
+    DragAction.Move -> desktop_linux_h.NativeDragAction_Move()
+    DragAction.Ask -> desktop_linux_h.NativeDragAction_Ask()
+}

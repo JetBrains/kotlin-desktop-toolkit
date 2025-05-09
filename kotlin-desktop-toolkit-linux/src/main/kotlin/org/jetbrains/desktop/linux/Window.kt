@@ -6,6 +6,15 @@ import org.jetbrains.desktop.linux.generated.desktop_linux_h as desktop_h
 
 public typealias WindowId = Long
 
+public enum class DragAction {
+    Copy,
+    Move,
+    Ask,
+    ;
+
+    internal companion object
+}
+
 public class Window internal constructor(
     private val appPtr: MemorySegment,
     params: WindowParams,
@@ -123,10 +132,10 @@ public class Window internal constructor(
         }
     }
 
-    public fun startDrag(mimeTypes: List<String>) {
+    public fun startDrag(mimeTypes: List<String>, action: DragAction) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_h.window_start_drag(appPtr, windowId, mimeTypesToNative(arena, mimeTypes))
+                desktop_h.window_start_drag(appPtr, windowId, mimeTypesToNative(arena, mimeTypes), action.toNative())
             }
         }
     }
