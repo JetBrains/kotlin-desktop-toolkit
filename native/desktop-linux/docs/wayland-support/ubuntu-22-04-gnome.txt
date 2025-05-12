@@ -1,0 +1,73 @@
+Package: mutter
+Version: 42.9-0ubuntu9
+
+./wayland-info
+interface: 'wl_compositor',                              version:  5, name:  1
+interface: 'wl_drm',                                     version:  2, name:  2
+interface: 'wl_shm',                                     version:  1, name:  3
+	formats (fourcc):
+	0x30334258 = 'XB30'
+	0x30334241 = 'AB30'
+	0x30335258 = 'XR30'
+	0x30335241 = 'AR30'
+	0x36314752 = 'RG16'
+	0x34324258 = 'XB24'
+	0x34324241 = 'AB24'
+	         1 = 'XR24'
+	         0 = 'AR24'
+interface: 'wl_output',                                  version:  3, name:  4
+	x: 0, y: 0, scale: 2,
+	physical_width: 870 mm, physical_height: 520 mm,
+	make: 'RHT', model: 'QEMU Monitor',
+	subpixel_orientation: unknown, output_transform: normal,
+	mode:
+		width: 3456 px, height: 2082 px, refresh: 75.000 Hz,
+		flags: current preferred
+interface: 'zxdg_output_manager_v1',                     version:  3, name:  5
+	xdg_output_v1
+		output: 4
+		name: 'Virtual-1'
+		description: 'Red Hat, Inc. 40"'
+		logical_x: 0, logical_y: 0
+		logical_width: 3456, logical_height: 2082
+interface: 'wl_data_device_manager',                     version:  3, name:  6
+interface: 'zwp_primary_selection_device_manager_v1',    version:  1, name:  7
+interface: 'gtk_primary_selection_device_manager',       version:  1, name:  8
+interface: 'wl_subcompositor',                           version:  1, name:  9
+interface: 'xdg_wm_base',                                version:  4, name: 10
+interface: 'zxdg_shell_v6',                              version:  1, name: 11
+interface: 'gtk_shell1',                                 version:  5, name: 12
+interface: 'wp_viewporter',                              version:  1, name: 13
+interface: 'zwp_pointer_gestures_v1',                    version:  3, name: 14
+interface: 'zwp_tablet_manager_v2',                      version:  1, name: 15
+interface: 'wl_seat',                                    version:  5, name: 16
+	name: seat0
+	capabilities: pointer keyboard
+	keyboard repeat rate: 33
+	keyboard repeat delay: 500
+interface: 'zwp_relative_pointer_manager_v1',            version:  1, name: 17
+interface: 'zwp_pointer_constraints_v1',                 version:  1, name: 18
+interface: 'zxdg_exporter_v1',                           version:  1, name: 19
+interface: 'zxdg_importer_v1',                           version:  1, name: 20
+interface: 'zwp_linux_dmabuf_v1',                        version:  4, name: 21
+	main device: 0xE280
+	tranche
+		target device: 0xE280
+		flags: none
+		formats (fourcc) and modifiers:
+		0x34325241 = 'AR24'; 0x00ffffffffffffff
+		0x34324241 = 'AB24'; 0x00ffffffffffffff
+		0x34325258 = 'XR24'; 0x00ffffffffffffff
+		0x34324258 = 'XB24'; 0x00ffffffffffffff
+		0x30335241 = 'AR30'; 0x00ffffffffffffff
+		0x30334241 = 'AB30'; 0x00ffffffffffffff
+		0x30335258 = 'XR30'; 0x00ffffffffffffff
+		0x30334258 = 'XB30'; 0x00ffffffffffffff
+		0x36314752 = 'RG16'; 0x00ffffffffffffff
+		0x48344241 = 'AB4H'; 0x00ffffffffffffff
+		0x48344258 = 'XB4H'; 0x00ffffffffffffff
+interface: 'zwp_keyboard_shortcuts_inhibit_manager_v1',  version:  1, name: 22
+interface: 'zwp_text_input_manager_v3',                  version:  1, name: 23
+interface: 'wp_presentation',                            version:  1, name: 24
+	presentation clock id: 1 (CLOCK_MONOTONIC)
+interface: 'xdg_activation_v1',                          version:  1, name: 25
