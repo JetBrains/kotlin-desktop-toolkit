@@ -126,6 +126,7 @@ public sealed class Event {
         val scrollingDeltaX: LogicalPixels,
         val scrollingDeltaY: LogicalPixels,
         val hasPreciseScrillingDeltas: Boolean,
+        val isDirectionInverted: Boolean,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
     ) : Event()
@@ -286,6 +287,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 scrollingDeltaX = NativeScrollWheelEvent.scrolling_delta_x(nativeEvent),
                 scrollingDeltaY = NativeScrollWheelEvent.scrolling_delta_y(nativeEvent),
                 hasPreciseScrillingDeltas = NativeScrollWheelEvent.has_precise_scrolling_deltas(nativeEvent),
+                isDirectionInverted = NativeScrollWheelEvent.is_direction_inverted(nativeEvent),
                 locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
             )

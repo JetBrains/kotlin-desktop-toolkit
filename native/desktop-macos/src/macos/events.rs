@@ -123,6 +123,7 @@ pub struct ScrollWheelEvent {
     pub scrolling_delta_x: LogicalPixels,
     pub scrolling_delta_y: LogicalPixels,
     pub has_precise_scrolling_deltas: bool,
+    pub is_direction_inverted: bool,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
 }
@@ -339,6 +340,7 @@ pub(crate) fn handle_scroll_wheel(ns_event: &NSEvent) -> bool {
             scrolling_delta_x: unsafe { ns_event.scrollingDeltaX() },
             scrolling_delta_y: unsafe { ns_event.scrollingDeltaY() },
             has_precise_scrolling_deltas: unsafe { ns_event.hasPreciseScrollingDeltas() },
+            is_direction_inverted: unsafe { ns_event.isDirectionInvertedFromDevice() },
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
             timestamp: unsafe { ns_event.timestamp() },
         });

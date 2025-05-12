@@ -206,6 +206,7 @@ typedef struct NativeScrollWheelEvent {
   NativeLogicalPixels scrolling_delta_x;
   NativeLogicalPixels scrolling_delta_y;
   bool has_precise_scrolling_deltas;
+  bool is_direction_inverted;
   struct NativeLogicalPoint location_in_window;
   NativeTimestamp timestamp;
 } NativeScrollWheelEvent;
