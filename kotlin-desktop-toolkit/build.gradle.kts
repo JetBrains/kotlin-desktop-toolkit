@@ -67,27 +67,6 @@ java {
     withSourcesJar()
 }
 
-tasks.test {
-    // Use JUnit Platform for unit tests.
-    jvmArgs("--enable-preview")
-    val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
-    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]
-    if (buildNativeTask != null) {
-        dependsOn(buildNativeTask)
-        val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
-        jvmArgumentProviders.add(
-            CommandLineArgumentProvider {
-                listOf(
-                    "-Dkdt.library.folder.path=${libFolder.get()}",
-                    "-Dkdt.debug=true",
-                    "-Dkdt.native.log.path=${logFile.get().asFile.absolutePath}",
-                )
-            },
-        )
-    }
-    useJUnitPlatform()
-}
-
 @Serializable
 data class RustTarget(
     @get:Input val platform: Platform,
@@ -111,6 +90,26 @@ val compileMacOSDesktopToolkitTaskByTarget = buildMap {
             }
             put(RustTarget(platform, profile), buildNativeTask)
         }
+    }
+}
+
+compileMacOSDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let { buildNativeTask ->
+    tasks.test {
+        // Use JUnit Platform for unit tests.
+        jvmArgs("--enable-preview")
+        val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
+        dependsOn(buildNativeTask)
+        val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
+        jvmArgumentProviders.add(
+            CommandLineArgumentProvider {
+                listOf(
+                    "-Dkdt.library.folder.path=${libFolder.get()}",
+                    "-Dkdt.debug=true",
+                    "-Dkdt.native.log.path=${logFile.get().asFile.absolutePath}",
+                )
+            },
+        )
+        useJUnitPlatform()
     }
 }
 
@@ -213,7 +212,9 @@ sourceSets.main {
 }
 
 tasks.processResources {
-    dependsOn(compileMacOSDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")])
+    compileMacOSDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let {
+        dependsOn(it)
+    }
 }
 kotlin {
     explicitApi()
