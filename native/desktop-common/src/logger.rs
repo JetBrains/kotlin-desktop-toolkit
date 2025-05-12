@@ -16,9 +16,8 @@ use log4rs::{
     filter::threshold::ThresholdFilter,
 };
 
-use crate::ffi_utils::{ArraySize, RustAllocatedStrPtr};
 use crate::{
-    ffi_utils::AutoDropArray,
+    ffi_utils::{ArraySize, AutoDropArray, RustAllocatedStrPtr},
     logger_api::{ExceptionsArray, LogLevel, LoggerConfiguration},
 };
 

@@ -8,7 +8,7 @@ use desktop_common::{
     logger::ffi_boundary,
 };
 
-use crate::macos::string::copy_to_ns_string;
+use crate::macos::string::copy_nonnull_to_ns_string;
 
 use super::{string::copy_to_c_string, url::url_to_file_path_string};
 
@@ -86,11 +86,7 @@ fn apply_common_param(panel: &NSSavePanel, common_params: &CommonFileDialogParam
 }
 
 fn to_ns_string_if_not_null(str_ptr: &BorrowedStrPtr) -> Option<Retained<NSString>> {
-    if str_ptr.is_not_null() {
-        Some(copy_to_ns_string(str_ptr).unwrap())
-    } else {
-        None
-    }
+    str_ptr.as_non_null().map(|s| copy_nonnull_to_ns_string(s).unwrap())
 }
 
 fn apply_open_file_dialog_params(panel: &NSOpenPanel, open_params: &OpenFileDialogParams) {

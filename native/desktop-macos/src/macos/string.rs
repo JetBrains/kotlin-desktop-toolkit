@@ -1,8 +1,8 @@
-use std::ffi::CStr;
-
 use anyhow::Context;
 use objc2::rc::Retained;
 use objc2_foundation::NSString;
+use std::ffi::{CStr, c_char};
+use std::ptr::NonNull;
 
 use desktop_common::{
     ffi_utils::{AutoDropArray, BorrowedStrPtr, RustAllocatedStrPtr},
@@ -30,9 +30,12 @@ pub(crate) fn borrow_ns_string(s: &NSString) -> BorrowedStrPtr<'_> {
     BorrowedStrPtr::new(c_str)
 }
 
-pub(crate) fn copy_to_ns_string(s: &BorrowedStrPtr) -> anyhow::Result<Retained<NSString>> {
-    let ptr = s.as_non_null().context("Null pointer")?;
+pub(crate) fn copy_nonnull_to_ns_string(ptr: NonNull<c_char>) -> anyhow::Result<Retained<NSString>> {
     unsafe { NSString::stringWithUTF8String(ptr) }.context("stringWithUTF8String failed")
+}
+
+pub(crate) fn copy_to_ns_string(s: &BorrowedStrPtr) -> anyhow::Result<Retained<NSString>> {
+    copy_nonnull_to_ns_string(s.as_non_null().context("Null pointer")?)
 }
 
 // Be aware, now you have to release this memory at some point

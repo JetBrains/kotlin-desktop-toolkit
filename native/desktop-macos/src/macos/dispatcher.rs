@@ -1,4 +1,5 @@
 use desktop_common::logger::ffi_boundary;
+use dispatch2::DispatchQueue;
 use objc2::MainThreadMarker;
 use objc2_foundation::{NSQualityOfService, NSThread};
 
@@ -11,7 +12,7 @@ pub extern "C" fn dispatcher_is_main_thread() -> bool {
 pub extern "C" fn dispatcher_main_exec_async(f: extern "C" fn()) {
     ffi_boundary("dispatcher_main_exec_async", || {
         #[allow(clippy::redundant_closure)]
-        dispatch2::Queue::main().exec_async(move || f());
+        DispatchQueue::main().exec_async(move || f());
         Ok(())
     });
 }
