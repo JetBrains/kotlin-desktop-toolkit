@@ -16,5 +16,13 @@ log.workspace = true
 log4rs.workspace = true
 desktop-common = { path = "../desktop-common" }
 
+[target.'cfg(target_os="linux")'.dependencies]
+smithay-client-toolkit = "0.19.2"
+ashpd = { version = "0.11.0", default-features = false, features = ["async-std"] }
+async-std = "1.13.1"
+wayland-egl = "0.32.5"
+khronos-egl = { version = "6.0.0", features = ["dynamic"] }
+libloading = "0.8.6"
+
 [build-dependencies]
 cbindgen.workspace = true

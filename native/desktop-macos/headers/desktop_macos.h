@@ -419,6 +419,7 @@ typedef struct NativeCombinedItemElement {
 typedef struct NativeBorrowedArray_CombinedItemElement {
   const struct NativeCombinedItemElement *ptr;
   NativeArraySize len;
+  void (*deinit)(const struct NativeCombinedItemElement*, NativeArraySize);
 } NativeBorrowedArray_CombinedItemElement;
 
 typedef enum NativePasteboardItem_Tag {
@@ -445,6 +446,7 @@ typedef struct NativePasteboardItem {
 typedef struct NativeBorrowedArray_PasteboardItem {
   const struct NativePasteboardItem *ptr;
   NativeArraySize len;
+  void (*deinit)(const struct NativePasteboardItem*, NativeArraySize);
 } NativeBorrowedArray_PasteboardItem;
 
 typedef struct NativeAutoDropArray_RustAllocatedStrPtr {
