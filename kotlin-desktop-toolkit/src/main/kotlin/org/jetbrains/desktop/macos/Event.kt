@@ -34,6 +34,10 @@ public value class Timestamp(
     }
 }
 
+public interface WindowEvent {
+    public val windowId: WindowId
+}
+
 public sealed class Event {
     public companion object {
         public fun pressedMouseButtons(): MouseButtonsSet {
@@ -52,7 +56,7 @@ public sealed class Event {
     }
 
     public data class KeyDown(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val keyCode: KeyCode,
         val typedCharacters: String,
         val key: String,
@@ -61,133 +65,109 @@ public sealed class Event {
         val isRepeat: Boolean,
         val mightHaveKeyEquivalent: Boolean,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class KeyUp(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val keyCode: KeyCode,
         val typedCharacters: String,
         val key: String,
         val keyWithModifiers: String,
         val modifiers: KeyModifiersSet,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class ModifiersChanged(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val modifiers: KeyModifiersSet,
         val keyCode: KeyCode,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class MouseMoved(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class MouseDragged(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class MouseEntered(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class MouseExited(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class MouseUp(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val clickCount: Long,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class MouseDown(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val clickCount: Long,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class ScrollWheel(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val scrollingDeltaX: LogicalPixels,
         val scrollingDeltaY: LogicalPixels,
         val hasPreciseScrillingDeltas: Boolean,
         val isDirectionInverted: Boolean,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class WindowScreenChange(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val newScreenId: ScreenId,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class WindowResize(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val size: LogicalSize,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class WindowMove(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val origin: LogicalPoint,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class WindowFocusChange(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val isKeyWindow: Boolean,
         val isMainWindow: Boolean,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data class WindowFullScreenToggle(
-        val windowId: WindowId,
+        override val windowId: WindowId,
         val isFullScreen: Boolean,
-    ) : Event()
+    ) : Event(), WindowEvent
 
     public data object DisplayConfigurationChange : Event()
 
     public data object ApplicationDidFinishLaunching : Event()
 
-    public data class WindowCloseRequest(val windowId: WindowId) : Event()
+    public data class WindowCloseRequest(override val windowId: WindowId) : Event(), WindowEvent
 
     public data class ApplicationAppearanceChange(val newAppearance: Appearance) : Event()
-
-    public fun windowId(): WindowId? {
-        return when (this) {
-            is KeyDown -> windowId
-            is KeyUp -> windowId
-            is MouseMoved -> windowId
-            is MouseDragged -> windowId
-            is MouseEntered -> windowId
-            is MouseExited -> windowId
-            is MouseUp -> windowId
-            is MouseDown -> windowId
-            is ScrollWheel -> windowId
-            is WindowScreenChange -> windowId
-            is WindowResize -> windowId
-            is WindowMove -> windowId
-            is WindowFocusChange -> windowId
-            is WindowCloseRequest -> windowId
-            is WindowFullScreenToggle -> windowId
-            is ModifiersChanged -> windowId
-            ApplicationDidFinishLaunching -> null
-            DisplayConfigurationChange -> null
-            is ApplicationAppearanceChange -> null
-        }
-    }
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event {

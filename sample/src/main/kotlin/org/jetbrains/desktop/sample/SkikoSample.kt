@@ -24,6 +24,7 @@ import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.Screen
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
+import org.jetbrains.desktop.macos.WindowEvent
 import org.jetbrains.desktop.macos.WindowId
 import org.jetbrains.desktop.macos.WindowVisualEffect
 import org.jetbrains.skia.Canvas
@@ -432,7 +433,6 @@ class ApplicationState : AutoCloseable {
 
     fun handleEvent(event: Event): EventHandlerResult {
 //        logEvents(event)
-        val eventWindowId = event.windowId()
 
         val result = when (event) {
             is Event.MouseMoved -> {
@@ -446,7 +446,7 @@ class ApplicationState : AutoCloseable {
             }
             is Event.WindowCloseRequest -> {
                 windows.find {
-                    it.window.windowId() == eventWindowId
+                    it.window.windowId() == event.windowId
                 }?.let { window ->
                     killWindow(window)
                 } ?: run {
@@ -463,9 +463,9 @@ class ApplicationState : AutoCloseable {
             }
             else -> EventHandlerResult.Continue
         }
-        return if (result == EventHandlerResult.Continue) {
+        return if (result == EventHandlerResult.Continue && event is WindowEvent) {
             val window = windows.find {
-                it.window.windowId() == eventWindowId
+                it.window.windowId() == event.windowId
             }
             window?.let {
                 window.handleEvent(event)
