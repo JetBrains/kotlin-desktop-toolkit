@@ -11,26 +11,30 @@ env:
   RUST_VERSION: 1.85.0 # the same as in rust-toolchain
 
 jobs:
-  # TODO: add support for more OS
-  macos:
-    runs-on: macos-14
+  build_all:
+    strategy:
+      matrix:
+        targets: [
+          { os: "macos-14", rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin", package_manager: "brew" },
+          { os: "ubuntu-22.04", rust_targets: "x86_64-unknown-linux-gnu", package_manager: "apt" },
+          { os: "ubuntu-22.04-arm", rust_targets: "aarch64-unknown-linux-gnu", package_manager: "apt" },
+        ]
+    runs-on: ${{ matrix.targets.os }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Setup Rust for x86_64
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          target: x86_64-apple-darwin
-          components: rustfmt, clippy
-          cache: true
+      - name: Install Dependencies
+        if: "${{ matrix.targets.package_manager == 'apt' }}"
+        run: |
+          sudo apt update
+          sudo apt install libwayland-dev libxkbcommon-dev
 
-      - name: Setup Rust for aarch64
+      - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          target: aarch64-apple-darwin
+          target: ${{ matrix.targets.rust_targets }}
           components: rustfmt, clippy
           cache: true
 

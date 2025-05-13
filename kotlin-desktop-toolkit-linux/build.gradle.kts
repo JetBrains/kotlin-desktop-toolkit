@@ -91,23 +91,26 @@ val compileLinuxDesktopToolkitTaskByTarget = buildMap {
     }
 }
 
-compileLinuxDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let { buildNativeTask ->
-    tasks.test {
-        // Use JUnit Platform for unit tests.
-        jvmArgs("--enable-preview")
-        val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
-        dependsOn(buildNativeTask)
-        val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
-        jvmArgumentProviders.add(
-            CommandLineArgumentProvider {
-                listOf(
-                    "-Dkdt.library.folder.path=${libFolder.get()}",
-                    "-Dkdt.debug=true",
-                    "-Dkdt.native.log.path=${logFile.get().asFile.absolutePath}",
-                )
-            },
-        )
-        useJUnitPlatform()
+// Only run tests if there is a Wayland composer available
+System.getenv("WAYLAND_DISPLAY")?.let { _ ->
+    compileLinuxDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let { buildNativeTask ->
+        tasks.test {
+            // Use JUnit Platform for unit tests.
+            jvmArgs("--enable-preview")
+            val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
+            dependsOn(buildNativeTask)
+            val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
+            jvmArgumentProviders.add(
+                CommandLineArgumentProvider {
+                    listOf(
+                        "-Dkdt.library.folder.path=${libFolder.get()}",
+                        "-Dkdt.debug=true",
+                        "-Dkdt.native.log.path=${logFile.get().asFile.absolutePath}",
+                    )
+                },
+            )
+            useJUnitPlatform()
+        }
     }
 }
 
