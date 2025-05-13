@@ -18,6 +18,7 @@ pub type DisplayLinkPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
 pub extern "C" fn display_link_create(screen_id: ScreenId, on_next_frame: DisplayLinkCallback) -> DisplayLinkPtr<'static> {
     let display_link = ffi_boundary("display_link_create", || {
         let _mtm = MainThreadMarker::new().unwrap();
+        // todo it throws when you are trying to create a window when pc is sleeping
         Ok(Some(DisplayLink::new(screen_id, on_next_frame).unwrap()))
     });
     DisplayLinkPtr::from_value(display_link)

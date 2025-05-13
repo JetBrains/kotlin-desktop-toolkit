@@ -40,6 +40,12 @@ public interface WindowEvent {
 
 public sealed class Event {
     public companion object {
+        /**
+         * Be aware this might be inacurate, namely:
+         * When you enable tap to click and tap on external track pad
+         * this set might be immidiately empty, even though we are handling
+         * key down event.
+         */
         public fun pressedMouseButtons(): MouseButtonsSet {
             return MouseButtonsSet(ffiDownCall { desktop_macos_h.events_pressed_mouse_buttons() })
         }
