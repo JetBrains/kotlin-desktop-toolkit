@@ -383,9 +383,9 @@ typedef struct NativeAppMenuStructure {
 
 typedef const void *NativeGenericRawPtr_c_void;
 
-typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr_c_void;
+typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr;
 
-typedef NativeRustAllocatedRawPtr_c_void NativeDisplayLinkPtr;
+typedef NativeRustAllocatedRawPtr NativeDisplayLinkPtr;
 
 typedef void (*NativeDisplayLinkCallback)(void);
 
@@ -401,7 +401,7 @@ typedef void *NativeMetalDeviceRef;
 
 typedef void *NativeMetalCommandQueueRef;
 
-typedef NativeRustAllocatedRawPtr_c_void NativeMetalViewPtr;
+typedef NativeRustAllocatedRawPtr NativeMetalViewPtr;
 
 typedef double NativePhysicalPixels;
 
@@ -420,6 +420,7 @@ typedef struct NativeCombinedItemElement {
 typedef struct NativeBorrowedArray_CombinedItemElement {
   const struct NativeCombinedItemElement *ptr;
   NativeArraySize len;
+  void (*deinit)(const struct NativeCombinedItemElement*, NativeArraySize);
 } NativeBorrowedArray_CombinedItemElement;
 
 typedef enum NativePasteboardItem_Tag {
@@ -446,6 +447,7 @@ typedef struct NativePasteboardItem {
 typedef struct NativeBorrowedArray_PasteboardItem {
   const struct NativePasteboardItem *ptr;
   NativeArraySize len;
+  void (*deinit)(const struct NativePasteboardItem*, NativeArraySize);
 } NativeBorrowedArray_PasteboardItem;
 
 typedef struct NativeAutoDropArray_RustAllocatedStrPtr {
@@ -476,7 +478,7 @@ typedef struct NativeAutoDropArray_ScreenInfo {
 
 typedef struct NativeAutoDropArray_ScreenInfo NativeScreenInfoArray;
 
-typedef NativeRustAllocatedRawPtr_c_void NativeWindowPtr;
+typedef NativeRustAllocatedRawPtr NativeWindowPtr;
 
 typedef struct NativeWindowParams {
   struct NativeLogicalPoint origin;
