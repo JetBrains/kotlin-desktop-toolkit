@@ -12,7 +12,7 @@ use desktop_common::{
 };
 use desktop_linux::linux::{
     application_api::{
-        AppPtr, ApplicationCallbacks, DataSource, DragAction, DragAndDropQueryData, application_clipboard_paste, application_clipboard_put,
+        AppPtr, ApplicationCallbacks, DataSource, DragAction, DragAndDropQueryData, application_clipboard_put,
         application_get_egl_proc_func, application_init, application_run_event_loop, application_set_cursor_theme, application_shutdown,
         application_start_drag_and_drop, application_stop_event_loop, application_text_input_disable, application_text_input_enable,
         application_text_input_update,
@@ -20,7 +20,7 @@ use desktop_linux::linux::{
     events::{Event, KeyModifiers, SoftwareDrawData, WindowDrawEvent, WindowId},
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
-    window_api::{WindowParams, window_close, window_create},
+    window_api::{WindowParams, window_clipboard_paste, window_close, window_create},
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use log::{debug, info};
@@ -308,7 +308,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                 }
                 _ => {
                     if data.code.0 == 47 && window_state.key_modifiers.ctrl {
-                        application_clipboard_paste(state.app_ptr.clone(), BorrowedStrPtr::new(TEXT_MIME_TYPE));
+                        window_clipboard_paste(state.app_ptr.clone(), window_id, BorrowedStrPtr::new(TEXT_MIME_TYPE));
                     } else if data.code.0 == 46 && window_state.key_modifiers.ctrl {
                         application_clipboard_put(state.app_ptr.clone(), BorrowedStrPtr::new(ALL_MIMES));
                     } else if let Some(event_chars) = data.characters.as_optional_str().unwrap() {

@@ -150,6 +150,14 @@ public class Application() : AutoCloseable {
         this.isSafeToQuit = isSafeToQuit
     }
 
+    public fun openURL(url: String) {
+        ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_linux_h.application_open_url(arena.allocateUtf8String(url))
+            }
+        }
+    }
+
     private var isSafeToQuit: () -> Boolean = { true }
 
     // called from native
@@ -289,15 +297,6 @@ public class Application() : AutoCloseable {
     public fun textInputDisable() {
         ffiDownCall {
             desktop_linux_h.application_text_input_disable(appPtr)
-        }
-    }
-
-    /** Will produce [Event.DataTransfer] event if there is clipboard content. */
-    public fun clipboardPaste(supportedMimeTypes: List<String>) {
-        Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                desktop_linux_h.application_clipboard_paste(appPtr, mimeTypesToNative(supportedMimeTypes))
-            }
         }
     }
 

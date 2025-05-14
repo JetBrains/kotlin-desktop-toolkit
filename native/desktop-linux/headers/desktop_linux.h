@@ -838,12 +838,12 @@ void application_text_input_disable(NativeAppPtr app_ptr);
 
 void application_clipboard_put(NativeAppPtr app_ptr, NativeBorrowedStrPtr mime_types);
 
-void application_clipboard_paste(NativeAppPtr app_ptr, NativeBorrowedStrPtr supported_mime_types);
-
 void application_start_drag_and_drop(NativeAppPtr app_ptr,
                                      NativeWindowId window_id,
                                      NativeBorrowedStrPtr mime_types,
                                      enum NativeDragAction action);
+
+bool application_open_url(NativeBorrowedStrPtr url_string);
 
 NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
 
@@ -890,6 +890,10 @@ void window_set_min_size(NativeAppPtr app_ptr,
 void window_set_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
 
 void window_unset_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
+
+void window_clipboard_paste(NativeAppPtr app_ptr,
+                            NativeWindowId window_id,
+                            NativeBorrowedStrPtr supported_mime_types);
 
 struct NativeExceptionsArray logger_check_exceptions(void);
 

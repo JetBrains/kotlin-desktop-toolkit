@@ -271,7 +271,7 @@ class EditorState() {
         return bi.following(cursorOffset)
     }
 
-    fun handleEvent(event: Event, app: Application): EventHandlerResult {
+    fun handleEvent(event: Event, app: Application, window: Window): EventHandlerResult {
         return when (event) {
             is Event.ModifiersChanged -> {
                 modifiers = event.modifiers
@@ -283,11 +283,11 @@ class EditorState() {
                 } else if (modifiers.control) {
                     when (event.key.value) {
                         KeySym.V -> {
-                            app.clipboardPaste(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                            window.clipboardPaste(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                             EventHandlerResult.Stop
                         }
                         KeySym.v -> {
-                            app.clipboardPaste(listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
+                            window.clipboardPaste(listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
                             EventHandlerResult.Stop
                         }
                         KeySym.C -> {
@@ -1152,7 +1152,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
     fun handleEvent(event: Event, windowId: WindowId): EventHandlerResult {
         logEvents(event)
         val window = windows[windowId] ?: return EventHandlerResult.Continue
-        if (window.editorState.handleEvent(event, app) == EventHandlerResult.Stop) {
+        if (window.editorState.handleEvent(event, app, window.window) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
         return when (event) {

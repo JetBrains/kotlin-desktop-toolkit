@@ -131,10 +131,7 @@ impl Application<'static> {
 
     #[must_use]
     pub fn get_window(&self, window_id: WindowId) -> Option<&SimpleWindow> {
-        self.state
-            .window_id_to_surface_id
-            .get(&window_id)
-            .and_then(|surface_id| self.state.windows.get(surface_id))
+        self.state.get_window_by_id(window_id)
     }
 
     #[must_use]
@@ -171,7 +168,7 @@ impl Application<'static> {
         }
     }
 
-    pub fn clipboard_paste(&self, supported_mime_types: &str) -> anyhow::Result<()> {
+    pub fn clipboard_paste(&self, window_id: WindowId, supported_mime_types: &str) -> anyhow::Result<()> {
         let Some(data_device) = self.state.data_device.as_ref() else {
             warn!("Application::clipboard_paste: No data device available");
             return Ok(());
@@ -199,7 +196,7 @@ impl Application<'static> {
             let size = f.read_to_end(&mut buf).unwrap();
 
             debug!("Application::clipboard_paste read {size} bytes");
-            if let Some(key_window) = state.get_key_window() {
+            if let Some(key_window) = state.get_window_by_id(window_id) {
                 let mime_type_cstr = CString::from_str(&mime_type).unwrap();
                 (key_window.event_handler)(&DataTransferContent::new(&buf, &mime_type_cstr).into());
             } else {

@@ -82,6 +82,7 @@ pub struct ApplicationState {
     pub(crate) last_key_down_serial: Option<u32>,
     pub(crate) key_surface: Option<ObjectId>,
     pub(crate) active_text_input: Option<ZwpTextInputV3>,
+    pub(crate) active_text_input_surface: Option<ObjectId>,
     pub(crate) pending_text_input_event: PendingTextInputEvent,
     pub egl: Option<EglInstance>,
     pub event_loop_thread_id: Option<ThreadId>,
@@ -140,6 +141,7 @@ impl ApplicationState {
             last_key_down_serial: None,
             key_surface: None,
             active_text_input: None,
+            active_text_input_surface: None,
             pending_text_input_event: PendingTextInputEvent::default(),
             egl,
             event_loop_thread_id: None,
@@ -155,6 +157,12 @@ impl ApplicationState {
     pub fn get_window_mut(&mut self, surface: &WlSurface) -> Option<&mut SimpleWindow> {
         let surface_id: &ObjectId = &surface.id();
         self.windows.get_mut(surface_id)
+    }
+
+    pub fn get_window_by_id(&self, window_id: WindowId) -> Option<&SimpleWindow> {
+        self.window_id_to_surface_id
+            .get(&window_id)
+            .and_then(|surface_id| self.windows.get(surface_id))
     }
 
     fn get_window_with_data(&mut self, surface: &WlSurface) -> Option<WindowWithData> {

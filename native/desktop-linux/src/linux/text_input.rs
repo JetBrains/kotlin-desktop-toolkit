@@ -25,6 +25,7 @@ pub struct PendingTextInputEvent {
 }
 
 impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
+    #[allow(clippy::too_many_lines)]
     fn event(
         this: &mut Self,
         text_input: &ZwpTextInputV3,
@@ -37,16 +38,22 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
             zwp_text_input_v3::Event::Enter { surface } => {
                 debug!("zwp_text_input_v3::Event::Enter: {}", surface.id());
                 this.active_text_input = Some(text_input.clone());
-                if let Some(w) = this.get_key_window() {
-                    (w.event_handler)(&Event::TextInputAvailability(TextInputAvailabilityEvent { available: true }));
-                }
+                this.active_text_input_surface = Some(surface.id());
+                let Some(w) = this.windows.get(&surface.id()) else {
+                    warn!("Couldn't find window for: {event:?}");
+                    return;
+                };
+                (w.event_handler)(&Event::TextInputAvailability(TextInputAvailabilityEvent { available: true }));
             }
             zwp_text_input_v3::Event::Leave { surface } => {
                 debug!("zwp_text_input_v3::Event::Leave: {}", surface.id());
                 this.active_text_input = None;
-                if let Some(w) = this.get_key_window() {
-                    (w.event_handler)(&Event::TextInputAvailability(TextInputAvailabilityEvent { available: false }));
-                }
+                this.active_text_input_surface = None;
+                let Some(w) = this.windows.get(&surface.id()) else {
+                    warn!("Couldn't find window for: {event:?}");
+                    return;
+                };
+                (w.event_handler)(&Event::TextInputAvailability(TextInputAvailabilityEvent { available: false }));
             }
             zwp_text_input_v3::Event::PreeditString {
                 text,
@@ -69,48 +76,63 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
             }
             zwp_text_input_v3::Event::Done { serial } => {
                 debug!("zwp_text_input_v3::Event::Done: serial={serial}");
-                let v = std::mem::take(&mut this.pending_text_input_event);
-                if let Some(w) = this.get_key_window() {
-                    let (has_commit_string, commit_string) = match v.commit_string {
-                        Some(zwp_text_input_v3::Event::CommitString { text }) => (true, text.map(|t| CString::new(t).unwrap())),
-                        _ => (false, None),
-                    };
-                    let delete_surrounding_text = match v.delete_surrounding_text {
-                        Some(zwp_text_input_v3::Event::DeleteSurroundingText {
-                            before_length,
-                            after_length,
-                        }) => Some(TextInputDeleteSurroundingTextData {
-                            before_length_in_bytes: before_length,
-                            after_length_in_bytes: after_length,
-                        }),
-                        _ => None,
-                    };
-                    let preedit_data = match v.preedit_string {
-                        Some(zwp_text_input_v3::Event::PreeditString {
-                            text,
-                            cursor_begin,
-                            cursor_end,
-                        }) => Some((text.map(|t| CString::new(t).unwrap()), cursor_begin, cursor_end)),
-                        _ => None,
-                    };
-                    let e = TextInputEvent {
-                        has_preedit_string: preedit_data.is_some(),
-                        preedit_string: if let Some((preedit_text, preedit_begin, preedit_end)) = &preedit_data {
-                            TextInputPreeditStringData {
-                                text: BorrowedStrPtr::new_optional(preedit_text.as_ref()),
-                                cursor_begin_byte_pos: *preedit_begin,
-                                cursor_end_byte_pos: *preedit_end,
-                            }
-                        } else {
-                            TextInputPreeditStringData::default()
-                        },
-                        has_commit_string,
-                        commit_string: BorrowedStrPtr::new_optional(commit_string.as_ref()),
-                        has_delete_surrounding_text: delete_surrounding_text.is_some(),
-                        delete_surrounding_text: delete_surrounding_text.unwrap_or_default(),
-                    };
-                    (w.event_handler)(&e.into());
+                if this.pending_text_input_event.commit_string.is_none()
+                    && this.pending_text_input_event.delete_surrounding_text.is_none()
+                    && this.pending_text_input_event.preedit_string.is_none()
+                {
+                    return;
                 }
+
+                let v = std::mem::take(&mut this.pending_text_input_event);
+                let Some(active_text_input_surface) = &this.active_text_input_surface else {
+                    warn!("No active text input surface for: {event:?}");
+                    return;
+                };
+
+                let Some(w) = this.windows.get(active_text_input_surface) else {
+                    warn!("Couldn't find key window for: {event:?}");
+                    return;
+                };
+
+                let (has_commit_string, commit_string) = match v.commit_string {
+                    Some(zwp_text_input_v3::Event::CommitString { text }) => (true, text.map(|t| CString::new(t).unwrap())),
+                    _ => (false, None),
+                };
+                let delete_surrounding_text = match v.delete_surrounding_text {
+                    Some(zwp_text_input_v3::Event::DeleteSurroundingText {
+                        before_length,
+                        after_length,
+                    }) => Some(TextInputDeleteSurroundingTextData {
+                        before_length_in_bytes: before_length,
+                        after_length_in_bytes: after_length,
+                    }),
+                    _ => None,
+                };
+                let preedit_data = match v.preedit_string {
+                    Some(zwp_text_input_v3::Event::PreeditString {
+                        text,
+                        cursor_begin,
+                        cursor_end,
+                    }) => Some((text.map(|t| CString::new(t).unwrap()), cursor_begin, cursor_end)),
+                    _ => None,
+                };
+                let e = TextInputEvent {
+                    has_preedit_string: preedit_data.is_some(),
+                    preedit_string: if let Some((preedit_text, preedit_begin, preedit_end)) = &preedit_data {
+                        TextInputPreeditStringData {
+                            text: BorrowedStrPtr::new_optional(preedit_text.as_ref()),
+                            cursor_begin_byte_pos: *preedit_begin,
+                            cursor_end_byte_pos: *preedit_end,
+                        }
+                    } else {
+                        TextInputPreeditStringData::default()
+                    },
+                    has_commit_string,
+                    commit_string: BorrowedStrPtr::new_optional(commit_string.as_ref()),
+                    has_delete_surrounding_text: delete_surrounding_text.is_some(),
+                    delete_surrounding_text: delete_surrounding_text.unwrap_or_default(),
+                };
+                (w.event_handler)(&e.into());
             }
             _ => {
                 warn!("Unknown event: {event:?}");

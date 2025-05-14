@@ -145,6 +145,15 @@ public class Window internal constructor(
         }
     }
 
+    /** Will produce [Event.DataTransfer] event if there is clipboard content. */
+    public fun clipboardPaste(supportedMimeTypes: List<String>) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_linux_h.window_clipboard_paste(appPtr, windowId, mimeTypesToNative(arena, supportedMimeTypes))
+            }
+        }
+    }
+
     override fun close() {
         Logger.trace { "Window: closing window with id $windowId" }
         ffiDownCall {
