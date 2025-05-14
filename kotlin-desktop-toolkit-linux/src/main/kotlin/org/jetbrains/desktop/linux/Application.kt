@@ -150,6 +150,14 @@ public class Application() : AutoCloseable {
         this.isSafeToQuit = isSafeToQuit
     }
 
+    public fun openURL(url: String) {
+        ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_linux_h.application_open_url(arena.allocateUtf8String(url))
+            }
+        }
+    }
+
     private var isSafeToQuit: () -> Boolean = { true }
 
     // called from native

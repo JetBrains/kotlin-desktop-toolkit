@@ -845,6 +845,8 @@ void application_start_drag_and_drop(NativeAppPtr app_ptr,
                                      NativeBorrowedStrPtr mime_types,
                                      enum NativeDragAction action);
 
+bool application_open_url(NativeBorrowedStrPtr url_string);
+
 NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
 
 void screen_list_drop(NativeScreenInfoArray arr);

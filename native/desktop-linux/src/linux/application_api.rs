@@ -223,3 +223,13 @@ pub extern "C" fn application_start_drag_and_drop(
         app.start_drag(window_id, MimeTypes::new(mime_types.as_str()?), action.into())
     });
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_open_url(url_string: BorrowedStrPtr) -> bool {
+    debug!("application_open_url");
+    ffi_boundary("application_open_url", || {
+        let uri = ashpd::url::Url::parse(url_string.as_str()?)?;
+        async_std::task::block_on(ashpd::desktop::open_uri::OpenFileRequest::default().ask(false).send_uri(&uri))?;
+        Ok(true)
+    })
+}
