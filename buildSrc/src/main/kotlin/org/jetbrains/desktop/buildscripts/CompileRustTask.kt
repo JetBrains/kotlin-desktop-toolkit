@@ -21,6 +21,7 @@ import org.gradle.process.ExecOperations
 import java.io.ByteArrayOutputStream
 import java.nio.file.Path
 import javax.inject.Inject
+import kotlin.io.path.absolutePathString
 import kotlin.io.path.copyTo
 
 abstract class CompileRustTask @Inject constructor(
@@ -152,8 +153,8 @@ private fun ExecOperations.compileRust(
 ) {
     exec {
         workingDir = nativeDirectory.toFile()
-        commandLine(
-            findCommand("cargo", rustTarget.os),
+        executable = findCommand("cargo", rustTarget.os)?.absolutePathString() ?: error("cannot find cargo path")
+        args = listOf(
             "build",
             "--package=$crateName",
             "--profile=$rustProfile",
