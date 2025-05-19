@@ -206,7 +206,20 @@ impl SeatHandler for ApplicationState {
 
         if capability == Capability::Keyboard && self.keyboard.is_none() {
             debug!("Set keyboard capability");
-            let keyboard = self.seat_state.get_keyboard(qh, &seat, None).expect("Failed to create keyboard");
+            let keyboard = self
+                .seat_state
+                .get_keyboard_with_repeat(
+                    qh,
+                    &seat,
+                    None,
+                    self.loop_handle.clone(),
+                    Box::new(|state, _wl_kbd, event| {
+                        if let Some(window) = state.get_key_window() {
+                            window.on_key_repeat(event);
+                        }
+                    }),
+                )
+                .expect("Failed to create keyboard");
             self.keyboard = Some(keyboard);
 
             if let Some(text_input_manager) = self.text_input_manager.as_ref() {

@@ -113,12 +113,12 @@ impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
 }
 
 impl<'a> KeyDownEvent<'a> {
-    pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a CString>) -> Self {
+    pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a CString>, is_repeat: bool) -> Self {
         Self {
             code,
             characters: BorrowedStrPtr::new_optional(characters),
             key,
-            is_repeat: false, // TODO
+            is_repeat,
         }
     }
 }
