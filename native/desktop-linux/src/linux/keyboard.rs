@@ -81,10 +81,18 @@ impl SimpleWindow {
         (self.event_handler)(&WindowFocusChangeEvent::new(false).into());
     }
 
-    pub fn press_key(&self, event: KeyEvent) {
+    fn send_key_down_event(&self, event: KeyEvent, is_repeat: bool) {
         let characters = event.utf8.map(|s| CString::new(s).unwrap());
-        let e = KeyDownEvent::new(KeyCode(event.raw_code), event.keysym.raw(), characters.as_ref());
+        let e = KeyDownEvent::new(KeyCode(event.raw_code), event.keysym.raw(), characters.as_ref(), is_repeat);
         (self.event_handler)(&e.into());
+    }
+
+    pub fn press_key(&self, event: KeyEvent) {
+        self.send_key_down_event(event, false);
+    }
+
+    pub fn on_key_repeat(&self, event: KeyEvent) {
+        self.send_key_down_event(event, true);
     }
 
     pub fn release_key(&self, event: KeyEvent) {
