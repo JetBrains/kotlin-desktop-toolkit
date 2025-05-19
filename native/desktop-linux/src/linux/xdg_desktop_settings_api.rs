@@ -1,22 +1,4 @@
-use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
-
-#[repr(i32)]
-#[derive(Copy, Clone, Debug)]
-pub enum WindowButtonType {
-    AppMenu,
-    Icon,
-    Spacer,
-    Minimize,
-    Maximize,
-    Close,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct TitlebarButtonLayout {
-    pub left_side: AutoDropArray<WindowButtonType>,
-    pub right_side: AutoDropArray<WindowButtonType>,
-}
+use desktop_common::ffi_utils::BorrowedStrPtr;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -67,7 +49,7 @@ pub struct Color {
 #[repr(C)]
 #[derive(Debug)]
 pub enum XdgDesktopSetting<'a> {
-    TitlebarLayout(TitlebarButtonLayout),
+    TitlebarLayout(BorrowedStrPtr<'a>),
     DoubleClickIntervalMs(i32),
     ColorScheme(XdgDesktopColorScheme),
     AccentColor(Color),

@@ -6,47 +6,21 @@ use ashpd::{
     zvariant::{OwnedValue, Structure},
 };
 use async_std::stream::StreamExt;
-use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
+use desktop_common::ffi_utils::BorrowedStrPtr;
 use log::{debug, error};
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::linux::xdg_desktop_settings_api::{
-    Color, FontAntialiasing, FontHinting, FontRgbaOrder, TitlebarButtonLayout, WindowButtonType, XdgDesktopColorScheme, XdgDesktopSetting,
+    Color, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme, XdgDesktopSetting,
 };
 
 const GNOME_DESKTOP_INTERFACE_NAMESPACE: &str = "org.gnome.desktop.interface";
 const GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE: &str = "org.gnome.desktop.peripherals.mouse";
 const GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE: &str = "org.gnome.desktop.wm.preferences";
 
-#[derive(Clone, Debug)]
-pub struct InternalTitlebarButtonLayout {
-    pub left_side: Box<[WindowButtonType]>,
-    pub right_side: Box<[WindowButtonType]>,
-}
-
-impl InternalTitlebarButtonLayout {
-    fn parse_one_side(buttons: &str) -> anyhow::Result<Box<[WindowButtonType]>> {
-        if buttons.is_empty() {
-            Ok(Box::default())
-        } else {
-            buttons.split(',').map(WindowButtonType::parse).collect()
-        }
-    }
-
-    fn parse(button_layout: &str) -> anyhow::Result<Self> {
-        let (buttons_left_str, buttons_right_str) = button_layout
-            .split_once(':')
-            .with_context(|| format!("Invalid button-layout format: {button_layout}"))?;
-        Ok(Self {
-            left_side: Self::parse_one_side(buttons_left_str).with_context(|| buttons_left_str.to_owned())?,
-            right_side: Self::parse_one_side(buttons_right_str).with_context(|| buttons_right_str.to_owned())?,
-        })
-    }
-}
-
 #[derive(Debug)]
 pub enum InternalXdgDesktopSetting {
-    TitlebarLayout(InternalTitlebarButtonLayout),
+    TitlebarLayout(String),
     DoubleClickIntervalMs(i32),
     ColorScheme(ColorScheme),
     AccentColor(Color),
@@ -67,20 +41,6 @@ pub enum InternalXdgDesktopSetting {
     OverlayScrolling(bool),
 
     AudibleBell(bool),
-}
-
-impl WindowButtonType {
-    pub fn parse(button_name: &str) -> anyhow::Result<Self> {
-        match button_name {
-            "appmenu" => Ok(Self::AppMenu),
-            "icon" => Ok(Self::Icon),
-            "spacer" => Ok(Self::Spacer),
-            "minimize" => Ok(Self::Minimize),
-            "maximize" => Ok(Self::Maximize),
-            "close" => Ok(Self::Close),
-            _ => bail!("Unknown button name {button_name}"),
-        }
-    }
 }
 
 impl FontAntialiasing {
@@ -122,10 +82,8 @@ impl XdgDesktopSetting<'_> {
     pub fn with(s: InternalXdgDesktopSetting, f: impl FnOnce(&XdgDesktopSetting)) {
         match s {
             InternalXdgDesktopSetting::TitlebarLayout(v) => {
-                f(&Self::TitlebarLayout(TitlebarButtonLayout {
-                    left_side: AutoDropArray::new(v.left_side),
-                    right_side: AutoDropArray::new(v.right_side),
-                }));
+                let cs = CString::new(v).unwrap();
+                f(&XdgDesktopSetting::TitlebarLayout(BorrowedStrPtr::new(&cs)));
             }
             InternalXdgDesktopSetting::DoubleClickIntervalMs(v) => f(&Self::DoubleClickIntervalMs(v)),
             InternalXdgDesktopSetting::ColorScheme(v) => f(&Self::ColorScheme(match v {
@@ -237,7 +195,7 @@ impl InternalXdgDesktopSetting {
             GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE => {
                 match key {
                     "audible-bell" => Some(Self::AudibleBell(read_bool(value)?)),
-                    "button-layout" => Some(Self::TitlebarLayout(InternalTitlebarButtonLayout::parse(&read_string(value)?)?)),
+                    "button-layout" => Some(Self::TitlebarLayout(read_string(value)?)),
                     //// Valid values: "toggle-maximize", "toggle-maximize-horizontally", "toggle-maximize-vertically", "menu", "lower", "none"
                     //"action-double-click-titlebar" => {},
                     //"action-right-click-titlebar" => {},

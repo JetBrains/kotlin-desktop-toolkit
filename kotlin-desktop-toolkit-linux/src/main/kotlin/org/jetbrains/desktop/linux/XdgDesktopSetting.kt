@@ -2,19 +2,6 @@ package org.jetbrains.desktop.linux
 
 import kotlin.time.Duration
 
-public enum class WindowButtonType {
-    AppMenu,
-    Icon,
-    Spacer,
-    Title,
-    Minimize,
-    Maximize,
-    Close,
-    ;
-
-    internal companion object;
-}
-
 public enum class WindowResizeEdge {
     /** The top edge is being dragged. */
     Top,
@@ -73,7 +60,7 @@ public enum class FontRgbaOrderValue {
 }
 
 public sealed class XdgDesktopSetting {
-    public data class TitlebarLayout(val layoutLeft: List<WindowButtonType>, val layoutRight: List<WindowButtonType>) : XdgDesktopSetting()
+    public data class TitlebarLayout(val value: String) : XdgDesktopSetting()
 
     public data class DoubleClickInterval(val value: Duration) : XdgDesktopSetting()
 

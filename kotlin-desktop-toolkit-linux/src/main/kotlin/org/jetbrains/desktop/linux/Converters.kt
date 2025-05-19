@@ -1,12 +1,5 @@
 package org.jetbrains.desktop.linux
 
-import org.jetbrains.desktop.linux.WindowButtonType.AppMenu
-import org.jetbrains.desktop.linux.WindowButtonType.Close
-import org.jetbrains.desktop.linux.WindowButtonType.Icon
-import org.jetbrains.desktop.linux.WindowButtonType.Maximize
-import org.jetbrains.desktop.linux.WindowButtonType.Minimize
-import org.jetbrains.desktop.linux.WindowButtonType.Spacer
-import org.jetbrains.desktop.linux.generated.NativeAutoDropArray_WindowButtonType
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
@@ -33,7 +26,6 @@ import org.jetbrains.desktop.linux.generated.NativeTextInputContext
 import org.jetbrains.desktop.linux.generated.NativeTextInputDeleteSurroundingTextData
 import org.jetbrains.desktop.linux.generated.NativeTextInputEvent
 import org.jetbrains.desktop.linux.generated.NativeTextInputPreeditStringData
-import org.jetbrains.desktop.linux.generated.NativeTitlebarButtonLayout
 import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
 import org.jetbrains.desktop.linux.generated.NativeWindowConfigureEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
@@ -184,11 +176,7 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
     val nativeTag = NativeXdgDesktopSetting.tag(s)
     return when (nativeTag) {
         desktop_linux_h.NativeXdgDesktopSetting_TitlebarLayout() -> {
-            val nativeTitlebarLayout = NativeXdgDesktopSetting.titlebar_layout(s)
-            XdgDesktopSetting.TitlebarLayout(
-                layoutLeft = WindowButtonType.fromNativeArray(NativeTitlebarButtonLayout.left_side(nativeTitlebarLayout)),
-                layoutRight = WindowButtonType.fromNativeArray(NativeTitlebarButtonLayout.right_side(nativeTitlebarLayout)),
-            )
+            XdgDesktopSetting.TitlebarLayout(NativeXdgDesktopSetting.titlebar_layout(s).getUtf8String(0))
         }
         desktop_linux_h.NativeXdgDesktopSetting_DoubleClickIntervalMs() -> XdgDesktopSetting.DoubleClickInterval(
             value = NativeXdgDesktopSetting.double_click_interval_ms(s).milliseconds,
@@ -360,28 +348,6 @@ internal fun DragAction.toNative(): Int = when (this) {
     DragAction.Copy -> desktop_linux_h.NativeDragAction_Copy()
     DragAction.Move -> desktop_linux_h.NativeDragAction_Move()
     DragAction.Ask -> desktop_linux_h.NativeDragAction_Ask()
-}
-
-private fun WindowButtonType.Companion.fromNative(s: MemorySegment, index: Long): WindowButtonType {
-    val v = s.getAtIndex(desktop_linux_h.NativeWindowButtonType, index)
-    return when (v) {
-        desktop_linux_h.NativeWindowButtonType_AppMenu() -> AppMenu
-        desktop_linux_h.NativeWindowButtonType_Icon() -> Icon
-        desktop_linux_h.NativeWindowButtonType_Spacer() -> Spacer
-        desktop_linux_h.NativeWindowButtonType_Minimize() -> Minimize
-        desktop_linux_h.NativeWindowButtonType_Maximize() -> Maximize
-        desktop_linux_h.NativeWindowButtonType_Close() -> Close
-        else -> error("Unexpected WindowButtonType tag $v")
-    }
-}
-
-internal fun WindowButtonType.Companion.fromNativeArray(nativeArray: MemorySegment): List<WindowButtonType> {
-    val ptr = NativeAutoDropArray_WindowButtonType.ptr(nativeArray)
-    val len = NativeAutoDropArray_WindowButtonType.len(nativeArray)
-
-    return (0 until len).map {
-        fromNative(ptr, it)
-    }
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event {

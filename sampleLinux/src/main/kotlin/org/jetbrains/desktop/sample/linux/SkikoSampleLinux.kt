@@ -27,13 +27,11 @@ import org.jetbrains.desktop.linux.TextInputContentPurpose
 import org.jetbrains.desktop.linux.TextInputContext
 import org.jetbrains.desktop.linux.Timestamp
 import org.jetbrains.desktop.linux.Window
-import org.jetbrains.desktop.linux.WindowButtonType
 import org.jetbrains.desktop.linux.WindowCapabilities
 import org.jetbrains.desktop.linux.WindowId
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
 import org.jetbrains.desktop.linux.XdgDesktopSetting
-import org.jetbrains.desktop.linux.XdgDesktopSetting.TitlebarLayout
 import org.jetbrains.desktop.linux.utf8OffsetToUtf16Offset
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
@@ -77,6 +75,48 @@ sealed class DataTransferContentType {
     data class UriList(val files: List<String>) : DataTransferContentType()
 }
 
+enum class WindowButtonType {
+    AppMenu,
+    Icon,
+    Spacer,
+    Title,
+    Minimize,
+    Maximize,
+    Close,
+    ;
+
+    internal companion object {
+        internal fun fromString(buttonName: String): WindowButtonType {
+            return when (buttonName) {
+                "appmenu" -> AppMenu
+                "icon" -> Icon
+                "spacer" -> Spacer
+                "minimize" -> Minimize
+                "maximize" -> Maximize
+                "close" -> Close
+                else -> error("Unknown button name {button_name}")
+            }
+        }
+    }
+}
+
+data class TitlebarLayout(val layoutLeft: List<WindowButtonType>, val layoutRight: List<WindowButtonType>) {
+    internal companion object {
+        private fun parseOneSide(buttons: String): List<WindowButtonType> {
+            return if (buttons.isEmpty()) {
+                emptyList()
+            } else {
+                buttons.split(',').map(WindowButtonType::fromString)
+            }
+        }
+
+        internal fun fromString(buttonLayout: String): TitlebarLayout {
+            val (buttonsLeftStr, buttonsRightStr) = buttonLayout.split(':')
+            return TitlebarLayout(parseOneSide(buttonsLeftStr), parseOneSide(buttonsRightStr))
+        }
+    }
+}
+
 data class XdgDesktopSettings(
     var titlebarLayout: TitlebarLayout = TitlebarLayout(
         layoutLeft = listOf(WindowButtonType.Icon),
@@ -100,7 +140,7 @@ data class XdgDesktopSettings(
 
     fun update(s: XdgDesktopSetting) {
         when (s) {
-            is TitlebarLayout -> titlebarLayout = s
+            is XdgDesktopSetting.TitlebarLayout -> titlebarLayout = TitlebarLayout.fromString(s.value)
             is XdgDesktopSetting.DoubleClickInterval -> doubleClickInterval = s.value
             is XdgDesktopSetting.ColorScheme -> colorScheme = s.value
             is XdgDesktopSetting.AccentColor -> accentColor = Color.makeARGB(

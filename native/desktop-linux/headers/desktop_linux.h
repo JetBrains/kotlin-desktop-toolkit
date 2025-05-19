@@ -256,16 +256,6 @@ typedef enum NativeTextInputContentPurpose {
   NativeTextInputContentPurpose_Terminal,
 } NativeTextInputContentPurpose;
 
-enum NativeWindowButtonType {
-  NativeWindowButtonType_AppMenu,
-  NativeWindowButtonType_Icon,
-  NativeWindowButtonType_Spacer,
-  NativeWindowButtonType_Minimize,
-  NativeWindowButtonType_Maximize,
-  NativeWindowButtonType_Close,
-};
-typedef int32_t NativeWindowButtonType;
-
 typedef enum NativeWindowResizeEdge {
   /**
    * Nothing is being dragged.
@@ -326,17 +316,9 @@ typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr;
 
 typedef NativeRustAllocatedRawPtr NativeAppPtr;
 
-typedef uintptr_t NativeArraySize;
+typedef const char *NativeGenericRawPtr_c_char;
 
-typedef struct NativeAutoDropArray_WindowButtonType {
-  const NativeWindowButtonType *ptr;
-  NativeArraySize len;
-} NativeAutoDropArray_WindowButtonType;
-
-typedef struct NativeTitlebarButtonLayout {
-  struct NativeAutoDropArray_WindowButtonType left_side;
-  struct NativeAutoDropArray_WindowButtonType right_side;
-} NativeTitlebarButtonLayout;
+typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
 typedef struct NativeColor {
   double red;
@@ -344,10 +326,6 @@ typedef struct NativeColor {
   double blue;
   double alpha;
 } NativeColor;
-
-typedef const char *NativeGenericRawPtr_c_char;
-
-typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
 typedef enum NativeXdgDesktopSetting_Tag {
   NativeXdgDesktopSetting_TitlebarLayout,
@@ -376,7 +354,7 @@ typedef struct NativeXdgDesktopSetting {
   NativeXdgDesktopSetting_Tag tag;
   union {
     struct {
-      struct NativeTitlebarButtonLayout titlebar_layout;
+      NativeBorrowedStrPtr titlebar_layout;
     };
     struct {
       int32_t double_click_interval_ms;
@@ -419,6 +397,8 @@ typedef struct NativeXdgDesktopSetting {
     };
   };
 } NativeXdgDesktopSetting;
+
+typedef uintptr_t NativeArraySize;
 
 typedef struct NativeBorrowedArray_u8 {
   const uint8_t *ptr;
