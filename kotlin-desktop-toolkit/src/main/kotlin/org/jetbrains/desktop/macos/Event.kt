@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeApplicationAppearanceChangeEvent
+import org.jetbrains.desktop.macos.generated.NativeApplicationOpenUrlsEvent
 import org.jetbrains.desktop.macos.generated.NativeEvent
 import org.jetbrains.desktop.macos.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.macos.generated.NativeKeyUpEvent
@@ -171,6 +172,8 @@ public sealed class Event {
 
     public data object ApplicationDidFinishLaunching : Event()
 
+    public data class ApplicationOpenUrls(val urls: List<String>) : Event()
+
     public data class WindowCloseRequest(override val windowId: WindowId) : Event(), WindowEvent
 
     public data class ApplicationAppearanceChange(val newAppearance: Appearance) : Event()
@@ -314,6 +317,11 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_macos_h.NativeEvent_DisplayConfigurationChange() -> {
             Event.DisplayConfigurationChange
+        }
+        desktop_macos_h.NativeEvent_ApplicationOpenUrls() -> {
+            val nativeEvent = NativeEvent.application_open_urls(s)
+            val urlsArray = NativeApplicationOpenUrlsEvent.urls(nativeEvent)
+            Event.ApplicationOpenUrls(listOfStringsFromNative(urlsArray))
         }
         desktop_macos_h.NativeEvent_ApplicationDidFinishLaunching() -> {
             Event.ApplicationDidFinishLaunching

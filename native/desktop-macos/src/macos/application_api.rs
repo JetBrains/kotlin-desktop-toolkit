@@ -16,12 +16,13 @@ use objc2_app_kit::{
     NSEventType, NSImage, NSRunningApplication, NSWorkspace,
 };
 use objc2_foundation::{
-    MainThreadMarker, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
+    MainThreadMarker, NSArray, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
     NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults,
 };
 
 use crate::macos::events::{
-    handle_application_appearance_change, handle_application_did_finish_launching, handle_display_configuration_change,
+    handle_application_appearance_change, handle_application_did_finish_launching, handle_application_open_urls,
+    handle_display_configuration_change,
 };
 
 use super::{
@@ -333,7 +334,18 @@ define_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidChangeScreenParameters:))]
         fn did_change_screen_parameters(&self, _notification: &NSNotification) {
-            handle_display_configuration_change();
+            catch_panic(|| {
+                handle_display_configuration_change();
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(application:openURLs:))]
+        unsafe fn application_open_urls(&self, _application: &NSApplication, urls: &NSArray<NSURL>) {
+            catch_panic(|| {
+                handle_application_open_urls(urls);
+                Ok(())
+            });
         }
 
         #[unsafe(method(applicationDidFinishLaunching:))]

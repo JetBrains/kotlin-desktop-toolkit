@@ -14,7 +14,10 @@ use objc2::{
 use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardURLReadingFileURLsOnlyKey, NSPasteboardWriting};
 use objc2_foundation::{NSArray, NSDictionary, NSMutableArray, NSNumber, NSURL};
 
-use super::string::{copy_to_c_string, copy_to_ns_string};
+use super::{
+    string::{copy_to_c_string, copy_to_ns_string},
+    url::url_to_file_path_string,
+};
 
 static GENERAL_PASTEBOARD_SHARED_TOKEN: Mutex<()> = Mutex::new(());
 
@@ -155,11 +158,9 @@ pub extern "C" fn pasteboard_read_file_items() -> PasteboardContentResult {
 
             let urls: anyhow::Result<Box<_>> = urls
                 .iter()
-                .filter_map(|url| {
-                    let url = url.downcast::<NSURL>().expect("It must be NSURL");
-                    unsafe { url.filePathURL() }
-                })
-                .map(|url_ns_str| copy_to_c_string(&*unsafe { url_ns_str.path().expect("Expected path here") }))
+                .map(|url| url.downcast::<NSURL>().expect("It must be NSURL"))
+                .filter_map(|url| url_to_file_path_string(&url))
+                .map(|url_ns_str| copy_to_c_string(&url_ns_str))
                 .collect();
 
             Ok(PasteboardContentResult {

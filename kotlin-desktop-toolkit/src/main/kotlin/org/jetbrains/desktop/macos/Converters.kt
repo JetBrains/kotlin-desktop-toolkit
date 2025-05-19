@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.macos
 
+import org.jetbrains.desktop.macos.generated.NativeAutoDropArray_RustAllocatedStrPtr
 import org.jetbrains.desktop.macos.generated.NativeColor
 import org.jetbrains.desktop.macos.generated.NativeLogicalPoint
 import org.jetbrains.desktop.macos.generated.NativeLogicalRect
@@ -69,4 +70,14 @@ internal fun Color.toNative(arena: Arena): MemorySegment {
     NativeColor.blue(result, blue)
     NativeColor.alpha(result, alpha)
     return result
+}
+
+internal fun listOfStringsFromNative(segment: MemorySegment): List<String> {
+    val ptr = NativeAutoDropArray_RustAllocatedStrPtr.ptr(segment)
+    val len = NativeAutoDropArray_RustAllocatedStrPtr.len(segment)
+
+    return (0 until len).map { i ->
+        val strPtr = ptr.getAtIndex(NativeAutoDropArray_RustAllocatedStrPtr.`ptr$layout`(), i)
+        strPtr.getUtf8String(0)
+    }.toList()
 }

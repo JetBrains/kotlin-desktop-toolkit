@@ -248,6 +248,15 @@ typedef struct NativeWindowFullScreenToggleEvent {
   bool is_full_screen;
 } NativeWindowFullScreenToggleEvent;
 
+typedef struct NativeAutoDropArray_RustAllocatedStrPtr {
+  const NativeRustAllocatedStrPtr *ptr;
+  NativeArraySize len;
+} NativeAutoDropArray_RustAllocatedStrPtr;
+
+typedef struct NativeApplicationOpenUrlsEvent {
+  struct NativeAutoDropArray_RustAllocatedStrPtr urls;
+} NativeApplicationOpenUrlsEvent;
+
 typedef struct NativeApplicationAppearanceChangeEvent {
   enum NativeAppearance new_appearance;
 } NativeApplicationAppearanceChangeEvent;
@@ -270,6 +279,7 @@ typedef enum NativeEvent_Tag {
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowFullScreenToggle,
   NativeEvent_DisplayConfigurationChange,
+  NativeEvent_ApplicationOpenUrls,
   NativeEvent_ApplicationDidFinishLaunching,
   NativeEvent_ApplicationAppearanceChange,
 } NativeEvent_Tag;
@@ -324,6 +334,9 @@ typedef struct NativeEvent {
     };
     struct {
       struct NativeWindowFullScreenToggleEvent window_full_screen_toggle;
+    };
+    struct {
+      struct NativeApplicationOpenUrlsEvent application_open_urls;
     };
     struct {
       struct NativeApplicationAppearanceChangeEvent application_appearance_change;
@@ -447,11 +460,6 @@ typedef struct NativeBorrowedArray_PasteboardItem {
   const struct NativePasteboardItem *ptr;
   NativeArraySize len;
 } NativeBorrowedArray_PasteboardItem;
-
-typedef struct NativeAutoDropArray_RustAllocatedStrPtr {
-  const NativeRustAllocatedStrPtr *ptr;
-  NativeArraySize len;
-} NativeAutoDropArray_RustAllocatedStrPtr;
 
 typedef struct NativePasteboardContentResult {
   struct NativeAutoDropArray_RustAllocatedStrPtr items;

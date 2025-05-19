@@ -3,11 +3,12 @@
 use core::f64;
 
 use anyhow::bail;
+use log::warn;
 use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
-use objc2_foundation::MainThreadMarker;
+use objc2_foundation::{MainThreadMarker, NSArray, NSURL};
 
 use desktop_common::{
-    ffi_utils::BorrowedStrPtr,
+    ffi_utils::{AutoDropArray, BorrowedStrPtr, RustAllocatedStrPtr},
     logger::{PanicDefault, ffi_boundary},
 };
 
@@ -19,7 +20,8 @@ use super::{
     keyboard::{EMPTY_KEY_MODIFIERS, KeyCode, KeyModifiersSet, unpack_flags_changed_event, unpack_key_event},
     mouse::{EmptyMouseButtonsSet, MouseButton, MouseButtonsSet, NSMouseEventExt},
     screen::{NSScreenExts, ScreenId},
-    string::borrow_ns_string,
+    string::{borrow_ns_string, copy_to_c_string},
+    url::url_to_absolute_string,
     window::NSWindowExts,
     window_api::WindowId,
 };
@@ -172,6 +174,12 @@ pub struct WindowFullScreenToggleEvent {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct ApplicationOpenUrlsEvent {
+    pub urls: AutoDropArray<RustAllocatedStrPtr>,
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct ApplicationAppearanceChangeEvent {
     pub new_appearance: Appearance,
 }
@@ -196,6 +204,7 @@ pub enum Event<'a> {
     WindowCloseRequest(WindowCloseRequestEvent),
     WindowFullScreenToggle(WindowFullScreenToggleEvent),
     DisplayConfigurationChange,
+    ApplicationOpenUrls(ApplicationOpenUrlsEvent),
     ApplicationDidFinishLaunching,
     ApplicationAppearanceChange(ApplicationAppearanceChangeEvent),
 }
@@ -420,6 +429,25 @@ pub(crate) fn handle_display_configuration_change() {
 pub(crate) fn handle_application_did_finish_launching() {
     let _handled = AppState::with(|state| {
         let event = Event::ApplicationDidFinishLaunching;
+        (state.event_handler)(&event)
+    });
+}
+
+pub(crate) fn handle_application_open_urls(urls: &NSArray<NSURL>) {
+    let urls = urls
+        .iter()
+        .filter_map(|url| {
+            let url_ns_string = url_to_absolute_string(&url);
+            if url_ns_string.is_none() {
+                warn!("Skipped the open url: {url:?}");
+            }
+            url_ns_string
+        })
+        .map(|url_ns_string| copy_to_c_string(&url_ns_string).unwrap())
+        .collect::<Box<_>>();
+    let urls = AutoDropArray::new(urls);
+    let _handled = AppState::with(|state| {
+        let event = Event::ApplicationOpenUrls(ApplicationOpenUrlsEvent { urls });
         (state.event_handler)(&event)
     });
 }

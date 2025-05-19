@@ -141,6 +141,7 @@ impl Drop for AutoDropStrPtr {
 pub type ArraySize = usize;
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct AutoDropArray<T> {
     pub ptr: *const T,
     pub len: ArraySize,
