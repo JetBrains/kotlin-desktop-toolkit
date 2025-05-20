@@ -199,7 +199,7 @@ pub extern "C" fn window_order_front(window_ptr: WindowPtr) {
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.orderFront(None);
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -211,7 +211,7 @@ pub extern "C" fn window_order_back(window_ptr: WindowPtr) {
             window.ns_window.orderBack(None);
         }
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -221,7 +221,7 @@ pub extern "C" fn window_make_key_and_order_front(window_ptr: WindowPtr) {
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.makeKeyAndOrderFront(None);
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -283,7 +283,7 @@ pub extern "C" fn window_maximize(window_ptr: WindowPtr) {
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.zoom(None);
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -304,9 +304,8 @@ pub extern "C" fn window_miniaturize(window_ptr: WindowPtr) {
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.miniaturize(None);
         Ok(())
-    })
+    });
 }
-
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_deminiaturize(window_ptr: WindowPtr) {
@@ -318,7 +317,7 @@ pub extern "C" fn window_deminiaturize(window_ptr: WindowPtr) {
             window.ns_window.deminiaturize(None);
         }
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]
