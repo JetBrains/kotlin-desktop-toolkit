@@ -759,6 +759,12 @@ bool window_is_key(NativeWindowPtr window_ptr);
 
 bool window_is_main(NativeWindowPtr window_ptr);
 
+void window_order_front(NativeWindowPtr window_ptr);
+
+void window_order_back(NativeWindowPtr window_ptr);
+
+void window_make_key_and_order_front(NativeWindowPtr window_ptr);
+
 struct NativeLogicalSize window_get_max_size(NativeWindowPtr window_ptr);
 
 void window_set_max_size(NativeWindowPtr window_ptr, struct NativeLogicalSize size);

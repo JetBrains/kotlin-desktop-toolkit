@@ -193,6 +193,38 @@ pub extern "C" fn window_is_main(window_ptr: WindowPtr) -> bool {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_order_front(window_ptr: WindowPtr) {
+    ffi_boundary("window_order_front", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        window.ns_window.orderFront(None);
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_order_back(window_ptr: WindowPtr) {
+    ffi_boundary("window_order_back", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        unsafe {
+            window.ns_window.orderBack(None);
+        }
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_make_key_and_order_front(window_ptr: WindowPtr) {
+    ffi_boundary("window_make_key_and_order_front", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        window.ns_window.makeKeyAndOrderFront(None);
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_get_max_size(window_ptr: WindowPtr) -> LogicalSize {
     ffi_boundary("window_get_max_size", || {
         let window = unsafe { window_ptr.borrow::<Window>() };

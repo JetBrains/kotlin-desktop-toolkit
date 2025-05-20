@@ -208,6 +208,24 @@ public class Window internal constructor(
             return ffiDownCall { desktop_macos_h.window_is_main(pointer) }
         }
 
+    public fun makeKeyAndOrderFront() {
+        ffiDownCall {
+            desktop_macos_h.window_make_key_and_order_front(pointer)
+        }
+    }
+
+    public fun orderFront() {
+        ffiDownCall {
+            desktop_macos_h.window_order_front(pointer)
+        }
+    }
+
+    public fun orderBack() {
+        ffiDownCall {
+            desktop_macos_h.window_order_back(pointer)
+        }
+    }
+
     public fun setRect(origin: LogicalPoint, size: LogicalSize, animateTransition: Boolean = true) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
