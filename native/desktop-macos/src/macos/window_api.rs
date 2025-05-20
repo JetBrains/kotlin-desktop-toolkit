@@ -244,6 +244,62 @@ pub extern "C" fn window_is_full_screen(window_ptr: WindowPtr) -> bool {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_maximize(window_ptr: WindowPtr) {
+    ffi_boundary("window_maximize", || {
+        // according to apple docs it shoudl be accessed only from main thread
+        let _mtm = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        window.ns_window.zoom(None);
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_is_maximized(window_ptr: WindowPtr) -> bool {
+    ffi_boundary("window_is_maximized", || {
+        // according to apple docs it shoudl be accessed only from main thread
+        let _mtm = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        Ok(window.ns_window.isZoomed())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_miniaturize(window_ptr: WindowPtr) {
+    ffi_boundary("window_miniaturize", || {
+        // according to apple docs it shoudl be accessed only from main thread
+        let _mtm = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        window.ns_window.miniaturize(None);
+        Ok(())
+    })
+}
+
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_deminiaturize(window_ptr: WindowPtr) {
+    ffi_boundary("window_deminiaturize", || {
+        // according to apple docs it shoudl be accessed only from main thread
+        let _mtm = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        unsafe {
+            window.ns_window.deminiaturize(None);
+        }
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_is_miniaturized(window_ptr: WindowPtr) -> bool {
+    ffi_boundary("window_is_miniaturized", || {
+        // according to apple docs it shoudl be accessed only from main thread
+        let _mtm = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        Ok(window.ns_window.isMiniaturized())
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_start_drag(window_ptr: WindowPtr) {
     ffi_boundary("window_start_drag", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();

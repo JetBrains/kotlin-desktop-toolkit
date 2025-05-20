@@ -771,6 +771,16 @@ void window_toggle_full_screen(NativeWindowPtr window_ptr);
 
 bool window_is_full_screen(NativeWindowPtr window_ptr);
 
+void window_maximize(NativeWindowPtr window_ptr);
+
+bool window_is_maximized(NativeWindowPtr window_ptr);
+
+void window_miniaturize(NativeWindowPtr window_ptr);
+
+void window_deminiaturize(NativeWindowPtr window_ptr);
+
+bool window_is_miniaturized(NativeWindowPtr window_ptr);
+
 void window_start_drag(NativeWindowPtr window_ptr);
 
 void window_invalidate_shadow(NativeWindowPtr window_ptr);

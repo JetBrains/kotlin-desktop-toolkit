@@ -42,6 +42,7 @@ class CustomTitlebar(
     private var origin: LogicalPoint,
     var size: LogicalSize,
     var startWindowDrag: (() -> Unit)? = null,
+    var zoomBoxClicked: (() -> Unit)? = null,
 ) {
     companion object {
         const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55.0
@@ -55,7 +56,12 @@ class CustomTitlebar(
                     event.locationInWindow.y > origin.y &&
                     event.locationInWindow.y < origin.y + size.height
                 ) {
-                    startWindowDrag?.invoke()
+                    if (event.clickCount == 1L) {
+                        startWindowDrag?.invoke()
+                    } else {
+                        zoomBoxClicked?.invoke()
+                    }
+
                     EventHandlerResult.Stop
                 } else {
                     EventHandlerResult.Continue
@@ -299,6 +305,9 @@ class RotatingBallWindow(
             windowContainer.customTitlebar?.startWindowDrag = {
                 window.startDrag()
             }
+            windowContainer.customTitlebar?.zoomBoxClicked = {
+                window.toggleMaximize()
+            }
             windowContainer.handleEvent(event)
         } else {
             EventHandlerResult.Stop
@@ -368,6 +377,16 @@ class ApplicationState : AutoCloseable {
     private fun makeWindowTransparent() {
         mainWindow()?.let { window ->
             window.window.setBackground(WindowBackground.Transparent)
+        }
+    }
+
+    private fun toggleMiniaturizationOfFirstWindow() {
+        windows.firstOrNull()?.window?.let { window ->
+            if (window.isMiniaturized) {
+                window.deminiaturize()
+            } else {
+                window.miniaturize()
+            }
         }
     }
 
@@ -607,6 +626,11 @@ class ApplicationState : AutoCloseable {
                     title = "Drecrease Size",
                     keystroke = Keystroke(key = "-", modifiers = KeyModifiersSet.create(command = true)),
                     perform = { changeCurrentWindowSize(-50.0) },
+                ),
+                AppMenuItem.Action(
+                    title = "Toggle Miniaturize first Window",
+                    keystroke = Keystroke(key = "m", modifiers = KeyModifiersSet.create(command = true, option = true)),
+                    perform = { toggleMiniaturizationOfFirstWindow() },
                 ),
                 AppMenuItem.Action(
                     title = "Make Window Transparent",

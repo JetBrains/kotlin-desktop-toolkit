@@ -172,6 +172,32 @@ public class Window internal constructor(
         }
     }
 
+    /*
+     * Though it's calls macOS maximize in maximized state it actually shrinks it back,
+     * so it's toggle
+     */
+    public fun toggleMaximize() {
+        ffiDownCall {
+            desktop_macos_h.window_maximize(pointer)
+        }
+    }
+
+    public val isMaximized: Boolean get() = ffiDownCall { desktop_macos_h.window_is_maximized(pointer) }
+
+    public fun miniaturize() {
+        ffiDownCall {
+            desktop_macos_h.window_miniaturize(pointer)
+        }
+    }
+
+    public fun deminiaturize() {
+        ffiDownCall {
+            desktop_macos_h.window_deminiaturize(pointer)
+        }
+    }
+
+    public val isMiniaturized: Boolean get() = ffiDownCall { desktop_macos_h.window_is_miniaturized(pointer) }
+
     public val isKey: Boolean
         get() {
             return ffiDownCall { desktop_macos_h.window_is_key(pointer) }

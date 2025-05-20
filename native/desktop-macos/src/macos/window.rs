@@ -474,6 +474,7 @@ pub(crate) struct MyNSWindowIvars {}
 
 define_class!(
     #[unsafe(super(NSWindow))]
+    #[thread_kind = MainThreadOnly]
     #[name = "MyNSWindow"]
     #[ivars = MyNSWindowIvars]
     pub(crate) struct MyNSWindow;
