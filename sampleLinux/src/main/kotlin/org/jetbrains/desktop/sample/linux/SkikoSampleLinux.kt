@@ -800,13 +800,16 @@ class ContentArea(
                     window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Copy)
                     currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
                 } else {
-                    window.startDrag(listOf(TEXT_MIME_TYPE), DragAction.Copy)
-                    currentDragContent = editorState.getCurrentSelection()?.let { DataTransferContentType.Text(it) }
+                    currentDragContent = editorState.getCurrentSelection()?.let {
+                        window.startDrag(listOf(TEXT_MIME_TYPE), DragAction.Copy)
+                        DataTransferContentType.Text(it)
+                    }
                 }
                 EventHandlerResult.Stop
             }
             is Event.MouseUp -> {
                 currentDragContent = null
+                Logger.info { "$window: currentDragContent = null" }
                 EventHandlerResult.Stop
             }
             is Event.TextInput -> {

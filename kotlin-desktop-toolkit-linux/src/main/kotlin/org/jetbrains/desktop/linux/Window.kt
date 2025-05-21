@@ -30,6 +30,10 @@ public class Window internal constructor(
         }
     }
 
+    override fun toString(): String {
+        return "${javaClass.typeName}(windowId=$windowId, appPtr=0x${appPtr.address().toString(16)})"
+    }
+
     public fun windowId(): WindowId {
         return windowId
     }

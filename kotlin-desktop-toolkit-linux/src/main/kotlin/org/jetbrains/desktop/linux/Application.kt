@@ -77,6 +77,10 @@ public class Application() : AutoCloseable {
         }
     }
 
+    override fun toString(): String {
+        return "${javaClass.typeName}(ptr=0x${appPtr?.address()?.toString(16)})"
+    }
+
     // called from native
     private fun onEvent(nativeEvent: MemorySegment, windowId: WindowId): Boolean {
         val event = Event.fromNative(nativeEvent)

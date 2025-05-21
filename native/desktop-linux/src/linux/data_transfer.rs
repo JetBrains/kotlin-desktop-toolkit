@@ -152,7 +152,8 @@ impl DataSourceHandler for ApplicationState {
         };
         let mime_cstr = CString::new(mime).unwrap();
         let data = (self.callbacks.get_data_transfer_data)(data_type, BorrowedStrPtr::new(&mime_cstr));
-        fd.write_all(data.as_slice().unwrap()).unwrap();
+        fd.write_all(data.as_slice().expect("Null transfer data"))
+            .expect("Write to data source failed");
         data.deinit();
     }
 
