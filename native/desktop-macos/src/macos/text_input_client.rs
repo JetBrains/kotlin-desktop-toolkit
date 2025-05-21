@@ -12,13 +12,12 @@ use objc2_foundation::{
     NSArray, NSAttributedString, NSAttributedStringKey, NSNotFound, NSPoint, NSRange, NSRangePointer, NSRect, NSString, NSUInteger,
 };
 
+use super::{application_api::MyNSApplication, string::borrow_ns_string, window_api::WindowPtr};
 use crate::{
     geometry::{LogicalPoint, LogicalRect},
-    macos::{screen::NSScreenExts, string::copy_to_ns_string, window::Window},
+    macos::{screen::NSScreenExts, string::copy_nonnull_to_ns_string, window::Window},
 };
 use desktop_common::{ffi_utils::BorrowedStrPtr, logger::ffi_boundary};
-
-use super::{application_api::MyNSApplication, string::borrow_ns_string, window_api::WindowPtr};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -183,12 +182,7 @@ impl TextInputClientHandler {
         actual_range: NSRangePointer,
     ) -> anyhow::Result<Option<Retained<NSAttributedString>>> {
         let result = (self.client.attributed_string_for_range)(range.into());
-        let ns_string = if result.string.is_not_null() {
-            let ns_string = copy_to_ns_string(&result.string)?;
-            Some(ns_string)
-        } else {
-            None
-        };
+        let ns_string = result.string.as_non_null().map(copy_nonnull_to_ns_string).transpose()?;
         write_to_range_ptr(actual_range, result.actual_range.into());
         (self.client.free_attributed_string_for_range)();
         debug!(

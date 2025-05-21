@@ -1,0 +1,17 @@
+[package]
+name = "desktop-linux-sample"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "desktop-linux-sample"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+log4rs.workspace = true
+desktop-common = { path = "../desktop-common" }
+desktop-linux = { path = "../desktop-linux" }
