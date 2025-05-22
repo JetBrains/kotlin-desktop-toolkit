@@ -159,7 +159,7 @@ impl Window {
 
         NSWindowStyleMask::Titled and NSWindowStyleMask::Borderless
         This two are both represented by the same bit.
-        Whem window is borderles it can't become key or main, and there is no decorations
+        When window is borderles it can't become key or main, and there is no decorations
 
         NSWindowStyleMask::Closable
         NSWindowStyleMask::Miniaturizable
@@ -194,13 +194,6 @@ impl Window {
         let frame = LogicalRect::new(params.origin, params.size).as_macos_coords(screen_height);
         let content_rect = unsafe { NSWindow::contentRectForFrameRect_styleMask(frame, style, mtm) };
         let ns_window = MyNSWindow::new(mtm, content_rect, style);
-        let custom_titlebar = if params.use_custom_titlebar {
-            // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
-            let titlebar = CustomTitlebar::init_custom_titlebar(&ns_window, params.titlebar_height);
-            Some(titlebar)
-        } else {
-            None
-        };
 
         let mut collection_behaviour: NSWindowCollectionBehavior = unsafe { ns_window.collectionBehavior() };
         if params.is_full_screen_allowed {
@@ -227,7 +220,14 @@ impl Window {
         unsafe {
             ns_window.setRestorable(false);
         }
-
+        
+        let custom_titlebar = if params.use_custom_titlebar {
+            // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
+            let titlebar = CustomTitlebar::init_custom_titlebar(&ns_window, params.titlebar_height);
+            Some(titlebar)
+        } else {
+            None
+        };
         let delegate = WindowDelegate::new(mtm, ns_window.clone(), custom_titlebar.clone());
         ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
 
