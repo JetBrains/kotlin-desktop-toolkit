@@ -152,6 +152,9 @@ private fun ExecOperations.compileRust(
 ) {
     exec {
         workingDir = nativeDirectory.toFile()
+        if (rustTarget.os == Os.MACOS) {
+            environment("MACOSX_DEPLOYMENT_TARGET", "10.12")
+        }
         commandLine(
             findCommand("cargo", rustTarget.os),
             "build",
