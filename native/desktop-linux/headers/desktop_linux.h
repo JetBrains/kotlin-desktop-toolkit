@@ -407,6 +407,7 @@ typedef struct NativeBorrowedArray_u8 {
 } NativeBorrowedArray_u8;
 
 typedef struct NativeDataTransferContent {
+  int32_t serial;
   struct NativeBorrowedArray_u8 data;
   NativeBorrowedStrPtr mime_types;
 } NativeDataTransferContent;
@@ -871,8 +872,9 @@ void window_set_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
 
 void window_unset_fullscreen(NativeAppPtr app_ptr, NativeWindowId window_id);
 
-void window_clipboard_paste(NativeAppPtr app_ptr,
+bool window_clipboard_paste(NativeAppPtr app_ptr,
                             NativeWindowId window_id,
+                            int32_t serial,
                             NativeBorrowedStrPtr supported_mime_types);
 
 struct NativeExceptionsArray logger_check_exceptions(void);

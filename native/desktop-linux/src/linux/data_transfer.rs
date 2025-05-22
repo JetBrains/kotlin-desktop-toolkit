@@ -5,7 +5,7 @@ use std::{
 };
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
-use log::{debug, warn};
+use log::{debug, error, warn};
 use smithay_client_toolkit::{
     data_device_manager::{
         WritePipe,
@@ -115,7 +115,7 @@ impl DataDeviceHandler for ApplicationState {
                 debug!("DataDeviceHandler::drop_performed value: {buf:?}");
                 if let Some(key_window) = state.get_window(&drag_offer.surface) {
                     let mime_type_cstr = CString::from_str(&mime_type).unwrap();
-                    (key_window.event_handler)(&DataTransferContent::new(&buf, &mime_type_cstr).into());
+                    (key_window.event_handler)(&DataTransferContent::new(-1, &buf, &mime_type_cstr).into());
                 } else {
                     warn!("DataDeviceHandler::drop_performed: No target window");
                 }
@@ -152,9 +152,13 @@ impl DataSourceHandler for ApplicationState {
         };
         let mime_cstr = CString::new(mime).unwrap();
         let data = (self.callbacks.get_data_transfer_data)(data_type, BorrowedStrPtr::new(&mime_cstr));
-        fd.write_all(data.as_slice().expect("Null transfer data"))
-            .expect("Write to data source failed");
-        data.deinit();
+        match data.as_slice() {
+            Ok(slice) => {
+                fd.write_all(slice).expect("Write to data source failed");
+                data.deinit();
+            }
+            Err(e) => error!("Error sending clipboard data: {e}"),
+        }
     }
 
     fn cancelled(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &WlDataSource) {

@@ -81,6 +81,29 @@ impl Application<'static> {
             .unwrap();
     }
 
+    pub fn event_loop_iteration(&mut self) -> Result<bool, anyhow::Error> {
+        self.event_loop.dispatch(Duration::from_millis(16), &mut self.state)?;
+
+        self.state.windows.retain(|k, v| {
+            if v.close {
+                debug!("Closing window {k}");
+                self.state.window_id_to_surface_id.retain(|_window_id, surface_id| k != surface_id);
+                false
+            } else {
+                true
+            }
+        });
+
+        if self.exit && (self.state.callbacks.on_should_terminate)() {
+            debug!("Exiting");
+            (self.state.callbacks.on_will_terminate)();
+            self.state.windows.clear();
+            Ok(false)
+        } else {
+            Ok(true)
+        }
+    }
+
     pub fn run(&mut self) -> Result<(), anyhow::Error> {
         debug!("Application event loop: starting");
 
@@ -90,24 +113,7 @@ impl Application<'static> {
         self.state.event_loop_thread_id = Some(std::thread::current().id());
         (self.state.callbacks.on_application_started)();
 
-        loop {
-            self.event_loop.dispatch(Duration::from_millis(16), &mut self.state)?;
-            if !self.state.windows.is_empty() {
-                self.state.windows.retain(|k, v| {
-                    if v.close {
-                        debug!("Closing window {k}");
-                        self.state.window_id_to_surface_id.retain(|_window_id, surface_id| k != surface_id);
-                    }
-                    !v.close
-                });
-            }
-
-            if self.exit && (self.state.callbacks.on_should_terminate)() {
-                debug!("Exiting");
-                (self.state.callbacks.on_will_terminate)();
-                self.state.windows.clear();
-                break;
-            }
+        while self.event_loop_iteration()? {
             // debug!("Application event loop: continuing");
         }
         debug!("Application event loop: stopped");
@@ -168,24 +174,24 @@ impl Application<'static> {
         }
     }
 
-    pub fn clipboard_paste(&self, window_id: WindowId, supported_mime_types: &str) -> anyhow::Result<()> {
+    pub fn clipboard_paste(&self, window_id: WindowId, serial: i32, supported_mime_types: &str) -> anyhow::Result<bool> {
         let Some(data_device) = self.state.data_device.as_ref() else {
             warn!("Application::clipboard_paste: No data device available");
-            return Ok(());
+            return Ok(false);
         };
         let Some(selection_offer) = data_device.data().selection_offer() else {
             debug!("Application::clipboard_paste: No selection offer found");
-            return Ok(());
+            return Ok(false);
         };
         let Some(mime_type) = selection_offer.with_mime_types(|mime_types| {
-            debug!("Application::clipboard_paste: offer MIME types: {mime_types:?}");
+            debug!("Application::clipboard_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
             supported_mime_types
                 .split(',')
                 .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
                 .map(str::to_owned)
         }) else {
             debug!("Application::clipboard_paste: clipboard content not supported");
-            return Ok(());
+            return Ok(false);
         };
 
         debug!("Application::clipboard_paste reading {mime_type}");
@@ -196,16 +202,16 @@ impl Application<'static> {
             let size = f.read_to_end(&mut buf).unwrap();
 
             debug!("Application::clipboard_paste read {size} bytes");
-            if let Some(key_window) = state.get_window_by_id(window_id) {
+            if let Some(target_window) = state.get_window_by_id(window_id) {
                 let mime_type_cstr = CString::from_str(&mime_type).unwrap();
-                (key_window.event_handler)(&DataTransferContent::new(&buf, &mime_type_cstr).into());
+                (target_window.event_handler)(&DataTransferContent::new(serial, &buf, &mime_type_cstr).into());
             } else {
-                warn!("Application::clipboard_paste: No key window");
+                warn!("Application::clipboard_paste: No target window");
             }
 
             PostAction::Remove
         })?;
-        Ok(())
+        Ok(true)
     }
 
     pub fn start_drag(&mut self, window_id: WindowId, mime_types: MimeTypes, action: DndAction) -> anyhow::Result<()> {

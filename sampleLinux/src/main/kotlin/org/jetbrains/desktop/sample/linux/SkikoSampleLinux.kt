@@ -323,11 +323,11 @@ class EditorState() {
                 } else if (modifiers.control) {
                     when (event.key.value) {
                         KeySym.V -> {
-                            window.clipboardPaste(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                            window.clipboardPaste(0, listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                             EventHandlerResult.Stop
                         }
                         KeySym.v -> {
-                            window.clipboardPaste(listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
+                            window.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
                             EventHandlerResult.Stop
                         }
                         KeySym.C -> {

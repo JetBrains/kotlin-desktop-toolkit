@@ -52,7 +52,7 @@ public data class ApplicationConfig(
     val onXdgDesktopSettingsChange: (XdgDesktopSetting) -> Unit,
     val eventHandler: EventHandler,
     val getDragAndDropSupportedMimeTypes: (DragAndDropQueryData) -> List<String>,
-    val getDataTransferData: (DataSource, String) -> ByteArray,
+    val getDataTransferData: (DataSource, String) -> ByteArray?,
 )
 
 public class Application() : AutoCloseable {
@@ -109,15 +109,9 @@ public class Application() : AutoCloseable {
         }
         val mimeType = nativeMimeType.getUtf8String(0)
         return ffiUpCall(defaultResult = MemorySegment.NULL) {
-            val result = applicationConfig?.getDataTransferData(dataSource, mimeType) ?: ByteArray(0)
+            val result = applicationConfig?.getDataTransferData(dataSource, mimeType)
             val arena = Arena.ofConfined()
             val nativeResult = result.toNative(arena)
-            NativeBorrowedArray_u8.deinit(
-                nativeResult,
-                NativeBorrowedArray_u8.deinit.allocate({ ptr, len ->
-                    arena.close()
-                }, arena),
-            )
             nativeResult
         }
     }

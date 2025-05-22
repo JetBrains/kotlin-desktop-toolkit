@@ -324,15 +324,24 @@ internal fun mimeTypesToNative(arena: Arena, mimeTypes: List<String>): MemorySeg
     return arena.allocateUtf8String(mimeTypes.joinToString(","))
 }
 
-internal fun ByteArray.toNative(arena: Arena): MemorySegment {
+internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
     val nativeDataArray = NativeBorrowedArray_u8.allocate(arena)
-    NativeBorrowedArray_u8.len(nativeDataArray, size.toLong())
-    val nativeArray = arena.allocate(MemoryLayout.sequenceLayout(size.toLong(), desktop_linux_h.C_CHAR))
-    this.forEachIndexed { i, b ->
-        nativeArray.setAtIndex(desktop_linux_h.C_CHAR, i.toLong(), b)
-    }
+    if (this == null) {
+        NativeBorrowedArray_u8.len(nativeDataArray, 0)
+        NativeBorrowedArray_u8.ptr(nativeDataArray, MemorySegment.NULL)
+    } else {
+        NativeBorrowedArray_u8.len(nativeDataArray, size.toLong())
+        val nativeArray = arena.allocate(MemoryLayout.sequenceLayout(size.toLong(), desktop_linux_h.C_CHAR))
+        this.forEachIndexed { i, b ->
+            nativeArray.setAtIndex(desktop_linux_h.C_CHAR, i.toLong(), b)
+        }
 
-    NativeBorrowedArray_u8.ptr(nativeDataArray, nativeArray)
+        NativeBorrowedArray_u8.ptr(nativeDataArray, nativeArray)
+
+        NativeBorrowedArray_u8.deinit(nativeDataArray, NativeBorrowedArray_u8.deinit.allocate({ ptr, len ->
+            arena.close()
+        }, arena))
+    }
 
     return nativeDataArray
 }
@@ -354,7 +363,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
         desktop_linux_h.NativeEvent_DataTransfer() -> {
             val nativeEvent = NativeEvent.data_transfer(s)
-            Event.DataTransfer(data = DataTransferContent.fromNative(nativeEvent))
+            Event.DataTransfer(
+                serial = NativeDataTransferContent.serial(nativeEvent),
+                data = DataTransferContent.fromNative(nativeEvent),
+            )
         }
         desktop_linux_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)

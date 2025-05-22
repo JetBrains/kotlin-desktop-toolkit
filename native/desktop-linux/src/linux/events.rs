@@ -71,6 +71,7 @@ pub struct KeyCode(pub u32);
 #[repr(C)]
 #[derive(Debug)]
 pub struct DataTransferContent<'a> {
+    pub serial: i32,
     pub data: BorrowedArray<'a, u8>,
     pub mime_types: BorrowedStrPtr<'a>,
 }
@@ -83,8 +84,9 @@ impl<'a> From<DataTransferContent<'a>> for Event<'a> {
 
 impl<'a> DataTransferContent<'a> {
     #[must_use]
-    pub fn new(data: &'a [u8], mime_types: &'a CStr) -> Self {
+    pub fn new(serial: i32, data: &'a [u8], mime_types: &'a CStr) -> Self {
         Self {
+            serial,
             data: BorrowedArray::from_slice(data),
             mime_types: BorrowedStrPtr::new(mime_types),
         }

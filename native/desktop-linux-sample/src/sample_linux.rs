@@ -308,7 +308,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                 }
                 _ => {
                     if data.code.0 == 47 && window_state.key_modifiers.ctrl {
-                        window_clipboard_paste(state.app_ptr.clone(), window_id, BorrowedStrPtr::new(TEXT_MIME_TYPE));
+                        window_clipboard_paste(state.app_ptr.clone(), window_id, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
                     } else if data.code.0 == 46 && window_state.key_modifiers.ctrl {
                         application_clipboard_put(state.app_ptr.clone(), BorrowedStrPtr::new(ALL_MIMES));
                     } else if let Some(event_chars) = data.characters.as_optional_str().unwrap() {

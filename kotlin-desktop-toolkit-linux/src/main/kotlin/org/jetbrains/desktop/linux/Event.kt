@@ -45,6 +45,7 @@ public sealed class Event {
     internal companion object;
 
     public data class DataTransfer(
+        val serial: Int,
         val data: DataTransferContent,
     ) : Event()
 
