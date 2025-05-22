@@ -508,7 +508,14 @@ class ApplicationState : AutoCloseable {
                     "Open...",
                     keystroke = Keystroke(key = "o", modifiers = KeyModifiersSet.create(command = true, shift = true)),
                     perform = {
-                        val path = FileDialog.showModal(FileDialog.DialogParams())
+                        val path = FileDialog.showOpenFileDialog(
+                            params = FileDialog.CommonDialogParams(
+                                title = "Hello Dialog",
+                                prompt = "Acceptable",
+                                directoryUrl = "/Users/pavel.sergeev/AndroidStudioProjects",
+                            ),
+                            openDialogParams = FileDialog.OpenDialogParams(allowsMultipleSelections = true),
+                        )
                         println("openFileDialog callback received $path")
                     },
                 ),

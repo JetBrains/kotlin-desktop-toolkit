@@ -404,11 +404,25 @@ typedef void (*NativeDisplayLinkCallback)(void);
 
 typedef uint32_t NativeMouseButtonsSet;
 
-typedef struct NativeFileDialogParams {
-  bool allow_file;
-  bool allow_folder;
-  bool allow_multiple_selection;
-} NativeFileDialogParams;
+typedef struct NativeCommonFileDialogParams {
+  NativeBorrowedStrPtr title;
+  NativeBorrowedStrPtr prompt;
+  NativeBorrowedStrPtr message;
+  NativeBorrowedStrPtr name_field_label;
+  NativeBorrowedStrPtr name_field_string_value;
+  NativeBorrowedStrPtr directory_url;
+  bool can_create_directories;
+  bool can_select_hidden_extension;
+  bool shows_hidden_files;
+  bool extensions_hidden;
+} NativeCommonFileDialogParams;
+
+typedef struct NativeOpenFileDialogParams {
+  bool can_choose_files;
+  bool can_choose_directories;
+  bool resolves_aliases;
+  bool allows_multiple_selection;
+} NativeOpenFileDialogParams;
 
 typedef void *NativeMetalDeviceRef;
 
@@ -664,7 +678,10 @@ NativeKeyModifiersSet events_pressed_modifiers(void);
 
 struct NativeLogicalPoint events_cursor_location_in_screen(void);
 
-NativeRustAllocatedStrPtr file_dialog_run_modal(struct NativeFileDialogParams params);
+struct NativeAutoDropArray_RustAllocatedStrPtr open_file_dialog_run_modal(const struct NativeCommonFileDialogParams *common_params,
+                                                                          const struct NativeOpenFileDialogParams *params);
+
+NativeRustAllocatedStrPtr save_file_dialog_run_modal(const struct NativeCommonFileDialogParams *common_params);
 
 NativeMetalDeviceRef metal_create_device(void);
 
@@ -709,6 +726,8 @@ void screen_list_drop(NativeScreenInfoArray arr);
 NativeScreenId screen_get_main_screen_id(void);
 
 void string_drop(NativeRustAllocatedStrPtr str_ptr);
+
+void string_array_drop(struct NativeAutoDropArray_RustAllocatedStrPtr str_array);
 
 bool text_input_context_handle_current_event(NativeWindowPtr window_ptr);
 

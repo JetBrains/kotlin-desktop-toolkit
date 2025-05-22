@@ -5,7 +5,7 @@ use objc2::rc::Retained;
 use objc2_foundation::NSString;
 
 use desktop_common::{
-    ffi_utils::{BorrowedStrPtr, RustAllocatedStrPtr},
+    ffi_utils::{AutoDropArray, BorrowedStrPtr, RustAllocatedStrPtr},
     logger::ffi_boundary,
 };
 
@@ -13,6 +13,14 @@ use desktop_common::{
 pub extern "C" fn string_drop(mut str_ptr: RustAllocatedStrPtr) {
     ffi_boundary("string_drop", || {
         str_ptr.deallocate();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn string_array_drop(str_array: AutoDropArray<RustAllocatedStrPtr>) {
+    ffi_boundary("string_array_drop", || {
+        drop(str_array);
         Ok(())
     });
 }

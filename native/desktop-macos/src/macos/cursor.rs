@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use desktop_common::logger::{PanicDefault, ffi_boundary};
-use objc2::{available, msg_send, rc::Retained, ClassType};
+use objc2::{ClassType, available, msg_send, rc::Retained};
 use objc2_app_kit::{NSCursor, NSHorizontalDirections, NSVerticalDirections};
 
 #[unsafe(no_mangle)]
@@ -107,7 +107,7 @@ impl CursorIconsCache {
                     #[allow(deprecated)]
                     NSCursor::resizeLeftCursor()
                 }
-            },
+            }
             CursorIcon::ResizeRightCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::Right) }
@@ -115,7 +115,7 @@ impl CursorIconsCache {
                     #[allow(deprecated)]
                     NSCursor::resizeRightCursor()
                 }
-            },
+            }
             CursorIcon::ResizeLeftRightCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::All) }
@@ -123,7 +123,7 @@ impl CursorIconsCache {
                     #[allow(deprecated)]
                     NSCursor::resizeLeftRightCursor()
                 }
-            },
+            }
             CursorIcon::ResizeUpCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::Up) }
@@ -131,7 +131,7 @@ impl CursorIconsCache {
                     #[allow(deprecated)]
                     NSCursor::resizeUpCursor()
                 }
-            },
+            }
             CursorIcon::ResizeDownCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::Down) }
@@ -139,7 +139,7 @@ impl CursorIconsCache {
                     #[allow(deprecated)]
                     NSCursor::resizeDownCursor()
                 }
-            },
+            }
             CursorIcon::ResizeUpDownCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::All) }
@@ -147,7 +147,7 @@ impl CursorIconsCache {
                     #[allow(deprecated)]
                     NSCursor::resizeUpDownCursor()
                 }
-            },
+            }
 
             // Next two is undocumented
             // see: https://stackoverflow.com/questions/27242353/cocoa-predefined-resize-mouse-cursor

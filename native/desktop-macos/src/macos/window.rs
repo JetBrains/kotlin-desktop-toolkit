@@ -220,7 +220,7 @@ impl Window {
         unsafe {
             ns_window.setRestorable(false);
         }
-        
+
         let custom_titlebar = if params.use_custom_titlebar {
             // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
             let titlebar = CustomTitlebar::init_custom_titlebar(&ns_window, params.titlebar_height);
