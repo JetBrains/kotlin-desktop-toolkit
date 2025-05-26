@@ -10,14 +10,14 @@ public object Cursor {
         ClosedHandCursor,
         OpenHandCursor,
         PointingHandCursor,
-        ResizeLeftCursor,
-        ResizeRightCursor,
-        ResizeLeftRightCursor,
-        ResizeUpCursor,
-        ResizeDownCursor,
-        ResizeUpDownCursor,
-        ResizeUpLeftDownRightCursor,
-        ResizeUpRightDownLeftCursor,
+        ColumnResizeLeftCursor,
+        ColumnResizeRightCursor,
+        ColumnResizeLeftRightCursor,
+        RowResizeUpCursor,
+        RowResizeDownCursor,
+        RowResizeUpDownCursor,
+        FrameResizeUpLeftDownRightCursor,
+        FrameResizeUpRightDownLeftCursor,
         DisappearingItemCursor,
         IBeamCursorForVerticalLayout,
         OperationNotAllowedCursor,
@@ -26,8 +26,6 @@ public object Cursor {
         ContextualMenuCursor,
         ZoomInCursor,
         ZoomOutCursor,
-        ColumnResizeCursor,
-        RowResizeCursor,
         ;
 
         internal fun toNative(): Int {
@@ -38,14 +36,14 @@ public object Cursor {
                 ClosedHandCursor -> desktop_macos_h.NativeCursorIcon_ClosedHandCursor()
                 OpenHandCursor -> desktop_macos_h.NativeCursorIcon_OpenHandCursor()
                 PointingHandCursor -> desktop_macos_h.NativeCursorIcon_PointingHandCursor()
-                ResizeLeftCursor -> desktop_macos_h.NativeCursorIcon_ResizeLeftCursor()
-                ResizeRightCursor -> desktop_macos_h.NativeCursorIcon_ResizeRightCursor()
-                ResizeLeftRightCursor -> desktop_macos_h.NativeCursorIcon_ResizeLeftRightCursor()
-                ResizeUpCursor -> desktop_macos_h.NativeCursorIcon_ResizeUpCursor()
-                ResizeDownCursor -> desktop_macos_h.NativeCursorIcon_ResizeDownCursor()
-                ResizeUpDownCursor -> desktop_macos_h.NativeCursorIcon_ResizeUpDownCursor()
-                ResizeUpLeftDownRightCursor -> desktop_macos_h.NativeCursorIcon_ResizeUpLeftDownRight()
-                ResizeUpRightDownLeftCursor -> desktop_macos_h.NativeCursorIcon_ResizeUpRightDownLeft()
+                ColumnResizeLeftCursor -> desktop_macos_h.NativeCursorIcon_ColumnResizeLeftCursor()
+                ColumnResizeRightCursor -> desktop_macos_h.NativeCursorIcon_ColumnResizeRightCursor()
+                ColumnResizeLeftRightCursor -> desktop_macos_h.NativeCursorIcon_ColumnResizeLeftRightCursor()
+                RowResizeUpCursor -> desktop_macos_h.NativeCursorIcon_RowResizeUpCursor()
+                RowResizeDownCursor -> desktop_macos_h.NativeCursorIcon_RowResizeDownCursor()
+                RowResizeUpDownCursor -> desktop_macos_h.NativeCursorIcon_RowResizeUpDownCursor()
+                FrameResizeUpLeftDownRightCursor -> desktop_macos_h.NativeCursorIcon_FrameResizeUpLeftDownRight()
+                FrameResizeUpRightDownLeftCursor -> desktop_macos_h.NativeCursorIcon_FrameResizeUpRightDownLeft()
                 DisappearingItemCursor -> desktop_macos_h.NativeCursorIcon_DisappearingItemCursor()
                 IBeamCursorForVerticalLayout -> desktop_macos_h.NativeCursorIcon_IBeamCursorForVerticalLayout()
                 OperationNotAllowedCursor -> desktop_macos_h.NativeCursorIcon_OperationNotAllowedCursor()
@@ -54,8 +52,6 @@ public object Cursor {
                 ContextualMenuCursor -> desktop_macos_h.NativeCursorIcon_ContextualMenuCursor()
                 ZoomInCursor -> desktop_macos_h.NativeCursorIcon_ZoomInCursor()
                 ZoomOutCursor -> desktop_macos_h.NativeCursorIcon_ZoomOutCursor()
-                ColumnResizeCursor -> desktop_macos_h.NativeCursorIcon_ColumnResizeCursor()
-                RowResizeCursor -> desktop_macos_h.NativeCursorIcon_RowResizeCursor()
             }
         }
 
@@ -70,14 +66,14 @@ public object Cursor {
                     desktop_macos_h.NativeCursorIcon_ClosedHandCursor() -> ClosedHandCursor
                     desktop_macos_h.NativeCursorIcon_OpenHandCursor() -> OpenHandCursor
                     desktop_macos_h.NativeCursorIcon_PointingHandCursor() -> PointingHandCursor
-                    desktop_macos_h.NativeCursorIcon_ResizeLeftCursor() -> ResizeLeftCursor
-                    desktop_macos_h.NativeCursorIcon_ResizeRightCursor() -> ResizeRightCursor
-                    desktop_macos_h.NativeCursorIcon_ResizeLeftRightCursor() -> ResizeLeftRightCursor
-                    desktop_macos_h.NativeCursorIcon_ResizeUpCursor() -> ResizeUpCursor
-                    desktop_macos_h.NativeCursorIcon_ResizeDownCursor() -> ResizeDownCursor
-                    desktop_macos_h.NativeCursorIcon_ResizeUpDownCursor() -> ResizeUpDownCursor
-                    desktop_macos_h.NativeCursorIcon_ResizeUpLeftDownRight() -> ResizeUpLeftDownRightCursor
-                    desktop_macos_h.NativeCursorIcon_ResizeUpRightDownLeft() -> ResizeUpRightDownLeftCursor
+                    desktop_macos_h.NativeCursorIcon_ColumnResizeLeftCursor() -> ColumnResizeLeftCursor
+                    desktop_macos_h.NativeCursorIcon_ColumnResizeRightCursor() -> ColumnResizeRightCursor
+                    desktop_macos_h.NativeCursorIcon_ColumnResizeLeftRightCursor() -> ColumnResizeLeftRightCursor
+                    desktop_macos_h.NativeCursorIcon_RowResizeUpCursor() -> RowResizeUpCursor
+                    desktop_macos_h.NativeCursorIcon_RowResizeDownCursor() -> RowResizeDownCursor
+                    desktop_macos_h.NativeCursorIcon_RowResizeUpDownCursor() -> RowResizeUpDownCursor
+                    desktop_macos_h.NativeCursorIcon_FrameResizeUpLeftDownRight() -> FrameResizeUpLeftDownRightCursor
+                    desktop_macos_h.NativeCursorIcon_FrameResizeUpRightDownLeft() -> FrameResizeUpRightDownLeftCursor
                     desktop_macos_h.NativeCursorIcon_DisappearingItemCursor() -> DisappearingItemCursor
                     desktop_macos_h.NativeCursorIcon_IBeamCursorForVerticalLayout() -> IBeamCursorForVerticalLayout
                     desktop_macos_h.NativeCursorIcon_OperationNotAllowedCursor() -> OperationNotAllowedCursor
@@ -86,8 +82,6 @@ public object Cursor {
                     desktop_macos_h.NativeCursorIcon_ContextualMenuCursor() -> ContextualMenuCursor
                     desktop_macos_h.NativeCursorIcon_ZoomInCursor() -> ZoomInCursor
                     desktop_macos_h.NativeCursorIcon_ZoomOutCursor() -> ZoomOutCursor
-                    desktop_macos_h.NativeCursorIcon_ColumnResizeCursor() -> ColumnResizeCursor
-                    desktop_macos_h.NativeCursorIcon_RowResizeCursor() -> RowResizeCursor
                     else -> throw Error("Unexpected cursor icon id: $value")
                 }
             }

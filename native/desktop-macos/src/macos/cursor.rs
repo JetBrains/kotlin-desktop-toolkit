@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use anyhow::Context;
 use desktop_common::logger::{PanicDefault, ffi_boundary};
 use objc2::{ClassType, available, msg_send, rc::Retained};
-use objc2_app_kit::{NSCursor, NSHorizontalDirections, NSVerticalDirections};
+use objc2_app_kit::{NSCursor, NSCursorFrameResizeDirections, NSCursorFrameResizePosition, NSHorizontalDirections, NSVerticalDirections};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn cursor_push_hide() {
@@ -91,6 +91,7 @@ impl CursorIconsCache {
             .with_context(|| format!("Unknown cursor: {cursor:?}"))
     }
 
+    #[allow(clippy::too_many_lines)]
     fn new_ns_cursor(icon: CursorIcon) -> Retained<NSCursor> {
         match icon {
             CursorIcon::ArrowCursor => NSCursor::arrowCursor(),
@@ -100,7 +101,7 @@ impl CursorIconsCache {
             CursorIcon::OpenHandCursor => NSCursor::openHandCursor(),
             CursorIcon::PointingHandCursor => NSCursor::pointingHandCursor(),
 
-            CursorIcon::ResizeLeftCursor => {
+            CursorIcon::ColumnResizeLeftCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::Left) }
                 } else {
@@ -108,7 +109,7 @@ impl CursorIconsCache {
                     NSCursor::resizeLeftCursor()
                 }
             }
-            CursorIcon::ResizeRightCursor => {
+            CursorIcon::ColumnResizeRightCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::Right) }
                 } else {
@@ -116,7 +117,7 @@ impl CursorIconsCache {
                     NSCursor::resizeRightCursor()
                 }
             }
-            CursorIcon::ResizeLeftRightCursor => {
+            CursorIcon::ColumnResizeLeftRightCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::All) }
                 } else {
@@ -124,7 +125,7 @@ impl CursorIconsCache {
                     NSCursor::resizeLeftRightCursor()
                 }
             }
-            CursorIcon::ResizeUpCursor => {
+            CursorIcon::RowResizeUpCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::Up) }
                 } else {
@@ -132,7 +133,7 @@ impl CursorIconsCache {
                     NSCursor::resizeUpCursor()
                 }
             }
-            CursorIcon::ResizeDownCursor => {
+            CursorIcon::RowResizeDownCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::Down) }
                 } else {
@@ -140,7 +141,7 @@ impl CursorIconsCache {
                     NSCursor::resizeDownCursor()
                 }
             }
-            CursorIcon::ResizeUpDownCursor => {
+            CursorIcon::RowResizeUpDownCursor => {
                 if available!(macos = 15.0) {
                     unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::All) }
                 } else {
@@ -149,10 +150,31 @@ impl CursorIconsCache {
                 }
             }
 
-            // Next two is undocumented
-            // see: https://stackoverflow.com/questions/27242353/cocoa-predefined-resize-mouse-cursor
-            CursorIcon::ResizeUpLeftDownRight => unsafe { msg_send![NSCursor::class(), _windowResizeNorthWestSouthEastCursor] },
-            CursorIcon::ResizeUpRightDownLeft => unsafe { msg_send![NSCursor::class(), _windowResizeNorthEastSouthWestCursor] },
+            //todo see: https://github.com/rust-windowing/winit/issues/3724
+            CursorIcon::FrameResizeUpLeftDownRight => {
+                if available!(macos = 15.0) {
+                    unsafe {
+                        NSCursor::frameResizeCursorFromPosition_inDirections(
+                            NSCursorFrameResizePosition::TopLeft,
+                            NSCursorFrameResizeDirections::All,
+                        )
+                    }
+                } else {
+                    unsafe { msg_send![NSCursor::class(), _windowResizeNorthWestSouthEastCursor] }
+                }
+            }
+            CursorIcon::FrameResizeUpRightDownLeft => {
+                if available!(macos = 15.0) {
+                    unsafe {
+                        NSCursor::frameResizeCursorFromPosition_inDirections(
+                            NSCursorFrameResizePosition::TopRight,
+                            NSCursorFrameResizeDirections::All,
+                        )
+                    }
+                } else {
+                    unsafe { msg_send![NSCursor::class(), _windowResizeNorthEastSouthWestCursor] }
+                }
+            }
 
             CursorIcon::DisappearingItemCursor => NSCursor::disappearingItemCursor(),
             CursorIcon::IBeamCursorForVerticalLayout => NSCursor::IBeamCursorForVerticalLayout(),
@@ -160,10 +182,21 @@ impl CursorIconsCache {
             CursorIcon::DragLinkCursor => NSCursor::dragLinkCursor(),
             CursorIcon::DragCopyCursor => NSCursor::dragCopyCursor(),
             CursorIcon::ContextualMenuCursor => NSCursor::contextualMenuCursor(),
-            CursorIcon::ZoomInCursor => unsafe { NSCursor::zoomInCursor() },
-            CursorIcon::ZoomOutCursor => unsafe { NSCursor::zoomOutCursor() },
-            CursorIcon::ColumnResizeCursor => unsafe { NSCursor::columnResizeCursor() },
-            CursorIcon::RowResizeCursor => unsafe { NSCursor::rowResizeCursor() },
+
+            CursorIcon::ZoomInCursor => {
+                if available!(macos = 15.0) {
+                    unsafe { NSCursor::zoomInCursor() }
+                } else {
+                    unsafe { msg_send![NSCursor::class(), _zoomInCursor] }
+                }
+            }
+            CursorIcon::ZoomOutCursor => {
+                if available!(macos = 15.0) {
+                    unsafe { NSCursor::zoomOutCursor() }
+                } else {
+                    unsafe { msg_send![NSCursor::class(), _zoomOutCursor] }
+                }
+            }
             CursorIcon::Unknown => panic!("Can't create Unknown cursor"),
         }
     }
@@ -180,15 +213,15 @@ pub enum CursorIcon {
     OpenHandCursor,
     PointingHandCursor,
 
-    ResizeLeftCursor,
-    ResizeRightCursor,
-    ResizeLeftRightCursor,
-    ResizeUpCursor,
-    ResizeDownCursor,
-    ResizeUpDownCursor,
+    ColumnResizeLeftCursor,
+    ColumnResizeRightCursor,
+    ColumnResizeLeftRightCursor,
+    RowResizeUpCursor,
+    RowResizeDownCursor,
+    RowResizeUpDownCursor,
 
-    ResizeUpLeftDownRight,
-    ResizeUpRightDownLeft,
+    FrameResizeUpLeftDownRight,
+    FrameResizeUpRightDownLeft,
 
     DisappearingItemCursor,
     IBeamCursorForVerticalLayout,
@@ -198,6 +231,4 @@ pub enum CursorIcon {
     ContextualMenuCursor,
     ZoomInCursor,
     ZoomOutCursor,
-    ColumnResizeCursor,
-    RowResizeCursor,
 }
