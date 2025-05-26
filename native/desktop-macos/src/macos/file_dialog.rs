@@ -12,7 +12,7 @@ use crate::macos::string::copy_to_ns_string;
 
 use super::{string::copy_to_c_string, url::url_to_file_path_string};
 
-// see the dock: https://developer.apple.com/documentation/appkit/nssavepanel?language=objc
+// see the doc: https://developer.apple.com/documentation/appkit/nssavepanel?language=objc
 #[repr(C)]
 pub struct CommonFileDialogParams<'a> {
     // Appearance
