@@ -51,6 +51,14 @@ public sealed class Event {
             return MouseButtonsSet(ffiDownCall { desktop_macos_h.events_pressed_mouse_buttons() })
         }
 
+        /**
+         * It's also might be inconsistent, e.g. in the following case:
+         * 0. We alt tab to a window
+         * 0. Press modifier
+         * 1. Window gains focus
+         * 2. We expect that the pressed modifier will be counted in this state, but it's apparently not
+         * 3. We didn't get any modifiers changed event
+         */
         public fun pressedModifiers(): KeyModifiersSet {
             return KeyModifiersSet(ffiDownCall { desktop_macos_h.events_pressed_modifiers() })
         }
