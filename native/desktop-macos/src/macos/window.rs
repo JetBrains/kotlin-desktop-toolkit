@@ -195,6 +195,7 @@ impl Window {
         let content_rect = unsafe { NSWindow::contentRectForFrameRect_styleMask(frame, style, mtm) };
         let ns_window = MyNSWindow::new(mtm, content_rect, style);
 
+        NSWindow::setAllowsAutomaticWindowTabbing(false, mtm);
         let mut collection_behaviour: NSWindowCollectionBehavior = unsafe { ns_window.collectionBehavior() };
         if params.is_full_screen_allowed {
             collection_behaviour |= NSWindowCollectionBehavior::FullScreenPrimary;
