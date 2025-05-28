@@ -44,6 +44,9 @@ public data class WindowParams(
 public enum class DataSource {
     Clipboard,
     DragAndDrop,
+    ;
+
+    internal companion object
 }
 
 public data class ApplicationConfig(
@@ -52,6 +55,7 @@ public data class ApplicationConfig(
     val eventHandler: EventHandler,
     val getDragAndDropSupportedMimeTypes: (DragAndDropQueryData) -> List<String>,
     val getDataTransferData: (DataSource, String) -> ByteArray?,
+    val onDataTransferCancelled: (DataSource) -> Unit,
 )
 
 public class Application() : AutoCloseable {
@@ -101,11 +105,7 @@ public class Application() : AutoCloseable {
 
     // called from native
     private fun onGetDataTransferData(nativeDataSource: Int, nativeMimeType: MemorySegment): MemorySegment {
-        val dataSource = when (nativeDataSource) {
-            desktop_linux_h.NativeDataSource_Clipboard() -> DataSource.Clipboard
-            desktop_linux_h.NativeDataSource_DragAndDrop() -> DataSource.DragAndDrop
-            else -> error("Unexpected data source type $nativeDataSource")
-        }
+        val dataSource = DataSource.fromNative(nativeDataSource)
         val mimeType = nativeMimeType.getUtf8String(0)
         return ffiUpCall(defaultResult = MemorySegment.NULL) {
             val result = applicationConfig?.getDataTransferData(dataSource, mimeType)
@@ -121,6 +121,14 @@ public class Application() : AutoCloseable {
         return ffiUpCall(defaultResult = MemorySegment.NULL) {
             val result = applicationConfig?.getDragAndDropSupportedMimeTypes(queryData) ?: emptyList()
             mimeTypesToNative(result)
+        }
+    }
+
+    // called from native
+    private fun onDataTransferCancelled(nativeDataSource: Int) {
+        val dataSource = DataSource.fromNative(nativeDataSource)
+        ffiUpCall {
+            applicationConfig?.onDataTransferCancelled(dataSource)
         }
     }
 
@@ -169,8 +177,8 @@ public class Application() : AutoCloseable {
     private fun onWillTerminate() {
         Logger.info { "onWillTerminate" }
         // This method will never be executed because
-        // the application halt is performed immediately after that
-        // which means that JVM shutdown hooks might be interupted
+        // the application halt is performed immediately after that,
+        // which means that JVM shutdown hooks might be interrupted
         ffiUpCall {
         }
     }
@@ -216,6 +224,10 @@ public class Application() : AutoCloseable {
         NativeApplicationCallbacks.get_data_transfer_data(
             callbacks,
             NativeApplicationCallbacks.get_data_transfer_data.allocate(::onGetDataTransferData, arena),
+        )
+        NativeApplicationCallbacks.on_data_transfer_cancelled(
+            callbacks,
+            NativeApplicationCallbacks.on_data_transfer_cancelled.allocate(::onDataTransferCancelled, arena),
         )
         return callbacks
     }

@@ -2,6 +2,7 @@ package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
+import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailable
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
 import org.jetbrains.desktop.linux.generated.NativeEvent
@@ -320,6 +321,12 @@ internal fun DataTransferContent.Companion.fromNative(s: MemorySegment): DataTra
     )
 }
 
+internal fun DataSource.Companion.fromNative(nativeDataSource: Int): DataSource = when (nativeDataSource) {
+    desktop_linux_h.NativeDataSource_Clipboard() -> DataSource.Clipboard
+    desktop_linux_h.NativeDataSource_DragAndDrop() -> DataSource.DragAndDrop
+    else -> error("Unexpected data source type $nativeDataSource")
+}
+
 internal fun mimeTypesToNative(arena: Arena, mimeTypes: List<String>): MemorySegment {
     return arena.allocateUtf8String(mimeTypes.joinToString(","))
 }
@@ -364,6 +371,11 @@ internal fun DragAction.toNative(): Int = when (this) {
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
+        desktop_linux_h.NativeEvent_DataTransferAvailable() -> {
+            val nativeEvent = NativeEvent.data_transfer_available(s)
+            val mimeTypesString = NativeDataTransferAvailable.mime_types(nativeEvent).getUtf8String(0)
+            Event.DataTransferAvailable(mimeTypes = mimeTypesString.split(","))
+        }
         desktop_linux_h.NativeEvent_DataTransfer() -> {
             val nativeEvent = NativeEvent.data_transfer(s)
             Event.DataTransfer(

@@ -470,7 +470,7 @@ extern "C" fn on_application_started() {
     });
 }
 
-extern "C" fn drag_and_drop_query_handler(data: &DragAndDropQueryData) -> BorrowedStrPtr<'static> {
+extern "C" fn get_drag_and_drop_supported_mime_types(data: &DragAndDropQueryData) -> BorrowedStrPtr<'static> {
     if data.point.x.0 < 100. {
         BorrowedStrPtr::new(ALL_MIMES)
     } else {
@@ -489,7 +489,7 @@ fn leaked_string_data(s: &str) -> &'static [u8] {
     Box::leak(s.to_owned().into_boxed_str().into_boxed_bytes())
 }
 
-extern "C" fn get_data_source_data(source: DataSource, mime_type: BorrowedStrPtr) -> BorrowedArray<'static, u8> {
+extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedStrPtr) -> BorrowedArray<'static, u8> {
     let mime_type_cstr = mime_type.as_optional_cstr().unwrap().unwrap();
     let v = if mime_type_cstr == URI_LIST_MIME_TYPE {
         match source {
@@ -510,6 +510,10 @@ extern "C" fn get_data_source_data(source: DataSource, mime_type: BorrowedStrPtr
     a
 }
 
+extern "C" fn on_data_transfer_cancelled(source: DataSource) {
+    debug!("on_data_transfer_cancelled: {source:?}");
+}
+
 pub fn main() {
     logger_init_impl(&LoggerConfiguration {
         file_path: BorrowedStrPtr::new(c"/tmp/a"),
@@ -523,8 +527,9 @@ pub fn main() {
         on_display_configuration_change,
         on_xdg_desktop_settings_change,
         event_handler,
-        get_drag_and_drop_supported_mime_types: drag_and_drop_query_handler,
-        get_data_transfer_data: get_data_source_data,
+        get_drag_and_drop_supported_mime_types,
+        get_data_transfer_data,
+        on_data_transfer_cancelled,
     });
     STATE.with(|c| {
         c.replace(Some(State {
