@@ -1268,6 +1268,17 @@ class ApplicationState(private val app: Application) : AutoCloseable {
         }
     }
 
+    fun onDataTransferCancelled(dataSource: DataSource) {
+        when (dataSource) {
+            DataSource.Clipboard -> {
+                editorState.currentClipboard = null
+            }
+            DataSource.DragAndDrop -> {
+                windows.values.forEach { it.windowContainer.contentArea.currentDragContent = null }
+            }
+        }
+    }
+
     override fun close() {
         windows.values.forEach(AutoCloseable::close)
         windows.clear()
@@ -1297,6 +1308,9 @@ fun main(args: Array<String>) {
                 },
                 getDataTransferData = { dataSource, mimeType ->
                     state.getDataTransferData(dataSource, mimeType)
+                },
+                onDataTransferCancelled = { dataSource ->
+                    state.onDataTransferCancelled(dataSource)
                 },
             ),
         )

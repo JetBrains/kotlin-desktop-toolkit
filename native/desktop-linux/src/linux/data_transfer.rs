@@ -28,7 +28,7 @@ use smithay_client_toolkit::{
 use crate::linux::{
     application_api::{DataSource, DragAndDropQueryData},
     application_state::ApplicationState,
-    events::DataTransferContent,
+    events::{DataTransferAvailable, DataTransferContent},
     geometry::{LogicalPixels, LogicalPoint},
 };
 
@@ -78,14 +78,24 @@ impl DataDeviceHandler for ApplicationState {
         }
     }
 
-    fn selection(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice) {
-        if let Some(data_device) = &self.data_device {
-            if let Some(selection_offer) = data_device.data().selection_offer() {
-                selection_offer.with_mime_types(|mime_types| {
-                    debug!("DataDeviceHandler::selection: mime_types={mime_types:?}");
-                });
-            }
+    fn selection(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, wl_data_device: &WlDataDevice) {
+        let Some(data_device) = &self.data_device else { return };
+        if data_device.inner() != wl_data_device {
+            return;
         }
+        let Some(selection_offer) = data_device.data().selection_offer() else {
+            return;
+        };
+        selection_offer.with_mime_types(|mime_types| {
+            debug!("DataDeviceHandler::selection: mime_types={mime_types:?}");
+
+            if let Some(key_window) = self.get_key_window() {
+                let mime_types = CString::new(mime_types.join(",")).unwrap();
+                (key_window.event_handler)(&DataTransferAvailable::new(&mime_types).into());
+            } else {
+                warn!("DataDeviceHandler::selection: No target window");
+            }
+        });
     }
 
     fn drop_performed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice) {
@@ -113,9 +123,9 @@ impl DataDeviceHandler for ApplicationState {
 
                 debug!("DataDeviceHandler::drop_performed read {size} bytes for {mime_type}");
                 debug!("DataDeviceHandler::drop_performed value: {buf:?}");
-                if let Some(key_window) = state.get_window(&drag_offer.surface) {
+                if let Some(target_window) = state.get_window(&drag_offer.surface) {
                     let mime_type_cstr = CString::from_str(&mime_type).unwrap();
-                    (key_window.event_handler)(&DataTransferContent::new(-1, &buf, &mime_type_cstr).into());
+                    (target_window.event_handler)(&DataTransferContent::new(-1, &buf, &mime_type_cstr).into());
                 } else {
                     warn!("DataDeviceHandler::drop_performed: No target window");
                 }
@@ -163,10 +173,17 @@ impl DataSourceHandler for ApplicationState {
 
     fn cancelled(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &WlDataSource) {
         debug!("DataSourceHandler::cancelled");
-        if self.copy_paste_source.as_ref().map(CopyPasteSource::inner) == Some(source) {
+        let data_source = if self.copy_paste_source.as_ref().map(CopyPasteSource::inner) == Some(source) {
             self.copy_paste_source = None;
+            Some(DataSource::Clipboard)
         } else if self.drag_source.as_ref().map(DragSource::inner) == Some(source) {
             self.drag_source = None;
+            Some(DataSource::DragAndDrop)
+        } else {
+            None
+        };
+        if let Some(data_source) = data_source {
+            (self.callbacks.on_data_transfer_cancelled)(data_source);
         }
     }
 

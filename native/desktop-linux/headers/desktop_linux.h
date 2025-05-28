@@ -412,6 +412,10 @@ typedef struct NativeDataTransferContent {
   NativeBorrowedStrPtr mime_types;
 } NativeDataTransferContent;
 
+typedef struct NativeDataTransferAvailable {
+  NativeBorrowedStrPtr mime_types;
+} NativeDataTransferAvailable;
+
 typedef uint32_t NativeKeyCode;
 
 typedef struct NativeKeyDownEvent {
@@ -624,6 +628,7 @@ typedef struct NativeWindowScreenChangeEvent {
 
 typedef enum NativeEvent_Tag {
   NativeEvent_DataTransfer,
+  NativeEvent_DataTransferAvailable,
   NativeEvent_KeyDown,
   NativeEvent_KeyUp,
   NativeEvent_ModifiersChanged,
@@ -650,6 +655,9 @@ typedef struct NativeEvent {
   union {
     struct {
       struct NativeDataTransferContent data_transfer;
+    };
+    struct {
+      struct NativeDataTransferAvailable data_transfer_available;
     };
     struct {
       struct NativeKeyDownEvent key_down;
@@ -727,6 +735,7 @@ typedef struct NativeApplicationCallbacks {
   NativeBorrowedStrPtr (*get_drag_and_drop_supported_mime_types)(const struct NativeDragAndDropQueryData*);
   struct NativeBorrowedArray_u8 (*get_data_transfer_data)(enum NativeDataSource,
                                                           NativeBorrowedStrPtr);
+  void (*on_data_transfer_cancelled)(enum NativeDataSource);
 } NativeApplicationCallbacks;
 
 typedef NativeGenericRawPtr_c_void NativeBorrowedOpaquePtr;
