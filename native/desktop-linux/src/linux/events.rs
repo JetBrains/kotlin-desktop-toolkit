@@ -99,6 +99,27 @@ impl<'a> DataTransferContent<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct DataTransferAvailable<'a> {
+    pub mime_types: BorrowedStrPtr<'a>,
+}
+
+impl<'a> From<DataTransferAvailable<'a>> for Event<'a> {
+    fn from(value: DataTransferAvailable<'a>) -> Self {
+        Self::DataTransferAvailable(value)
+    }
+}
+
+impl<'a> DataTransferAvailable<'a> {
+    #[must_use]
+    pub const fn new(mime_types: &'a CStr) -> Self {
+        Self {
+            mime_types: BorrowedStrPtr::new(mime_types),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct KeyDownEvent<'a> {
     pub code: KeyCode,
     pub characters: BorrowedStrPtr<'a>,
@@ -521,6 +542,7 @@ impl From<WindowScreenChangeEvent> for Event<'_> {
 #[derive(Debug)]
 pub enum Event<'a> {
     DataTransfer(DataTransferContent<'a>),
+    DataTransferAvailable(DataTransferAvailable<'a>),
     KeyDown(KeyDownEvent<'a>),
     KeyUp(KeyUpEvent<'a>),
     ModifiersChanged(ModifiersChangedEvent),

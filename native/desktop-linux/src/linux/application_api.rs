@@ -42,6 +42,7 @@ pub struct ApplicationCallbacks {
     pub event_handler: EventHandler,
     pub get_drag_and_drop_supported_mime_types: extern "C" fn(&DragAndDropQueryData) -> BorrowedStrPtr<'static>,
     pub get_data_transfer_data: extern "C" fn(DataSource, BorrowedStrPtr) -> BorrowedArray<'static, u8>,
+    pub on_data_transfer_cancelled: extern "C" fn(DataSource),
 }
 
 pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
