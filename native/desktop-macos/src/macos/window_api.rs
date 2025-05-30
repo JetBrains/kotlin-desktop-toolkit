@@ -1,4 +1,4 @@
-use objc2_app_kit::NSAppearanceCustomization;
+use objc2_app_kit::{NSAppearanceCustomization, NSWindowOcclusionState};
 use objc2_foundation::MainThreadMarker;
 
 use desktop_common::{
@@ -327,6 +327,17 @@ pub extern "C" fn window_is_miniaturized(window_ptr: WindowPtr) -> bool {
         let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.isMiniaturized())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_is_visible(window_ptr: WindowPtr) -> bool {
+    ffi_boundary("window_is_visible", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let occlusion_state = window.ns_window.occlusionState();
+        let is_visible = occlusion_state.contains(NSWindowOcclusionState::Visible);
+        Ok(is_visible)
     })
 }
 

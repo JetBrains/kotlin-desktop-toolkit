@@ -246,6 +246,11 @@ typedef struct NativeWindowFullScreenToggleEvent {
   bool is_full_screen;
 } NativeWindowFullScreenToggleEvent;
 
+typedef struct NativeWindowChangedOcclusionStateEvent {
+  NativeWindowId window_id;
+  bool is_visible;
+} NativeWindowChangedOcclusionStateEvent;
+
 typedef struct NativeAutoDropArray_RustAllocatedStrPtr {
   const NativeRustAllocatedStrPtr *ptr;
   NativeArraySize len;
@@ -276,6 +281,7 @@ typedef enum NativeEvent_Tag {
   NativeEvent_WindowFocusChange,
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowFullScreenToggle,
+  NativeEvent_WindowChangedOcclusionState,
   NativeEvent_DisplayConfigurationChange,
   NativeEvent_ApplicationOpenUrls,
   NativeEvent_ApplicationDidFinishLaunching,
@@ -332,6 +338,9 @@ typedef struct NativeEvent {
     };
     struct {
       struct NativeWindowFullScreenToggleEvent window_full_screen_toggle;
+    };
+    struct {
+      struct NativeWindowChangedOcclusionStateEvent window_changed_occlusion_state;
     };
     struct {
       struct NativeApplicationOpenUrlsEvent application_open_urls;
@@ -807,6 +816,8 @@ void window_miniaturize(NativeWindowPtr window_ptr);
 void window_deminiaturize(NativeWindowPtr window_ptr);
 
 bool window_is_miniaturized(NativeWindowPtr window_ptr);
+
+bool window_is_visible(NativeWindowPtr window_ptr);
 
 void window_start_drag(NativeWindowPtr window_ptr);
 

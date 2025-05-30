@@ -13,6 +13,7 @@ import org.jetbrains.desktop.macos.generated.NativeMouseExitedEvent
 import org.jetbrains.desktop.macos.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.macos.generated.NativeMouseUpEvent
 import org.jetbrains.desktop.macos.generated.NativeScrollWheelEvent
+import org.jetbrains.desktop.macos.generated.NativeWindowChangedOcclusionStateEvent
 import org.jetbrains.desktop.macos.generated.NativeWindowCloseRequestEvent
 import org.jetbrains.desktop.macos.generated.NativeWindowFocusChangeEvent
 import org.jetbrains.desktop.macos.generated.NativeWindowFullScreenToggleEvent
@@ -174,6 +175,11 @@ public sealed class Event {
     public data class WindowFullScreenToggle(
         override val windowId: WindowId,
         val isFullScreen: Boolean,
+    ) : Event(), WindowEvent
+
+    public data class WindowChangedOcclusionState(
+        override val windowId: WindowId,
+        val isVisible: Boolean,
     ) : Event(), WindowEvent
 
     public data object DisplayConfigurationChange : Event()
@@ -339,6 +345,13 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.WindowFullScreenToggle(
                 windowId = NativeWindowFullScreenToggleEvent.window_id(nativeEvent),
                 isFullScreen = NativeWindowFullScreenToggleEvent.is_full_screen(nativeEvent),
+            )
+        }
+        desktop_macos_h.NativeEvent_WindowChangedOcclusionState() -> {
+            val nativeEvent = NativeEvent.window_changed_occlusion_state(s)
+            Event.WindowChangedOcclusionState(
+                windowId = NativeWindowChangedOcclusionStateEvent.window_id(nativeEvent),
+                isVisible = NativeWindowChangedOcclusionStateEvent.is_visible(nativeEvent),
             )
         }
         desktop_macos_h.NativeEvent_ApplicationAppearanceChange() -> {

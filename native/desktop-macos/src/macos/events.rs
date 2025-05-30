@@ -4,7 +4,7 @@ use core::f64;
 
 use anyhow::bail;
 use log::warn;
-use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow};
+use objc2_app_kit::{NSEvent, NSEventType, NSScreen, NSWindow, NSWindowOcclusionState};
 use objc2_foundation::{MainThreadMarker, NSArray, NSURL};
 
 use desktop_common::{
@@ -174,6 +174,13 @@ pub struct WindowFullScreenToggleEvent {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct WindowChangedOcclusionStateEvent {
+    pub window_id: WindowId,
+    pub is_visible: bool,
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct ApplicationOpenUrlsEvent {
     pub urls: AutoDropArray<RustAllocatedStrPtr>,
 }
@@ -203,6 +210,7 @@ pub enum Event<'a> {
     WindowFocusChange(WindowFocusChangeEvent),
     WindowCloseRequest(WindowCloseRequestEvent),
     WindowFullScreenToggle(WindowFullScreenToggleEvent),
+    WindowChangedOcclusionState(WindowChangedOcclusionStateEvent),
     DisplayConfigurationChange,
     ApplicationOpenUrls(ApplicationOpenUrlsEvent),
     ApplicationDidFinishLaunching,
@@ -414,6 +422,18 @@ pub(crate) fn handle_window_full_screen_toggle(window: &NSWindow) {
         let event = Event::WindowFullScreenToggle(WindowFullScreenToggleEvent {
             window_id: window.window_id(),
             is_full_screen: window.is_full_screen(),
+        });
+        (state.event_handler)(&event)
+    });
+}
+
+pub(crate) fn handle_window_changed_occlusion_state(window: &NSWindow) {
+    let _handled = AppState::with(|state| {
+        let occlusion_state = window.occlusionState();
+        let is_visible = occlusion_state.contains(NSWindowOcclusionState::Visible);
+        let event = Event::WindowChangedOcclusionState(WindowChangedOcclusionStateEvent {
+            window_id: window.window_id(),
+            is_visible,
         });
         (state.event_handler)(&event)
     });

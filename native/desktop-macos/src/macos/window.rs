@@ -24,8 +24,9 @@ use crate::{
         custom_titlebar::CustomTitlebar,
         events::{
             handle_flags_change, handle_key_up_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
-            handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_close_request, handle_window_focus_change,
-            handle_window_full_screen_toggle, handle_window_move, handle_window_resize, handle_window_screen_change,
+            handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_changed_occlusion_state, handle_window_close_request,
+            handle_window_focus_change, handle_window_full_screen_toggle, handle_window_move, handle_window_resize,
+            handle_window_screen_change,
         },
         string::copy_to_ns_string,
         text_input_client::NOT_FOUND_NS_RANGE,
@@ -368,6 +369,15 @@ define_class!(
             catch_panic(|| {
                 let ivars = self.ivars();
                 CustomTitlebar::before_enter_fullscreen(ivars.custom_titlebar.as_ref(), &ivars.ns_window);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(windowDidChangeOcclusionState:))]
+        unsafe fn window_did_change_occlusion_state(&self, _notification: &NSNotification) {
+            catch_panic(|| {
+                let window = &self.ivars().ns_window;
+                handle_window_changed_occlusion_state(window);
                 Ok(())
             });
         }

@@ -172,6 +172,9 @@ public class Window internal constructor(
         }
     }
 
+    // see: https://developer.apple.com/documentation/appkit/nswindow/occlusionstate-swift.property
+    public val isVisible: Boolean get() = ffiDownCall { desktop_macos_h.window_is_visible(pointer) }
+
     /*
      * Though it's calls macOS maximize in maximized state it actually shrinks it back,
      * so it's toggle
