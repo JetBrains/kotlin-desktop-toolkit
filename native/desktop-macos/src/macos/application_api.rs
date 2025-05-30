@@ -224,6 +224,27 @@ pub extern "C" fn application_unhide_all_applications() {
     });
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn application_is_active() -> bool {
+    ffi_boundary("application_is_active", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        let is_active = unsafe { app.isActive() };
+        Ok(is_active)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_activate_ignoring_other_apps() {
+    ffi_boundary("application_activate_ignoring_other_apps", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        #[allow(deprecated)]
+        app.activateIgnoringOtherApps(true);
+        Ok(())
+    });
+}
+
 /// # Safety
 ///
 /// `data` must be a valid, non-null, pointer.

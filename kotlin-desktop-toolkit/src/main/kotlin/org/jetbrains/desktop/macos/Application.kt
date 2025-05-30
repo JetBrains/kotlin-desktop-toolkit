@@ -93,6 +93,22 @@ public object Application {
         }
     }
 
+    public val isActive: Boolean
+        get() {
+            return ffiDownCall {
+                desktop_macos_h.application_is_active()
+            }
+        }
+
+    /**
+     * This API is depricated and will be removed in future MacOS releases
+     */
+    public fun activateIgnoringOtherApps() {
+        ffiDownCall {
+            desktop_macos_h.application_activate_ignoring_other_apps()
+        }
+    }
+
     public fun setDockIcon(icon: ByteArray) {
         ffiDownCall {
             Arena.ofConfined().use { arena ->

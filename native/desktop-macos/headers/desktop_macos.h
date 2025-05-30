@@ -632,6 +632,10 @@ void application_hide_other_applications(void);
 
 void application_unhide_all_applications(void);
 
+bool application_is_active(void);
+
+void application_activate_ignoring_other_apps(void);
+
 /**
  * # Safety
  *
