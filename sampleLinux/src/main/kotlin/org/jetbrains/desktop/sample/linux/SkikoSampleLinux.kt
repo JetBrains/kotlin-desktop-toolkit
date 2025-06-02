@@ -48,8 +48,6 @@ import java.nio.file.Path
 import java.text.BreakIterator
 import kotlin.math.PI
 import kotlin.math.cos
-import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -164,6 +162,7 @@ data class XdgDesktopSettings(
 }
 
 class EditorState() {
+    private var textInputEnabled: Boolean = false
     private var composedText: String = ""
     private var composedTextStartOffset: Int? = null
     private var composedTextEndOffset: Int? = null
@@ -187,7 +186,31 @@ class EditorState() {
 
     companion object {
         private fun codepointFromOffset(sb: StringBuilder, offset: Int): Short {
+            if (offset == 0) {
+                return 0
+            }
             return sb.codePointCount(0, offset).toShort()
+        }
+
+        private fun getPreviousGlyphOffset(text: String, offset: Int): Int {
+            if (offset == 0) {
+                return 0
+            }
+            val bi = BreakIterator.getCharacterInstance()
+            bi.setText(text)
+            return bi.preceding(offset)
+        }
+
+        private fun getNextGlyphOffset(text: String, offset: Int): Int {
+            val bi = BreakIterator.getCharacterInstance()
+            bi.setText(text)
+            return bi.following(offset).let {
+                if (it == BreakIterator.DONE) {
+                    text.length
+                } else {
+                    it
+                }
+            }
         }
     }
 
@@ -299,18 +322,6 @@ class EditorState() {
         return false
     }
 
-    private fun getPreviousGlyphOffset(): Int {
-        val bi = BreakIterator.getCharacterInstance()
-        bi.setText(text.toString())
-        return bi.preceding(cursorOffset)
-    }
-
-    private fun getNextGlyphOffset(): Int {
-        val bi = BreakIterator.getCharacterInstance()
-        bi.setText(text.toString())
-        return bi.following(cursorOffset)
-    }
-
     fun handleEvent(event: Event, app: Application, window: Window): EventHandlerResult {
         return when (event) {
             is Event.ModifiersChanged -> {
@@ -348,7 +359,7 @@ class EditorState() {
                     when (event.key.value) {
                         KeySym.BackSpace -> {
                             if (!deleteSelection() && cursorOffset > 0) {
-                                val newCursorOffset = getPreviousGlyphOffset()
+                                val newCursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
                                 text.delete(newCursorOffset, cursorOffset)
                                 cursorOffset = newCursorOffset
                             }
@@ -384,10 +395,10 @@ class EditorState() {
                                 if (selectionStartOffset == null) {
                                     selectionStartOffset = cursorOffset
                                 }
-                                cursorOffset = max(0, getPreviousGlyphOffset())
+                                cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
                                 selectionEndOffset = cursorOffset
                             } else {
-                                cursorOffset = max(0, getPreviousGlyphOffset())
+                                cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
                             }
                         }
 
@@ -396,10 +407,10 @@ class EditorState() {
                                 if (selectionStartOffset == null) {
                                     selectionStartOffset = cursorOffset
                                 }
-                                cursorOffset = min(getNextGlyphOffset(), text.length)
+                                cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
                                 selectionEndOffset = cursorOffset
                             } else {
-                                cursorOffset = min(getNextGlyphOffset(), text.length)
+                                cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
                             }
                         }
 
@@ -416,9 +427,9 @@ class EditorState() {
                         selectionStartOffset = null
                         selectionEndOffset = null
                     }
-
-                    cursorOffset = max(0, cursorOffset)
-                    app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+                    if (textInputEnabled) {
+                        app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+                    }
                     EventHandlerResult.Stop
                 }
             }
@@ -435,14 +446,19 @@ class EditorState() {
                     val pastedText = data.data.decodeToString()
                     text.insert(cursorOffset, pastedText)
                     cursorOffset += pastedText.length
+                    if (textInputEnabled) {
+                        app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+                    }
                 }
                 EventHandlerResult.Stop
             }
             is Event.TextInputAvailability -> {
                 if (event.available) {
                     app.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
+                    textInputEnabled = true
                 } else {
                     app.textInputDisable()
+                    textInputEnabled = false
                 }
                 EventHandlerResult.Stop
             }

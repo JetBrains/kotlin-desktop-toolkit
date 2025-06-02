@@ -66,6 +66,7 @@ struct Settings {
 
 #[derive(Debug, Default)]
 struct WindowState {
+    text_input_available: bool,
     composed_text: String,
     text: String,
     key_modifiers: KeyModifiers,
@@ -304,7 +305,9 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
             match data.code.0 {
                 14 => {
                     window_state.text.pop();
-                    update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
+                    if window_state.text_input_available {
+                        update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
+                    }
                 }
                 _ => {
                     if data.code.0 == 47 && window_state.key_modifiers.ctrl {
@@ -313,7 +316,9 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                         application_clipboard_put(state.app_ptr.clone(), BorrowedStrPtr::new(ALL_MIMES));
                     } else if let Some(event_chars) = data.characters.as_optional_str().unwrap() {
                         window_state.text += event_chars;
-                        update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
+                        if window_state.text_input_available {
+                            update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
+                        }
                     }
                 }
             }
@@ -357,8 +362,10 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                     state.app_ptr.clone(),
                     create_text_input_context(&window_state.text, &surrounding_text_cstring, false),
                 );
+                window_state.text_input_available = true;
             } else {
                 application_text_input_disable(state.app_ptr.clone());
+                window_state.text_input_available = false;
             }
         }),
         Event::TextInput(data) => STATE.with(|c| {

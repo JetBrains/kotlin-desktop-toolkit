@@ -1,4 +1,5 @@
 use desktop_common::ffi_utils::BorrowedStrPtr;
+use log::debug;
 use smithay_client_toolkit::reexports::protocols::wp::text_input::zv3::client::zwp_text_input_v3;
 
 use crate::linux::geometry::LogicalRect;
@@ -16,6 +17,14 @@ pub struct TextInputContext<'a> {
 }
 
 impl TextInputContext<'_> {
+    fn get_byte_offset(text: &str, offset: u16) -> usize {
+        let mut it = text.char_indices();
+        for _ in 0..offset {
+            it.next();
+        }
+        it.offset()
+    }
+
     pub(crate) fn apply(&self, text_input: &zwp_text_input_v3::ZwpTextInputV3) -> anyhow::Result<()> {
         let surrounding_text = self.surrounding_text.as_str()?;
         let content_hint = if self.is_multiline {
@@ -24,28 +33,17 @@ impl TextInputContext<'_> {
             zwp_text_input_v3::ContentHint::None
         };
 
-        let cursor_pos_bytes = if self.cursor_codepoint_offset == 0 {
-            0
-        } else {
-            surrounding_text
-                .char_indices()
-                .nth((self.cursor_codepoint_offset - 1).into())
-                .unwrap()
-                .0
-        };
+        let cursor_pos_bytes = Self::get_byte_offset(surrounding_text, self.cursor_codepoint_offset);
 
-        let selection_start_pos_bytes = if self.selection_start_codepoint_offset == 0 {
-            0
-        } else if self.selection_start_codepoint_offset == self.cursor_codepoint_offset {
+        let selection_start_pos_bytes = if self.selection_start_codepoint_offset == self.cursor_codepoint_offset {
             cursor_pos_bytes
         } else {
-            surrounding_text
-                .char_indices()
-                .nth((self.selection_start_codepoint_offset - 1).into())
-                .unwrap()
-                .0
+            Self::get_byte_offset(surrounding_text, self.selection_start_codepoint_offset)
         };
 
+        debug!(
+            "Calling set_surrounding_text with cursor_pos_bytes={cursor_pos_bytes}, selection_start_pos_bytes={selection_start_pos_bytes}, surrounding_text={surrounding_text}"
+        );
         #[allow(clippy::cast_possible_truncation)]
         text_input.set_surrounding_text(
             surrounding_text.to_owned(),
