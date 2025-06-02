@@ -25,7 +25,7 @@ use crate::linux::{
         Event, InternalEventHandler, SoftwareDrawData, WindowCapabilities, WindowConfigureEvent, WindowDrawEvent, WindowId,
         WindowScaleChangedEvent, WindowScreenChangeEvent,
     },
-    geometry::{LogicalPixels, LogicalPoint, LogicalSize},
+    geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
     rendering_egl::EglRendering,
     rendering_software::SoftwareRendering,
     window_api::WindowParams,
@@ -132,7 +132,7 @@ impl SimpleWindow {
     ) -> bool {
         const DEFAULT_WIDTH: LogicalPixels = LogicalPixels(640.);
         const DEFAULT_HEIGHT: LogicalPixels = LogicalPixels(480.);
-        debug!("Configure {configure:?}");
+        debug!("SimpleWindow::configure start: {configure:?}");
 
         self.decoration_mode = configure.decoration_mode;
 
@@ -156,10 +156,6 @@ impl SimpleWindow {
         window.xdg_surface().set_window_geometry(0, 0, width.round(), height.round());
         // TODO: wl_surface::set_opaque_region?
 
-        if let Some(viewport) = &self.viewport {
-            viewport.set_destination(width.round(), height.round());
-        }
-
         (self.event_handler)(
             &WindowConfigureEvent {
                 size,
@@ -178,18 +174,11 @@ impl SimpleWindow {
         );
 
         let physical_size = size.to_physical(self.current_scale);
+        debug!("SimpleWindow::configure: size={size:?}, physical_size={physical_size:?}");
 
-        if let Some(rendering_data) = &mut self.rendering_data {
-            match rendering_data {
-                RenderingData::Egl(egl_data) => {
-                    egl_data.resize(physical_size);
-                }
-                RenderingData::Software(data) => {
-                    data.resize(shm, physical_size);
-                }
-            }
-            false
-        } else {
+        self.on_resize(&size, physical_size, shm);
+
+        if self.rendering_data.is_none() {
             self.rendering_data = if self.force_software_rendering {
                 info!("Forcing software rendering");
                 Some(RenderingData::Software(SoftwareRendering::new(shm, physical_size)))
@@ -206,6 +195,8 @@ impl SimpleWindow {
                 Some(RenderingData::Software(SoftwareRendering::new(shm, physical_size)))
             };
             true
+        } else {
+            false
         }
     }
 
@@ -249,12 +240,6 @@ impl SimpleWindow {
             // Damage the entire window
             surface.damage_buffer(0, 0, physical_size.width.0, physical_size.height.0);
 
-            if self.viewport.is_none() {
-                assert!(self.current_scale % 1.0 == 0.0);
-                #[allow(clippy::cast_possible_truncation)]
-                surface.set_buffer_scale(self.current_scale as i32);
-            }
-
             // Request our next frame
             surface.frame(qh, surface.clone());
         };
@@ -270,9 +255,38 @@ impl SimpleWindow {
         (self.event_handler)(&WindowScreenChangeEvent::new(output).into());
     }
 
-    pub fn scale_changed(&mut self, new_scale: f64) {
+    fn on_resize(&mut self, size: &LogicalSize, physical_size: PhysicalSize, shm: &Shm) {
+        if let Some(viewport) = &self.viewport {
+            debug!("viewport.set_destination({}, {})", size.width.round(), size.height.round());
+            viewport.set_destination(size.width.round(), size.height.round());
+        } else {
+            let surface = self.window.wl_surface();
+            assert!(self.current_scale % 1.0 == 0.0);
+            debug!("surface.set_buffer_scale({})", self.current_scale);
+            #[allow(clippy::cast_possible_truncation)]
+            surface.set_buffer_scale(self.current_scale as i32);
+        }
+
+        if let Some(rendering_data) = &mut self.rendering_data {
+            match rendering_data {
+                RenderingData::Egl(egl_data) => {
+                    egl_data.resize(physical_size);
+                }
+                RenderingData::Software(data) => {
+                    data.resize(shm, physical_size);
+                }
+            }
+        }
+    }
+
+    pub fn scale_changed(&mut self, new_scale: f64, shm: &Shm) {
         debug!("scale_changed: {new_scale}");
         self.current_scale = new_scale;
+
+        if let Some(size) = self.size {
+            self.on_resize(&size, size.to_physical(self.current_scale), shm);
+        }
+
         (self.event_handler)(&WindowScaleChangedEvent { new_scale }.into());
     }
 

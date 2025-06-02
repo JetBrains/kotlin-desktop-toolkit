@@ -154,11 +154,6 @@ impl ApplicationState {
         self.windows.get(surface_id)
     }
 
-    pub fn get_window_mut(&mut self, surface: &WlSurface) -> Option<&mut SimpleWindow> {
-        let surface_id: &ObjectId = &surface.id();
-        self.windows.get_mut(surface_id)
-    }
-
     pub fn get_window_by_id(&self, window_id: WindowId) -> Option<&SimpleWindow> {
         self.window_id_to_surface_id
             .get(&window_id)
@@ -316,8 +311,8 @@ impl CompositorHandler for ApplicationState {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_factor: i32) {
         debug!("scale_factor_changed for {}: {new_factor}", surface.id());
         if self.fractional_scale_manager.is_none() {
-            if let Some(window) = self.get_window_mut(surface) {
-                window.scale_changed(new_factor.into());
+            if let Some(window) = self.windows.get_mut(&surface.id()) {
+                window.scale_changed(new_factor.into(), &self.shm_state);
             }
         }
     }
@@ -393,7 +388,7 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
             debug!("wp_fractional_scale_v1::Event::PreferredScale: {scale}");
             if let Some(window) = this.windows.get_mut(surface_id) {
-                window.scale_changed(f64::from(scale) / 120.0);
+                window.scale_changed(f64::from(scale) / 120.0, &this.shm_state);
             };
         }
     }

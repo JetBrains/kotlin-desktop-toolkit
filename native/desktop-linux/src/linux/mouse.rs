@@ -19,7 +19,7 @@ impl PointerHandler for ApplicationState {
     fn pointer_frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
         for event in events {
             #[allow(clippy::cast_possible_truncation)]
-            let scale = if let Some(window) = self.get_window_mut(&event.surface) {
+            let scale = if let Some(window) = self.windows.get_mut(&event.surface.id()) {
                 window.pointer_event(pointer, event);
                 window.current_scale.round() as i32
             } else {
