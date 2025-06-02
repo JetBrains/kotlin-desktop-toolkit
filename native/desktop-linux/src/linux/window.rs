@@ -1,5 +1,6 @@
 use log::{debug, error, info, warn};
 use smithay_client_toolkit::{
+    compositor::Region,
     reexports::{
         client::{
             Connection, Proxy, QueueHandle,
@@ -128,6 +129,7 @@ impl SimpleWindow {
         shm: &Shm,
         window: &Window,
         configure: &WindowConfigure,
+        opaque_region: &Region,
         egl: Option<&EglInstance>,
     ) -> bool {
         const DEFAULT_WIDTH: LogicalPixels = LogicalPixels(640.);
@@ -153,8 +155,11 @@ impl SimpleWindow {
         let size = LogicalSize { width, height };
         self.size = Some(size);
 
-        window.xdg_surface().set_window_geometry(0, 0, width.round(), height.round());
-        // TODO: wl_surface::set_opaque_region?
+        let rounded_w = width.round();
+        let rounded_h = height.round();
+        window.xdg_surface().set_window_geometry(0, 0, rounded_w, rounded_h);
+        opaque_region.add(0, 0, rounded_w, rounded_h);
+        window.set_opaque_region(Some(opaque_region.wl_region()));
 
         (self.event_handler)(
             &WindowConfigureEvent {
@@ -249,6 +254,8 @@ impl SimpleWindow {
             Some(RenderingData::Software(r)) => r.draw(surface, physical_size, do_draw),
             None => warn!("Rendering data not initialized in draw"),
         };
+
+        surface.commit();
     }
 
     pub fn output_changed(&self, output: &WlOutput) {

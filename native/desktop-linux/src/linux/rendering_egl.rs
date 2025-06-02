@@ -76,10 +76,8 @@ impl EglRendering {
 
         do_draw(None);
 
-        // Attach and commit to present.
         egl.swap_buffers(self.egl_display, self.egl_window_surface)
             .context(surface.id())
             .unwrap();
-        surface.commit();
     }
 }

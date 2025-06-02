@@ -3,7 +3,7 @@ use std::{collections::HashMap, thread::ThreadId};
 use khronos_egl;
 use log::{debug, warn};
 use smithay_client_toolkit::{
-    compositor::{CompositorHandler, CompositorState},
+    compositor::{CompositorHandler, CompositorState, Region},
     data_device_manager::{
         DataDeviceManagerState,
         data_device::DataDevice,
@@ -89,13 +89,6 @@ pub struct ApplicationState {
     pub run_on_event_loop: Option<Sender<extern "C" fn()>>,
 }
 
-struct WindowWithData<'a> {
-    window: &'a mut SimpleWindow,
-    shm: &'a Shm,
-    themed_pointer: Option<&'a mut ThemedPointer>,
-    egl: Option<&'a EglInstance>,
-}
-
 impl ApplicationState {
     #[must_use]
     pub fn new(
@@ -158,15 +151,6 @@ impl ApplicationState {
         self.window_id_to_surface_id
             .get(&window_id)
             .and_then(|surface_id| self.windows.get(surface_id))
-    }
-
-    fn get_window_with_data(&mut self, surface: &WlSurface) -> Option<WindowWithData> {
-        self.windows.get_mut(&surface.id()).map(|window| WindowWithData {
-            window,
-            shm: &self.shm_state,
-            themed_pointer: self.themed_pointer.as_mut(),
-            egl: self.egl.as_ref(),
-        })
     }
 
     pub(crate) fn get_key_window(&self) -> Option<&SimpleWindow> {
@@ -322,8 +306,8 @@ impl CompositorHandler for ApplicationState {
     }
 
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, _time: u32) {
-        if let Some(window_data) = self.get_window_with_data(surface) {
-            window_data.window.draw(conn, qh, window_data.themed_pointer, window_data.egl);
+        if let Some(window) = self.windows.get_mut(&surface.id()) {
+            window.draw(conn, qh, self.themed_pointer.as_mut(), self.egl.as_ref());
         }
     }
 
@@ -353,13 +337,12 @@ impl WindowHandler for ApplicationState {
     }
 
     fn configure(&mut self, conn: &Connection, qh: &QueueHandle<Self>, window: &Window, configure: WindowConfigure, _serial: u32) {
-        if let Some(window_data) = self.get_window_with_data(window.wl_surface()) {
-            if window_data
-                .window
-                .configure(conn, window_data.shm, window, &configure, window_data.egl)
-            {
+        if let Some(w) = self.windows.get_mut(&window.wl_surface().id()) {
+            let egl = self.egl.as_ref();
+            let opaque_region = Region::new(&self.compositor_state).unwrap();
+            if w.configure(conn, &self.shm_state, window, &configure, &opaque_region, egl) {
                 // Initiate the first draw.
-                window_data.window.draw(conn, qh, window_data.themed_pointer, window_data.egl);
+                w.draw(conn, qh, self.themed_pointer.as_mut(), egl);
             }
         }
     }

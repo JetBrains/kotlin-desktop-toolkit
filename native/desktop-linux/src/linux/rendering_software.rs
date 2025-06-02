@@ -65,8 +65,6 @@ impl SoftwareRendering {
             stride: self.stride,
         }));
 
-        // Attach and commit to present.
         self.buffer.attach_to(surface).expect("buffer attach");
-        surface.commit();
     }
 }
