@@ -184,24 +184,24 @@ mod tests {
     use test_log::test;
 
     use log::info;
-    use objc2::{rc::Retained, runtime::ProtocolObject};
-    use objc2_app_kit::{NSPasteboardItem, NSPasteboardType, NSPasteboardTypeString, NSURLNSPasteboardSupport};
-    use objc2_foundation::{NSArray, NSObjectNSComparisonMethods, NSString, NSURL};
+    use objc2::runtime::ProtocolObject;
+    use objc2_app_kit::{NSPasteboardItem, NSPasteboardTypeString, NSURLNSPasteboardSupport};
+    use objc2_foundation::{NSArray, NSObjectNSComparisonMethods, NSString, NSURL, ns_string};
 
     use crate::macos::pasteboard::{PasteboardType, with_pasteboard};
 
     #[test]
     fn test_pasteboard_can_store_and_return_string() {
         with_pasteboard(PasteboardType::WithUniqueName, |pasteboard| {
-            let original_string = NSString::from_str("Hello😃World");
+            let original_string = ns_string!("Hello😃World");
             unsafe {
                 info!("NSPasteboardTypeString: {NSPasteboardTypeString:?}");
                 pasteboard.clearContents();
-                pasteboard.setString_forType(&original_string, NSPasteboardTypeString);
+                pasteboard.setString_forType(original_string, NSPasteboardTypeString);
                 let types = pasteboard.types();
                 assert!(types.is_some_and(|types| types.doesContain(NSPasteboardTypeString)));
                 let string_from_pasteboard = pasteboard.stringForType(NSPasteboardTypeString);
-                assert_eq!(Some(original_string), string_from_pasteboard);
+                assert_eq!(Some(original_string), string_from_pasteboard.as_deref());
             }
         });
     }
@@ -220,21 +220,21 @@ mod tests {
     #[test]
     fn test_store_custom_type() {
         with_pasteboard(PasteboardType::WithUniqueName, |pasteboard| {
-            let metadata_string = NSString::from_str("some metadata");
-            let my_pasteboard_type: Retained<NSPasteboardType> = NSString::from_str("org.jetbrains.kdt.meta-string");
+            let metadata_string = ns_string!("some metadata");
+            let my_pasteboard_type = ns_string!("org.jetbrains.kdt.meta-string");
             unsafe {
                 pasteboard.clearContents();
-                let change_count = pasteboard.declareTypes_owner(&NSArray::from_slice(&[&*my_pasteboard_type]), None);
+                let change_count = pasteboard.declareTypes_owner(&NSArray::from_slice(&[my_pasteboard_type]), None);
                 // when we declare type it immediately shows in pasteboard types
                 // after clearContents it's gone
                 info!("types1: {:?}", pasteboard.types());
                 info!("change: {change_count:?}");
-                pasteboard.setString_forType(&metadata_string, &my_pasteboard_type);
+                pasteboard.setString_forType(metadata_string, my_pasteboard_type);
                 info!("types2: {:?}", pasteboard.types());
                 let string_from_pasteboard = pasteboard.stringForType(NSPasteboardTypeString);
                 assert_eq!(None, string_from_pasteboard);
-                let meta_string_from_pasteboard = pasteboard.stringForType(&my_pasteboard_type);
-                assert_eq!(Some(metadata_string), meta_string_from_pasteboard);
+                let meta_string_from_pasteboard = pasteboard.stringForType(my_pasteboard_type);
+                assert_eq!(Some(metadata_string), meta_string_from_pasteboard.as_deref());
                 info!("pasteboard items: {:?}", pasteboard.pasteboardItems());
             }
         });
@@ -243,22 +243,22 @@ mod tests {
     #[test]
     fn test_store_custom_type_with_string() {
         with_pasteboard(PasteboardType::WithUniqueName, |pasteboard| {
-            let metadata_string = NSString::from_str("some metadata");
-            let original_string = NSString::from_str("Hello");
-            let my_pasteboard_type: Retained<NSPasteboardType> = NSString::from_str("org.jetbrains.kdt.meta-string");
+            let metadata_string = ns_string!("some metadata");
+            let original_string = ns_string!("Hello");
+            let my_pasteboard_type = ns_string!("org.jetbrains.kdt.meta-string");
             unsafe {
                 pasteboard.clearContents();
-                let change_count = pasteboard.declareTypes_owner(&NSArray::from_slice(&[&*my_pasteboard_type]), None);
+                let change_count = pasteboard.declareTypes_owner(&NSArray::from_slice(&[my_pasteboard_type]), None);
                 pasteboard.clearContents();
                 info!("types1: {:?}", pasteboard.types());
                 info!("change: {change_count:?}");
-                pasteboard.setString_forType(&metadata_string, &my_pasteboard_type);
-                pasteboard.setString_forType(&original_string, NSPasteboardTypeString);
+                pasteboard.setString_forType(metadata_string, my_pasteboard_type);
+                pasteboard.setString_forType(original_string, NSPasteboardTypeString);
                 info!("types2: {:?}", pasteboard.types());
                 let string_from_pasteboard = pasteboard.stringForType(NSPasteboardTypeString);
-                assert_eq!(Some(original_string), string_from_pasteboard);
-                let meta_string_from_pasteboard = pasteboard.stringForType(&my_pasteboard_type);
-                assert_eq!(Some(metadata_string), meta_string_from_pasteboard);
+                assert_eq!(Some(original_string), string_from_pasteboard.as_deref());
+                let meta_string_from_pasteboard = pasteboard.stringForType(my_pasteboard_type);
+                assert_eq!(Some(metadata_string), meta_string_from_pasteboard.as_deref());
             }
         });
     }
@@ -298,7 +298,7 @@ mod tests {
     #[test]
     fn test_store_two_files_together_with_string() {
         with_pasteboard(PasteboardType::WithUniqueName, |general| {
-            let original_string = NSString::from_str("Hello");
+            let original_string = ns_string!("Hello");
             unsafe {
                 general.clearContents();
                 let url1 = NSURL::fileURLWithPath(&NSString::from_str(get_source_file("mouse.rs").to_str().unwrap()));
@@ -308,7 +308,7 @@ mod tests {
                     ProtocolObject::from_ref(&*url1),
                     ProtocolObject::from_ref(&*url2),
                 ]));
-                general.setString_forType(&original_string, NSPasteboardTypeString);
+                general.setString_forType(original_string, NSPasteboardTypeString);
                 let types = general.types();
                 info!("types: {types:?}");
                 assert_eq!(Some(url1), NSURL::URLFromPasteboard(general));
@@ -322,11 +322,11 @@ mod tests {
     fn test_create_pasteboard_item() {
         with_pasteboard(PasteboardType::WithUniqueName, |general| {
             let item = unsafe { NSPasteboardItem::new() };
-            let original_string = NSString::from_str("Hello");
+            let original_string = ns_string!("Hello");
             unsafe {
                 general.clearContents();
                 let url1 = NSURL::fileURLWithPath(&NSString::from_str(get_source_file("mouse.rs").to_str().unwrap()));
-                item.setString_forType(&original_string, NSPasteboardTypeString);
+                item.setString_forType(original_string, NSPasteboardTypeString);
                 let result = general.writeObjects(&NSArray::from_slice(&[
                     ProtocolObject::from_ref(&*url1),
                     ProtocolObject::from_ref(&*item),
@@ -342,12 +342,12 @@ mod tests {
             unsafe {
                 general.clearContents();
                 let item1 = NSPasteboardItem::new();
-                item1.setString_forType(&NSString::from_str("Hello"), NSPasteboardTypeString);
+                item1.setString_forType(ns_string!("Hello"), NSPasteboardTypeString);
                 let result1 = general.writeObjects(&NSArray::from_slice(&[ProtocolObject::from_ref(&*item1)]));
                 assert!(result1);
 
                 let item2 = NSPasteboardItem::new();
-                item2.setString_forType(&NSString::from_str("World"), NSPasteboardTypeString);
+                item2.setString_forType(ns_string!("World"), NSPasteboardTypeString);
                 let result2 = general.writeObjects(&NSArray::from_slice(&[ProtocolObject::from_ref(&*item2)]));
                 // this might be false if the application lost pasteboard ownership
                 assert!(result2);

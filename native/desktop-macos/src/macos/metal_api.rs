@@ -5,7 +5,7 @@ use std::{cell::Cell, ffi::c_void};
 use anyhow::Context;
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
-use objc2_foundation::{MainThreadMarker, NSString};
+use objc2_foundation::{MainThreadMarker, ns_string};
 use objc2_metal::{MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};
 use objc2_quartz_core::{CAAutoresizingMask, CAMetalDrawable, CAMetalLayer, kCAGravityResize};
 
@@ -193,7 +193,7 @@ pub extern "C" fn metal_view_present(view_ptr: MetalViewPtr, queue: MetalCommand
         if let Some(drawable) = view.drawable.replace(None) {
             let queue = unsafe { queue.retain() };
             let command_buffer = queue.commandBuffer().unwrap();
-            command_buffer.setLabel(Some(&NSString::from_str("Present")));
+            command_buffer.setLabel(Some(ns_string!("Present")));
             if wait_for_ca_transaction {
                 unsafe {
                     view.layer.setPresentsWithTransaction(true);

@@ -43,7 +43,7 @@ pub(crate) fn copy_to_c_string(ns_string: &NSString) -> anyhow::Result<RustAlloc
 
 #[cfg(test)]
 mod tests {
-    use objc2_foundation::NSString;
+    use objc2_foundation::{NSString, ns_string};
 
     use crate::macos::string::copy_to_c_string;
 
@@ -51,18 +51,18 @@ mod tests {
 
     #[test]
     fn test_string_conversion_is_reversable() {
-        let ns_string = NSString::from_str("Hello😃World\nOne More Line");
-        let borrowed_c_str = borrow_ns_string(&ns_string);
+        let ns_string = ns_string!("Hello😃World\nOne More Line");
+        let borrowed_c_str = borrow_ns_string(ns_string);
         let new_ns_string = copy_to_ns_string(&borrowed_c_str).unwrap();
-        assert_eq!(ns_string, new_ns_string);
+        assert_eq!(ns_string, &*new_ns_string);
     }
 
     #[test]
     fn test_string_conversion_with_copy_is_reversable() {
-        let ns_string = NSString::from_str("Hello😃World\nOne More Line");
-        let c_str = copy_to_c_string(&ns_string).unwrap();
+        let ns_string = ns_string!("Hello😃World\nOne More Line");
+        let c_str = copy_to_c_string(ns_string).unwrap();
         let str = c_str.as_str().unwrap();
         let new_ns_string = NSString::from_str(str);
-        assert_eq!(ns_string, new_ns_string);
+        assert_eq!(ns_string, &*new_ns_string);
     }
 }

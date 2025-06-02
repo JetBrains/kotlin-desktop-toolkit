@@ -1,7 +1,7 @@
 use anyhow::Context;
 use objc2::rc::Retained;
 use objc2_app_kit::NSScreen;
-use objc2_foundation::{MainThreadMarker, NSNumber, NSString};
+use objc2_foundation::{MainThreadMarker, NSNumber, ns_string};
 
 use desktop_common::{
     ffi_utils::{AutoDropArray, AutoDropStrPtr},
@@ -80,11 +80,7 @@ pub(crate) trait NSScreenExts {
     }
 
     fn screen_id(&self) -> ScreenId {
-        let screen_id = self
-            .me()
-            .deviceDescription()
-            .objectForKey(&*NSString::from_str("NSScreenNumber"))
-            .unwrap();
+        let screen_id = self.me().deviceDescription().objectForKey(ns_string!("NSScreenNumber")).unwrap();
         let screen_id: Retained<NSNumber> = Retained::downcast(screen_id).unwrap();
 
         screen_id.unsignedIntValue()

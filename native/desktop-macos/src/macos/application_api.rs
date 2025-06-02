@@ -17,7 +17,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
-    NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults,
+    NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults, ns_string,
 };
 
 use crate::macos::events::{
@@ -82,13 +82,10 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         //    unsafe { NSUserDefaults::resetStandardUserDefaults() };
         let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
         unsafe {
-            user_defaults.setBool_forKey(
-                config.disable_dictation_menu_item,
-                &NSString::from_str("NSDisabledDictationMenuItem"),
-            );
+            user_defaults.setBool_forKey(config.disable_dictation_menu_item, ns_string!("NSDisabledDictationMenuItem"));
             user_defaults.setBool_forKey(
                 config.disable_character_palette_menu_item,
-                &NSString::from_str("NSDisabledCharacterPaletteMenuItem"),
+                ns_string!("NSDisabledCharacterPaletteMenuItem"),
             );
         };
         let app = MyNSApplication::sharedApplication(mtm);
@@ -329,7 +326,7 @@ impl MyNSApplication {
         unsafe {
             self.addObserver_forKeyPath_options_context(
                 delegate,
-                &NSString::from_str("effectiveAppearance"),
+                ns_string!("effectiveAppearance"),
                 NSKeyValueObservingOptions::New,
                 std::ptr::null_mut(),
             );
@@ -401,7 +398,7 @@ define_class!(
                 match (object, key_path) {
                     (Some(object), Some(key_path))
                         if object.class().superclass() == Some(MyNSApplication::class())
-                            && key_path == &*NSString::from_str("effectiveAppearance") =>
+                            && key_path == ns_string!("effectiveAppearance") =>
                     {
                         handle_application_appearance_change();
                     }
