@@ -133,7 +133,7 @@ tasks.register<JavaExec>("runSkikoSample") {
     )
     setUpLoggingAndLibraryPath()
 
-    environment("MTL_HUD_ENABLED", 1)
+    environment("MTL_HUD_ENABLED", "1")
 //    environment("MallocStackLogging", "1")
 }
 

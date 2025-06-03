@@ -683,6 +683,14 @@ class ApplicationState : AutoCloseable {
                     },
                 ),
                 AppMenuItem.Action(
+                    title = "Toggle Metal HUD",
+                    perform = {
+                        mainWindow()?.view?.let { view ->
+                            view.isHUDEnabled = !view.isHUDEnabled
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
                     title = "Close Window",
                     keystroke = Keystroke(key = "w", modifiers = KeyModifiersSet.create(command = true)),
                     perform = {

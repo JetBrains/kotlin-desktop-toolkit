@@ -47,6 +47,14 @@ public class MetalView internal constructor(ptr: MemorySegment) : Managed(ptr, d
         }
     }
 
+    public var isHUDEnabled: Boolean
+        get() {
+            return ffiDownCall { desktop_macos_h.metal_view_get_is_hud_enabled(pointer) }
+        }
+        set(value) {
+            ffiDownCall { desktop_macos_h.metal_view_set_is_hud_enabled(pointer, value) }
+        }
+
     public var isOpaque: Boolean
         get() = ffiDownCall { desktop_macos_h.metal_view_get_is_opaque(pointer) }
         set(value) = ffiDownCall { desktop_macos_h.metal_view_set_is_opaque(pointer, value) }

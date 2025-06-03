@@ -3,9 +3,10 @@
 use std::{cell::Cell, ffi::c_void};
 
 use anyhow::Context;
+use objc2::runtime::AnyObject;
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
-use objc2_foundation::{MainThreadMarker, ns_string};
+use objc2_foundation::{MainThreadMarker, NSMutableDictionary, NSString, ns_string};
 use objc2_metal::{MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};
 use objc2_quartz_core::{CAAutoresizingMask, CAMetalDrawable, CAMetalLayer, kCAGravityResize};
 
@@ -182,6 +183,40 @@ pub extern "C" fn metal_view_get_is_opaque(view_ptr: MetalViewPtr) -> bool {
     ffi_boundary("metal_view_get_is_opaque", || {
         let view = unsafe { view_ptr.borrow::<MetalView>() };
         Ok(view.layer.isOpaque())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn metal_view_set_is_hud_enabled(view_ptr: MetalViewPtr, is_enabled: bool) {
+    ffi_boundary("metal_view_set_hud_enabled", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let view = unsafe { view_ptr.borrow::<MetalView>() };
+        if is_enabled {
+            let properties = NSMutableDictionary::new();
+            unsafe {
+                properties.setObject_forKey(
+                    &*Retained::<AnyObject>::from(NSString::from_str("mode")),
+                    &ProtocolObject::from_retained(NSString::from_str("default")),
+                );
+                properties.setObject_forKey(
+                    &*Retained::<AnyObject>::from(NSString::from_str("logging")),
+                    &ProtocolObject::from_retained(NSString::from_str("default")),
+                );
+            };
+            unsafe { view.layer.setDeveloperHUDProperties(Some(&*properties)) };
+        } else {
+            unsafe { view.layer.setDeveloperHUDProperties(None) };
+        }
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn metal_view_get_is_hud_enabled(view_ptr: MetalViewPtr) -> bool {
+    ffi_boundary("metal_view_get_is_hud_enabled", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let view = unsafe { view_ptr.borrow::<MetalView>() };
+        Ok(unsafe { view.layer.developerHUDProperties() }.is_some())
     })
 }
 
