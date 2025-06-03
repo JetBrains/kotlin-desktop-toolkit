@@ -1,7 +1,6 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeApplicationCallbacks
-import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeEventHandler
 import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
 import org.jetbrains.desktop.linux.generated.NativeScreenInfo

@@ -345,9 +345,12 @@ internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
 
         NativeBorrowedArray_u8.ptr(nativeDataArray, nativeArray)
 
-        NativeBorrowedArray_u8.deinit(nativeDataArray, NativeBorrowedArray_u8.deinit.allocate({ ptr, len ->
-            arena.close()
-        }, arena))
+        NativeBorrowedArray_u8.deinit(
+            nativeDataArray,
+            NativeBorrowedArray_u8.deinit.allocate({ ptr, len ->
+                arena.close()
+            }, arena),
+        )
     }
 
     return nativeDataArray
