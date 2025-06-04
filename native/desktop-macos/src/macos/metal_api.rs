@@ -105,12 +105,6 @@ pub(crate) struct MetalView {
 
 pub type MetalViewPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
 
-impl MetalView {
-    pub(crate) fn ns_view(&self) -> &NSView {
-        &self.layer_view
-    }
-}
-
 pub(crate)  struct MetalLayerViewIvars {}
 
 define_class!(
@@ -307,10 +301,8 @@ impl PanicDefault for PhysicalSize {
 #[unsafe(no_mangle)]
 pub extern "C" fn metal_view_get_texture_size(view_ptr: MetalViewPtr) -> PhysicalSize {
     ffi_boundary("metal_view_get_texture_size", || {
-        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let view = unsafe { view_ptr.borrow::<MetalView>() };
-        let ns_view = view.ns_view();
-        let view_size = unsafe { ns_view.convertSizeToBacking(ns_view.bounds().size) };
+        let view_size = unsafe { view.layer.drawableSize() };
         Ok(view_size.into())
     })
 }
