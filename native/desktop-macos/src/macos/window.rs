@@ -319,8 +319,8 @@ impl Window {
         let content_view = self.ns_window.contentView().unwrap();
 
         unsafe {
-            layer.ns_view.setFrameSize(content_view.frame().size);
-            content_view.addSubview_positioned_relativeTo(&layer.ns_view, NSWindowOrderingMode::Below, Some(&self.root_view));
+            layer.layer_view.setFrameSize(content_view.frame().size);
+            content_view.addSubview_positioned_relativeTo(&layer.layer_view, NSWindowOrderingMode::Below, Some(&self.root_view));
         }
     }
 }
