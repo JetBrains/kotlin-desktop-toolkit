@@ -167,10 +167,9 @@ pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr<'_>) {
     debug!("application_text_input_disable");
     ffi_boundary("application_text_input_disable", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        if let Some(text_input) = app.state.active_text_input.as_mut() {
-            text_input.disable();
-            text_input.commit();
-        }
+        let text_input = app.state.active_text_input.as_mut().context("Active text input")?;
+        text_input.disable();
+        text_input.commit();
         Ok(())
     });
 }

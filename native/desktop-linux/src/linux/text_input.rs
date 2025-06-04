@@ -47,13 +47,13 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
             }
             zwp_text_input_v3::Event::Leave { surface } => {
                 debug!("zwp_text_input_v3::Event::Leave: {}", surface.id());
-                this.active_text_input = None;
-                this.active_text_input_surface = None;
                 let Some(w) = this.windows.get(&surface.id()) else {
                     warn!("Couldn't find window for: {event:?}");
                     return;
                 };
                 (w.event_handler)(&Event::TextInputAvailability(TextInputAvailabilityEvent { available: false }));
+                this.active_text_input = None;
+                this.active_text_input_surface = None;
             }
             zwp_text_input_v3::Event::PreeditString {
                 text,
