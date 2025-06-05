@@ -157,18 +157,25 @@ impl MetalLayerView {
     }
 }
 
+pub type OnDisplayLayerCallback = extern "C" fn();
+
+pub(crate) struct LayerDelegateIvars {
+    on_display_layer: OnDisplayLayerCallback,
+}
+
 define_class!(
     #[unsafe(super(NSObject))]
     #[name = "LayerDelegate"]
+    #[ivars = LayerDelegateIvars]
     pub(crate) struct LayerDelegate;
 
     unsafe impl NSObjectProtocol for LayerDelegate {}
 
     unsafe impl CALayerDelegate for LayerDelegate {
         #[unsafe(method(displayLayer:))]
-        fn display_layer(&self, layer: &CALayer) {
+        fn display_layer(&self, _layer: &CALayer) {
             catch_panic(|| {
-                println!("Layer {layer:?} redraw requested");
+                (self.ivars().on_display_layer)();
                 Ok(())
             });
         }
@@ -176,19 +183,19 @@ define_class!(
 );
 
 impl LayerDelegate {
-    fn new() -> Retained<Self> {
-        let this = Self::alloc().set_ivars(());
+    fn new(on_display_layer: OnDisplayLayerCallback) -> Retained<Self> {
+        let this = Self::alloc().set_ivars(LayerDelegateIvars { on_display_layer });
         unsafe { msg_send![super(this), init] }
     }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> MetalViewPtr<'static> {
+pub extern "C" fn metal_create_view(device: MetalDeviceRef, on_display_layer: OnDisplayLayerCallback) -> MetalViewPtr<'static> {
     let metal_view = ffi_boundary("metal_create_view", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let device = unsafe { device.retain() };
         let layer = unsafe { CAMetalLayer::new() };
-        let layer_delegate = LayerDelegate::new();
+        let layer_delegate = LayerDelegate::new(on_display_layer);
         unsafe {
             layer.setDevice(Some(ProtocolObject::from_ref(&*device)));
             layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
@@ -204,7 +211,7 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef) -> MetalViewPtr<'sta
 
             // this are marked crucial for correct resize
             layer.setAutoresizingMask(CAAutoresizingMask::LayerHeightSizable | CAAutoresizingMask::LayerWidthSizable);
-            //layer.setNeedsDisplayOnBoundsChange(true); // not sure that we need to call ::draw when it's resized
+            layer.setNeedsDisplayOnBoundsChange(true); // we rely on displayLayer callback to redraw when size changed
             layer.setPresentsWithTransaction(true);
 
             layer.setContentsGravity(kCAGravityResize);

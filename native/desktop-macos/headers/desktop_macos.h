@@ -437,6 +437,8 @@ typedef void *NativeMetalCommandQueueRef;
 
 typedef NativeRustAllocatedRawPtr_c_void NativeMetalViewPtr;
 
+typedef void (*NativeOnDisplayLayerCallback)(void);
+
 typedef double NativePhysicalPixels;
 
 typedef struct NativePhysicalSize {
@@ -702,7 +704,8 @@ NativeMetalCommandQueueRef metal_create_command_queue(NativeMetalDeviceRef devic
 
 void metal_deref_command_queue(NativeMetalCommandQueueRef queue);
 
-NativeMetalViewPtr metal_create_view(NativeMetalDeviceRef device);
+NativeMetalViewPtr metal_create_view(NativeMetalDeviceRef device,
+                                     NativeOnDisplayLayerCallback on_display_layer);
 
 void metal_drop_view(NativeMetalViewPtr view_ptr);
 

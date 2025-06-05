@@ -37,7 +37,12 @@ abstract class SkikoWindow(
     })
 
     private val directContext = DirectContext.makeMetal(device.pointerAddress, queue.pointerAddress)
-    var view: MetalView = MetalView.create(device)
+    var view: MetalView = MetalView.create(device, onDisplayLayer = {
+        val isRunning = displayLink.isRunning()
+        displayLink.setRunning(false)
+        performDrawing(syncWithCA = true)
+        displayLink.setRunning(isRunning)
+    })
     private val creationTime = TimeSource.Monotonic.markNow()
 
     init {
