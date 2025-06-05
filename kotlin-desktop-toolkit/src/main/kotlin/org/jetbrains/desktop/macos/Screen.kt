@@ -18,7 +18,7 @@ public class DisplayLink internal constructor(
 ) {
     public companion object {
         public fun create(screenId: ScreenId, onNextFrame: () -> Unit): DisplayLink {
-            val arena = Arena.ofConfined()
+            val arena = Arena.ofShared()
             val callback = NativeDisplayLinkCallback.allocate({
                 ffiUpCall {
                     // todo don't execute this callback after the link was closed

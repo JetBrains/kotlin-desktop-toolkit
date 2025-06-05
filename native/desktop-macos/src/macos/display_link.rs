@@ -70,10 +70,12 @@ impl DisplayLink {
             _output_time: *const display_link_sys::CVTimeStamp,
             _flags_in: i64,
             _flags_out: *mut i64,
-            frame_requests: *mut c_void,
+            callback: *mut c_void,
         ) -> i32 {
-            let frame_requests = frame_requests as dispatch_source_t;
-            unsafe { dispatch_source_merge_data(frame_requests, 1) };
+            unsafe {
+                let callback: unsafe extern "C" fn() = std::mem::transmute(callback);
+                callback();
+            }
             0
         }
 
@@ -91,7 +93,7 @@ impl DisplayLink {
 
             dispatch_resume(dispatch_sys::dispatch_object_t { _ds: frame_requests });
 
-            let display_link = display_link_sys::DisplayLink::new(display_id, display_link_callback, frame_requests.cast::<c_void>())?;
+            let display_link = display_link_sys::DisplayLink::new(display_id, display_link_callback, callback as *mut c_void)?;
 
             Ok(Self {
                 display_link,

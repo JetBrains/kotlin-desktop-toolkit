@@ -34,6 +34,7 @@ import org.jetbrains.skia.Rect
 import java.lang.AutoCloseable
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.concurrent.Volatile
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -94,6 +95,7 @@ class ContentArea(
     var size: LogicalSize,
 ) {
 
+    @Volatile
     private var markerPosition: LogicalPoint? = null
 
     fun handleEvent(event: Event): EventHandlerResult {

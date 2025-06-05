@@ -133,7 +133,6 @@ abstract class SkikoWindow(
                 }
             }
             view.present(queue, waitForCATransaction = syncWithCA)
-            window.invalidateShadow()
         }
     }
 
