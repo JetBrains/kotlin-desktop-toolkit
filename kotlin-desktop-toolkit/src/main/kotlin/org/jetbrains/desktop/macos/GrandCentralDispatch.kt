@@ -8,10 +8,13 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 
 public object GrandCentralDispatch {
+    private val highPriorityQueue = ConcurrentLinkedQueue<() -> Unit>()
     private val queue = ConcurrentLinkedQueue<() -> Unit>()
     private val callback: MemorySegment = `dispatcher_main_exec_async$f`.allocate({
         ffiUpCall {
-            queue.poll().invoke()
+            highPriorityQueue.poll()?.let {
+                it()
+            } ?: queue.poll().invoke()
         }
     }, Arena.global())
 
@@ -21,17 +24,21 @@ public object GrandCentralDispatch {
         }
     }
 
-    public fun dispatchOnMain(f: () -> Unit) {
+    public fun dispatchOnMain(highPriority: Boolean = false, f: () -> Unit) {
         ffiDownCall {
-            queue.add(f)
+            if (highPriority) {
+                highPriorityQueue.add(f)
+            } else {
+                queue.add(f)
+            }
             desktop_macos_h.dispatcher_main_exec_async(callback)
         }
     }
 
-    public fun <T> dispatchOnMainSync(f: () -> T): T {
+    public fun <T> dispatchOnMainSync(highPriority: Boolean = false, f: () -> T): T {
         val latch = CountDownLatch(1)
         var result: T? = null
-        dispatchOnMain {
+        dispatchOnMain(highPriority) {
             result = f()
             latch.countDown()
         }
