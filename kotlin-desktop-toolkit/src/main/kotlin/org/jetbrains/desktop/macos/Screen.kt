@@ -9,6 +9,11 @@ import java.lang.foreign.MemorySegment
 
 public typealias ScreenId = Int
 
+/**
+ * Known caveats:
+ * If you call setRunning(false), the calling thread might be blocked until
+ * the ongoing onNextFrame() is finished.
+ */
 public class DisplayLink internal constructor(
     ptr: MemorySegment,
     private val arena: Arena,
