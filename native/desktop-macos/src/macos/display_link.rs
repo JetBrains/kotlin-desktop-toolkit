@@ -1,13 +1,8 @@
-use std::{ffi::c_void, ptr::addr_of};
+use std::ffi::c_void;
 
 use super::screen::ScreenId;
 use anyhow::Result;
 use desktop_common::{ffi_utils::RustAllocatedRawPtr, logger::ffi_boundary};
-use dispatch_sys::{
-    _dispatch_main_q, _dispatch_source_type_data_add, dispatch_object_t, dispatch_queue_t, dispatch_resume, dispatch_set_context,
-    dispatch_source_cancel, dispatch_source_create, dispatch_source_merge_data, dispatch_source_set_event_handler_f, dispatch_source_t,
-    dispatch_suspend,
-};
 use display_link_sys::CGDirectDisplayID;
 use objc2_foundation::MainThreadMarker;
 
@@ -59,7 +54,6 @@ pub extern "C" fn display_link_is_running(mut display_link_ptr: DisplayLinkPtr) 
 // https://github.com/zed-industries/zed/blob/b17f2089a2fb7e2f142eb71bf78b007f397629b0/crates/gpui/LICENSE-APACHE
 pub struct DisplayLink {
     display_link: display_link_sys::DisplayLink,
-    frame_requests: dispatch_source_t,
 }
 
 impl DisplayLink {
@@ -79,26 +73,10 @@ impl DisplayLink {
             0
         }
 
-        unsafe extern "C" fn callback_impl(callback: *mut c_void) {
-            unsafe {
-                let callback: unsafe extern "C" fn() = std::mem::transmute(callback);
-                callback();
-            }
-        }
-
         unsafe {
-            let frame_requests = dispatch_source_create(&_dispatch_source_type_data_add, 0, 0, dispatch_get_main_queue());
-            dispatch_set_context(dispatch_object_t { _ds: frame_requests }, callback as *mut c_void);
-            dispatch_source_set_event_handler_f(frame_requests, Some(callback_impl));
-
-            dispatch_resume(dispatch_sys::dispatch_object_t { _ds: frame_requests });
-
             let display_link = display_link_sys::DisplayLink::new(display_id, display_link_callback, callback as *mut c_void)?;
 
-            Ok(Self {
-                display_link,
-                frame_requests,
-            })
+            Ok(Self { display_link })
         }
     }
 
@@ -125,14 +103,6 @@ impl Drop for DisplayLink {
     fn drop(&mut self) {
         if self.is_running() {
             self.stop().unwrap();
-        }
-
-        unsafe {
-            dispatch_suspend(dispatch_sys::dispatch_object_t { _ds: self.frame_requests });
-        }
-
-        unsafe {
-            dispatch_source_cancel(self.frame_requests);
         }
     }
 }
@@ -300,10 +270,6 @@ mod display_link_sys {
             unsafe { CVDisplayLinkIsRunning(self) }
         }
     }
-}
-
-fn dispatch_get_main_queue() -> dispatch_queue_t {
-    addr_of!(_dispatch_main_q).cast_mut()
 }
 
 /// cbindgen:ignore

@@ -3,17 +3,17 @@
 use std::{cell::Cell, ffi::c_void};
 
 use anyhow::Context;
-use objc2::{define_class, msg_send, AllocAnyThread, DefinedClass, MainThreadOnly};
 use objc2::rc::autoreleasepool;
+use objc2::{AllocAnyThread, DefinedClass, MainThreadOnly, define_class, msg_send};
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
-use objc2_foundation::{ns_string, MainThreadMarker, NSObject, NSObjectProtocol, NSSize};
+use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSSize, ns_string};
 use objc2_metal::{MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLDevice, MTLDrawable, MTLPixelFormat, MTLTexture};
-use objc2_quartz_core::{kCAGravityResize, CAAutoresizingMask, CALayer, CALayerDelegate, CAMetalDrawable, CAMetalLayer};
+use objc2_quartz_core::{CAAutoresizingMask, CALayer, CALayerDelegate, CAMetalDrawable, CAMetalLayer, kCAGravityResize};
 
 use crate::geometry::PhysicalSize;
 use desktop_common::ffi_utils::RustAllocatedRawPtr;
-use desktop_common::logger::{catch_panic, ffi_boundary, PanicDefault};
+use desktop_common::logger::{PanicDefault, catch_panic, ffi_boundary};
 
 macro_rules! define_objc_ref {
     ($name:ident, $otype:ty) => {
@@ -31,6 +31,7 @@ macro_rules! define_objc_ref {
                 return unsafe { Retained::retain(self.ptr.cast::<$otype>()) }.unwrap();
             }
 
+            #[must_use]
             pub unsafe fn consume(self) -> Retained<$otype> {
                 return unsafe { Retained::from_raw(self.ptr.cast::<$otype>()) }.unwrap();
             }
@@ -105,7 +106,7 @@ pub(crate) struct MetalView {
 
 pub type MetalViewPtr<'a> = RustAllocatedRawPtr<'a, std::ffi::c_void>;
 
-pub(crate)  struct MetalLayerViewIvars {}
+pub(crate) struct MetalLayerViewIvars {}
 
 define_class!(
     #[unsafe(super(NSView))]
@@ -257,7 +258,7 @@ pub extern "C" fn metal_view_set_needs_display(view_ptr: MetalViewPtr) {
         let view = unsafe { view_ptr.borrow::<MetalView>() };
         view.layer.setNeedsDisplay();
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]
