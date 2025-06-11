@@ -252,6 +252,15 @@ pub extern "C" fn metal_drop_view(view_ptr: MetalViewPtr) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn metal_view_set_needs_display(view_ptr: MetalViewPtr) {
+    ffi_boundary("metal_view_set_needs_display", || {
+        let view = unsafe { view_ptr.borrow::<MetalView>() };
+        view.layer.setNeedsDisplay();
+        Ok(())
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn metal_view_set_is_opaque(view_ptr: MetalViewPtr, value: bool) {
     ffi_boundary("metal_view_set_is_opaque", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();

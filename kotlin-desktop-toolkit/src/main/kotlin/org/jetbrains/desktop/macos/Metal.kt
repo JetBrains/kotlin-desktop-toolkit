@@ -41,6 +41,10 @@ public class MetalView internal constructor(ptr: MemorySegment, private val aren
         }
     }
 
+    public fun setNeedsDisplay() {
+        ffiDownCall { desktop_macos_h.metal_view_set_needs_display(pointer) }
+    }
+
     public fun nextTexture(): MetalTexture {
         return MetalTexture(ffiDownCall { desktop_macos_h.metal_view_next_texture(pointer) })
     }

@@ -452,15 +452,6 @@ class ApplicationState : AutoCloseable {
 //        logEvents(event)
 
         val result = when (event) {
-            is Event.MouseMoved -> {
-                windows.find {
-                    it.window.windowId() == lockedWindowId
-                }?.let { window ->
-                    val size = window.window.size
-                    window.window.setContentRect(Event.cursorLocationInScreen(), size, animateTransition = false)
-                }
-                EventHandlerResult.Continue
-            }
             is Event.WindowCloseRequest -> {
                 windows.find {
                     it.window.windowId() == event.windowId
@@ -470,9 +461,6 @@ class ApplicationState : AutoCloseable {
                     Logger.warn { "Can't find window for $event" }
                 }
                 EventHandlerResult.Stop
-            }
-            is Event.KeyDown -> {
-                EventHandlerResult.Continue
             }
             is Event.WindowFullScreenToggle -> {
                 AppMenuManager.setMainMenu(buildMenu())

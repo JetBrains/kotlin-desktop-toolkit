@@ -3,6 +3,7 @@ package org.jetbrains.desktop.sample
 import org.jetbrains.desktop.macos.DisplayLink
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
+import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.LogicalRect
@@ -30,16 +31,18 @@ abstract class SkikoWindow(
     private val queue: MetalCommandQueue,
     windowParams: Window.WindowParams,
 ) : AutoCloseable {
+    val displayLinkCallback = {
+        GrandCentralDispatch.dispatchOnMain(highPriority = true) {
+            view.setNeedsDisplay()
+        }
+    }
 
     val window = Window.create(windowParams)
-    var displayLink = DisplayLink.create(window.screenId(), onNextFrame = {
-        performDrawing(syncWithCA = false)
-    })
+    var displayLink = DisplayLink.create(window.screenId(), onNextFrame = displayLinkCallback)
 
     private val directContext = DirectContext.makeMetal(device.pointerAddress, queue.pointerAddress)
     var view: MetalView = MetalView.create(device, onDisplayLayer = {
         val isRunning = displayLink.isRunning()
-        displayLink.setRunning(false)
         performDrawing(syncWithCA = true)
         displayLink.setRunning(isRunning)
     })
@@ -101,10 +104,9 @@ abstract class SkikoWindow(
 
     private fun updateDisplayLink(screenId: ScreenId) {
         val isRunning = displayLink.isRunning()
+        displayLink.setRunning(false)
         displayLink.close()
-        displayLink = DisplayLink.create(screenId, onNextFrame = {
-            performDrawing(syncWithCA = false)
-        })
+        displayLink = DisplayLink.create(screenId, onNextFrame = displayLinkCallback)
         displayLink.setRunning(isRunning)
     }
 
@@ -119,9 +121,9 @@ abstract class SkikoWindow(
     }
 
     fun performDrawing(syncWithCA: Boolean) {
+        // sleep(Random.nextLong(0, 8)) // uncomment this to check window resize quality
         val size = view.size()
         view.nextTexture().use { texture ->
-//             sleep(100) // uncomment this to check window resize quality
             BackendRenderTarget.makeMetal(size.width.toInt(), size.height.toInt(), texture.pointerAddress).use { renderTarget ->
                 Surface.makeFromBackendRenderTarget(
                     context = directContext,
@@ -144,6 +146,7 @@ abstract class SkikoWindow(
     abstract fun Canvas.draw(size: PhysicalSize, time: Long)
 
     override fun close() {
+        displayLink.setRunning(false)
         displayLink.close()
         directContext.close()
         view.close()

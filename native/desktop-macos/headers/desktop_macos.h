@@ -709,6 +709,8 @@ NativeMetalViewPtr metal_create_view(NativeMetalDeviceRef device,
 
 void metal_drop_view(NativeMetalViewPtr view_ptr);
 
+void metal_view_set_needs_display(NativeMetalViewPtr view_ptr);
+
 void metal_view_set_is_opaque(NativeMetalViewPtr view_ptr, bool value);
 
 bool metal_view_get_is_opaque(NativeMetalViewPtr view_ptr);
