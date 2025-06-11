@@ -4,6 +4,7 @@ use super::screen::ScreenId;
 use anyhow::Result;
 use desktop_common::{ffi_utils::RustAllocatedRawPtr, logger::ffi_boundary};
 use display_link_sys::CGDirectDisplayID;
+use objc2::rc::autoreleasepool;
 use objc2_foundation::MainThreadMarker;
 
 pub type DisplayLinkCallback = extern "C" fn();
@@ -68,7 +69,9 @@ impl DisplayLink {
         ) -> i32 {
             unsafe {
                 let callback: unsafe extern "C" fn() = std::mem::transmute(callback);
-                callback();
+                autoreleasepool(|_| {
+                    callback();
+                });
             }
             0
         }
