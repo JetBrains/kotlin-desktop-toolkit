@@ -21,7 +21,7 @@ class MetalTests {
             Pair(device, queue)
         }
         val view = GrandCentralDispatch.dispatchOnMainSync {
-            MetalView.create(device)
+            MetalView.create(device, onDisplayLayer = {})
         }
         val window = GrandCentralDispatch.dispatchOnMainSync {
             val window = Window.create(
