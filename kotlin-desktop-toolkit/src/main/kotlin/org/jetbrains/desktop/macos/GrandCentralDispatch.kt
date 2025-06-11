@@ -6,8 +6,11 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
+import kotlin.concurrent.Volatile
 
-public object GrandCentralDispatch {
+public object GrandCentralDispatch : AutoCloseable {
+    @Volatile
+    private var isClosed = false
     private val highPriorityQueue = ConcurrentLinkedQueue<() -> Unit>()
     private val queue = ConcurrentLinkedQueue<() -> Unit>()
     private val callback: MemorySegment = `dispatcher_main_exec_async$f`.allocate({
@@ -26,6 +29,7 @@ public object GrandCentralDispatch {
 
     public fun dispatchOnMain(highPriority: Boolean = false, f: () -> Unit) {
         ffiDownCall {
+            checkIsNotClosed()
             if (highPriority) {
                 highPriorityQueue.add(f)
             } else {
@@ -36,6 +40,7 @@ public object GrandCentralDispatch {
     }
 
     public fun <T> dispatchOnMainSync(highPriority: Boolean = false, f: () -> T): T {
+        checkIsNotClosed()
         val latch = CountDownLatch(1)
         var result: T? = null
         dispatchOnMain(highPriority) {
@@ -44,5 +49,27 @@ public object GrandCentralDispatch {
         }
         latch.await()
         return result!!
+    }
+
+    private fun checkIsNotClosed() {
+        assert(!isClosed) { "GrandCentralDispatch is closed" }
+    }
+
+    /**
+     * Should be called from AppKit thread, usually after `Application.stopEventLoop`
+     * it ensures that all scheduled tasks are executed, and mark the dispatcher as closed.
+     */
+    override fun close() {
+        isClosed = true
+        var task = highPriorityQueue.poll()
+        while (task != null) {
+            task()
+            task = highPriorityQueue.poll()
+        }
+        task = queue.poll()
+        while (task != null) {
+            task()
+            task = queue.poll()
+        }
     }
 }

@@ -8,6 +8,7 @@ import org.jetbrains.desktop.macos.Cursor
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.FileDialog
+import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KeyModifiersSet
 import org.jetbrains.desktop.macos.Keystroke
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
@@ -723,4 +724,5 @@ fun main() {
             state.handleEvent(event)
         }
     }
+    GrandCentralDispatch.close()
 }

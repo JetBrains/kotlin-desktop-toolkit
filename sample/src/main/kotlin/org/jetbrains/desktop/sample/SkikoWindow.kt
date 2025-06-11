@@ -33,7 +33,9 @@ abstract class SkikoWindow(
 ) : AutoCloseable {
     val displayLinkCallback = {
         GrandCentralDispatch.dispatchOnMain(highPriority = true) {
-            view.setNeedsDisplay()
+            if (!view.isClosed()) {
+                view.setNeedsDisplay()
+            }
         }
     }
 
@@ -42,9 +44,7 @@ abstract class SkikoWindow(
 
     private val directContext = DirectContext.makeMetal(device.pointerAddress, queue.pointerAddress)
     var view: MetalView = MetalView.create(device, onDisplayLayer = {
-        val isRunning = displayLink.isRunning()
         performDrawing(syncWithCA = true)
-        displayLink.setRunning(isRunning)
     })
     private val creationTime = TimeSource.Monotonic.markNow()
 

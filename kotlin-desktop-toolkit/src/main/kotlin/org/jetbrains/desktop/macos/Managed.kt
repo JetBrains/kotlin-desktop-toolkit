@@ -13,6 +13,9 @@ public open class Managed internal constructor(
             throw Error("Can't access $this it's aredy closed!")
         }
     }
+
+    public fun isClosed(): Boolean = ptr == MemorySegment.NULL
+
     override fun close() {
         if (ptr == MemorySegment.NULL) {
             throw Error("Can't close $this it's already closed!")
