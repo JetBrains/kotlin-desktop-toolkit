@@ -206,7 +206,7 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef, on_display_layer: On
 
             // layer.setFramebufferOnly(false); // missing in zed
 
-            layer.setMaximumDrawableCount(3);
+            layer.setMaximumDrawableCount(2);
             layer.setAllowsNextDrawableTimeout(false);
             // layer.setDisplaySyncEnabled(false); //JWM but why ignore vsync?
 
