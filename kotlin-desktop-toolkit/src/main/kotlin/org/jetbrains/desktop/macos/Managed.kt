@@ -10,7 +10,7 @@ public open class Managed internal constructor(
         return if (ptr != MemorySegment.NULL) {
             ptr
         } else {
-            throw Error("Can't access $this it's aredy closed!")
+            throw Error("Can't access $this it's alredy closed!")
         }
     }
 
