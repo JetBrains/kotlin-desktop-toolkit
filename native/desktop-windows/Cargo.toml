@@ -1,0 +1,31 @@
+[package]
+name = "desktop-windows"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+name = "desktop_windows"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+log4rs.workspace = true
+desktop-common = { path = "../desktop-common" }
+
+[dependencies.windows]
+workspace = true
+features = [
+    "System",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_System_WinRT",
+    "Win32_UI_WindowsAndMessaging",
+]
+
+[build-dependencies]
+cbindgen.workspace = true
