@@ -169,13 +169,18 @@ public object Application {
     private fun onEvent(nativeEvent: MemorySegment): Boolean {
         return ffiUpCall(defaultResult = false) {
             val event = Event.fromNative(nativeEvent)
-            when (event) {
-                is Event.ApplicationDidFinishLaunching -> {
+            when {
+                /**
+                 * MacOS has race condition between WindowScreenChange and DisplayConfigurationChange events
+                 * sometimes after system awakes we might receive WindowScreenChange earlier than DisplayConfigurationChange
+                 * Then if we deciede to access Application.screens we will read outdated value
+                 */
+                event is Event.ApplicationDidFinishLaunching ||
+                    event is Event.DisplayConfigurationChange ||
+                    event is Event.WindowScreenChange -> {
                     screens = Screen.allScreens()
                 }
-                is Event.DisplayConfigurationChange -> {
-                    screens = Screen.allScreens()
-                }
+
                 else -> {}
             }
             val result = runEventHandler(event)

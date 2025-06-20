@@ -112,7 +112,10 @@ public data class AllScreens(val screens: List<Screen>) {
         return screens.first { it.screenId == screenId }
     }
 
-    public fun findById(screenId: ScreenId): Screen? {
-        return screens.firstOrNull { it.screenId == screenId }
+    public fun findById(screenId: ScreenId): Screen {
+        val screen = screens.firstOrNull { it.screenId == screenId }
+        return screen ?: throw Error(
+            "Can't find screen with id $screenId. Available screens: $screens",
+        )
     }
 }
