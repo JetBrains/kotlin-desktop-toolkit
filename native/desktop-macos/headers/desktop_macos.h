@@ -676,6 +676,8 @@ bool dispatcher_is_main_thread(void);
 
 void dispatcher_main_exec_async(void (*f)(void));
 
+void set_qos_for_current_thread(intptr_t qos);
+
 NativeDisplayLinkPtr display_link_create(NativeScreenId screen_id,
                                          NativeDisplayLinkCallback on_next_frame);
 

@@ -73,3 +73,20 @@ public object GrandCentralDispatch : AutoCloseable {
         }
     }
 }
+
+@JvmInline
+public value class QualityOfService internal constructor(internal val x: Long) {
+    public companion object {
+        public val UserInteractive: QualityOfService = QualityOfService(0x21L)
+        public val UserInitiated: QualityOfService = QualityOfService(0x19L)
+        public val Utility: QualityOfService = QualityOfService(0x11L)
+        public val Background: QualityOfService = QualityOfService(0x09)
+        public val Default: QualityOfService = QualityOfService(-1)
+    }
+}
+
+public fun setQualityOfServiceForCurrentThread(qualityOfService: QualityOfService) {
+    ffiDownCall {
+        desktop_macos_h.set_qos_for_current_thread(qualityOfService.x)
+    }
+}

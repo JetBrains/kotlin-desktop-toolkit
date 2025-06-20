@@ -2,6 +2,8 @@ package org.jetbrains.desktop.tests
 
 import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
+import org.jetbrains.desktop.macos.QualityOfService
+import org.jetbrains.desktop.macos.setQualityOfServiceForCurrentThread
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -67,5 +69,14 @@ class GrandCentralDispatchTest {
         }
         GrandCentralDispatch.dispatchOnMainSync {}
         assertEquals(invocationOrder, executionOrder)
+    }
+
+    @Test
+    fun testSetQualityOfServiceForCurrentThreadDoesNotThrow() {
+        setQualityOfServiceForCurrentThread(QualityOfService.UserInteractive)
+        setQualityOfServiceForCurrentThread(QualityOfService.UserInitiated)
+        setQualityOfServiceForCurrentThread(QualityOfService.Utility)
+        setQualityOfServiceForCurrentThread(QualityOfService.Background)
+        setQualityOfServiceForCurrentThread(QualityOfService.Default)
     }
 }
