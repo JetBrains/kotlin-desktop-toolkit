@@ -18,3 +18,4 @@ include("kotlin-desktop-toolkit-win32")
 
 include("sample")
 include("sampleLinux")
+include("sampleWindows")
