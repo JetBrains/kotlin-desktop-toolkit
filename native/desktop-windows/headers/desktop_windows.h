@@ -9,19 +9,46 @@ typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr;
 
 typedef NativeRustAllocatedRawPtr NativeAppPtr;
 
-typedef NativeRustAllocatedRawPtr NativeWindowPtr;
+typedef intptr_t NativeWindowId;
 
 typedef int32_t NativePhysicalPixels;
-
-typedef struct NativePhysicalPoint {
-  NativePhysicalPixels x;
-  NativePhysicalPixels y;
-} NativePhysicalPoint;
 
 typedef struct NativePhysicalSize {
   NativePhysicalPixels width;
   NativePhysicalPixels height;
 } NativePhysicalSize;
+
+typedef struct NativeWindowDrawEvent {
+  struct NativePhysicalSize physical_size;
+  float scale;
+} NativeWindowDrawEvent;
+
+typedef enum NativeEvent_Tag {
+  NativeEvent_WindowCloseRequest,
+  NativeEvent_WindowDraw,
+} NativeEvent_Tag;
+
+typedef struct NativeEvent {
+  NativeEvent_Tag tag;
+  union {
+    struct {
+      struct NativeWindowDrawEvent window_draw;
+    };
+  };
+} NativeEvent;
+
+typedef bool (*NativeEventHandler)(NativeWindowId, const struct NativeEvent*);
+
+typedef struct NativeApplicationCallbacks {
+  NativeEventHandler event_handler;
+} NativeApplicationCallbacks;
+
+typedef NativeRustAllocatedRawPtr NativeWindowPtr;
+
+typedef struct NativePhysicalPoint {
+  NativePhysicalPixels x;
+  NativePhysicalPixels y;
+} NativePhysicalPoint;
 
 typedef const char *NativeGenericRawPtr_c_char;
 
@@ -36,14 +63,16 @@ typedef struct NativeWindowParams {
   bool is_minimizable;
 } NativeWindowParams;
 
-NativeAppPtr application_init(void);
+NativeAppPtr application_init(struct NativeApplicationCallbacks callbacks);
 
-void application_run_event_loop(void);
+void application_run_event_loop(NativeAppPtr app_ptr);
 
-void application_stop_event_loop(void);
+void application_stop_event_loop(NativeAppPtr app_ptr);
 
 NativeWindowPtr window_create(NativeAppPtr app_ptr, struct NativeWindowParams params);
 
-void window_drop(NativeWindowPtr window_ptr);
+NativeWindowId window_get_window_id(NativeWindowPtr window_ptr);
 
 void window_show(NativeWindowPtr window_ptr);
+
+void window_drop(NativeWindowPtr window_ptr);
