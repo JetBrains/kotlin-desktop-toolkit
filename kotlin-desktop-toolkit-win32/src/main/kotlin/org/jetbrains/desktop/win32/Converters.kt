@@ -18,3 +18,8 @@ internal fun PhysicalPoint.toNative(arena: Arena): MemorySegment {
     NativePhysicalPoint.y(result, y)
     return result
 }
+
+internal fun PhysicalSize.Companion.fromNative(s: MemorySegment) = PhysicalSize(
+    width = NativePhysicalSize.width(s),
+    height = NativePhysicalSize.height(s),
+)
