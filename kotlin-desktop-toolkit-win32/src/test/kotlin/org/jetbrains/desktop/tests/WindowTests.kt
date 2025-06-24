@@ -11,7 +11,6 @@ class WindowTests {
     fun smokeTest() {
         KotlinDesktopToolkit.init()
         Application.init()
-        Application.runEventLoop()
         val window1 = Application.createWindow(WindowParams(title = "Test Hello1"))
         val window2 = Application.createWindow(
             WindowParams(

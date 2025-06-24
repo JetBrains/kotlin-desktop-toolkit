@@ -9,3 +9,20 @@ internal fun <T> ffiDownCall(body: () -> T): T {
 //    }
     return result
 }
+
+internal inline fun ffiUpCall(crossinline body: () -> Unit) {
+    return try {
+        body()
+    } catch (e: Throwable) {
+        //Logger.error(e) { "Exception caught" }
+    }
+}
+
+internal inline fun <T> ffiUpCall(defaultResult: T, crossinline body: () -> T): T {
+    return try {
+        body()
+    } catch (e: Throwable) {
+        //Logger.error(e) { "Exception caught" }
+        defaultResult
+    }
+}
