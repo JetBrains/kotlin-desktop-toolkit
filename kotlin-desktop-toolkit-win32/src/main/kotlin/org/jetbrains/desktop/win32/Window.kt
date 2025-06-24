@@ -65,6 +65,10 @@ public class Window internal constructor(
         }
     }
 
+    public fun windowId(): WindowId {
+        return ffiDownCall { desktop_windows_h.window_get_window_id(ptr) }
+    }
+
     public fun show() {
         return ffiDownCall { desktop_windows_h.window_show(ptr) }
     }
