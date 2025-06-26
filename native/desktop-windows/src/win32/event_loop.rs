@@ -3,7 +3,8 @@ use windows::{
     Foundation::TypedEventHandler,
     System::DispatcherQueueController,
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+        Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
+        Graphics::Gdi::GetUpdateRect,
         System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
         UI::WindowsAndMessaging::{DefWindowProcW, DispatchMessageW, GetMessageW, MSG, PostQuitMessage, WM_CLOSE, WM_PAINT},
     },
@@ -64,6 +65,24 @@ impl EventLoop {
 
     pub fn window_proc(&self, hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         match msg {
+            WM_PAINT => {
+                let mut rect = RECT::default();
+                let should_update = unsafe { GetUpdateRect(hwnd, Some(&mut rect), false) }.as_bool();
+                if should_update {
+                    let event = Event::WindowDraw(WindowDrawEvent {
+                        physical_size: PhysicalSize {
+                            width: PhysicalPixels(rect.right - rect.left),
+                            height: PhysicalPixels(rect.bottom - rect.top),
+                        },
+                        scale: 1.0, // TODO
+                    });
+                    let result = (self.event_handler)(hwnd.into(), &event);
+                    if result {
+                        return LRESULT(0);
+                    }
+                }
+                unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+            }
             WM_CLOSE => {
                 if let Err(_err) = self.shutdown() {
                     error!("failed to request the shutdown of the dispatcher queue");

@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.sample.win32
 
+import org.jetbrains.desktop.win32.AngleRenderer
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
@@ -21,11 +22,13 @@ import kotlin.time.TimeSource
 abstract class SkikoWindowWin32(
     params: WindowParams,
 ) : AutoCloseable {
-//    private val directContext: DirectContext by lazy {
-//        val eglFunc = app.getEglProcFunc()!!
-//        val openGlInterace = GLAssembledInterface.createFromNativePointers(ctxPtr = eglFunc.ctxPtr, fPtr = eglFunc.fPtr)
-//        DirectContext.makeGLWithInterface(openGlInterace)
-//    }
+    private val directContext: DirectContext by lazy {
+        val angleRenderer = AngleRenderer.create(window)
+        val eglFunc = angleRenderer.getEglGetProcFunc()
+        val glInterface = GLAssembledInterface.createFromNativePointers(ctxPtr = eglFunc.ctxPtr, fPtr = eglFunc.fPtr)
+        DirectContext.makeGLWithInterface(glInterface)
+    }
+
     val window = Application.createWindow(params)
     private val creationTime = TimeSource.Monotonic.markNow()
 
@@ -44,27 +47,27 @@ abstract class SkikoWindowWin32(
     }
 
     fun performDrawing(event: Event.WindowDraw) {
-//        BackendRenderTarget.makeGL(
-//            width = event.size.width,
-//            height = event.size.height,
-//            sampleCnt = 1,
-//            stencilBits = 8,
-//            fbId = 0,
-//            fbFormat = FramebufferFormat.GR_GL_RGBA8,
-//        ).use { renderTarget ->
-//            Surface.makeFromBackendRenderTarget(
-//                context = directContext,
-//                rt = renderTarget,
-//                origin = SurfaceOrigin.BOTTOM_LEFT,
-//                colorFormat = SurfaceColorFormat.RGBA_8888,
-//                colorSpace = ColorSpace.sRGB,
-//                surfaceProps = null,
-//            )!!.use { surface ->
-//                val time = creationTime.elapsedNow().inWholeMilliseconds
-//                surface.canvas.draw(event.size, event.scale, time)
-//                surface.flushAndSubmit()
-//            }
-//        }
+        BackendRenderTarget.makeGL(
+            width = event.size.width,
+            height = event.size.height,
+            sampleCnt = 1,
+            stencilBits = 8,
+            fbId = 0,
+            fbFormat = FramebufferFormat.GR_GL_RGBA8,
+        ).use { renderTarget ->
+            Surface.makeFromBackendRenderTarget(
+                context = directContext,
+                rt = renderTarget,
+                origin = SurfaceOrigin.BOTTOM_LEFT,
+                colorFormat = SurfaceColorFormat.RGBA_8888,
+                colorSpace = ColorSpace.sRGB,
+                surfaceProps = null,
+            )!!.use { surface ->
+                val time = creationTime.elapsedNow().inWholeMilliseconds
+                surface.canvas.draw(event.size, event.scale, time)
+                surface.flushAndSubmit()
+            }
+        }
     }
 
     abstract fun Canvas.draw(size: PhysicalSize, scale: Float, time: Long)

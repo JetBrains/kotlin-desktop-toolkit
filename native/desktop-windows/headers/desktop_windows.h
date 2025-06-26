@@ -43,16 +43,23 @@ typedef struct NativeApplicationCallbacks {
   NativeEventHandler event_handler;
 } NativeApplicationCallbacks;
 
+typedef NativeRustAllocatedRawPtr NativeAngleDevicePtr;
+
+typedef const char *NativeGenericRawPtr_c_char;
+
+typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
+
+typedef struct NativeEglGetProcFuncData {
+  void (*(*f)(NativeAngleDevicePtr ctx, NativeBorrowedStrPtr name))(void);
+  NativeAngleDevicePtr ctx;
+} NativeEglGetProcFuncData;
+
 typedef NativeRustAllocatedRawPtr NativeWindowPtr;
 
 typedef struct NativePhysicalPoint {
   NativePhysicalPixels x;
   NativePhysicalPixels y;
 } NativePhysicalPoint;
-
-typedef const char *NativeGenericRawPtr_c_char;
-
-typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
 
 typedef struct NativeWindowParams {
   struct NativePhysicalPoint origin;
@@ -68,6 +75,10 @@ NativeAppPtr application_init(struct NativeApplicationCallbacks callbacks);
 void application_run_event_loop(NativeAppPtr app_ptr);
 
 void application_stop_event_loop(NativeAppPtr app_ptr);
+
+struct NativeEglGetProcFuncData renderer_angle_get_egl_get_proc_func(NativeAngleDevicePtr angle_device_ptr);
+
+NativeAngleDevicePtr renderer_angle_device_create(NativeWindowPtr window_ptr);
 
 NativeWindowPtr window_create(NativeAppPtr app_ptr, struct NativeWindowParams params);
 
