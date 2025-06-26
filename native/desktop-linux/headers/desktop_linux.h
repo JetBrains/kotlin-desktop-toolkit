@@ -612,10 +612,6 @@ typedef struct NativeWindowFocusChangeEvent {
   bool is_main;
 } NativeWindowFocusChangeEvent;
 
-typedef struct NativeWindowFullScreenToggleEvent {
-  bool is_full_screen;
-} NativeWindowFullScreenToggleEvent;
-
 typedef struct NativeWindowScaleChangedEvent {
   double new_scale;
 } NativeWindowScaleChangedEvent;
@@ -645,7 +641,6 @@ typedef enum NativeEvent_Tag {
   NativeEvent_WindowConfigure,
   NativeEvent_WindowDraw,
   NativeEvent_WindowFocusChange,
-  NativeEvent_WindowFullScreenToggle,
   NativeEvent_WindowScaleChanged,
   NativeEvent_WindowScreenChange,
 } NativeEvent_Tag;
@@ -703,9 +698,6 @@ typedef struct NativeEvent {
     };
     struct {
       struct NativeWindowFocusChangeEvent window_focus_change;
-    };
-    struct {
-      struct NativeWindowFullScreenToggleEvent window_full_screen_toggle;
     };
     struct {
       struct NativeWindowScaleChangedEvent window_scale_changed;

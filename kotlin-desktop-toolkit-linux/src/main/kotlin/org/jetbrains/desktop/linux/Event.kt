@@ -143,10 +143,6 @@ public sealed class Event {
         val isMainWindow: Boolean,
     ) : Event()
 
-    public data class WindowFullScreenToggle(
-        val isFullScreen: Boolean,
-    ) : Event()
-
     public data class WindowDraw(
         val softwareDrawData: SoftwareDrawData?,
         val size: PhysicalSize,

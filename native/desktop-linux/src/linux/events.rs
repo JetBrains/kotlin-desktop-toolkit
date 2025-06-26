@@ -496,18 +496,6 @@ impl From<WindowFocusChangeEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct WindowFullScreenToggleEvent {
-    pub is_full_screen: bool,
-}
-
-impl From<WindowFullScreenToggleEvent> for Event<'_> {
-    fn from(value: WindowFullScreenToggleEvent) -> Self {
-        Self::WindowFullScreenToggle(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
 pub struct WindowScaleChangedEvent {
     pub new_scale: f64,
 }
@@ -559,7 +547,6 @@ pub enum Event<'a> {
     WindowConfigure(WindowConfigureEvent),
     WindowDraw(WindowDrawEvent),
     WindowFocusChange(WindowFocusChangeEvent),
-    WindowFullScreenToggle(WindowFullScreenToggleEvent),
     WindowScaleChanged(WindowScaleChangedEvent),
     WindowScreenChange(WindowScreenChangeEvent),
 }

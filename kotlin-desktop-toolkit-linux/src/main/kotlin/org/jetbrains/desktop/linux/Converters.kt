@@ -31,7 +31,6 @@ import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
 import org.jetbrains.desktop.linux.generated.NativeWindowConfigureEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowFocusChangeEvent
-import org.jetbrains.desktop.linux.generated.NativeWindowFullScreenToggleEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
 import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
@@ -509,12 +508,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_linux_h.NativeEvent_WindowCloseRequest() -> {
             Event.WindowCloseRequest
-        }
-        desktop_linux_h.NativeEvent_WindowFullScreenToggle() -> {
-            val nativeEvent = NativeEvent.window_full_screen_toggle(s)
-            Event.WindowFullScreenToggle(
-                isFullScreen = NativeWindowFullScreenToggleEvent.is_full_screen(nativeEvent),
-            )
         }
         desktop_linux_h.NativeEvent_WindowDraw() -> {
             val nativeEvent = NativeEvent.window_draw(s)
