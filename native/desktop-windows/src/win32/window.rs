@@ -8,8 +8,8 @@ use windows::{
         Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM},
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
-            CreateWindowExW, DefWindowProcW, GetPropW, RegisterClassExW, RemovePropW, SW_SHOW, SetPropW, ShowWindow, WINDOW_EX_STYLE,
-            WM_NCDESTROY, WNDCLASSEXW, WS_OVERLAPPEDWINDOW,
+            CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, GetPropW, RegisterClassExW, RemovePropW, SW_SHOW, SetPropW,
+            ShowWindow, WINDOW_EX_STYLE, WM_NCDESTROY, WNDCLASSEXW, WS_OVERLAPPEDWINDOW,
         },
     },
     core::{PCWSTR, Result as WinResult, w},
@@ -35,6 +35,7 @@ impl Window {
             cbSize: size_of::<WNDCLASSEXW>() as _,
             lpszClassName: WNDCLASS_NAME,
             lpfnWndProc: Some(wndproc),
+            style: CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
             ..Default::default()
         };
         let hwnd = unsafe {
