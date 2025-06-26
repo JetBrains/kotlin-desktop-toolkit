@@ -10,7 +10,13 @@ import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.WindowId
 import org.jetbrains.desktop.win32.WindowParams
 import org.jetbrains.skia.Canvas
+import org.jetbrains.skia.Paint
 import java.lang.AutoCloseable
+import kotlin.Array
+import kotlin.Float
+import kotlin.Long
+import kotlin.String
+import kotlin.use
 
 class RotatingBallWindow(
     windowParams: WindowParams,
@@ -22,8 +28,11 @@ class RotatingBallWindow(
     }
 
     override fun Canvas.draw(size: PhysicalSize, scale: Float, time: Long) {
-        //val canvas = this
-        //windowContainer.draw(canvas, time, scale, title, editorState)
+        val canvas = this
+        Paint().use { paint ->
+            paint.color = 0x77264653
+            canvas.drawCircle(size.width.toFloat() / 2, size.height.toFloat() / 2, 100f, paint)
+        }
     }
 }
 

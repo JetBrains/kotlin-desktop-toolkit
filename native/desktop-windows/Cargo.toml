@@ -12,6 +12,8 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+khronos-egl = { version = "6.0", features = ["dynamic"] }
+libloading = "0.8"
 log.workspace = true
 log4rs.workspace = true
 desktop-common = { path = "../desktop-common" }

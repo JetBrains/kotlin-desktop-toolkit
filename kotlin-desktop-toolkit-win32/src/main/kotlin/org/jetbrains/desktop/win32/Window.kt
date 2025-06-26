@@ -65,6 +65,8 @@ public class Window internal constructor(
         }
     }
 
+    internal inline fun <T> withPointer(block: (MemorySegment) -> T): T = block(this.ptr)
+
     public fun windowId(): WindowId {
         return ffiDownCall { desktop_windows_h.window_get_window_id(ptr) }
     }
