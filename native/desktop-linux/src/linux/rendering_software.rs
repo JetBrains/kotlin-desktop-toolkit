@@ -49,7 +49,7 @@ impl SoftwareRendering {
         }
     }
 
-    pub fn draw<F: FnOnce(Option<SoftwareDrawData>)>(&mut self, surface: &WlSurface, size: PhysicalSize, do_draw: F) {
+    pub fn draw<F: FnOnce(Option<SoftwareDrawData>) -> bool>(&mut self, surface: &WlSurface, size: PhysicalSize, do_draw: F) {
         let canvas = if let Some(canvas) = self.pool.canvas(&self.buffer) {
             canvas
         } else {
@@ -60,11 +60,12 @@ impl SoftwareRendering {
             second_draw_data.canvas
         };
 
-        do_draw(Some(SoftwareDrawData {
+        let draw_data = Some(SoftwareDrawData {
             canvas: canvas.as_mut_ptr(),
             stride: self.stride,
-        }));
-
-        self.buffer.attach_to(surface).expect("buffer attach");
+        });
+        if do_draw(draw_data) {
+            self.buffer.attach_to(surface).expect("buffer attach");
+        }
     }
 }

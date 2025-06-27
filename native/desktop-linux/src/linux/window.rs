@@ -225,7 +225,7 @@ impl SimpleWindow {
         let physical_size = self.size.unwrap().to_physical(self.current_scale);
 
         let do_draw = |software_draw_data: Option<SoftwareDrawData>| {
-            (self.event_handler)(
+            let did_draw = (self.event_handler)(
                 &WindowDrawEvent {
                     software_draw_data: software_draw_data.unwrap_or(SoftwareDrawData {
                         canvas: std::ptr::null_mut(),
@@ -237,11 +237,14 @@ impl SimpleWindow {
                 .into(),
             );
 
-            // Damage the entire window
-            surface.damage_buffer(0, 0, physical_size.width.0, physical_size.height.0);
+            if did_draw {
+                // Damage the entire window
+                surface.damage_buffer(0, 0, physical_size.width.0, physical_size.height.0);
+            }
 
             // Request our next frame
             surface.frame(qh, surface.clone());
+            did_draw
         };
 
         match &mut self.rendering_data {

@@ -64,7 +64,7 @@ impl EglRendering {
         self.wl_egl_surface.resize(size.width.0, size.height.0, 0, 0);
     }
 
-    pub fn draw<F: FnOnce(Option<SoftwareDrawData>)>(&self, surface: &WlSurface, egl: &EglInstance, do_draw: F) {
+    pub fn draw<F: FnOnce(Option<SoftwareDrawData>) -> bool>(&self, surface: &WlSurface, egl: &EglInstance, do_draw: F) {
         egl.make_current(
             self.egl_display,
             Some(self.egl_window_surface),
@@ -74,10 +74,10 @@ impl EglRendering {
         .context("egl.make_current")
         .unwrap();
 
-        do_draw(None);
-
-        egl.swap_buffers(self.egl_display, self.egl_window_surface)
-            .context(surface.id())
-            .unwrap();
+        if do_draw(None) {
+            egl.swap_buffers(self.egl_display, self.egl_window_surface)
+                .context(surface.id())
+                .unwrap();
+        }
     }
 }
