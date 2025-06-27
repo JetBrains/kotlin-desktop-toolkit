@@ -5,11 +5,11 @@ use std::{
 
 use windows::{
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+        Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM},
         System::LibraryLoader::GetModuleHandleW,
         UI::WindowsAndMessaging::{
-            CreateWindowExW, DefWindowProcW, GetWindowLongPtrW, RegisterClassExW, SW_SHOW, SetWindowLongPtrW, ShowWindow, WINDOW_EX_STYLE,
-            WINDOW_LONG_PTR_INDEX, WNDCLASSEXW, WS_OVERLAPPEDWINDOW,
+            CreateWindowExW, DefWindowProcW, GetPropW, RegisterClassExW, RemovePropW, SW_SHOW, SetPropW, ShowWindow, WINDOW_EX_STYLE,
+            WM_NCDESTROY, WNDCLASSEXW, WS_OVERLAPPEDWINDOW,
         },
     },
     core::{PCWSTR, Result as WinResult, w},
@@ -21,6 +21,8 @@ use super::{
     window_api::{WindowId, WindowParams},
 };
 
+const WINDOW_EVENT_LOOP_PROP_NAME: PCWSTR = w!("KOTLIN_DESKTOP_TOOLKIT_EVENT_LOOP_PTR");
+
 pub struct Window {
     hwnd: HWND,
     _john_weak: Weak<EventLoop>,
@@ -31,7 +33,6 @@ impl Window {
         const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
         let wndclass = WNDCLASSEXW {
             cbSize: size_of::<WNDCLASSEXW>() as _,
-            cbWndExtra: size_of::<*const Window>() as _,
             lpszClassName: WNDCLASS_NAME,
             lpfnWndProc: Some(wndproc),
             ..Default::default()
@@ -55,7 +56,7 @@ impl Window {
             )?
         };
         let event_loop = Rc::downgrade(&app.event_loop());
-        unsafe { SetWindowLongPtrW(hwnd, WINDOW_LONG_PTR_INDEX(0), event_loop.as_ptr() as _) };
+        unsafe { SetPropW(hwnd, WINDOW_EVENT_LOOP_PROP_NAME, Some(HANDLE(event_loop.as_ptr() as _))) }?;
         Ok(Self {
             hwnd,
             _john_weak: event_loop,
@@ -75,11 +76,22 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     if hwnd.0.is_null() {
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     }
-    let raw = unsafe { GetWindowLongPtrW(hwnd, WINDOW_LONG_PTR_INDEX(0)) as *const EventLoop };
+    // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
+    if msg == WM_NCDESTROY {
+        let raw = unsafe { RemovePropW(hwnd, WINDOW_EVENT_LOOP_PROP_NAME) }
+            .unwrap_or(HANDLE::default())
+            .0 as *const EventLoop;
+        if !raw.is_null() {
+            // this is the moment when we can drop the weak reference
+            let _ = unsafe { Weak::from_raw(raw) };
+        }
+        return LRESULT(0);
+    }
+    let raw = unsafe { GetPropW(hwnd, WINDOW_EVENT_LOOP_PROP_NAME).0 as *const EventLoop };
     if raw.is_null() {
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     }
-    // we reuse the weak reference on every iteration of the event loop, so we shouldn't drop it
+    // we reuse the weak reference on every iteration of the event loop, so we don't drop it here (see above)
     let this = ManuallyDrop::new(unsafe { Weak::from_raw(raw) });
     match this.upgrade() {
         Some(app) => app.window_proc(hwnd, msg, wparam, lparam),
