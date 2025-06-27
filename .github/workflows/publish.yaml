@@ -16,7 +16,7 @@ jobs:
         targets: [
           { os: "macos-14", rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin", package_manager: "brew", gradle_project: "kotlin-desktop-toolkit" },
           { os: "ubuntu-22.04", rust_targets: "x86_64-unknown-linux-gnu", package_manager: "apt", gradle_project: "kotlin-desktop-toolkit-linux" },
-          { os: "ubuntu-22.04-arm", rust_targets: "aarch64-unknown-linux-gnu", package_manager: "apt", gradle_project: "kotlin-desktop-toolkit-linux" },
+          #{ os: "ubuntu-22.04-arm", rust_targets: "aarch64-unknown-linux-gnu", package_manager: "apt", gradle_project: "kotlin-desktop-toolkit-linux" },
         ]
     runs-on: ${{ matrix.targets.os }}
     steps:
