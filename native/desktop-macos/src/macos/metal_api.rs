@@ -4,7 +4,7 @@ use std::{cell::Cell, ffi::c_void};
 
 use anyhow::Context;
 use objc2::rc::autoreleasepool;
-use objc2::{AllocAnyThread, DefinedClass, MainThreadOnly, define_class, msg_send};
+use objc2::{AllocAnyThread, DefinedClass, MainThreadOnly, define_class, msg_send, ffi};
 use objc2::{rc::Retained, runtime::ProtocolObject};
 use objc2_app_kit::{NSAutoresizingMaskOptions, NSView, NSViewLayerContentsPlacement, NSViewLayerContentsRedrawPolicy};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSSize, ns_string};
@@ -276,6 +276,23 @@ pub extern "C" fn metal_view_get_is_opaque(view_ptr: MetalViewPtr) -> bool {
     ffi_boundary("metal_view_get_is_opaque", || {
         let view = unsafe { view_ptr.borrow::<MetalView>() };
         Ok(view.layer.isOpaque())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn push_autorelease_pool() -> isize {
+    ffi_boundary("push_autorelease_pool", || {
+        let pool_ptr = unsafe { ffi::objc_autoreleasePoolPush() };
+        Ok(pool_ptr as isize)
+    })
+}
+
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pop_autorelease_pool(pool_ptr: isize) {
+    ffi_boundary("pop_autorelease_pool", || {
+        unsafe { ffi::objc_autoreleasePoolPop(pool_ptr as *mut c_void) };
+        Ok(())
     })
 }
 

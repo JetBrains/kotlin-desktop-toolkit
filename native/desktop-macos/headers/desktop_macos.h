@@ -719,6 +719,10 @@ void metal_view_set_is_opaque(NativeMetalViewPtr view_ptr, bool value);
 
 bool metal_view_get_is_opaque(NativeMetalViewPtr view_ptr);
 
+intptr_t push_autorelease_pool(void);
+
+void pop_autorelease_pool(intptr_t pool_ptr);
+
 void metal_view_present(NativeMetalViewPtr view_ptr,
                         NativeMetalCommandQueueRef queue,
                         bool wait_for_ca_transaction);

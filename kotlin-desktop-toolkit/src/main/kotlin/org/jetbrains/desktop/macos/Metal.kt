@@ -75,6 +75,16 @@ public class MetalView internal constructor(ptr: MemorySegment, private val aren
     }
 }
 
+public fun withAutoReleasePool(f: () -> Unit) {
+    val pool = ffiDownCall {
+        desktop_macos_h.push_autorelease_pool()
+    }
+    f()
+    ffiDownCall {
+        desktop_macos_h.pop_autorelease_pool(pool)
+    }
+}
+
 public class MetalTexture internal constructor(ptr: MemorySegment) : Managed(ptr, desktop_macos_h::metal_deref_texture) {
     public val pointerAddress: Long get() = pointer.address()
 }
