@@ -90,3 +90,16 @@ public fun setQualityOfServiceForCurrentThread(qualityOfService: QualityOfServic
         desktop_macos_h.set_qos_for_current_thread(qualityOfService.x)
     }
 }
+
+public fun withAutoReleasePool(f: () -> Unit) {
+    val pool = ffiDownCall {
+        desktop_macos_h.push_autorelease_pool()
+    }
+    try {
+        f()
+    } finally {
+        ffiDownCall {
+            desktop_macos_h.pop_autorelease_pool(pool)
+        }
+    }
+}

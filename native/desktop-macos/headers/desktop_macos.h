@@ -678,6 +678,10 @@ bool dispatcher_is_main_thread(void);
 
 void dispatcher_main_exec_async(void (*f)(void));
 
+intptr_t push_autorelease_pool(void);
+
+void pop_autorelease_pool(intptr_t pool_ptr);
+
 void set_qos_for_current_thread(intptr_t qos);
 
 NativeDisplayLinkPtr display_link_create(NativeScreenId screen_id,
@@ -718,10 +722,6 @@ void metal_view_set_needs_display(NativeMetalViewPtr view_ptr);
 void metal_view_set_is_opaque(NativeMetalViewPtr view_ptr, bool value);
 
 bool metal_view_get_is_opaque(NativeMetalViewPtr view_ptr);
-
-intptr_t push_autorelease_pool(void);
-
-void pop_autorelease_pool(intptr_t pool_ptr);
 
 void metal_view_present(NativeMetalViewPtr view_ptr,
                         NativeMetalCommandQueueRef queue,
