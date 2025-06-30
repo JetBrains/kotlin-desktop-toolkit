@@ -13,7 +13,7 @@ use smithay_client_toolkit::{
 use super::events::{KeyUpEvent, ModifiersChangedEvent};
 use crate::linux::{
     application_state::ApplicationState,
-    events::{KeyCode, KeyDownEvent, WindowFocusChangeEvent},
+    events::{Event, KeyCode, KeyDownEvent, WindowKeyboardEnterEvent},
     window::SimpleWindow,
 };
 
@@ -25,12 +25,12 @@ impl KeyboardHandler for ApplicationState {
         _: &WlKeyboard,
         surface: &WlSurface,
         _serial: u32,
-        _raw: &[u32],
+        raw: &[u32],
         keysyms: &[Keysym],
     ) {
         self.key_surface = Some(surface.id());
         if let Some(window) = self.get_window(surface) {
-            window.keyboard_enter(keysyms);
+            window.keyboard_enter(raw, keysyms);
         }
     }
 
@@ -72,13 +72,13 @@ impl KeyboardHandler for ApplicationState {
 delegate_keyboard!(ApplicationState);
 
 impl SimpleWindow {
-    pub fn keyboard_enter(&self, keysyms: &[Keysym]) {
+    pub fn keyboard_enter(&self, raw: &[u32], keysyms: &[Keysym]) {
         debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
-        (self.event_handler)(&WindowFocusChangeEvent::new(true).into());
+        (self.event_handler)(&WindowKeyboardEnterEvent::new(raw).into());
     }
 
     pub fn keyboard_leave(&self) {
-        (self.event_handler)(&WindowFocusChangeEvent::new(false).into());
+        (self.event_handler)(&Event::WindowKeyboardLeave);
     }
 
     fn send_key_down_event(&self, event: KeyEvent, is_repeat: bool) {

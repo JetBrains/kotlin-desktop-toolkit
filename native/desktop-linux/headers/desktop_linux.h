@@ -607,10 +607,15 @@ typedef struct NativeWindowDrawEvent {
   double scale;
 } NativeWindowDrawEvent;
 
-typedef struct NativeWindowFocusChangeEvent {
-  bool is_key;
-  bool is_main;
-} NativeWindowFocusChangeEvent;
+typedef struct NativeBorrowedArray_u32 {
+  const uint32_t *ptr;
+  NativeArraySize len;
+  void (*deinit)(const uint32_t*, NativeArraySize);
+} NativeBorrowedArray_u32;
+
+typedef struct NativeWindowKeyboardEnterEvent {
+  struct NativeBorrowedArray_u32 raw;
+} NativeWindowKeyboardEnterEvent;
 
 typedef struct NativeWindowScaleChangedEvent {
   double new_scale;
@@ -640,7 +645,8 @@ typedef enum NativeEvent_Tag {
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowConfigure,
   NativeEvent_WindowDraw,
-  NativeEvent_WindowFocusChange,
+  NativeEvent_WindowKeyboardEnter,
+  NativeEvent_WindowKeyboardLeave,
   NativeEvent_WindowScaleChanged,
   NativeEvent_WindowScreenChange,
 } NativeEvent_Tag;
@@ -697,7 +703,7 @@ typedef struct NativeEvent {
       struct NativeWindowDrawEvent window_draw;
     };
     struct {
-      struct NativeWindowFocusChangeEvent window_focus_change;
+      struct NativeWindowKeyboardEnterEvent window_keyboard_enter;
     };
     struct {
       struct NativeWindowScaleChangedEvent window_scale_changed;

@@ -138,10 +138,11 @@ public sealed class Event {
         val capabilities: WindowCapabilities,
     ) : Event()
 
-    public data class WindowFocusChange(
-        val isKeyWindow: Boolean,
-        val isMainWindow: Boolean,
+    public data class WindowKeyboardEnter(
+        val keys: List<KeySym>,
     ) : Event()
+
+    public data object WindowKeyboardLeave : Event()
 
     public data class WindowDraw(
         val softwareDrawData: SoftwareDrawData?,

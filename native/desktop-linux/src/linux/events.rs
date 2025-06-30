@@ -477,20 +477,21 @@ impl From<WindowDrawEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct WindowFocusChangeEvent {
-    pub is_key: bool,
-    pub is_main: bool,
+pub struct WindowKeyboardEnterEvent<'a> {
+    pub raw: BorrowedArray<'a, u32>,
 }
 
-impl WindowFocusChangeEvent {
-    pub(crate) const fn new(is_key: bool) -> Self {
-        Self { is_key, is_main: is_key }
+impl<'a> WindowKeyboardEnterEvent<'a> {
+    pub(crate) fn new(raw: &'a [u32]) -> Self {
+        Self {
+            raw: BorrowedArray::from_slice(raw),
+        }
     }
 }
 
-impl From<WindowFocusChangeEvent> for Event<'_> {
-    fn from(value: WindowFocusChangeEvent) -> Self {
-        Self::WindowFocusChange(value)
+impl<'a> From<WindowKeyboardEnterEvent<'a>> for Event<'a> {
+    fn from(value: WindowKeyboardEnterEvent<'a>) -> Self {
+        Self::WindowKeyboardEnter(value)
     }
 }
 
@@ -546,7 +547,8 @@ pub enum Event<'a> {
     WindowCloseRequest,
     WindowConfigure(WindowConfigureEvent),
     WindowDraw(WindowDrawEvent),
-    WindowFocusChange(WindowFocusChangeEvent),
+    WindowKeyboardEnter(WindowKeyboardEnterEvent<'a>),
+    WindowKeyboardLeave,
     WindowScaleChanged(WindowScaleChangedEvent),
     WindowScreenChange(WindowScreenChangeEvent),
 }

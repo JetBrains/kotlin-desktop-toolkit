@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.linux
 
+import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
 import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailable
@@ -30,7 +31,7 @@ import org.jetbrains.desktop.linux.generated.NativeTextInputPreeditStringData
 import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
 import org.jetbrains.desktop.linux.generated.NativeWindowConfigureEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
-import org.jetbrains.desktop.linux.generated.NativeWindowFocusChangeEvent
+import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardEnterEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
 import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
@@ -499,12 +500,21 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 capabilities = WindowCapabilities.fromNative(NativeWindowConfigureEvent.capabilities(nativeEvent)),
             )
         }
-        desktop_linux_h.NativeEvent_WindowFocusChange() -> {
-            val nativeEvent = NativeEvent.window_focus_change(s)
-            Event.WindowFocusChange(
-                isKeyWindow = NativeWindowFocusChangeEvent.is_key(nativeEvent),
-                isMainWindow = NativeWindowFocusChangeEvent.is_main(nativeEvent),
-            )
+        desktop_linux_h.NativeEvent_WindowKeyboardEnter() -> {
+            val nativeEvent = NativeEvent.window_keyboard_enter(s)
+
+            val nativeU8Array = NativeWindowKeyboardEnterEvent.raw(nativeEvent)
+            val len = NativeBorrowedArray_u32.len(nativeU8Array)
+            val dataPtr = NativeBorrowedArray_u32.ptr(nativeU8Array)
+            val keys = mutableListOf<KeySym>()
+            for (i in 0 until len) {
+                val raw = dataPtr.get(desktop_linux_h.C_INT, i)
+                keys.add(KeySym(raw))
+            }
+            Event.WindowKeyboardEnter(keys = keys)
+        }
+        desktop_linux_h.NativeEvent_WindowKeyboardLeave() -> {
+            Event.WindowKeyboardLeave
         }
         desktop_linux_h.NativeEvent_WindowCloseRequest() -> {
             Event.WindowCloseRequest
