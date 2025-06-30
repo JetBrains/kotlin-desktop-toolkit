@@ -174,6 +174,18 @@ impl Application<'static> {
         }
     }
 
+    pub fn clipboard_get_available_mimetypes(&self) -> Option<String> {
+        let Some(data_device) = self.state.data_device.as_ref() else {
+            warn!("Application::clipboard_paste: No data device available");
+            return None;
+        };
+        let Some(selection_offer) = data_device.data().selection_offer() else {
+            debug!("Application::clipboard_paste: No selection offer found");
+            return None;
+        };
+        selection_offer.with_mime_types(|mime_types| Some(mime_types.join(",")))
+    }
+
     pub fn clipboard_paste(&self, window_id: WindowId, serial: i32, supported_mime_types: &str) -> anyhow::Result<bool> {
         let Some(data_device) = self.state.data_device.as_ref() else {
             warn!("Application::clipboard_paste: No data device available");

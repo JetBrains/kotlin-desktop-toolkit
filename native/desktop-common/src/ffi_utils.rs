@@ -173,7 +173,7 @@ impl RustAllocatedStrPtr {
         })
     }
 
-    pub fn allocate(data: &[u8]) -> Result<Self, NulError> {
+    pub fn allocate<T: Into<Vec<u8>>>(data: T) -> Result<Self, NulError> {
         Ok(Self(GenericRawPtr {
             ptr: CString::new(data)?.into_raw(),
             phantom: PhantomData,

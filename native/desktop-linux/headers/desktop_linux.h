@@ -820,6 +820,8 @@ void application_text_input_disable(NativeAppPtr app_ptr);
 
 void application_clipboard_put(NativeAppPtr app_ptr, NativeBorrowedStrPtr mime_types);
 
+NativeRustAllocatedStrPtr application_clipboard_get_available_mimetypes(NativeAppPtr app_ptr);
+
 void application_start_drag_and_drop(NativeAppPtr app_ptr,
                                      NativeWindowId window_id,
                                      NativeBorrowedStrPtr mime_types,
@@ -830,6 +832,8 @@ bool application_open_url(NativeBorrowedStrPtr url_string);
 NativeScreenInfoArray screen_list(NativeAppPtr app_ptr);
 
 void screen_list_drop(NativeScreenInfoArray arr);
+
+void string_drop(NativeRustAllocatedStrPtr str_ptr);
 
 void window_create(NativeAppPtr app_ptr, struct NativeWindowParams params);
 

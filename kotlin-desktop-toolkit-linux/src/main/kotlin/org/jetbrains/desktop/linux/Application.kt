@@ -321,4 +321,13 @@ public class Application() : AutoCloseable {
             }
         }
     }
+
+    public fun clipboardGetAvailableMimeTypes(): List<String> {
+        val csvMimetypes = ffiDownCall { desktop_linux_h.application_clipboard_get_available_mimetypes(appPtr) }
+        return try {
+            csvMimetypes.getUtf8String(0).split(",")
+        } finally {
+            ffiDownCall { desktop_linux_h.string_drop(csvMimetypes) }
+        }
+    }
 }

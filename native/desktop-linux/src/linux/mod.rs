@@ -10,6 +10,7 @@ pub mod pointer_shapes;
 mod rendering_egl;
 mod rendering_software;
 pub mod screen;
+pub mod string_api;
 mod text_input;
 pub mod text_input_api;
 mod window;

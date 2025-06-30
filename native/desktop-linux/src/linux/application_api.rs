@@ -1,6 +1,6 @@
 use anyhow::{Context, bail};
 use desktop_common::{
-    ffi_utils::{BorrowedArray, BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr},
+    ffi_utils::{BorrowedArray, BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr, RustAllocatedStrPtr},
     logger::ffi_boundary,
 };
 use log::debug;
@@ -182,6 +182,19 @@ pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr<'_>, mime_types:
         app.clipboard_put(MimeTypes::new(mime_types.as_str()?));
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_clipboard_get_available_mimetypes(mut app_ptr: AppPtr<'_>) -> RustAllocatedStrPtr {
+    debug!("application_clipboard_get_available_mimetypes");
+    ffi_boundary("application_clipboard_get_available_mimetypes", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        if let Some(csv_mimetypes) = app.clipboard_get_available_mimetypes() {
+            Ok(RustAllocatedStrPtr::allocate(csv_mimetypes)?)
+        } else {
+            Ok(RustAllocatedStrPtr::null())
+        }
+    })
 }
 
 #[repr(C)]
