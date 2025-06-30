@@ -11,23 +11,23 @@ public object KotlinDesktopToolkit {
         libraryFolderPath: Path = Path.of(requiredProperty("kdt.library.folder.path")),
         logFilePath: Path = Path.of(requiredProperty("kdt.native.log.path")),
         useDebugBuild: Boolean = System.getProperty("kdt.debug")?.toBooleanStrictOrNull() ?: false,
-//        consoleLogLevel: LogLevel = LogLevel.Info,
-//        fileLogLevel: LogLevel = LogLevel.Info,
-//        appenderInterface: AppenderInterface = DefaultConsoleAppender.fromLevel(consoleLogLevel),
+        consoleLogLevel: LogLevel = LogLevel.Info,
+        fileLogLevel: LogLevel = LogLevel.Info,
+        appenderInterface: AppenderInterface = DefaultConsoleAppender.fromLevel(consoleLogLevel),
     ) {
         if (isInitialized.compareAndSet(false, true)) {
             // todo check that native library version is consistent with Kotlin code
             val libraryPath = libraryFolderPath.resolve(libraryName(useDebugBuild = useDebugBuild))
             load(libraryPath)
-//            initLogger(
-//                logFile = logFilePath,
-//                consoleLogLevel = consoleLogLevel,
-//                fileLogLevel = fileLogLevel,
-//                appender = appenderInterface,
-//            )
-//            Logger.info { "KotlinDesktopToolkit is initialized" }
+            initLogger(
+                logFile = logFilePath,
+                consoleLogLevel = consoleLogLevel,
+                fileLogLevel = fileLogLevel,
+                appender = appenderInterface,
+            )
+            Logger.info { "KotlinDesktopToolkit is initialized" }
         } else {
-//            Logger.warn { "Init was called for already initialized library" }
+            Logger.warn { "Init was called for already initialized library" }
         }
     }
 
