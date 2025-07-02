@@ -5,5 +5,6 @@ mod events;
 mod geometry;
 mod renderer_angle;
 mod renderer_api;
+mod utils;
 mod window;
 mod window_api;
