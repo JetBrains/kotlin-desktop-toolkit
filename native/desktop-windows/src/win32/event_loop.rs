@@ -3,19 +3,22 @@ use windows::{
     Foundation::TypedEventHandler,
     System::DispatcherQueueController,
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+        Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
         Graphics::Gdi::{BeginPaint, EndPaint},
         System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
         UI::WindowsAndMessaging::{
-            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, MSG, PostQuitMessage, TranslateMessage, WM_CLOSE, WM_PAINT,
+            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, MSG, PostQuitMessage, TranslateMessage, USER_DEFAULT_SCREEN_DPI,
+            WM_CLOSE, WM_DPICHANGED, WM_PAINT,
         },
     },
     core::Result as WinResult,
 };
 
 use super::{
-    events::{Event, EventHandler, WindowDrawEvent},
-    geometry::{PhysicalPixels, PhysicalSize},
+    events::{EventHandler, WindowDrawEvent, WindowScaleChangedEvent},
+    geometry::{PhysicalPoint, PhysicalSize},
+    utils,
+    window::Window,
 };
 
 pub struct EventLoop {
@@ -75,17 +78,33 @@ impl EventLoop {
                     error!("Failed to get client rect: {err:?}");
                     return LRESULT(1);
                 }
-                let event = Event::WindowDraw(WindowDrawEvent {
-                    physical_size: PhysicalSize {
-                        width: PhysicalPixels(rect.right - rect.left),
-                        height: PhysicalPixels(rect.bottom - rect.top),
-                    },
-                    scale: 1.0, // TODO
-                });
-                let handled = (self.event_handler)(hwnd.into(), &event);
+                let event = WindowDrawEvent {
+                    physical_size: PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top),
+                    scale: Window::hwnd_get_scale(hwnd),
+                };
+                let handled = (self.event_handler)(hwnd.into(), &event.into());
                 let _ = unsafe { EndPaint(hwnd, &paint) };
                 if handled { LRESULT(0) } else { LRESULT(1) }
             }
+
+            WM_DPICHANGED => {
+                let new_dpi = utils::HIWORD(wparam.0);
+                assert_eq!(
+                    new_dpi,
+                    utils::LOWORD(wparam.0),
+                    "The DPI values of the X-axis and the Y-axis should be identical for Windows apps."
+                );
+                let new_scale = (new_dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
+                let new_rect = unsafe { *(lparam.0 as *const RECT) };
+                let event = WindowScaleChangedEvent {
+                    new_origin: PhysicalPoint::new(new_rect.left, new_rect.top),
+                    new_size: PhysicalSize::new(new_rect.right - new_rect.left, new_rect.bottom - new_rect.top),
+                    new_scale,
+                };
+                let handled = (self.event_handler)(hwnd.into(), &event.into());
+                if handled { LRESULT(0) } else { LRESULT(1) }
+            }
+
             WM_CLOSE => {
                 if let Err(_err) = self.shutdown() {
                     error!("failed to request the shutdown of the dispatcher queue");
@@ -93,6 +112,7 @@ impl EventLoop {
                 }
                 LRESULT(0)
             }
+
             _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
         }
     }

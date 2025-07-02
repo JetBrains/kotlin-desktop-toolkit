@@ -1,4 +1,7 @@
-use super::{geometry::PhysicalSize, window_api::WindowId};
+use super::{
+    geometry::{PhysicalPoint, PhysicalSize},
+    window_api::WindowId,
+};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -18,7 +21,7 @@ pub enum Event /*<'a>*/ {
     WindowDraw(WindowDrawEvent),
     //WindowFocusChange(WindowFocusChangeEvent),
     //WindowFullScreenToggle(WindowFullScreenToggleEvent),
-    //WindowScaleChanged(WindowScaleChangedEvent),
+    WindowScaleChanged(WindowScaleChangedEvent),
     //WindowScreenChange(WindowScreenChangeEvent),
     //WindowResize(WindowResizeEvent),
     //WindowMove(WindowMoveEvent),
@@ -34,8 +37,22 @@ pub struct WindowDrawEvent {
     pub scale: f32,
 }
 
-impl From<WindowDrawEvent> for Event /*<'_>*/ {
+impl From<WindowDrawEvent> for Event {
     fn from(value: WindowDrawEvent) -> Self {
         Self::WindowDraw(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowScaleChangedEvent {
+    pub new_origin: PhysicalPoint,
+    pub new_size: PhysicalSize,
+    pub new_scale: f32,
+}
+
+impl From<WindowScaleChangedEvent> for Event {
+    fn from(value: WindowScaleChangedEvent) -> Self {
+        Self::WindowScaleChanged(value)
     }
 }
