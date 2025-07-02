@@ -3,7 +3,10 @@ use desktop_common::{
     logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
-use windows::Win32::Foundation::{HWND, INVALID_HANDLE_VALUE};
+use windows::Win32::{
+    Foundation::{HWND, INVALID_HANDLE_VALUE},
+    Graphics::Dwm::{DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW},
+};
 
 use super::{
     application::Application,
@@ -47,6 +50,29 @@ pub struct WindowParams<'a> {
     pub is_minimizable: bool,
 }
 
+#[repr(C)]
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum WindowSystemBackdropType {
+    Auto,
+    None,
+    Mica,
+    DesktopAcrylic,
+    MicaAlt,
+}
+
+impl WindowSystemBackdropType {
+    pub const fn to_system(&self) -> DWM_SYSTEMBACKDROP_TYPE {
+        match self {
+            WindowSystemBackdropType::Auto => DWMSBT_AUTO,
+            WindowSystemBackdropType::None => DWMSBT_NONE,
+            WindowSystemBackdropType::Mica => DWMSBT_MAINWINDOW,
+            WindowSystemBackdropType::DesktopAcrylic => DWMSBT_TRANSIENTWINDOW,
+            WindowSystemBackdropType::MicaAlt => DWMSBT_TABBEDWINDOW,
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn window_create(app_ptr: AppPtr, params: WindowParams) -> WindowPtr<'static> {
     let window = ffi_boundary("window_create", || {
@@ -65,6 +91,22 @@ pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
     ffi_boundary("window_get_window_id", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.id())
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_extend_content_into_titlebar(window_ptr: WindowPtr) {
+    ffi_boundary("window_extend_content_into_titlebar", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        Ok(window.extend_content_into_titlebar()?)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_apply_system_backdrop(window_ptr: WindowPtr, backdrop_type: WindowSystemBackdropType) {
+    ffi_boundary("window_apply_system_backdrop", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        Ok(window.apply_system_backdrop(backdrop_type)?)
     })
 }
 
