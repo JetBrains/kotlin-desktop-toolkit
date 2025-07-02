@@ -6,6 +6,7 @@ import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.KotlinDesktopToolkit
 import org.jetbrains.desktop.win32.LogLevel
 import org.jetbrains.desktop.win32.Logger
+import org.jetbrains.desktop.win32.LogicalSize
 import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.WindowId
 import org.jetbrains.desktop.win32.WindowParams
@@ -32,7 +33,7 @@ class RotatingBallWindow(
         val canvas = this
         Paint().use { paint ->
             paint.color = 0x77264653
-            canvas.drawCircle(size.width.toFloat() / 2, size.height.toFloat() / 2, 100f, paint)
+            canvas.drawCircle(size.width.toFloat() / 2, size.height.toFloat() / 2, 100f * scale, paint)
         }
     }
 }
@@ -42,7 +43,7 @@ class ApplicationState : AutoCloseable {
 
     fun createWindow() {
         val windowParams = WindowParams(
-            size = PhysicalSize(width = 640, height = 480),
+            size = LogicalSize(width = 640f, height = 480f),
             title = "Window",
         )
 

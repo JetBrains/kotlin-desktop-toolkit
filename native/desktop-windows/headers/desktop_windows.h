@@ -59,9 +59,21 @@ typedef struct NativeWindowDrawEvent {
   float scale;
 } NativeWindowDrawEvent;
 
+typedef struct NativePhysicalPoint {
+  NativePhysicalPixels x;
+  NativePhysicalPixels y;
+} NativePhysicalPoint;
+
+typedef struct NativeWindowScaleChangedEvent {
+  struct NativePhysicalPoint new_origin;
+  struct NativePhysicalSize new_size;
+  float new_scale;
+} NativeWindowScaleChangedEvent;
+
 typedef enum NativeEvent_Tag {
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowDraw,
+  NativeEvent_WindowScaleChanged,
 } NativeEvent_Tag;
 
 typedef struct NativeEvent {
@@ -69,6 +81,9 @@ typedef struct NativeEvent {
   union {
     struct {
       struct NativeWindowDrawEvent window_draw;
+    };
+    struct {
+      struct NativeWindowScaleChangedEvent window_scale_changed;
     };
   };
 } NativeEvent;
@@ -94,14 +109,21 @@ typedef struct NativeAngleDeviceCallbacks {
   NativeAngleDeviceDrawFun draw_fun;
 } NativeAngleDeviceCallbacks;
 
-typedef struct NativePhysicalPoint {
-  NativePhysicalPixels x;
-  NativePhysicalPixels y;
-} NativePhysicalPoint;
+typedef float NativeLogicalPixels;
+
+typedef struct NativeLogicalPoint {
+  NativeLogicalPixels x;
+  NativeLogicalPixels y;
+} NativeLogicalPoint;
+
+typedef struct NativeLogicalSize {
+  NativeLogicalPixels width;
+  NativeLogicalPixels height;
+} NativeLogicalSize;
 
 typedef struct NativeWindowParams {
-  struct NativePhysicalPoint origin;
-  struct NativePhysicalSize size;
+  struct NativeLogicalPoint origin;
+  struct NativeLogicalSize size;
   NativeBorrowedStrPtr title;
   bool is_resizable;
   bool is_closable;
@@ -146,5 +168,9 @@ void window_apply_system_backdrop(NativeWindowPtr window_ptr,
                                   enum NativeWindowSystemBackdropType backdrop_type);
 
 void window_show(NativeWindowPtr window_ptr);
+
+void window_set_rect(NativeWindowPtr window_ptr,
+                     struct NativePhysicalPoint origin,
+                     struct NativePhysicalSize size);
 
 void window_drop(NativeWindowPtr window_ptr);

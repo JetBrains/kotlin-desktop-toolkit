@@ -56,6 +56,12 @@ abstract class SkikoWindowWin32(
                 performDrawing(event.size, event.scale)
                 EventHandlerResult.Stop
             }
+
+            is Event.WindowScaleChanged -> {
+                window.setRect(event.newOrigin, event.newSize)
+                EventHandlerResult.Stop
+            }
+
             else -> EventHandlerResult.Continue
         }
     }
