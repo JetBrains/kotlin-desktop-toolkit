@@ -5,11 +5,18 @@ use std::{
 
 use windows::{
     Win32::{
-        Foundation::{HANDLE, HWND, LPARAM, LRESULT, WPARAM},
+        Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
+        Graphics::Dwm::{
+            DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
+            DwmSetWindowAttribute,
+        },
         System::LibraryLoader::GetModuleHandleW,
-        UI::WindowsAndMessaging::{
-            CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, GetPropW, RegisterClassExW, RemovePropW, SW_SHOW, SetPropW,
-            ShowWindow, WINDOW_EX_STYLE, WM_NCDESTROY, WNDCLASSEXW, WS_OVERLAPPEDWINDOW,
+        UI::{
+            Controls::MARGINS,
+            WindowsAndMessaging::{
+                CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, GetPropW, RegisterClassExW, RemovePropW, SW_SHOW,
+                SetPropW, ShowWindow, WINDOW_EX_STYLE, WM_NCDESTROY, WNDCLASSEXW, WS_OVERLAPPEDWINDOW,
+            },
         },
     },
     core::{PCWSTR, Result as WinResult, w},
@@ -18,7 +25,7 @@ use windows::{
 use super::{
     application::Application,
     event_loop::EventLoop,
-    window_api::{WindowId, WindowParams},
+    window_api::{WindowId, WindowParams, WindowSystemBackdropType},
 };
 
 const WINDOW_EVENT_LOOP_PROP_NAME: PCWSTR = w!("KOTLIN_DESKTOP_TOOLKIT_EVENT_LOOP_PTR");
@@ -66,6 +73,38 @@ impl Window {
 
     pub fn id(&self) -> WindowId {
         WindowId(self.hwnd.0 as isize)
+    }
+
+    pub fn extend_content_into_titlebar(&self) -> WinResult<()> {
+        let colorref = COLORREF(DWMWA_COLOR_NONE);
+        let margins = MARGINS {
+            cxLeftWidth: -1,
+            cxRightWidth: -1,
+            cyTopHeight: -1,
+            cyBottomHeight: -1,
+        };
+        unsafe {
+            // if we want to extend content into the titlebar area, it makes sense to remove any color from it
+            DwmSetWindowAttribute(
+                self.hwnd,
+                DWMWA_CAPTION_COLOR,
+                &raw const colorref as *const _,
+                core::mem::size_of::<COLORREF>() as _,
+            )?;
+            DwmExtendFrameIntoClientArea(self.hwnd, &margins)
+        }
+    }
+
+    pub fn apply_system_backdrop(&self, backdrop_type: WindowSystemBackdropType) -> WinResult<()> {
+        let backdrop: DWM_SYSTEMBACKDROP_TYPE = backdrop_type.to_system();
+        unsafe {
+            DwmSetWindowAttribute(
+                self.hwnd,
+                DWMWA_SYSTEMBACKDROP_TYPE,
+                &raw const backdrop as *const _,
+                core::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as _,
+            )
+        }
     }
 
     pub fn show(&self) {
