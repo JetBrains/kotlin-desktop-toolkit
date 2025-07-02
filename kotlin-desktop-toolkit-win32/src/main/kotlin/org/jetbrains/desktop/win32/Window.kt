@@ -71,6 +71,14 @@ public class Window internal constructor(
         return ffiDownCall { desktop_windows_h.window_get_window_id(ptr) }
     }
 
+    public fun extendContentIntoTitleBar() {
+        ffiDownCall { desktop_windows_h.window_extend_content_into_titlebar(ptr) }
+    }
+
+    public fun applySystemBackdrop(backdrop: WindowSystemBackdropType) {
+        ffiDownCall { desktop_windows_h.window_apply_system_backdrop(ptr, backdrop.toNative()) }
+    }
+
     public fun show() {
         return ffiDownCall { desktop_windows_h.window_show(ptr) }
     }
@@ -79,5 +87,22 @@ public class Window internal constructor(
         ffiDownCall {
             desktop_windows_h.window_drop(ptr)
         }
+    }
+}
+
+public enum class WindowSystemBackdropType {
+    Auto,
+    None,
+    Mica,
+    DesktopAcrylic,
+    MicaAlt,
+    ;
+
+    public fun toNative(): Int = when (this) {
+        Auto -> desktop_windows_h.NativeWindowSystemBackdropType_Auto()
+        None -> desktop_windows_h.NativeWindowSystemBackdropType_None()
+        Mica -> desktop_windows_h.NativeWindowSystemBackdropType_Mica()
+        DesktopAcrylic -> desktop_windows_h.NativeWindowSystemBackdropType_DesktopAcrylic()
+        MicaAlt -> desktop_windows_h.NativeWindowSystemBackdropType_MicaAlt()
     }
 }
