@@ -27,6 +27,7 @@ use crate::macos::events::{
 
 use super::{
     appearance::Appearance,
+    drag_and_drop::DragAndDropHandlerState,
     events::EventHandler,
     string::{copy_to_c_string, copy_to_ns_string},
 };
@@ -42,6 +43,7 @@ pub(crate) struct AppState {
     #[allow(dead_code)]
     app_delegate: Retained<AppDelegate>,
     pub(crate) event_handler: EventHandler,
+    pub(crate) drag_and_drop_handler_state: DragAndDropHandlerState,
     pub(crate) mtm: MainThreadMarker,
 }
 
@@ -102,6 +104,7 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
                     app,
                     app_delegate,
                     event_handler,
+                    drag_and_drop_handler_state: DragAndDropHandlerState::default(),
                     mtm,
                 })
                 .map_err(|_| anyhow!("Can't initialize second time!"))?;

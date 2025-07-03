@@ -8,10 +8,10 @@ use objc2::{
     runtime::{AnyObject, ProtocolObject, Sel},
 };
 use objc2_app_kit::{
-    NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSEvent, NSNormalWindowLevel, NSScreen,
-    NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial,
-    NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode,
-    NSWindowStyleMask,
+    NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingDestination,
+    NSDraggingInfo, NSEvent, NSNormalWindowLevel, NSPasteboardTypeFileURL, NSScreen, NSTextInputClient, NSTrackingArea,
+    NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
+    NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask,
 };
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
@@ -22,6 +22,7 @@ use crate::{
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     macos::{
         custom_titlebar::CustomTitlebar,
+        drag_and_drop::{handle_drag_entered, handle_drag_exited, handle_drag_perform, handle_drag_updated},
         events::{
             handle_flags_change, handle_key_up_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
             handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_changed_occlusion_state, handle_window_close_request,
@@ -635,6 +636,43 @@ define_class!(
         }
     }
 
+    unsafe impl NSDraggingDestination for RootView {
+        #[unsafe(method(draggingEntered:))]
+        unsafe fn dragging_entered(
+            &self,
+            info: &ProtocolObject<dyn NSDraggingInfo>,
+        ) -> NSDragOperation {
+            catch_panic(|| {
+                Ok(handle_drag_entered(info))
+            }).unwrap_or(NSDragOperation::None)
+        }
+
+        #[unsafe(method(draggingUpdated:))]
+        unsafe fn dragging_updated(
+            &self,
+            info: &ProtocolObject<dyn NSDraggingInfo>,
+        ) -> NSDragOperation {
+            catch_panic(|| {
+                Ok(handle_drag_updated(info))
+            }).unwrap_or(NSDragOperation::None)
+        }
+
+        #[unsafe(method(draggingExited:))]
+        unsafe fn dragging_exited(&self, info: Option<&ProtocolObject<dyn NSDraggingInfo>>) {
+            catch_panic(|| {
+                handle_drag_exited(info);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(performDragOperation:))]
+        unsafe fn perform_drag_operation(&self, info: &ProtocolObject<dyn NSDraggingInfo>) -> bool {
+            catch_panic(|| {
+                Ok(handle_drag_perform(info))
+            }).unwrap_or(false)
+        }
+    }
+
     impl RootView {
         #[unsafe(method(updateTrackingArea))]
         fn update_tracking_area(&self) {
@@ -852,6 +890,9 @@ impl RootView {
             root_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
         }
         root_view.update_tracking_area_impl(mtm);
+        unsafe {
+            root_view.registerForDraggedTypes(&NSArray::from_slice(&[NSPasteboardTypeFileURL]));
+        }
         root_view
     }
 
@@ -863,7 +904,7 @@ impl RootView {
         let result = handle_key_down_event(ns_event, true)?;
         let ivars = &self.ivars();
         if let Some(prev_event) = ivars.last_key_equiv_ns_event.replace(Some(ns_event.retain())) {
-            debug!("Replace perfromKeyEquivalent event: {prev_event:?} {ns_event:?}");
+            debug!("Replace performKeyEquivalent event: {prev_event:?} {ns_event:?}");
         }
         Ok(result)
     }

@@ -409,6 +409,35 @@ typedef NativeRustAllocatedRawPtr NativeDisplayLinkPtr;
 
 typedef void (*NativeDisplayLinkCallback)(void);
 
+typedef uintptr_t NativeDragOperation;
+
+typedef uintptr_t NativeDragOperationsBitSet;
+
+typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
+
+typedef struct NativeDragInfo {
+  NativeWindowId destination_window_id;
+  struct NativeLogicalPoint location_in_window;
+  NativeDragOperationsBitSet allowed_operations;
+  intptr_t sequence_number;
+  NativeAutoDropStrPtr pasteboard_name;
+} NativeDragInfo;
+
+typedef NativeDragOperation (*NativeDragEnteredCallback)(struct NativeDragInfo info);
+
+typedef NativeDragOperation (*NativeDragUpdatedCallback)(struct NativeDragInfo info);
+
+typedef void (*NativeDragExitedCallback)(NativeRustAllocatedRawPtr info);
+
+typedef bool (*NativeDragPerformCallback)(struct NativeDragInfo info);
+
+typedef struct NativeDragAndDropCallbacks {
+  NativeDragEnteredCallback drag_entered_callback;
+  NativeDragUpdatedCallback drag_updated_callback;
+  NativeDragExitedCallback drag_exited_callback;
+  NativeDragPerformCallback drag_perform_callback;
+} NativeDragAndDropCallbacks;
+
 typedef uint32_t NativeMouseButtonsSet;
 
 typedef struct NativeCommonFileDialogParams {
@@ -489,8 +518,6 @@ typedef struct NativeBorrowedArray_PasteboardItem {
 typedef struct NativePasteboardContentResult {
   struct NativeAutoDropArray_RustAllocatedStrPtr items;
 } NativePasteboardContentResult;
-
-typedef NativeRustAllocatedStrPtr NativeAutoDropStrPtr;
 
 typedef struct NativeScreenInfo {
   NativeScreenId screen_id;
@@ -692,6 +719,10 @@ void display_link_drop(NativeDisplayLinkPtr display_link_ptr);
 void display_link_set_running(NativeDisplayLinkPtr display_link_ptr, bool value);
 
 bool display_link_is_running(NativeDisplayLinkPtr display_link_ptr);
+
+void set_drag_and_drop_callbacks(struct NativeDragAndDropCallbacks callbacks);
+
+void drop_drag_and_drop_callbacks(void);
 
 NativeMouseButtonsSet events_pressed_mouse_buttons(void);
 

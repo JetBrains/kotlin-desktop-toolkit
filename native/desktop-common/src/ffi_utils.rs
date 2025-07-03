@@ -73,6 +73,10 @@ impl RustAllocatedRawPtr<'_> {
         })
     }
 
+    pub fn is_null(&self) -> bool {
+        self.0.ptr.is_null()
+    }
+
     #[allow(clippy::unnecessary_box_returns)]
     #[must_use]
     pub unsafe fn to_owned<R>(&self) -> Box<R> {
@@ -200,6 +204,7 @@ impl RustAllocatedStrPtr {
 }
 
 #[repr(transparent)]
+#[derive(Debug, Clone)]
 pub struct AutoDropStrPtr(RustAllocatedStrPtr);
 
 impl AutoDropStrPtr {

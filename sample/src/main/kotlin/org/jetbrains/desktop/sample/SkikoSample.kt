@@ -5,6 +5,10 @@ import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.AppMenuStructure
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Cursor
+import org.jetbrains.desktop.macos.DragAndDropCallbacks
+import org.jetbrains.desktop.macos.DragAndDropHandler
+import org.jetbrains.desktop.macos.DragInfo
+import org.jetbrains.desktop.macos.DragOperation
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.FileDialog
@@ -708,10 +712,34 @@ class ApplicationState : AutoCloseable {
     }
 }
 
+fun dragAndDropCallback(): DragAndDropCallbacks {
+    return object : DragAndDropCallbacks {
+        override fun onDragEntered(info: DragInfo): DragOperation {
+            println("Drag Entered: $info")
+            return DragOperation.COPY
+        }
+
+        override fun onDragUpdated(info: DragInfo): DragOperation {
+            println("Drag Updated: $info")
+            return DragOperation.COPY
+        }
+
+        override fun onDragExited(info: DragInfo?) {
+            println("Drag Exited: $info")
+        }
+
+        override fun onDragPerformed(info: DragInfo): Boolean {
+            println("Drag Performed: $info")
+            return true
+        }
+    }
+}
+
 fun main() {
     Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
     Application.init(Application.ApplicationConfig())
+    DragAndDropHandler.init(dragAndDropCallback())
     ApplicationState().use { state ->
         state.createWindow(useCustomTitlebar = true)
         Application.runEventLoop { event ->
@@ -724,5 +752,6 @@ fun main() {
             state.handleEvent(event)
         }
     }
+    DragAndDropHandler.close()
     GrandCentralDispatch.close()
 }
