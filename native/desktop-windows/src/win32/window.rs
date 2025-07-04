@@ -3,6 +3,7 @@ use std::{
     rc::{Rc, Weak},
 };
 
+use log::error;
 use windows::{
     Win32::{
         Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
@@ -15,8 +16,8 @@ use windows::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
-                CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, GetPropW, RegisterClassExW, RemovePropW, SW_SHOW,
-                SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI,
+                CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetPropW, RegisterClassExW, RemovePropW,
+                SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI,
                 WINDOW_EX_STYLE, WM_NCDESTROY, WNDCLASSEXW, WS_OVERLAPPEDWINDOW,
             },
         },
@@ -151,19 +152,21 @@ impl Window {
     }
 }
 
+impl Drop for Window {
+    fn drop(&mut self) {
+        if let Err(err) = unsafe { DestroyWindow(self.hwnd) } {
+            error!("Failed to destroy the window: {err:?}")
+        }
+    }
+}
+
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if hwnd.0.is_null() {
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     }
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
     if msg == WM_NCDESTROY {
-        let raw = unsafe { RemovePropW(hwnd, WINDOW_EVENT_LOOP_PROP_NAME) }
-            .unwrap_or(HANDLE::default())
-            .0 as *const EventLoop;
-        if !raw.is_null() {
-            // this is the moment when we can drop the weak reference
-            let _ = unsafe { Weak::from_raw(raw) };
-        }
+        let _ = unsafe { RemovePropW(hwnd, WINDOW_EVENT_LOOP_PROP_NAME) };
         return LRESULT(0);
     }
     let raw = unsafe { GetPropW(hwnd, WINDOW_EVENT_LOOP_PROP_NAME).0 as *const EventLoop };
