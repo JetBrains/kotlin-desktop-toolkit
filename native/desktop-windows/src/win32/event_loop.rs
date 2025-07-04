@@ -15,7 +15,7 @@ use windows::{
 };
 
 use super::{
-    events::{EventHandler, WindowDrawEvent, WindowScaleChangedEvent},
+    events::{Event, EventHandler, WindowDrawEvent, WindowScaleChangedEvent},
     geometry::{PhysicalPoint, PhysicalSize},
     utils,
     window::Window,
@@ -106,10 +106,7 @@ impl EventLoop {
             }
 
             WM_CLOSE => {
-                if let Err(_err) = self.shutdown() {
-                    error!("failed to request the shutdown of the dispatcher queue");
-                    unsafe { PostQuitMessage(0) };
-                }
+                (self.event_handler)(hwnd.into(), &Event::WindowCloseRequest);
                 LRESULT(0)
             }
 
