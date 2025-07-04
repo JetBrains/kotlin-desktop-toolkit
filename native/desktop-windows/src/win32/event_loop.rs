@@ -69,7 +69,7 @@ impl EventLoop {
     }
 
     pub fn window_proc(&self, hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-        match msg {
+        let handled = match msg {
             WM_PAINT => {
                 let mut paint = Default::default();
                 unsafe { BeginPaint(hwnd, &mut paint) };
@@ -84,7 +84,7 @@ impl EventLoop {
                 };
                 let handled = (self.event_handler)(hwnd.into(), &event.into());
                 let _ = unsafe { EndPaint(hwnd, &paint) };
-                if handled { LRESULT(0) } else { LRESULT(1) }
+                handled
             }
 
             WM_DPICHANGED => {
@@ -101,16 +101,18 @@ impl EventLoop {
                     new_size: PhysicalSize::new(new_rect.right - new_rect.left, new_rect.bottom - new_rect.top),
                     new_scale,
                 };
-                let handled = (self.event_handler)(hwnd.into(), &event.into());
-                if handled { LRESULT(0) } else { LRESULT(1) }
+                (self.event_handler)(hwnd.into(), &event.into())
             }
 
-            WM_CLOSE => {
-                (self.event_handler)(hwnd.into(), &Event::WindowCloseRequest);
-                LRESULT(0)
-            }
+            WM_CLOSE => (self.event_handler)(hwnd.into(), &Event::WindowCloseRequest),
 
-            _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+            _ => false,
+        };
+
+        if handled {
+            LRESULT(0)
+        } else {
+            unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
         }
     }
 }
