@@ -21,7 +21,7 @@ public object Pasteboard {
     public sealed class Item {
         /**
          * If you need to put files in clipboard
-         * use the Url("file:///absoulte/path/to/file.ext")
+         * use the Url("file:///absolute/path/to/file.ext")
          */
         public data class Url(val url: String) : Item()
         public data class Combined(val elements: List<Element>) : Item() {
@@ -52,10 +52,17 @@ public object Pasteboard {
         }
     }
 
-    public fun readItemsOfType(type: String): List<String> {
+    /**
+     * When pasteboardName is null general clipboard is used
+     */
+    public fun readItemsOfType(type: String, pasteboardName: String? = null): List<String> {
         return Arena.ofConfined().use { arena ->
             val nativeResult = ffiDownCall {
-                desktop_macos_h.pasteboard_read_items_of_type(arena, arena.allocateUtf8String(type))
+                desktop_macos_h.pasteboard_read_items_of_type(
+                    arena,
+                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    arena.allocateUtf8String(type),
+                )
             }
             val items = NativePasteboardContentResult.items(nativeResult)
             val result = listOfStringsFromNative(items)
@@ -66,10 +73,16 @@ public object Pasteboard {
         }
     }
 
-    public fun readFileItemPaths(): List<String> {
+    /**
+     * When pasteboardName is null general clipboard is used
+     */
+    public fun readFileItemPaths(pasteboardName: String? = null): List<String> {
         return Arena.ofConfined().use { arena ->
             val nativeResult = ffiDownCall {
-                desktop_macos_h.pasteboard_read_file_items(arena)
+                desktop_macos_h.pasteboard_read_file_items(
+                    arena,
+                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                )
             }
             val items = NativePasteboardContentResult.items(nativeResult)
             val result = listOfStringsFromNative(items)

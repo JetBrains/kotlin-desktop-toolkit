@@ -1,5 +1,10 @@
 use std::sync::Mutex;
 
+use super::{
+    string::{copy_to_c_string, copy_to_ns_string},
+    url::url_to_file_path_string,
+};
+use crate::macos::string::copy_to_ns_string_if_not_null;
 use anyhow::Context;
 use desktop_common::{
     ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr, RustAllocatedStrPtr},
@@ -12,29 +17,33 @@ use objc2::{
     runtime::{AnyObject, ProtocolObject},
 };
 use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardURLReadingFileURLsOnlyKey, NSPasteboardWriting};
-use objc2_foundation::{NSArray, NSDictionary, NSMutableArray, NSNumber, NSURL};
-
-use super::{
-    string::{copy_to_c_string, copy_to_ns_string},
-    url::url_to_file_path_string,
-};
+use objc2_foundation::{NSArray, NSDictionary, NSMutableArray, NSNumber, NSString, NSURL};
 
 static GENERAL_PASTEBOARD_SHARED_TOKEN: Mutex<()> = Mutex::new(());
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum PasteboardType {
     Global,
+    #[allow(dead_code)] // Used only it tests
     WithUniqueName,
+    WithName(Retained<NSString>),
 }
 
-fn with_pasteboard<R, F: FnOnce(&NSPasteboard) -> R>(pasteboard_type: PasteboardType, f: F) -> R {
+fn with_pasteboard<R, F: FnOnce(&NSPasteboard) -> R>(pasteboard_type: &PasteboardType, f: F) -> R {
     match pasteboard_type {
         PasteboardType::Global => {
             // We could get multiple refs to general clipboard with calling `NSPasteboard::generalPasteboard()`
             // from multiple threads. Though the NSPasteboard isn't thread safe class
             let _shared_token = GENERAL_PASTEBOARD_SHARED_TOKEN.lock();
             let pasteboard = unsafe { NSPasteboard::generalPasteboard() };
+            f(&pasteboard)
+        }
+        PasteboardType::WithName(pasteboard_name) => {
+            // It's a bit more restrictive than it should be
+            // We could have separate locks for separate clipboards
+            // And maybe the lock should be reentrant
+            let _shared_token = GENERAL_PASTEBOARD_SHARED_TOKEN.lock();
+            let pasteboard = unsafe { NSPasteboard::pasteboardWithName(pasteboard_name) };
             f(&pasteboard)
         }
         PasteboardType::WithUniqueName => {
@@ -47,7 +56,7 @@ fn with_pasteboard<R, F: FnOnce(&NSPasteboard) -> R>(pasteboard_type: Pasteboard
 #[unsafe(no_mangle)]
 pub extern "C" fn pasteboard_clear() -> isize {
     ffi_boundary("pasteboard_clear", || {
-        let result = with_pasteboard(PasteboardType::Global, |pasteboard| unsafe { pasteboard.clearContents() });
+        let result = with_pasteboard(&PasteboardType::Global, |pasteboard| unsafe { pasteboard.clearContents() });
         Ok(result)
     })
 }
@@ -105,7 +114,7 @@ fn copy_to_objects(items: &BorrowedArray<PasteboardItem>) -> anyhow::Result<Reta
 #[unsafe(no_mangle)]
 pub extern "C" fn pasteboard_write_objects(items: BorrowedArray<PasteboardItem>) -> bool {
     ffi_boundary("pasteboard_write_objects", || {
-        with_pasteboard(PasteboardType::Global, |pasteboard| {
+        with_pasteboard(&PasteboardType::Global, |pasteboard| {
             debug!("pasteboard_write_objects: {items:?}");
             let objects = copy_to_objects(&items)?;
             Ok(unsafe { pasteboard.writeObjects(&objects) })
@@ -126,10 +135,17 @@ impl PanicDefault for PasteboardContentResult {
     }
 }
 
+fn pasteboard_type_by_str_ptr(pasteboard_name: &BorrowedStrPtr) -> PasteboardType {
+    copy_to_ns_string_if_not_null(pasteboard_name).map_or(PasteboardType::Global, PasteboardType::WithName)
+}
+
 #[unsafe(no_mangle)]
-pub extern "C" fn pasteboard_read_items_of_type(uniform_type_identifier: BorrowedStrPtr) -> PasteboardContentResult {
+pub extern "C" fn pasteboard_read_items_of_type(
+    pasteboard_name: BorrowedStrPtr,
+    uniform_type_identifier: BorrowedStrPtr,
+) -> PasteboardContentResult {
     ffi_boundary("pasteboard_read_content_for_type", || {
-        with_pasteboard(PasteboardType::Global, |pasteboard| {
+        with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
             let uti = copy_to_ns_string(&uniform_type_identifier)?;
             let items = unsafe { pasteboard.pasteboardItems() }.context("Can't retrieve items")?;
             let items: anyhow::Result<Box<[_]>> = items
@@ -145,9 +161,9 @@ pub extern "C" fn pasteboard_read_items_of_type(uniform_type_identifier: Borrowe
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pasteboard_read_file_items() -> PasteboardContentResult {
+pub extern "C" fn pasteboard_read_file_items(pasteboard_name: BorrowedStrPtr) -> PasteboardContentResult {
     ffi_boundary("pasteboard_read_file_items", || {
-        with_pasteboard(PasteboardType::Global, |pasteboard| {
+        with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
             let class_array = NSArray::from_slice(&[NSURL::class()]);
 
             let options = NSDictionary::from_slices(
@@ -192,7 +208,7 @@ mod tests {
 
     #[test]
     fn test_pasteboard_can_store_and_return_string() {
-        with_pasteboard(PasteboardType::WithUniqueName, |pasteboard| {
+        with_pasteboard(&PasteboardType::WithUniqueName, |pasteboard| {
             let original_string = ns_string!("Hello😃World");
             unsafe {
                 info!("NSPasteboardTypeString: {NSPasteboardTypeString:?}");
@@ -208,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_empty_pasteboard_doesnt_contain_string() {
-        with_pasteboard(PasteboardType::WithUniqueName, |pasteboard| {
+        with_pasteboard(&PasteboardType::WithUniqueName, |pasteboard| {
             unsafe {
                 pasteboard.clearContents();
             }
@@ -219,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_store_custom_type() {
-        with_pasteboard(PasteboardType::WithUniqueName, |pasteboard| {
+        with_pasteboard(&PasteboardType::WithUniqueName, |pasteboard| {
             let metadata_string = ns_string!("some metadata");
             let my_pasteboard_type = ns_string!("org.jetbrains.kdt.meta-string");
             unsafe {
@@ -242,7 +258,7 @@ mod tests {
 
     #[test]
     fn test_store_custom_type_with_string() {
-        with_pasteboard(PasteboardType::WithUniqueName, |pasteboard| {
+        with_pasteboard(&PasteboardType::WithUniqueName, |pasteboard| {
             let metadata_string = ns_string!("some metadata");
             let original_string = ns_string!("Hello");
             let my_pasteboard_type = ns_string!("org.jetbrains.kdt.meta-string");
@@ -265,7 +281,7 @@ mod tests {
 
     #[test]
     fn test_store_two_files() {
-        with_pasteboard(PasteboardType::WithUniqueName, |general| {
+        with_pasteboard(&PasteboardType::WithUniqueName, |general| {
             unsafe {
                 let url1 = NSURL::fileURLWithPath(&NSString::from_str(get_source_file("mouse.rs").to_str().unwrap()));
                 let url2 = NSURL::fileURLWithPath(&NSString::from_str(get_source_file("string.rs").to_str().unwrap()));
@@ -297,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_store_two_files_together_with_string() {
-        with_pasteboard(PasteboardType::WithUniqueName, |general| {
+        with_pasteboard(&PasteboardType::WithUniqueName, |general| {
             let original_string = ns_string!("Hello");
             unsafe {
                 general.clearContents();
@@ -320,7 +336,7 @@ mod tests {
 
     #[test]
     fn test_create_pasteboard_item() {
-        with_pasteboard(PasteboardType::WithUniqueName, |general| {
+        with_pasteboard(&PasteboardType::WithUniqueName, |general| {
             let item = unsafe { NSPasteboardItem::new() };
             let original_string = ns_string!("Hello");
             unsafe {
@@ -338,7 +354,7 @@ mod tests {
 
     #[test]
     fn test_clear_is_required_before_write_objects() {
-        with_pasteboard(PasteboardType::WithUniqueName, |general| {
+        with_pasteboard(&PasteboardType::WithUniqueName, |general| {
             unsafe {
                 general.clearContents();
                 let item1 = NSPasteboardItem::new();

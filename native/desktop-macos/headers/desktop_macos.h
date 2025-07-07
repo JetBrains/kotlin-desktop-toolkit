@@ -768,9 +768,10 @@ intptr_t pasteboard_clear(void);
 
 bool pasteboard_write_objects(struct NativeBorrowedArray_PasteboardItem items);
 
-struct NativePasteboardContentResult pasteboard_read_items_of_type(NativeBorrowedStrPtr uniform_type_identifier);
+struct NativePasteboardContentResult pasteboard_read_items_of_type(NativeBorrowedStrPtr pasteboard_name,
+                                                                   NativeBorrowedStrPtr uniform_type_identifier);
 
-struct NativePasteboardContentResult pasteboard_read_file_items(void);
+struct NativePasteboardContentResult pasteboard_read_file_items(NativeBorrowedStrPtr pasteboard_name);
 
 void pasteboard_content_drop(struct NativePasteboardContentResult content);
 

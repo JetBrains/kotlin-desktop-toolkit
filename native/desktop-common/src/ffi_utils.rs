@@ -73,7 +73,8 @@ impl RustAllocatedRawPtr<'_> {
         })
     }
 
-    pub fn is_null(&self) -> bool {
+    #[must_use]
+    pub const fn is_null(&self) -> bool {
         self.0.ptr.is_null()
     }
 

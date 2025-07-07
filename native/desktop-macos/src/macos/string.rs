@@ -38,6 +38,10 @@ pub(crate) fn copy_to_ns_string(s: &BorrowedStrPtr) -> anyhow::Result<Retained<N
     copy_nonnull_to_ns_string(s.as_non_null().context("Null pointer")?)
 }
 
+pub(crate) fn copy_to_ns_string_if_not_null(str_ptr: &BorrowedStrPtr) -> Option<Retained<NSString>> {
+    str_ptr.as_non_null().map(|s| copy_nonnull_to_ns_string(s).unwrap())
+}
+
 // Be aware, now you have to release this memory at some point
 pub(crate) fn copy_to_c_string(ns_string: &NSString) -> anyhow::Result<RustAllocatedStrPtr> {
     let c_str = unsafe { CStr::from_ptr(ns_string.UTF8String()) };

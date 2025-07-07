@@ -715,21 +715,25 @@ class ApplicationState : AutoCloseable {
 fun dragAndDropCallback(): DragAndDropCallbacks {
     return object : DragAndDropCallbacks {
         override fun onDragEntered(info: DragInfo): DragOperation {
-            println("Drag Entered: $info")
+            val files = Pasteboard.readFileItemPaths(pasteboardName = info.pasteboardName)
+            println("Drag Entered: $info, files: $files")
             return DragOperation.COPY
         }
 
         override fun onDragUpdated(info: DragInfo): DragOperation {
-            println("Drag Updated: $info")
+            val files = Pasteboard.readFileItemPaths(pasteboardName = info.pasteboardName)
+            println("Drag Updated: $info, files: $files")
             return DragOperation.COPY
         }
 
         override fun onDragExited(info: DragInfo?) {
-            println("Drag Exited: $info")
+            val files = info?.pasteboardName?.let { Pasteboard.readFileItemPaths(pasteboardName = it) }
+            println("Drag Exited: $info files: $files")
         }
 
         override fun onDragPerformed(info: DragInfo): Boolean {
-            println("Drag Performed: $info")
+            val files = Pasteboard.readFileItemPaths(pasteboardName = info.pasteboardName)
+            println("Drag Performed: $info files: $files")
             return true
         }
     }

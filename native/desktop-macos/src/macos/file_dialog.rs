@@ -8,7 +8,7 @@ use desktop_common::{
     logger::ffi_boundary,
 };
 
-use crate::macos::string::copy_nonnull_to_ns_string;
+use crate::macos::string::copy_to_ns_string_if_not_null;
 
 use super::{string::copy_to_c_string, url::url_to_file_path_string};
 
@@ -64,14 +64,14 @@ pub extern "C" fn save_file_dialog_run_modal(common_params: &CommonFileDialogPar
 }
 
 fn apply_common_param(panel: &NSSavePanel, common_params: &CommonFileDialogParams) {
-    unsafe { panel.setTitle(to_ns_string_if_not_null(&common_params.title).as_deref()) };
-    unsafe { panel.setPrompt(to_ns_string_if_not_null(&common_params.prompt).as_deref()) }
-    unsafe { panel.setMessage(to_ns_string_if_not_null(&common_params.message).as_deref()) }
-    unsafe { panel.setNameFieldLabel(to_ns_string_if_not_null(&common_params.name_field_label).as_deref()) }
-    if let Some(name_field_string_value) = to_ns_string_if_not_null(&common_params.name_field_string_value).as_deref() {
+    unsafe { panel.setTitle(copy_to_ns_string_if_not_null(&common_params.title).as_deref()) };
+    unsafe { panel.setPrompt(copy_to_ns_string_if_not_null(&common_params.prompt).as_deref()) }
+    unsafe { panel.setMessage(copy_to_ns_string_if_not_null(&common_params.message).as_deref()) }
+    unsafe { panel.setNameFieldLabel(copy_to_ns_string_if_not_null(&common_params.name_field_label).as_deref()) }
+    if let Some(name_field_string_value) = copy_to_ns_string_if_not_null(&common_params.name_field_string_value).as_deref() {
         unsafe { panel.setNameFieldStringValue(name_field_string_value) }
     }
-    let directory_url_str = to_ns_string_if_not_null(&common_params.directory_url);
+    let directory_url_str = copy_to_ns_string_if_not_null(&common_params.directory_url);
     let directory_url = directory_url_str.map(|directory_url_str| unsafe { NSURL::fileURLWithPath(&directory_url_str) });
     unsafe {
         panel.setDirectoryURL(directory_url.as_deref());
@@ -83,10 +83,6 @@ fn apply_common_param(panel: &NSSavePanel, common_params: &CommonFileDialogParam
         panel.setShowsHiddenFiles(common_params.shows_hidden_files);
     }
     unsafe { panel.setExtensionHidden(common_params.extensions_hidden) }
-}
-
-fn to_ns_string_if_not_null(str_ptr: &BorrowedStrPtr) -> Option<Retained<NSString>> {
-    str_ptr.as_non_null().map(|s| copy_nonnull_to_ns_string(s).unwrap())
 }
 
 fn apply_open_file_dialog_params(panel: &NSOpenPanel, open_params: &OpenFileDialogParams) {
