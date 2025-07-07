@@ -35,9 +35,9 @@ foreign-types = "0.5"
 dispatch2 = { version = "0.3.0" }
 # "catch-all" feature add try catch for obj-c exceptions in msg_send![]
 # it's nice to have at least for beginning, but later we need to check how it impacts performance
-objc2 = { version = "0.6.0", features = ["exception", "catch-all"] }
-objc2-foundation = { version = "0.3.0" }
-objc2-app-kit = { version = "0.3.0", features = [
+objc2 = { version = "0.6.1", features = ["exception", "catch-all"] }
+objc2-foundation = { version = "0.3.1" }
+objc2-app-kit = { version = "0.3.1", features = [
   "NSApplication",
   "NSWindow",
   "NSWindowRestoration",
@@ -61,9 +61,9 @@ objc2-app-kit = { version = "0.3.0", features = [
   "NSGraphicsContext",
   "objc2-quartz-core",
 ] }
-objc2-quartz-core = { version = "0.3.0" }
-objc2-core-graphics = { version = "0.3.0" }
-objc2-metal = { version = "0.3.0" }
-objc2-uniform-type-identifiers = { version = "0.3.0" }
+objc2-quartz-core = { version = "0.3.1" }
+objc2-core-graphics = { version = "0.3.1" }
+objc2-metal = { version = "0.3.1" }
+objc2-uniform-type-identifiers = { version = "0.3.1" }
 num-traits = "0.2"
 num-derive = "0.4"
