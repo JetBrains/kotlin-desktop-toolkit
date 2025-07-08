@@ -379,8 +379,8 @@ pub extern "C" fn window_appearance_override(window_ptr: WindowPtr, appearance: 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_appearacne_is_overridden(window_ptr: WindowPtr) -> bool {
-    ffi_boundary("window_appearacne_is_overridden", || {
+pub extern "C" fn window_appearance_is_overridden(window_ptr: WindowPtr) -> bool {
+    ffi_boundary("window_appearance_is_overridden", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
         let result = unsafe { window.ns_window.appearance() }.is_some();
         Ok(result)
@@ -388,8 +388,8 @@ pub extern "C" fn window_appearacne_is_overridden(window_ptr: WindowPtr) -> bool
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_appearacne_set_follow_application(window_ptr: WindowPtr) {
-    ffi_boundary("window_appearacne_set_follow_application", || {
+pub extern "C" fn window_appearance_set_follow_application(window_ptr: WindowPtr) {
+    ffi_boundary("window_appearance_set_follow_application", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
         unsafe {
             window.ns_window.setAppearance(None);

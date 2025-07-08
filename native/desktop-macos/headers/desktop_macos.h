@@ -870,9 +870,9 @@ void window_invalidate_shadow(NativeWindowPtr window_ptr);
 
 void window_appearance_override(NativeWindowPtr window_ptr, enum NativeAppearance appearance);
 
-bool window_appearacne_is_overridden(NativeWindowPtr window_ptr);
+bool window_appearance_is_overridden(NativeWindowPtr window_ptr);
 
-void window_appearacne_set_follow_application(NativeWindowPtr window_ptr);
+void window_appearance_set_follow_application(NativeWindowPtr window_ptr);
 
 enum NativeAppearance window_get_appearance(NativeWindowPtr window_ptr);
 

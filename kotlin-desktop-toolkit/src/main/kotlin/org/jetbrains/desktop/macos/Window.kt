@@ -283,7 +283,7 @@ public class Window internal constructor(
 
     public var overriddenAppearance: Appearance?
         get() {
-            return if (ffiDownCall { desktop_macos_h.window_appearacne_is_overridden(pointer) }) {
+            return if (ffiDownCall { desktop_macos_h.window_appearance_is_overridden(pointer) }) {
                 ffiDownCall {
                     Appearance.fromNative(desktop_macos_h.window_get_appearance(pointer))
                 }
@@ -294,7 +294,7 @@ public class Window internal constructor(
         set(value) {
             if (value == null) {
                 ffiDownCall {
-                    desktop_macos_h.window_appearacne_set_follow_application(pointer)
+                    desktop_macos_h.window_appearance_set_follow_application(pointer)
                 }
             } else {
                 ffiDownCall {
