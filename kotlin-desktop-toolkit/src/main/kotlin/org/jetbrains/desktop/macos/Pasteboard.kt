@@ -132,13 +132,14 @@ internal fun Pasteboard.Item.toNative(nativeItem: MemorySegment, arena: Arena) =
 
 @JvmName("toNativeBorrowedArray_PasteboardItem")
 internal fun List<Pasteboard.Item>.toNative(arena: Arena): MemorySegment = let { items ->
-    val itemsArray = NativePasteboardItem.allocateArray(items.count().toLong(), arena)
+    val itemsCount = items.count().toLong()
+    val itemsArray = NativePasteboardItem.allocateArray(itemsCount, arena)
     items.forEachIndexed { i, item ->
         item.toNative(NativePasteboardItem.asSlice(itemsArray, i.toLong()), arena)
     }
 
     val result = NativeBorrowedArray_PasteboardItem.allocate(arena)
     NativeBorrowedArray_PasteboardItem.ptr(result, itemsArray)
-    NativeBorrowedArray_PasteboardItem.len(result, items.count().toLong())
+    NativeBorrowedArray_PasteboardItem.len(result, itemsCount)
     result
 }

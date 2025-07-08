@@ -9,9 +9,9 @@ use objc2::{
 };
 use objc2_app_kit::{
     NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingDestination,
-    NSDraggingInfo, NSEvent, NSNormalWindowLevel, NSPasteboardTypeFileURL, NSScreen, NSTextInputClient, NSTrackingArea,
-    NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
-    NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask,
+    NSDraggingInfo, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
+    NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior,
+    NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask,
 };
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
@@ -890,9 +890,6 @@ impl RootView {
             root_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
         }
         root_view.update_tracking_area_impl(mtm);
-        unsafe {
-            root_view.registerForDraggedTypes(&NSArray::from_slice(&[NSPasteboardTypeFileURL]));
-        }
         root_view
     }
 

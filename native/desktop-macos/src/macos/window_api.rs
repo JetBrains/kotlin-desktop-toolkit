@@ -1,12 +1,13 @@
+use objc2::__framework_prelude::Retained;
 use objc2_app_kit::{NSAppearanceCustomization, NSWindowOcclusionState};
-use objc2_foundation::MainThreadMarker;
+use objc2_foundation::{MainThreadMarker, NSArray, NSString};
 
+use crate::geometry::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize};
+use desktop_common::ffi_utils::BorrowedArray;
 use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedRawPtr, RustAllocatedStrPtr},
     logger::{PanicDefault, ffi_boundary},
 };
-
-use crate::geometry::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize};
 
 use super::{
     appearance::Appearance,
@@ -406,6 +407,27 @@ pub extern "C" fn window_get_appearance(window_ptr: WindowPtr) -> Appearance {
         let appearance = Appearance::from_ns_appearance(&ns_appearance);
         Ok(appearance)
     })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_register_for_dragged_types(window_ptr: WindowPtr, types: BorrowedArray<BorrowedStrPtr>) {
+    ffi_boundary("window_register_for_dragged_types", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let types: anyhow::Result<Vec<Retained<NSString>>> = types.as_slice()?.iter().map(|str_ptr| copy_to_ns_string(str_ptr)).collect();
+        unsafe {
+            window.root_view.registerForDraggedTypes(&NSArray::from_retained_slice(&types?));
+        }
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_unregister_dragged_types(window_ptr: WindowPtr) {
+    ffi_boundary("window_unregister_dragged_types", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        unsafe { window.root_view.unregisterDraggedTypes() }
+        Ok(())
+    });
 }
 
 #[derive(Debug)]

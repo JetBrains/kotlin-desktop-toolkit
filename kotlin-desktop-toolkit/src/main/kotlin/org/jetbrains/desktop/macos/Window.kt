@@ -309,6 +309,20 @@ public class Window internal constructor(
 
     public val textInputContext: TextInputContext = TextInputContext(this)
 
+    public fun registerForDraggedTypes(types: List<String>) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_macos_h.window_register_for_dragged_types(pointer, listOfStringsToNative(arena, types))
+            }
+        }
+    }
+
+    public fun unregisterDraggedTypes() {
+        ffiDownCall {
+            desktop_macos_h.window_unregister_dragged_types(pointer)
+        }
+    }
+
     override fun close() {
         super.close()
         textInputClientHolder.close()

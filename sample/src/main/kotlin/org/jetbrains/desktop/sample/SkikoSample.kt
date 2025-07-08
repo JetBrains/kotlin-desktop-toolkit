@@ -336,15 +336,15 @@ class ApplicationState : AutoCloseable {
     }
 
     fun createWindow(useCustomTitlebar: Boolean) {
-        windows.add(
-            RotatingBallWindow.createWindow(
-                device,
-                queue,
-                "Window ${windows.count()}",
-                LogicalPoint(0.0, 0.0),
-                useCustomTitlebar,
-            ),
+        val window = RotatingBallWindow.createWindow(
+            device,
+            queue,
+            "Window ${windows.count()}",
+            LogicalPoint(0.0, 0.0),
+            useCustomTitlebar,
         )
+        window.window.registerForDraggedTypes(listOf(Pasteboard.URL_TYPE))
+        windows.add(window)
     }
 
     private fun setPaused(value: Boolean) {
@@ -415,6 +415,7 @@ class ApplicationState : AutoCloseable {
 
     private fun killWindow(window: RotatingBallWindow) {
         windows.remove(window)
+        window.window.unregisterDraggedTypes()
         window.close()
     }
 

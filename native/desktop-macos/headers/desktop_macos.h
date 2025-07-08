@@ -618,6 +618,12 @@ typedef struct NativeTextInputClient {
   NativeCharacterIndexForPoint character_index_for_point;
 } NativeTextInputClient;
 
+typedef struct NativeBorrowedArray_BorrowedStrPtr {
+  const NativeBorrowedStrPtr *ptr;
+  NativeArraySize len;
+  void (*deinit)(const NativeBorrowedStrPtr*, NativeArraySize);
+} NativeBorrowedArray_BorrowedStrPtr;
+
 typedef struct NativeColor {
   double red;
   double green;
@@ -875,5 +881,10 @@ bool window_appearance_is_overridden(NativeWindowPtr window_ptr);
 void window_appearance_set_follow_application(NativeWindowPtr window_ptr);
 
 enum NativeAppearance window_get_appearance(NativeWindowPtr window_ptr);
+
+void window_register_for_dragged_types(NativeWindowPtr window_ptr,
+                                       struct NativeBorrowedArray_BorrowedStrPtr types);
+
+void window_unregister_dragged_types(NativeWindowPtr window_ptr);
 
 void window_set_background(NativeWindowPtr window_ptr, struct NativeWindowBackground background);
