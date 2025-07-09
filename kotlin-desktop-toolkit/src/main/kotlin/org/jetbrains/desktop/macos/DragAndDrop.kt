@@ -119,27 +119,35 @@ public object DragAndDropHandler : AutoCloseable {
 
     // called from native
     private fun onDragEntered(dragInfo: MemorySegment): Long {
-        return dragAndDropCallbacks.onDragEntered(DragInfo.fromNative(dragInfo)).value
+        return ffiUpCall(defaultResult = DragOperation.NONE.value) {
+            dragAndDropCallbacks.onDragEntered(DragInfo.fromNative(dragInfo)).value
+        }
     }
 
     // called from native
     private fun onDragUpdated(dragInfo: MemorySegment): Long {
-        return dragAndDropCallbacks.onDragUpdated(DragInfo.fromNative(dragInfo)).value
+        return ffiUpCall(defaultResult = DragOperation.NONE.value) {
+            dragAndDropCallbacks.onDragUpdated(DragInfo.fromNative(dragInfo)).value
+        }
     }
 
     // called from native
     private fun onDragExited(dragInfo: MemorySegment) {
-        val dragInfo = if (dragInfo == MemorySegment.NULL) {
-            null
-        } else {
-            DragInfo.fromNative(dragInfo)
+        ffiUpCall {
+            val dragInfo = if (dragInfo == MemorySegment.NULL) {
+                null
+            } else {
+                DragInfo.fromNative(dragInfo)
+            }
+            dragAndDropCallbacks.onDragExited(dragInfo)
         }
-        dragAndDropCallbacks.onDragExited(dragInfo)
     }
 
     // called from native
     private fun onDragPerformed(dragInfo: MemorySegment): Boolean {
-        return dragAndDropCallbacks.onDragPerformed(DragInfo.fromNative(dragInfo))
+        return ffiUpCall(defaultResult = false) {
+            dragAndDropCallbacks.onDragPerformed(DragInfo.fromNative(dragInfo))
+        }
     }
 
     override fun close() {
