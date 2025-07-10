@@ -41,8 +41,11 @@ abstract class SkikoWindowLinux(
     open fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
             is Event.WindowDraw -> {
-                performDrawing(event)
-                EventHandlerResult.Stop
+                if (performDrawing(event)) {
+                    EventHandlerResult.Stop
+                } else {
+                    EventHandlerResult.Continue
+                }
             }
             is Event.WindowScreenChange -> {
                 EventHandlerResult.Continue
@@ -51,8 +54,8 @@ abstract class SkikoWindowLinux(
         }
     }
 
-    fun performSoftwareDrawing(event: Event.WindowDraw, softwareDrawData: SoftwareDrawData) {
-        Surface.makeRasterDirect(
+    private fun performSoftwareDrawing(event: Event.WindowDraw, softwareDrawData: SoftwareDrawData): Boolean {
+        return Surface.makeRasterDirect(
             imageInfo = ImageInfo(
                 width = event.size.width,
                 height = event.size.height,
@@ -67,17 +70,12 @@ abstract class SkikoWindowLinux(
             val time = creationTime.elapsedNow().inWholeMilliseconds
             surface.canvas.draw(PhysicalSize(surface.width, surface.height), event.scale, time)
             surface.flushAndSubmit()
+            true
         }
     }
 
-    fun performDrawing(event: Event.WindowDraw) {
-        val softwareDrawData = event.softwareDrawData
-        if (softwareDrawData != null) {
-            performSoftwareDrawing(event, softwareDrawData)
-            return
-        }
-
-        BackendRenderTarget.makeGL(
+    private fun performOpenGlDrawing(event: Event.WindowDraw): Boolean {
+        return BackendRenderTarget.makeGL(
             width = event.size.width,
             height = event.size.height,
             sampleCnt = 1,
@@ -96,8 +94,15 @@ abstract class SkikoWindowLinux(
                 val time = creationTime.elapsedNow().inWholeMilliseconds
                 surface.canvas.draw(event.size, event.scale, time)
                 surface.flushAndSubmit()
+                true
             }
         }
+    }
+
+    fun performDrawing(event: Event.WindowDraw): Boolean {
+        return event.softwareDrawData?.let { softwareDrawData ->
+            performSoftwareDrawing(event, softwareDrawData)
+        } ?: performOpenGlDrawing(event)
     }
 
     abstract fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long)

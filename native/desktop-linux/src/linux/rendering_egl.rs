@@ -18,7 +18,8 @@ impl EglRendering {
     pub fn new(conn: &Connection, egl: &EglInstance, surface: &WlSurface, size: PhysicalSize) -> anyhow::Result<Self> {
         info!("Trying to use EGL rendering");
 
-        let wl_egl_surface = WlEglSurface::new(surface.id(), size.width.0, size.height.0).context("WlEglSurface::new")?;
+        let wl_egl_surface = WlEglSurface::new(surface.id(), size.width.0, size.height.0)
+            .with_context(|| format!("WlEglSurface::new (surface.id() = {})", surface.id()))?;
 
         let wayland_display_ptr = conn.display().id().as_ptr();
         let egl_display = unsafe { egl.get_display(wayland_display_ptr.cast()) }.context("egl.get_display")?;
@@ -47,7 +48,7 @@ impl EglRendering {
             .context("egl.create_context")?;
 
         let egl_window_surface = unsafe { egl.create_window_surface(egl_display, egl_config, wl_egl_surface.ptr().cast_mut(), None) }
-            .context("egl.create_window_surface")?;
+            .with_context(|| format!("egl.create_window_surface, surface.id()={}", surface.id()))?;
 
         egl.make_current(egl_display, Some(egl_window_surface), Some(egl_window_surface), Some(egl_context))
             .context("egl.make_current")?;
