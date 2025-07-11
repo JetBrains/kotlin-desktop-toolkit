@@ -4,6 +4,7 @@ import org.jetbrains.desktop.win32.AngleRenderer
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
+import org.jetbrains.desktop.win32.LogicalSize
 import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.WindowParams
 import org.jetbrains.skia.BackendRenderTarget
@@ -39,7 +40,7 @@ abstract class SkikoWindowWin32(
     private var surface: Surface? = null
 
     init {
-        //window.setMinSize(LogicalSize(320.0f, 240.0f))
+        window.setMinSize(LogicalSize(320.0f, 240.0f))
     }
 
     private fun isSizeChanged(size: PhysicalSize): Boolean {

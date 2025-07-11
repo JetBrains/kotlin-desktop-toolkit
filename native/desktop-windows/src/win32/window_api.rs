@@ -103,6 +103,14 @@ pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) {
+    with_window_mut(window_ptr, "window_set_min_size", |window| {
+        window.set_min_size(size);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_extend_content_into_titlebar(window_ptr: WindowPtr) {
     with_window(window_ptr, "window_extend_content_into_titlebar", |window| {
         Ok(window.extend_content_into_titlebar()?)

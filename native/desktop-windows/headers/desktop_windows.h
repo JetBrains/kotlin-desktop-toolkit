@@ -162,6 +162,8 @@ NativeWindowPtr window_create(NativeAppPtr app_ptr, struct NativeWindowParams pa
 
 NativeWindowId window_get_window_id(NativeWindowPtr window_ptr);
 
+void window_set_min_size(NativeWindowPtr window_ptr, struct NativeLogicalSize size);
+
 void window_extend_content_into_titlebar(NativeWindowPtr window_ptr);
 
 void window_apply_system_backdrop(NativeWindowPtr window_ptr,
