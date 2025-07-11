@@ -2,7 +2,7 @@ use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedRawPtr},
     logger::{PanicDefault, ffi_boundary},
 };
-use log::debug;
+
 use windows::Win32::{
     Foundation::{HWND, INVALID_HANDLE_VALUE},
     Graphics::Dwm::{DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW},
@@ -73,47 +73,52 @@ impl WindowSystemBackdropType {
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn window_create(app_ptr: AppPtr, params: WindowParams) -> WindowPtr<'static> {
-    let window = ffi_boundary("window_create", || {
-        debug!("window_create");
-
-        let app = unsafe { app_ptr.borrow::<Application>() };
-        let window = Window::new(&params, app)?;
-
-        Ok(Some(window))
-    });
-    WindowPtr::from_value(window)
+fn with_window<R: PanicDefault>(window_ptr: WindowPtr, name: &str, f: impl FnOnce(&Window) -> anyhow::Result<R>) -> R {
+    ffi_boundary(name, || {
+        let w = unsafe { window_ptr.borrow::<Window>() };
+        f(w)
+    })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
-    ffi_boundary("window_get_window_id", || {
-        let window = unsafe { window_ptr.borrow::<Window>() };
-        Ok(window.id())
+fn with_window_mut<R: PanicDefault>(mut window_ptr: WindowPtr, name: &str, f: impl FnOnce(&mut Window) -> anyhow::Result<R>) -> R {
+    ffi_boundary(name, || {
+        let w = unsafe { window_ptr.borrow_mut::<Window>() };
+        f(w)
     })
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_create(app_ptr: AppPtr, params: WindowParams) -> WindowPtr<'static> {
+    let window = ffi_boundary("window_create", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let window = Window::new(&params, app)?;
+        Ok(Some(window))
+    });
+    WindowPtr::from_rc(window)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
+    with_window(window_ptr, "window_get_window_id", |window| Ok(window.id()))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_extend_content_into_titlebar(window_ptr: WindowPtr) {
-    ffi_boundary("window_extend_content_into_titlebar", || {
-        let window = unsafe { window_ptr.borrow::<Window>() };
+    with_window(window_ptr, "window_extend_content_into_titlebar", |window| {
         Ok(window.extend_content_into_titlebar()?)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_apply_system_backdrop(window_ptr: WindowPtr, backdrop_type: WindowSystemBackdropType) {
-    ffi_boundary("window_apply_system_backdrop", || {
-        let window = unsafe { window_ptr.borrow::<Window>() };
+    with_window(window_ptr, "window_apply_system_backdrop", |window| {
         Ok(window.apply_system_backdrop(backdrop_type)?)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_show(window_ptr: WindowPtr) {
-    ffi_boundary("window_show", || {
-        let window = unsafe { window_ptr.borrow::<Window>() };
+    with_window(window_ptr, "window_show", |window| {
         window.show();
         Ok(())
     });
@@ -121,8 +126,7 @@ pub extern "C" fn window_show(window_ptr: WindowPtr) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: PhysicalPoint, size: PhysicalSize) {
-    ffi_boundary("window_set_rect", || {
-        let window = unsafe { window_ptr.borrow::<Window>() };
+    with_window(window_ptr, "window_set_rect", |window| {
         window.set_position(origin, size)?;
         Ok(())
     });

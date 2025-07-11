@@ -3,7 +3,7 @@ use windows::{
     Foundation::TypedEventHandler,
     System::DispatcherQueueController,
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
+        Foundation::{LPARAM, LRESULT, RECT, WPARAM},
         Graphics::Gdi::{BeginPaint, EndPaint},
         System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
         UI::WindowsAndMessaging::{
@@ -55,7 +55,7 @@ impl EventLoop {
         let mut msg = MSG::default();
         unsafe {
             while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-                let _ = TranslateMessage(&msg);
+                //let _ = windows::Win32::UI::WindowsAndMessaging::TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
         }
@@ -68,7 +68,9 @@ impl EventLoop {
             .inspect_err(|err| error!("Failed to shut down the dispatcher queue: {:?}", err))
     }
 
-    pub fn window_proc(&self, hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    pub fn window_proc(&self, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        let hwnd = window.hwnd();
+
         let handled = match msg {
             WM_PAINT => {
                 let mut paint = Default::default();
@@ -80,7 +82,7 @@ impl EventLoop {
                 }
                 let event = WindowDrawEvent {
                     physical_size: PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top),
-                    scale: Window::hwnd_get_scale(hwnd),
+                    scale: window.get_scale(),
                 };
                 let handled = (self.event_handler)(hwnd.into(), &event.into());
                 let _ = unsafe { EndPaint(hwnd, &paint) };
