@@ -32,15 +32,16 @@ use super::{
     window_api::{WindowId, WindowParams, WindowSystemBackdropType},
 };
 
-const WINDOW_EVENT_LOOP_PROP_NAME: PCWSTR = w!("KOTLIN_DESKTOP_TOOLKIT_EVENT_LOOP_PTR");
+const WINDOW_PTR_PROP_NAME: PCWSTR = w!("KDT_WINDOW_PTR");
 
 pub struct Window {
     hwnd: HWND,
-    _john_weak: Weak<EventLoop>,
+    event_loop: Weak<EventLoop>,
+    john_weak: Weak<Window>,
 }
 
 impl Window {
-    pub fn new(params: &WindowParams, app: &Application) -> WinResult<Self> {
+    pub fn new(params: &WindowParams, app: &Application) -> WinResult<Rc<Self>> {
         const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
         let wndclass = WNDCLASSEXW {
             cbSize: size_of::<WNDCLASSEXW>() as _,
@@ -67,7 +68,13 @@ impl Window {
                 None,
             )?
         };
-        let scale = Self::hwnd_get_scale(hwnd);
+        let window = Rc::new_cyclic(|weak| Self {
+            hwnd,
+            min_size: None,
+            event_loop: Rc::downgrade(&app.event_loop()),
+            john_weak: weak.clone(),
+        });
+        let scale = window.get_scale();
         let origin = PhysicalPoint::new(
             f32::round(params.origin.x.0 * scale + 0.5_f32) as i32,
             f32::round(params.origin.y.0 * scale + 0.5_f32) as i32,
@@ -76,17 +83,23 @@ impl Window {
             f32::round(params.size.width.0 * scale + 0.5_f32) as i32,
             f32::round(params.size.height.0 * scale + 0.5_f32) as i32,
         );
-        Self::hwnd_set_position(hwnd, origin, size)?;
-        let event_loop = Rc::downgrade(&app.event_loop());
-        unsafe { SetPropW(hwnd, WINDOW_EVENT_LOOP_PROP_NAME, Some(HANDLE(event_loop.as_ptr() as _))) }?;
-        Ok(Self {
-            hwnd,
-            _john_weak: event_loop,
-        })
+        window.set_position(origin, size)?;
+        unsafe { SetPropW(hwnd, WINDOW_PTR_PROP_NAME, Some(HANDLE(window.john_weak.as_ptr() as _))) }?;
+        Ok(window)
     }
 
     pub fn id(&self) -> WindowId {
         WindowId(self.hwnd.0 as isize)
+    }
+
+    #[inline]
+    pub(crate) fn hwnd(&self) -> HWND {
+        self.hwnd
+    }
+
+    pub fn get_scale(&self) -> f32 {
+        let dpi = unsafe { GetDpiForWindow(self.hwnd) };
+        (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
     }
 
     pub fn extend_content_into_titlebar(&self) -> WinResult<()> {
@@ -126,20 +139,9 @@ impl Window {
     }
 
     pub fn set_position(&self, origin: PhysicalPoint, size: PhysicalSize) -> WinResult<()> {
-        Self::hwnd_set_position(self.hwnd, origin, size)
-    }
-}
-
-impl Window {
-    pub(super) fn hwnd_get_scale(hwnd: HWND) -> f32 {
-        let dpi = unsafe { GetDpiForWindow(hwnd) };
-        (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
-    }
-
-    fn hwnd_set_position(hwnd: HWND, origin: PhysicalPoint, size: PhysicalSize) -> WinResult<()> {
         unsafe {
             SetWindowPos(
-                hwnd,
+                self.hwnd,
                 None,
                 origin.x.0,
                 origin.y.0,
@@ -166,17 +168,23 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     }
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
     if msg == WM_NCDESTROY {
-        let _ = unsafe { RemovePropW(hwnd, WINDOW_EVENT_LOOP_PROP_NAME) };
+        let _ = unsafe { RemovePropW(hwnd, WINDOW_PTR_PROP_NAME) };
         return LRESULT(0);
     }
-    let raw = unsafe { GetPropW(hwnd, WINDOW_EVENT_LOOP_PROP_NAME).0 as *const EventLoop };
+    let raw = unsafe { GetPropW(hwnd, WINDOW_PTR_PROP_NAME).0 as *const Window };
     if raw.is_null() {
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     }
     // we reuse the weak reference on every iteration of the event loop, so we don't drop it here (see above)
     let this = ManuallyDrop::new(unsafe { Weak::from_raw(raw) });
     match this.upgrade() {
-        Some(app) => app.window_proc(hwnd, msg, wparam, lparam),
-        _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+        Some(window) if hwnd == window.hwnd => {
+            let event_loop = window.event_loop.upgrade().expect("event loop has been dropped");
+            event_loop.window_proc(window.as_ref(), msg, wparam, lparam)
+        }
+        _ => {
+            error!("could not upgrade the window weak reference, or the window pointer was incorrect");
+            unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+        }
     }
 }
