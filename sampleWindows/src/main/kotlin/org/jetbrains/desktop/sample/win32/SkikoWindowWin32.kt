@@ -63,6 +63,11 @@ abstract class SkikoWindowWin32(
                 EventHandlerResult.Stop
             }
 
+            is Event.WindowResize -> {
+                performDrawing(event.size, event.scale)
+                EventHandlerResult.Stop
+            }
+
             else -> EventHandlerResult.Continue
         }
     }
