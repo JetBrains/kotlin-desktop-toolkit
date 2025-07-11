@@ -6,7 +6,7 @@ use std::{
 use log::error;
 use windows::{
     Win32::{
-        Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
+        Foundation::{COLORREF, ERROR_NO_UNICODE_TRANSLATION, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
         Graphics::Dwm::{
             DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
             DwmSetWindowAttribute,
@@ -22,7 +22,7 @@ use windows::{
             },
         },
     },
-    core::{PCWSTR, Result as WinResult, w},
+    core::{Error as WinError, HSTRING, PCWSTR, Result as WinResult, w},
 };
 
 use super::{
@@ -50,13 +50,14 @@ impl Window {
             style: CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
             ..Default::default()
         };
+        let title = params.title.as_str().map_err(|_| WinError::from(ERROR_NO_UNICODE_TRANSLATION))?;
         let hwnd = unsafe {
             let _atom = RegisterClassExW(&wndclass);
             let instance = GetModuleHandleW(None)?;
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 WNDCLASS_NAME,
-                w!("KotlinDesktopToolkit Win32 Window"),
+                &HSTRING::from(title),
                 WS_OVERLAPPEDWINDOW,
                 0, // CW_USEDEFAULT: i32 = -2147483648i32
                 0, // CW_USEDEFAULT: i32 = -2147483648i32
