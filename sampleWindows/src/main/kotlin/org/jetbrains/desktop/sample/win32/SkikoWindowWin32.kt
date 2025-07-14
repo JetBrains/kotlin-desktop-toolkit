@@ -74,13 +74,13 @@ abstract class SkikoWindowWin32(
 
     fun performDrawing(size: PhysicalSize, scale: Float) {
         if (isSizeChanged(size) || surface == null) {
-            angleRenderer.makeSurface(currentSize.width, currentSize.height)
+            val surfaceParams = angleRenderer.makeSurface(currentSize.width, currentSize.height)
             renderTarget = BackendRenderTarget.makeGL(
                 width = currentSize.width,
                 height = currentSize.height,
                 sampleCnt = 1,
                 stencilBits = 8,
-                fbId = 0,
+                fbId = surfaceParams.framebufferBinding,
                 fbFormat = FramebufferFormat.GR_GL_RGBA8,
             )
             surface = Surface.makeFromBackendRenderTarget(

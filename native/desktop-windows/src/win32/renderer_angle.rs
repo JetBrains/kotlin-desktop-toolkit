@@ -15,9 +15,13 @@ use windows::{
     core::{Error as WinError, PWSTR},
 };
 
-use super::window_api::WindowId;
+use crate::win32::renderer_egl_utils::{GR_GL_COLOR_BUFFER_BIT, GR_GL_FRAMEBUFFER_BINDING, GR_GL_STENCIL_BUFFER_BIT};
 
-type EglInstance = egl::DynamicInstance<egl::EGL1_1>;
+use super::{
+    renderer_api::EglSurfaceData,
+    renderer_egl_utils::{EglInstance, GetPlatformDisplayEXTFn, GrGLFunctions, get_egl_proc},
+    window_api::WindowId,
+};
 
 pub type AngleDeviceDrawFun = extern "C" fn() -> ();
 
@@ -28,6 +32,7 @@ pub struct AngleDevice {
     context: egl::Context,
     surface: egl::Surface,
     surface_config: egl::Config,
+    functions: GrGLFunctions,
 }
 
 impl AngleDevice {
@@ -70,6 +75,7 @@ impl AngleDevice {
             egl::NONE, egl::NONE,
         ];
         let context = egl_instance.create_context(display, surface_config, None, &context_attribs)?;
+        let functions = GrGLFunctions::init(&egl_instance)?;
 
         Ok(AngleDevice {
             egl_instance,
@@ -78,10 +84,11 @@ impl AngleDevice {
             context,
             surface: unsafe { egl::Surface::from_ptr(egl::NO_SURFACE) },
             surface_config,
+            functions,
         })
     }
 
-    pub fn make_surface(&mut self, width: egl::Int, height: egl::Int) -> Result<()> {
+    pub fn make_surface(&mut self, width: egl::Int, height: egl::Int) -> Result<EglSurfaceData> {
         const EGL_FIXED_SIZE_ANGLE: egl::Int = 0x3201;
 
         #[rustfmt::skip]
@@ -105,7 +112,16 @@ impl AngleDevice {
             .make_current(self.display, Some(self.surface), Some(self.surface), Some(self.context))?;
         self.egl_instance.swap_interval(self.display, 1)?;
 
-        Ok(())
+        (self.functions.fClearStencil)(0);
+        (self.functions.fClearColor)(0_f32, 0_f32, 0_f32, 0_f32);
+        (self.functions.fStencilMask)(0xffffffff);
+        (self.functions.fClear)(GR_GL_STENCIL_BUFFER_BIT | GR_GL_COLOR_BUFFER_BIT);
+        (self.functions.fViewport)(0, 0, width, height);
+
+        let mut framebuffer_binding = 0;
+        (self.functions.fGetIntegerv)(GR_GL_FRAMEBUFFER_BINDING, &mut framebuffer_binding);
+
+        Ok(EglSurfaceData { framebuffer_binding })
     }
 
     pub fn draw(&self, wait_for_vsync: bool, draw_fun: AngleDeviceDrawFun) -> Result<()> {
@@ -142,19 +158,13 @@ impl Drop for AngleDevice {
 }
 
 fn get_angle_platform_display(egl_instance: &EglInstance, hdc: &HDC) -> Result<egl::Display> {
-    type GetPlatformDisplayEXTFn =
-        extern "C" fn(platform: egl::Enum, native_display: *mut std::ffi::c_void, attrib_list: *const egl::Int) -> egl::EGLDisplay;
-
     const EGL_PLATFORM_ANGLE_ANGLE: egl::Int = 0x3202;
     const EGL_PLATFORM_ANGLE_TYPE_ANGLE: egl::Int = 0x3203;
 
     //const EGL_PLATFORM_ANGLE_TYPE_D3D9_ANGLE: egl::Int = 0x3207;
     const EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE: egl::Int = 0x3208;
 
-    let fun: GetPlatformDisplayEXTFn = egl_instance
-        .get_proc_address("eglGetPlatformDisplayEXT")
-        .ok_or_else(|| anyhow!("Could not load the eglGetPlatformDisplayEXT function."))
-        .map(|f| unsafe { core::mem::transmute(f) })?;
+    let fun: GetPlatformDisplayEXTFn = get_egl_proc!(egl_instance, "eglGetPlatformDisplayEXT")?;
 
     #[rustfmt::skip]
     let display_attribs = [
