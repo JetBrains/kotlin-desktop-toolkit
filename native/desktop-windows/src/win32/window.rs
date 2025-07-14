@@ -18,7 +18,7 @@ use windows::{
             WindowsAndMessaging::{
                 CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetPropW, RegisterClassExW, RemovePropW,
                 SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI,
-                WINDOW_EX_STYLE, WM_NCDESTROY, WNDCLASSEXW, WS_OVERLAPPEDWINDOW,
+                WINDOW_EX_STYLE, WM_NCDESTROY, WNDCLASSEXW,
             },
         },
     },
@@ -51,15 +51,19 @@ impl Window {
             style: CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
             ..Default::default()
         };
-        let title = params.title.as_str().map_err(|_| WinError::from(ERROR_NO_UNICODE_TRANSLATION))?;
+        let title = params
+            .title
+            .as_optional_str()
+            .map_err(|_| WinError::from(ERROR_NO_UNICODE_TRANSLATION))?
+            .map(|some| HSTRING::from(some));
         let hwnd = unsafe {
             let _atom = RegisterClassExW(&wndclass);
             let instance = GetModuleHandleW(None)?;
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 WNDCLASS_NAME,
-                &HSTRING::from(title),
-                WS_OVERLAPPEDWINDOW,
+                title.map_or_else(|| PCWSTR::null(), |str| PCWSTR::from_raw(str.as_ptr())),
+                params.style.to_system()?,
                 0, // CW_USEDEFAULT: i32 = -2147483648i32
                 0, // CW_USEDEFAULT: i32 = -2147483648i32
                 1,
