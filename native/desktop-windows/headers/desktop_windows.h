@@ -129,6 +129,10 @@ typedef struct NativeEglGetProcFuncData {
 
 typedef NativeRustAllocatedRawPtr NativeWindowPtr;
 
+typedef struct NativeEglSurfaceData {
+  int32_t framebuffer_binding;
+} NativeEglSurfaceData;
+
 typedef void (*NativeAngleDeviceDrawFun)(void);
 
 typedef struct NativeAngleDeviceCallbacks {
@@ -180,9 +184,9 @@ struct NativeEglGetProcFuncData renderer_angle_get_egl_get_proc_func(NativeAngle
 
 NativeAngleDevicePtr renderer_angle_device_create(NativeWindowPtr window_ptr);
 
-void renderer_angle_make_surface(NativeAngleDevicePtr angle_device_ptr,
-                                 int32_t width,
-                                 int32_t height);
+struct NativeEglSurfaceData renderer_angle_make_surface(NativeAngleDevicePtr angle_device_ptr,
+                                                        int32_t width,
+                                                        int32_t height);
 
 void renderer_angle_draw(NativeAngleDevicePtr angle_device_ptr,
                          bool wait_for_vsync,
