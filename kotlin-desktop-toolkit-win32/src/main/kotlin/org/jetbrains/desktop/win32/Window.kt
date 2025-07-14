@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeWindowParams
+import org.jetbrains.desktop.win32.generated.NativeWindowStyle
 import org.jetbrains.desktop.win32.generated.desktop_windows_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -10,22 +11,34 @@ public typealias WindowId = Long
 public data class WindowParams(
     val origin: LogicalPoint = LogicalPoint(0f, 0f),
     val size: LogicalSize = LogicalSize(640f, 480f),
-    val title: String = "Window",
-    val isResizable: Boolean = true,
-    val isClosable: Boolean = true,
-    val isMinimizable: Boolean = true,
+    val title: String? = null,
+    val style: WindowStyle = WindowStyle()
 ) {
-    internal fun toNative(arena: Arena): MemorySegment {
-        val nativeWindowParams = NativeWindowParams.allocate(arena)
-        NativeWindowParams.origin(nativeWindowParams, origin.toNative(arena))
-        NativeWindowParams.size(nativeWindowParams, size.toNative(arena))
-        NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
+    internal fun toNative(arena: Arena): MemorySegment =
+        NativeWindowParams.allocate(arena).also { nativeWindowParams ->
+            NativeWindowParams.origin(nativeWindowParams, origin.toNative(arena))
+            NativeWindowParams.size(nativeWindowParams, size.toNative(arena))
+            NativeWindowParams.title(nativeWindowParams, title?.let(arena::allocateUtf8String) ?: MemorySegment.NULL)
+            NativeWindowParams.style(nativeWindowParams, style.toNative(arena))
+        }
+}
 
-        NativeWindowParams.is_resizable(nativeWindowParams, isResizable)
-        NativeWindowParams.is_closable(nativeWindowParams, isClosable)
-        NativeWindowParams.is_minimizable(nativeWindowParams, isMinimizable)
-        return nativeWindowParams
-    }
+public data class WindowStyle(
+    public val hasCaption: Boolean = true,
+    public val hasSystemMenu: Boolean = true,
+
+    public val isResizable: Boolean = true,
+    public val isMinimizable: Boolean = true,
+    public val isMaximizable: Boolean = true,
+) {
+    internal fun toNative(arena: Arena): MemorySegment =
+        NativeWindowStyle.allocate(arena).also { nativeWindowStyle ->
+            NativeWindowStyle.has_caption(nativeWindowStyle, hasCaption)
+            NativeWindowStyle.has_system_menu(nativeWindowStyle, hasSystemMenu)
+            NativeWindowStyle.is_resizable(nativeWindowStyle, isResizable)
+            NativeWindowStyle.is_minimizable(nativeWindowStyle, isMinimizable)
+            NativeWindowStyle.is_maximizable(nativeWindowStyle, isMaximizable)
+        }
 }
 
 public class Window internal constructor(
@@ -47,9 +60,7 @@ public class Window internal constructor(
             origin: LogicalPoint = LogicalPoint(0f, 0f),
             size: LogicalSize = LogicalSize(640f, 480f),
             title: String = "Window",
-            isResizable: Boolean = true,
-            isClosable: Boolean = true,
-            isMinimizable: Boolean = true,
+            style: WindowStyle = WindowStyle(),
         ): Window {
             return create(
                 appPtr,
@@ -57,9 +68,7 @@ public class Window internal constructor(
                     origin,
                     size,
                     title,
-                    isResizable,
-                    isClosable,
-                    isMinimizable,
+                    style
                 ),
             )
         }

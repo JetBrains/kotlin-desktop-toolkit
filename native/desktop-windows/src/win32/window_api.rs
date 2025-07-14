@@ -4,8 +4,9 @@ use desktop_common::{
 };
 
 use windows::Win32::{
-    Foundation::{HWND, INVALID_HANDLE_VALUE},
+    Foundation::{ERROR_INVALID_WINDOW_STYLE, HWND, INVALID_HANDLE_VALUE, WIN32_ERROR},
     Graphics::Dwm::{DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW},
+    UI::WindowsAndMessaging::{WINDOW_STYLE, WS_BORDER, WS_CAPTION, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME},
 };
 
 use super::{
@@ -44,10 +45,42 @@ pub struct WindowParams<'a> {
     pub origin: LogicalPoint,
     pub size: LogicalSize,
     pub title: BorrowedStrPtr<'a>,
+    pub style: WindowStyle,
+}
+
+#[repr(C)]
+pub struct WindowStyle {
+    pub has_caption: bool,
+    pub has_system_menu: bool,
 
     pub is_resizable: bool,
-    pub is_closable: bool,
     pub is_minimizable: bool,
+    pub is_maximizable: bool,
+}
+
+impl WindowStyle {
+    pub const fn to_system(&self) -> Result<WINDOW_STYLE, WIN32_ERROR> {
+        if !self.has_caption && (self.is_minimizable || self.is_maximizable) {
+            return Err(ERROR_INVALID_WINDOW_STYLE);
+        }
+        let mut style = WS_BORDER.0;
+        if self.has_caption {
+            style = style | WS_CAPTION.0
+        };
+        if self.has_system_menu {
+            style = style | WS_SYSMENU.0
+        };
+        if self.is_resizable {
+            style = style | WS_THICKFRAME.0
+        };
+        if self.is_minimizable {
+            style = style | WS_MINIMIZEBOX.0
+        };
+        if self.is_maximizable {
+            style = style | WS_MAXIMIZEBOX.0
+        };
+        Ok(WINDOW_STYLE(style))
+    }
 }
 
 #[repr(C)]
