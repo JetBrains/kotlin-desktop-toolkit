@@ -371,7 +371,7 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
             debug!("wp_fractional_scale_v1::Event::PreferredScale: {scale}");
             if let Some(window) = this.windows.get_mut(surface_id) {
                 window.scale_changed(f64::from(scale) / 120.0, &this.shm_state);
-            };
+            }
         }
     }
 }

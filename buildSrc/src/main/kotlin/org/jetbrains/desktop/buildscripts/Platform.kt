@@ -9,7 +9,9 @@ import org.gradle.internal.impldep.kotlinx.serialization.Serializable
 data class Platform(
     @get:Input val os: Os,
     @get:Input val arch: Arch,
-)
+) {
+    fun name(): String = "${os.normalizedName}-${arch.name}"
+}
 
 enum class Os(val normalizedName: String) {
     LINUX("linux"), MACOS("macos"), WINDOWS("windows");

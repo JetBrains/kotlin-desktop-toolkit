@@ -157,7 +157,7 @@ impl Application<'static> {
             self.state.copy_paste_source = None;
             warn!("Application::clipboard_put: None");
             return;
-        };
+        }
         let Some(data_device) = self.state.data_device.as_ref() else {
             warn!("Application::clipboard_put: No data device");
             return;

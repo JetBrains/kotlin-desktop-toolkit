@@ -7,16 +7,25 @@ on:
       - "[0-9]+.[0-9]+.[0-9]+-[a-zA-Z0-9]+.[0-9]+"
 
 env:
-  RUST_VERSION: 1.85.0 # the same as in rust-toolchain
+  RUST_VERSION: 1.88.0 # the same as in rust-toolchain
 
 jobs:
   publish_all:
     strategy:
       matrix:
         targets: [
-          { os: "macos-14", rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin", package_manager: "brew", gradle_project: "kotlin-desktop-toolkit" },
-          { os: "ubuntu-22.04", rust_targets: "x86_64-unknown-linux-gnu", package_manager: "apt", gradle_project: "kotlin-desktop-toolkit-linux" },
-          #{ os: "ubuntu-22.04-arm", rust_targets: "aarch64-unknown-linux-gnu", package_manager: "apt", gradle_project: "kotlin-desktop-toolkit-linux" },
+          { os: "macos-14",
+            rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin",
+            publish_common: false,
+            package_manager: "brew" },
+          { os: "ubuntu-22.04",
+            rust_targets: "x86_64-unknown-linux-gnu",
+            publish_common: false,
+            package_manager: "apt" },
+          { os: "ubuntu-22.04-arm",
+            rust_targets: "aarch64-unknown-linux-gnu",
+            publish_common: true,
+            package_manager: "apt" },
         ]
     runs-on: ${{ matrix.targets.os }}
     steps:
@@ -45,4 +54,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
       - name: Build with Gradle
-        run: ./gradlew ":${{ matrix.targets.gradle_project }}:publish" -PspaceUsername=${{ secrets.SPACE_USERNAME }} -PspacePassword=${{ secrets.SPACE_PASSWORD }} -Pversion=${{ github.ref_name }}
+        run: |
+          ./gradlew :kotlin-desktop-toolkit:publish \
+               -PenableCrossCompileToMacosX86_64="${{ matrix.targets.os == 'macos-14' }}" \
+               -PpublishCommon=${{ matrix.targets.publish_common }} \
+               -PspaceUsername=${{ secrets.SPACE_USERNAME }} \
+               -PspacePassword=${{ secrets.SPACE_PASSWORD }} \
+               -Pversion=${{ github.ref_name }}

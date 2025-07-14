@@ -9,7 +9,6 @@ import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Provider
 import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Nested
@@ -66,9 +65,6 @@ abstract class CompileRustTask @Inject constructor(
     }
 
     @get:OutputFile
-    val headerFile = outputDirectory.map { outDir -> outDir.file("headers/${crateName.get().replace("-", "_")}.h") }
-
-    @get:OutputFile
     val libraryFile = providerFactory.provider {
         val dir = outputDirectory.get().asFile
         val target = rustTarget.get()
@@ -88,7 +84,7 @@ abstract class CompileRustTask @Inject constructor(
         /**
         * See `KotlinDesktopToolkit.kt` if you would like to change this logic.
         */
-        // todo change libname with otool
+        // todo macOS change libname with otool
         when (target.os) {
             Os.LINUX -> dir.resolve("lib$libName.so")
             Os.MACOS -> dir.resolve("lib$libName.dylib")
@@ -103,7 +99,6 @@ abstract class CompileRustTask @Inject constructor(
             crateName.get(),
             rustTarget.get(),
             rustProfile.get(),
-            headerFile.get().asFile.toPath(),
             rustOutputLibraryFile.get().toPath(),
             libraryFile.get().toPath(),
         )
@@ -147,7 +142,6 @@ private fun ExecOperations.compileRust(
     crateName: String,
     rustTarget: Platform,
     rustProfile: String,
-    headerFile: Path,
     rustOutputLibraryFile: Path,
     libraryFile: Path,
 ) {
@@ -156,7 +150,7 @@ private fun ExecOperations.compileRust(
         if (rustTarget.os == Os.MACOS) {
             environment("MACOSX_DEPLOYMENT_TARGET", "10.12")
         }
-        executable = findCommand("cargo", rustTarget.os)?.absolutePathString() ?: error("cannot find cargo path")
+        executable = findCommand("cargo", hostOs())?.absolutePathString() ?: error("cannot find cargo path")
         args = listOf(
             "build",
             "--package=$crateName",
@@ -165,11 +159,6 @@ private fun ExecOperations.compileRust(
             "--color=always",
         )
     }
-
-    nativeDirectory
-        .resolve(crateName)
-        .resolve("headers")
-        .resolve(headerFile.fileName).copyTo(headerFile, overwrite = true)
 
     nativeDirectory
         .resolve(rustOutputLibraryFile)
