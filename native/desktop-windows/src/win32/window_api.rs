@@ -179,6 +179,14 @@ pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: PhysicalPoint, 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_request_update(window_ptr: WindowPtr) {
+    with_window(window_ptr, "window_request_update", |window| {
+        window.request_update()?;
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_drop(window_ptr: WindowPtr) {
     ffi_boundary("window_drop", || {
         let _window = unsafe { window_ptr.to_owned::<Window>() };
