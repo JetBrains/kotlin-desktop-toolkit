@@ -213,4 +213,6 @@ void window_set_rect(NativeWindowPtr window_ptr,
                      struct NativePhysicalPoint origin,
                      struct NativePhysicalSize size);
 
+void window_request_update(NativeWindowPtr window_ptr);
+
 void window_drop(NativeWindowPtr window_ptr);

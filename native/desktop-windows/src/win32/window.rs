@@ -16,9 +16,9 @@ use windows::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
-                CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetPropW, RegisterClassExW, RemovePropW,
-                SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI,
-                WINDOW_EX_STYLE, WM_NCDESTROY, WNDCLASSEXW,
+                CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GetPropW, PostMessageW, RegisterClassExW,
+                RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW, SetWindowPos, ShowWindow,
+                USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WM_NCDESTROY, WM_USER, WNDCLASSEXW,
             },
         },
     },
@@ -33,6 +33,8 @@ use super::{
 };
 
 const WINDOW_PTR_PROP_NAME: PCWSTR = w!("KDT_WINDOW_PTR");
+
+pub(crate) const WM_REQUEST_UPDATE: u32 = WM_USER + 1;
 
 pub struct Window {
     hwnd: HWND,
@@ -165,6 +167,11 @@ impl Window {
 
     pub fn set_min_size(&mut self, size: LogicalSize) {
         self.min_size = Some(size);
+    }
+
+    pub fn request_update(&self) -> WinResult<()> {
+        let _ = unsafe { PostMessageW(Some(self.hwnd), WM_REQUEST_UPDATE, Default::default(), Default::default()) }?;
+        Ok(())
     }
 }
 
