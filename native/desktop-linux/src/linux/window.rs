@@ -22,8 +22,8 @@ use smithay_client_toolkit::{
 use crate::linux::{
     application_state::{ApplicationState, EglInstance},
     events::{
-        Event, InternalEventHandler, SoftwareDrawData, WindowCapabilities, WindowConfigureEvent, WindowDrawEvent, WindowId,
-        WindowScaleChangedEvent, WindowScreenChangeEvent,
+        Event, InternalEventHandler, SoftwareDrawData, WindowCapabilities, WindowConfigureEvent, WindowDecorationMode, WindowDrawEvent,
+        WindowId, WindowScaleChangedEvent, WindowScreenChangeEvent,
     },
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
     rendering_egl::EglRendering,
@@ -36,6 +36,15 @@ use crate::linux::{
 enum RenderingData {
     Egl(EglRendering),
     Software(SoftwareRendering),
+}
+
+impl From<DecorationMode> for WindowDecorationMode {
+    fn from(value: DecorationMode) -> Self {
+        match value {
+            DecorationMode::Client => Self::Client,
+            DecorationMode::Server => Self::Server,
+        }
+    }
 }
 
 pub struct SimpleWindow {
@@ -162,7 +171,7 @@ impl SimpleWindow {
                 active: configure.is_activated(),
                 maximized: configure.is_maximized(),
                 fullscreen: configure.is_fullscreen(),
-                client_side_decorations: configure.decoration_mode == DecorationMode::Client,
+                decoration_mode: configure.decoration_mode.into(),
                 capabilities: WindowCapabilities {
                     window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
                     maximixe: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),

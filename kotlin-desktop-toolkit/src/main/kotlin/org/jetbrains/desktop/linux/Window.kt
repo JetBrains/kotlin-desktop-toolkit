@@ -136,6 +136,18 @@ public class Window internal constructor(
         }
     }
 
+    public fun requestDecorationMode(decorationMode: WindowDecorationMode) {
+        ffiDownCall {
+            desktop_linux_h.window_request_decoration_mode(appPtr, windowId, decorationMode.toNative())
+        }
+    }
+
+    public fun unsetDecorationMode() {
+        ffiDownCall {
+            desktop_linux_h.window_unset_decoration_mode(appPtr, windowId)
+        }
+    }
+
     /**
      * Start a drag&drop action with the data that can be interpreted in any of the provided MIME type formats.
      * Later, [ApplicationConfig.getDataTransferData] may be called, with [DataSource.DragAndDrop] argument,

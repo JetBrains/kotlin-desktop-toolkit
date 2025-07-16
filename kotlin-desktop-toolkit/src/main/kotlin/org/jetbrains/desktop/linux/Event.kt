@@ -50,6 +50,18 @@ public data class DragAndDropQueryData(
     internal companion object;
 }
 
+public enum class WindowDecorationMode {
+    /** The window should draw client side decorations. */
+    Client,
+
+    /** The server will draw window decorations. */
+    Server,
+
+    ;
+
+    internal companion object;
+}
+
 public sealed class Event {
     internal companion object;
 
@@ -135,7 +147,7 @@ public sealed class Event {
         val active: Boolean,
         val maximized: Boolean,
         val fullscreen: Boolean,
-        val clientSideDecorations: Boolean,
+        val decorationMode: WindowDecorationMode,
         val capabilities: WindowCapabilities,
     ) : Event()
 

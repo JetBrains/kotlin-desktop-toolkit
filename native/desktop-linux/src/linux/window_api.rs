@@ -4,12 +4,13 @@ use desktop_common::{
     logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
+use smithay_client_toolkit::shell::xdg::window::DecorationMode;
 
 use super::window::SimpleWindow;
 use crate::linux::{
     application::Application,
     application_api::AppPtr,
-    events::WindowId,
+    events::{WindowDecorationMode, WindowId},
     geometry::{LogicalPoint, LogicalSize},
     pointer_shapes::PointerShape,
     window_resize_edge::WindowResizeEdge,
@@ -196,4 +197,38 @@ pub extern "C" fn window_clipboard_paste(
         let app = unsafe { app_ptr.borrow::<Application>() };
         app.clipboard_paste(window_id, serial, supported_mime_types.as_str()?)
     })
+}
+
+impl From<WindowDecorationMode> for DecorationMode {
+    fn from(value: WindowDecorationMode) -> Self {
+        match value {
+            WindowDecorationMode::Client => Self::Client,
+            WindowDecorationMode::Server => Self::Server,
+        }
+    }
+}
+
+/// Requests the window should use the specified decoration mode.
+///
+/// The compositor can decide not to use the client's mode and enforce a different mode instead.
+/// See <https://wayland.app/protocols/xdg-decoration-unstable-v1#zxdg_toplevel_decoration_v1:request:set_mode>
+#[unsafe(no_mangle)]
+pub extern "C" fn window_request_decoration_mode(app_ptr: AppPtr, window_id: WindowId, decoration_mode: WindowDecorationMode) {
+    with_window(&app_ptr, window_id, "window_request_decoration_mode", |w| {
+        let decoration = Some(decoration_mode.into());
+        w.window.request_decoration_mode(decoration);
+        Ok(())
+    });
+}
+
+/// Unset the window decoration mode.
+///
+/// This informs the compositor that the client doesn't prefer a particular decoration mode.
+/// See <https://wayland.app/protocols/xdg-decoration-unstable-v1#zxdg_toplevel_decoration_v1:request:unset_mode>
+#[unsafe(no_mangle)]
+pub extern "C" fn window_unset_decoration_mode(app_ptr: AppPtr, window_id: WindowId) {
+    with_window(&app_ptr, window_id, "window_unset_decoration_mode", |w| {
+        w.window.request_decoration_mode(None);
+        Ok(())
+    });
 }

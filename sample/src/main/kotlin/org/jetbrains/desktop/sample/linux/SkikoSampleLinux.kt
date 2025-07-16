@@ -28,6 +28,7 @@ import org.jetbrains.desktop.linux.TextInputContext
 import org.jetbrains.desktop.linux.Timestamp
 import org.jetbrains.desktop.linux.Window
 import org.jetbrains.desktop.linux.WindowCapabilities
+import org.jetbrains.desktop.linux.WindowDecorationMode
 import org.jetbrains.desktop.linux.WindowId
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
@@ -1069,30 +1070,33 @@ class WindowContainer(
 
     fun configure(event: Event.WindowConfigure) {
         capabilities = event.capabilities
-        if (event.clientSideDecorations) {
-            val titlebarLayout = TitlebarLayout(
-                layoutLeft = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutLeft, event.capabilities),
-                layoutRight = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutRight, event.capabilities),
-            )
-            val titlebarSize = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
-            val titlebar = customTitlebar ?: CustomTitlebar(
-                origin = LogicalPoint.Zero,
-                size = titlebarSize,
-                titlebarLayout,
-                requestClose,
-            ).also {
-                customTitlebar = it
+        when (event.decorationMode) {
+            WindowDecorationMode.Client -> {
+                val titlebarLayout = TitlebarLayout(
+                    layoutLeft = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutLeft, event.capabilities),
+                    layoutRight = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutRight, event.capabilities),
+                )
+                val titlebarSize = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
+                val titlebar = customTitlebar ?: CustomTitlebar(
+                    origin = LogicalPoint.Zero,
+                    size = titlebarSize,
+                    titlebarLayout,
+                    requestClose,
+                ).also {
+                    customTitlebar = it
+                }
+                titlebar.configure(event, titlebarLayout)
+                val customBorders = customBorders ?: CustomBorders().also { customBorders = it }
+                customBorders.configure(event)
+                contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height)
+                contentArea.size =
+                    LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
             }
-            titlebar.configure(event, titlebarLayout)
-            val customBorders = customBorders ?: CustomBorders().also { customBorders = it }
-            customBorders.configure(event)
-            contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height)
-            contentArea.size =
-                LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
-        } else {
-            customTitlebar = null
-            contentArea.origin = LogicalPoint(x = 0f, y = 0f)
-            contentArea.size = event.size
+            WindowDecorationMode.Server -> {
+                customTitlebar = null
+                contentArea.origin = LogicalPoint(x = 0f, y = 0f)
+                contentArea.size = event.size
+            }
         }
     }
 

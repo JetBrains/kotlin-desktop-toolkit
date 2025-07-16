@@ -173,6 +173,21 @@ internal fun Color.Companion.fromNative(s: MemorySegment) = Color(
     alpha = NativeColor.alpha(s),
 )
 
+private fun WindowDecorationMode.Companion.fromNative(raw: Int): WindowDecorationMode {
+    return when (raw) {
+        desktop_linux_h.NativeWindowDecorationMode_Client() -> WindowDecorationMode.Client
+        desktop_linux_h.NativeWindowDecorationMode_Server() -> WindowDecorationMode.Server
+        else -> error("Unexpected Window decoration mode: $raw")
+    }
+}
+
+internal fun WindowDecorationMode.toNative(): Int {
+    return when (this) {
+        WindowDecorationMode.Client -> desktop_linux_h.NativeWindowDecorationMode_Client()
+        WindowDecorationMode.Server -> desktop_linux_h.NativeWindowDecorationMode_Server()
+    }
+}
+
 internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDesktopSetting {
     val nativeTag = NativeXdgDesktopSetting.tag(s)
     return when (nativeTag) {
@@ -508,7 +523,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 active = NativeWindowConfigureEvent.active(nativeEvent),
                 maximized = NativeWindowConfigureEvent.maximized(nativeEvent),
                 fullscreen = NativeWindowConfigureEvent.fullscreen(nativeEvent),
-                clientSideDecorations = NativeWindowConfigureEvent.client_side_decorations(nativeEvent),
+                decorationMode = WindowDecorationMode.fromNative(NativeWindowConfigureEvent.decoration_mode(nativeEvent)),
                 capabilities = WindowCapabilities.fromNative(NativeWindowConfigureEvent.capabilities(nativeEvent)),
             )
         }

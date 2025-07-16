@@ -69,6 +69,16 @@ pub struct KeyModifiers {
 pub struct KeyCode(pub u32);
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowDecorationMode {
+    /// The window should draw client side decorations.
+    Client,
+
+    /// The server will draw window decorations.
+    Server,
+}
+
+#[repr(C)]
 #[derive(Debug)]
 pub struct DataTransferContent<'a> {
     pub serial: i32,
@@ -444,7 +454,7 @@ pub struct WindowConfigureEvent {
     pub active: bool,
     pub maximized: bool,
     pub fullscreen: bool,
-    pub client_side_decorations: bool,
+    pub decoration_mode: WindowDecorationMode,
     pub capabilities: WindowCapabilities,
 }
 
