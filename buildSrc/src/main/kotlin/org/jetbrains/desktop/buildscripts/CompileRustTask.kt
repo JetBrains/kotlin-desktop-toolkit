@@ -9,7 +9,6 @@ import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Provider
 import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Nested
@@ -88,7 +87,7 @@ abstract class CompileRustTask @Inject constructor(
         /**
         * See `KotlinDesktopToolkit.kt` if you would like to change this logic.
         */
-        // todo change libname with otool
+        // todo macOS change libname with otool
         when (target.os) {
             Os.LINUX -> dir.resolve("lib$libName.so")
             Os.MACOS -> dir.resolve("lib$libName.dylib")
