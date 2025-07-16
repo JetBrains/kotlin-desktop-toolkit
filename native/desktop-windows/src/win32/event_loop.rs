@@ -1,0 +1,150 @@
+use log::{debug, error};
+use windows::{
+    Foundation::TypedEventHandler,
+    System::DispatcherQueueController,
+    Win32::{
+        Foundation::{LPARAM, LRESULT, RECT, WPARAM},
+        Graphics::Gdi::{BeginPaint, EndPaint, InvalidateRect},
+        System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
+        UI::WindowsAndMessaging::{
+            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, MINMAXINFO, MSG, PostQuitMessage, SIZE_MAXIMIZED, SIZE_MINIMIZED,
+            SIZE_RESTORED, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_DPICHANGED, WM_GETMINMAXINFO, WM_PAINT, WM_SIZE,
+        },
+    },
+    core::Result as WinResult,
+};
+
+use super::{
+    events::{Event, EventHandler, WindowDrawEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent},
+    geometry::{PhysicalPoint, PhysicalSize},
+    utils,
+    window::{WM_REQUEST_UPDATE, Window},
+};
+
+pub struct EventLoop {
+    dispatcher_queue_controller: DispatcherQueueController,
+    event_handler: EventHandler,
+}
+
+impl EventLoop {
+    pub fn new(event_handler: EventHandler) -> WinResult<Self> {
+        let dispatcher_queue_controller = unsafe {
+            CreateDispatcherQueueController(DispatcherQueueOptions {
+                dwSize: size_of::<DispatcherQueueOptions>() as _,
+                threadType: DQTYPE_THREAD_CURRENT,
+                apartmentType: DQTAT_COM_NONE,
+            })?
+        };
+
+        // See https://devblogs.microsoft.com/oldnewthing/20240509-52/?p=109738
+        dispatcher_queue_controller
+            .DispatcherQueue()?
+            .ShutdownCompleted(&TypedEventHandler::new(|_, _| {
+                debug!("Shutting down the dispatcher queue");
+                unsafe { PostQuitMessage(0) };
+                Ok(())
+            }))?;
+
+        Ok(Self {
+            dispatcher_queue_controller,
+            event_handler,
+        })
+    }
+
+    pub fn run(&self) {
+        let mut msg = MSG::default();
+        unsafe {
+            while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+                //let _ = windows::Win32::UI::WindowsAndMessaging::TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+        }
+    }
+
+    pub fn shutdown(&self) -> WinResult<()> {
+        self.dispatcher_queue_controller
+            .ShutdownQueueAsync()
+            .map(|_async| ())
+            .inspect_err(|err| error!("Failed to shut down the dispatcher queue: {:?}", err))
+    }
+
+    pub fn window_proc(&self, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        let hwnd = window.hwnd();
+
+        let handled = match msg {
+            WM_PAINT => {
+                let mut paint = Default::default();
+                unsafe { BeginPaint(hwnd, &mut paint) };
+                let mut rect = Default::default();
+                if let Err(err) = unsafe { GetClientRect(hwnd, &mut rect) } {
+                    error!("Failed to get client rect: {err:?}");
+                    return LRESULT(1);
+                }
+                let event = WindowDrawEvent {
+                    size: PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top),
+                    scale: window.get_scale(),
+                };
+                let handled = (self.event_handler)(hwnd.into(), &event.into());
+                let _ = unsafe { EndPaint(hwnd, &paint) };
+                handled
+            }
+
+            WM_REQUEST_UPDATE => unsafe { InvalidateRect(Some(hwnd), None, false).as_bool() },
+
+            WM_DPICHANGED => {
+                let new_dpi = utils::HIWORD(wparam.0);
+                assert_eq!(
+                    new_dpi,
+                    utils::LOWORD(wparam.0),
+                    "The DPI values of the X-axis and the Y-axis should be identical for Windows apps."
+                );
+                let new_scale = (new_dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
+                let new_rect = unsafe { *(lparam.0 as *const RECT) };
+                let event = WindowScaleChangedEvent {
+                    new_origin: PhysicalPoint::new(new_rect.left, new_rect.top),
+                    new_size: PhysicalSize::new(new_rect.right - new_rect.left, new_rect.bottom - new_rect.top),
+                    new_scale,
+                };
+                (self.event_handler)(hwnd.into(), &event.into())
+            }
+
+            WM_SIZE => {
+                let width = utils::LOWORD(lparam.0 as _);
+                let height = utils::HIWORD(lparam.0 as _);
+                let kind = match wparam.0 as u32 {
+                    SIZE_MAXIMIZED => WindowResizeKind::Maximized,
+                    SIZE_MINIMIZED => WindowResizeKind::Minimized,
+                    SIZE_RESTORED => WindowResizeKind::Restored,
+                    kind => WindowResizeKind::Other(kind),
+                };
+                let event = WindowResizeEvent {
+                    size: PhysicalSize::new(width as _, height as _),
+                    scale: window.get_scale(),
+                    kind,
+                };
+                (self.event_handler)(hwnd.into(), &event.into())
+            }
+
+            WM_GETMINMAXINFO => {
+                if let Some(min_max_info) = unsafe { (lparam.0 as *mut MINMAXINFO).as_mut() } {
+                    if let Some(min_size) = window.get_min_size() {
+                        let scale = window.get_scale();
+                        min_max_info.ptMinTrackSize.x = f32::round(min_size.width.0 * scale + 0.5_f32) as i32;
+                        min_max_info.ptMinTrackSize.y = f32::round(min_size.height.0 * scale + 0.5_f32) as i32;
+                    }
+                }
+                true
+            }
+
+            WM_CLOSE => (self.event_handler)(hwnd.into(), &Event::WindowCloseRequest),
+
+            _ => false,
+        };
+
+        if handled {
+            LRESULT(0)
+        } else {
+            unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+        }
+    }
+}
