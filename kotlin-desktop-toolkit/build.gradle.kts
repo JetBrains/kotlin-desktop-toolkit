@@ -36,8 +36,7 @@ plugins {
     `java-library`
     `maven-publish`
 }
-
-group = "org.jetbrains"
+group = "org.jetbrains.kotlin-desktop-toolkit"
 version = (project.properties["version"] as? String)?.takeIf { it.isNotBlank() && it != "unspecified" } ?: "SNAPSHOT"
 
 repositories {
@@ -67,6 +66,10 @@ java {
     withSourcesJar()
 }
 
+kotlin {
+    explicitApi()
+}
+
 @Serializable
 data class RustTarget(
     @get:Input val platform: Platform,
@@ -93,25 +96,150 @@ val compileMacOSDesktopToolkitTaskByTarget = buildMap {
     }
 }
 
-compileMacOSDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let { buildNativeTask ->
-    tasks.test {
-        // Use JUnit Platform for unit tests.
-        jvmArgs("--enable-preview")
-        val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
+val downloadJExtractTask = tasks.register<DownloadJExtractTask>("downloadJExtract") {
+    slug = "22/6/openjdk-22-jextract+6-47"
+    jextractDirectory = layout.buildDirectory.dir("jextract")
+}
+
+val generateBindingsTask = tasks.register<GenerateJavaBindingsTask>("generateBindings") {
+    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]
+    dependsOn(downloadJExtractTask)
+    headerFile = if (buildNativeTask != null) {
         dependsOn(buildNativeTask)
-        val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
-        jvmArgumentProviders.add(
-            CommandLineArgumentProvider {
-                listOf(
-                    "-Dkdt.library.folder.path=${libFolder.get()}",
-                    "-Dkdt.debug=true",
-                    "-Dkdt.native.log.path=${logFile.get().asFile.absolutePath}",
-                )
-            },
-        )
-        useJUnitPlatform()
+        buildNativeTask.flatMap { it.headerFile }
+    } else {
+        project.provider { getWorkspaceHeaderFile(nativeDir, rustCrateName) }
+    }
+
+    jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
+    packageName = "org.jetbrains.desktop.macos.generated"
+    generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/main/java/")
+}
+
+tasks.compileJava {
+    dependsOn(generateBindingsTask)
+}
+
+tasks.compileKotlin {
+    dependsOn(generateBindingsTask)
+}
+
+sourceSets.main {
+    java.srcDirs(generateBindingsTask.flatMap { it.generatedSourcesDirectory })
+}
+
+// Publishing
+
+tasks.withType<Jar>().configureEach {
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}
+
+// Same as in skiko
+fun suffixForPlatform(platform: Platform): String {
+    val osName = platform.os.normalizedName
+    val archName = when (platform.arch) {
+        Arch.aarch64 -> "arm64"
+        Arch.x86_64 -> "x64"
+    }
+    return "$osName-$archName"
+}
+
+val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
+    val jarSuffix = suffixForPlatform(platform)
+    tasks.register<Jar>("package-jar-$jarSuffix") {
+        archiveBaseName = "kotlin-desktop-toolkit-$jarSuffix"
+        for (profile in profiles) {
+            val rustTarget = RustTarget(platform, profile)
+            val compileTask = compileMacOSDesktopToolkitTaskByTarget[rustTarget]!!
+            from(compileTask.map { it.libraryFile }) {
+                into("")
+            }
+        }
     }
 }
+
+val spaceUsername: String? by project
+val spacePassword: String? by project
+publishing {
+    publications {
+        configureEach {
+            this as MavenPublication
+
+            pom {
+                description.set("Kotlin Desktop Toolkit")
+                licenses {
+                    license {
+                        name.set("The Apache License, Version 2.0")
+                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
+                }
+                val repoUrl = "https://www.github.com/JetBrains/kotlin-desktop-toolkit"
+                url.set(repoUrl)
+                scm {
+                    url.set(repoUrl)
+                    val repoConnection = "scm:git:$repoUrl.git"
+                    connection.set(repoConnection)
+                    developerConnection.set(repoConnection)
+                }
+                developers {
+                    developer {
+                        organization.set("JetBrains")
+                        organizationUrl.set("https://www.jetbrains.com")
+                    }
+                }
+            }
+        }
+
+        create<MavenPublication>("maven") {
+            from(components["java"])
+            artifactId = "kotlin-desktop-toolkit-common"
+            pom {
+                licenses {
+                    license {
+                        name = "The Apache License, Version 2.0"
+                        url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                    }
+                }
+            }
+        }
+
+        nativeJarTasksByPlatform.forEach { (platform, jarTask) ->
+            val suffix = suffixForPlatform(platform)
+            create<MavenPublication>("MavenPublication$suffix") {
+                artifactId = "kotlin-desktop-toolkit-$suffix"
+                artifact(jarTask)
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = "IntellijDependencies"
+            url = uri("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies")
+            credentials {
+                username = spaceUsername
+                password = spacePassword
+            }
+        }
+    }
+}
+
+// Share artifacts
+
+val nativeConsumable = configurations.consumable("nativeParts") {
+    attributes {
+        attribute(KotlinDesktopToolkitAttributes.TYPE, KotlingDesktopToolkitArtifactType.NATIVE_LIBRARY)
+        attribute(KotlinDesktopToolkitAttributes.PROFILE, KotlingDesktopToolkitNativeProfile.DEBUG)
+    }
+}
+
+compileMacOSDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let { buildNativeTask ->
+    artifacts.add(nativeConsumable.name, buildNativeTask.flatMap { it.libraryFile }) {
+        builtBy(buildNativeTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
+    }
+}
+
+// Rust linting
 
 val cargoFmtCheckTask = tasks.register<CargoFmtTask>("cargoFmtCheck") {
     checkOnly = true
@@ -150,100 +278,24 @@ task("autofix") {
     dependsOn(cargoFmtTask)
 }
 
-val downloadJExtractTask = tasks.register<DownloadJExtractTask>("downloadJExtract") {
-    slug = "22/6/openjdk-22-jextract+6-47"
-    jextractDirectory = layout.buildDirectory.dir("jextract")
-}
-
-val nativeConsumable = configurations.consumable("nativeParts") {
-    attributes {
-        attribute(KotlinDesktopToolkitAttributes.TYPE, KotlingDesktopToolkitArtifactType.NATIVE_LIBRARY)
-        attribute(KotlinDesktopToolkitAttributes.PROFILE, KotlingDesktopToolkitNativeProfile.DEBUG)
-    }
-}
+// Java tests
 
 compileMacOSDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let { buildNativeTask ->
-    artifacts.add(nativeConsumable.name, buildNativeTask.flatMap { it.libraryFile }) {
-        builtBy(buildNativeTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
-    }
-}
-
-val generateBindingsTask = tasks.register<GenerateJavaBindingsTask>("generateBindings") {
-    val buildNativeTask = compileMacOSDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]
-    dependsOn(downloadJExtractTask)
-    headerFile = if (buildNativeTask != null) {
+    tasks.test {
+        // Use JUnit Platform for unit tests.
+        jvmArgs("--enable-preview")
+        val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
         dependsOn(buildNativeTask)
-        buildNativeTask.flatMap { it.headerFile }
-    } else {
-        project.provider { getWorkspaceHeaderFile(nativeDir, rustCrateName) }
-    }
-
-    jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
-    packageName = "org.jetbrains.desktop.macos.generated"
-    generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/main/java/")
-}
-
-tasks.compileKotlin {
-    dependsOn(generateBindingsTask)
-}
-
-tasks.compileJava {
-    dependsOn(generateBindingsTask)
-}
-
-tasks.named<Jar>("sourcesJar") {
-    dependsOn(generateBindingsTask)
-}
-
-val generateNativeResources = tasks.register<Sync>("generateResourcesDir") {
-    destinationDir = layout.buildDirectory.dir("native").get().asFile
-
-    compileMacOSDesktopToolkitTaskByTarget.values.forEach { task ->
-        from(task.map { it.libraryFile }) {
-            into("")
-        }
-    }
-}
-
-// TODO: decide if this is needed, depending on how we package the native code
-sourceSets.main {
-    java.srcDirs(generateBindingsTask.flatMap { it.generatedSourcesDirectory })
-    resources.srcDirs(generateNativeResources.map { it.destinationDir })
-}
-
-tasks.processResources {
-    compileMacOSDesktopToolkitTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let {
-        dependsOn(it)
-    }
-}
-kotlin {
-    explicitApi()
-}
-
-val spaceUsername: String? by project
-val spacePassword: String? by project
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            from(components["java"])
-            pom {
-                licenses {
-                    license {
-                        name = "The Apache License, Version 2.0"
-                        url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
-                    }
-                }
-            }
-        }
-    }
-    repositories {
-        maven {
-            name = "IntellijDependencies"
-            url = uri("https://packages.jetbrains.team/maven/p/ij/intellij-dependencies")
-            credentials {
-                username = spaceUsername
-                password = spacePassword
-            }
-        }
+        val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
+        jvmArgumentProviders.add(
+            CommandLineArgumentProvider {
+                listOf(
+                    "-Dkdt.library.folder.path=${libFolder.get()}",
+                    "-Dkdt.debug=true",
+                    "-Dkdt.native.log.path=${logFile.get().asFile.absolutePath}",
+                )
+            },
+        )
+        useJUnitPlatform()
     }
 }

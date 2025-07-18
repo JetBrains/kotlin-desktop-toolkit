@@ -16,6 +16,7 @@ jobs:
       matrix:
         targets: [
           { os: "macos-14", rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin", package_manager: "brew" },
+          { os: "macos-13", rust_targets: "x86_64-apple-darwin", package_manager: "brew" }, # mac with intel cpu
           { os: "ubuntu-22.04", rust_targets: "x86_64-unknown-linux-gnu", package_manager: "apt" },
           { os: "ubuntu-22.04-arm", rust_targets: "aarch64-unknown-linux-gnu", package_manager: "apt" },
         ]
