@@ -36,8 +36,7 @@ plugins {
     `java-library`
     `maven-publish`
 }
-
-group = "org.jetbrains"
+group = "org.jetbrains.kotlin-desktop-toolkit"
 version = (project.properties["version"] as? String)?.takeIf { it.isNotBlank() && it != "unspecified" } ?: "SNAPSHOT"
 
 repositories {
@@ -136,26 +135,20 @@ tasks.withType<Jar>().configureEach {
     isReproducibleFileOrder = true
 }
 
-val sourcesJar = tasks.named<Jar>("sourcesJar") {
-    dependsOn(generateBindingsTask)
+// Same as in skiko
+fun suffixForPlatform(platform: Platform): String {
+    val osName = platform.os.normalizedName
+    val archName = when (platform.arch) {
+        Arch.aarch64 -> "arm64"
+        Arch.x86_64 -> "x64"
+    }
+    return "$osName-$archName"
 }
 
-val commonJar by tasks.registering(Jar::class) {
-    archiveClassifier.set("common")
-    from(sourceSets["main"].output)
-    include("org/jetbrains/desktop/common/**")
-}
-
-val macOSJar by tasks.registering(Jar::class) {
-    archiveClassifier.set("macos")
-    from(sourceSets["main"].output)
-    include("org/jetbrains/desktop/macos/**")
-}
-
-val nativeJarTasks = enabledPlatforms.map { platform ->
-    val jarSuffix = "${platform.os.normalizedName}-${platform.arch.name}"
+val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
+    val jarSuffix = suffixForPlatform(platform)
     tasks.register<Jar>("package-jar-$jarSuffix") {
-        archiveClassifier = jarSuffix
+        archiveBaseName = "kotlin-desktop-toolkit-$jarSuffix"
         for (profile in profiles) {
             val rustTarget = RustTarget(platform, profile)
             val compileTask = compileMacOSDesktopToolkitTaskByTarget[rustTarget]!!
@@ -170,11 +163,37 @@ val spaceUsername: String? by project
 val spacePassword: String? by project
 publishing {
     publications {
+        configureEach {
+            this as MavenPublication
+
+            pom {
+                description.set("Kotlin Desktop Toolkit")
+                licenses {
+                    license {
+                        name.set("The Apache License, Version 2.0")
+                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
+                }
+                val repoUrl = "https://www.github.com/JetBrains/kotlin-desktop-toolkit"
+                url.set(repoUrl)
+                scm {
+                    url.set(repoUrl)
+                    val repoConnection = "scm:git:$repoUrl.git"
+                    connection.set(repoConnection)
+                    developerConnection.set(repoConnection)
+                }
+                developers {
+                    developer {
+                        organization.set("JetBrains")
+                        organizationUrl.set("https://www.jetbrains.com")
+                    }
+                }
+            }
+        }
+
         create<MavenPublication>("maven") {
-            artifact(sourcesJar.get())
-            artifact(commonJar.get())
-            artifact(macOSJar.get())
-            nativeJarTasks.forEach { artifact(it.get()) }
+            from(components["java"])
+            artifactId = "kotlin-desktop-toolkit-common"
             pom {
                 licenses {
                     license {
@@ -182,6 +201,14 @@ publishing {
                         url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
                     }
                 }
+            }
+        }
+
+        nativeJarTasksByPlatform.forEach { (platform, jarTask) ->
+            val suffix = suffixForPlatform(platform)
+            create<MavenPublication>("MavenPublication$suffix") {
+                artifactId = "kotlin-desktop-toolkit-$suffix"
+                artifact(jarTask)
             }
         }
     }
