@@ -20,6 +20,12 @@ typedef enum NativeWindowSystemBackdropType {
   NativeWindowSystemBackdropType_MicaAlt,
 } NativeWindowSystemBackdropType;
 
+typedef enum NativeWindowTitleBarKind {
+  NativeWindowTitleBarKind_System,
+  NativeWindowTitleBarKind_Custom,
+  NativeWindowTitleBarKind_None,
+} NativeWindowTitleBarKind;
+
 typedef const char *NativeGenericRawPtr_c_char;
 
 typedef NativeGenericRawPtr_c_char NativeRustAllocatedStrPtr;
@@ -152,11 +158,11 @@ typedef struct NativeLogicalSize {
 } NativeLogicalSize;
 
 typedef struct NativeWindowStyle {
-  bool has_caption;
-  bool has_system_menu;
+  enum NativeWindowTitleBarKind title_bar_kind;
   bool is_resizable;
   bool is_minimizable;
   bool is_maximizable;
+  enum NativeWindowSystemBackdropType system_backdrop_type;
 } NativeWindowStyle;
 
 typedef struct NativeWindowParams {
@@ -201,11 +207,6 @@ NativeWindowId window_get_window_id(NativeWindowPtr window_ptr);
 float window_get_scale_factor(NativeWindowPtr window_ptr);
 
 void window_set_min_size(NativeWindowPtr window_ptr, struct NativeLogicalSize size);
-
-void window_extend_content_into_titlebar(NativeWindowPtr window_ptr);
-
-void window_apply_system_backdrop(NativeWindowPtr window_ptr,
-                                  enum NativeWindowSystemBackdropType backdrop_type);
 
 void window_show(NativeWindowPtr window_ptr);
 

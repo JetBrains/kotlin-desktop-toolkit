@@ -10,7 +10,9 @@ import org.jetbrains.desktop.win32.LogicalSize
 import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.WindowId
 import org.jetbrains.desktop.win32.WindowParams
+import org.jetbrains.desktop.win32.WindowStyle
 import org.jetbrains.desktop.win32.WindowSystemBackdropType
+import org.jetbrains.desktop.win32.WindowTitleBarKind
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.PaintMode
@@ -49,7 +51,7 @@ class RotatingBallWindow(
             paint.color = 0xFF_FF_FF_FF.toInt()
             paint.mode = PaintMode.FILL
             canvas.drawRRect(
-                RRect.makeXYWH(12f, 6f, size.width.toFloat() - 24f, size.height.toFloat() - 18f, 12f),
+                RRect.makeXYWH(12f, 60f, size.width.toFloat() - 24f, size.height.toFloat() - 72f, 12f),
                 paint
             )
         }
@@ -57,7 +59,7 @@ class RotatingBallWindow(
             paint.color = 0x80_00_00_00.toInt()
             paint.mode = PaintMode.STROKE
             canvas.drawRRect(
-                RRect.makeXYWH(12f, 6f, size.width.toFloat() - 24f, size.height.toFloat() - 18f, 12f),
+                RRect.makeXYWH(12f, 60f, size.width.toFloat() - 24f, size.height.toFloat() - 72f, 12f),
                 paint
             )
         }
@@ -76,6 +78,10 @@ class ApplicationState : AutoCloseable {
         val windowParams = WindowParams(
             size = LogicalSize(width = 640f, height = 480f),
             title = "Sample Window",
+            style = WindowStyle(
+                systemBackdropType = WindowSystemBackdropType.MicaAlt,
+                titleBarKind = WindowTitleBarKind.Custom,
+            )
         )
 
         val window = RotatingBallWindow.createWindow(
@@ -83,8 +89,6 @@ class ApplicationState : AutoCloseable {
         )
 
         windows[window.window.windowId()] = window
-        window.window.extendContentIntoTitleBar()
-        window.window.applySystemBackdrop(WindowSystemBackdropType.MicaAlt)
         window.window.show()
     }
 

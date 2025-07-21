@@ -24,20 +24,23 @@ public data class WindowParams(
 }
 
 public data class WindowStyle(
-    public val hasCaption: Boolean = true,
-    public val hasSystemMenu: Boolean = true,
+    public val titleBarKind: WindowTitleBarKind = WindowTitleBarKind.System,
 
     public val isResizable: Boolean = true,
     public val isMinimizable: Boolean = true,
     public val isMaximizable: Boolean = true,
+
+    public val systemBackdropType: WindowSystemBackdropType = WindowSystemBackdropType.None,
 ) {
     internal fun toNative(arena: Arena): MemorySegment =
         NativeWindowStyle.allocate(arena).also { nativeWindowStyle ->
-            NativeWindowStyle.has_caption(nativeWindowStyle, hasCaption)
-            NativeWindowStyle.has_system_menu(nativeWindowStyle, hasSystemMenu)
+            NativeWindowStyle.title_bar_kind(nativeWindowStyle, titleBarKind.toNative())
+
             NativeWindowStyle.is_resizable(nativeWindowStyle, isResizable)
             NativeWindowStyle.is_minimizable(nativeWindowStyle, isMinimizable)
             NativeWindowStyle.is_maximizable(nativeWindowStyle, isMaximizable)
+
+            NativeWindowStyle.system_backdrop_type(nativeWindowStyle, systemBackdropType.toNative())
         }
 }
 
@@ -92,14 +95,6 @@ public class Window internal constructor(
         }
     }
 
-    public fun extendContentIntoTitleBar() {
-        ffiDownCall { desktop_windows_h.window_extend_content_into_titlebar(ptr) }
-    }
-
-    public fun applySystemBackdrop(backdrop: WindowSystemBackdropType) {
-        ffiDownCall { desktop_windows_h.window_apply_system_backdrop(ptr, backdrop.toNative()) }
-    }
-
     public fun show() {
         return ffiDownCall { desktop_windows_h.window_show(ptr) }
     }
@@ -124,6 +119,19 @@ public class Window internal constructor(
         ffiDownCall {
             desktop_windows_h.window_drop(ptr)
         }
+    }
+}
+
+public enum class WindowTitleBarKind {
+    System,
+    Custom,
+    None,
+    ;
+
+    public fun toNative(): Int = when (this) {
+        System -> desktop_windows_h.NativeWindowTitleBarKind_System()
+        Custom -> desktop_windows_h.NativeWindowTitleBarKind_Custom()
+        None -> desktop_windows_h.NativeWindowTitleBarKind_None()
     }
 }
 
