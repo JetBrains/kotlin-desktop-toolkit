@@ -60,6 +60,7 @@
 | Metal     | ✅     | ➖       | ➖       | ➖   |
 | ANGLE     | ❌     | ❌       | ✅       | ❌   |
 | DirectX12 | ➖     | ➖       | ❌       | ➖   |
+| OpenGL    | ➖     | ✅       | ❌       | ❌   |
 | Vulkan    | ❌     | ❌       | ❌       | ❌   |
 | Software  | ❌     | ✅       | ❌       | ❌   |
 
