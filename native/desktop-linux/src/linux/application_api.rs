@@ -1,4 +1,5 @@
 use anyhow::{Context, bail};
+use ashpd::url::Url;
 use desktop_common::{
     ffi_utils::{BorrowedArray, BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr, RustAllocatedStrPtr},
     logger::ffi_boundary,
@@ -229,11 +230,17 @@ pub extern "C" fn application_start_drag_and_drop(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_open_url(url_string: BorrowedStrPtr) -> bool {
+pub extern "C" fn application_open_url(app_ptr: AppPtr, url_string: BorrowedStrPtr) {
     debug!("application_open_url");
     ffi_boundary("application_open_url", || {
-        let uri = ashpd::url::Url::parse(url_string.as_str()?)?;
-        async_std::task::block_on(ashpd::desktop::open_uri::OpenFileRequest::default().ask(false).send_uri(&uri))?;
-        Ok(true)
-    })
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let uri = Url::parse(url_string.as_str()?)?;
+
+        app.run_async(async move {
+            let request = ashpd::desktop::open_uri::OpenFileRequest::default().ask(false);
+            request.send_uri(&uri).await?;
+            Ok(())
+        });
+        Ok(())
+    });
 }

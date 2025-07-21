@@ -5,8 +5,8 @@ use ashpd::{
     desktop::settings::{ACCENT_COLOR_SCHEME_KEY, APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY, ColorScheme, Namespace, Settings},
     zvariant::{OwnedValue, Structure},
 };
-use async_std::stream::StreamExt;
 use desktop_common::ffi_utils::BorrowedStrPtr;
+use futures_lite::StreamExt;
 use log::{debug, error};
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 

@@ -2,7 +2,7 @@ use std::{ffi::CString, io::Read, str::FromStr, thread::ThreadId, time::Duration
 
 use anyhow::{Context, anyhow};
 use desktop_common::logger::catch_panic;
-use log::{debug, warn};
+use log::{debug, error, warn};
 use smithay_client_toolkit::{
     reexports::{
         calloop::{
@@ -33,6 +33,7 @@ pub struct Application {
     pub state: ApplicationState,
     pub run_on_event_loop: Option<Sender<extern "C" fn()>>,
     pub event_loop_thread_id: Option<ThreadId>,
+    rt: tokio::runtime::Runtime,
 }
 
 impl Application {
@@ -50,6 +51,11 @@ impl Application {
             .map_err(|e| anyhow!(e.to_string()))?;
 
         let state = ApplicationState::new(&globals, &qh, callbacks, event_loop.handle());
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_io()
+            .worker_threads(1)
+            .build()
+            .unwrap();
         Ok(Self {
             event_loop,
             qh,
@@ -57,12 +63,25 @@ impl Application {
             state,
             run_on_event_loop: None,
             event_loop_thread_id: None,
+            rt,
         })
+    }
+
+    pub fn run_async<F>(&self, future: F)
+    where
+        F: Future<Output = anyhow::Result<()>> + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        self.rt.spawn(async move {
+            if let Err(e) = future.await {
+                error!("{e}");
+            }
+        });
     }
 
     fn init_xdg_desktop_settings_notifier(&self) {
         let (xdg_settings_sender, xdg_settings_channel) = channel::channel();
-        async_std::task::spawn(xdg_desktop_settings_notifier(xdg_settings_sender));
+        self.rt.spawn(xdg_desktop_settings_notifier(xdg_settings_sender));
 
         self.event_loop
             .handle()
