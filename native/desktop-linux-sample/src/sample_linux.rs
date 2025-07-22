@@ -70,6 +70,7 @@ struct WindowState {
     composed_text: String,
     text: String,
     key_modifiers: KeyModifiers,
+    animation_progress: u16,
 }
 
 #[derive(Debug)]
@@ -151,9 +152,9 @@ void main()
 }
 
 /// Draw a triangle using the shader pair created in `Init()`
-fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEvent) {
+fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEvent, animation_progress: f32) {
     //    debug!("draw_opengl_triangle, program = {program}, event = {data:?}");
-    const V_VERTICES: [f32; 6] = [0.0f32, 1.0, -1.0, -1.0, 1.0, -1.0];
+    let v_vertices: [f32; 6] = [animation_progress, 1.0, -1.0, -1.0, 1.0, -1.0];
     unsafe {
         (gl.glViewport)(0, 0, data.physical_size.width.0, data.physical_size.height.0);
         (gl.glClear)(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -161,7 +162,7 @@ fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEven
         //let v_position = (gl.glGetAttribLocation)(program, c"vPosition".as_ptr());
         //assert!(v_position != -1);
         // Load the vertex data
-        (gl.glVertexAttribPointer)(V_POSITION, 2, GL_FLOAT, GL_FALSE, 0, V_VERTICES.as_ptr().cast());
+        (gl.glVertexAttribPointer)(V_POSITION, 2, GL_FLOAT, GL_FALSE, 0, v_vertices.as_ptr().cast());
         (gl.glEnableVertexAttribArray)(V_POSITION);
         (gl.glDrawArrays)(GL_TRIANGLES, 0, 3);
     }
@@ -184,8 +185,20 @@ fn draw_opengl_triangle_with_init(data: &WindowDrawEvent, window_id: WindowId) {
             .programs
             .entry(window_id)
             .or_insert_with(|| create_opengl_program(&opengl_state.funcs).unwrap());
+        let window_state = state.windows.get_mut(&window_id).unwrap();
+        if window_state.animation_progress == 200 {
+            window_state.animation_progress = 0
+        } else {
+            window_state.animation_progress += 1;
+        }
 
-        draw_opengl_triangle(&opengl_state.funcs, *program, data);
+        let animation_progress = if window_state.animation_progress < 100 {
+            -1.0 + (f32::from(window_state.animation_progress) / 50.)
+        } else {
+            1.0 - (f32::from(window_state.animation_progress - 100) / 50.)
+        };
+
+        draw_opengl_triangle(&opengl_state.funcs, *program, data, animation_progress);
     });
 }
 
