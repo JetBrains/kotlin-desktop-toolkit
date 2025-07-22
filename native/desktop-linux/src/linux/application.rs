@@ -23,14 +23,14 @@ use crate::linux::{
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
 
-pub struct Application<'a> {
-    pub event_loop: EventLoop<'a, ApplicationState>,
+pub struct Application {
+    pub event_loop: EventLoop<'static, ApplicationState>,
     qh: QueueHandle<ApplicationState>,
     pub exit: bool,
     pub state: ApplicationState,
 }
 
-impl Application<'static> {
+impl Application {
     pub fn new(callbacks: ApplicationCallbacks) -> anyhow::Result<Self> {
         let conn = Connection::connect_to_env()?;
 
