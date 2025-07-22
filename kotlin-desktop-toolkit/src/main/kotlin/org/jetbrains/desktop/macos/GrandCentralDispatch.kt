@@ -15,9 +15,8 @@ public object GrandCentralDispatch : AutoCloseable {
     private val queue = ConcurrentLinkedQueue<() -> Unit>()
     private val callback: MemorySegment = `dispatcher_main_exec_async$f`.allocate({
         ffiUpCall {
-            highPriorityQueue.poll()?.let {
-                it()
-            } ?: queue.poll().invoke()
+            val f = highPriorityQueue.poll() ?: queue.poll()
+            f!!.invoke()
         }
     }, Arena.global())
 
