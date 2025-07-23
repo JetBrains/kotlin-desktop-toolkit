@@ -277,20 +277,6 @@ impl From<MouseMovedEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct MouseDraggedEvent {
-    pub button: MouseButton,
-    pub location_in_window: LogicalPoint,
-    pub timestamp: Timestamp,
-}
-
-impl From<MouseDraggedEvent> for Event<'_> {
-    fn from(value: MouseDraggedEvent) -> Self {
-        Self::MouseDragged(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
 pub struct MouseDownEvent {
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
@@ -550,7 +536,6 @@ pub enum Event<'a> {
     MouseEntered(MouseEnteredEvent),
     MouseExited(MouseExitedEvent),
     MouseMoved(MouseMovedEvent),
-    MouseDragged(MouseDraggedEvent),
     MouseDown(MouseDownEvent),
     MouseUp(MouseUpEvent),
     ScrollWheel(ScrollWheelEvent),

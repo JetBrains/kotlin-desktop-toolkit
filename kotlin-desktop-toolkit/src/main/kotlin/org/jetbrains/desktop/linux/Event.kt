@@ -92,12 +92,6 @@ public sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class MouseDragged(
-        val button: MouseButton,
-        val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
-    ) : Event()
-
     public data class MouseEntered(val locationInWindow: LogicalPoint) : Event()
 
     public data class MouseExited(val locationInWindow: LogicalPoint) : Event()

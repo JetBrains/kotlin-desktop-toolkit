@@ -15,7 +15,6 @@ import org.jetbrains.desktop.linux.generated.NativeLogicalRect
 import org.jetbrains.desktop.linux.generated.NativeLogicalSize
 import org.jetbrains.desktop.linux.generated.NativeModifiersChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseDownEvent
-import org.jetbrains.desktop.linux.generated.NativeMouseDraggedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseEnteredEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseExitedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseMovedEvent
@@ -464,14 +463,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.MouseMoved(
                 locationInWindow = LogicalPoint.fromNative(NativeMouseMovedEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(NativeMouseMovedEvent.timestamp(nativeEvent)),
-            )
-        }
-        desktop_linux_h.NativeEvent_MouseDragged() -> {
-            val nativeEvent = NativeEvent.mouse_dragged(s)
-            Event.MouseDragged(
-                button = MouseButton(NativeMouseDraggedEvent.button(nativeEvent)),
-                locationInWindow = LogicalPoint.fromNative(NativeMouseDraggedEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(NativeMouseDraggedEvent.timestamp(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_MouseEntered() -> {
