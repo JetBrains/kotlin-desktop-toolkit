@@ -111,7 +111,7 @@ pub extern "C" fn application_get_egl_proc_func(app_ptr: AppPtr<'_>) -> GetEglPr
 pub extern "C" fn application_is_event_loop_thread(app_ptr: AppPtr<'_>) -> bool {
     ffi_boundary("application_is_event_loop_thread", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        if let Some(t) = app.state.event_loop_thread_id {
+        if let Some(t) = app.event_loop_thread_id {
             let current_thread_id = std::thread::current().id();
             Ok(t == current_thread_id)
         } else {
@@ -124,7 +124,7 @@ pub extern "C" fn application_is_event_loop_thread(app_ptr: AppPtr<'_>) -> bool 
 pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr<'_>, f: extern "C" fn()) {
     ffi_boundary("application_run_on_event_loop_async", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        if let Some(s) = &app.state.run_on_event_loop {
+        if let Some(s) = &app.run_on_event_loop {
             s.send(f).map_err(std::convert::Into::into)
         } else {
             bail!("Event loop not yet started")

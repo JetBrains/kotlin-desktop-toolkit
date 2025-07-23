@@ -1,11 +1,14 @@
-use std::{ffi::CString, io::Read, str::FromStr, time::Duration};
+use std::{ffi::CString, io::Read, str::FromStr, thread::ThreadId, time::Duration};
 
 use anyhow::{Context, anyhow};
 use desktop_common::logger::catch_panic;
 use log::{debug, warn};
 use smithay_client_toolkit::{
     reexports::{
-        calloop::{EventLoop, PostAction, channel},
+        calloop::{
+            EventLoop, PostAction,
+            channel::{self, Sender},
+        },
         calloop_wayland_source::WaylandSource,
         client::{Connection, Proxy, QueueHandle, globals::registry_queue_init, protocol::wl_data_device_manager::DndAction},
     },
@@ -28,6 +31,8 @@ pub struct Application {
     qh: QueueHandle<ApplicationState>,
     pub exit: bool,
     pub state: ApplicationState,
+    pub run_on_event_loop: Option<Sender<extern "C" fn()>>,
+    pub event_loop_thread_id: Option<ThreadId>,
 }
 
 impl Application {
@@ -50,6 +55,8 @@ impl Application {
             qh,
             exit: false,
             state,
+            run_on_event_loop: None,
+            event_loop_thread_id: None,
         })
     }
 
@@ -69,7 +76,7 @@ impl Application {
 
     fn init_run_on_event_loop(&mut self) {
         let (s, c) = channel::channel();
-        self.state.run_on_event_loop = Some(s);
+        self.run_on_event_loop = Some(s);
 
         self.event_loop
             .handle()
@@ -110,7 +117,7 @@ impl Application {
         self.init_xdg_desktop_settings_notifier();
         self.init_run_on_event_loop();
 
-        self.state.event_loop_thread_id = Some(std::thread::current().id());
+        self.event_loop_thread_id = Some(std::thread::current().id());
         (self.state.callbacks.on_application_started)();
 
         while self.event_loop_iteration()? {

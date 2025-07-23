@@ -1,4 +1,4 @@
-use std::{collections::HashMap, thread::ThreadId};
+use std::collections::HashMap;
 
 use khronos_egl;
 use log::{debug, warn};
@@ -13,7 +13,7 @@ use smithay_client_toolkit::{
     delegate_xdg_window,
     output::{OutputHandler, OutputState},
     reexports::{
-        calloop::{LoopHandle, channel::Sender},
+        calloop::LoopHandle,
         client::{
             Connection, Dispatch, Proxy, QueueHandle,
             backend::ObjectId,
@@ -85,8 +85,6 @@ pub struct ApplicationState {
     pub(crate) active_text_input_surface: Option<ObjectId>,
     pub(crate) pending_text_input_event: PendingTextInputEvent,
     pub egl: Option<EglInstance>,
-    pub event_loop_thread_id: Option<ThreadId>,
-    pub run_on_event_loop: Option<Sender<extern "C" fn()>>,
 }
 
 impl ApplicationState {
@@ -137,8 +135,6 @@ impl ApplicationState {
             active_text_input_surface: None,
             pending_text_input_event: PendingTextInputEvent::default(),
             egl,
-            event_loop_thread_id: None,
-            run_on_event_loop: None,
         }
     }
 
