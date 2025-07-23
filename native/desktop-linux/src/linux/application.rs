@@ -1,7 +1,7 @@
 use std::{ffi::CString, io::Read, str::FromStr, thread::ThreadId, time::Duration};
 
 use anyhow::{Context, anyhow};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use smithay_client_toolkit::{
     reexports::{
         calloop::{
@@ -57,6 +57,18 @@ fn create_run_async_sender(event_loop: &EventLoop<'static, ApplicationState>) ->
     sender
 }
 
+fn num_threads() -> Option<std::num::NonZeroUsize> {
+    std::fs::read_to_string("/proc/self/stat")
+        .ok()
+        .as_ref()
+        // Skip past the pid and (process name) fields
+        .and_then(|stat| stat.rsplit(')').next())
+        // 20th field, less the two we skipped
+        .and_then(|rstat| rstat.split_whitespace().nth(17))
+        .and_then(|num_threads| num_threads.parse::<usize>().ok())
+        .and_then(std::num::NonZeroUsize::new)
+}
+
 impl Application {
     pub fn new(callbacks: ApplicationCallbacks) -> anyhow::Result<Self> {
         let conn = Connection::connect_to_env()?;
@@ -72,11 +84,15 @@ impl Application {
             .map_err(|e| anyhow!(e.to_string()))?;
 
         let state = ApplicationState::new(&globals, &qh, callbacks, event_loop.handle());
+
+        info!("{:?} threads before tokio runtime creation", num_threads());
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_io()
             .worker_threads(1)
             .build()
             .unwrap();
+        info!("{:?} threads after tokio runtime creation", num_threads());
+
         let run_async_sender = create_run_async_sender(&event_loop);
 
         Ok(Self {
@@ -114,6 +130,10 @@ impl Application {
     fn init_xdg_desktop_settings_notifier(&self) {
         let (xdg_settings_sender, xdg_settings_channel) = channel::channel();
         self.rt.spawn(xdg_desktop_settings_notifier(xdg_settings_sender));
+        info!(
+            "{:?} threads after tokio runtime xdg_desktop_settings_notifier spawn",
+            num_threads()
+        );
 
         self.event_loop
             .handle()
