@@ -1075,6 +1075,8 @@ class WindowContainer(
             contentArea.size =
                 LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
         } else {
+            customTitlebar = null
+            contentArea.origin = LogicalPoint(x = 0f, y = 0f)
             contentArea.size = event.size
         }
     }
