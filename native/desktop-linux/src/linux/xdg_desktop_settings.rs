@@ -248,8 +248,6 @@ async fn read_initial_xdg_desktop_settings(settings: &Settings<'_>, tx: &Sender<
 }
 
 pub async fn xdg_desktop_settings_notifier(tx: Sender<InternalXdgDesktopSetting>) -> anyhow::Result<()> {
-    // let d = ashpd::desktop::remote_desktop::RemoteDesktop::new().await?;
-    // let c = ashpd::desktop::clipboard::Clipboard::new().await?;
     let xdg_desktop_settings = Settings::new().await?;
     read_initial_xdg_desktop_settings(&xdg_desktop_settings, &tx).await?;
 
