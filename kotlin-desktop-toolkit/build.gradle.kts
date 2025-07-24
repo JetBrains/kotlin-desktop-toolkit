@@ -17,10 +17,12 @@ import org.jetbrains.desktop.buildscripts.Os
 import org.jetbrains.desktop.buildscripts.Platform
 import org.jetbrains.desktop.buildscripts.buildPlatformRustTarget
 import org.jetbrains.desktop.buildscripts.hostArch
+import org.jetbrains.desktop.buildscripts.hostOs
 import org.jetbrains.desktop.buildscripts.targetArch
 
 private val crossCompilationSettings = CrossCompilationSettings.create(project)
-private val defaultTargetPlatform = Platform(Os.MACOS, targetArch(project) ?: hostArch())
+
+private val defaultTargetPlatform = Platform(hostOs(), targetArch(project) ?: hostArch())
 private val nativeDir = layout.projectDirectory.dir("../native")
 private val rustCrateName = "desktop-macos"
 
