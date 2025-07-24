@@ -6,6 +6,8 @@
  */
 import org.gradle.internal.impldep.kotlinx.serialization.Serializable
 import org.jetbrains.desktop.buildscripts.Arch
+import org.jetbrains.desktop.buildscripts.CargoFmtTask
+import org.jetbrains.desktop.buildscripts.ClippyTask
 import org.jetbrains.desktop.buildscripts.CompileRustTask
 import org.jetbrains.desktop.buildscripts.CrossCompilationSettings
 import org.jetbrains.desktop.buildscripts.DownloadJExtractTask
@@ -22,25 +24,19 @@ import org.jetbrains.desktop.buildscripts.targetArch
 
 private val crossCompilationSettings = CrossCompilationSettings.create(project)
 
-private val defaultTargetPlatform = Platform(hostOs(), targetArch(project) ?: hostArch())
+private val runTestsWithPlatform = Platform(hostOs(), targetArch(project) ?: hostArch())
 private val nativeDir = layout.projectDirectory.dir("../native")
-private val rustCrateName = "desktop-macos"
 
 plugins {
-    // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktlint)
-    id("com.dorongold.task-tree") version "4.0.1"
 
-    // Apply the java-library plugin for API and implementation separation.
-    `java-library`
     `maven-publish`
 }
 group = "org.jetbrains.kotlin-desktop-toolkit"
 version = (project.properties["version"] as? String)?.takeIf { it.isNotBlank() && it != "unspecified" } ?: "SNAPSHOT"
 
 repositories {
-    // Use Maven Central for resolving dependencies.
     mavenCentral()
 }
 
@@ -251,54 +247,56 @@ val nativeConsumable = configurations.consumable("nativeParts") {
     }
 }
 
-compileNativeTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let { buildNativeTask ->
+compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildNativeTask ->
     artifacts.add(nativeConsumable.name, buildNativeTask.flatMap { it.libraryFile }) {
         builtBy(buildNativeTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
     }
 }
 
-// Rust linting
+// Linting
 
-//val cargoFmtCheckTask = tasks.register<CargoFmtTask>("cargoFmtCheck") {
-//    checkOnly = true
-//    workingDir = nativeDir.asFile
-//}
-//
-//val cargoFmtTask = tasks.register<CargoFmtTask>("cargoFmt") {
-//    workingDir = nativeDir.asFile
-//    mustRunAfter(clippyFixTask)
-//}
-//
-//val clippyCheckTasks = enabledPlatforms.map { target ->
-//    tasks.register<ClippyTask>("clippyCheck-${buildPlatformRustTarget(target)}") {
-//        checkOnly = true
-//        workingDir = nativeDir.asFile
-//        targetPlatform = defaultTargetPlatform
-//        crateName = rustCrateName
-//    }
-//}
-//
-//val clippyFixTask = tasks.register<ClippyTask>("clippyFix") {
-//    workingDir = nativeDir.asFile
-//    targetPlatform = defaultTargetPlatform
-//    crateName = rustCrateName
-//}
-//
-//task("lint") {
-//    dependsOn(tasks.named("ktlintCheck"))
-//    dependsOn(clippyCheckTasks)
-//    dependsOn(cargoFmtCheckTask)
-//}
-//
-//task("autofix") {
-//    dependsOn(tasks.named("ktlintFormat"))
-//    dependsOn(clippyFixTask)
-//    dependsOn(cargoFmtTask)
-//}
+val cargoFmtCheckTask = tasks.register<CargoFmtTask>("cargoFmtCheck") {
+    checkOnly = true
+    workingDir = nativeDir.asFile
+}
+
+val cargoFmtTask = tasks.register<CargoFmtTask>("cargoFmt") {
+    workingDir = nativeDir.asFile
+    clippyFixTasks.forEach { mustRunAfter(it) }
+}
+
+val clippyCheckTasks = enabledPlatforms.map { target ->
+    tasks.register<ClippyTask>("clippyCheck-${buildPlatformRustTarget(target)}") {
+        checkOnly = true
+        workingDir = nativeDir.asFile
+        targetPlatform = target
+        crateName = crateNameForOS(target.os)
+    }
+}
+
+val clippyFixTasks = enabledPlatforms.map { target ->
+    tasks.register<ClippyTask>("clippyFix-${buildPlatformRustTarget(target)}") {
+        workingDir = nativeDir.asFile
+        targetPlatform = target
+        crateName = crateNameForOS(target.os)
+    }
+}
+
+task("lint") {
+    dependsOn(tasks.named("ktlintCheck"))
+    clippyCheckTasks.forEach { dependsOn(it) }
+    dependsOn(cargoFmtCheckTask)
+}
+
+task("autofix") {
+    dependsOn(tasks.named("ktlintFormat"))
+    clippyFixTasks.forEach { dependsOn(it) }
+    dependsOn(cargoFmtTask)
+}
 
 // Java tests
 
-compileNativeTaskByTarget[RustTarget(defaultTargetPlatform, "dev")]?.let { buildNativeTask ->
+compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildNativeTask ->
     tasks.test {
         // Use JUnit Platform for unit tests.
         jvmArgs("--enable-preview")
