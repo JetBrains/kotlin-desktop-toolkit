@@ -302,7 +302,7 @@ pub extern "C" fn metal_view_present(view_ptr: MetalViewPtr, queue: MetalCommand
                     let drawable = ProtocolObject::from_retained(drawable);
                     command_buffer.presentDrawable(&drawable);
                     command_buffer.commit();
-                };
+                }
             }
         });
         Ok(())

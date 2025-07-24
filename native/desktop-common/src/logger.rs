@@ -204,7 +204,7 @@ impl LoggerConfiguration<'_> {
             Err(err) => {
                 append_exception_msg(format!("Failed to create logger config: {err}"));
             }
-        };
+        }
     }
 }
 

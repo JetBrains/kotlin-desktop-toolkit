@@ -50,6 +50,7 @@ pub type DragUpdatedCallback = extern "C" fn(info: DragInfo) -> DragOperation;
 pub type DragExitedCallback = extern "C" fn(info: RustAllocatedRawPtr);
 pub type DragPerformCallback = extern "C" fn(info: DragInfo) -> bool;
 
+#[allow(clippy::struct_field_names)]
 #[derive(Debug)]
 #[repr(C)]
 pub struct DragAndDropCallbacks {
