@@ -155,7 +155,7 @@ private fun ExecOperations.compileRust(
         if (rustTarget.os == Os.MACOS) {
             environment("MACOSX_DEPLOYMENT_TARGET", "10.12")
         }
-        executable = findCommand("cargo", rustTarget.os)?.absolutePathString() ?: error("cannot find cargo path")
+        executable = findCommand("cargo", hostOs())?.absolutePathString() ?: error("cannot find cargo path")
         args = listOf(
             "build",
             "--package=$crateName",
