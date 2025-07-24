@@ -109,6 +109,7 @@ private fun ExecOperations.generateOsHeader(cbindgenBinary: Path, crateDirectory
         add("--output=${headerFile.absolutePathString()}")
     }.toTypedArray()
     exec {
+        workingDir = crateDirectory.toFile()
         commandLine(cbindgenBinary.pathString, *args)
     }
     return headerFile
