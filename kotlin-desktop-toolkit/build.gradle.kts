@@ -6,8 +6,6 @@
  */
 import org.gradle.internal.impldep.kotlinx.serialization.Serializable
 import org.jetbrains.desktop.buildscripts.Arch
-import org.jetbrains.desktop.buildscripts.CargoFmtTask
-import org.jetbrains.desktop.buildscripts.ClippyTask
 import org.jetbrains.desktop.buildscripts.CompileRustTask
 import org.jetbrains.desktop.buildscripts.CrossCompilationSettings
 import org.jetbrains.desktop.buildscripts.DownloadJExtractTask
@@ -18,12 +16,10 @@ import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.Os
 import org.jetbrains.desktop.buildscripts.Platform
 import org.jetbrains.desktop.buildscripts.buildPlatformRustTarget
-import org.jetbrains.desktop.buildscripts.getWorkspaceHeaderFile
 import org.jetbrains.desktop.buildscripts.hostArch
-import org.jetbrains.desktop.buildscripts.hostPlatform
 import org.jetbrains.desktop.buildscripts.targetArch
 
-private val crossCompilation = CrossCompilationSettings.create(project)
+private val crossCompilationSettings = CrossCompilationSettings.create(project)
 private val defaultTargetPlatform = Platform(Os.MACOS, targetArch(project) ?: hostArch())
 private val nativeDir = layout.projectDirectory.dir("../native")
 private val rustCrateName = "desktop-macos"
@@ -78,12 +74,15 @@ data class RustTarget(
     @get:Input val profile: String,
 )
 
-val enabledPlatforms = listOf(
+val allPlatforms = listOf(
     Platform(Os.MACOS, Arch.x86_64),
     Platform(Os.MACOS, Arch.aarch64),
     Platform(Os.LINUX, Arch.x86_64),
     Platform(Os.LINUX, Arch.aarch64),
 )
+
+val enabledPlatforms = allPlatforms.filter { crossCompilationSettings.enabled(it) }
+
 val profiles = listOf("dev", "release")
 
 fun crateNameForOS(os: Os): String {
@@ -94,17 +93,14 @@ fun crateNameForOS(os: Os): String {
     }
 }
 
-fun List<Platform>.enabledOSes(): List<Os> {
+fun List<Platform>.allOSes(): List<Os> {
     return this.map { it.os }.distinct()
 }
 
-// to install toolchain
-// rustup target add --toolchain 1.85.0 x86_64-apple-darwin
 val compileNativeTaskByTarget = buildMap {
     for (platform in enabledPlatforms) {
         for (profile in profiles) {
             val buildNativeTask = tasks.register<CompileRustTask>("compileNative-${buildPlatformRustTarget(platform)}-$profile") {
-                enabled = crossCompilation.enabled(platform)
                 crateName = crateNameForOS(platform.os)
                 rustProfile = profile
                 rustTarget = platform
@@ -124,9 +120,8 @@ fun packageNameForOS(os: Os): String {
     return "org.jetbrains.desktop.${os.normalizedName}.generated"
 }
 
-val generateBindingsTaskByOS = enabledPlatforms.enabledOSes().associateWith { os ->
+val generateBindingsTaskByOS = allPlatforms.allOSes().associateWith { os ->
     tasks.register<GenerateJavaBindingsTask>("generateBindingsFor${os.normalizedName}") {
-        // todo replace hostArch with something else
         dependsOn(downloadJExtractTask)
         jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
         packageName = packageNameForOS(os)
@@ -153,7 +148,6 @@ sourceSets.main {
 // Publishing
 
 tasks.withType<Jar>().configureEach {
-    duplicatesStrategy = DuplicatesStrategy.WARN
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
 }
@@ -174,7 +168,6 @@ val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
         archiveBaseName = "kotlin-desktop-toolkit-$jarSuffix"
         for (profile in profiles) {
             val compileTask = compileNativeTaskByTarget[RustTarget(platform, profile)]!!
-            println("platform: $platform, compileTask: ${compileTask.name}")
             dependsOn(compileTask)
             from(compileTask.flatMap { it.libraryFile })
         }
