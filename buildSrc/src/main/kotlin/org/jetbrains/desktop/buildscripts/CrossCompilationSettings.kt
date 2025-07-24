@@ -2,6 +2,8 @@ package org.jetbrains.desktop.buildscripts
 
 import org.gradle.api.Project
 
+ // rustup target add --toolchain 1.88.0 x86_64-apple-darwin
+
 data class CrossCompilationSettings(private val platforms: List<Platform>) {
     companion object {
         private fun getBooleanProperty(project: Project, name: String): Boolean {
@@ -19,8 +21,8 @@ data class CrossCompilationSettings(private val platforms: List<Platform>) {
                     Arch.x86_64 -> getBooleanProperty(project, "enableCrossCompileToLinuxX86_64")
                 }
                 Os.MACOS -> when (targetPlatform.arch) {
-                    Arch.aarch64 -> host.os == Os.MACOS || getBooleanProperty(project, "enableCrossCompileToMacosAarch64")
-                    Arch.x86_64 -> host.os == Os.MACOS || getBooleanProperty(project, "enableCrossCompileToMacosX86_64")
+                    Arch.aarch64 -> getBooleanProperty(project, "enableCrossCompileToMacosAarch64")
+                    Arch.x86_64 -> getBooleanProperty(project, "enableCrossCompileToMacosX86_64")
                 }
                 Os.WINDOWS -> when (targetPlatform.arch) {
                     Arch.aarch64 -> getBooleanProperty(project, "enableCrossCompileToWindowsAarch64")
