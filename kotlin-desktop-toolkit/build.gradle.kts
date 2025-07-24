@@ -103,17 +103,12 @@ fun List<Platform>.enabledOSes(): List<Os> {
 val compileNativeTaskByTarget = buildMap {
     for (platform in enabledPlatforms) {
         for (profile in profiles) {
-            val target = if (crossCompilation.enabled(platform)) {
-                platform
-            } else {
-                hostPlatform()
-            }
             val buildNativeTask = tasks.register<CompileRustTask>("compileNative-${buildPlatformRustTarget(platform)}-$profile") {
+                enabled = crossCompilation.enabled(platform)
                 crateName = crateNameForOS(platform.os)
                 rustProfile = profile
-                rustTarget = target
+                rustTarget = platform
                 workspaceRoot = nativeDir
-                enabled = true
             }
             put(RustTarget(platform, profile), buildNativeTask)
         }
@@ -132,13 +127,11 @@ fun packageNameForOS(os: Os): String {
 val generateBindingsTaskByOS = enabledPlatforms.enabledOSes().associateWith { os ->
     tasks.register<GenerateJavaBindingsTask>("generateBindingsFor${os.normalizedName}") {
         // todo replace hostArch with something else
-        val buildNativeTask = compileNativeTaskByTarget[RustTarget(Platform(os, hostArch()), "dev")]!!
         dependsOn(downloadJExtractTask)
-        dependsOn(buildNativeTask)
-        // headerFile = project.provider { getWorkspaceHeaderFile(nativeDir, crateNameForOS(os)) }
-        headerFile = buildNativeTask.flatMap { it.headerFile }
         jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
         packageName = packageNameForOS(os)
+        workspaceRoot = nativeDir
+        crateDirectory = nativeDir.dir(crateNameForOS(os))
         generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/${os.normalizedName}/main/java/")
     }
 }

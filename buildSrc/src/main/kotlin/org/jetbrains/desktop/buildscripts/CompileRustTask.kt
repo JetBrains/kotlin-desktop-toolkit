@@ -65,9 +65,6 @@ abstract class CompileRustTask @Inject constructor(
     }
 
     @get:OutputFile
-    val headerFile = outputDirectory.map { outDir -> outDir.file("headers/${crateName.get().replace("-", "_")}.h") }
-
-    @get:OutputFile
     val libraryFile = providerFactory.provider {
         val dir = outputDirectory.get().asFile
         val target = rustTarget.get()
@@ -102,7 +99,6 @@ abstract class CompileRustTask @Inject constructor(
             crateName.get(),
             rustTarget.get(),
             rustProfile.get(),
-            headerFile.get().asFile.toPath(),
             rustOutputLibraryFile.get().toPath(),
             libraryFile.get().toPath(),
         )
@@ -146,7 +142,6 @@ private fun ExecOperations.compileRust(
     crateName: String,
     rustTarget: Platform,
     rustProfile: String,
-    headerFile: Path,
     rustOutputLibraryFile: Path,
     libraryFile: Path,
 ) {
@@ -164,11 +159,6 @@ private fun ExecOperations.compileRust(
             "--color=always",
         )
     }
-
-    nativeDirectory
-        .resolve(crateName)
-        .resolve("headers")
-        .resolve(headerFile.fileName).copyTo(headerFile, overwrite = true)
 
     nativeDirectory
         .resolve(rustOutputLibraryFile)
