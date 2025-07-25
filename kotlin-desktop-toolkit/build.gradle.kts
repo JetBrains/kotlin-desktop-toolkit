@@ -295,15 +295,25 @@ task("autofix") {
 
 // Junit tests
 
+fun canRunTests(): Boolean {
+    return when (hostOs()) {
+        Os.LINUX -> System.getenv("WAYLAND_DISPLAY") != null
+        Os.MACOS -> true
+        Os.WINDOWS -> true
+    }
+}
+
 compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildNativeTask ->
     tasks.test {
         jvmArgs("--enable-preview")
         val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
         dependsOn(buildNativeTask)
         val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
+
         filter {
             includeTestsMatching("org.jetbrains.desktop.${hostOs().normalizedName}.*")
         }
+        enabled = canRunTests()
 
         jvmArgumentProviders.add(
             CommandLineArgumentProvider {
