@@ -312,20 +312,24 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
             window_state.key_modifiers = data.modifiers;
         }),
         Event::KeyDown(data) => STATE.with(|c| {
+            const KEYCODE_BACKSPACE: u32 = 14;
+            const KEYCODE_C: u32 = 46;
+            const KEYCODE_V: u32 = 47;
+
             let mut state = c.borrow_mut();
             let state = state.as_mut().unwrap();
             let window_state = state.windows.get_mut(&window_id).unwrap();
             match data.code.0 {
-                14 => {
+                KEYCODE_BACKSPACE => {
                     window_state.text.pop();
                     if window_state.text_input_available {
                         update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
                     }
                 }
                 _ => {
-                    if data.code.0 == 47 && window_state.key_modifiers.ctrl {
+                    if data.code.0 == KEYCODE_V && window_state.key_modifiers.ctrl {
                         window_clipboard_paste(state.app_ptr.clone(), window_id, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
-                    } else if data.code.0 == 46 && window_state.key_modifiers.ctrl {
+                    } else if data.code.0 == KEYCODE_C && window_state.key_modifiers.ctrl {
                         application_clipboard_put(state.app_ptr.clone(), BorrowedStrPtr::new(ALL_MIMES));
                     } else if let Some(event_chars) = data.characters.as_optional_str().unwrap() {
                         window_state.text += event_chars;
