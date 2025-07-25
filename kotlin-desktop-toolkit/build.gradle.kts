@@ -297,11 +297,14 @@ task("autofix") {
 
 compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildNativeTask ->
     tasks.test {
-        // Use JUnit Platform for unit tests.
         jvmArgs("--enable-preview")
         val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
         dependsOn(buildNativeTask)
         val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
+        filter {
+            includeTestsMatching("org.jetbrains.desktop.${hostOs().normalizedName}.*")
+        }
+
         jvmArgumentProviders.add(
             CommandLineArgumentProvider {
                 listOf(
