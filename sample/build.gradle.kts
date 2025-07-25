@@ -25,8 +25,6 @@ val skikoTargetArch = when (targetArch(project) ?: hostArch()) {
 val skikoVersion = "0.9.17"
 val skikoTarget = "$skikoTargetOs-$skikoTargetArch"
 dependencies {
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-
     implementation(project(":kotlin-desktop-toolkit"))
     implementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTarget:$skikoVersion")
 }
