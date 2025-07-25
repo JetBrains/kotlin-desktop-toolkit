@@ -1,4 +1,4 @@
-package org.jetbrains.desktop.sample
+package org.jetbrains.desktop.sample.macos
 
 import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.Application
@@ -8,6 +8,7 @@ import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Window
+import org.jetbrains.desktop.sample.common.runtimeInfo
 import kotlin.concurrent.thread
 
 fun main() {

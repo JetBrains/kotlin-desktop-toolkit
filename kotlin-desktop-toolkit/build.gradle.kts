@@ -23,9 +23,9 @@ import org.jetbrains.desktop.buildscripts.hostOs
 import org.jetbrains.desktop.buildscripts.targetArch
 
 private val crossCompilationSettings = CrossCompilationSettings.create(project)
+private val nativeDir = layout.projectDirectory.dir("../native")
 
 private val runTestsWithPlatform = Platform(hostOs(), targetArch(project) ?: hostArch())
-private val nativeDir = layout.projectDirectory.dir("../native")
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
@@ -294,7 +294,7 @@ task("autofix") {
     dependsOn(cargoFmtTask)
 }
 
-// Java tests
+// Junit tests
 
 compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildNativeTask ->
     tasks.test {

@@ -1,4 +1,4 @@
-package org.jetbrains.desktop.sample
+package org.jetbrains.desktop.sample.macos
 
 import org.jetbrains.desktop.macos.AppMenuItem
 import org.jetbrains.desktop.macos.AppMenuManager
@@ -32,6 +32,7 @@ import org.jetbrains.desktop.macos.WindowBackground
 import org.jetbrains.desktop.macos.WindowEvent
 import org.jetbrains.desktop.macos.WindowId
 import org.jetbrains.desktop.macos.WindowVisualEffect
+import org.jetbrains.desktop.sample.common.runtimeInfo
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
 import org.jetbrains.skia.Paint

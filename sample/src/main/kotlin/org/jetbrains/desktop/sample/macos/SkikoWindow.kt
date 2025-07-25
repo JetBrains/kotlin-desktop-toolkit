@@ -1,4 +1,4 @@
-package org.jetbrains.desktop.sample
+package org.jetbrains.desktop.sample.macos
 
 import org.jetbrains.desktop.macos.DisplayLink
 import org.jetbrains.desktop.macos.Event
