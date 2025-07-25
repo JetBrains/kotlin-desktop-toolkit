@@ -169,7 +169,6 @@ val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
             dependsOn(compileTask)
             from(compileTask.flatMap { it.libraryFile })
         }
-        println("jar: ${outputs.files.files}")
     }
 }
 
