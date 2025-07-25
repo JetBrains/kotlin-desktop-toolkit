@@ -237,7 +237,7 @@ mod display_link_sys {
             unsafe {
                 let mut display_link: *mut CVDisplayLink = 0 as _;
 
-                let code = CVDisplayLinkCreateWithActiveCGDisplays(&mut display_link);
+                let code = CVDisplayLinkCreateWithActiveCGDisplays(&raw mut display_link);
                 anyhow::ensure!(code == 0, "could not create display link, code: {}", code);
 
                 let mut display_link = Self::from_ptr(display_link);

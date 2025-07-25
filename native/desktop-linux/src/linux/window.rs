@@ -251,7 +251,7 @@ impl SimpleWindow {
             Some(RenderingData::Egl(r)) => r.draw(surface, egl.unwrap(), do_draw),
             Some(RenderingData::Software(r)) => r.draw(surface, physical_size, do_draw),
             None => warn!("Rendering data not initialized in draw"),
-        };
+        }
 
         surface.commit();
     }
@@ -295,7 +295,7 @@ impl SimpleWindow {
         (self.event_handler)(&WindowScaleChangedEvent { new_scale }.into());
     }
 
-    pub fn set_cursor_icon(&mut self, cursor_icon: CursorIcon) {
+    pub const fn set_cursor_icon(&mut self, cursor_icon: CursorIcon) {
         self.set_cursor = true;
         self.decorations_cursor = cursor_icon;
     }
