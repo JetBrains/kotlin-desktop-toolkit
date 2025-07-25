@@ -3,6 +3,7 @@ import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.hostArch
+import org.jetbrains.desktop.buildscripts.hostOs
 import org.jetbrains.desktop.buildscripts.targetArch
 
 plugins {
@@ -15,7 +16,7 @@ repositories {
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
 
-val skikoTargetOs = "macos"
+val skikoTargetOs = hostOs().normalizedName
 
 val skikoTargetArch = when (targetArch(project) ?: hostArch()) {
     Arch.aarch64 -> "arm64"
@@ -68,7 +69,7 @@ fun JavaExec.setUpLoggingAndLibraryPath() {
 
 tasks.register<JavaExec>("runSkikoSampleMac") {
     group = "application"
-    description = "Runs example of integration with Skiko"
+    description = "Runs example of integration with Skiko on MacOS"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("org.jetbrains.desktop.sample.macos.SkikoSampleMacKt")
     javaLauncher.set(
@@ -108,6 +109,24 @@ tasks.register<JavaExec>("runApplicationMenuSampleMac") {
 
     environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
+}
+
+tasks.register<JavaExec>("runSkikoSampleLinux") {
+    group = "application"
+    description = "Runs example of integration with Skiko on Linux Wayland"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.desktop.sample.linux.SkikoSampleLinuxKt")
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        },
+    )
+    jvmArgs = listOf(
+        "--enable-preview",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+    )
+    setUpLoggingAndLibraryPath()
 }
 
 task("lint") {

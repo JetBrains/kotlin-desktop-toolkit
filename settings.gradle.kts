@@ -14,4 +14,3 @@ rootProject.name = "kotlin-desktop-toolkit"
 
 include("kotlin-desktop-toolkit")
 include("sample")
-//include("sampleLinux")
