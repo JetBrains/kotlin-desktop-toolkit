@@ -1,4 +1,4 @@
-package org.jetbrains.desktop.tests
+package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
@@ -6,6 +6,7 @@ import org.jetbrains.desktop.macos.LogLevel
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.Pasteboard.Element
 import kotlin.io.path.absolutePathString
+import kotlin.io.path.createTempFile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -111,8 +112,8 @@ class PasteboardTest {
             Pasteboard.clear()
         }
         assert(counter > 0L)
-        val file1 = kotlin.io.path.createTempFile(suffix = "File1.txt")
-        val file2 = kotlin.io.path.createTempFile(suffix = "File2.txt")
+        val file1 = createTempFile(suffix = "File1.txt")
+        val file2 = createTempFile(suffix = "File2.txt")
         val content1 = "Hello1"
         val content2 = "Hello2"
         val success = GrandCentralDispatch.dispatchOnMainSync {

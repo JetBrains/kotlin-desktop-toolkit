@@ -1,4 +1,4 @@
-package org.jetbrains.desktop.tests
+package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.AppMenuItem
 import org.jetbrains.desktop.macos.AppMenuManager

@@ -1,3 +1,5 @@
+package org.jetbrains.desktop.macos.tests
+
 import org.jetbrains.desktop.macos.Cursor
 import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
