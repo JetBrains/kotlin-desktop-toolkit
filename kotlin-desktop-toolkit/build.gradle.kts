@@ -178,7 +178,6 @@ publishing {
     publications {
         configureEach {
             this as MavenPublication
-
             pom {
                 description.set("Kotlin Desktop Toolkit")
                 licenses {
@@ -204,7 +203,7 @@ publishing {
             }
         }
 
-        create<MavenPublication>("maven") {
+        create<MavenPublication>("Common") {
             from(components["java"])
             artifactId = "kotlin-desktop-toolkit-common"
             pom {
@@ -219,7 +218,7 @@ publishing {
 
         nativeJarTasksByPlatform.forEach { (platform, jarTask) ->
             val suffix = jarSuffixForPlatform(platform)
-            create<MavenPublication>("MavenPublication$suffix") {
+            create<MavenPublication>("Native-$suffix") {
                 artifactId = "kotlin-desktop-toolkit-$suffix"
                 artifact(jarTask)
             }
