@@ -145,6 +145,10 @@ sourceSets.main {
 
 // Publishing
 
+fun shouldPublishCommon(): Boolean {
+    return (project.property("publishCommon") as String).toBooleanStrict()
+}
+
 tasks.withType<Jar>().configureEach {
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
@@ -203,14 +207,16 @@ publishing {
             }
         }
 
-        create<MavenPublication>("Common") {
-            from(components["java"])
-            artifactId = "kotlin-desktop-toolkit-common"
-            pom {
-                licenses {
-                    license {
-                        name = "The Apache License, Version 2.0"
-                        url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+        if (shouldPublishCommon()) {
+            create<MavenPublication>("Common") {
+                from(components["java"])
+                artifactId = "kotlin-desktop-toolkit-common"
+                pom {
+                    licenses {
+                        license {
+                            name = "The Apache License, Version 2.0"
+                            url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                        }
                     }
                 }
             }
