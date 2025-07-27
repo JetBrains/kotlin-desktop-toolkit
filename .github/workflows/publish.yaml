@@ -56,7 +56,7 @@ jobs:
       - name: Build with Gradle
         run: |
           ./gradlew :kotlin-desktop-toolkit:publish \
-               -PenableCrossCompileToMacosX86_64=${{ matrix.targets.os == "macos-14" }} \
+               -PenableCrossCompileToMacosX86_64="${{ matrix.targets.os == 'macos-14' }}" \
                -PpublishCommon=${{ matrix.targets.publish_common }} \
                -PspaceUsername=${{ secrets.SPACE_USERNAME }} \
                -PspacePassword=${{ secrets.SPACE_PASSWORD }} \
