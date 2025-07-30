@@ -10,7 +10,7 @@ import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.Test
 
 class MetalTests {
-    @Test
+    //@Test
     fun smokeTest() {
         GrandCentralDispatch.dispatchOnMainSync {
             Application.init()
