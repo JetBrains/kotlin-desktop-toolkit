@@ -742,8 +742,8 @@ fun dragAndDropCallback(): DragAndDropCallbacks {
 }
 
 fun main() {
-    Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
+    Logger.info { runtimeInfo() }
     GrandCentralDispatch.startOnMainThread {
         Application.init(Application.ApplicationConfig())
         DragAndDropHandler.init(dragAndDropCallback())
