@@ -1,9 +1,13 @@
 package org.jetbrains.desktop.macos.tests
 
+import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.QualityOfService
 import org.jetbrains.desktop.macos.setQualityOfServiceForCurrentThread
+import org.jetbrains.desktop.tests.runTestWithEventLoop
+import org.junit.jupiter.api.Timeout
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -78,5 +82,17 @@ class GrandCentralDispatchTest {
         setQualityOfServiceForCurrentThread(QualityOfService.Utility)
         setQualityOfServiceForCurrentThread(QualityOfService.Background)
         setQualityOfServiceForCurrentThread(QualityOfService.Default)
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    fun grandCentralDispatchAllowsReentrancyTest() {
+        runTestWithEventLoop(eventHandler = { EventHandlerResult.Continue }) {
+            val counter = AtomicInteger()
+            GrandCentralDispatch.dispatchOnMain { counter.incrementAndGet() }
+            GrandCentralDispatch.dispatchOnMain { counter.incrementAndGet() }
+            GrandCentralDispatch.dispatchOnMainSync { counter.incrementAndGet() }
+            assertEquals(counter.get(), 3)
+        }
     }
 }

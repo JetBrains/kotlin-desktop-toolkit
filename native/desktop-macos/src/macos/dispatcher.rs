@@ -1,9 +1,10 @@
 use std::ffi::c_void;
 
+use block2::RcBlock;
 use desktop_common::logger::ffi_boundary;
 use dispatch2::DispatchQueue;
-use objc2::{MainThreadMarker, ffi};
-use objc2_foundation::{NSQualityOfService, NSThread};
+use objc2::{MainThreadMarker, ffi, sel};
+use objc2_foundation::{NSBlockOperation, NSObjectNSThreadPerformAdditions, NSQualityOfService, NSThread};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn dispatcher_is_main_thread() -> bool {
@@ -15,6 +16,23 @@ pub extern "C" fn dispatcher_main_exec_async(f: extern "C" fn()) {
     ffi_boundary("dispatcher_main_exec_async", || {
         #[allow(clippy::redundant_closure)]
         DispatchQueue::main().exec_async(move || f());
+        Ok(())
+    });
+}
+
+fn run_block_on_main_thread_sync<F: Fn() + 'static>(f: F) {
+    let block = RcBlock::new(move || {
+        f();
+    });
+    let op = unsafe { NSBlockOperation::blockOperationWithBlock(&block) };
+    unsafe { op.performSelectorOnMainThread_withObject_waitUntilDone(sel!(start), None, true) };
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn dispatcher_start_on_main_thread(f: extern "C" fn()) {
+    ffi_boundary("dispatcher_start_on_main_thread", || {
+        #[allow(clippy::redundant_closure)]
+        run_block_on_main_thread_sync(move || f());
         Ok(())
     });
 }
