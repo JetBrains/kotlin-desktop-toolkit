@@ -2,6 +2,7 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import org.jetbrains.desktop.macos.generated.`dispatcher_main_exec_async$f`
+import org.jetbrains.desktop.macos.generated.`dispatcher_start_on_main_thread$f`
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -23,6 +24,22 @@ public object GrandCentralDispatch : AutoCloseable {
     public fun isMainThread(): Boolean {
         return ffiDownCall {
             desktop_macos_h.dispatcher_is_main_thread()
+        }
+    }
+
+    public fun startOnMainThread(body: () -> Unit) {
+        if (isMainThread()) {
+            body()
+        } else {
+            Arena.ofShared().use { arena ->
+                desktop_macos_h.dispatcher_start_on_main_thread(
+                    `dispatcher_start_on_main_thread$f`.allocate({
+                        ffiUpCall {
+                            body()
+                        }
+                    }, arena)
+                )
+            }
         }
     }
 

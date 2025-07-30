@@ -744,20 +744,22 @@ fun dragAndDropCallback(): DragAndDropCallbacks {
 fun main() {
     Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
-    Application.init(Application.ApplicationConfig())
-    DragAndDropHandler.init(dragAndDropCallback())
-    ApplicationState().use { state ->
-        state.createWindow(useCustomTitlebar = true)
-        Application.runEventLoop { event ->
-            if (event is Event.ApplicationDidFinishLaunching) {
-                Files.readAllBytes(Path.of("resources/jb-logo.png")).let { iconBytes ->
-                    Application.setDockIcon(iconBytes)
+    GrandCentralDispatch.startOnMainThread {
+        Application.init(Application.ApplicationConfig())
+        DragAndDropHandler.init(dragAndDropCallback())
+        ApplicationState().use { state ->
+            state.createWindow(useCustomTitlebar = true)
+            Application.runEventLoop { event ->
+                if (event is Event.ApplicationDidFinishLaunching) {
+                    Files.readAllBytes(Path.of("resources/jb-logo.png")).let { iconBytes ->
+                        Application.setDockIcon(iconBytes)
+                    }
+                    AppMenuManager.setMainMenu(state.buildMenu())
                 }
-                AppMenuManager.setMainMenu(state.buildMenu())
+                state.handleEvent(event)
             }
-            state.handleEvent(event)
         }
+        DragAndDropHandler.close()
+        GrandCentralDispatch.close()
     }
-    DragAndDropHandler.close()
-    GrandCentralDispatch.close()
 }
