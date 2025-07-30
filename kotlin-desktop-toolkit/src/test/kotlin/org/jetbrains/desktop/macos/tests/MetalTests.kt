@@ -7,10 +7,10 @@ import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView
 import org.jetbrains.desktop.macos.Window
-import org.junit.jupiter.api.Test
+// import org.junit.jupiter.api.Test
 
 class MetalTests {
-    //@Test
+    // @Test
     fun smokeTest() {
         GrandCentralDispatch.dispatchOnMainSync {
             Application.init()
