@@ -7,10 +7,7 @@ import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import kotlin.concurrent.thread
 
-fun runTestWithEventLoop(
-    eventHandler: (Event) -> EventHandlerResult,
-    body: () -> Unit
-) {
+fun runTestWithEventLoop(eventHandler: (Event) -> EventHandlerResult, body: () -> Unit) {
     KotlinDesktopToolkit.init()
     val applicationStartedLatch = java.util.concurrent.CountDownLatch(1)
     val applicationStoppedLatch = java.util.concurrent.CountDownLatch(1)

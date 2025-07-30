@@ -57,5 +57,5 @@ jobs:
         uses: dorny/test-reporter@v2
         with:
           name: Tests Report (${{ matrix.os }})
-          path: oniguruma-jni/build/kotlin-desktop-toolkit/test/*.xml
+          path: kotlin-desktop-toolkit/build/test-results/test/*.xml
           reporter: java-junit

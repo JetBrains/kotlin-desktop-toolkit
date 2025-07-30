@@ -37,7 +37,7 @@ public object GrandCentralDispatch : AutoCloseable {
                         ffiUpCall {
                             body()
                         }
-                    }, arena)
+                    }, arena),
                 )
             }
         }

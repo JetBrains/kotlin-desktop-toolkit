@@ -3,8 +3,7 @@ use std::ffi::c_void;
 use block2::RcBlock;
 use desktop_common::logger::ffi_boundary;
 use dispatch2::DispatchQueue;
-use objc2::{ffi, sel, MainThreadMarker};
-use objc2_core_foundation::{kCFRunLoopDefaultMode, CFRunLoop};
+use objc2::{MainThreadMarker, ffi, sel};
 use objc2_foundation::{NSBlockOperation, NSObjectNSThreadPerformAdditions, NSQualityOfService, NSThread};
 
 #[unsafe(no_mangle)]
@@ -23,7 +22,7 @@ pub extern "C" fn dispatcher_main_exec_async(f: extern "C" fn()) {
 
 fn run_block_on_main_thread_sync<F: Fn() + 'static>(f: F) {
     let block = RcBlock::new(move || {
-        f()
+        f();
     });
     let op = unsafe { NSBlockOperation::blockOperationWithBlock(&block) };
     unsafe { op.performSelectorOnMainThread_withObject_waitUntilDone(sel!(start), None, true) };

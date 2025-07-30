@@ -1,7 +1,5 @@
 package org.jetbrains.desktop.macos.tests
 
-import org.jetbrains.desktop.macos.Application
-import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
@@ -11,7 +9,6 @@ import org.jetbrains.desktop.tests.runTestWithEventLoop
 import org.junit.jupiter.api.Timeout
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
