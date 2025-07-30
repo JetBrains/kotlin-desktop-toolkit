@@ -47,10 +47,13 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-      - name: Build with Gradle
-        run: ./gradlew build
       - name: Lint with Gradle
         run: ./gradlew lint
+      - name: Build with Gradle
+        run: ./gradlew build
+      - name: Test with Gradle
+        run: ./gradlew test
+
 
       - name: Publish Test Report
         if: always() # Ensure this step runs even if the test step fails
