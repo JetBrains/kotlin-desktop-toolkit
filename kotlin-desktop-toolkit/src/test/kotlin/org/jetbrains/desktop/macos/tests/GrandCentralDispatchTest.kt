@@ -7,6 +7,7 @@ import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.QualityOfService
 import org.jetbrains.desktop.macos.setQualityOfServiceForCurrentThread
+import org.jetbrains.desktop.tests.runTestWithEventLoop
 import org.junit.jupiter.api.Timeout
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -84,34 +85,6 @@ class GrandCentralDispatchTest {
         setQualityOfServiceForCurrentThread(QualityOfService.Utility)
         setQualityOfServiceForCurrentThread(QualityOfService.Background)
         setQualityOfServiceForCurrentThread(QualityOfService.Default)
-    }
-
-    fun runTestWithEventLoop(eventHandler: (Event) -> EventHandlerResult,
-                             body: () -> Unit) {
-        KotlinDesktopToolkit.init()
-        val applicationStartedLatch = java.util.concurrent.CountDownLatch(1)
-        val applicationStoppedLatch = java.util.concurrent.CountDownLatch(1)
-        thread {
-            GrandCentralDispatch.startOnMainThread {
-                Application.init()
-                Application.runEventLoop { event ->
-                    if (event is Event.ApplicationDidFinishLaunching) {
-                        applicationStartedLatch.countDown()
-                    }
-                    eventHandler(event)
-                }
-            }
-            applicationStoppedLatch.countDown()
-        }
-        try {
-            applicationStartedLatch.await()
-            body()
-        } finally {
-            GrandCentralDispatch.dispatchOnMainSync {
-                Application.stopEventLoop()
-            }
-            applicationStoppedLatch.await()
-        }
     }
 
     @Test
