@@ -84,9 +84,7 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
         //    unsafe { NSUserDefaults::resetStandardUserDefaults() };
         let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
         unsafe {
-            user_defaults.setBool_forKey(
-                config.disable_dictation_menu_item, 
-            ns_string!("NSDisabledDictationMenuItem"));
+            user_defaults.setBool_forKey(config.disable_dictation_menu_item, ns_string!("NSDisabledDictationMenuItem"));
             user_defaults.setBool_forKey(
                 config.disable_character_palette_menu_item,
                 ns_string!("NSDisabledCharacterPaletteMenuItem"),
