@@ -27,6 +27,13 @@ public object GrandCentralDispatch : AutoCloseable {
         }
     }
 
+    /**
+     * On MacOS access to NSApplication and other UI related classes are only allowed from the Main thread.
+     * Usually you can dispatch on Main with `dispatchOnMain { ... }` function, which sends the task to the Main.
+     * Under the hood `dispatchOnMain` uses application main queue, see: https://developer.apple.com/documentation/dispatch/dispatch_get_main_queue?language=objc
+     * But for initial capture of Main thread, to start Application event loop you need to use this `startOnMainThread` function.
+     * It relies on lower level mechanism, which allows reentrancy, opposite to `dispatchOnMain`.
+    */
     public fun startOnMainThread(body: () -> Unit) {
         if (isMainThread()) {
             body()
