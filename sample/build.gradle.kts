@@ -79,7 +79,6 @@ tasks.register<JavaExec>("runSkikoSampleMac") {
     )
     jvmArgs = listOf(
         "--enable-preview",
-        "-XstartOnFirstThread",
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
@@ -101,7 +100,6 @@ tasks.register<JavaExec>("runApplicationMenuSampleMac") {
     )
     jvmArgs = listOf(
         "--enable-preview",
-        "-XstartOnFirstThread",
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
