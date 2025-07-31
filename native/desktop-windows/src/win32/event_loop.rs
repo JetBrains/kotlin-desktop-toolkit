@@ -23,7 +23,7 @@ use windows::{
 };
 
 use super::{
-    events::{Event, EventHandler, WindowDrawEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent},
+    events::{Event, EventHandler, NCHitTestEvent, WindowDrawEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent},
     geometry::{PhysicalPoint, PhysicalSize},
     utils,
     window::{WM_REQUEST_UPDATE, Window},
@@ -102,7 +102,7 @@ impl EventLoop {
 
             WM_NCCALCSIZE => on_nccalcsize(window, wparam, lparam),
 
-            WM_NCHITTEST => on_nchittest(window, wparam, lparam),
+            WM_NCHITTEST => on_nchittest(self, window, wparam, lparam),
 
             WM_NCMOUSELEAVE => on_ncmouseleave(window, wparam, lparam),
 
@@ -137,10 +137,10 @@ fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
 }
 
 fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let new_dpi = utils::HIWORD!(wparam);
+    let new_dpi = utils::HIWORD!(wparam.0);
     assert_eq!(
         new_dpi,
-        utils::LOWORD!(wparam),
+        utils::LOWORD!(wparam.0),
         "The DPI values of the X-axis and the Y-axis should be identical for Windows apps."
     );
     let new_scale = (new_dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
@@ -154,8 +154,8 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
 }
 
 fn on_size(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let width = utils::LOWORD!(lparam);
-    let height = utils::HIWORD!(lparam);
+    let width = utils::LOWORD!(lparam.0);
+    let height = utils::HIWORD!(lparam.0);
     let kind = match wparam.0 as u32 {
         SIZE_MAXIMIZED => WindowResizeKind::Maximized,
         SIZE_MINIMIZED => WindowResizeKind::Minimized,
@@ -215,7 +215,7 @@ fn on_nccalcsize(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRES
     None
 }
 
-fn on_nchittest(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     if !window.has_custom_title_bar() || !window.is_resizable() {
         return None;
     }
@@ -230,7 +230,13 @@ fn on_nchittest(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESU
     if original_ht != LRESULT(HTCLIENT as _) {
         return Some(original_ht);
     }
+    let mouse_x = utils::GET_X_LPARAM!(lparam);
     let mouse_y = utils::GET_Y_LPARAM!(lparam);
+    let event = NCHitTestEvent { mouse_x, mouse_y };
+    let handled = event_loop.handle_event(window, event.into());
+    if handled.is_some() {
+        return Some(LRESULT(HTCLIENT as _));
+    }
     let mut window_rect = RECT::default();
     let _ = unsafe { GetWindowRect(hwnd, &mut window_rect) };
     let current_dpi = unsafe { GetDpiForWindow(hwnd) };
