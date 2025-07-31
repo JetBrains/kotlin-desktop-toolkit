@@ -23,6 +23,7 @@ workspace = true
 features = [
     "System",
     "Win32_Foundation",
+    "Win32_Globalization",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
     "Win32_System_Diagnostics_Debug",
@@ -31,6 +32,7 @@ features = [
     "Win32_System_WinRT",
     "Win32_UI_Controls",
     "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ]
 

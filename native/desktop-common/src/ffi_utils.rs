@@ -193,6 +193,13 @@ impl RustAllocatedStrPtr {
         }))
     }
 
+    pub fn from_c_string(s: CString) -> Self {
+        Self(GenericRawPtr {
+            ptr: s.into_raw(),
+            phantom: PhantomData,
+        })
+    }
+
     pub fn deallocate(&mut self) {
         if !self.0.ptr.is_null() {
             let _s = unsafe { CString::from_raw(self.0.ptr.cast_mut()) };

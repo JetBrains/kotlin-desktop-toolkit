@@ -53,6 +53,34 @@ typedef NativeRustAllocatedRawPtr NativeAppPtr;
 
 typedef intptr_t NativeWindowId;
 
+typedef uint16_t NativeVirtualKey;
+
+typedef struct NativePhysicalKeyStatus {
+  uint32_t scan_code;
+  bool is_extended_key;
+  bool is_menu_key_down;
+  bool was_key_down;
+  bool is_key_released;
+  uint32_t repeat_count;
+} NativePhysicalKeyStatus;
+
+typedef uint64_t NativeTimestamp;
+
+typedef struct NativeKeyEvent {
+  NativeVirtualKey key_code;
+  struct NativePhysicalKeyStatus key_status;
+  bool is_system_key;
+  NativeTimestamp timestamp;
+} NativeKeyEvent;
+
+typedef struct NativeCharacterReceivedEvent {
+  uint16_t key_code;
+  NativeRustAllocatedStrPtr characters;
+  struct NativePhysicalKeyStatus key_status;
+  bool is_dead_char;
+  bool is_system_key;
+} NativeCharacterReceivedEvent;
+
 typedef struct NativeNCHitTestEvent {
   int32_t mouse_x;
   int32_t mouse_y;
@@ -104,6 +132,9 @@ typedef struct NativeWindowResizeEvent {
 } NativeWindowResizeEvent;
 
 typedef enum NativeEvent_Tag {
+  NativeEvent_KeyDown,
+  NativeEvent_KeyUp,
+  NativeEvent_CharacterReceived,
   NativeEvent_NCHitTest,
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowDraw,
@@ -114,6 +145,15 @@ typedef enum NativeEvent_Tag {
 typedef struct NativeEvent {
   NativeEvent_Tag tag;
   union {
+    struct {
+      struct NativeKeyEvent key_down;
+    };
+    struct {
+      struct NativeKeyEvent key_up;
+    };
+    struct {
+      struct NativeCharacterReceivedEvent character_received;
+    };
     struct {
       struct NativeNCHitTestEvent nc_hit_test;
     };
