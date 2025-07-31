@@ -27,7 +27,6 @@ use super::{
     geometry::{PhysicalPoint, PhysicalSize},
     utils,
     window::{WM_REQUEST_UPDATE, Window},
-    window_api::WindowId,
 };
 
 pub struct EventLoop {
@@ -78,8 +77,8 @@ impl EventLoop {
     }
 
     #[inline]
-    fn handle_event(&self, window_id: WindowId, event: Event) -> Option<LRESULT> {
-        (self.event_handler)(window_id, &event).then_some(LRESULT(0))
+    fn handle_event(&self, window: &Window, event: Event) -> Option<LRESULT> {
+        (self.event_handler)(window.id(), &event).then_some(LRESULT(0))
     }
 
     pub fn window_proc(&self, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -107,7 +106,7 @@ impl EventLoop {
 
             WM_NCMOUSELEAVE => on_ncmouseleave(window, wparam, lparam),
 
-            WM_CLOSE => self.handle_event(hwnd.into(), Event::WindowCloseRequest),
+            WM_CLOSE => self.handle_event(window, Event::WindowCloseRequest),
 
             _ => None,
         };
@@ -132,7 +131,7 @@ fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
         size: PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top),
         scale: window.get_scale(),
     };
-    let handled = event_loop.handle_event(hwnd.into(), event.into());
+    let handled = event_loop.handle_event(window, event.into());
     let _ = unsafe { EndPaint(hwnd, &paint) };
     handled
 }
@@ -151,7 +150,7 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         new_size: PhysicalSize::new(new_rect.right - new_rect.left, new_rect.bottom - new_rect.top),
         new_scale,
     };
-    event_loop.handle_event(window.hwnd().into(), event.into())
+    event_loop.handle_event(window, event.into())
 }
 
 fn on_size(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
@@ -168,7 +167,7 @@ fn on_size(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPAR
         scale: window.get_scale(),
         kind,
     };
-    event_loop.handle_event(window.hwnd().into(), event.into())
+    event_loop.handle_event(window, event.into())
 }
 
 fn on_getminmaxinfo(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
