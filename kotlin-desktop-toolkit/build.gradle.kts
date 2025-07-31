@@ -329,6 +329,11 @@ compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildN
                 )
             },
         )
+        testLogging {
+            events("failed")
+            events("passed")
+            events("skipped")
+        }
         useJUnitPlatform()
     }
 }
