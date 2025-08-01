@@ -55,7 +55,7 @@ typedef struct NativePhysicalSize {
 } NativePhysicalSize;
 
 typedef struct NativeWindowDrawEvent {
-  struct NativePhysicalSize physical_size;
+  struct NativePhysicalSize size;
   float scale;
 } NativeWindowDrawEvent;
 
@@ -70,10 +70,33 @@ typedef struct NativeWindowScaleChangedEvent {
   float new_scale;
 } NativeWindowScaleChangedEvent;
 
+typedef enum NativeWindowResizeKind_Tag {
+  NativeWindowResizeKind_Restored,
+  NativeWindowResizeKind_Maximized,
+  NativeWindowResizeKind_Minimized,
+  NativeWindowResizeKind_Other,
+} NativeWindowResizeKind_Tag;
+
+typedef struct NativeWindowResizeKind {
+  NativeWindowResizeKind_Tag tag;
+  union {
+    struct {
+      uint32_t other;
+    };
+  };
+} NativeWindowResizeKind;
+
+typedef struct NativeWindowResizeEvent {
+  struct NativePhysicalSize size;
+  float scale;
+  struct NativeWindowResizeKind kind;
+} NativeWindowResizeEvent;
+
 typedef enum NativeEvent_Tag {
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowDraw,
   NativeEvent_WindowScaleChanged,
+  NativeEvent_WindowResize,
 } NativeEvent_Tag;
 
 typedef struct NativeEvent {
@@ -84,6 +107,9 @@ typedef struct NativeEvent {
     };
     struct {
       struct NativeWindowScaleChangedEvent window_scale_changed;
+    };
+    struct {
+      struct NativeWindowResizeEvent window_resize;
     };
   };
 } NativeEvent;
@@ -161,6 +187,8 @@ void renderer_angle_drop(NativeAngleDevicePtr angle_device_ptr);
 NativeWindowPtr window_create(NativeAppPtr app_ptr, struct NativeWindowParams params);
 
 NativeWindowId window_get_window_id(NativeWindowPtr window_ptr);
+
+float window_get_scale_factor(NativeWindowPtr window_ptr);
 
 void window_set_min_size(NativeWindowPtr window_ptr, struct NativeLogicalSize size);
 

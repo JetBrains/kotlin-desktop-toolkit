@@ -7,15 +7,15 @@ use windows::{
         Graphics::Gdi::{BeginPaint, EndPaint},
         System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
         UI::WindowsAndMessaging::{
-            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, MINMAXINFO, MSG, PostQuitMessage, USER_DEFAULT_SCREEN_DPI,
-            WM_CLOSE, WM_DPICHANGED, WM_GETMINMAXINFO, WM_PAINT,
+            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, MINMAXINFO, MSG, PostQuitMessage, SIZE_MAXIMIZED, SIZE_MINIMIZED,
+            SIZE_RESTORED, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_DPICHANGED, WM_GETMINMAXINFO, WM_PAINT, WM_SIZE,
         },
     },
     core::Result as WinResult,
 };
 
 use super::{
-    events::{Event, EventHandler, WindowDrawEvent, WindowScaleChangedEvent},
+    events::{Event, EventHandler, WindowDrawEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent},
     geometry::{PhysicalPoint, PhysicalSize},
     utils,
     window::Window,
@@ -81,7 +81,7 @@ impl EventLoop {
                     return LRESULT(1);
                 }
                 let event = WindowDrawEvent {
-                    physical_size: PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top),
+                    size: PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top),
                     scale: window.get_scale(),
                 };
                 let handled = (self.event_handler)(hwnd.into(), &event.into());
@@ -102,6 +102,23 @@ impl EventLoop {
                     new_origin: PhysicalPoint::new(new_rect.left, new_rect.top),
                     new_size: PhysicalSize::new(new_rect.right - new_rect.left, new_rect.bottom - new_rect.top),
                     new_scale,
+                };
+                (self.event_handler)(hwnd.into(), &event.into())
+            }
+
+            WM_SIZE => {
+                let width = utils::LOWORD(lparam.0 as _);
+                let height = utils::HIWORD(lparam.0 as _);
+                let kind = match wparam.0 as u32 {
+                    SIZE_MAXIMIZED => WindowResizeKind::Maximized,
+                    SIZE_MINIMIZED => WindowResizeKind::Minimized,
+                    SIZE_RESTORED => WindowResizeKind::Restored,
+                    kind => WindowResizeKind::Other(kind),
+                };
+                let event = WindowResizeEvent {
+                    size: PhysicalSize::new(width as _, height as _),
+                    scale: window.get_scale(),
+                    kind,
                 };
                 (self.event_handler)(hwnd.into(), &event.into())
             }
