@@ -139,7 +139,8 @@ public sealed class Event {
     ) : Event()
 
     public data class WindowKeyboardEnter(
-        val keys: List<KeySym>,
+        val keyCodes: List<KeyCode>,
+        val keySyms: List<KeySym>,
     ) : Event()
 
     public data object WindowKeyboardLeave : Event()

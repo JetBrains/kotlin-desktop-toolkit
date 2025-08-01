@@ -74,7 +74,9 @@ delegate_keyboard!(ApplicationState);
 impl SimpleWindow {
     pub fn keyboard_enter(&self, raw: &[u32], keysyms: &[Keysym]) {
         debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
-        (self.event_handler)(&WindowKeyboardEnterEvent::new(raw).into());
+        let ks: Vec<u32> = keysyms.iter().map(|e| e.raw()).collect();
+        let e = WindowKeyboardEnterEvent::new(raw, &ks);
+        (self.event_handler)(&e.into());
     }
 
     pub fn keyboard_leave(&self) {

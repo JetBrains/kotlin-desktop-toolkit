@@ -479,12 +479,14 @@ impl From<WindowDrawEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct WindowKeyboardEnterEvent<'a> {
     pub raw: BorrowedArray<'a, u32>,
+    pub keysyms: BorrowedArray<'a, u32>,
 }
 
 impl<'a> WindowKeyboardEnterEvent<'a> {
-    pub(crate) fn new(raw: &'a [u32]) -> Self {
+    pub(crate) fn new(raw: &'a [u32], keysyms: &'a [u32]) -> Self {
         Self {
             raw: BorrowedArray::from_slice(raw),
+            keysyms: BorrowedArray::from_slice(keysyms),
         }
     }
 }

@@ -369,6 +369,18 @@ internal fun DragAction.toNative(): Int = when (this) {
     DragAction.Ask -> desktop_linux_h.NativeDragAction_Ask()
 }
 
+private fun readNativeU32Array(nativeU32Array: MemorySegment): List<Int> {
+    val len = NativeBorrowedArray_u32.len(nativeU32Array)
+    val dataPtr = NativeBorrowedArray_u32.ptr(nativeU32Array)
+    val values = mutableListOf<Int>()
+    for (i in 0 until len) {
+        val raw = dataPtr.getAtIndex(desktop_linux_h.C_INT, i)
+        Logger.debug { "readNativeU32ArrayFor: len=$len : dataPtr=$dataPtr, value of index $i : $raw" }
+        values.add(raw)
+    }
+    return values
+}
+
 internal fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
         desktop_linux_h.NativeEvent_DataTransferAvailable() -> {
@@ -503,15 +515,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_linux_h.NativeEvent_WindowKeyboardEnter() -> {
             val nativeEvent = NativeEvent.window_keyboard_enter(s)
 
-            val nativeU8Array = NativeWindowKeyboardEnterEvent.raw(nativeEvent)
-            val len = NativeBorrowedArray_u32.len(nativeU8Array)
-            val dataPtr = NativeBorrowedArray_u32.ptr(nativeU8Array)
-            val keys = mutableListOf<KeySym>()
-            for (i in 0 until len) {
-                val raw = dataPtr.get(desktop_linux_h.C_INT, i)
-                keys.add(KeySym(raw))
-            }
-            Event.WindowKeyboardEnter(keys = keys)
+            val keyCodes = readNativeU32Array(NativeWindowKeyboardEnterEvent.raw(nativeEvent)).map { KeyCode(it) }
+            val keySyms = readNativeU32Array(NativeWindowKeyboardEnterEvent.keysyms(nativeEvent)).map { KeySym(it) }
+
+            Event.WindowKeyboardEnter(keyCodes, keySyms)
         }
         desktop_linux_h.NativeEvent_WindowKeyboardLeave() -> {
             Event.WindowKeyboardLeave
