@@ -6,6 +6,7 @@ use std::{
     fmt::Write,
     marker::PhantomData,
     ptr::NonNull,
+    rc::Rc,
 };
 
 use anyhow::{Context, bail};
@@ -69,6 +70,13 @@ impl RustAllocatedRawPtr<'_> {
     pub fn from_value<R>(value: Option<R>) -> Self {
         Self(GenericRawPtr {
             ptr: value.map_or(std::ptr::null(), |v| Box::into_raw(Box::new(v)).cast_const()).cast(),
+            phantom: PhantomData,
+        })
+    }
+
+    pub fn from_rc<R>(value: Option<Rc<R>>) -> Self {
+        Self(GenericRawPtr {
+            ptr: value.map_or(std::ptr::null(), |v| Rc::into_raw(v)).cast(),
             phantom: PhantomData,
         })
     }
