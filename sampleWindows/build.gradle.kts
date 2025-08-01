@@ -78,7 +78,7 @@ val nativeLib = configurations.resolvable("windowsNativeParts") {
 }
 
 fun JavaExec.setUpLoggingAndLibraryPath() {
-    val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample.log").map { it.asFile.absolutePath }
+    val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample_win32.log").map { it.asFile.absolutePath }
     val nativeLibPath = nativeLib.map { it.singleFile.parentFile.absolutePath }
     jvmArgumentProviders.add(
         CommandLineArgumentProvider {
@@ -86,6 +86,21 @@ fun JavaExec.setUpLoggingAndLibraryPath() {
                 "-Dkdt.library.folder.path=${nativeLibPath.get()}",
                 "-Dkdt.debug=true",
                 "-Dkdt.native.log.path=${logFilePath.get()}",
+            )
+        },
+    )
+}
+
+fun JavaExec.setUpCrashDumpPath() {
+    val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample_win32_dump.log").map { it.asFile.absolutePath }
+    val crashDumpFilePath = layout.buildDirectory.file("sample-logs/skiko_sample_win32_dump.hprof").map { it.asFile.absolutePath }
+    jvmArgumentProviders.add(
+        CommandLineArgumentProvider {
+            listOf(
+                "-XX:+CreateCoredumpOnCrash",
+                "-XX:+HeapDumpOnOutOfMemoryError",
+                "-XX:ErrorFile=${logFilePath.get()}",
+                "-XX:HeapDumpPath=${crashDumpFilePath.get()}",
             )
         },
     )
@@ -112,6 +127,7 @@ tasks.register<JavaExec>("runSkikoSampleWindows") {
         "-Djextract.trace.downcalls=false",
     )
     setUpLoggingAndLibraryPath()
+    setUpCrashDumpPath()
 }
 
 tasks.named<Test>("test") {
