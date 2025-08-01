@@ -53,6 +53,11 @@ typedef NativeRustAllocatedRawPtr NativeAppPtr;
 
 typedef intptr_t NativeWindowId;
 
+typedef struct NativeNCHitTestEvent {
+  int32_t mouse_x;
+  int32_t mouse_y;
+} NativeNCHitTestEvent;
+
 typedef int32_t NativePhysicalPixels;
 
 typedef struct NativePhysicalSize {
@@ -99,6 +104,7 @@ typedef struct NativeWindowResizeEvent {
 } NativeWindowResizeEvent;
 
 typedef enum NativeEvent_Tag {
+  NativeEvent_NCHitTest,
   NativeEvent_WindowCloseRequest,
   NativeEvent_WindowDraw,
   NativeEvent_WindowScaleChanged,
@@ -108,6 +114,9 @@ typedef enum NativeEvent_Tag {
 typedef struct NativeEvent {
   NativeEvent_Tag tag;
   union {
+    struct {
+      struct NativeNCHitTestEvent nc_hit_test;
+    };
     struct {
       struct NativeWindowDrawEvent window_draw;
     };
