@@ -11,7 +11,6 @@ use windows::{
             DWM_SYSTEMBACKDROP_TYPE, DWMNCRENDERINGPOLICY, DWMNCRP_ENABLED, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE,
             DWMWA_NCRENDERING_POLICY, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
         },
-        System::LibraryLoader::GetModuleHandleW,
         UI::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
@@ -48,7 +47,7 @@ pub struct Window {
 impl Window {
     pub fn new(params: &WindowParams, app: &Application) -> WinResult<Rc<Self>> {
         const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
-        let instance = unsafe { GetModuleHandleW(None) }?.into();
+        let instance = crate::get_dll_instance();
         let wndclass = WNDCLASSEXW {
             cbSize: size_of::<WNDCLASSEXW>() as _,
             hInstance: instance,
