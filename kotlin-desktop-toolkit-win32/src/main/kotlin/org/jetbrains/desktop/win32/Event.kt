@@ -1,6 +1,8 @@
 package org.jetbrains.desktop.win32
 
+import org.jetbrains.desktop.win32.generated.NativeCharacterReceivedEvent
 import org.jetbrains.desktop.win32.generated.NativeEvent
+import org.jetbrains.desktop.win32.generated.NativeKeyEvent
 import org.jetbrains.desktop.win32.generated.NativeNCHitTestEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
@@ -14,7 +16,7 @@ import kotlin.time.Duration.Companion.milliseconds
 @JvmInline
 public value class Timestamp(
     /** Count of milliseconds since some fixed but arbitrary moment in the past */
-    private val value: Int,
+    private val value: Long,
 ) {
     public fun toDuration(): Duration {
         return value.milliseconds
@@ -30,6 +32,28 @@ public typealias EventHandler = (WindowId, Event) -> EventHandlerResult
 
 public sealed class Event {
     internal companion object;
+
+    public data class KeyDown(
+        val keyCode: VirtualKey,
+        val keyStatus: PhysicalKeyStatus,
+        val isSystemKey: Boolean,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class KeyUp(
+        val keyCode: VirtualKey,
+        val keyStatus: PhysicalKeyStatus,
+        val isSystemKey: Boolean,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class CharacterReceived(
+        val keyCode: Char,
+        val characters: String,
+        val keyStatus: PhysicalKeyStatus,
+        val isDeadChar: Boolean,
+        val isSystemKey: Boolean,
+    ) : Event()
 
     public data class NCHitTest(
         val mouseX: Int,
@@ -69,6 +93,37 @@ public sealed class WindowResizeKind {
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
+    desktop_windows_h.NativeEvent_KeyDown() -> {
+        val nativeEvent = NativeEvent.key_down(s)
+        Event.KeyDown(
+            keyCode = VirtualKey.fromNative(NativeKeyEvent.key_code(nativeEvent)),
+            keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
+            isSystemKey = NativeKeyEvent.is_system_key(nativeEvent),
+            timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
+        )
+    }
+
+    desktop_windows_h.NativeEvent_KeyUp() -> {
+        val nativeEvent = NativeEvent.key_up(s)
+        Event.KeyUp(
+            keyCode = VirtualKey.fromNative(NativeKeyEvent.key_code(nativeEvent)),
+            keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
+            isSystemKey = NativeKeyEvent.is_system_key(nativeEvent),
+            timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
+        )
+    }
+
+    desktop_windows_h.NativeEvent_CharacterReceived() -> {
+        val nativeEvent = NativeEvent.character_received(s)
+        Event.CharacterReceived(
+            keyCode = NativeCharacterReceivedEvent.key_code(nativeEvent).toInt().toChar(),
+            characters = NativeCharacterReceivedEvent.characters(nativeEvent).getUtf8String(0),
+            keyStatus = PhysicalKeyStatus.fromNative(NativeCharacterReceivedEvent.key_status(nativeEvent)),
+            isDeadChar = NativeCharacterReceivedEvent.is_dead_char(nativeEvent),
+            isSystemKey = NativeCharacterReceivedEvent.is_system_key(nativeEvent),
+        )
+    }
+
     desktop_windows_h.NativeEvent_NCHitTest() -> {
         val nativeEvent = NativeEvent.nc_hit_test(s)
         Event.NCHitTest(

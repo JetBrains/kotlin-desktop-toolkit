@@ -1,9 +1,10 @@
+use desktop_common::ffi_utils::RustAllocatedStrPtr;
 use log::{debug, error};
 use windows::{
     Foundation::TypedEventHandler,
     System::DispatcherQueueController,
     Win32::{
-        Foundation::{LPARAM, LRESULT, RECT, WPARAM},
+        Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
         Graphics::{
             Dwm::DwmDefWindowProc,
             Gdi::{BeginPaint, EndPaint, InvalidateRect},
@@ -12,10 +13,11 @@ use windows::{
         UI::{
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
             WindowsAndMessaging::{
-                DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG,
-                NCCALCSIZE_PARAMS, PostQuitMessage, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SM_CXPADDEDBORDER, SM_CYSIZE,
-                SM_CYSIZEFRAME, SWP_FRAMECHANGED, SetWindowPos, USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CLOSE, WM_DPICHANGED,
-                WM_GETMINMAXINFO, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_SIZE,
+                DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
+                HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, PostQuitMessage, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED,
+                SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SetWindowPos, TranslateMessage, USER_DEFAULT_SCREEN_DPI,
+                WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_NCCALCSIZE,
+                WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
             },
         },
     },
@@ -23,8 +25,13 @@ use windows::{
 };
 
 use super::{
-    events::{Event, EventHandler, NCHitTestEvent, WindowDrawEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent},
+    events::{
+        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCHitTestEvent, Timestamp, WindowDrawEvent, WindowResizeEvent,
+        WindowResizeKind, WindowScaleChangedEvent,
+    },
     geometry::{PhysicalPoint, PhysicalSize},
+    keyboard::{PhysicalKeyStatus, VirtualKey},
+    strings::copy_from_wide_string,
     utils,
     window::{WM_REQUEST_UPDATE, Window},
 };
@@ -63,7 +70,6 @@ impl EventLoop {
         let mut msg = MSG::default();
         unsafe {
             while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-                //let _ = windows::Win32::UI::WindowsAndMessaging::TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
         }
@@ -97,6 +103,12 @@ impl EventLoop {
             WM_SIZE => on_size(self, window, wparam, lparam),
 
             WM_GETMINMAXINFO => on_getminmaxinfo(window, lparam),
+
+            WM_KEYDOWN | WM_SYSKEYDOWN => on_keydown(self, window, msg, wparam, lparam),
+
+            WM_KEYUP | WM_SYSKEYUP => on_keyup(self, window, msg, wparam, lparam),
+
+            WM_CHAR | WM_DEADCHAR | WM_SYSCHAR | WM_SYSDEADCHAR => on_char(self, window, msg, wparam, lparam),
 
             WM_ACTIVATE => on_activate(window),
 
@@ -230,8 +242,8 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     if original_ht != LRESULT(HTCLIENT as _) {
         return Some(original_ht);
     }
-    let mouse_x = utils::GET_X_LPARAM!(lparam);
-    let mouse_y = utils::GET_Y_LPARAM!(lparam);
+    let mouse_x = utils::GET_X_LPARAM!(lparam.0);
+    let mouse_y = utils::GET_Y_LPARAM!(lparam.0);
     let event = NCHitTestEvent { mouse_x, mouse_y };
     let handled = event_loop.handle_event(window, event.into());
     if handled.is_some() {
@@ -262,4 +274,62 @@ fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LR
     unsafe { DwmDefWindowProc(window.hwnd(), WM_NCMOUSELEAVE, wparam, lparam, &mut dwm_result) }
         .as_bool()
         .then(|| dwm_result)
+}
+
+fn on_keydown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    let vk_code = utils::LOWORD!(wparam.0);
+    let timestamp = unsafe { GetMessageTime() };
+    let event = KeyEvent {
+        key_code: VirtualKey(vk_code),
+        key_status: PhysicalKeyStatus::parse(lparam),
+        is_system_key: matches!(msg, WM_SYSKEYDOWN),
+        timestamp: Timestamp(timestamp as _),
+    };
+    let result = event_loop.handle_event(window, Event::KeyDown(event));
+    if result.is_none() {
+        let pos = unsafe { GetMessagePos() };
+        let msg = MSG {
+            hwnd: window.hwnd(),
+            message: msg,
+            wParam: wparam,
+            lParam: lparam,
+            time: timestamp as _,
+            pt: POINT {
+                x: utils::GET_X_LPARAM!(pos),
+                y: utils::GET_Y_LPARAM!(pos),
+            },
+        };
+        let _ = unsafe { TranslateMessage(&msg) };
+    }
+    result
+}
+
+fn on_keyup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    let vk_code = utils::LOWORD!(wparam.0);
+    let event = KeyEvent {
+        key_code: VirtualKey(vk_code),
+        key_status: PhysicalKeyStatus::parse(lparam),
+        is_system_key: matches!(msg, WM_SYSKEYUP),
+        timestamp: Timestamp(unsafe { GetMessageTime() } as _),
+    };
+    event_loop.handle_event(window, Event::KeyUp(event))
+}
+
+fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    let char = wparam.0 as u16;
+    let characters = match copy_from_wide_string(&[char]) {
+        Ok(chars) => chars,
+        Err(err) => {
+            log::error!("Failed to get a C-string from the char {char}: {err:?}");
+            return Some(LRESULT(1));
+        }
+    };
+    let event = CharacterReceivedEvent {
+        key_code: char,
+        characters: RustAllocatedStrPtr::from_c_string(characters),
+        key_status: PhysicalKeyStatus::parse(lparam),
+        is_dead_char: matches!(msg, WM_DEADCHAR | WM_SYSDEADCHAR),
+        is_system_key: matches!(msg, WM_SYSCHAR | WM_SYSDEADCHAR),
+    };
+    event_loop.handle_event(window, event.into())
 }
