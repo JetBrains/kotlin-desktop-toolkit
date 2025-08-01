@@ -2,6 +2,8 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
+import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
+import org.jetbrains.desktop.win32.generated.NativeWindowResizeKind
 import org.jetbrains.desktop.win32.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.win32.generated.desktop_windows_h
 import java.lang.foreign.MemorySegment
@@ -40,31 +42,72 @@ public sealed class Event {
         val newSize: PhysicalSize,
         val newScale: Float,
     ) : Event()
+
+    public data class WindowResize(
+        val size: PhysicalSize,
+        val scale: Float,
+        val kind: WindowResizeKind,
+    ) : Event()
 }
 
-internal fun Event.Companion.fromNative(s: MemorySegment): Event {
-    return when (NativeEvent.tag(s)) {
-        desktop_windows_h.NativeEvent_WindowCloseRequest() -> {
-            Event.WindowCloseRequest
-        }
+public sealed class WindowResizeKind {
+    internal companion object;
 
-        desktop_windows_h.NativeEvent_WindowDraw() -> {
-            val nativeEvent = NativeEvent.window_draw(s)
-            Event.WindowDraw(
-                size = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_size(nativeEvent)),
-                scale = NativeWindowDrawEvent.scale(nativeEvent),
-            )
-        }
+    public data object Restored : WindowResizeKind()
 
-        desktop_windows_h.NativeEvent_WindowScaleChanged() -> {
-            val nativeEvent = NativeEvent.window_scale_changed(s)
-            Event.WindowScaleChanged(
-                newOrigin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.new_origin(nativeEvent)),
-                newSize = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.new_size(nativeEvent)),
-                newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent)
-            )
-        }
+    public data object Maximized : WindowResizeKind()
 
-        else -> error("Unexpected Event tag")
+    public data object Minimized : WindowResizeKind()
+
+    public data class Other(val kind: UInt) : WindowResizeKind()
+}
+
+internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
+
+    desktop_windows_h.NativeEvent_WindowCloseRequest() -> {
+        Event.WindowCloseRequest
     }
+
+    desktop_windows_h.NativeEvent_WindowDraw() -> {
+        val nativeEvent = NativeEvent.window_draw(s)
+        Event.WindowDraw(
+            size = PhysicalSize.fromNative(NativeWindowDrawEvent.size(nativeEvent)),
+            scale = NativeWindowDrawEvent.scale(nativeEvent),
+        )
+    }
+
+    desktop_windows_h.NativeEvent_WindowScaleChanged() -> {
+        val nativeEvent = NativeEvent.window_scale_changed(s)
+        Event.WindowScaleChanged(
+            newOrigin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.new_origin(nativeEvent)),
+            newSize = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.new_size(nativeEvent)),
+            newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent)
+        )
+    }
+
+    desktop_windows_h.NativeEvent_WindowResize() -> {
+        val nativeEvent = NativeEvent.window_resize(s)
+        Event.WindowResize(
+            size = PhysicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
+            scale = NativeWindowResizeEvent.scale(nativeEvent),
+            kind = WindowResizeKind.fromNative(NativeWindowResizeEvent.kind(nativeEvent))
+        )
+    }
+
+    else -> error("Unexpected Event tag")
+}
+
+internal fun WindowResizeKind.Companion.fromNative(s: MemorySegment): WindowResizeKind = when (NativeWindowResizeKind.tag(s)) {
+
+    desktop_windows_h.NativeWindowResizeKind_Restored() -> WindowResizeKind.Restored
+
+    desktop_windows_h.NativeWindowResizeKind_Maximized() -> WindowResizeKind.Maximized
+
+    desktop_windows_h.NativeWindowResizeKind_Minimized() -> WindowResizeKind.Minimized
+
+    desktop_windows_h.NativeWindowResizeKind_Other() -> {
+        WindowResizeKind.Other(NativeWindowResizeKind.other(s).toUInt())
+    }
+
+    else -> error("Unexpected WindowResizeKind tag")
 }

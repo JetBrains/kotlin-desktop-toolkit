@@ -23,7 +23,7 @@ pub enum Event /*<'a>*/ {
     //WindowFullScreenToggle(WindowFullScreenToggleEvent),
     WindowScaleChanged(WindowScaleChangedEvent),
     //WindowScreenChange(WindowScreenChangeEvent),
-    //WindowResize(WindowResizeEvent),
+    WindowResize(WindowResizeEvent),
     //WindowMove(WindowMoveEvent),
 }
 
@@ -33,7 +33,7 @@ pub type EventHandler = extern "C" fn(WindowId, &Event) -> bool;
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowDrawEvent {
-    pub physical_size: PhysicalSize,
+    pub size: PhysicalSize,
     pub scale: f32,
 }
 
@@ -54,5 +54,29 @@ pub struct WindowScaleChangedEvent {
 impl From<WindowScaleChangedEvent> for Event {
     fn from(value: WindowScaleChangedEvent) -> Self {
         Self::WindowScaleChanged(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowResizeEvent {
+    pub size: PhysicalSize,
+    pub scale: f32,
+    pub kind: WindowResizeKind,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+#[allow(dead_code)]
+pub enum WindowResizeKind {
+    Restored,
+    Maximized,
+    Minimized,
+    Other(u32),
+}
+
+impl From<WindowResizeEvent> for Event {
+    fn from(value: WindowResizeEvent) -> Self {
+        Self::WindowResize(value)
     }
 }

@@ -71,6 +71,10 @@ public class Window internal constructor(
         return ffiDownCall { desktop_windows_h.window_get_window_id(ptr) }
     }
 
+    public fun getScaleFactor(): Float {
+        return ffiDownCall { desktop_windows_h.window_get_scale_factor(ptr) }
+    }
+
     public fun setMinSize(size: LogicalSize) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
