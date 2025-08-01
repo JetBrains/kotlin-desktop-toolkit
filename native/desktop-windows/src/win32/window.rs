@@ -28,7 +28,7 @@ use windows::{
 use super::{
     application::Application,
     event_loop::EventLoop,
-    geometry::{PhysicalPoint, PhysicalSize},
+    geometry::{LogicalSize, PhysicalPoint, PhysicalSize},
     window_api::{WindowId, WindowParams, WindowSystemBackdropType},
 };
 
@@ -36,6 +36,7 @@ const WINDOW_PTR_PROP_NAME: PCWSTR = w!("KDT_WINDOW_PTR");
 
 pub struct Window {
     hwnd: HWND,
+    min_size: Option<LogicalSize>,
     event_loop: Weak<EventLoop>,
     john_weak: Weak<Window>,
 }
@@ -152,6 +153,14 @@ impl Window {
             )?
         };
         Ok(())
+    }
+
+    pub fn get_min_size(&self) -> Option<LogicalSize> {
+        self.min_size
+    }
+
+    pub fn set_min_size(&mut self, size: LogicalSize) {
+        self.min_size = Some(size);
     }
 }
 

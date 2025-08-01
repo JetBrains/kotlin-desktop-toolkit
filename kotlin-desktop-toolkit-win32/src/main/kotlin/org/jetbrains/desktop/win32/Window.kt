@@ -71,6 +71,14 @@ public class Window internal constructor(
         return ffiDownCall { desktop_windows_h.window_get_window_id(ptr) }
     }
 
+    public fun setMinSize(size: LogicalSize) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_windows_h.window_set_min_size(ptr, size.toNative(arena))
+            }
+        }
+    }
+
     public fun extendContentIntoTitleBar() {
         ffiDownCall { desktop_windows_h.window_extend_content_into_titlebar(ptr) }
     }

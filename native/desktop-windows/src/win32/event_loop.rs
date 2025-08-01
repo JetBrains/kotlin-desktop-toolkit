@@ -7,8 +7,8 @@ use windows::{
         Graphics::Gdi::{BeginPaint, EndPaint},
         System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
         UI::WindowsAndMessaging::{
-            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, MSG, PostQuitMessage, TranslateMessage, USER_DEFAULT_SCREEN_DPI,
-            WM_CLOSE, WM_DPICHANGED, WM_PAINT,
+            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, MINMAXINFO, MSG, PostQuitMessage, USER_DEFAULT_SCREEN_DPI,
+            WM_CLOSE, WM_DPICHANGED, WM_GETMINMAXINFO, WM_PAINT,
         },
     },
     core::Result as WinResult,
@@ -104,6 +104,17 @@ impl EventLoop {
                     new_scale,
                 };
                 (self.event_handler)(hwnd.into(), &event.into())
+            }
+
+            WM_GETMINMAXINFO => {
+                if let Some(min_max_info) = unsafe { (lparam.0 as *mut MINMAXINFO).as_mut() } {
+                    if let Some(min_size) = window.get_min_size() {
+                        let scale = window.get_scale();
+                        min_max_info.ptMinTrackSize.x = f32::round(min_size.width.0 * scale + 0.5_f32) as i32;
+                        min_max_info.ptMinTrackSize.y = f32::round(min_size.height.0 * scale + 0.5_f32) as i32;
+                    }
+                }
+                true
             }
 
             WM_CLOSE => (self.event_handler)(hwnd.into(), &Event::WindowCloseRequest),
