@@ -4,9 +4,9 @@ use desktop_common::{
 };
 
 use windows::Win32::{
-    Foundation::{ERROR_INVALID_WINDOW_STYLE, HWND, INVALID_HANDLE_VALUE, WIN32_ERROR},
+    Foundation::{HWND, INVALID_HANDLE_VALUE, WIN32_ERROR},
     Graphics::Dwm::{DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW},
-    UI::WindowsAndMessaging::{WINDOW_STYLE, WS_BORDER, WS_CAPTION, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_SYSMENU, WS_THICKFRAME},
+    UI::WindowsAndMessaging::{WINDOW_STYLE, WS_CAPTION, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME},
 };
 
 use super::{
@@ -49,42 +49,47 @@ pub struct WindowParams<'a> {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct WindowStyle {
-    pub has_caption: bool,
-    pub has_system_menu: bool,
+    pub title_bar_kind: WindowTitleBarKind,
 
     pub is_resizable: bool,
     pub is_minimizable: bool,
     pub is_maximizable: bool,
+
+    pub system_backdrop_type: WindowSystemBackdropType,
 }
 
 impl WindowStyle {
     pub const fn to_system(&self) -> Result<WINDOW_STYLE, WIN32_ERROR> {
-        if !self.has_caption && (self.is_minimizable || self.is_maximizable) {
-            return Err(ERROR_INVALID_WINDOW_STYLE);
-        }
-        let mut style = WS_BORDER.0;
-        if self.has_caption {
-            style = style | WS_CAPTION.0
+        let mut style = WS_OVERLAPPEDWINDOW.0;
+        if matches!(self.title_bar_kind, WindowTitleBarKind::None) {
+            style = style & !WS_CAPTION.0
         };
-        if self.has_system_menu {
-            style = style | WS_SYSMENU.0
+        if !self.is_resizable {
+            style = style & !WS_THICKFRAME.0
         };
-        if self.is_resizable {
-            style = style | WS_THICKFRAME.0
+        if !self.is_minimizable {
+            style = style & !WS_MINIMIZEBOX.0
         };
-        if self.is_minimizable {
-            style = style | WS_MINIMIZEBOX.0
-        };
-        if self.is_maximizable {
-            style = style | WS_MAXIMIZEBOX.0
+        if !self.is_maximizable {
+            style = style & !WS_MAXIMIZEBOX.0
         };
         Ok(WINDOW_STYLE(style))
     }
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum WindowTitleBarKind {
+    System,
+    Custom,
+    None,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
 pub enum WindowSystemBackdropType {
     Auto,
@@ -146,20 +151,6 @@ pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) 
         window.set_min_size(size);
         Ok(())
     });
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn window_extend_content_into_titlebar(window_ptr: WindowPtr) {
-    with_window(window_ptr, "window_extend_content_into_titlebar", |window| {
-        Ok(window.extend_content_into_titlebar()?)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn window_apply_system_backdrop(window_ptr: WindowPtr, backdrop_type: WindowSystemBackdropType) {
-    with_window(window_ptr, "window_apply_system_backdrop", |window| {
-        Ok(window.apply_system_backdrop(backdrop_type)?)
-    })
 }
 
 #[unsafe(no_mangle)]

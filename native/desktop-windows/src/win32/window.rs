@@ -8,8 +8,8 @@ use windows::{
     Win32::{
         Foundation::{COLORREF, ERROR_NO_UNICODE_TRANSLATION, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
         Graphics::Dwm::{
-            DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
-            DwmSetWindowAttribute,
+            DWM_SYSTEMBACKDROP_TYPE, DWMNCRENDERINGPOLICY, DWMNCRP_ENABLED, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE,
+            DWMWA_NCRENDERING_POLICY, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
         },
         System::LibraryLoader::GetModuleHandleW,
         UI::{
@@ -30,7 +30,7 @@ use super::{
     application::Application,
     event_loop::EventLoop,
     geometry::{LogicalSize, PhysicalPoint, PhysicalSize},
-    window_api::{WindowId, WindowParams, WindowSystemBackdropType},
+    window_api::{WindowId, WindowParams, WindowStyle, WindowSystemBackdropType, WindowTitleBarKind},
 };
 
 const WINDOW_PTR_PROP_NAME: PCWSTR = w!("KDT_WINDOW_PTR");
@@ -40,6 +40,7 @@ pub(crate) const WM_REQUEST_UPDATE: u32 = WM_USER + 1;
 pub struct Window {
     hwnd: HWND,
     min_size: Option<LogicalSize>,
+    style: WindowStyle,
     event_loop: Weak<EventLoop>,
     john_weak: Weak<Window>,
 }
@@ -82,6 +83,7 @@ impl Window {
         let window = Rc::new_cyclic(|weak| Self {
             hwnd,
             min_size: None,
+            style: params.style,
             event_loop: Rc::downgrade(&app.event_loop()),
             john_weak: weak.clone(),
         });
@@ -114,28 +116,49 @@ impl Window {
         (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
     }
 
+    pub fn has_custom_title_bar(&self) -> bool {
+        matches!(self.style.title_bar_kind, WindowTitleBarKind::Custom)
+    }
+
+    pub fn is_resizable(&self) -> bool {
+        self.style.is_resizable
+    }
+
     pub fn extend_content_into_titlebar(&self) -> WinResult<()> {
-        let colorref = COLORREF(DWMWA_COLOR_NONE);
-        let margins = MARGINS {
-            cxLeftWidth: -1,
-            cxRightWidth: -1,
-            cyTopHeight: -1,
-            cyBottomHeight: -1,
-        };
-        unsafe {
-            // if we want to extend content into the titlebar area, it makes sense to remove any color from it
-            DwmSetWindowAttribute(
-                self.hwnd,
-                DWMWA_CAPTION_COLOR,
-                &raw const colorref as *const _,
-                core::mem::size_of::<COLORREF>() as _,
-            )?;
-            DwmExtendFrameIntoClientArea(self.hwnd, &margins)
+        let should_extend_content_into_titlebar = !(matches!(self.style.title_bar_kind, WindowTitleBarKind::System)
+            && matches!(self.style.system_backdrop_type, WindowSystemBackdropType::None));
+        if should_extend_content_into_titlebar {
+            let colorref = COLORREF(DWMWA_COLOR_NONE);
+            let policy = DWMNCRP_ENABLED;
+            let margins = MARGINS {
+                cxLeftWidth: -1,
+                cxRightWidth: -1,
+                cyTopHeight: -1,
+                cyBottomHeight: -1,
+            };
+            unsafe {
+                // if we want to extend content into the titlebar area, it makes sense to remove any color from it
+                DwmSetWindowAttribute(
+                    self.hwnd,
+                    DWMWA_CAPTION_COLOR,
+                    &raw const colorref as *const _,
+                    core::mem::size_of::<COLORREF>() as _,
+                )?;
+                DwmSetWindowAttribute(
+                    self.hwnd,
+                    DWMWA_NCRENDERING_POLICY,
+                    &raw const policy as *const _,
+                    core::mem::size_of::<DWMNCRENDERINGPOLICY>() as _,
+                )?;
+                DwmExtendFrameIntoClientArea(self.hwnd, &margins)
+            }
+        } else {
+            Ok(())
         }
     }
 
-    pub fn apply_system_backdrop(&self, backdrop_type: WindowSystemBackdropType) -> WinResult<()> {
-        let backdrop: DWM_SYSTEMBACKDROP_TYPE = backdrop_type.to_system();
+    pub fn apply_system_backdrop(&self) -> WinResult<()> {
+        let backdrop: DWM_SYSTEMBACKDROP_TYPE = self.style.system_backdrop_type.to_system();
         unsafe {
             DwmSetWindowAttribute(
                 self.hwnd,
