@@ -23,7 +23,7 @@ bitflags = "2.6.0"
 
 [build-dependencies]
 cbindgen.workspace = true
-build-target = "0.4.0"
+build-target.workspace = true
 
 [dev-dependencies]
 test-log.workspace = true
