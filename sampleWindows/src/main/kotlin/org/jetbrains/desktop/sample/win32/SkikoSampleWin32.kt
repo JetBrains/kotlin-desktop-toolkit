@@ -9,6 +9,7 @@ import org.jetbrains.desktop.win32.Logger
 import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.WindowId
 import org.jetbrains.desktop.win32.WindowParams
+import org.jetbrains.desktop.win32.WindowSystemBackdropType
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Paint
 import java.lang.AutoCloseable
@@ -50,6 +51,8 @@ class ApplicationState : AutoCloseable {
         )
 
         windows[window.window.windowId()] = window
+        window.window.extendContentIntoTitleBar()
+        window.window.applySystemBackdrop(WindowSystemBackdropType.DesktopAcrylic)
         window.window.show()
     }
 

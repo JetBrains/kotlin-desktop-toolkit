@@ -12,6 +12,14 @@ typedef enum NativeLogLevel {
   NativeLogLevel_Trace,
 } NativeLogLevel;
 
+typedef enum NativeWindowSystemBackdropType {
+  NativeWindowSystemBackdropType_Auto,
+  NativeWindowSystemBackdropType_None,
+  NativeWindowSystemBackdropType_Mica,
+  NativeWindowSystemBackdropType_DesktopAcrylic,
+  NativeWindowSystemBackdropType_MicaAlt,
+} NativeWindowSystemBackdropType;
+
 typedef const char *NativeGenericRawPtr_c_char;
 
 typedef NativeGenericRawPtr_c_char NativeRustAllocatedStrPtr;
@@ -131,6 +139,11 @@ void renderer_angle_drop(NativeAngleDevicePtr angle_device_ptr);
 NativeWindowPtr window_create(NativeAppPtr app_ptr, struct NativeWindowParams params);
 
 NativeWindowId window_get_window_id(NativeWindowPtr window_ptr);
+
+void window_extend_content_into_titlebar(NativeWindowPtr window_ptr);
+
+void window_apply_system_backdrop(NativeWindowPtr window_ptr,
+                                  enum NativeWindowSystemBackdropType backdrop_type);
 
 void window_show(NativeWindowPtr window_ptr);
 
