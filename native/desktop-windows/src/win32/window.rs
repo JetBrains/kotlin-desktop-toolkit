@@ -16,9 +16,10 @@ use windows::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
-                CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW, PostMessageW,
-                RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW, SetWindowLongPtrW,
-                SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE, WM_NCDESTROY, WM_USER, WNDCLASSEXW,
+                CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW, IDC_ARROW,
+                LoadCursorW, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
+                SetPropW, SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE,
+                WM_NCDESTROY, WM_USER, WNDCLASSEXW,
             },
         },
     },
@@ -46,10 +47,13 @@ pub struct Window {
 impl Window {
     pub fn new(params: &WindowParams, app: &Application) -> WinResult<Rc<Self>> {
         const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
+        let instance = unsafe { GetModuleHandleW(None) }?.into();
         let wndclass = WNDCLASSEXW {
             cbSize: size_of::<WNDCLASSEXW>() as _,
+            hInstance: instance,
             lpszClassName: WNDCLASS_NAME,
             lpfnWndProc: Some(wndproc),
+            hCursor: unsafe { LoadCursorW(None, IDC_ARROW) }?,
             style: CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
             ..Default::default()
         };
@@ -60,7 +64,6 @@ impl Window {
             .map(|some| HSTRING::from(some));
         let hwnd = unsafe {
             let _atom = RegisterClassExW(&wndclass);
-            let instance = GetModuleHandleW(None)?;
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 WNDCLASS_NAME,
@@ -72,7 +75,7 @@ impl Window {
                 1,
                 None,
                 None,
-                Some(instance.into()),
+                Some(instance),
                 None,
             )?
         };
