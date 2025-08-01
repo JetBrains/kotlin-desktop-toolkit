@@ -39,7 +39,7 @@ public object Application {
         return eventHandler?.let { eventHandler ->
             eventHandler(windowId, event)
         } ?: run {
-            // Logger.warn { "eventHandler is null; event: $event was ignored!" }
+            Logger.warn { "eventHandler is null; event: $event was ignored!" }
             EventHandlerResult.Continue
         }
     }

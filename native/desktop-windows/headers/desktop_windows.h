@@ -3,6 +3,34 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+typedef enum NativeLogLevel {
+  NativeLogLevel_Off,
+  NativeLogLevel_Error,
+  NativeLogLevel_Warn,
+  NativeLogLevel_Info,
+  NativeLogLevel_Debug,
+  NativeLogLevel_Trace,
+} NativeLogLevel;
+
+typedef const char *NativeGenericRawPtr_c_char;
+
+typedef NativeGenericRawPtr_c_char NativeRustAllocatedStrPtr;
+
+typedef uintptr_t NativeArraySize;
+
+typedef struct NativeExceptionsArray {
+  const NativeRustAllocatedStrPtr *items;
+  NativeArraySize count;
+} NativeExceptionsArray;
+
+typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
+
+typedef struct NativeLoggerConfiguration {
+  NativeBorrowedStrPtr file_path;
+  enum NativeLogLevel console_level;
+  enum NativeLogLevel file_level;
+} NativeLoggerConfiguration;
+
 typedef const void *NativeGenericRawPtr_c_void;
 
 typedef NativeGenericRawPtr_c_void NativeRustAllocatedRawPtr;
@@ -50,10 +78,6 @@ typedef struct NativePhysicalPoint {
   NativePhysicalPixels y;
 } NativePhysicalPoint;
 
-typedef const char *NativeGenericRawPtr_c_char;
-
-typedef NativeGenericRawPtr_c_char NativeBorrowedStrPtr;
-
 typedef struct NativeWindowParams {
   struct NativePhysicalPoint origin;
   struct NativePhysicalSize size;
@@ -62,6 +86,14 @@ typedef struct NativeWindowParams {
   bool is_closable;
   bool is_minimizable;
 } NativeWindowParams;
+
+struct NativeExceptionsArray logger_check_exceptions(void);
+
+void logger_clear_exceptions(void);
+
+void logger_init(const struct NativeLoggerConfiguration *logger_configuration);
+
+void logger_output_debug_string(NativeBorrowedStrPtr message);
 
 NativeAppPtr application_init(struct NativeApplicationCallbacks callbacks);
 
