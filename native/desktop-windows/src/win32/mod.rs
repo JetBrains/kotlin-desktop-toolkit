@@ -1,7 +1,10 @@
 mod application;
-pub mod application_api;
+mod application_api;
+
+mod event_loop;
+mod events;
 
 mod geometry;
 
 mod window;
-pub mod window_api;
+mod window_api;
