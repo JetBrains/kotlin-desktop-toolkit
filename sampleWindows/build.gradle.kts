@@ -3,24 +3,20 @@ import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.hostArch
+import org.jetbrains.desktop.buildscripts.hostOs
 import org.jetbrains.desktop.buildscripts.targetArch
 
 plugins {
-    // Apply the org.jetbrains.kotlin.jvm Plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktlint)
-
-    // Apply the application plugin to add support for building a CLI application in Java.
-    application
 }
 
 repositories {
-    // Use Maven Central for resolving dependencies.
     mavenCentral()
     maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
 }
 
-val skikoTargetOs = "windows"
+val skikoTargetOs = hostOs().normalizedName
 
 val skikoTargetArch = when (targetArch(project) ?: hostArch()) {
     Arch.aarch64 -> "arm64"
@@ -30,21 +26,10 @@ val skikoTargetArch = when (targetArch(project) ?: hostArch()) {
 val skikoVersion = "0.9.17"
 val skikoTarget = "$skikoTargetOs-$skikoTargetArch"
 dependencies {
-    // Use the Kotlin JUnit 5 integration.
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-
-    // Use the JUnit 5 integration.
-    testImplementation(libs.junit.jupiter.engine)
-
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-
-    // This dependency is used by the application.
-    implementation(libs.guava)
     implementation(project(":kotlin-desktop-toolkit-win32"))
     implementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTarget:$skikoVersion")
 }
 
-// Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -55,21 +40,12 @@ tasks.compileJava {
     options.compilerArgs = listOf("--enable-preview")
 }
 
-application {
-    mainClass = "org.jetbrains.desktop.sample.ApplicationSampleKt"
-    applicationDefaultJvmArgs = listOf(
-        "--enable-preview",
-        "--enable-native-access=ALL-UNNAMED",
-        "-Djextract.trace.downcalls=false",
-    )
-}
-
-val depScope = configurations.dependencyScope("windowsNative") {
+val depScope = configurations.dependencyScope("native") {
     withDependencies {
         add(project.dependencies.project(":kotlin-desktop-toolkit-win32"))
     }
 }
-val nativeLib = configurations.resolvable("windowsNativeParts") {
+val nativeLib = configurations.resolvable("nativeParts") {
     extendsFrom(depScope.get())
     attributes {
         attribute(KotlinDesktopToolkitAttributes.TYPE, KotlingDesktopToolkitArtifactType.NATIVE_LIBRARY)
@@ -106,14 +82,9 @@ fun JavaExec.setUpCrashDumpPath() {
     )
 }
 
-tasks.named<JavaExec>("run") {
-    jvmArgs("--enable-preview")
-    setUpLoggingAndLibraryPath()
-}
-
 tasks.register<JavaExec>("runSkikoSampleWindows") {
     group = "application"
-    description = "Runs example of integration with Skiko"
+    description = "Runs example of integration with Skiko on Windows"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("org.jetbrains.desktop.sample.win32.SkikoSampleWin32Kt")
     javaLauncher.set(
@@ -128,11 +99,6 @@ tasks.register<JavaExec>("runSkikoSampleWindows") {
     )
     setUpLoggingAndLibraryPath()
     setUpCrashDumpPath()
-}
-
-tasks.named<Test>("test") {
-    // Use JUnit Platform for unit tests.
-    useJUnitPlatform()
 }
 
 task("lint") {
