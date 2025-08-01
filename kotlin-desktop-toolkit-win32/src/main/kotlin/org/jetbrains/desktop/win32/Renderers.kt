@@ -3,6 +3,7 @@ package org.jetbrains.desktop.win32
 import org.jetbrains.desktop.win32.generated.NativeAngleDeviceCallbacks
 import org.jetbrains.desktop.win32.generated.NativeAngleDeviceDrawFun
 import org.jetbrains.desktop.win32.generated.NativeEglGetProcFuncData
+import org.jetbrains.desktop.win32.generated.NativeEglSurfaceData
 import org.jetbrains.desktop.win32.generated.desktop_windows_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -26,16 +27,22 @@ public class AngleRenderer internal constructor(
 
     public fun getEglGetProcFunc(): EglGetProcFunc {
         return Arena.ofConfined().use { arena ->
-            val native = desktop_windows_h.renderer_angle_get_egl_get_proc_func(arena, angleDevicePtr)
+            val native = ffiDownCall {
+                desktop_windows_h.renderer_angle_get_egl_get_proc_func(arena, angleDevicePtr)
+            }
             val f = NativeEglGetProcFuncData.f(native)
             val ctx = NativeEglGetProcFuncData.ctx(native)
             EglGetProcFunc(f.address(), ctx.address())
         }
     }
 
-    public fun makeSurface(width: Int, height: Int) {
-        ffiDownCall {
-            desktop_windows_h.renderer_angle_make_surface(angleDevicePtr, width, height)
+    public fun makeSurface(width: Int, height: Int): SurfaceParams {
+        return Arena.ofConfined().use { arena ->
+            val native = ffiDownCall {
+                desktop_windows_h.renderer_angle_make_surface(arena, angleDevicePtr, width, height)
+            }
+            val framebufferBinding = NativeEglSurfaceData.framebuffer_binding(native)
+            SurfaceParams(framebufferBinding)
         }
     }
 
@@ -43,7 +50,9 @@ public class AngleRenderer internal constructor(
         Arena.ofConfined().use { arena ->
             val callbacks = NativeAngleDeviceCallbacks.allocate(arena)
             NativeAngleDeviceCallbacks.draw_fun(callbacks, NativeAngleDeviceDrawFun.allocate(drawFun, arena))
-            desktop_windows_h.renderer_angle_draw(angleDevicePtr, waitForVsync, callbacks)
+            ffiDownCall {
+                desktop_windows_h.renderer_angle_draw(angleDevicePtr, waitForVsync, callbacks)
+            }
         }
     }
 
@@ -53,3 +62,5 @@ public class AngleRenderer internal constructor(
         }
     }
 }
+
+public data class SurfaceParams(val framebufferBinding: Int)
