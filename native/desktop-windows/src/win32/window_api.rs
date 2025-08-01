@@ -11,7 +11,7 @@ use windows::Win32::{
 use super::{
     application::Application,
     application_api::AppPtr,
-    geometry::{PhysicalPoint, PhysicalSize},
+    geometry::{LogicalPoint, LogicalSize, PhysicalPoint, PhysicalSize},
     window::Window,
 };
 
@@ -41,8 +41,8 @@ pub type WindowPtr<'a> = RustAllocatedRawPtr<'a>;
 
 #[repr(C)]
 pub struct WindowParams<'a> {
-    pub origin: PhysicalPoint,
-    pub size: PhysicalSize,
+    pub origin: LogicalPoint,
+    pub size: LogicalSize,
     pub title: BorrowedStrPtr<'a>,
 
     pub is_resizable: bool,
@@ -115,6 +115,15 @@ pub extern "C" fn window_show(window_ptr: WindowPtr) {
     ffi_boundary("window_show", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.show();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: PhysicalPoint, size: PhysicalSize) {
+    ffi_boundary("window_set_rect", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        window.set_position(origin, size)?;
         Ok(())
     });
 }

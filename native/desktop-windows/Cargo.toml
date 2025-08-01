@@ -29,6 +29,7 @@ features = [
     "Win32_System_LibraryLoader",
     "Win32_System_WinRT",
     "Win32_UI_Controls",
+    "Win32_UI_HiDpi",
     "Win32_UI_WindowsAndMessaging",
 ]
 

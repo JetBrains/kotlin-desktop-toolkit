@@ -13,9 +13,11 @@ use windows::{
         System::LibraryLoader::GetModuleHandleW,
         UI::{
             Controls::MARGINS,
+            HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
                 CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, GetPropW, RegisterClassExW, RemovePropW, SW_SHOW,
-                SetPropW, ShowWindow, WINDOW_EX_STYLE, WM_NCDESTROY, WNDCLASSEXW, WS_OVERLAPPEDWINDOW,
+                SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI,
+                WINDOW_EX_STYLE, WM_NCDESTROY, WNDCLASSEXW, WS_OVERLAPPEDWINDOW,
             },
         },
     },
@@ -25,6 +27,7 @@ use windows::{
 use super::{
     application::Application,
     event_loop::EventLoop,
+    geometry::{PhysicalPoint, PhysicalSize},
     window_api::{WindowId, WindowParams, WindowSystemBackdropType},
 };
 
@@ -53,16 +56,26 @@ impl Window {
                 WNDCLASS_NAME,
                 w!("KotlinDesktopToolkit Win32 Window"),
                 WS_OVERLAPPEDWINDOW,
-                params.origin.x.0, // CW_USEDEFAULT: i32 = -2147483648i32
-                params.origin.y.0, // CW_USEDEFAULT: i32 = -2147483648i32
-                params.size.width.0,
-                params.size.height.0,
+                0, // CW_USEDEFAULT: i32 = -2147483648i32
+                0, // CW_USEDEFAULT: i32 = -2147483648i32
+                1,
+                1,
                 None,
                 None,
                 Some(instance.into()),
                 None,
             )?
         };
+        let scale = Self::hwnd_get_scale(hwnd);
+        let origin = PhysicalPoint::new(
+            f32::round(params.origin.x.0 * scale + 0.5_f32) as i32,
+            f32::round(params.origin.y.0 * scale + 0.5_f32) as i32,
+        );
+        let size = PhysicalSize::new(
+            f32::round(params.size.width.0 * scale + 0.5_f32) as i32,
+            f32::round(params.size.height.0 * scale + 0.5_f32) as i32,
+        );
+        Self::hwnd_set_position(hwnd, origin, size)?;
         let event_loop = Rc::downgrade(&app.event_loop());
         unsafe { SetPropW(hwnd, WINDOW_EVENT_LOOP_PROP_NAME, Some(HANDLE(event_loop.as_ptr() as _))) }?;
         Ok(Self {
@@ -109,6 +122,32 @@ impl Window {
 
     pub fn show(&self) {
         let _ = unsafe { ShowWindow(self.hwnd, SW_SHOW) };
+    }
+
+    pub fn set_position(&self, origin: PhysicalPoint, size: PhysicalSize) -> WinResult<()> {
+        Self::hwnd_set_position(self.hwnd, origin, size)
+    }
+}
+
+impl Window {
+    pub(super) fn hwnd_get_scale(hwnd: HWND) -> f32 {
+        let dpi = unsafe { GetDpiForWindow(hwnd) };
+        (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
+    }
+
+    fn hwnd_set_position(hwnd: HWND, origin: PhysicalPoint, size: PhysicalSize) -> WinResult<()> {
+        unsafe {
+            SetWindowPos(
+                hwnd,
+                None,
+                origin.x.0,
+                origin.y.0,
+                size.width.0,
+                size.height.0,
+                SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER,
+            )?
+        };
+        Ok(())
     }
 }
 

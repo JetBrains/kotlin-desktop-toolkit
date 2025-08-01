@@ -8,8 +8,8 @@ import java.lang.foreign.MemorySegment
 public typealias WindowId = Long
 
 public data class WindowParams(
-    val origin: PhysicalPoint = PhysicalPoint(0, 0),
-    val size: PhysicalSize = PhysicalSize(640, 480),
+    val origin: LogicalPoint = LogicalPoint(0f, 0f),
+    val size: LogicalSize = LogicalSize(640f, 480f),
     val title: String = "Window",
     val isResizable: Boolean = true,
     val isClosable: Boolean = true,
@@ -44,8 +44,8 @@ public class Window internal constructor(
 
         public fun create(
             appPtr: MemorySegment,
-            origin: PhysicalPoint = PhysicalPoint(0, 0),
-            size: PhysicalSize = PhysicalSize(640, 480),
+            origin: LogicalPoint = LogicalPoint(0f, 0f),
+            size: LogicalSize = LogicalSize(640f, 480f),
             title: String = "Window",
             isResizable: Boolean = true,
             isClosable: Boolean = true,
@@ -81,6 +81,18 @@ public class Window internal constructor(
 
     public fun show() {
         return ffiDownCall { desktop_windows_h.window_show(ptr) }
+    }
+
+    public fun setRect(origin: PhysicalPoint, size: PhysicalSize) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_windows_h.window_set_rect(
+                    ptr,
+                    origin.toNative(arena),
+                    size.toNative(arena),
+                )
+            }
+        }
     }
 
     override fun close() {

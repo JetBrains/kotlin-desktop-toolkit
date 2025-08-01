@@ -2,7 +2,7 @@ package org.jetbrains.desktop.tests
 
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.KotlinDesktopToolkit
-import org.jetbrains.desktop.win32.PhysicalSize
+import org.jetbrains.desktop.win32.LogicalSize
 import org.jetbrains.desktop.win32.WindowParams
 import org.junit.jupiter.api.Test
 
@@ -15,7 +15,7 @@ class WindowTests {
         val window2 = Application.createWindow(
             WindowParams(
                 title = "Hello2",
-                size = PhysicalSize(200, 300),
+                size = LogicalSize(200f, 300f),
             ),
         )
         window1.show()

@@ -2,6 +2,7 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
+import org.jetbrains.desktop.win32.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.win32.generated.desktop_windows_h
 import java.lang.foreign.MemorySegment
 import kotlin.time.Duration
@@ -33,6 +34,12 @@ public sealed class Event {
         val size: PhysicalSize,
         val scale: Float,
     ) : Event()
+
+    public data class WindowScaleChanged(
+        val newOrigin: PhysicalPoint,
+        val newSize: PhysicalSize,
+        val newScale: Float,
+    ) : Event()
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event {
@@ -40,6 +47,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_windows_h.NativeEvent_WindowCloseRequest() -> {
             Event.WindowCloseRequest
         }
+
         desktop_windows_h.NativeEvent_WindowDraw() -> {
             val nativeEvent = NativeEvent.window_draw(s)
             Event.WindowDraw(
@@ -47,8 +55,16 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 scale = NativeWindowDrawEvent.scale(nativeEvent),
             )
         }
-        else -> {
-            error("Unexpected Event tag")
+
+        desktop_windows_h.NativeEvent_WindowScaleChanged() -> {
+            val nativeEvent = NativeEvent.window_scale_changed(s)
+            Event.WindowScaleChanged(
+                newOrigin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.new_origin(nativeEvent)),
+                newSize = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.new_size(nativeEvent)),
+                newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent)
+            )
         }
+
+        else -> error("Unexpected Event tag")
     }
 }
