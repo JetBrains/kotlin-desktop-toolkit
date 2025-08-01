@@ -1,6 +1,6 @@
 use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedRawPtr},
-    logger::ffi_boundary,
+    logger::{PanicDefault, ffi_boundary},
 };
 
 use super::{
@@ -22,6 +22,18 @@ pub struct AngleDeviceCallbacks {
 pub struct EglGetProcFuncData<'a> {
     pub f: extern "C" fn(ctx: AngleDevicePtr, name: BorrowedStrPtr) -> Option<extern "system" fn()>,
     pub ctx: AngleDevicePtr<'a>,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct EglSurfaceData {
+    pub framebuffer_binding: i32,
+}
+
+impl PanicDefault for EglSurfaceData {
+    fn default() -> Self {
+        Self { framebuffer_binding: 0 }
+    }
 }
 
 extern "C" fn egl_get_proc_address(ctx_ptr: AngleDevicePtr, name_ptr: BorrowedStrPtr) -> Option<extern "system" fn()> {
@@ -50,11 +62,10 @@ pub extern "C" fn renderer_angle_device_create(window_ptr: WindowPtr) -> AngleDe
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn renderer_angle_make_surface(mut angle_device_ptr: AngleDevicePtr, width: i32, height: i32) {
+pub extern "C" fn renderer_angle_make_surface(mut angle_device_ptr: AngleDevicePtr, width: i32, height: i32) -> EglSurfaceData {
     ffi_boundary("renderer_angle_make_surface", || {
         let angle_device = unsafe { angle_device_ptr.borrow_mut::<AngleDevice>() };
-        angle_device.make_surface(width, height)?;
-        Ok(())
+        Ok(angle_device.make_surface(width, height)?)
     })
 }
 
