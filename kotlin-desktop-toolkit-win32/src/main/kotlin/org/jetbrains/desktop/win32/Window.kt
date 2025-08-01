@@ -116,6 +116,10 @@ public class Window internal constructor(
         }
     }
 
+    public fun requestUpdate() {
+        ffiDownCall { desktop_windows_h.window_request_update(ptr) }
+    }
+
     override fun close() {
         ffiDownCall {
             desktop_windows_h.window_drop(ptr)
