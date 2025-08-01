@@ -15,6 +15,9 @@ import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.PaintMode
 import org.jetbrains.skia.RRect
+import org.jetbrains.skia.skottie.Animation
+import org.jetbrains.skia.skottie.AnimationBuilder
+import org.jetbrains.skia.skottie.buildFromFile
 import java.lang.AutoCloseable
 import kotlin.Array
 import kotlin.Float
@@ -29,31 +32,40 @@ class RotatingBallWindow(
         fun createWindow(windowParams: WindowParams): RotatingBallWindow {
             return RotatingBallWindow(windowParams)
         }
+
+        private const val ANIMATION_FRAME_COUNT: Int = 151
+    }
+
+    private val animation: Animation by lazy {
+        AnimationBuilder().use {
+            it.buildFromFile("resources/lego_loader.json")
+        }
     }
 
     override fun Canvas.draw(size: PhysicalSize, scale: Float, time: Long) {
         val canvas = this
         canvas.clear(0)
         Paint().use { paint ->
-            paint.color = 0xFFFFFFFF.toInt()
+            paint.color = 0xFF_FF_FF_FF.toInt()
             paint.mode = PaintMode.FILL
             canvas.drawRRect(
-                RRect.makeXYWH(12f, 12f, size.width.toFloat() - 24f, size.height.toFloat() - 24f, 12f),
+                RRect.makeXYWH(12f, 6f, size.width.toFloat() - 24f, size.height.toFloat() - 18f, 12f),
                 paint
             )
         }
         Paint().use { paint ->
-            paint.color = 0x80000000.toInt()
+            paint.color = 0x80_00_00_00.toInt()
             paint.mode = PaintMode.STROKE
             canvas.drawRRect(
-                RRect.makeXYWH(12f, 12f, size.width.toFloat() - 24f, size.height.toFloat() - 24f, 12f),
+                RRect.makeXYWH(12f, 6f, size.width.toFloat() - 24f, size.height.toFloat() - 18f, 12f),
                 paint
             )
         }
-        Paint().use { paint ->
-            paint.color = 0x77264653
-            canvas.drawCircle(size.width.toFloat() / 2, size.height.toFloat() / 2, 100f * scale, paint)
-        }
+        val animationDuration = ANIMATION_FRAME_COUNT * animation.fPS
+        val frame = (time.toFloat() % animationDuration) / animation.fPS
+        animation.seekFrame(frame)
+        animation.render(canvas, (size.width.toFloat() / 2) - (animation.width / 2), (size.height.toFloat() / 2) - (animation.height / 2))
+        window.requestUpdate()
     }
 }
 

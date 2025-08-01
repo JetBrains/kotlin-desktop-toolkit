@@ -4,7 +4,7 @@ use windows::{
     System::DispatcherQueueController,
     Win32::{
         Foundation::{LPARAM, LRESULT, RECT, WPARAM},
-        Graphics::Gdi::{BeginPaint, EndPaint},
+        Graphics::Gdi::{BeginPaint, EndPaint, InvalidateRect},
         System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
         UI::WindowsAndMessaging::{
             DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, MINMAXINFO, MSG, PostQuitMessage, SIZE_MAXIMIZED, SIZE_MINIMIZED,
@@ -18,7 +18,7 @@ use super::{
     events::{Event, EventHandler, WindowDrawEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent},
     geometry::{PhysicalPoint, PhysicalSize},
     utils,
-    window::Window,
+    window::{WM_REQUEST_UPDATE, Window},
 };
 
 pub struct EventLoop {
@@ -88,6 +88,8 @@ impl EventLoop {
                 let _ = unsafe { EndPaint(hwnd, &paint) };
                 handled
             }
+
+            WM_REQUEST_UPDATE => unsafe { InvalidateRect(Some(hwnd), None, false).as_bool() },
 
             WM_DPICHANGED => {
                 let new_dpi = utils::HIWORD(wparam.0);
