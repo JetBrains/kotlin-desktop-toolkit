@@ -6,7 +6,7 @@ use anyhow::{Context, Result, anyhow};
 use khronos_egl as egl;
 use windows::{
     Win32::{
-        Foundation::{ERROR_PATH_NOT_FOUND, HMODULE},
+        Foundation::{ERROR_PATH_NOT_FOUND, HMODULE, HWND},
         Graphics::Gdi::{GetDC, HDC},
         System::LibraryLoader::{
             GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, GetModuleFileNameW, GetModuleHandleExW,
@@ -15,19 +15,20 @@ use windows::{
     core::{Error as WinError, PWSTR},
 };
 
-use crate::win32::renderer_egl_utils::{GR_GL_COLOR_BUFFER_BIT, GR_GL_FRAMEBUFFER_BINDING, GR_GL_STENCIL_BUFFER_BIT};
-
 use super::{
     renderer_api::EglSurfaceData,
-    renderer_egl_utils::{EglInstance, GetPlatformDisplayEXTFn, GrGLFunctions, get_egl_proc},
-    window_api::WindowId,
+    renderer_egl_utils::{
+        EglInstance, GR_GL_COLOR_BUFFER_BIT, GR_GL_FRAMEBUFFER_BINDING, GR_GL_STENCIL_BUFFER_BIT, GetPlatformDisplayEXTFn, GrGLFunctions,
+        get_egl_proc,
+    },
+    window::Window,
 };
 
 pub type AngleDeviceDrawFun = extern "C" fn() -> ();
 
 pub struct AngleDevice {
     egl_instance: EglInstance,
-    window: WindowId,
+    window: HWND,
     display: egl::Display,
     context: egl::Context,
     surface: egl::Surface,
@@ -36,12 +37,12 @@ pub struct AngleDevice {
 }
 
 impl AngleDevice {
-    pub fn create_for_window(window_id: WindowId) -> Result<Self> {
+    pub fn create_for_window(window: &Window) -> Result<Self> {
         let lib_egl = load_angle_libraries()?;
 
         let egl_instance = unsafe { EglInstance::load_required_from(lib_egl) }.context("Failed to load ANGLE library from libEGL.dll")?;
 
-        let hdc = unsafe { GetDC(Some(window_id.into())) };
+        let hdc = unsafe { GetDC(Some(window.hwnd())) };
         let display = get_angle_platform_display(&egl_instance, &hdc)?;
 
         let (_major, _minor) = egl_instance.initialize(display)?;
@@ -79,7 +80,7 @@ impl AngleDevice {
 
         Ok(AngleDevice {
             egl_instance,
-            window: window_id,
+            window: window.hwnd(),
             display,
             context,
             surface: unsafe { egl::Surface::from_ptr(egl::NO_SURFACE) },
