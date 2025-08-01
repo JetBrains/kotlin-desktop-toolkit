@@ -13,6 +13,8 @@ import org.jetbrains.desktop.win32.WindowParams
 import org.jetbrains.desktop.win32.WindowSystemBackdropType
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Paint
+import org.jetbrains.skia.PaintMode
+import org.jetbrains.skia.RRect
 import java.lang.AutoCloseable
 import kotlin.Array
 import kotlin.Float
@@ -31,6 +33,23 @@ class RotatingBallWindow(
 
     override fun Canvas.draw(size: PhysicalSize, scale: Float, time: Long) {
         val canvas = this
+        canvas.clear(0)
+        Paint().use { paint ->
+            paint.color = 0xFFFFFFFF.toInt()
+            paint.mode = PaintMode.FILL
+            canvas.drawRRect(
+                RRect.makeXYWH(12f, 12f, size.width.toFloat() - 24f, size.height.toFloat() - 24f, 12f),
+                paint
+            )
+        }
+        Paint().use { paint ->
+            paint.color = 0x80000000.toInt()
+            paint.mode = PaintMode.STROKE
+            canvas.drawRRect(
+                RRect.makeXYWH(12f, 12f, size.width.toFloat() - 24f, size.height.toFloat() - 24f, 12f),
+                paint
+            )
+        }
         Paint().use { paint ->
             paint.color = 0x77264653
             canvas.drawCircle(size.width.toFloat() / 2, size.height.toFloat() / 2, 100f * scale, paint)
@@ -44,7 +63,7 @@ class ApplicationState : AutoCloseable {
     fun createWindow() {
         val windowParams = WindowParams(
             size = LogicalSize(width = 640f, height = 480f),
-            title = "Window",
+            title = "Sample Window",
         )
 
         val window = RotatingBallWindow.createWindow(
@@ -53,7 +72,7 @@ class ApplicationState : AutoCloseable {
 
         windows[window.window.windowId()] = window
         window.window.extendContentIntoTitleBar()
-        window.window.applySystemBackdrop(WindowSystemBackdropType.DesktopAcrylic)
+        window.window.applySystemBackdrop(WindowSystemBackdropType.MicaAlt)
         window.window.show()
     }
 
