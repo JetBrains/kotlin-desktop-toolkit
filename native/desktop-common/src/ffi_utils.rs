@@ -341,7 +341,6 @@ impl<T> Drop for AutoDropArray<T> {
 }
 
 #[repr(C)]
-#[derive(Debug)]
 pub struct BorrowedArray<'a, T> {
     ptr: *const T,
     len: ArraySize,
@@ -382,6 +381,14 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
         }
         let slice = unsafe { slice::from_raw_parts(self.ptr, self.len) };
         Ok(slice)
+    }
+}
+
+impl<T: std::fmt::Debug> std::fmt::Debug for BorrowedArray<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BorrowedArray({:?})[", self.ptr)?;
+        self.as_slice().fmt(f)?;
+        f.write_char(']')
     }
 }
 
