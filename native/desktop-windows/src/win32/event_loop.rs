@@ -4,8 +4,11 @@ use windows::{
     System::DispatcherQueueController,
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, WPARAM},
+        Graphics::Gdi::{BeginPaint, EndPaint},
         System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
-        UI::WindowsAndMessaging::{DefWindowProcW, DispatchMessageW, GetMessageW, MSG, PostQuitMessage, TranslateMessage, WM_CLOSE, WM_PAINT},
+        UI::WindowsAndMessaging::{
+            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW, MSG, PostQuitMessage, TranslateMessage, WM_CLOSE, WM_PAINT,
+        },
     },
     core::Result as WinResult,
 };
@@ -64,6 +67,25 @@ impl EventLoop {
 
     pub fn window_proc(&self, hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         match msg {
+            WM_PAINT => {
+                let mut paint = Default::default();
+                unsafe { BeginPaint(hwnd, &mut paint) };
+                let mut rect = Default::default();
+                if let Err(err) = unsafe { GetClientRect(hwnd, &mut rect) } {
+                    error!("Failed to get client rect: {err:?}");
+                    return LRESULT(1);
+                }
+                let event = Event::WindowDraw(WindowDrawEvent {
+                    physical_size: PhysicalSize {
+                        width: PhysicalPixels(rect.right - rect.left),
+                        height: PhysicalPixels(rect.bottom - rect.top),
+                    },
+                    scale: 1.0, // TODO
+                });
+                let handled = (self.event_handler)(hwnd.into(), &event);
+                let _ = unsafe { EndPaint(hwnd, &paint) };
+                if handled { LRESULT(0) } else { LRESULT(1) }
+            }
             WM_CLOSE => {
                 if let Err(_err) = self.shutdown() {
                     error!("failed to request the shutdown of the dispatcher queue");
