@@ -4,7 +4,7 @@ use desktop_common::{
 };
 
 use windows::Win32::{
-    Foundation::{HWND, INVALID_HANDLE_VALUE, WIN32_ERROR},
+    Foundation::{INVALID_HANDLE_VALUE, WIN32_ERROR},
     Graphics::Dwm::{DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW},
     UI::WindowsAndMessaging::{WINDOW_STYLE, WS_CAPTION, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME},
 };
@@ -23,18 +23,6 @@ pub struct WindowId(pub isize);
 impl PanicDefault for WindowId {
     fn default() -> Self {
         WindowId(INVALID_HANDLE_VALUE.0 as isize)
-    }
-}
-
-impl From<WindowId> for HWND {
-    fn from(value: WindowId) -> Self {
-        HWND(value.0 as _)
-    }
-}
-
-impl From<HWND> for WindowId {
-    fn from(value: HWND) -> Self {
-        WindowId(value.0 as _)
     }
 }
 

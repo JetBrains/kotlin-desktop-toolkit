@@ -54,8 +54,7 @@ pub extern "C" fn renderer_angle_get_egl_get_proc_func(angle_device_ptr: AngleDe
 pub extern "C" fn renderer_angle_device_create(window_ptr: WindowPtr) -> AngleDevicePtr {
     let angle_device = ffi_boundary("renderer_angle_device_create", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
-        let window_id = window.id();
-        let angle_device = AngleDevice::create_for_window(window_id)?;
+        let angle_device = AngleDevice::create_for_window(window)?;
         Ok(Some(angle_device))
     });
     AngleDevicePtr::from_value(angle_device)
