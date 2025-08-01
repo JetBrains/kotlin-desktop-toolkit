@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeEvent
+import org.jetbrains.desktop.win32.generated.NativeNCHitTestEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeKind
@@ -29,6 +30,11 @@ public typealias EventHandler = (WindowId, Event) -> EventHandlerResult
 
 public sealed class Event {
     internal companion object;
+
+    public data class NCHitTest(
+        val mouseX: Int,
+        val mouseY: Int,
+    ) : Event()
 
     public data object WindowCloseRequest : Event()
 
@@ -63,6 +69,13 @@ public sealed class WindowResizeKind {
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
+    desktop_windows_h.NativeEvent_NCHitTest() -> {
+        val nativeEvent = NativeEvent.nc_hit_test(s)
+        Event.NCHitTest(
+            mouseX = NativeNCHitTestEvent.mouse_x(nativeEvent),
+            mouseY = NativeNCHitTestEvent.mouse_y(nativeEvent),
+        )
+    }
 
     desktop_windows_h.NativeEvent_WindowCloseRequest() -> {
         Event.WindowCloseRequest

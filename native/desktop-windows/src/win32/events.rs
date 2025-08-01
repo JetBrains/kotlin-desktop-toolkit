@@ -16,6 +16,7 @@ pub enum Event /*<'a>*/ {
     //MouseDragged(MouseDraggedEvent),
     //MouseDown(MouseDownEvent),
     //MouseUp(MouseUpEvent),
+    NCHitTest(NCHitTestEvent),
     //ScrollWheel(ScrollWheelEvent),
     WindowCloseRequest,
     WindowDraw(WindowDrawEvent),
@@ -78,5 +79,18 @@ pub enum WindowResizeKind {
 impl From<WindowResizeEvent> for Event {
     fn from(value: WindowResizeEvent) -> Self {
         Self::WindowResize(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct NCHitTestEvent {
+    pub mouse_x: i32,
+    pub mouse_y: i32,
+}
+
+impl From<NCHitTestEvent> for Event {
+    fn from(value: NCHitTestEvent) -> Self {
+        Self::NCHitTest(value)
     }
 }
