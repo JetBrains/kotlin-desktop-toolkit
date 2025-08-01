@@ -147,13 +147,19 @@ typedef struct NativeLogicalSize {
   NativeLogicalPixels height;
 } NativeLogicalSize;
 
+typedef struct NativeWindowStyle {
+  bool has_caption;
+  bool has_system_menu;
+  bool is_resizable;
+  bool is_minimizable;
+  bool is_maximizable;
+} NativeWindowStyle;
+
 typedef struct NativeWindowParams {
   struct NativeLogicalPoint origin;
   struct NativeLogicalSize size;
   NativeBorrowedStrPtr title;
-  bool is_resizable;
-  bool is_closable;
-  bool is_minimizable;
+  struct NativeWindowStyle style;
 } NativeWindowParams;
 
 struct NativeExceptionsArray logger_check_exceptions(void);
