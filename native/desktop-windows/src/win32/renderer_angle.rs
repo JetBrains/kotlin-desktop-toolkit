@@ -6,13 +6,11 @@ use anyhow::{Context, Result, anyhow};
 use khronos_egl as egl;
 use windows::{
     Win32::{
-        Foundation::{ERROR_PATH_NOT_FOUND, HMODULE, HWND},
+        Foundation::{ERROR_PATH_NOT_FOUND, HWND},
         Graphics::Gdi::{GetDC, HDC},
-        System::LibraryLoader::{
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, GetModuleFileNameW, GetModuleHandleExW,
-        },
+        System::LibraryLoader::GetModuleFileNameW,
     },
-    core::{Error as WinError, PWSTR},
+    core::Error as WinError,
 };
 
 use super::{
@@ -183,12 +181,7 @@ fn get_angle_platform_display(egl_instance: &EglInstance, hdc: &HDC) -> Result<e
 
 fn load_angle_libraries() -> Result<libloading::Library> {
     let current_module_path: PathBuf = unsafe {
-        let mut hmodule: HMODULE = Default::default();
-        GetModuleHandleExW(
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            PWSTR(load_angle_libraries as *const () as _),
-            &mut hmodule,
-        )?;
+        let hmodule = crate::get_dll_instance().into();
         let mut filename = vec![0u16; 1024];
         match GetModuleFileNameW(Some(hmodule), &mut filename) {
             0 => Err(WinError::from_win32()),
