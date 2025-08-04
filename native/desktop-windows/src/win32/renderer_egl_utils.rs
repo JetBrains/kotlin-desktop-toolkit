@@ -18,8 +18,8 @@ type GrGLViewportFn = extern "system" fn(x: egl::Int, y: egl::Int, width: GrGLsi
 pub(crate) type GetPlatformDisplayEXTFn =
     extern "system" fn(platform: egl::Enum, native_display: *mut std::ffi::c_void, attrib_list: *const egl::Int) -> egl::EGLDisplay;
 
-pub(crate) const GR_GL_STENCIL_BUFFER_BIT: GrGLbitfield = 0x00000400;
-pub(crate) const GR_GL_COLOR_BUFFER_BIT: GrGLbitfield = 0x00004000;
+pub(crate) const GR_GL_STENCIL_BUFFER_BIT: GrGLbitfield = 0x0000_0400;
+pub(crate) const GR_GL_COLOR_BUFFER_BIT: GrGLbitfield = 0x0000_4000;
 
 pub(crate) const GR_GL_FRAMEBUFFER_BINDING: egl::Enum = 0x8CA6;
 
@@ -31,7 +31,7 @@ macro_rules! get_egl_proc {
             .map(|f| unsafe { core::mem::transmute(f) })
     };
 }
-pub(super) use get_egl_proc;
+pub(crate) use get_egl_proc;
 
 #[allow(non_snake_case)]
 pub(crate) struct GrGLFunctions {

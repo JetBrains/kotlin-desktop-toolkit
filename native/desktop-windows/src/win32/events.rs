@@ -53,6 +53,7 @@ impl From<WindowDrawEvent> for Event {
 
 #[repr(C)]
 #[derive(Debug)]
+#[allow(clippy::struct_field_names)]
 pub struct WindowScaleChangedEvent {
     pub new_origin: PhysicalPoint,
     pub new_size: PhysicalSize,

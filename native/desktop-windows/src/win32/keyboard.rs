@@ -21,7 +21,10 @@ pub struct PhysicalKeyStatus {
 }
 
 impl PhysicalKeyStatus {
-    pub fn parse(lparam: LPARAM) -> Self {
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
+    #[must_use]
+    pub const fn parse(lparam: LPARAM) -> Self {
         let key_flags = utils::HIWORD!(lparam.0);
         let repeat_count = utils::LOWORD!(lparam.0) as u32;
 
@@ -41,5 +44,3 @@ impl PhysicalKeyStatus {
         }
     }
 }
-
-//VK_PACKET

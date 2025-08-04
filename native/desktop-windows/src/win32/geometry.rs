@@ -14,7 +14,8 @@ pub struct PhysicalPoint {
 }
 
 impl PhysicalPoint {
-    pub fn new(x: i32, y: i32) -> Self {
+    #[must_use]
+    pub const fn new(x: i32, y: i32) -> Self {
         Self {
             x: PhysicalPixels(x),
             y: PhysicalPixels(y),
@@ -30,7 +31,8 @@ pub struct PhysicalSize {
 }
 
 impl PhysicalSize {
-    pub fn new(width: i32, height: i32) -> Self {
+    #[must_use]
+    pub const fn new(width: i32, height: i32) -> Self {
         Self {
             width: PhysicalPixels(width),
             height: PhysicalPixels(height),
@@ -50,4 +52,24 @@ pub struct LogicalPoint {
 pub struct LogicalSize {
     pub width: LogicalPixels,
     pub height: LogicalPixels,
+}
+
+impl LogicalPoint {
+    #[allow(clippy::cast_possible_truncation)]
+    pub(crate) fn to_physical(self, scale: f32) -> PhysicalPoint {
+        PhysicalPoint::new(
+            f32::floor(self.x.0.mul_add(scale, 0.5_f32)) as i32,
+            f32::floor(self.y.0.mul_add(scale, 0.5_f32)) as i32,
+        )
+    }
+}
+
+impl LogicalSize {
+    #[allow(clippy::cast_possible_truncation)]
+    pub(crate) fn to_physical(self, scale: f32) -> PhysicalSize {
+        PhysicalSize::new(
+            f32::floor(self.width.0.mul_add(scale, 0.5_f32)) as i32,
+            f32::floor(self.height.0.mul_add(scale, 0.5_f32)) as i32,
+        )
+    }
 }

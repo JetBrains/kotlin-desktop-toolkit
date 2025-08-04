@@ -29,7 +29,7 @@ pub extern "C" fn application_run_event_loop(app_ptr: AppPtr) {
         app.event_loop().run();
 
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -41,5 +41,5 @@ pub extern "C" fn application_stop_event_loop(app_ptr: AppPtr) {
         app.event_loop().shutdown()?;
 
         Ok(())
-    })
+    });
 }

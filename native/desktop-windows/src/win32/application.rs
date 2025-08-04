@@ -16,6 +16,7 @@ impl Application {
         })
     }
 
+    #[must_use]
     pub fn event_loop(&self) -> Rc<EventLoop> {
         self.event_loop.clone()
     }

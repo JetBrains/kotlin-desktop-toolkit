@@ -35,6 +35,7 @@ pub struct AngleDevice {
 }
 
 impl AngleDevice {
+    #[allow(clippy::items_after_statements)]
     pub fn create_for_window(window: &Window) -> Result<Self> {
         let lib_egl = load_angle_libraries()?;
 
@@ -76,7 +77,7 @@ impl AngleDevice {
         let context = egl_instance.create_context(display, surface_config, None, &context_attribs)?;
         let functions = GrGLFunctions::init(&egl_instance)?;
 
-        Ok(AngleDevice {
+        Ok(Self {
             egl_instance,
             window: window.hwnd(),
             display,
@@ -104,7 +105,7 @@ impl AngleDevice {
 
         self.surface = unsafe {
             self.egl_instance
-                .create_window_surface(self.display, self.surface_config, self.window.0 as _, Some(&surface_attribs))
+                .create_window_surface(self.display, self.surface_config, self.window.0.cast(), Some(&surface_attribs))
         }?;
 
         self.egl_instance
@@ -113,16 +114,17 @@ impl AngleDevice {
 
         (self.functions.fClearStencil)(0);
         (self.functions.fClearColor)(0_f32, 0_f32, 0_f32, 0_f32);
-        (self.functions.fStencilMask)(0xffffffff);
+        (self.functions.fStencilMask)(0xffff_ffff);
         (self.functions.fClear)(GR_GL_STENCIL_BUFFER_BIT | GR_GL_COLOR_BUFFER_BIT);
         (self.functions.fViewport)(0, 0, width, height);
 
         let mut framebuffer_binding = 0;
-        (self.functions.fGetIntegerv)(GR_GL_FRAMEBUFFER_BINDING, &mut framebuffer_binding);
+        (self.functions.fGetIntegerv)(GR_GL_FRAMEBUFFER_BINDING, &raw mut framebuffer_binding);
 
         Ok(EglSurfaceData { framebuffer_binding })
     }
 
+    #[allow(clippy::bool_to_int_with_if)]
     pub fn draw(&self, wait_for_vsync: bool, draw_fun: AngleDeviceDrawFun) -> Result<()> {
         self.egl_instance
             .make_current(self.display, Some(self.surface), Some(self.surface), Some(self.context))?;
@@ -136,6 +138,7 @@ impl AngleDevice {
     }
 
     #[inline]
+    #[must_use]
     pub fn get_proc_address(&self, procname: &str) -> Option<extern "system" fn()> {
         self.egl_instance.get_proc_address(procname)
     }
@@ -174,7 +177,7 @@ fn get_angle_platform_display(egl_instance: &EglInstance, hdc: &HDC) -> Result<e
     match fun(EGL_PLATFORM_ANGLE_ANGLE as _, hdc.0, display_attribs.as_ptr()) {
         egl::NO_DISPLAY => Err(egl_instance
             .get_error()
-            .map_or_else(|| anyhow!("Could not get ANGLE platform display."), |err| err.into())),
+            .map_or_else(|| anyhow!("Could not get ANGLE platform display."), Into::into)),
         display => Ok(unsafe { egl::Display::from_ptr(display) }),
     }
 }

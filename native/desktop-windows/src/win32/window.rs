@@ -45,6 +45,7 @@ pub struct Window {
 }
 
 impl Window {
+    #[allow(clippy::cast_possible_truncation)]
     pub fn new(params: &WindowParams, app: &Application) -> WinResult<Rc<Self>> {
         const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
         let instance = crate::get_dll_instance();
@@ -61,13 +62,13 @@ impl Window {
             .title
             .as_optional_str()
             .map_err(|_| WinError::from(ERROR_NO_UNICODE_TRANSLATION))?
-            .map(|some| HSTRING::from(some));
+            .map(HSTRING::from);
         let hwnd = unsafe {
-            let _atom = RegisterClassExW(&wndclass);
+            let _atom = RegisterClassExW(&raw const wndclass);
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 WNDCLASS_NAME,
-                title.map_or_else(|| PCWSTR::null(), |str| PCWSTR::from_raw(str.as_ptr())),
+                title.map_or_else(PCWSTR::null, |str| PCWSTR::from_raw(str.as_ptr())),
                 WINDOW_STYLE(0),
                 0, // CW_USEDEFAULT: i32 = -2147483648i32
                 0, // CW_USEDEFAULT: i32 = -2147483648i32
@@ -86,43 +87,47 @@ impl Window {
             event_loop: Rc::downgrade(&app.event_loop()),
             john_weak: weak.clone(),
         });
-        unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, params.style.to_system()?.0 as _) };
+        unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, params.style.to_system().0 as _) };
         let scale = window.get_scale();
-        let origin = PhysicalPoint::new(
-            f32::round(params.origin.x.0 * scale + 0.5_f32) as i32,
-            f32::round(params.origin.y.0 * scale + 0.5_f32) as i32,
-        );
-        let size = PhysicalSize::new(
-            f32::round(params.size.width.0 * scale + 0.5_f32) as i32,
-            f32::round(params.size.height.0 * scale + 0.5_f32) as i32,
-        );
-        window.set_position(origin, size)?;
-        unsafe { SetPropW(hwnd, WINDOW_PTR_PROP_NAME, Some(HANDLE(window.john_weak.as_ptr() as _))) }?;
+        window.set_position(params.origin.to_physical(scale), params.size.to_physical(scale))?;
+        unsafe {
+            SetPropW(
+                hwnd,
+                WINDOW_PTR_PROP_NAME,
+                Some(HANDLE(window.john_weak.as_ptr().cast_mut().cast())),
+            )
+        }?;
         Ok(window)
     }
 
+    #[must_use]
     pub fn id(&self) -> WindowId {
         WindowId(self.hwnd.0 as isize)
     }
 
     #[inline]
-    pub(crate) fn hwnd(&self) -> HWND {
+    pub(crate) const fn hwnd(&self) -> HWND {
         self.hwnd
     }
 
+    #[allow(clippy::cast_precision_loss)]
+    #[must_use]
     pub fn get_scale(&self) -> f32 {
         let dpi = unsafe { GetDpiForWindow(self.hwnd) };
         (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
     }
 
-    pub fn has_custom_title_bar(&self) -> bool {
+    #[must_use]
+    pub const fn has_custom_title_bar(&self) -> bool {
         matches!(self.style.title_bar_kind, WindowTitleBarKind::Custom)
     }
 
-    pub fn is_resizable(&self) -> bool {
+    #[must_use]
+    pub const fn is_resizable(&self) -> bool {
         self.style.is_resizable
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     pub fn extend_content_into_titlebar(&self) -> WinResult<()> {
         let should_extend_content_into_titlebar = !(matches!(self.style.title_bar_kind, WindowTitleBarKind::System)
             && matches!(self.style.system_backdrop_type, WindowSystemBackdropType::None));
@@ -140,29 +145,30 @@ impl Window {
                 DwmSetWindowAttribute(
                     self.hwnd,
                     DWMWA_CAPTION_COLOR,
-                    &raw const colorref as *const _,
+                    (&raw const colorref).cast(),
                     core::mem::size_of::<COLORREF>() as _,
                 )?;
                 DwmSetWindowAttribute(
                     self.hwnd,
                     DWMWA_NCRENDERING_POLICY,
-                    &raw const policy as *const _,
+                    (&raw const policy).cast(),
                     core::mem::size_of::<DWMNCRENDERINGPOLICY>() as _,
                 )?;
-                DwmExtendFrameIntoClientArea(self.hwnd, &margins)
+                DwmExtendFrameIntoClientArea(self.hwnd, &raw const margins)
             }
         } else {
             Ok(())
         }
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     pub fn apply_system_backdrop(&self) -> WinResult<()> {
         let backdrop: DWM_SYSTEMBACKDROP_TYPE = self.style.system_backdrop_type.to_system();
         unsafe {
             DwmSetWindowAttribute(
                 self.hwnd,
                 DWMWA_SYSTEMBACKDROP_TYPE,
-                &raw const backdrop as *const _,
+                (&raw const backdrop).cast(),
                 core::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as _,
             )
         }
@@ -182,29 +188,29 @@ impl Window {
                 size.width.0,
                 size.height.0,
                 SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER,
-            )?
+            )?;
         };
         Ok(())
     }
 
-    pub fn get_min_size(&self) -> Option<LogicalSize> {
+    #[must_use]
+    pub const fn get_min_size(&self) -> Option<LogicalSize> {
         self.min_size
     }
 
-    pub fn set_min_size(&mut self, size: LogicalSize) {
+    pub const fn set_min_size(&mut self, size: LogicalSize) {
         self.min_size = Some(size);
     }
 
     pub fn request_update(&self) -> WinResult<()> {
-        let _ = unsafe { PostMessageW(Some(self.hwnd), WM_REQUEST_UPDATE, Default::default(), Default::default()) }?;
-        Ok(())
+        unsafe { PostMessageW(Some(self.hwnd), WM_REQUEST_UPDATE, WPARAM::default(), LPARAM::default()) }
     }
 }
 
 impl Drop for Window {
     fn drop(&mut self) {
         if let Err(err) = unsafe { DestroyWindow(self.hwnd) } {
-            error!("Failed to destroy the window: {err:?}")
+            error!("Failed to destroy the window: {err:?}");
         }
     }
 }

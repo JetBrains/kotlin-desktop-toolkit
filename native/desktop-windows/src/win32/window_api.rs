@@ -4,7 +4,7 @@ use desktop_common::{
 };
 
 use windows::Win32::{
-    Foundation::{INVALID_HANDLE_VALUE, WIN32_ERROR},
+    Foundation::INVALID_HANDLE_VALUE,
     Graphics::Dwm::{DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW},
     UI::WindowsAndMessaging::{WINDOW_STYLE, WS_CAPTION, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME},
 };
@@ -22,7 +22,7 @@ pub struct WindowId(pub isize);
 
 impl PanicDefault for WindowId {
     fn default() -> Self {
-        WindowId(INVALID_HANDLE_VALUE.0 as isize)
+        Self(INVALID_HANDLE_VALUE.0 as isize)
     }
 }
 
@@ -49,21 +49,22 @@ pub struct WindowStyle {
 }
 
 impl WindowStyle {
-    pub const fn to_system(&self) -> Result<WINDOW_STYLE, WIN32_ERROR> {
+    #[must_use]
+    pub const fn to_system(self) -> WINDOW_STYLE {
         let mut style = WS_OVERLAPPEDWINDOW.0;
         if matches!(self.title_bar_kind, WindowTitleBarKind::None) {
-            style = style & !WS_CAPTION.0
-        };
+            style &= !WS_CAPTION.0;
+        }
         if !self.is_resizable {
-            style = style & !WS_THICKFRAME.0
-        };
+            style &= !WS_THICKFRAME.0;
+        }
         if !self.is_minimizable {
-            style = style & !WS_MINIMIZEBOX.0
-        };
+            style &= !WS_MINIMIZEBOX.0;
+        }
         if !self.is_maximizable {
-            style = style & !WS_MAXIMIZEBOX.0
-        };
-        Ok(WINDOW_STYLE(style))
+            style &= !WS_MAXIMIZEBOX.0;
+        }
+        WINDOW_STYLE(style)
     }
 }
 
@@ -88,25 +89,26 @@ pub enum WindowSystemBackdropType {
 }
 
 impl WindowSystemBackdropType {
-    pub const fn to_system(&self) -> DWM_SYSTEMBACKDROP_TYPE {
+    #[must_use]
+    pub const fn to_system(self) -> DWM_SYSTEMBACKDROP_TYPE {
         match self {
-            WindowSystemBackdropType::Auto => DWMSBT_AUTO,
-            WindowSystemBackdropType::None => DWMSBT_NONE,
-            WindowSystemBackdropType::Mica => DWMSBT_MAINWINDOW,
-            WindowSystemBackdropType::DesktopAcrylic => DWMSBT_TRANSIENTWINDOW,
-            WindowSystemBackdropType::MicaAlt => DWMSBT_TABBEDWINDOW,
+            Self::Auto => DWMSBT_AUTO,
+            Self::None => DWMSBT_NONE,
+            Self::Mica => DWMSBT_MAINWINDOW,
+            Self::DesktopAcrylic => DWMSBT_TRANSIENTWINDOW,
+            Self::MicaAlt => DWMSBT_TABBEDWINDOW,
         }
     }
 }
 
-fn with_window<R: PanicDefault>(window_ptr: WindowPtr, name: &str, f: impl FnOnce(&Window) -> anyhow::Result<R>) -> R {
+fn with_window<R: PanicDefault>(window_ptr: &WindowPtr, name: &str, f: impl FnOnce(&Window) -> anyhow::Result<R>) -> R {
     ffi_boundary(name, || {
         let w = unsafe { window_ptr.borrow::<Window>() };
         f(w)
     })
 }
 
-fn with_window_mut<R: PanicDefault>(mut window_ptr: WindowPtr, name: &str, f: impl FnOnce(&mut Window) -> anyhow::Result<R>) -> R {
+fn with_window_mut<R: PanicDefault>(window_ptr: &mut WindowPtr, name: &str, f: impl FnOnce(&mut Window) -> anyhow::Result<R>) -> R {
     ffi_boundary(name, || {
         let w = unsafe { window_ptr.borrow_mut::<Window>() };
         f(w)
@@ -125,17 +127,17 @@ pub extern "C" fn window_create(app_ptr: AppPtr, params: WindowParams) -> Window
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
-    with_window(window_ptr, "window_get_window_id", |window| Ok(window.id()))
+    with_window(&window_ptr, "window_get_window_id", |window| Ok(window.id()))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_scale_factor(window_ptr: WindowPtr) -> f32 {
-    with_window(window_ptr, "window_get_scale_factor", |window| Ok(window.get_scale()))
+    with_window(&window_ptr, "window_get_scale_factor", |window| Ok(window.get_scale()))
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) {
-    with_window_mut(window_ptr, "window_set_min_size", |window| {
+pub extern "C" fn window_set_min_size(mut window_ptr: WindowPtr, size: LogicalSize) {
+    with_window_mut(&mut window_ptr, "window_set_min_size", |window| {
         window.set_min_size(size);
         Ok(())
     });
@@ -143,7 +145,7 @@ pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) 
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_show(window_ptr: WindowPtr) {
-    with_window(window_ptr, "window_show", |window| {
+    with_window(&window_ptr, "window_show", |window| {
         window.show();
         Ok(())
     });
@@ -151,7 +153,7 @@ pub extern "C" fn window_show(window_ptr: WindowPtr) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: PhysicalPoint, size: PhysicalSize) {
-    with_window(window_ptr, "window_set_rect", |window| {
+    with_window(&window_ptr, "window_set_rect", |window| {
         window.set_position(origin, size)?;
         Ok(())
     });
@@ -159,7 +161,7 @@ pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: PhysicalPoint, 
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_request_update(window_ptr: WindowPtr) {
-    with_window(window_ptr, "window_request_update", |window| {
+    with_window(&window_ptr, "window_request_update", |window| {
         window.request_update()?;
         Ok(())
     });

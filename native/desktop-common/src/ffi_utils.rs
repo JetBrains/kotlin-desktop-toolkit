@@ -74,6 +74,7 @@ impl RustAllocatedRawPtr<'_> {
         })
     }
 
+    #[must_use]
     pub fn from_rc<R>(value: Option<Rc<R>>) -> Self {
         Self(GenericRawPtr {
             ptr: value.map_or(std::ptr::null(), |v| Rc::into_raw(v)).cast(),
@@ -193,6 +194,7 @@ impl RustAllocatedStrPtr {
         }))
     }
 
+    #[must_use]
     pub fn from_c_string(s: CString) -> Self {
         Self(GenericRawPtr {
             ptr: s.into_raw(),

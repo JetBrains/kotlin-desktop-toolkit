@@ -64,7 +64,7 @@ pub extern "C" fn renderer_angle_device_create(window_ptr: WindowPtr) -> AngleDe
 pub extern "C" fn renderer_angle_make_surface(mut angle_device_ptr: AngleDevicePtr, width: i32, height: i32) -> EglSurfaceData {
     ffi_boundary("renderer_angle_make_surface", || {
         let angle_device = unsafe { angle_device_ptr.borrow_mut::<AngleDevice>() };
-        Ok(angle_device.make_surface(width, height)?)
+        angle_device.make_surface(width, height)
     })
 }
 
@@ -74,7 +74,7 @@ pub extern "C" fn renderer_angle_draw(angle_device_ptr: AngleDevicePtr, wait_for
         let angle_device = unsafe { angle_device_ptr.borrow::<AngleDevice>() };
         angle_device.draw(wait_for_vsync, callbacks.draw_fun)?;
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]

@@ -8,6 +8,7 @@ use windows::{
     core::{Error as WinError, Result as WinResult},
 };
 
+#[allow(clippy::cast_sign_loss)]
 pub(crate) fn copy_from_wide_string(s: &[u16]) -> WinResult<CString> {
     let len = unsafe { WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, s, None, None, None) };
     if len == 0 {

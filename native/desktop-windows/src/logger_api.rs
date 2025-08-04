@@ -25,5 +25,5 @@ pub extern "C" fn logger_output_debug_string(message: BorrowedStrPtr) {
         .as_optional_cstr()
         .expect("Invalid debug string")
         .expect("The debug string pointer is null.");
-    unsafe { OutputDebugStringA(PCSTR::from_raw(cstr.as_ptr() as _)) };
+    unsafe { OutputDebugStringA(PCSTR::from_raw(cstr.as_ptr().cast())) };
 }

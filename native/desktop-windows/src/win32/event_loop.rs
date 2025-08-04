@@ -7,7 +7,7 @@ use windows::{
         Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
         Graphics::{
             Dwm::DwmDefWindowProc,
-            Gdi::{BeginPaint, EndPaint, InvalidateRect},
+            Gdi::{BeginPaint, EndPaint, InvalidateRect, PAINTSTRUCT},
         },
         System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
         UI::{
@@ -42,6 +42,7 @@ pub struct EventLoop {
 }
 
 impl EventLoop {
+    #[allow(clippy::cast_possible_truncation)]
     pub fn new(event_handler: EventHandler) -> WinResult<Self> {
         let dispatcher_queue_controller = unsafe {
             CreateDispatcherQueueController(DispatcherQueueOptions {
@@ -66,11 +67,12 @@ impl EventLoop {
         })
     }
 
+    #[allow(clippy::unused_self)]
     pub fn run(&self) {
         let mut msg = MSG::default();
         unsafe {
-            while GetMessageW(&mut msg, None, 0, 0).as_bool() {
-                DispatchMessageW(&msg);
+            while GetMessageW(&raw mut msg, None, 0, 0).as_bool() {
+                DispatchMessageW(&raw const msg);
             }
         }
     }
@@ -79,15 +81,16 @@ impl EventLoop {
         self.dispatcher_queue_controller
             .ShutdownQueueAsync()
             .map(|_async| ())
-            .inspect_err(|err| error!("Failed to shut down the dispatcher queue: {:?}", err))
+            .inspect_err(|err| error!("Failed to shut down the dispatcher queue: {err:?}"))
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     #[inline]
     fn handle_event(&self, window: &Window, event: Event) -> Option<LRESULT> {
         (self.event_handler)(window.id(), &event).then_some(LRESULT(0))
     }
 
-    pub fn window_proc(&self, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    pub(crate) fn window_proc(&self, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         let hwnd = window.hwnd();
 
         let handled = match msg {
@@ -110,7 +113,7 @@ impl EventLoop {
 
             WM_CHAR | WM_DEADCHAR | WM_SYSCHAR | WM_SYSDEADCHAR => on_char(self, window, msg, wparam, lparam),
 
-            WM_ACTIVATE => on_activate(window),
+            WM_ACTIVATE => Some(on_activate(window)),
 
             WM_NCCALCSIZE => on_nccalcsize(window, wparam, lparam),
 
@@ -132,10 +135,10 @@ impl EventLoop {
 
 fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
     let hwnd = window.hwnd();
-    let mut paint = Default::default();
-    unsafe { BeginPaint(hwnd, &mut paint) };
-    let mut rect = Default::default();
-    if let Err(err) = unsafe { GetClientRect(hwnd, &mut rect) } {
+    let mut paint = PAINTSTRUCT::default();
+    unsafe { BeginPaint(hwnd, &raw mut paint) };
+    let mut rect = RECT::default();
+    if let Err(err) = unsafe { GetClientRect(hwnd, &raw mut rect) } {
         error!("Failed to get client rect: {err:?}");
         return Some(LRESULT(1));
     }
@@ -144,10 +147,13 @@ fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
         scale: window.get_scale(),
     };
     let handled = event_loop.handle_event(window, event.into());
-    let _ = unsafe { EndPaint(hwnd, &paint) };
+    let _ = unsafe { EndPaint(hwnd, &raw const paint) };
     handled
 }
 
+#[allow(clippy::cast_lossless)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_precision_loss)]
 fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let new_dpi = utils::HIWORD!(wparam.0);
     assert_eq!(
@@ -165,6 +171,8 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     event_loop.handle_event(window, event.into())
 }
 
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
 fn on_size(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let width = utils::LOWORD!(lparam.0);
     let height = utils::HIWORD!(lparam.0);
@@ -175,7 +183,7 @@ fn on_size(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPAR
         kind => WindowResizeKind::Other(kind),
     };
     let event = WindowResizeEvent {
-        size: PhysicalSize::new(width as _, height as _),
+        size: PhysicalSize::new(width.into(), height.into()),
         scale: window.get_scale(),
         kind,
     };
@@ -186,20 +194,21 @@ fn on_getminmaxinfo(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     if let Some(min_max_info) = unsafe { (lparam.0 as *mut MINMAXINFO).as_mut() } {
         if let Some(min_size) = window.get_min_size() {
             let scale = window.get_scale();
-            min_max_info.ptMinTrackSize.x = f32::round(min_size.width.0 * scale + 0.5_f32) as i32;
-            min_max_info.ptMinTrackSize.y = f32::round(min_size.height.0 * scale + 0.5_f32) as i32;
+            let physical_size = min_size.to_physical(scale);
+            min_max_info.ptMinTrackSize.x = physical_size.width.0;
+            min_max_info.ptMinTrackSize.y = physical_size.height.0;
             return Some(LRESULT(0));
         }
     }
     None
 }
 
-fn on_activate(window: &Window) -> Option<LRESULT> {
+fn on_activate(window: &Window) -> LRESULT {
     let hwnd = window.hwnd();
-    let _ = window.extend_content_into_titlebar().and_then(|_| window.apply_system_backdrop());
+    let _ = window.extend_content_into_titlebar().and_then(|()| window.apply_system_backdrop());
     let mut rect = RECT::default();
     unsafe {
-        let _ = GetWindowRect(hwnd, &mut rect).and_then(|_| {
+        let _ = GetWindowRect(hwnd, &raw mut rect).and_then(|()| {
             SetWindowPos(
                 hwnd,
                 None,
@@ -211,7 +220,7 @@ fn on_activate(window: &Window) -> Option<LRESULT> {
             )
         });
     }
-    Some(LRESULT(0))
+    LRESULT(0)
 }
 
 fn on_nccalcsize(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
@@ -227,6 +236,9 @@ fn on_nccalcsize(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRES
     None
 }
 
+#[allow(clippy::cast_lossless)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
 fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     if !window.has_custom_title_bar() || !window.is_resizable() {
         return None;
@@ -234,10 +246,11 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     let hwnd = window.hwnd();
     let original_ht = {
         let mut dwm_result = LRESULT(0);
-        unsafe { DwmDefWindowProc(hwnd, WM_NCHITTEST, wparam, lparam, &mut dwm_result) }
-            .as_bool()
-            .then(|| dwm_result)
-            .unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, WM_NCHITTEST, wparam, lparam) })
+        if unsafe { DwmDefWindowProc(hwnd, WM_NCHITTEST, wparam, lparam, &raw mut dwm_result) }.as_bool() {
+            dwm_result
+        } else {
+            unsafe { DefWindowProcW(hwnd, WM_NCHITTEST, wparam, lparam) }
+        }
     };
     if original_ht != LRESULT(HTCLIENT as _) {
         return Some(original_ht);
@@ -250,7 +263,7 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
         return Some(LRESULT(HTCLIENT as _));
     }
     let mut window_rect = RECT::default();
-    let _ = unsafe { GetWindowRect(hwnd, &mut window_rect) };
+    let _ = unsafe { GetWindowRect(hwnd, &raw mut window_rect) };
     let current_dpi = unsafe { GetDpiForWindow(hwnd) };
     let resize_handle_height = unsafe {
         let current_dpi = GetDpiForWindow(hwnd);
@@ -271,11 +284,16 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
 
 fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let mut dwm_result = LRESULT(0);
-    unsafe { DwmDefWindowProc(window.hwnd(), WM_NCMOUSELEAVE, wparam, lparam, &mut dwm_result) }
-        .as_bool()
-        .then(|| dwm_result)
+    if unsafe { DwmDefWindowProc(window.hwnd(), WM_NCMOUSELEAVE, wparam, lparam, &raw mut dwm_result) }.as_bool() {
+        Some(dwm_result)
+    } else {
+        None
+    }
 }
 
+#[allow(clippy::cast_lossless)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
 fn on_keydown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let vk_code = utils::LOWORD!(wparam.0);
     let timestamp = unsafe { GetMessageTime() };
@@ -299,11 +317,13 @@ fn on_keydown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM,
                 y: utils::GET_Y_LPARAM!(pos),
             },
         };
-        let _ = unsafe { TranslateMessage(&msg) };
+        let _ = unsafe { TranslateMessage(&raw const msg) };
     }
     result
 }
 
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
 fn on_keyup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let vk_code = utils::LOWORD!(wparam.0);
     let event = KeyEvent {
@@ -315,6 +335,7 @@ fn on_keyup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, l
     event_loop.handle_event(window, Event::KeyUp(event))
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let char = wparam.0 as u16;
     let characters = match copy_from_wide_string(&[char]) {
