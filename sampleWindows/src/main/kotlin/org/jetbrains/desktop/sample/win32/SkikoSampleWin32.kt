@@ -52,7 +52,7 @@ class RotatingBallWindow(
             paint.mode = PaintMode.FILL
             canvas.drawRRect(
                 RRect.makeXYWH(12f, 60f, size.width.toFloat() - 24f, size.height.toFloat() - 72f, 12f),
-                paint
+                paint,
             )
         }
         Paint().use { paint ->
@@ -60,7 +60,7 @@ class RotatingBallWindow(
             paint.mode = PaintMode.STROKE
             canvas.drawRRect(
                 RRect.makeXYWH(12f, 60f, size.width.toFloat() - 24f, size.height.toFloat() - 72f, 12f),
-                paint
+                paint,
             )
         }
         val animationDuration = ANIMATION_FRAME_COUNT * animation.fPS
@@ -81,7 +81,7 @@ class ApplicationState : AutoCloseable {
             style = WindowStyle(
                 systemBackdropType = WindowSystemBackdropType.MicaAlt,
                 titleBarKind = WindowTitleBarKind.Custom,
-            )
+            ),
         )
 
         val window = RotatingBallWindow.createWindow(

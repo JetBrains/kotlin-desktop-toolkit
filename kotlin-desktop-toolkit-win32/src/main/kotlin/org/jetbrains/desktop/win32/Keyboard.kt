@@ -257,12 +257,11 @@ internal fun VirtualKey.Companion.fromNative(code: Short): VirtualKey {
     return VirtualKey(intCode)
 }
 
-internal fun PhysicalKeyStatus.Companion.fromNative(native: MemorySegment) =
-    PhysicalKeyStatus(
-        scanCode = NativePhysicalKeyStatus.scan_code(native),
-        isExtendedKey = NativePhysicalKeyStatus.is_extended_key(native),
-        isMenuKeyDown = NativePhysicalKeyStatus.is_menu_key_down(native),
-        wasKeyDown = NativePhysicalKeyStatus.was_key_down(native),
-        isKeyReleased = NativePhysicalKeyStatus.is_key_released(native),
-        repeatCount = NativePhysicalKeyStatus.repeat_count(native),
-    )
+internal fun PhysicalKeyStatus.Companion.fromNative(native: MemorySegment) = PhysicalKeyStatus(
+    scanCode = NativePhysicalKeyStatus.scan_code(native),
+    isExtendedKey = NativePhysicalKeyStatus.is_extended_key(native),
+    isMenuKeyDown = NativePhysicalKeyStatus.is_menu_key_down(native),
+    wasKeyDown = NativePhysicalKeyStatus.was_key_down(native),
+    isKeyReleased = NativePhysicalKeyStatus.is_key_released(native),
+    repeatCount = NativePhysicalKeyStatus.repeat_count(native),
+)

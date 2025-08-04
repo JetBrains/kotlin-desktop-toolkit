@@ -149,7 +149,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
         Event.WindowScaleChanged(
             newOrigin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.new_origin(nativeEvent)),
             newSize = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.new_size(nativeEvent)),
-            newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent)
+            newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent),
         )
     }
 
@@ -158,7 +158,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
         Event.WindowResize(
             size = PhysicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
             scale = NativeWindowResizeEvent.scale(nativeEvent),
-            kind = WindowResizeKind.fromNative(NativeWindowResizeEvent.kind(nativeEvent))
+            kind = WindowResizeKind.fromNative(NativeWindowResizeEvent.kind(nativeEvent)),
         )
     }
 
@@ -166,7 +166,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
 }
 
 internal fun WindowResizeKind.Companion.fromNative(s: MemorySegment): WindowResizeKind = when (NativeWindowResizeKind.tag(s)) {
-
     desktop_windows_h.NativeWindowResizeKind_Restored() -> WindowResizeKind.Restored
 
     desktop_windows_h.NativeWindowResizeKind_Maximized() -> WindowResizeKind.Maximized

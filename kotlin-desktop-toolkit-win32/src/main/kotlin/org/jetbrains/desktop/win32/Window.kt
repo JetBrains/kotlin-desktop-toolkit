@@ -12,15 +12,14 @@ public data class WindowParams(
     val origin: LogicalPoint = LogicalPoint(0f, 0f),
     val size: LogicalSize = LogicalSize(640f, 480f),
     val title: String? = null,
-    val style: WindowStyle = WindowStyle()
+    val style: WindowStyle = WindowStyle(),
 ) {
-    internal fun toNative(arena: Arena): MemorySegment =
-        NativeWindowParams.allocate(arena).also { nativeWindowParams ->
-            NativeWindowParams.origin(nativeWindowParams, origin.toNative(arena))
-            NativeWindowParams.size(nativeWindowParams, size.toNative(arena))
-            NativeWindowParams.title(nativeWindowParams, title?.let(arena::allocateUtf8String) ?: MemorySegment.NULL)
-            NativeWindowParams.style(nativeWindowParams, style.toNative(arena))
-        }
+    internal fun toNative(arena: Arena): MemorySegment = NativeWindowParams.allocate(arena).also { nativeWindowParams ->
+        NativeWindowParams.origin(nativeWindowParams, origin.toNative(arena))
+        NativeWindowParams.size(nativeWindowParams, size.toNative(arena))
+        NativeWindowParams.title(nativeWindowParams, title?.let(arena::allocateUtf8String) ?: MemorySegment.NULL)
+        NativeWindowParams.style(nativeWindowParams, style.toNative(arena))
+    }
 }
 
 public data class WindowStyle(
@@ -32,16 +31,15 @@ public data class WindowStyle(
 
     public val systemBackdropType: WindowSystemBackdropType = WindowSystemBackdropType.None,
 ) {
-    internal fun toNative(arena: Arena): MemorySegment =
-        NativeWindowStyle.allocate(arena).also { nativeWindowStyle ->
-            NativeWindowStyle.title_bar_kind(nativeWindowStyle, titleBarKind.toNative())
+    internal fun toNative(arena: Arena): MemorySegment = NativeWindowStyle.allocate(arena).also { nativeWindowStyle ->
+        NativeWindowStyle.title_bar_kind(nativeWindowStyle, titleBarKind.toNative())
 
-            NativeWindowStyle.is_resizable(nativeWindowStyle, isResizable)
-            NativeWindowStyle.is_minimizable(nativeWindowStyle, isMinimizable)
-            NativeWindowStyle.is_maximizable(nativeWindowStyle, isMaximizable)
+        NativeWindowStyle.is_resizable(nativeWindowStyle, isResizable)
+        NativeWindowStyle.is_minimizable(nativeWindowStyle, isMinimizable)
+        NativeWindowStyle.is_maximizable(nativeWindowStyle, isMaximizable)
 
-            NativeWindowStyle.system_backdrop_type(nativeWindowStyle, systemBackdropType.toNative())
-        }
+        NativeWindowStyle.system_backdrop_type(nativeWindowStyle, systemBackdropType.toNative())
+    }
 }
 
 public class Window internal constructor(
@@ -71,7 +69,7 @@ public class Window internal constructor(
                     origin,
                     size,
                     title,
-                    style
+                    style,
                 ),
             )
         }
