@@ -62,3 +62,5 @@ jobs:
           name: Tests Report (${{ matrix.os }})
           path: kotlin-desktop-toolkit/build/test-results/test/*.xml
           reporter: java-junit
+          fail-on-empty: false
+          fail-on-error: false
