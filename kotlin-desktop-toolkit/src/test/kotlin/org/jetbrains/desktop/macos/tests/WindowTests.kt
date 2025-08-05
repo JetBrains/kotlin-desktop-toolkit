@@ -4,19 +4,19 @@ import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Window
-import org.junit.jupiter.api.Test
+import kotlin.test.Ignore
+import kotlin.test.Test
 
-class WindowTests {
+class WindowTests: KDTApplicationTestBase() {
     @Test
     fun smokeTest() {
-        KotlinDesktopToolkit.init()
-        val window1 = GrandCentralDispatch.dispatchOnMainSync {
+        val window1 = ui {
             Window.create(origin = LogicalPoint(100.0, 200.0), title = "Hello1")
         }
-        val window2 = GrandCentralDispatch.dispatchOnMainSync {
+        val window2 = ui {
             Window.create(origin = LogicalPoint(200.0, 300.0), title = "Hello2")
         }
-        GrandCentralDispatch.dispatchOnMainSync {
+        ui {
             window1.close()
             window2.close()
         }

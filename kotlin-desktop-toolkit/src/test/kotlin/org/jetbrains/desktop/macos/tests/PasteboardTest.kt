@@ -7,19 +7,21 @@ import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.Pasteboard.Element
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.createTempFile
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class PasteboardTest {
+
+class PasteboardTest: KDTApplicationTestBase() {
+
     @Test
     fun putStringTest() {
-        KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
-        val counter = GrandCentralDispatch.dispatchOnMainSync {
+        val counter = ui {
             Pasteboard.clear()
         }
         assert(counter > 0L)
-        val success = GrandCentralDispatch.dispatchOnMainSync {
+        val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item.Combined(
                     Element(
@@ -30,7 +32,7 @@ class PasteboardTest {
             )
         }
         assertTrue(success)
-        val strings = GrandCentralDispatch.dispatchOnMainSync {
+        val strings = ui {
             Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
         }
         assertEquals(listOf("Hello World!!!"), strings)
@@ -38,7 +40,6 @@ class PasteboardTest {
 
     @Test
     fun putStringWithHTMLTest() {
-        KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
         val htmlContent = """
                           <html>
                               <body>
@@ -46,11 +47,11 @@ class PasteboardTest {
                               </body>
                           </html>
         """.trimIndent()
-        val counter = GrandCentralDispatch.dispatchOnMainSync {
+        val counter = ui {
             Pasteboard.clear()
         }
         assert(counter > 0L)
-        val success = GrandCentralDispatch.dispatchOnMainSync {
+        val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item.Combined(
                     Element(
@@ -65,11 +66,11 @@ class PasteboardTest {
             )
         }
         assertTrue(success)
-        val strings = GrandCentralDispatch.dispatchOnMainSync {
+        val strings = ui {
             Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
         }
         assertEquals(listOf("Hello World!!!"), strings)
-        val htmls = GrandCentralDispatch.dispatchOnMainSync {
+        val htmls = ui {
             Pasteboard.readItemsOfType(type = Pasteboard.HTML_TYPE)
         }
         assertEquals(listOf(htmlContent), htmls)
@@ -77,12 +78,11 @@ class PasteboardTest {
 
     @Test
     fun putTwoStringTest() {
-        KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
-        val counter = GrandCentralDispatch.dispatchOnMainSync {
+        val counter = ui {
             Pasteboard.clear()
         }
         assert(counter > 0L)
-        val success = GrandCentralDispatch.dispatchOnMainSync {
+        val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item.Combined(
                     Element(
@@ -99,7 +99,7 @@ class PasteboardTest {
             )
         }
         assertTrue(success)
-        val strings = GrandCentralDispatch.dispatchOnMainSync {
+        val strings = ui {
             Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
         }
         assertEquals(listOf("String1", "String2"), strings)
@@ -107,8 +107,7 @@ class PasteboardTest {
 
     @Test
     fun putTwoFilesTest() {
-        KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
-        val counter = GrandCentralDispatch.dispatchOnMainSync {
+        val counter = ui {
             Pasteboard.clear()
         }
         assert(counter > 0L)
@@ -116,7 +115,7 @@ class PasteboardTest {
         val file2 = createTempFile(suffix = "File2.txt")
         val content1 = "Hello1"
         val content2 = "Hello2"
-        val success = GrandCentralDispatch.dispatchOnMainSync {
+        val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item.Url("file://${file1.absolutePathString()}"),
                 Pasteboard.Item.Url("file://${file2.absolutePathString()}"),
@@ -125,10 +124,10 @@ class PasteboardTest {
             )
         }
         assertTrue(success)
-        val files = GrandCentralDispatch.dispatchOnMainSync {
+        val files = ui {
             Pasteboard.readFileItemPaths()
         }
-        val strings = GrandCentralDispatch.dispatchOnMainSync {
+        val strings = ui {
             Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
         }
         assertEquals(listOf(file1.absolutePathString(), file2.absolutePathString()), files)
@@ -137,19 +136,18 @@ class PasteboardTest {
 
     @Test
     fun putHttpsUrl() {
-        KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
         val url = "https://jetbrains.com"
-        val counter = GrandCentralDispatch.dispatchOnMainSync {
+        val counter = ui {
             Pasteboard.clear()
         }
         assert(counter > 0L)
-        val success = GrandCentralDispatch.dispatchOnMainSync {
+        val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item.Url(url),
             )
         }
         assertTrue(success)
-        val urls = GrandCentralDispatch.dispatchOnMainSync {
+        val urls = ui {
             Pasteboard.readItemsOfType(type = Pasteboard.URL_TYPE)
         }
         assertEquals(listOf(url), urls)
@@ -157,20 +155,19 @@ class PasteboardTest {
 
     @Test
     fun putEmoji() {
-        KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
-        val counter = GrandCentralDispatch.dispatchOnMainSync {
+        val counter = ui {
             Pasteboard.clear()
         }
         assert(counter > 0L)
 
         val emojiString = "😃"
-        val success = GrandCentralDispatch.dispatchOnMainSync {
+        val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item.of(type = Pasteboard.STRING_TYPE, content = emojiString),
             )
         }
         assertTrue(success)
-        val result = GrandCentralDispatch.dispatchOnMainSync {
+        val result = ui {
             Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
         }
         assertEquals(listOf(emojiString), result)

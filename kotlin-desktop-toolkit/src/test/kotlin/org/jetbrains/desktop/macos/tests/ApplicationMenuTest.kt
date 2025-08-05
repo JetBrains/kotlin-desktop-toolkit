@@ -3,16 +3,16 @@ package org.jetbrains.desktop.macos.tests
 import org.jetbrains.desktop.macos.AppMenuItem
 import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.AppMenuStructure
-import org.jetbrains.desktop.macos.GrandCentralDispatch
-import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import kotlin.test.Test
 
-class ApplicationMenuTest {
+class ApplicationMenuTest: KDTApplicationTestBase() {
     @Test
     fun smokeTest() {
-        KotlinDesktopToolkit.init()
-        GrandCentralDispatch.dispatchOnMain {
+        ui {
             AppMenuManager.setMainMenu(AppMenuStructure())
+        }
+
+        ui {
             AppMenuManager.setMainMenu(
                 AppMenuStructure(
                     AppMenuItem.Action("Foo", false),
@@ -28,6 +28,5 @@ class ApplicationMenuTest {
                 ),
             )
         }
-        GrandCentralDispatch.dispatchOnMainSync {}
     }
 }
