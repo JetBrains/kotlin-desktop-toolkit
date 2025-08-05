@@ -39,7 +39,10 @@ public data class LogicalPoint(
     public fun toPhysical(scale: Double): PhysicalPoint = PhysicalPoint(x * scale, y * scale)
 }
 
-public data class LogicalRect(val origin: LogicalPoint, val size: LogicalSize) {
+public data class LogicalRect(
+    val origin: LogicalPoint,
+    val size: LogicalSize,
+) {
     public companion object {
         public val Zero: LogicalRect = LogicalRect(LogicalPoint.Zero, LogicalSize.Zero)
     }

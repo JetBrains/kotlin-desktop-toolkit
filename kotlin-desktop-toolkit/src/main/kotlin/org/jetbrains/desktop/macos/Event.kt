@@ -81,7 +81,8 @@ public sealed class Event {
         val isRepeat: Boolean,
         val mightHaveKeyEquivalent: Boolean,
         val timestamp: Timestamp,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class KeyUp(
         override val windowId: WindowId,
@@ -91,39 +92,45 @@ public sealed class Event {
         val keyWithModifiers: String,
         val modifiers: KeyModifiersSet,
         val timestamp: Timestamp,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class ModifiersChanged(
         override val windowId: WindowId,
         val modifiers: KeyModifiersSet,
         val keyCode: KeyCode,
         val timestamp: Timestamp,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class MouseMoved(
         override val windowId: WindowId,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class MouseDragged(
         override val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class MouseEntered(
         override val windowId: WindowId,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class MouseExited(
         override val windowId: WindowId,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class MouseUp(
         override val windowId: WindowId,
@@ -131,7 +138,8 @@ public sealed class Event {
         val locationInWindow: LogicalPoint,
         val clickCount: Long,
         val timestamp: Timestamp,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class MouseDown(
         override val windowId: WindowId,
@@ -139,7 +147,8 @@ public sealed class Event {
         val locationInWindow: LogicalPoint,
         val clickCount: Long,
         val timestamp: Timestamp,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class ScrollWheel(
         override val windowId: WindowId,
@@ -149,38 +158,45 @@ public sealed class Event {
         val isDirectionInverted: Boolean,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class WindowScreenChange(
         override val windowId: WindowId,
         val newScreenId: ScreenId,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class WindowResize(
         override val windowId: WindowId,
         val size: LogicalSize,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class WindowMove(
         override val windowId: WindowId,
         val origin: LogicalPoint,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class WindowFocusChange(
         override val windowId: WindowId,
         val isKeyWindow: Boolean,
         val isMainWindow: Boolean,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class WindowFullScreenToggle(
         override val windowId: WindowId,
         val isFullScreen: Boolean,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data class WindowChangedOcclusionState(
         override val windowId: WindowId,
         val isVisible: Boolean,
-    ) : Event(), WindowEvent
+    ) : Event(),
+        WindowEvent
 
     public data object DisplayConfigurationChange : Event()
 
@@ -188,7 +204,9 @@ public sealed class Event {
 
     public data class ApplicationOpenUrls(val urls: List<String>) : Event()
 
-    public data class WindowCloseRequest(override val windowId: WindowId) : Event(), WindowEvent
+    public data class WindowCloseRequest(override val windowId: WindowId) :
+        Event(),
+        WindowEvent
 
     public data class ApplicationAppearanceChange(val newAppearance: Appearance) : Event()
 }

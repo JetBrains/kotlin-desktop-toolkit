@@ -19,7 +19,7 @@ public enum class EventHandlerResult {
 
 public typealias EventHandler = (Event, WindowId) -> EventHandlerResult
 
-public class CustomTitlebarParams()
+public class CustomTitlebarParams
 
 public data class WindowParams(
     val windowId: WindowId,
@@ -58,7 +58,7 @@ public data class ApplicationConfig(
     val onDataTransferCancelled: (DataSource) -> Unit,
 )
 
-public class Application() : AutoCloseable {
+public class Application : AutoCloseable {
     private var applicationConfig: ApplicationConfig? = null
 
     private val runOnEventLoopAsyncQueue = ConcurrentLinkedQueue<() -> Unit>()
@@ -273,7 +273,10 @@ public class Application() : AutoCloseable {
         }
     }
 
-    public data class EglProcFunc(val fPtr: Long, val ctxPtr: Long)
+    public data class EglProcFunc(
+        val fPtr: Long,
+        val ctxPtr: Long,
+    )
 
     public fun getEglProcFunc(): EglProcFunc? {
         return Arena.ofConfined().use { arena ->

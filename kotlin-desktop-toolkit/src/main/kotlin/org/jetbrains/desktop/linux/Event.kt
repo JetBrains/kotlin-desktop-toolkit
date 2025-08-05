@@ -29,24 +29,31 @@ public data class WindowCapabilities(
     internal companion object;
 }
 
-public data class SoftwareDrawData(val canvas: Long, val stride: Int) {
+public data class SoftwareDrawData(
+    val canvas: Long,
+    val stride: Int,
+) {
     internal companion object;
 }
 
-public class DataTransferContent(public val data: ByteArray, public val mimeTypes: List<String>) {
+public class DataTransferContent(
+    public val data: ByteArray,
+    public val mimeTypes: List<String>,
+) {
     internal companion object;
 }
 
-public data class DragAndDropQueryData(public val windowId: WindowId, public val point: LogicalPoint) {
+public data class DragAndDropQueryData(
+    public val windowId: WindowId,
+    public val point: LogicalPoint,
+) {
     internal companion object;
 }
 
 public sealed class Event {
     internal companion object;
 
-    public data class DataTransferAvailable(
-        val mimeTypes: List<String>,
-    ) : Event()
+    public data class DataTransferAvailable(val mimeTypes: List<String>) : Event()
 
     public data class DataTransfer(
         val serial: Int,
@@ -66,9 +73,7 @@ public sealed class Event {
         val key: KeySym,
     ) : Event()
 
-    public data class ModifiersChanged(
-        val modifiers: KeyModifiers,
-    ) : Event()
+    public data class ModifiersChanged(val modifiers: KeyModifiers) : Event()
 
     public data class MouseMoved(
         val locationInWindow: LogicalPoint,
@@ -81,13 +86,9 @@ public sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class MouseEntered(
-        val locationInWindow: LogicalPoint,
-    ) : Event()
+    public data class MouseEntered(val locationInWindow: LogicalPoint) : Event()
 
-    public data class MouseExited(
-        val locationInWindow: LogicalPoint,
-    ) : Event()
+    public data class MouseExited(val locationInWindow: LogicalPoint) : Event()
 
     public data class MouseUp(
         val button: MouseButton,
@@ -151,11 +152,7 @@ public sealed class Event {
         val scale: Double,
     ) : Event()
 
-    public data class WindowScaleChanged(
-        val newScale: Double,
-    ) : Event()
+    public data class WindowScaleChanged(val newScale: Double) : Event()
 
-    public data class WindowScreenChange(
-        val newScreenId: ScreenId,
-    ) : Event()
+    public data class WindowScreenChange(val newScreenId: ScreenId) : Event()
 }

@@ -99,7 +99,10 @@ enum class WindowButtonType {
     }
 }
 
-data class TitlebarLayout(val layoutLeft: List<WindowButtonType>, val layoutRight: List<WindowButtonType>) {
+data class TitlebarLayout(
+    val layoutLeft: List<WindowButtonType>,
+    val layoutRight: List<WindowButtonType>,
+) {
     internal companion object {
         private fun parseOneSide(buttons: String): List<WindowButtonType> {
             return if (buttons.isEmpty()) {
@@ -162,7 +165,7 @@ data class XdgDesktopSettings(
     }
 }
 
-class EditorState() {
+class EditorState {
     private var textInputEnabled: Boolean = false
     private var composedText: String = ""
     private var composedTextStartOffset: Int? = null
@@ -505,7 +508,10 @@ private fun LogicalPoint.isInsideCircle(center: LogicalPoint, radius: LogicalPix
     return xDiff.pow(2) + yDiff.pow(2) <= radius.pow(2)
 }
 
-private data class TextLineCreator(private var cachedFontSize: Float, private var cachedText: String) {
+private data class TextLineCreator(
+    private var cachedFontSize: Float,
+    private var cachedText: String,
+) {
     private var textLine: TextLine? = null
 
     init {
@@ -723,7 +729,13 @@ class CustomTitlebar(
         when (button) {
             WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close -> {
                 Paint().use { paint ->
-                    paint.color = if (highlighted) COLOR_LIGHT_GRAY else if (hovered) COLOR_DARK_GRAY else Color.BLACK
+                    paint.color = if (highlighted) {
+                        COLOR_LIGHT_GRAY
+                    } else if (hovered) {
+                        COLOR_DARK_GRAY
+                    } else {
+                        Color.BLACK
+                    }
                     canvas.drawRect(Rect.makeXYWH(xOffset, yOffset, w, h), paint)
                 }
             }
@@ -1064,7 +1076,10 @@ class WindowContainer(
             )
             val titlebarSize = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
             val titlebar = customTitlebar ?: CustomTitlebar(
-                origin = LogicalPoint.Zero, size = titlebarSize, titlebarLayout, requestClose,
+                origin = LogicalPoint.Zero,
+                size = titlebarSize,
+                titlebarLayout,
+                requestClose,
             ).also {
                 customTitlebar = it
             }

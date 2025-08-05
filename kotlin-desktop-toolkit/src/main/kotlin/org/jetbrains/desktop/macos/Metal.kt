@@ -25,7 +25,10 @@ public class MetalCommandQueue internal constructor(ptr: MemorySegment) : Manage
     public val pointerAddress: Long get() = pointer.address()
 }
 
-public class MetalView internal constructor(ptr: MemorySegment, private val arena: Arena) : Managed(ptr, desktop_macos_h::metal_drop_view) {
+public class MetalView internal constructor(
+    ptr: MemorySegment,
+    private val arena: Arena,
+) : Managed(ptr, desktop_macos_h::metal_drop_view) {
     public companion object {
         public fun create(device: MetalDevice, onDisplayLayer: () -> Unit): MetalView {
             val arena = Arena.ofShared()

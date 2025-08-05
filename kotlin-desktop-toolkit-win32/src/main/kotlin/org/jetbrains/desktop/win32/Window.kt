@@ -42,9 +42,7 @@ public data class WindowStyle(
     }
 }
 
-public class Window internal constructor(
-    private val ptr: MemorySegment,
-) : AutoCloseable {
+public class Window internal constructor(private val ptr: MemorySegment) : AutoCloseable {
     public companion object {
         public fun create(appPtr: MemorySegment, params: WindowParams): Window {
             return Arena.ofConfined().use { arena ->

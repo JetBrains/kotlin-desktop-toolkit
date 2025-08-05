@@ -8,9 +8,7 @@ import org.jetbrains.desktop.win32.generated.desktop_windows_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
-public class AngleRenderer internal constructor(
-    private val angleDevicePtr: MemorySegment,
-) : AutoCloseable {
+public class AngleRenderer internal constructor(private val angleDevicePtr: MemorySegment) : AutoCloseable {
     public companion object {
         public fun create(window: Window): AngleRenderer {
             return AngleRenderer(
@@ -23,7 +21,10 @@ public class AngleRenderer internal constructor(
         }
     }
 
-    public data class EglGetProcFunc(val fPtr: Long, val ctxPtr: Long)
+    public data class EglGetProcFunc(
+        val fPtr: Long,
+        val ctxPtr: Long,
+    )
 
     public fun getEglGetProcFunc(): EglGetProcFunc {
         return Arena.ofConfined().use { arena ->
