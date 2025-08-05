@@ -1,5 +1,5 @@
 use anyhow::Context;
-use ashpd::desktop::file_chooser;
+use ashpd::desktop::file_chooser::{self, FileFilter};
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger::{PanicDefault, ffi_boundary},
@@ -222,7 +222,19 @@ pub extern "C" fn window_unset_decoration_mode(app_ptr: AppPtr, window_id: Windo
 }
 
 impl OpenFileDialogParams {
-    fn apply(&self, request: file_chooser::OpenFileRequest) -> file_chooser::OpenFileRequest {
+    fn apply(&self, mut request: file_chooser::OpenFileRequest) -> file_chooser::OpenFileRequest {
+        // Notes:
+        // 1. Gnome:
+        //   a. request.directory(true).multiple(false):
+        //      shows files and doesn't disable the "accept" button when they are selected, but return value is directory
+        //   b. request.directory(true).multiple(true):
+        //      shows files, but disabled the "accept" button when they are selected, but return value is a list of directories
+        //   c. request.directory(true).multiple(false).current_filter(FileFilter::new("Directories").mimetype("inode/directory")):
+        //      doesn't show files, the return value is a directory
+
+        if self.select_directories {
+            request = request.current_filter(FileFilter::new("Directories").mimetype("inode/directory"));
+        }
         request.directory(self.select_directories).multiple(self.allows_multiple_selection)
     }
 }
