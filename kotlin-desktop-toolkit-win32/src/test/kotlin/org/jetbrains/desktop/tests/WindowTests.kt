@@ -5,7 +5,10 @@ import org.jetbrains.desktop.win32.KotlinDesktopToolkit
 import org.jetbrains.desktop.win32.LogicalSize
 import org.jetbrains.desktop.win32.WindowParams
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 
+@EnabledOnOs(OS.WINDOWS)
 class WindowTests {
     @Test
     fun smokeTest() {

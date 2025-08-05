@@ -3,11 +3,14 @@ package org.jetbrains.desktop.macos.tests
 import org.jetbrains.desktop.macos.Appearance
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Window
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+@EnabledOnOs(OS.MAC)
 class AppearanceTest : KDTApplicationTestBase() {
     @Test
     fun smokeTest() {

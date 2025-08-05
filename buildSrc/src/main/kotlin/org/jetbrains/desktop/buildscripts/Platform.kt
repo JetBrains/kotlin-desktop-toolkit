@@ -32,8 +32,7 @@ fun hostOs(): Os  {
 }
 
 fun targetArch(project: Project): Arch? {
-    val projectTargetArchName = project.properties["targetArch"]
-    return when (projectTargetArchName) {
+    return when (val projectTargetArchName = project.properties["targetArch"]) {
         "x86_64" -> Arch.x86_64
         "aarch64" -> Arch.aarch64
         null -> null
