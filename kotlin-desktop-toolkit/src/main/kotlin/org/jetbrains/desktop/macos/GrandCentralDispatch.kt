@@ -2,6 +2,7 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import org.jetbrains.desktop.macos.generated.`dispatcher_main_exec_async$f`
+import org.jetbrains.desktop.macos.generated.`dispatcher_start_on_main_thread$f`
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -15,15 +16,39 @@ public object GrandCentralDispatch : AutoCloseable {
     private val queue = ConcurrentLinkedQueue<() -> Unit>()
     private val callback: MemorySegment = `dispatcher_main_exec_async$f`.allocate({
         ffiUpCall {
-            highPriorityQueue.poll()?.let {
-                it()
-            } ?: queue.poll().invoke()
+            if (!isClosed) {
+                val f = highPriorityQueue.poll() ?: queue.poll()
+                f!!.invoke()
+            }
         }
     }, Arena.global())
 
     public fun isMainThread(): Boolean {
         return ffiDownCall {
             desktop_macos_h.dispatcher_is_main_thread()
+        }
+    }
+
+    /**
+     * On MacOS access to NSApplication and other UI related classes are only allowed from the Main thread.
+     * Usually you can dispatch on Main with `dispatchOnMain { ... }` function, which sends the task to the Main.
+     * Under the hood `dispatchOnMain` uses application main queue, see: https://developer.apple.com/documentation/dispatch/dispatch_get_main_queue?language=objc
+     * But for initial capture of Main thread, to start Application event loop you need to use this `startOnMainThread` function.
+     * It relies on lower level mechanism, which allows reentrancy, opposite to `dispatchOnMain`.
+     */
+    public fun startOnMainThread(body: () -> Unit) {
+        if (isMainThread()) {
+            body()
+        } else {
+            Arena.ofShared().use { arena ->
+                desktop_macos_h.dispatcher_start_on_main_thread(
+                    `dispatcher_start_on_main_thread$f`.allocate({
+                        ffiUpCall {
+                            body()
+                        }
+                    }, arena),
+                )
+            }
         }
     }
 
@@ -43,11 +68,20 @@ public object GrandCentralDispatch : AutoCloseable {
         checkIsNotClosed()
         val latch = CountDownLatch(1)
         var result: T? = null
+        var throwable: Throwable? = null
         dispatchOnMain(highPriority) {
-            result = f()
+            result = try {
+                f()
+            } catch (e: Throwable) {
+                throwable = e
+                null
+            }
             latch.countDown()
         }
         latch.await()
+        if (throwable != null) {
+            throw throwable
+        }
         return result!!
     }
 

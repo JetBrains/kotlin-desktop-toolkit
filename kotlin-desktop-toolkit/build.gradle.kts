@@ -310,7 +310,7 @@ fun canRunTests(): Boolean {
 
 compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildNativeTask ->
     tasks.test {
-        jvmArgs("--enable-preview")
+        jvmArgs("--enable-preview", "--enable-native-access=ALL-UNNAMED")
         val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
         dependsOn(buildNativeTask)
         val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
@@ -329,6 +329,16 @@ compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildN
                 )
             },
         )
+        testLogging {
+            events("failed")
+            events("passed")
+            events("skipped")
+        }
+
+        // We run every test class in separate JVM
+        forkEvery = 1
+        maxParallelForks = 1
+
         useJUnitPlatform()
     }
 }

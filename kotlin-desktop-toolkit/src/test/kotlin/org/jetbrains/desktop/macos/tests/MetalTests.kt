@@ -1,29 +1,24 @@
 package org.jetbrains.desktop.macos.tests
 
-import org.jetbrains.desktop.macos.Application
-import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView
 import org.jetbrains.desktop.macos.Window
-import org.junit.jupiter.api.Test
+import kotlin.test.Test
 
-class MetalTests {
+class MetalTests : KDTApplicationTestBase() {
     @Test
     fun smokeTest() {
-        GrandCentralDispatch.dispatchOnMainSync {
-            Application.init()
-        }
-        val (device, queue) = GrandCentralDispatch.dispatchOnMainSync {
+        val (device, queue) = ui {
             val device = MetalDevice.create()
             val queue = MetalCommandQueue.create(device)
             Pair(device, queue)
         }
-        val view = GrandCentralDispatch.dispatchOnMainSync {
+        val view = ui {
             MetalView.create(device, onDisplayLayer = {})
         }
-        val window = GrandCentralDispatch.dispatchOnMainSync {
+        val window = ui {
             val window = Window.create(
                 origin = LogicalPoint(100.0, 100.0),
                 title = "Hello",
@@ -31,7 +26,7 @@ class MetalTests {
             window.attachView(view)
             window
         }
-        GrandCentralDispatch.dispatchOnMainSync {
+        ui {
             device.close()
             view.close()
             window.close()

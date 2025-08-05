@@ -47,7 +47,20 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-      - name: Build with Gradle
-        run: ./gradlew build
       - name: Lint with Gradle
         run: ./gradlew lint
+      - name: Build with Gradle
+        run: ./gradlew build
+      - name: Test with Gradle
+        run: ./gradlew test --rerun
+
+
+      - name: Publish Test Report
+        if: always() # Ensure this step runs even if the test step fails
+        uses: dorny/test-reporter@v2
+        with:
+          name: Tests Report (${{ matrix.os }})
+          path: kotlin-desktop-toolkit/build/test-results/test/*.xml
+          reporter: java-junit
+          fail-on-empty: false
+          fail-on-error: false
