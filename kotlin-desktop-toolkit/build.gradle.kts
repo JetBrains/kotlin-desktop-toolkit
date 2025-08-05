@@ -123,14 +123,6 @@ val generateBindingsTaskByOS = allPlatforms.allOSes().associateWith { os ->
     }
 }
 
-tasks.compileJava {
-    generateBindingsTaskByOS.values.forEach { dependsOn(it) }
-}
-
-tasks.compileKotlin {
-    generateBindingsTaskByOS.values.forEach { dependsOn(it) }
-}
-
 sourceSets.main {
     generateBindingsTaskByOS.values.forEach { task ->
         java.srcDir(task.flatMap { it.generatedSourcesDirectory })
@@ -168,6 +160,16 @@ val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
             from(compileTask.flatMap { it.libraryFile })
         }
     }
+}
+
+tasks.compileJava {
+    dependsOn(nativeJarTasksByPlatform.values)
+    dependsOn(generateBindingsTaskByOS.values)
+}
+
+tasks.compileKotlin {
+    dependsOn(nativeJarTasksByPlatform.values)
+    dependsOn(generateBindingsTaskByOS.values)
 }
 
 val spaceUsername: String? by project
