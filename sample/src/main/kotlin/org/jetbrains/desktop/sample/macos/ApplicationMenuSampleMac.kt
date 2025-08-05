@@ -17,8 +17,8 @@ fun main() {
     GrandCentralDispatch.startOnMainThread {
         Application.init(
             Application.ApplicationConfig(
-    //        disableDictationMenuItem = true,
-    //        disableCharacterPaletteMenuItem = true
+                //        disableDictationMenuItem = true,
+                //        disableCharacterPaletteMenuItem = true
             ),
         )
         AppMenuManager.setMainMenu(buildAppMenu())
