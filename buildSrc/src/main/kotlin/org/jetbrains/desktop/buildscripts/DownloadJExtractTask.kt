@@ -33,7 +33,8 @@ abstract class DownloadJExtractTask @Inject constructor(
     @get:OutputFile
     val jextractBinary = providerFactory.provider {
         val dir = jextractDirectory.get().asFile
-        when (platform) { // FIXME: implement for each platform if required
+        when (hostPlatform().os) { // FIXME: implement for each platform if required
+            Os.WINDOWS -> dir.resolve("jextract-22/bin/jextract.bat")
             else -> dir.resolve("jextract-22/bin/jextract") // FIXME: path under the directory
         }
     }
@@ -86,7 +87,10 @@ private fun jextractPlatform(platform: Platform): String {
     }
     val jextractArch = when (platform.arch) {
         Arch.x86_64 -> "x64"
-        Arch.aarch64 -> "aarch64"
+        Arch.aarch64 -> when (platform.os) {
+            Os.WINDOWS -> "x64" // there's no jextract for windows-arm64 yet
+            else -> "aarch64"
+        }
     }
     return "$jextractOs-$jextractArch"
 }
