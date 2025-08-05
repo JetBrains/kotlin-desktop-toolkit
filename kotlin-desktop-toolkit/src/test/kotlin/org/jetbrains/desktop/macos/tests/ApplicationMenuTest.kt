@@ -5,7 +5,7 @@ import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.AppMenuStructure
 import kotlin.test.Test
 
-class ApplicationMenuTest: KDTApplicationTestBase() {
+class ApplicationMenuTest : KDTApplicationTestBase() {
     @Test
     fun smokeTest() {
         ui {

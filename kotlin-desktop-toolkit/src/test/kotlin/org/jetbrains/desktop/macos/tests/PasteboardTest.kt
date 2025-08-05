@@ -1,19 +1,14 @@
 package org.jetbrains.desktop.macos.tests
 
-import org.jetbrains.desktop.macos.GrandCentralDispatch
-import org.jetbrains.desktop.macos.KotlinDesktopToolkit
-import org.jetbrains.desktop.macos.LogLevel
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.Pasteboard.Element
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.createTempFile
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-
-class PasteboardTest: KDTApplicationTestBase() {
+class PasteboardTest : KDTApplicationTestBase() {
 
     @Test
     fun putStringTest() {

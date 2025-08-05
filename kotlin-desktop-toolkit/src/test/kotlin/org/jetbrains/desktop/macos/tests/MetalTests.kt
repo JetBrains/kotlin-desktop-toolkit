@@ -1,16 +1,13 @@
 package org.jetbrains.desktop.macos.tests
 
-import org.jetbrains.desktop.macos.Application
-import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView
 import org.jetbrains.desktop.macos.Window
-import kotlin.test.Ignore
 import kotlin.test.Test
 
-class MetalTests: KDTApplicationTestBase() {
+class MetalTests : KDTApplicationTestBase() {
     @Test
     fun smokeTest() {
         val (device, queue) = ui {

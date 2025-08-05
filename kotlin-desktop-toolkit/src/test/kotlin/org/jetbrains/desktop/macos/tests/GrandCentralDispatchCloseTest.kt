@@ -22,7 +22,7 @@ class GrandCentralDispatchCloseTest : KDTTestBase() {
         }
         assertEquals(tasksCount, counter.get())
         assertThrows<Throwable> {
-            GrandCentralDispatch.dispatchOnMain {  }
+            GrandCentralDispatch.dispatchOnMain { }
         }
     }
 }

@@ -68,7 +68,7 @@ public object GrandCentralDispatch : AutoCloseable {
         checkIsNotClosed()
         val latch = CountDownLatch(1)
         var result: T? = null
-        var throwable : Throwable? = null
+        var throwable: Throwable? = null
         dispatchOnMain(highPriority) {
             result = try {
                 f()
