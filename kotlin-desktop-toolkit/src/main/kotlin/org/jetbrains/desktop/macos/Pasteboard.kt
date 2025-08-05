@@ -16,7 +16,10 @@ public object Pasteboard {
     public const val HTML_TYPE: String = "public.html"
     public const val URL_TYPE: String = "public.url"
 
-    public data class Element(val type: String, val content: String)
+    public data class Element(
+        val type: String,
+        val content: String,
+    )
 
     public sealed class Item {
         /**

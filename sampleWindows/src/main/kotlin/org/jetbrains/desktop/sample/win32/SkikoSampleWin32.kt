@@ -27,9 +27,7 @@ import kotlin.Long
 import kotlin.String
 import kotlin.use
 
-class RotatingBallWindow(
-    windowParams: WindowParams,
-) : SkikoWindowWin32(windowParams) {
+class RotatingBallWindow(windowParams: WindowParams) : SkikoWindowWin32(windowParams) {
     companion object {
         fun createWindow(windowParams: WindowParams): RotatingBallWindow {
             return RotatingBallWindow(windowParams)

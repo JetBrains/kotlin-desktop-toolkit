@@ -19,9 +19,7 @@ import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
 import kotlin.time.TimeSource
 
-abstract class SkikoWindowWin32(
-    params: WindowParams,
-) : AutoCloseable {
+abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
     private val angleRenderer: AngleRenderer by lazy {
         AngleRenderer.create(window)
     }

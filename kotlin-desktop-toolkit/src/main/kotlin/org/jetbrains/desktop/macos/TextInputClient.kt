@@ -95,7 +95,10 @@ public interface TextInputClient {
      */
     public fun setMarkedText(text: String, selectedRange: TextRange?, replacementRange: TextRange?)
 
-    public data class StringAndRange(val text: String?, val actualRange: TextRange?)
+    public data class StringAndRange(
+        val text: String?,
+        val actualRange: TextRange?,
+    )
     public fun attributedStringForRange(range: TextRange): StringAndRange
     public data class RectAndRange(
         val rect: LogicalRect,

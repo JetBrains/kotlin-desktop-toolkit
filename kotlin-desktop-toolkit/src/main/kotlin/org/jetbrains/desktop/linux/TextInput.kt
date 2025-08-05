@@ -8,9 +8,7 @@ public data class TextInputPreeditStringData(
     internal companion object
 }
 
-public data class TextInputCommitStringData(
-    public val text: String?,
-) {
+public data class TextInputCommitStringData(public val text: String?) {
     internal companion object
 }
 
