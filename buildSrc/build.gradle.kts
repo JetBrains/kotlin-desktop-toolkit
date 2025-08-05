@@ -8,10 +8,10 @@ repositories {
     mavenCentral()
 }
 
-task("lint") {
+tasks.register("lint") {
     dependsOn(tasks.named("ktlintCheck"))
 }
 
-task("autofix") {
+tasks.register("autofix") {
     dependsOn(tasks.named("ktlintFormat"))
 }

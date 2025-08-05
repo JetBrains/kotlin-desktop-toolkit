@@ -5,8 +5,11 @@ import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
 import org.jetbrains.desktop.macos.MetalView
 import org.jetbrains.desktop.macos.Window
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import kotlin.test.Test
 
+@EnabledOnOs(OS.MAC)
 class MetalTests : KDTApplicationTestBase() {
     @Test
     fun smokeTest() {

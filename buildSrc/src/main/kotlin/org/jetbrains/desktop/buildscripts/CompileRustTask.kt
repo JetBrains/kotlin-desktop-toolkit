@@ -4,7 +4,6 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.file.Directory
 import org.gradle.api.file.FileTree
 import org.gradle.api.file.ProjectLayout
-import org.gradle.api.file.RegularFile
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Provider
 import org.gradle.api.provider.ProviderFactory
@@ -185,9 +184,4 @@ internal fun ObjectFactory.rustWorkspaceFiles(workspaceRoot: Provider<Directory>
   setDir(workspaceRoot)
 }.matching {
   exclude("target/**/*")
-}
-
-
-fun getWorkspaceHeaderFile(dir: Directory, crateName: String): RegularFile {
-    return dir.dir(crateName).dir("headers").file("${crateName.replace("-", "_")}.h")
 }

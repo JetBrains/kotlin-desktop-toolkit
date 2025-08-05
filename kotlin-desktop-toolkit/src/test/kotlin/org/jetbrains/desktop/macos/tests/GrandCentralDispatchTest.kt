@@ -8,6 +8,8 @@ import org.jetbrains.desktop.macos.QualityOfService
 import org.jetbrains.desktop.macos.setQualityOfServiceForCurrentThread
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -17,6 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+@EnabledOnOs(OS.MAC)
 class GrandCentralDispatchTest : KDTTestBase() {
 
     @Test

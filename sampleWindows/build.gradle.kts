@@ -1,7 +1,7 @@
 import org.jetbrains.desktop.buildscripts.Arch
+import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
-import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
-import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
+import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.hostArch
 import org.jetbrains.desktop.buildscripts.hostOs
 import org.jetbrains.desktop.buildscripts.targetArch
@@ -48,8 +48,8 @@ val depScope = configurations.dependencyScope("native") {
 val nativeLib = configurations.resolvable("nativeParts") {
     extendsFrom(depScope.get())
     attributes {
-        attribute(KotlinDesktopToolkitAttributes.TYPE, KotlingDesktopToolkitArtifactType.NATIVE_LIBRARY)
-        attribute(KotlinDesktopToolkitAttributes.PROFILE, KotlingDesktopToolkitNativeProfile.DEBUG)
+        attribute(KotlinDesktopToolkitAttributes.TYPE, KotlinDesktopToolkitArtifactType.NATIVE_LIBRARY)
+        attribute(KotlinDesktopToolkitAttributes.PROFILE, KotlinDesktopToolkitNativeProfile.DEBUG)
     }
 }
 
@@ -101,10 +101,10 @@ tasks.register<JavaExec>("runSkikoSampleWindows") {
     setUpCrashDumpPath()
 }
 
-task("lint") {
+tasks.register("lint") {
     dependsOn(tasks.named("ktlintCheck"))
 }
 
-task("autofix") {
+tasks.register("autofix") {
     dependsOn(tasks.named("ktlintFormat"))
 }

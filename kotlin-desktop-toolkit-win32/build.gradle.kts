@@ -12,9 +12,9 @@ import org.jetbrains.desktop.buildscripts.CompileRustTask
 import org.jetbrains.desktop.buildscripts.CrossCompilationSettings
 import org.jetbrains.desktop.buildscripts.DownloadJExtractTask
 import org.jetbrains.desktop.buildscripts.GenerateJavaBindingsTask
+import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
-import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitArtifactType
-import org.jetbrains.desktop.buildscripts.KotlingDesktopToolkitNativeProfile
+import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.Os
 import org.jetbrains.desktop.buildscripts.Platform
 import org.jetbrains.desktop.buildscripts.buildPlatformRustTarget
@@ -251,8 +251,8 @@ publishing {
 
 val nativeConsumable = configurations.consumable("nativeParts") {
     attributes {
-        attribute(KotlinDesktopToolkitAttributes.TYPE, KotlingDesktopToolkitArtifactType.NATIVE_LIBRARY)
-        attribute(KotlinDesktopToolkitAttributes.PROFILE, KotlingDesktopToolkitNativeProfile.DEBUG)
+        attribute(KotlinDesktopToolkitAttributes.TYPE, KotlinDesktopToolkitArtifactType.NATIVE_LIBRARY)
+        attribute(KotlinDesktopToolkitAttributes.PROFILE, KotlinDesktopToolkitNativeProfile.DEBUG)
     }
 }
 
@@ -291,13 +291,13 @@ val clippyFixTasks = enabledPlatforms.map { target ->
     }
 }
 
-task("lint") {
+tasks.register("lint") {
     dependsOn(tasks.named("ktlintCheck"))
     clippyCheckTasks.forEach { dependsOn(it) }
     dependsOn(cargoFmtCheckTask)
 }
 
-task("autofix") {
+tasks.register("autofix") {
     dependsOn(tasks.named("ktlintFormat"))
     clippyFixTasks.forEach { dependsOn(it) }
     dependsOn(cargoFmtTask)
@@ -305,26 +305,17 @@ task("autofix") {
 
 // Junit tests
 
-fun canRunTests(): Boolean {
-    return when (hostOs()) {
-        Os.LINUX -> System.getenv("WAYLAND_DISPLAY") != null
-        Os.MACOS -> true
-        Os.WINDOWS -> true
-    }
-}
+tasks.test {
+    jvmArgs("--enable-preview")
+    useJUnitPlatform()
 
-compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildNativeTask ->
-    tasks.test {
-        jvmArgs("--enable-preview")
-        val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
+    val buildNativeTask = compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]
+    if (buildNativeTask == null) {
+        enabled = false
+    } else {
         dependsOn(buildNativeTask)
+        val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
         val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
-
-        filter {
-            includeTestsMatching("org.jetbrains.desktop.${hostOs().getKdtName()}.*")
-        }
-        enabled = canRunTests()
-
         jvmArgumentProviders.add(
             CommandLineArgumentProvider {
                 listOf(
@@ -334,6 +325,5 @@ compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildN
                 )
             },
         )
-        useJUnitPlatform()
     }
 }

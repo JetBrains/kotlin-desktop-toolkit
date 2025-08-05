@@ -2,8 +2,11 @@ package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Window
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import kotlin.test.Test
 
+@EnabledOnOs(OS.MAC)
 class WindowTests : KDTApplicationTestBase() {
     @Test
     fun smokeTest() {

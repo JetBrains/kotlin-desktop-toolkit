@@ -2,12 +2,15 @@ package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.Pasteboard.Element
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.createTempFile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+@EnabledOnOs(OS.MAC)
 class PasteboardTest : KDTApplicationTestBase() {
 
     @Test

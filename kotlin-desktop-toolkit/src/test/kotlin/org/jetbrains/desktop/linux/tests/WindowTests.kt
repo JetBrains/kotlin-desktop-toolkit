@@ -5,7 +5,12 @@ import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogicalSize
 import org.jetbrains.desktop.linux.WindowParams
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 
+@EnabledOnOs(OS.LINUX)
+@EnabledIfEnvironmentVariable(named = "WAYLAND_DISPLAY", matches = ".*")
 class WindowTests {
     @Test
     fun smokeTest() {
