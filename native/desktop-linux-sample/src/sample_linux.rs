@@ -351,7 +351,7 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                 .any(|s| s == URI_LIST_MIME_TYPE.to_str().unwrap())
             {
                 let list_str = str::from_utf8(data.data.as_slice().unwrap()).unwrap();
-                let list = list_str.split('\n').collect::<Vec<_>>();
+                let list = list_str.trim_ascii_end().split("\r\n").collect::<Vec<_>>();
                 info!("Pasted file list: {list:?}");
             } else if data
                 .mime_types

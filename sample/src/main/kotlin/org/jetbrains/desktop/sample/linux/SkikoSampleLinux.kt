@@ -440,7 +440,7 @@ class EditorState {
             is Event.DataTransfer -> {
                 val data = event.data
                 if (data.mimeTypes.contains(URI_LIST_MIME_TYPE)) {
-                    val files = data.data.decodeToString().trimEnd().split("\n")
+                    val files = data.data.decodeToString().trimEnd().split("\r\n")
                     Logger.info { "Pasted ${files.size} files:" }
                     for (file in files) {
                         Logger.info { file }
@@ -1273,7 +1273,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
                         content.files.joinToString("\n").encodeToByteArray()
                     }
                     URI_LIST_MIME_TYPE -> {
-                        content.files.joinToString("\n") { "file://$it" }.encodeToByteArray()
+                        content.files.joinToString("\r\n", postfix = "\r\n") { "file://$it" }.encodeToByteArray()
                     }
                     else -> {
                         error("Unsupported mime type: $mimeType")
