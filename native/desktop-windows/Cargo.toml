@@ -36,4 +36,4 @@ windows = { version = "0.61.3", features = [
 ] }
 
 [build-dependencies]
-cbindgen.workspace = true
+cbindgen = "0.29.0"

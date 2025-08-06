@@ -24,6 +24,3 @@ wayland-egl = "0.32.5"
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
 libloading = "0.8.6"
 tokio = { version = "1.46.1", features = ["rt-multi-thread"] }
-
-[build-dependencies]
-cbindgen.workspace = true
