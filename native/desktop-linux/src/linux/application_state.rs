@@ -53,7 +53,8 @@ use smithay_client_toolkit::{
 
 use crate::linux::{application_api::ApplicationCallbacks, events::WindowId, text_input::PendingTextInputEvent, window::SimpleWindow};
 
-pub type EglInstance = khronos_egl::Instance<khronos_egl::Dynamic<libloading::Library, khronos_egl::EGL1_0>>;
+/// cbindgen:ignore
+pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
 
 pub struct ApplicationState {
     pub callbacks: ApplicationCallbacks,

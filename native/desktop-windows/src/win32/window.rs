@@ -32,8 +32,10 @@ use super::{
     window_api::{WindowId, WindowParams, WindowStyle, WindowSystemBackdropType, WindowTitleBarKind},
 };
 
+/// cbindgen:ignore
 const WINDOW_PTR_PROP_NAME: PCWSTR = w!("KDT_WINDOW_PTR");
 
+/// cbindgen:ignore
 pub(crate) const WM_REQUEST_UPDATE: u32 = WM_USER + 1;
 
 pub struct Window {

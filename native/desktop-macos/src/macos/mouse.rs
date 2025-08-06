@@ -49,6 +49,7 @@ pub struct MouseButton(pub u32);
 #[repr(transparent)]
 pub struct MouseButtonsSet(pub u32);
 
+/// cbindgen:ignore
 #[allow(non_upper_case_globals)]
 pub(crate) const EmptyMouseButtonsSet: MouseButtonsSet = MouseButtonsSet(0);
 

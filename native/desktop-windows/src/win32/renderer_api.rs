@@ -36,6 +36,7 @@ impl PanicDefault for EglSurfaceData {
     }
 }
 
+/// cbindgen:ignore
 extern "C" fn egl_get_proc_address(ctx_ptr: AngleDevicePtr, name_ptr: BorrowedStrPtr) -> Option<extern "system" fn()> {
     let name = name_ptr.as_str().unwrap();
     let angle_device = unsafe { ctx_ptr.borrow::<AngleDevice>() };

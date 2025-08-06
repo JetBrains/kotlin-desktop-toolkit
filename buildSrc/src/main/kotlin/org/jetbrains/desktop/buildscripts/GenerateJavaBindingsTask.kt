@@ -21,6 +21,7 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.createTempFile
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.deleteRecursively
+import kotlin.io.path.exists
 import kotlin.io.path.name
 import kotlin.io.path.pathString
 
@@ -60,6 +61,7 @@ abstract class GenerateJavaBindingsTask @Inject constructor(
         val cbindgenBinary = execOperations.installCargoProgram(
             moduleDirectory = crateDir,
             crate = "cbindgen",
+            version = "0.29.0",
             targetDirectory = temporaryDir.resolve("cargoInstallation").toPath(),
             logger = logger,
         )
@@ -79,24 +81,31 @@ abstract class GenerateJavaBindingsTask @Inject constructor(
 }
 
 @OptIn(ExperimentalPathApi::class)
-private fun ExecOperations.installCargoProgram(moduleDirectory: Path, crate: String, targetDirectory: Path, logger: Logger): Path {
-    targetDirectory.createDirectories()
-    val cmd = listOf(
-        findCommand("cargo", hostOs())?.absolutePathString() ?: error("cannot find cargo path"),
-        "install",
-        crate,
-        "--locked",
-        "--color=always",
-        "--root=${targetDirectory.absolutePathString()}"
-    )
-    logger.info("Installing Cargo program '$crate' in module '$moduleDirectory' using:\n  ${cmd.joinToString(" ")}")
+private fun ExecOperations.installCargoProgram(moduleDirectory: Path, crate: String, version: String, targetDirectory: Path, logger: Logger): Path {
+    val targetBinDir = targetDirectory.resolve("bin")
+    val targetBinPath = targetBinDir.resolve(crate)
+    if (!targetBinPath.exists()) {
+        targetDirectory.createDirectories()
+        val cmd = listOf(
+            findCommand("cargo", hostOs())?.absolutePathString() ?: error("cannot find cargo path"),
+            "install",
+            crate,
+            "--version",
+            version,
+            "--locked",
+            "--color=always",
+            "--root=${targetDirectory.absolutePathString()}"
+        )
+        logger.info("Installing Cargo program '$crate' in module '$moduleDirectory' using:\n  ${cmd.joinToString(" ")}")
 
-    exec {
-        workingDir = moduleDirectory.toFile()
-        commandLine(*cmd.toTypedArray())
+        exec {
+            workingDir = moduleDirectory.toFile()
+            environment["PATH"] = "${environment["PATH"]}:$targetBinDir"
+            commandLine(*cmd.toTypedArray())
+        }
     }
 
-    return targetDirectory.resolve("bin").resolve(crate)
+    return targetBinPath
 }
 
 @OptIn(ExperimentalPathApi::class)

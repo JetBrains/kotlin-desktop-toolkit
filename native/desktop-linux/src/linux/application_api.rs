@@ -91,6 +91,7 @@ pub struct GetEglProcFuncData<'a> {
     pub ctx: BorrowedOpaquePtr<'a>,
 }
 
+/// cbindgen:ignore
 extern "C" fn egl_get_proc_address(ctx_ptr: BorrowedOpaquePtr<'_>, name_ptr: BorrowedStrPtr) -> Option<extern "system" fn()> {
     let name = name_ptr.as_str().unwrap();
     // debug!("egl_get_gl_proc for {name}");
