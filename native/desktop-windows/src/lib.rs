@@ -15,12 +15,14 @@ pub mod win32;
 
 extern crate desktop_common;
 
+/// cbindgen:ignore
 static DLL_HINSTANCE: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
 
 fn get_dll_instance() -> HINSTANCE {
     HINSTANCE(DLL_HINSTANCE.load(Ordering::Relaxed))
 }
 
+/// cbindgen:ignore
 #[unsafe(no_mangle)]
 extern "system" fn DllMain(instance: HINSTANCE, reason: u32, _reserved: *mut std::ffi::c_void) -> BOOL {
     if reason == DLL_PROCESS_ATTACH {

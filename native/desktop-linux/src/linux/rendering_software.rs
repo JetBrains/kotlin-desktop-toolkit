@@ -21,6 +21,7 @@ struct SoftwareBuffer<'a> {
 }
 
 impl SoftwareRendering {
+    /// cbindgen:ignore
     const BYTES_PER_PIXEL: u8 = 4;
 
     fn create_buffer(pool: &mut SlotPool, size: PhysicalSize) -> SoftwareBuffer {

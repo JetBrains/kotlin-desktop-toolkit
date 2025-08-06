@@ -19,6 +19,7 @@ use objc2::{
 use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardURLReadingFileURLsOnlyKey, NSPasteboardWriting};
 use objc2_foundation::{NSArray, NSDictionary, NSMutableArray, NSNumber, NSString, NSURL};
 
+/// cbindgen:ignore
 static GENERAL_PASTEBOARD_SHARED_TOKEN: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone)]

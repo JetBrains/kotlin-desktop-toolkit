@@ -1,6 +1,7 @@
 use anyhow::Result;
 use khronos_egl as egl;
 
+/// cbindgen:ignore
 pub(crate) type EglInstance = egl::DynamicInstance<egl::EGL1_5>;
 
 type GrGLclampf = core::ffi::c_float;
@@ -18,9 +19,13 @@ type GrGLViewportFn = extern "system" fn(x: egl::Int, y: egl::Int, width: GrGLsi
 pub(crate) type GetPlatformDisplayEXTFn =
     extern "system" fn(platform: egl::Enum, native_display: *mut std::ffi::c_void, attrib_list: *const egl::Int) -> egl::EGLDisplay;
 
+/// cbindgen:ignore
 pub(crate) const GR_GL_STENCIL_BUFFER_BIT: GrGLbitfield = 0x0000_0400;
+
+/// cbindgen:ignore
 pub(crate) const GR_GL_COLOR_BUFFER_BIT: GrGLbitfield = 0x0000_4000;
 
+/// cbindgen:ignore
 pub(crate) const GR_GL_FRAMEBUFFER_BINDING: egl::Enum = 0x8CA6;
 
 macro_rules! get_egl_proc {

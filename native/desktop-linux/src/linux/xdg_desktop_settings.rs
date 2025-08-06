@@ -14,8 +14,13 @@ use crate::linux::xdg_desktop_settings_api::{
     Color, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme, XdgDesktopSetting,
 };
 
+/// cbindgen:ignore
 const GNOME_DESKTOP_INTERFACE_NAMESPACE: &str = "org.gnome.desktop.interface";
+
+/// cbindgen:ignore
 const GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE: &str = "org.gnome.desktop.peripherals.mouse";
+
+/// cbindgen:ignore
 const GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE: &str = "org.gnome.desktop.wm.preferences";
 
 #[derive(Debug)]

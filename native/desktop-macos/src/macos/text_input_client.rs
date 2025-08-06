@@ -351,6 +351,7 @@ impl From<NSRange> for TextRange {
     }
 }
 
+/// cbindgen:ignore
 #[allow(clippy::cast_sign_loss)] // isize to usize
 pub const NOT_FOUND_NS_RANGE: NSRange = NSRange {
     location: NSNotFound as usize,
