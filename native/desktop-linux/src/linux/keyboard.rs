@@ -7,7 +7,7 @@ use smithay_client_toolkit::{
         Connection, Proxy, QueueHandle,
         protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
     },
-    seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers},
+    seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
 };
 
 use super::events::{KeyUpEvent, ModifiersChangedEvent};
@@ -61,10 +61,17 @@ impl KeyboardHandler for ApplicationState {
         _: &WlKeyboard,
         _serial: u32,
         modifiers: Modifiers,
+        _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
         if let Some(window) = self.get_key_window() {
             window.update_modifiers(modifiers);
+        }
+    }
+
+    fn repeat_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, _serial: u32, event: KeyEvent) {
+        if let Some(window) = self.get_key_window() {
+            window.on_key_repeat(event);
         }
     }
 }

@@ -210,8 +210,12 @@ impl SeatHandler for ApplicationState {
                     &seat,
                     None,
                     self.loop_handle.clone(),
-                    Box::new(|state, _wl_kbd, event| {
-                        if let Some(window) = state.get_key_window() {
+                    Box::new(|state, wl_kbd, event| {
+                        // Since wl_keyboard version 10, [smithay_client_toolkit::seat::keyboard::KeyboardHandler::repeat_key]
+                        // is used instead.
+                        if wl_kbd.version() < 10
+                            && let Some(window) = state.get_key_window()
+                        {
                             window.on_key_repeat(event);
                         }
                     }),
