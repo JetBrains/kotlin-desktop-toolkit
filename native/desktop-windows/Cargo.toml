@@ -34,6 +34,3 @@ windows = { version = "0.61.3", features = [
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_WindowsAndMessaging",
 ] }
-
-[build-dependencies]
-cbindgen = "0.29.0"
