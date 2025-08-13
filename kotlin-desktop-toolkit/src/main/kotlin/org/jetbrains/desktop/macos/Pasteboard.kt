@@ -2,7 +2,6 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_CombinedItemElement
 import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_PasteboardItem
-import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.macos.generated.NativeCombinedItemElement
 import org.jetbrains.desktop.macos.generated.NativePasteboardContentResult
 import org.jetbrains.desktop.macos.generated.NativePasteboardItem
@@ -69,7 +68,7 @@ public object Pasteboard {
     /**
      * When pasteboardName is null general clipboard is used
      */
-    public fun readItemsOfType(type: String, pasteboardName: String? = null): List<String> {
+    public fun readItemsOfType(type: String, pasteboardName: String? = null): List<ByteArray> {
         return Arena.ofConfined().use { arena ->
             val nativeResult = ffiDownCall {
                 desktop_macos_h.pasteboard_read_items_of_type(
@@ -79,7 +78,7 @@ public object Pasteboard {
                 )
             }
             val items = NativePasteboardContentResult.items(nativeResult)
-            val result = listOfStringsFromNative(items)
+            val result = listOfByteArraysFromNative(items)
             ffiDownCall {
                 desktop_macos_h.pasteboard_content_drop(nativeResult)
             }
@@ -99,7 +98,7 @@ public object Pasteboard {
                 )
             }
             val items = NativePasteboardContentResult.items(nativeResult)
-            val result = listOfStringsFromNative(items)
+            val result = listOfByteArraysFromNative(items).map { String(it) }
             ffiDownCall {
                 desktop_macos_h.pasteboard_content_drop(nativeResult)
             }

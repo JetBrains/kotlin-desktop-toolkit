@@ -13,6 +13,10 @@ import kotlin.test.assertTrue
 @EnabledOnOs(OS.MAC)
 class PasteboardTest : KDTApplicationTestBase() {
 
+    private fun List<ByteArray>.toStringsList(): List<String> {
+        return this.map { it.decodeToString() }
+    }
+
     @Test
     fun putStringTest() {
         val counter = ui {
@@ -29,7 +33,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         }
         assertTrue(success)
         val strings = ui {
-            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
+            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE).toStringsList()
         }
         assertEquals(listOf("Hello World!!!"), strings)
     }
@@ -63,11 +67,11 @@ class PasteboardTest : KDTApplicationTestBase() {
         }
         assertTrue(success)
         val strings = ui {
-            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
+            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE).toStringsList()
         }
         assertEquals(listOf("Hello World!!!"), strings)
         val htmls = ui {
-            Pasteboard.readItemsOfType(type = Pasteboard.HTML_TYPE)
+            Pasteboard.readItemsOfType(type = Pasteboard.HTML_TYPE).toStringsList()
         }
         assertEquals(listOf(htmlContent), htmls)
     }
@@ -92,7 +96,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         }
         assertTrue(success)
         val strings = ui {
-            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
+            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE).toStringsList()
         }
         assertEquals(listOf("String1", "String2"), strings)
     }
@@ -120,7 +124,7 @@ class PasteboardTest : KDTApplicationTestBase() {
             Pasteboard.readFileItemPaths()
         }
         val strings = ui {
-            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
+            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE).toStringsList()
         }
         assertEquals(listOf(file1.absolutePathString(), file2.absolutePathString()), files)
         assertEquals(listOf(content1, content2), strings)
@@ -140,7 +144,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         }
         assertTrue(success)
         val urls = ui {
-            Pasteboard.readItemsOfType(type = Pasteboard.URL_TYPE)
+            Pasteboard.readItemsOfType(type = Pasteboard.URL_TYPE).toStringsList()
         }
         assertEquals(listOf(url), urls)
     }
@@ -160,7 +164,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         }
         assertTrue(success)
         val result = ui {
-            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE)
+            Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE).toStringsList()
         }
         assertEquals(listOf(emojiString), result)
     }

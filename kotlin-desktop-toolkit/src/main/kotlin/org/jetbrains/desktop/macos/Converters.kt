@@ -1,6 +1,8 @@
 package org.jetbrains.desktop.macos
 
+import org.jetbrains.desktop.macos.generated.NativeAutoDropArray_AutoDropArray_u8
 import org.jetbrains.desktop.macos.generated.NativeAutoDropArray_RustAllocatedStrPtr
+import org.jetbrains.desktop.macos.generated.NativeAutoDropArray_u8
 import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_BorrowedStrPtr
 import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.macos.generated.NativeColor
@@ -104,4 +106,21 @@ internal fun ByteArray.toNative(arena: Arena): MemorySegment = let { bytes ->
     NativeBorrowedArray_u8.ptr(result, arena.allocateArray(JAVA_BYTE, *bytes))
     NativeBorrowedArray_u8.len(result, bytes.count().toLong())
     result
+}
+
+internal fun byteArrayFromNative(segment: MemorySegment): ByteArray {
+    val ptr = NativeAutoDropArray_u8.ptr(segment)
+    val len = NativeAutoDropArray_u8.len(segment)
+    val result = ByteArray(len.toInt())
+    MemorySegment.copy(ptr, JAVA_BYTE, 0, result, 0, result.size)
+    return result
+}
+
+internal fun listOfByteArraysFromNative(segment: MemorySegment): List<ByteArray> {
+    val ptr = NativeAutoDropArray_AutoDropArray_u8.ptr(segment)
+    val len = NativeAutoDropArray_AutoDropArray_u8.len(segment)
+    return (0 until len).map { i ->
+        val byteArrayPtr = NativeAutoDropArray_u8.asSlice(ptr, i)
+        byteArrayFromNative(byteArrayPtr)
+    }.toList()
 }
