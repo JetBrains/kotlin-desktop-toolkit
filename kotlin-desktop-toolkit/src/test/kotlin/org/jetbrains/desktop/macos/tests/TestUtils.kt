@@ -78,3 +78,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
         }
     }
 }
+
+fun jbIconBytes(): ByteArray {
+    return object {}.javaClass.getResource("/jb-logo.png")!!.readBytes()
+}

@@ -38,8 +38,6 @@ import org.jetbrains.skia.Color
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import java.lang.AutoCloseable
-import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.concurrent.Volatile
 import kotlin.math.PI
 import kotlin.math.cos
@@ -74,6 +72,7 @@ class CustomTitlebar(
                     EventHandlerResult.Continue
                 }
             }
+
             else -> EventHandlerResult.Continue
         }
     }
@@ -425,30 +424,39 @@ class ApplicationState : AutoCloseable {
             is Event.KeyDown -> {
                 Logger.info { "$event" }
             }
+
             is Event.KeyUp -> {
                 Logger.info { "$event" }
             }
+
             is Event.ModifiersChanged -> {
                 Logger.info { "$event" }
             }
+
             is Event.MouseEntered -> {
                 Logger.info { "$event" }
             }
+
             is Event.MouseExited -> {
                 Logger.info { "$event" }
             }
+
             is Event.MouseMoved -> {
                 Logger.info { "$event" }
             }
+
             is Event.MouseDragged -> {
                 Logger.info { "$event" }
             }
+
             is Event.MouseDown -> {
                 Logger.info { "$event" }
             }
+
             is Event.MouseUp -> {
                 Logger.info { "$event" }
             }
+
             else -> {}
         }
     }
@@ -469,10 +477,12 @@ class ApplicationState : AutoCloseable {
                 }
                 EventHandlerResult.Stop
             }
+
             is Event.WindowFullScreenToggle -> {
                 AppMenuManager.setMainMenu(buildMenu())
                 EventHandlerResult.Continue
             }
+
             else -> EventHandlerResult.Continue
         }
         return if (result == EventHandlerResult.Continue && event is WindowEvent) {
@@ -553,11 +563,9 @@ class ApplicationState : AutoCloseable {
                     title = "Copy",
                     keystroke = Keystroke(key = "c", modifiers = KeyModifiersSet.create(command = true)),
                     perform = {
-                        Files.readAllBytes(Path.of("resources/jb-logo.png")).let { iconBytes ->
-                            Pasteboard.clear()
-                            val result = Pasteboard.writeObjects(Pasteboard.Item.of(Pasteboard.PNG_IMAGE_TYPE, iconBytes))
-                            Logger.info { "Pasteboard.writeObjects result: $result" }
-                        }
+                        Pasteboard.clear()
+                        val result = Pasteboard.writeObjects(Pasteboard.Item.of(Pasteboard.PNG_IMAGE_TYPE, jbIconBytes()))
+                        Logger.info { "Pasteboard.writeObjects result: $result" }
                     },
                 ),
                 AppMenuItem.Action(
@@ -752,6 +760,10 @@ fun dragAndDropCallback(): DragAndDropCallbacks {
     }
 }
 
+fun jbIconBytes(): ByteArray {
+    return object {}.javaClass.getResource("/jb-logo.png")!!.readBytes()
+}
+
 fun main() {
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
     Logger.info { runtimeInfo() }
@@ -762,9 +774,7 @@ fun main() {
             state.createWindow(useCustomTitlebar = true)
             Application.runEventLoop { event ->
                 if (event is Event.ApplicationDidFinishLaunching) {
-                    Files.readAllBytes(Path.of("resources/jb-logo.png")).let { iconBytes ->
-                        Application.setDockIcon(iconBytes)
-                    }
+                    Application.setDockIcon(jbIconBytes())
                     AppMenuManager.setMainMenu(state.buildMenu())
                 }
                 state.handleEvent(event)

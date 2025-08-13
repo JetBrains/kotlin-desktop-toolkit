@@ -7,6 +7,7 @@ import org.junit.jupiter.api.condition.OS
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.createTempFile
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -167,5 +168,28 @@ class PasteboardTest : KDTApplicationTestBase() {
             Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE).toStringsList()
         }
         assertEquals(listOf(emojiString), result)
+    }
+
+    @Test
+    fun putPngImage() {
+        val counter = ui {
+            Pasteboard.clear()
+        }
+        assert(counter > 0L)
+
+        val imageBytes = jbIconBytes()
+        val success = ui {
+            Pasteboard.writeObjects(
+                Pasteboard.Item.of(
+                    type = Pasteboard.PNG_IMAGE_TYPE,
+                    content = imageBytes,
+                ),
+            )
+        }
+        assertTrue(success)
+        val result = ui {
+            Pasteboard.readItemsOfType(type = Pasteboard.PNG_IMAGE_TYPE).single()
+        }
+        assertContentEquals(imageBytes, result)
     }
 }

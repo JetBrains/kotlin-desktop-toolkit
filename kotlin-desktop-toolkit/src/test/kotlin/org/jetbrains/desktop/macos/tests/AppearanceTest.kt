@@ -43,4 +43,11 @@ class AppearanceTest : KDTApplicationTestBase() {
             window2.close()
         }
     }
+
+    @Test
+    fun setIconTest() {
+        ui {
+            Application.setDockIcon(jbIconBytes())
+        }
+    }
 }
