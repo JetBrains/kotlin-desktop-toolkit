@@ -1,13 +1,10 @@
 use std::{ffi::CStr, sync::Mutex};
 
-use super::{
-    string::{copy_to_c_string, copy_to_ns_string},
-    url::url_to_file_path_string,
-};
+use super::{string::copy_to_ns_string, url::url_to_file_path_string};
 use crate::macos::string::copy_to_ns_string_if_not_null;
 use anyhow::Context;
 use desktop_common::{
-    ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr, RustAllocatedStrPtr},
+    ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr},
     logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
@@ -99,7 +96,7 @@ fn copy_to_objects(items: &BorrowedArray<PasteboardItem>) -> anyhow::Result<Reta
                 let item = unsafe { NSPasteboardItem::new() };
                 for element in elements {
                     let uti = copy_to_ns_string(&element.uniform_type_identifier)?;
-                    let data = NSData::with_bytes(&element.content.as_slice()?);
+                    let data = NSData::with_bytes(element.content.as_slice()?);
                     unsafe {
                         assert!(item.setData_forType(&data, &uti));
                     }
@@ -151,9 +148,7 @@ pub extern "C" fn pasteboard_read_items_of_type(
             let items: Box<[_]> = items
                 .iter()
                 .filter_map(|item| unsafe { item.dataForType(&uti) })
-                .map(|data| {
-                    AutoDropArray::new(data.to_vec().into_boxed_slice())
-                })
+                .map(|data| AutoDropArray::new(data.to_vec().into_boxed_slice()))
                 .collect();
             Ok(PasteboardContentResult {
                 items: AutoDropArray::new(items),
