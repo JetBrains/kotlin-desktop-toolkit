@@ -35,8 +35,8 @@ data class CrossCompilationSettings(private val platforms: List<Platform>) {
             val host = hostPlatform()
             val targetArch = targetArch(project)
             return CrossCompilationSettings(buildList {
-                for (os in Os.entries) {
-                    for (arch in Arch.entries) {
+                for (os in Os.values()) {
+                    for (arch in Arch.values()) {
                         if (targetArch == null || arch == targetArch) {
                             val platform = Platform(os, arch)
                             if (enabled(platform, host, project)) {
