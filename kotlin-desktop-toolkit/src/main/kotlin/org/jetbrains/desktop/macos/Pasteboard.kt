@@ -2,6 +2,7 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_CombinedItemElement
 import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_PasteboardItem
+import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.macos.generated.NativeCombinedItemElement
 import org.jetbrains.desktop.macos.generated.NativePasteboardContentResult
 import org.jetbrains.desktop.macos.generated.NativePasteboardItem
@@ -18,8 +19,14 @@ public object Pasteboard {
 
     public data class Element(
         val type: String,
-        val content: String,
-    )
+        val content: ByteArray,
+    ) {
+        public companion object {
+            public fun ofString(type: String, content: String): Element {
+                return Element(type, content.encodeToByteArray())
+            }
+        }
+    }
 
     public sealed class Item {
         /**
@@ -32,7 +39,11 @@ public object Pasteboard {
         }
 
         public companion object {
-            public fun of(type: String, content: String): Item {
+            public fun ofString(type: String, content: String): Item {
+                return Combined(Element(type, content.encodeToByteArray()))
+            }
+
+            public fun of(type: String, content: ByteArray): Item {
                 return Combined(Element(type, content))
             }
         }
@@ -101,7 +112,7 @@ public object Pasteboard {
 
 internal fun Pasteboard.Element.toNative(natiiveElement: MemorySegment, arena: Arena) = let { element ->
     NativeCombinedItemElement.uniform_type_identifier(natiiveElement, arena.allocateUtf8String(element.type))
-    NativeCombinedItemElement.content(natiiveElement, arena.allocateUtf8String(element.content))
+    NativeCombinedItemElement.content(natiiveElement, element.content.toNative(arena))
 }
 
 @JvmName("toNativeBorrowedArray_CombinedItemElement")

@@ -2,6 +2,7 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeAutoDropArray_RustAllocatedStrPtr
 import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_BorrowedStrPtr
+import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.macos.generated.NativeColor
 import org.jetbrains.desktop.macos.generated.NativeLogicalPoint
 import org.jetbrains.desktop.macos.generated.NativeLogicalRect
@@ -10,6 +11,7 @@ import org.jetbrains.desktop.macos.generated.NativePhysicalSize
 import org.jetbrains.desktop.macos.generated.desktop_macos_h.NativeBorrowedStrPtr
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout.JAVA_BYTE
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment): LogicalSize {
     return LogicalSize(
@@ -95,4 +97,11 @@ internal fun listOfStringsToNative(arena: Arena, list: List<String>): MemorySegm
     NativeBorrowedArray_BorrowedStrPtr.ptr(result, itemsArray)
     NativeBorrowedArray_BorrowedStrPtr.len(result, itemsCount)
     return result
+}
+
+internal fun ByteArray.toNative(arena: Arena): MemorySegment = let { bytes ->
+    val result = NativeBorrowedArray_u8.allocate(arena)
+    NativeBorrowedArray_u8.ptr(result, arena.allocateArray(JAVA_BYTE, *bytes))
+    NativeBorrowedArray_u8.len(result, bytes.count().toLong())
+    result
 }

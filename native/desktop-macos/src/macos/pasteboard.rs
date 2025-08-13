@@ -17,7 +17,7 @@ use objc2::{
     runtime::{AnyObject, ProtocolObject},
 };
 use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardURLReadingFileURLsOnlyKey, NSPasteboardWriting};
-use objc2_foundation::{NSArray, NSDictionary, NSMutableArray, NSNumber, NSString, NSURL};
+use objc2_foundation::{NSArray, NSData, NSDictionary, NSMutableArray, NSNumber, NSString, NSURL};
 
 /// cbindgen:ignore
 static GENERAL_PASTEBOARD_SHARED_TOKEN: Mutex<()> = Mutex::new(());
@@ -65,10 +65,9 @@ pub extern "C" fn pasteboard_clear() -> isize {
 #[repr(C)]
 #[derive(Debug)]
 pub struct CombinedItemElement<'a> {
-    // todo: later we need to support elements with binary payload
     // todo: and elements with lazy data providers
     pub uniform_type_identifier: BorrowedStrPtr<'a>,
-    pub content: BorrowedStrPtr<'a>,
+    pub content: BorrowedArray<'a, u8>,
 }
 
 #[repr(C)]
@@ -100,9 +99,9 @@ fn copy_to_objects(items: &BorrowedArray<PasteboardItem>) -> anyhow::Result<Reta
                 let item = unsafe { NSPasteboardItem::new() };
                 for element in elements {
                     let uti = copy_to_ns_string(&element.uniform_type_identifier)?;
-                    let content = copy_to_ns_string(&element.content)?;
+                    let data = NSData::with_bytes(&element.content.as_slice()?);
                     unsafe {
-                        item.setString_forType(&content, &uti);
+                        assert!(item.setData_forType(&data, &uti));
                     }
                 }
                 array.addObject(&ProtocolObject::from_retained(item));

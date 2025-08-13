@@ -21,11 +21,9 @@ class PasteboardTest : KDTApplicationTestBase() {
         assert(counter > 0L)
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.Combined(
-                    Element(
-                        type = Pasteboard.STRING_TYPE,
-                        content = "Hello World!!!",
-                    ),
+                Pasteboard.Item.ofString(
+                    type = Pasteboard.STRING_TYPE,
+                    content = "Hello World!!!",
                 ),
             )
         }
@@ -52,11 +50,11 @@ class PasteboardTest : KDTApplicationTestBase() {
         val success = ui {
             Pasteboard.writeObjects(
                 Pasteboard.Item.Combined(
-                    Element(
+                    Element.ofString(
                         type = Pasteboard.STRING_TYPE,
                         content = "Hello World!!!",
                     ),
-                    Element(
+                    Element.ofString(
                         type = Pasteboard.HTML_TYPE,
                         content = htmlContent,
                     ),
@@ -82,17 +80,13 @@ class PasteboardTest : KDTApplicationTestBase() {
         assert(counter > 0L)
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.Combined(
-                    Element(
-                        type = Pasteboard.STRING_TYPE,
-                        content = "String1",
-                    ),
+                Pasteboard.Item.ofString(
+                    type = Pasteboard.STRING_TYPE,
+                    content = "String1",
                 ),
-                Pasteboard.Item.Combined(
-                    Element(
-                        type = Pasteboard.STRING_TYPE,
-                        content = "String2",
-                    ),
+                Pasteboard.Item.ofString(
+                    type = Pasteboard.STRING_TYPE,
+                    content = "String2",
                 ),
             )
         }
@@ -117,8 +111,8 @@ class PasteboardTest : KDTApplicationTestBase() {
             Pasteboard.writeObjects(
                 Pasteboard.Item.Url("file://${file1.absolutePathString()}"),
                 Pasteboard.Item.Url("file://${file2.absolutePathString()}"),
-                Pasteboard.Item.of(type = Pasteboard.STRING_TYPE, content = content1),
-                Pasteboard.Item.of(type = Pasteboard.STRING_TYPE, content = content2),
+                Pasteboard.Item.ofString(type = Pasteboard.STRING_TYPE, content = content1),
+                Pasteboard.Item.ofString(type = Pasteboard.STRING_TYPE, content = content2),
             )
         }
         assertTrue(success)
@@ -161,7 +155,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val emojiString = "😃"
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.of(type = Pasteboard.STRING_TYPE, content = emojiString),
+                Pasteboard.Item.ofString(type = Pasteboard.STRING_TYPE, content = emojiString),
             )
         }
         assertTrue(success)
