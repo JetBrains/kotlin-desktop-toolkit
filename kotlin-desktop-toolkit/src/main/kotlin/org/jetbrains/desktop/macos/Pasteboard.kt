@@ -15,6 +15,8 @@ public object Pasteboard {
     public const val STRING_TYPE: String = "public.utf8-plain-text"
     public const val HTML_TYPE: String = "public.html"
     public const val URL_TYPE: String = "public.url"
+    public const val PNG_IMAGE_TYPE: String = "public.png"
+    public const val TIFF_IMAGE_TYPE: String = "public.tiff"
 
     public data class Element(
         val type: String,

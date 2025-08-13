@@ -550,6 +550,17 @@ class ApplicationState : AutoCloseable {
             AppMenuItem.SubMenu(
                 title = "Edit",
                 AppMenuItem.Action(
+                    title = "Copy",
+                    keystroke = Keystroke(key = "c", modifiers = KeyModifiersSet.create(command = true)),
+                    perform = {
+                        Files.readAllBytes(Path.of("resources/jb-logo.png")).let { iconBytes ->
+                            Pasteboard.clear()
+                            val result = Pasteboard.writeObjects(Pasteboard.Item.of(Pasteboard.PNG_IMAGE_TYPE, iconBytes))
+                            Logger.info { "Pasteboard.writeObjects result: $result" }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
                     title = "Paste",
                     keystroke = Keystroke(key = "v", modifiers = KeyModifiersSet.create(command = true)),
                     perform = {
