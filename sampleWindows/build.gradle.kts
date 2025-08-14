@@ -55,7 +55,7 @@ val nativeLib = configurations.resolvable("nativeParts") {
 
 fun JavaExec.setUpLoggingAndLibraryPath() {
     val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample_win32.log").map { it.asFile.absolutePath }
-    val nativeLibPath = nativeLib.map { it.singleFile.parentFile.absolutePath }
+    val nativeLibPath = nativeLib.map { it.singleFile.absolutePath }
     jvmArgumentProviders.add(
         CommandLineArgumentProvider {
             listOf(

@@ -113,7 +113,7 @@ impl EventLoop {
 
             WM_CHAR | WM_DEADCHAR | WM_SYSCHAR | WM_SYSDEADCHAR => on_char(self, window, msg, wparam, lparam),
 
-            WM_ACTIVATE => Some(on_activate(window)),
+            WM_ACTIVATE => on_activate(window),
 
             WM_NCCALCSIZE => on_nccalcsize(window, wparam, lparam),
 
@@ -203,7 +203,8 @@ fn on_getminmaxinfo(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     None
 }
 
-fn on_activate(window: &Window) -> LRESULT {
+#[allow(clippy::unnecessary_wraps)]
+fn on_activate(window: &Window) -> Option<LRESULT> {
     let hwnd = window.hwnd();
     let _ = window.extend_content_into_titlebar().and_then(|()| window.apply_system_backdrop());
     let mut rect = RECT::default();
@@ -220,7 +221,7 @@ fn on_activate(window: &Window) -> LRESULT {
             )
         });
     }
-    LRESULT(0)
+    Some(LRESULT(0))
 }
 
 fn on_nccalcsize(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {

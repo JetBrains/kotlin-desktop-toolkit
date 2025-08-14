@@ -9,7 +9,7 @@ import org.gradle.internal.impldep.kotlinx.serialization.Serializable
 data class Platform(
     @get:Input val os: Os,
     @get:Input val arch: Arch,
-) {
+) : java.io.Serializable {
     fun name(): String = "${os.normalizedName}-${arch.name}"
 }
 
