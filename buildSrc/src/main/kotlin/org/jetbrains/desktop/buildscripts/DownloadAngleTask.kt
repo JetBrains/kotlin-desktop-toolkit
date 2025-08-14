@@ -31,7 +31,7 @@ abstract class DownloadAngleTask @Inject constructor(
     @get:OutputFiles
     val binaries = outputDirectory.map { dir ->
         dir.asFileTree
-            .matching { include("**/libEGL.dll", "**/libGLESv2.dll", "**/d3dcompiler_47.dll") }
+            .matching { include("**/libEGL.dll", "**/libGLESv2.dll") }
             .files
     }
 
