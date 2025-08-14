@@ -118,7 +118,7 @@ val downloadJExtractTask = tasks.register<DownloadJExtractTask>("downloadJExtrac
 val downloadAngleTaskByPlatform = enabledPlatforms.associateWith { platform ->
     tasks.register<DownloadAngleTask>("downloadAngle-${buildPlatformRustTarget(platform)}") {
         this.platform = platform
-        version = "7fea539cc9"
+        version = providers.gradleProperty("kdt.win32.angle-version")
         outputDirectory = layout.buildDirectory.dir("angle-${angleArch(platform.arch)}")
     }
 }
@@ -135,13 +135,12 @@ val collectNativeArtifactsTaskByTarget = buildMap {
                 dependsOn(downloadAngleTask)
                 angleBinaries.setFrom(downloadAngleTask.flatMap { it.binaries })
                 nativeLibrary = buildNativeTask.flatMap { it.libraryFile }
+                targetDirectory = layout.buildDirectory.dir("native-${buildPlatformRustTarget(platform)}")
             }
             put(RustTarget(platform, profile), collectWindowsArtifactsTask)
         }
     }
 }
-
-val collectNativeArtifactsTaskForTests = collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]
 
 fun Os.getKdtName(): String {
     return when (this) {
@@ -198,11 +197,9 @@ val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
     tasks.register<Jar>("package-jar-$jarSuffix") {
         archiveBaseName = "kotlin-desktop-toolkit-$jarSuffix"
         for (profile in profiles) {
-            // The collect artifacts task copies ANGLE binaries to the same directory as the native compile task
-            // Gradle doesn't like it when two tasks write to the same directory, so we need to depend on it here
-            val collectNativeArtifactsTask = collectNativeArtifactsTaskByTarget[RustTarget(platform, profile)]!!
-            dependsOn(collectNativeArtifactsTask)
-            from(collectNativeArtifactsTask.flatMap { it.nativeLibrary })
+            val compileTask = compileNativeTaskByTarget[RustTarget(platform, profile)]!!
+            dependsOn(compileTask)
+            from(compileTask.flatMap { it.libraryFile })
         }
         dependsOn(downloadAngleTask)
         from(downloadAngleTask.flatMap { it.binaries })
@@ -212,13 +209,13 @@ val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
 tasks.compileJava {
     dependsOn(nativeJarTasksByPlatform.values)
     dependsOn(generateBindingsTaskByOS.values)
-    collectNativeArtifactsTaskForTests?.let { dependsOn(it) }
+    collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { dependsOn(it) }
 }
 
 tasks.compileKotlin {
     dependsOn(nativeJarTasksByPlatform.values)
     dependsOn(generateBindingsTaskByOS.values)
-    collectNativeArtifactsTaskForTests?.let { dependsOn(it) }
+    collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { dependsOn(it) }
 }
 
 val spaceUsername: String? by project
@@ -296,7 +293,7 @@ val nativeConsumable = configurations.consumable("nativeParts") {
     }
 }
 
-collectNativeArtifactsTaskForTests?.let { collectArtifactsTask ->
+collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { collectArtifactsTask ->
     artifacts.add(nativeConsumable.name, collectArtifactsTask.flatMap { it.targetDirectory }) {
         builtBy(collectArtifactsTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
     }
@@ -349,12 +346,13 @@ tasks.test {
     jvmArgs("--enable-preview")
     useJUnitPlatform()
 
-    if (collectNativeArtifactsTaskForTests == null) {
+    val collectNativeArtifactsTask = collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]
+    if (collectNativeArtifactsTask == null) {
         enabled = false
     } else {
-        dependsOn(collectNativeArtifactsTaskForTests)
+        dependsOn(collectNativeArtifactsTask)
         val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
-        val libFolder = collectNativeArtifactsTaskForTests.flatMap { it.targetDirectory }
+        val libFolder = collectNativeArtifactsTask.flatMap { it.targetDirectory }
         jvmArgumentProviders.add(
             CommandLineArgumentProvider {
                 listOf(

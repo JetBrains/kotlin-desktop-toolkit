@@ -20,12 +20,16 @@ abstract class CollectWindowsArtifactsTask @Inject constructor(
     val nativeLibrary = objectFactory.fileProperty()
 
     @get:OutputDirectory
-    val targetDirectory = nativeLibrary.map { it.asFile.parentFile }
+    val targetDirectory = objectFactory.directoryProperty()
 
     @TaskAction
     fun copyBinaries() {
         fs.copy {
             from(angleBinaries)
+            into(targetDirectory)
+        }
+        fs.copy {
+            from(nativeLibrary)
             into(targetDirectory)
         }
     }
