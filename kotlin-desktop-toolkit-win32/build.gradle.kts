@@ -8,8 +8,10 @@ import org.gradle.internal.impldep.kotlinx.serialization.Serializable
 import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.CargoFmtTask
 import org.jetbrains.desktop.buildscripts.ClippyTask
+import org.jetbrains.desktop.buildscripts.CollectWindowsArtifactsTask
 import org.jetbrains.desktop.buildscripts.CompileRustTask
 import org.jetbrains.desktop.buildscripts.CrossCompilationSettings
+import org.jetbrains.desktop.buildscripts.DownloadAngleTask
 import org.jetbrains.desktop.buildscripts.DownloadJExtractTask
 import org.jetbrains.desktop.buildscripts.GenerateJavaBindingsTask
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitArtifactType
@@ -17,6 +19,7 @@ import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.Os
 import org.jetbrains.desktop.buildscripts.Platform
+import org.jetbrains.desktop.buildscripts.angleArch
 import org.jetbrains.desktop.buildscripts.buildPlatformRustTarget
 import org.jetbrains.desktop.buildscripts.hostArch
 import org.jetbrains.desktop.buildscripts.hostOs
@@ -112,6 +115,33 @@ val downloadJExtractTask = tasks.register<DownloadJExtractTask>("downloadJExtrac
     jextractDirectory = layout.buildDirectory.dir("jextract")
 }
 
+val downloadAngleTaskByPlatform = enabledPlatforms.associateWith { platform ->
+    tasks.register<DownloadAngleTask>("downloadAngle-${buildPlatformRustTarget(platform)}") {
+        this.platform = platform
+        version = providers.gradleProperty("kdt.win32.angle-version")
+        outputDirectory = layout.buildDirectory.dir("angle-${angleArch(platform.arch)}")
+    }
+}
+
+val collectNativeArtifactsTaskByTarget = buildMap {
+    for (platform in enabledPlatforms) {
+        val downloadAngleTask = downloadAngleTaskByPlatform[platform]!!
+        for (profile in profiles) {
+            val buildNativeTask = compileNativeTaskByTarget[RustTarget(platform, profile)]!!
+            val collectWindowsArtifactsTask = tasks.register<CollectWindowsArtifactsTask>(
+                "collectWindowsArtifacts-${buildPlatformRustTarget(platform)}-$profile",
+            ) {
+                dependsOn(buildNativeTask)
+                dependsOn(downloadAngleTask)
+                angleBinaries.setFrom(downloadAngleTask.flatMap { it.binaries })
+                nativeLibrary = buildNativeTask.flatMap { it.libraryFile }
+                targetDirectory = layout.buildDirectory.dir("native-${buildPlatformRustTarget(platform)}")
+            }
+            put(RustTarget(platform, profile), collectWindowsArtifactsTask)
+        }
+    }
+}
+
 fun Os.getKdtName(): String {
     return when (this) {
         Os.WINDOWS -> "win32"
@@ -163,6 +193,7 @@ fun jarSuffixForPlatform(platform: Platform): String {
 
 val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
     val jarSuffix = jarSuffixForPlatform(platform)
+    val downloadAngleTask = downloadAngleTaskByPlatform[platform]!!
     tasks.register<Jar>("package-jar-$jarSuffix") {
         archiveBaseName = "kotlin-desktop-toolkit-$jarSuffix"
         for (profile in profiles) {
@@ -170,17 +201,21 @@ val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
             dependsOn(compileTask)
             from(compileTask.flatMap { it.libraryFile })
         }
+        dependsOn(downloadAngleTask)
+        from(downloadAngleTask.flatMap { it.binaries })
     }
 }
 
 tasks.compileJava {
     dependsOn(nativeJarTasksByPlatform.values)
     dependsOn(generateBindingsTaskByOS.values)
+    collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { dependsOn(it) }
 }
 
 tasks.compileKotlin {
     dependsOn(nativeJarTasksByPlatform.values)
     dependsOn(generateBindingsTaskByOS.values)
+    collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { dependsOn(it) }
 }
 
 val spaceUsername: String? by project
@@ -258,9 +293,9 @@ val nativeConsumable = configurations.consumable("nativeParts") {
     }
 }
 
-compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { buildNativeTask ->
-    artifacts.add(nativeConsumable.name, buildNativeTask.flatMap { it.libraryFile }) {
-        builtBy(buildNativeTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
+collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { collectArtifactsTask ->
+    artifacts.add(nativeConsumable.name, collectArtifactsTask.flatMap { it.targetDirectory }) {
+        builtBy(collectArtifactsTask) // redundant because of the flatMap usage above, but if you want to be sure you can specify that
     }
 }
 
@@ -311,13 +346,13 @@ tasks.test {
     jvmArgs("--enable-preview")
     useJUnitPlatform()
 
-    val buildNativeTask = compileNativeTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]
-    if (buildNativeTask == null) {
+    val collectNativeArtifactsTask = collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]
+    if (collectNativeArtifactsTask == null) {
         enabled = false
     } else {
-        dependsOn(buildNativeTask)
+        dependsOn(collectNativeArtifactsTask)
         val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
-        val libFolder = buildNativeTask.flatMap { it.libraryFile }.map { it.parent }
+        val libFolder = collectNativeArtifactsTask.flatMap { it.targetDirectory }
         jvmArgumentProviders.add(
             CommandLineArgumentProvider {
                 listOf(

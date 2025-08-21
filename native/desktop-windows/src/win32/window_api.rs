@@ -50,7 +50,7 @@ pub struct WindowStyle {
 
 impl WindowStyle {
     #[must_use]
-    pub const fn to_system(self) -> WINDOW_STYLE {
+    pub const fn to_system(&self) -> WINDOW_STYLE {
         let mut style = WS_OVERLAPPEDWINDOW.0;
         if matches!(self.title_bar_kind, WindowTitleBarKind::None) {
             style &= !WS_CAPTION.0;
@@ -90,7 +90,7 @@ pub enum WindowSystemBackdropType {
 
 impl WindowSystemBackdropType {
     #[must_use]
-    pub const fn to_system(self) -> DWM_SYSTEMBACKDROP_TYPE {
+    pub const fn to_system(&self) -> DWM_SYSTEMBACKDROP_TYPE {
         match self {
             Self::Auto => DWMSBT_AUTO,
             Self::None => DWMSBT_NONE,
