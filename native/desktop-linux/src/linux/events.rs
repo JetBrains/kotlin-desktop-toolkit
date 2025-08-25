@@ -156,24 +156,13 @@ impl<'a> KeyDownEvent<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct KeyUpEvent<'a> {
+pub struct KeyUpEvent {
     pub code: KeyCode,
-    pub characters: BorrowedStrPtr<'a>,
     pub key: u32,
 }
 
-impl<'a> KeyUpEvent<'a> {
-    pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a CString>) -> Self {
-        Self {
-            code,
-            characters: BorrowedStrPtr::new_optional(characters),
-            key,
-        }
-    }
-}
-
-impl<'a> From<KeyUpEvent<'a>> for Event<'a> {
-    fn from(value: KeyUpEvent<'a>) -> Self {
+impl From<KeyUpEvent> for Event<'_> {
+    fn from(value: KeyUpEvent) -> Self {
         Self::KeyUp(value)
     }
 }
@@ -531,7 +520,7 @@ pub enum Event<'a> {
     DataTransfer(DataTransferContent<'a>),
     DataTransferAvailable(DataTransferAvailable<'a>),
     KeyDown(KeyDownEvent<'a>),
-    KeyUp(KeyUpEvent<'a>),
+    KeyUp(KeyUpEvent),
     ModifiersChanged(ModifiersChangedEvent),
     MouseEntered(MouseEnteredEvent),
     MouseExited(MouseExitedEvent),

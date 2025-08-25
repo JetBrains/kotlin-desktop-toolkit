@@ -421,7 +421,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_linux_h.NativeEvent_KeyUp() -> {
             val nativeEvent = NativeEvent.key_up(s)
             Event.KeyUp(
-                characters = fromOptionalNativeString(NativeKeyUpEvent.characters(nativeEvent)),
                 key = KeySym(NativeKeyUpEvent.key(nativeEvent)),
                 keyCode = KeyCode(NativeKeyUpEvent.code(nativeEvent)),
             )

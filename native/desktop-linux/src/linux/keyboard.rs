@@ -50,7 +50,7 @@ impl KeyboardHandler for ApplicationState {
 
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, _serial: u32, event: KeyEvent) {
         if let Some(window) = self.get_key_window() {
-            window.release_key(event);
+            window.release_key(&event);
         }
     }
 
@@ -104,9 +104,14 @@ impl SimpleWindow {
         self.send_key_down_event(event, true);
     }
 
-    pub fn release_key(&self, event: KeyEvent) {
-        let characters = event.utf8.map(|s| CString::new(s).unwrap());
-        (self.event_handler)(&KeyUpEvent::new(KeyCode(event.raw_code), event.keysym.raw(), characters.as_ref()).into());
+    pub fn release_key(&self, event: &KeyEvent) {
+        (self.event_handler)(
+            &KeyUpEvent {
+                code: KeyCode(event.raw_code),
+                key: event.keysym.raw(),
+            }
+            .into(),
+        );
     }
 
     pub fn update_modifiers(&self, modifiers: Modifiers) {

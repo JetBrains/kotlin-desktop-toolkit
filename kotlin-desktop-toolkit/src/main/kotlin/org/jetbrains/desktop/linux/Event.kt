@@ -81,7 +81,6 @@ public sealed class Event {
 
     public data class KeyUp(
         val keyCode: KeyCode,
-        val characters: String?,
         val key: KeySym,
     ) : Event()
 
