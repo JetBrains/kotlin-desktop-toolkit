@@ -24,6 +24,8 @@ pub enum Event {
     WindowCloseRequest,
     WindowDraw(WindowDrawEvent),
     //WindowFocusChange(WindowFocusChangeEvent),
+    WindowKeyboardEnter,
+    WindowKeyboardLeave,
     //WindowFullScreenToggle(WindowFullScreenToggleEvent),
     WindowScaleChanged(WindowScaleChangedEvent),
     //WindowScreenChange(WindowScreenChangeEvent),

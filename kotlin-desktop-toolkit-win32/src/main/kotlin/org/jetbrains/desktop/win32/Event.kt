@@ -67,6 +67,10 @@ public sealed class Event {
         val scale: Float,
     ) : Event()
 
+    public data object WindowKeyboardEnter : Event()
+
+    public data object WindowKeyboardLeave : Event()
+
     public data class WindowScaleChanged(
         val newOrigin: PhysicalPoint,
         val newSize: PhysicalSize,
@@ -142,6 +146,14 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
             size = PhysicalSize.fromNative(NativeWindowDrawEvent.size(nativeEvent)),
             scale = NativeWindowDrawEvent.scale(nativeEvent),
         )
+    }
+
+    desktop_windows_h.NativeEvent_WindowKeyboardEnter() -> {
+        Event.WindowKeyboardEnter
+    }
+
+    desktop_windows_h.NativeEvent_WindowKeyboardLeave() -> {
+        Event.WindowKeyboardLeave
     }
 
     desktop_windows_h.NativeEvent_WindowScaleChanged() -> {
