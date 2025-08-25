@@ -1,7 +1,146 @@
 package org.jetbrains.desktop.linux
 
+public typealias RawKeyCode = Int
+
 @JvmInline
-public value class KeyCode internal constructor(public val value: Int)
+public value class KeyCode internal constructor(public val value: Int) {
+    @Suppress("MemberVisibilityCanBePrivate", "ConstPropertyName", "ktlint:standard:property-naming")
+    public companion object {
+        public const val Escape: RawKeyCode = 1
+        public const val `1`: RawKeyCode = 2
+        public const val `2`: RawKeyCode = 3
+        public const val `3`: RawKeyCode = 4
+        public const val `4`: RawKeyCode = 5
+        public const val `5`: RawKeyCode = 6
+        public const val `6`: RawKeyCode = 7
+        public const val `7`: RawKeyCode = 8
+        public const val `8`: RawKeyCode = 9
+        public const val `9`: RawKeyCode = 10
+        public const val `0`: RawKeyCode = 11
+        public const val minus: RawKeyCode = 12
+        public const val equal: RawKeyCode = 13
+        public const val BackSpace: RawKeyCode = 14
+        public const val Tab: RawKeyCode = 15
+        public const val Q: RawKeyCode = 16
+        public const val W: RawKeyCode = 17
+        public const val E: RawKeyCode = 18
+        public const val R: RawKeyCode = 19
+        public const val T: RawKeyCode = 20
+        public const val Y: RawKeyCode = 21
+        public const val U: RawKeyCode = 22
+        public const val I: RawKeyCode = 23
+        public const val O: RawKeyCode = 24
+        public const val P: RawKeyCode = 25
+        public const val bracketleft: RawKeyCode = 26
+        public const val bracketright: RawKeyCode = 27
+        public const val Return: RawKeyCode = 28
+        public const val Control_L: RawKeyCode = 29
+        public const val A: RawKeyCode = 30
+        public const val S: RawKeyCode = 31
+        public const val D: RawKeyCode = 32
+        public const val F: RawKeyCode = 33
+        public const val G: RawKeyCode = 34
+        public const val H: RawKeyCode = 35
+        public const val J: RawKeyCode = 36
+        public const val K: RawKeyCode = 37
+        public const val L: RawKeyCode = 38
+        public const val semicolon: RawKeyCode = 39
+        public const val apostrophe: RawKeyCode = 40
+        public const val grave: RawKeyCode = 41
+        public const val Shift_L: RawKeyCode = 42
+        public const val backslash: RawKeyCode = 43
+        public const val Z: RawKeyCode = 44
+        public const val X: RawKeyCode = 45
+        public const val C: RawKeyCode = 46
+        public const val V: RawKeyCode = 47
+        public const val B: RawKeyCode = 48
+        public const val N: RawKeyCode = 49
+        public const val M: RawKeyCode = 50
+        public const val comma: RawKeyCode = 51
+        public const val period: RawKeyCode = 52
+        public const val slash: RawKeyCode = 53
+        public const val Shift_R: RawKeyCode = 54
+        public const val KP_Multiply: RawKeyCode = 55
+        public const val Alt_L: RawKeyCode = 56
+        public const val space: RawKeyCode = 57
+        public const val Caps_Lock: RawKeyCode = 58
+        public const val F1: RawKeyCode = 59
+        public const val F2: RawKeyCode = 60
+        public const val F3: RawKeyCode = 61
+        public const val F4: RawKeyCode = 62
+        public const val F5: RawKeyCode = 63
+        public const val F6: RawKeyCode = 64
+        public const val F7: RawKeyCode = 65
+        public const val F8: RawKeyCode = 66
+        public const val F9: RawKeyCode = 67
+        public const val F10: RawKeyCode = 68
+        public const val Num_Lock: RawKeyCode = 69
+        public const val Scroll_Lock: RawKeyCode = 70
+        public const val KP_7: RawKeyCode = 71
+        public const val KP_8: RawKeyCode = 72
+        public const val KP_9: RawKeyCode = 73
+        public const val KP_Subtract: RawKeyCode = 74
+        public const val KP_4: RawKeyCode = 75
+        public const val KP_5: RawKeyCode = 76
+        public const val KP_6: RawKeyCode = 77
+        public const val KP_Add: RawKeyCode = 78
+        public const val KP_1: RawKeyCode = 79
+        public const val KP_2: RawKeyCode = 80
+        public const val KP_3: RawKeyCode = 81
+        public const val KP_0: RawKeyCode = 82
+        public const val KP_DOT: RawKeyCode = 83
+        public const val Zenkaku_Hankaku: RawKeyCode = 85
+        public const val lsgt: RawKeyCode = 86 // AKA KEY_102N
+        public const val F11: RawKeyCode = 87
+        public const val F12: RawKeyCode = 88
+        public const val Romaji: RawKeyCode = 89
+        public const val Katakana: RawKeyCode = 90
+        public const val Hiragana: RawKeyCode = 91
+        public const val Henkan: RawKeyCode = 92
+        public const val Hiragana_Katakana: RawKeyCode = 93
+        public const val Muhenkan: RawKeyCode = 94
+        public const val KP_Separator: RawKeyCode = 95
+        public const val KP_Enter: RawKeyCode = 96
+        public const val Control_R: RawKeyCode = 97
+        public const val KP_Divide: RawKeyCode = 98
+        public const val Print: RawKeyCode = 99
+        public const val Alt_R: RawKeyCode = 100
+        public const val Linefeed: RawKeyCode = 101
+        public const val Home: RawKeyCode = 102
+        public const val Up: RawKeyCode = 103
+        public const val Page_Up: RawKeyCode = 104
+        public const val Left: RawKeyCode = 105
+        public const val Right: RawKeyCode = 106
+        public const val End: RawKeyCode = 107
+        public const val Down: RawKeyCode = 108
+        public const val Page_Down: RawKeyCode = 109
+        public const val Insert: RawKeyCode = 110
+        public const val Delete: RawKeyCode = 111
+        public const val KP_Equal: RawKeyCode = 117
+        public const val plusminus: RawKeyCode = 118
+        public const val Pause: RawKeyCode = 119
+        public const val KP_COMMA: RawKeyCode = 121
+        public const val Hangul: RawKeyCode = 122
+        public const val Hangul_Hanja: RawKeyCode = 123
+        public const val yen: RawKeyCode = 124
+        public const val Super_L: RawKeyCode = 125
+        public const val Super_R: RawKeyCode = 126
+        public const val Menu: RawKeyCode = 127
+
+        public const val F13: RawKeyCode = 191
+        public const val F14: RawKeyCode = 192
+        public const val F15: RawKeyCode = 193
+        public const val F16: RawKeyCode = 194
+        public const val F17: RawKeyCode = 195
+        public const val F18: RawKeyCode = 196
+        public const val F19: RawKeyCode = 197
+        public const val F20: RawKeyCode = 198
+        public const val F21: RawKeyCode = 199
+        public const val F22: RawKeyCode = 200
+        public const val F23: RawKeyCode = 202
+        public const val F24: RawKeyCode = 203
+    }
+}
 
 public data class KeyModifiers(
     val capsLock: Boolean,

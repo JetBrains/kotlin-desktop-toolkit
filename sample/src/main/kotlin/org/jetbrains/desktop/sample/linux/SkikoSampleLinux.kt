@@ -10,8 +10,8 @@ import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.FontAntialiasingValue
 import org.jetbrains.desktop.linux.FontHintingValue
 import org.jetbrains.desktop.linux.FontRgbaOrderValue
+import org.jetbrains.desktop.linux.KeyCode
 import org.jetbrains.desktop.linux.KeyModifiers
-import org.jetbrains.desktop.linux.KeySym
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogLevel
 import org.jetbrains.desktop.linux.Logger
@@ -334,22 +334,26 @@ class EditorState {
             is Event.KeyDown -> {
                 if (modifiers.logo) {
                     EventHandlerResult.Continue
-                } else if (modifiers.control) {
-                    when (event.key.value) {
-                        KeySym.V -> {
+                } else if (modifiers.control && modifiers.shift) {
+                    when (event.keyCode.value) {
+                        KeyCode.V -> {
                             window.clipboardPaste(0, listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                             EventHandlerResult.Stop
                         }
-                        KeySym.v -> {
-                            window.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
-                            EventHandlerResult.Stop
-                        }
-                        KeySym.C -> {
+                        KeyCode.C -> {
                             app.clipboardPut(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                             currentClipboard = DataTransferContentType.UriList(EXAMPLE_FILES)
                             EventHandlerResult.Stop
                         }
-                        KeySym.c -> {
+                        else -> EventHandlerResult.Continue
+                    }
+                } else if (modifiers.control) {
+                    when (event.keyCode.value) {
+                        KeyCode.V -> {
+                            window.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
+                            EventHandlerResult.Stop
+                        }
+                        KeyCode.C -> {
                             getCurrentSelection()?.let { selection ->
                                 app.clipboardPut(listOf(TEXT_MIME_TYPE))
                                 currentClipboard = DataTransferContentType.Text(selection)
@@ -359,8 +363,8 @@ class EditorState {
                         else -> EventHandlerResult.Continue
                     }
                 } else {
-                    when (event.key.value) {
-                        KeySym.BackSpace -> {
+                    when (event.keyCode.value) {
+                        KeyCode.BackSpace -> {
                             if (!deleteSelection() && cursorOffset > 0) {
                                 val newCursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
                                 text.delete(newCursorOffset, cursorOffset)
@@ -368,7 +372,7 @@ class EditorState {
                             }
                         }
 
-                        KeySym.Up -> {
+                        KeyCode.Up -> {
                             if (modifiers.shift) {
                                 if (selectionStartOffset == null) {
                                     selectionStartOffset = cursorOffset
@@ -380,7 +384,7 @@ class EditorState {
                             }
                         }
 
-                        KeySym.Down -> {
+                        KeyCode.Down -> {
                             if (modifiers.shift) {
                                 if (selectionStartOffset == null) {
                                     selectionStartOffset = cursorOffset
@@ -393,7 +397,7 @@ class EditorState {
                             }
                         }
 
-                        KeySym.Left -> {
+                        KeyCode.Left -> {
                             if (modifiers.shift) {
                                 if (selectionStartOffset == null) {
                                     selectionStartOffset = cursorOffset
@@ -405,7 +409,7 @@ class EditorState {
                             }
                         }
 
-                        KeySym.Right -> {
+                        KeyCode.Right -> {
                             if (modifiers.shift) {
                                 if (selectionStartOffset == null) {
                                     selectionStartOffset = cursorOffset
