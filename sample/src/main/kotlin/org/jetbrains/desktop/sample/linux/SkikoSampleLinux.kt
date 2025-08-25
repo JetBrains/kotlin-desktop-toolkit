@@ -45,8 +45,6 @@ import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.TextLine
 import java.lang.AutoCloseable
-import java.nio.file.Files
-import java.nio.file.Path
 import java.text.BreakIterator
 import kotlin.math.PI
 import kotlin.math.cos
@@ -88,13 +86,13 @@ enum class WindowButtonType {
     internal companion object {
         internal fun fromString(buttonName: String): WindowButtonType {
             return when (buttonName) {
-                "appmenu" -> AppMenu
+                "appmenu", "menu" -> AppMenu
                 "icon" -> Icon
                 "spacer" -> Spacer
                 "minimize" -> Minimize
                 "maximize" -> Maximize
                 "close" -> Close
-                else -> error("Unknown button name {button_name}")
+                else -> error("Unknown button name $buttonName")
             }
         }
     }
@@ -535,6 +533,10 @@ private data class TextLineCreator(
     }
 }
 
+fun jbIconBytes(): ByteArray {
+    return object {}.javaClass.getResource("/jb-logo.png")!!.readBytes()
+}
+
 class CustomTitlebar(
     private var origin: LogicalPoint,
     var size: LogicalSize,
@@ -560,7 +562,7 @@ class CustomTitlebar(
         val COLOR_LIGHT_GRAY = Color.makeRGB(211, 211, 211)
         val BUTTON_SIZE = LogicalSize(CUSTOM_TITLEBAR_HEIGHT, CUSTOM_TITLEBAR_HEIGHT)
 
-        val APP_ICON = Image.makeFromEncoded(Files.readAllBytes(Path.of("resources/jb-logo.png")))
+        val APP_ICON = Image.makeFromEncoded(jbIconBytes())
     }
 
     fun configure(event: Event.WindowConfigure, layout: TitlebarLayout) {
@@ -728,7 +730,7 @@ class CustomTitlebar(
         val yOffset = rect.point.y * scale
 
         when (button) {
-            WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close -> {
+            WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close, WindowButtonType.AppMenu -> {
                 Paint().use { paint ->
                     paint.color = if (highlighted) {
                         COLOR_LIGHT_GRAY
@@ -749,13 +751,13 @@ class CustomTitlebar(
 
             val yTop = yOffset + (paint.strokeWidth / 2)
             val yBottom = (yOffset + h) - (paint.strokeWidth / 2)
-            val xLeft = xOffset + (paint.strokeWidth / 2)
-            val xRight = (xOffset + w) - (paint.strokeWidth / 2)
+            val xLeft = xOffset + (paint.strokeWidth / 2) + 1
+            val xRight = (xOffset + w) - (paint.strokeWidth / 2) - 2
             when (button) {
                 WindowButtonType.AppMenu -> {
-                    canvas.drawLine(xOffset, yOffset, xOffset + w, yOffset, paint)
-                    canvas.drawLine(xOffset, yOffset + (h / 2), xOffset + w, yOffset + (h / 2), paint)
-                    canvas.drawLine(xOffset, yBottom, xOffset + w, yBottom, paint)
+                    canvas.drawLine(xLeft, yTop, xRight, yTop, paint)
+                    canvas.drawLine(xLeft, yOffset + (h / 2), xRight, yOffset + (h / 2), paint)
+                    canvas.drawLine(xLeft, yBottom, xRight, yBottom, paint)
                 }
                 WindowButtonType.Icon -> {
                     canvas.drawImageRect(
@@ -767,7 +769,7 @@ class CustomTitlebar(
                 }
                 WindowButtonType.Spacer -> {}
                 WindowButtonType.Minimize -> {
-                    canvas.drawLine(xOffset, yBottom, xOffset + w, yBottom, paint)
+                    canvas.drawLine(xLeft, yBottom, xRight, yBottom, paint)
                 }
                 WindowButtonType.Maximize -> {
                     canvas.drawLine(xLeft, yTop, xLeft, yBottom, paint)
@@ -776,8 +778,8 @@ class CustomTitlebar(
                     canvas.drawLine(xLeft, yBottom, xRight, yBottom, paint)
                 }
                 WindowButtonType.Close -> {
-                    canvas.drawLine(xOffset, yOffset, xOffset + w, yBottom, paint)
-                    canvas.drawLine(xOffset + w, yOffset, xOffset, yBottom, paint)
+                    canvas.drawLine(xLeft, yTop, xRight, yBottom, paint)
+                    canvas.drawLine(xRight, yTop, xLeft, yBottom, paint)
                 }
                 WindowButtonType.Title -> {
                     paint.color = if (active) Color.WHITE else COLOR_LIGHT_GRAY
