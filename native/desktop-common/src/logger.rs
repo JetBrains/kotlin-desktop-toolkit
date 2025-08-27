@@ -103,8 +103,8 @@ impl LogLevel {
 }
 
 impl LoggerConfiguration<'_> {
-    fn file_path(&self) -> anyhow::Result<&str> {
-        self.file_path.as_str()
+    fn file_path(&self) -> anyhow::Result<Option<&str>> {
+        self.file_path.as_optional_str()
     }
 
     const fn console_log_level(&self) -> log::LevelFilter {
@@ -115,11 +115,13 @@ impl LoggerConfiguration<'_> {
         self.file_level.level_filter()
     }
 
-    fn file_appender(&self) -> anyhow::Result<RollingFileAppender> {
+    fn file_appender(&self) -> anyhow::Result<Option<RollingFileAppender>> {
         const TRIGGER_FILE_SIZE: u64 = 2 * 1024 * 1024; // 2Mb
         const LOG_FILE_COUNT: u32 = 3;
 
-        let file_path = std::path::Path::new(self.file_path()?);
+        let Some(file_path_str) = self.file_path()? else { return Ok(None) };
+
+        let file_path = std::path::Path::new(file_path_str);
 
         let file_name = file_path
             .file_stem()
@@ -137,12 +139,15 @@ impl LoggerConfiguration<'_> {
             .unwrap();
         let policy = CompoundPolicy::new(Box::new(trigger), Box::new(roller));
 
-        RollingFileAppender::builder()
-            .encoder(Box::new(PatternEncoder::new(
-                "[{d(%Y%m%d %H:%M:%S%.6f)} {h({l:5})} {M}:{L}] {m}{n}",
-            )))
-            .build(file_path, Box::new(policy))
-            .context("Failed to create file appender")
+        Some(
+            RollingFileAppender::builder()
+                .encoder(Box::new(PatternEncoder::new(
+                    "[{d(%Y%m%d %H:%M:%S%.6f)} {h({l:5})} {M}:{L}] {m}{n}",
+                )))
+                .build(file_path, Box::new(policy))
+                .context("Failed to create file appender"),
+        )
+        .transpose()
     }
 
     fn console_appender() -> ConsoleAppender {
@@ -172,13 +177,14 @@ impl LoggerConfiguration<'_> {
         );
 
         match self.file_appender() {
-            Ok(file_appender) => {
+            Ok(Some(file_appender)) => {
                 appenders.push(
                     Appender::builder()
                         .filter(Box::new(ThresholdFilter::new(file_level)))
                         .build("logfile", Box::new(file_appender)),
                 );
             }
+            Ok(None) => {}
             Err(err) => {
                 append_exception_msg(format!("File appender creatrion failed: {err}"));
             }
