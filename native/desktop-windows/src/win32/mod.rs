@@ -4,6 +4,7 @@ pub mod event_loop;
 pub mod events;
 pub mod geometry;
 pub mod keyboard;
+pub mod mouse;
 pub mod renderer_angle;
 pub mod renderer_api;
 pub mod renderer_egl_utils;

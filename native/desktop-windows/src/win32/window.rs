@@ -1,6 +1,7 @@
 use std::{
     mem::ManuallyDrop,
     rc::{Rc, Weak},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use log::error;
@@ -42,6 +43,7 @@ pub struct Window {
     hwnd: HWND,
     min_size: Option<LogicalSize>,
     style: WindowStyle,
+    mouse_in_client: AtomicBool,
     event_loop: Weak<EventLoop>,
     john_weak: Weak<Window>,
 }
@@ -86,6 +88,7 @@ impl Window {
             hwnd,
             min_size: None,
             style: params.style,
+            mouse_in_client: AtomicBool::new(false),
             event_loop: Rc::downgrade(&app.event_loop()),
             john_weak: weak.clone(),
         });
@@ -204,6 +207,16 @@ impl Window {
         self.min_size = Some(size);
     }
 
+    #[inline]
+    pub(crate) fn is_mouse_in_client(&self) -> bool {
+        self.mouse_in_client.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub(crate) fn set_is_mouse_in_client(&self, value: bool) {
+        self.mouse_in_client.store(value, Ordering::Relaxed);
+    }
+
     pub fn request_update(&self) -> WinResult<()> {
         unsafe { PostMessageW(Some(self.hwnd), WM_REQUEST_UPDATE, WPARAM::default(), LPARAM::default()) }
     }
@@ -235,7 +248,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     match this.upgrade() {
         Some(window) if hwnd == window.hwnd => {
             let event_loop = window.event_loop.upgrade().expect("event loop has been dropped");
-            event_loop.window_proc(window.as_ref(), msg, wparam, lparam)
+            event_loop.window_proc(Rc::as_ref(&window), msg, wparam, lparam)
         }
         _ => {
             error!("could not upgrade the window weak reference, or the window pointer was incorrect");

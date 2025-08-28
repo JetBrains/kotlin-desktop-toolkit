@@ -3,7 +3,12 @@ package org.jetbrains.desktop.win32
 import org.jetbrains.desktop.win32.generated.NativeCharacterReceivedEvent
 import org.jetbrains.desktop.win32.generated.NativeEvent
 import org.jetbrains.desktop.win32.generated.NativeKeyEvent
+import org.jetbrains.desktop.win32.generated.NativeMouseButtonEvent
+import org.jetbrains.desktop.win32.generated.NativeMouseEnteredEvent
+import org.jetbrains.desktop.win32.generated.NativeMouseExitedEvent
+import org.jetbrains.desktop.win32.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.win32.generated.NativeNCHitTestEvent
+import org.jetbrains.desktop.win32.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeKind
@@ -55,9 +60,51 @@ public sealed class Event {
         val isSystemKey: Boolean,
     ) : Event()
 
+    public data class MouseEntered(
+        val keyState: MouseKeyState,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class MouseExited(val timestamp: Timestamp) : Event()
+
+    public data class MouseMoved(
+        val keyState: MouseKeyState,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class MouseDown(
+        val button: MouseButton,
+        val keyState: MouseKeyState,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class MouseUp(
+        val button: MouseButton,
+        val keyState: MouseKeyState,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event()
+
     public data class NCHitTest(
         val mouseX: Int,
         val mouseY: Int,
+    ) : Event()
+
+    public data class ScrollWheelX(
+        val scrollingDelta: Short,
+        val keyState: MouseKeyState,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class ScrollWheelY(
+        val scrollingDelta: Short,
+        val keyState: MouseKeyState,
+        val locationInWindow: LogicalPoint,
+        val timestamp: Timestamp,
     ) : Event()
 
     public data object WindowCloseRequest : Event()
@@ -85,7 +132,15 @@ public sealed class Event {
 }
 
 public sealed class WindowResizeKind {
-    internal companion object;
+    internal companion object {
+        internal fun fromNative(s: MemorySegment): WindowResizeKind = when (NativeWindowResizeKind.tag(s)) {
+            desktop_windows_h.NativeWindowResizeKind_Restored() -> Restored
+            desktop_windows_h.NativeWindowResizeKind_Maximized() -> Maximized
+            desktop_windows_h.NativeWindowResizeKind_Minimized() -> Minimized
+            desktop_windows_h.NativeWindowResizeKind_Other() -> Other(NativeWindowResizeKind.other(s).toUInt())
+            else -> error("Unexpected WindowResizeKind tag")
+        }
+    }
 
     public data object Restored : WindowResizeKind()
 
@@ -97,96 +152,152 @@ public sealed class WindowResizeKind {
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
-    desktop_windows_h.NativeEvent_KeyDown() -> {
-        val nativeEvent = NativeEvent.key_down(s)
-        Event.KeyDown(
-            keyCode = VirtualKey.fromNative(NativeKeyEvent.key_code(nativeEvent)),
-            keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
-            isSystemKey = NativeKeyEvent.is_system_key(nativeEvent),
-            timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
-        )
-    }
-
-    desktop_windows_h.NativeEvent_KeyUp() -> {
-        val nativeEvent = NativeEvent.key_up(s)
-        Event.KeyUp(
-            keyCode = VirtualKey.fromNative(NativeKeyEvent.key_code(nativeEvent)),
-            keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
-            isSystemKey = NativeKeyEvent.is_system_key(nativeEvent),
-            timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
-        )
-    }
-
-    desktop_windows_h.NativeEvent_CharacterReceived() -> {
-        val nativeEvent = NativeEvent.character_received(s)
-        Event.CharacterReceived(
-            keyCode = NativeCharacterReceivedEvent.key_code(nativeEvent).toInt().toChar(),
-            characters = NativeCharacterReceivedEvent.characters(nativeEvent).getUtf8String(0),
-            keyStatus = PhysicalKeyStatus.fromNative(NativeCharacterReceivedEvent.key_status(nativeEvent)),
-            isDeadChar = NativeCharacterReceivedEvent.is_dead_char(nativeEvent),
-            isSystemKey = NativeCharacterReceivedEvent.is_system_key(nativeEvent),
-        )
-    }
-
-    desktop_windows_h.NativeEvent_NCHitTest() -> {
-        val nativeEvent = NativeEvent.nc_hit_test(s)
-        Event.NCHitTest(
-            mouseX = NativeNCHitTestEvent.mouse_x(nativeEvent),
-            mouseY = NativeNCHitTestEvent.mouse_y(nativeEvent),
-        )
-    }
-
-    desktop_windows_h.NativeEvent_WindowCloseRequest() -> {
-        Event.WindowCloseRequest
-    }
-
-    desktop_windows_h.NativeEvent_WindowDraw() -> {
-        val nativeEvent = NativeEvent.window_draw(s)
-        Event.WindowDraw(
-            size = PhysicalSize.fromNative(NativeWindowDrawEvent.size(nativeEvent)),
-            scale = NativeWindowDrawEvent.scale(nativeEvent),
-        )
-    }
-
-    desktop_windows_h.NativeEvent_WindowKeyboardEnter() -> {
-        Event.WindowKeyboardEnter
-    }
-
-    desktop_windows_h.NativeEvent_WindowKeyboardLeave() -> {
-        Event.WindowKeyboardLeave
-    }
-
-    desktop_windows_h.NativeEvent_WindowScaleChanged() -> {
-        val nativeEvent = NativeEvent.window_scale_changed(s)
-        Event.WindowScaleChanged(
-            newOrigin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.new_origin(nativeEvent)),
-            newSize = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.new_size(nativeEvent)),
-            newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent),
-        )
-    }
-
-    desktop_windows_h.NativeEvent_WindowResize() -> {
-        val nativeEvent = NativeEvent.window_resize(s)
-        Event.WindowResize(
-            size = PhysicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
-            scale = NativeWindowResizeEvent.scale(nativeEvent),
-            kind = WindowResizeKind.fromNative(NativeWindowResizeEvent.kind(nativeEvent)),
-        )
-    }
-
+    desktop_windows_h.NativeEvent_KeyDown() -> keyDown(s)
+    desktop_windows_h.NativeEvent_KeyUp() -> keyUp(s)
+    desktop_windows_h.NativeEvent_CharacterReceived() -> characterReceived(s)
+    desktop_windows_h.NativeEvent_MouseEntered() -> mouseEntered(s)
+    desktop_windows_h.NativeEvent_MouseExited() -> mouseExited(s)
+    desktop_windows_h.NativeEvent_MouseMoved() -> mouseMoved(s)
+    desktop_windows_h.NativeEvent_MouseDown() -> mouseDown(s)
+    desktop_windows_h.NativeEvent_MouseUp() -> mouseUp(s)
+    desktop_windows_h.NativeEvent_NCHitTest() -> ncHitTest(s)
+    desktop_windows_h.NativeEvent_ScrollWheelX() -> scrollWheelX(s)
+    desktop_windows_h.NativeEvent_ScrollWheelY() -> scrollWheelY(s)
+    desktop_windows_h.NativeEvent_WindowCloseRequest() -> Event.WindowCloseRequest
+    desktop_windows_h.NativeEvent_WindowDraw() -> windowDraw(s)
+    desktop_windows_h.NativeEvent_WindowKeyboardEnter() -> Event.WindowKeyboardEnter
+    desktop_windows_h.NativeEvent_WindowKeyboardLeave() -> Event.WindowKeyboardLeave
+    desktop_windows_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
+    desktop_windows_h.NativeEvent_WindowResize() -> windowResize(s)
     else -> error("Unexpected Event tag")
 }
 
-internal fun WindowResizeKind.Companion.fromNative(s: MemorySegment): WindowResizeKind = when (NativeWindowResizeKind.tag(s)) {
-    desktop_windows_h.NativeWindowResizeKind_Restored() -> WindowResizeKind.Restored
+private fun keyDown(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.key_down(s)
+    return Event.KeyDown(
+        keyCode = VirtualKey.fromNative(NativeKeyEvent.key_code(nativeEvent)),
+        keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
+        isSystemKey = NativeKeyEvent.is_system_key(nativeEvent),
+        timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
+    )
+}
 
-    desktop_windows_h.NativeWindowResizeKind_Maximized() -> WindowResizeKind.Maximized
+private fun keyUp(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.key_up(s)
+    return Event.KeyUp(
+        keyCode = VirtualKey.fromNative(NativeKeyEvent.key_code(nativeEvent)),
+        keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
+        isSystemKey = NativeKeyEvent.is_system_key(nativeEvent),
+        timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
+    )
+}
 
-    desktop_windows_h.NativeWindowResizeKind_Minimized() -> WindowResizeKind.Minimized
+private fun characterReceived(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.character_received(s)
+    return Event.CharacterReceived(
+        keyCode = NativeCharacterReceivedEvent.key_code(nativeEvent).toInt().toChar(),
+        characters = NativeCharacterReceivedEvent.characters(nativeEvent).getUtf8String(0),
+        keyStatus = PhysicalKeyStatus.fromNative(NativeCharacterReceivedEvent.key_status(nativeEvent)),
+        isDeadChar = NativeCharacterReceivedEvent.is_dead_char(nativeEvent),
+        isSystemKey = NativeCharacterReceivedEvent.is_system_key(nativeEvent),
+    )
+}
 
-    desktop_windows_h.NativeWindowResizeKind_Other() -> {
-        WindowResizeKind.Other(NativeWindowResizeKind.other(s).toUInt())
-    }
+private fun mouseEntered(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.mouse_entered(s)
+    return Event.MouseEntered(
+        keyState = MouseKeyState.fromNative(NativeMouseEnteredEvent.key_state(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativeMouseEnteredEvent.location_in_window(nativeEvent)),
+        timestamp = Timestamp(NativeMouseEnteredEvent.timestamp(nativeEvent)),
+    )
+}
 
-    else -> error("Unexpected WindowResizeKind tag")
+private fun mouseExited(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.mouse_exited(s)
+    return Event.MouseExited(
+        timestamp = Timestamp(NativeMouseExitedEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun mouseMoved(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.mouse_moved(s)
+    return Event.MouseMoved(
+        keyState = MouseKeyState.fromNative(NativeMouseMovedEvent.key_state(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativeMouseMovedEvent.location_in_window(nativeEvent)),
+        timestamp = Timestamp(NativeMouseMovedEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun mouseDown(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.mouse_down(s)
+    return Event.MouseDown(
+        button = MouseButton.fromNative(NativeMouseButtonEvent.button(nativeEvent)),
+        keyState = MouseKeyState.fromNative(NativeMouseButtonEvent.key_state(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativeMouseButtonEvent.location_in_window(nativeEvent)),
+        timestamp = Timestamp(NativeMouseButtonEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun mouseUp(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.mouse_up(s)
+    return Event.MouseUp(
+        button = MouseButton.fromNative(NativeMouseButtonEvent.button(nativeEvent)),
+        keyState = MouseKeyState.fromNative(NativeMouseButtonEvent.key_state(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativeMouseButtonEvent.location_in_window(nativeEvent)),
+        timestamp = Timestamp(NativeMouseButtonEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun ncHitTest(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.nc_hit_test(s)
+    return Event.NCHitTest(
+        mouseX = NativeNCHitTestEvent.mouse_x(nativeEvent),
+        mouseY = NativeNCHitTestEvent.mouse_y(nativeEvent),
+    )
+}
+
+private fun scrollWheelX(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.scroll_wheel_x(s)
+    return Event.ScrollWheelX(
+        scrollingDelta = NativeScrollWheelEvent.scrolling_delta(nativeEvent),
+        keyState = MouseKeyState.fromNative(NativeScrollWheelEvent.key_state(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
+        timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun scrollWheelY(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.scroll_wheel_y(s)
+    return Event.ScrollWheelY(
+        scrollingDelta = NativeScrollWheelEvent.scrolling_delta(nativeEvent),
+        keyState = MouseKeyState.fromNative(NativeScrollWheelEvent.key_state(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
+        timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun windowDraw(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.window_draw(s)
+    return Event.WindowDraw(
+        size = PhysicalSize.fromNative(NativeWindowDrawEvent.size(nativeEvent)),
+        scale = NativeWindowDrawEvent.scale(nativeEvent),
+    )
+}
+
+private fun windowScaleChanged(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.window_scale_changed(s)
+    return Event.WindowScaleChanged(
+        newOrigin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.new_origin(nativeEvent)),
+        newSize = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.new_size(nativeEvent)),
+        newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent),
+    )
+}
+
+private fun windowResize(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.window_resize(s)
+    return Event.WindowResize(
+        size = PhysicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
+        scale = NativeWindowResizeEvent.scale(nativeEvent),
+        kind = WindowResizeKind.fromNative(NativeWindowResizeEvent.kind(nativeEvent)),
+    )
 }

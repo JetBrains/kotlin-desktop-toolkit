@@ -7,6 +7,11 @@ import org.jetbrains.desktop.win32.generated.NativePhysicalSize
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
+internal fun LogicalPoint.Companion.fromNative(s: MemorySegment) = LogicalPoint(
+    x = NativeLogicalPoint.x(s),
+    y = NativeLogicalPoint.y(s),
+)
+
 internal fun LogicalSize.toNative(arena: Arena): MemorySegment = NativeLogicalSize.allocate(arena).also { result ->
     NativeLogicalSize.width(result, width)
     NativeLogicalSize.height(result, height)
