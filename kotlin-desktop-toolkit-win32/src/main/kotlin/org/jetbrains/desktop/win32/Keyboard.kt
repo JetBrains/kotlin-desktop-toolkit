@@ -1,10 +1,30 @@
 package org.jetbrains.desktop.win32
 
+import org.jetbrains.desktop.win32.generated.NativeKeyState
 import org.jetbrains.desktop.win32.generated.NativePhysicalKeyStatus
+import org.jetbrains.desktop.win32.generated.desktop_windows_h
+import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
+public object Keyboard {
+    public fun getKeyState(key: VirtualKey): KeyState = ffiDownCall {
+        val nativeKeyState = Arena.ofConfined().use { arena ->
+            desktop_windows_h.keyboard_get_key_state(arena, key.value)
+        }
+        KeyState(
+            isDown = NativeKeyState.is_down(nativeKeyState),
+            isToggled = NativeKeyState.is_toggled(nativeKeyState),
+        )
+    }
+}
+
+public data class KeyState(
+    val isDown: Boolean,
+    val isToggled: Boolean,
+)
+
 @JvmInline
-public value class VirtualKey internal constructor(private val value: Int) {
+public value class VirtualKey internal constructor(internal val value: Int) {
     @Suppress("MemberVisibilityCanBePrivate")
     public companion object {
         public val None: VirtualKey = VirtualKey(0)
