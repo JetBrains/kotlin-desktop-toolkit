@@ -9,8 +9,8 @@ use windows::{
     Win32::{
         Foundation::{COLORREF, ERROR_NO_UNICODE_TRANSLATION, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
         Graphics::Dwm::{
-            DWM_SYSTEMBACKDROP_TYPE, DWMNCRENDERINGPOLICY, DWMNCRP_ENABLED, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE,
-            DWMWA_NCRENDERING_POLICY, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
+            DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
+            DwmSetWindowAttribute,
         },
         UI::{
             Controls::MARGINS,
@@ -30,7 +30,7 @@ use super::{
     application::Application,
     event_loop::EventLoop,
     geometry::{LogicalSize, PhysicalPoint, PhysicalSize},
-    window_api::{WindowId, WindowParams, WindowStyle, WindowSystemBackdropType, WindowTitleBarKind},
+    window_api::{WindowId, WindowParams, WindowStyle, WindowTitleBarKind},
 };
 
 /// cbindgen:ignore
@@ -134,35 +134,22 @@ impl Window {
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn extend_content_into_titlebar(&self) -> WinResult<()> {
-        let should_extend_content_into_titlebar = !(matches!(self.style.title_bar_kind, WindowTitleBarKind::System)
-            && matches!(self.style.system_backdrop_type, WindowSystemBackdropType::None));
-        if should_extend_content_into_titlebar {
-            let colorref = COLORREF(DWMWA_COLOR_NONE);
-            let policy = DWMNCRP_ENABLED;
-            let margins = MARGINS {
-                cxLeftWidth: -1,
-                cxRightWidth: -1,
-                cyTopHeight: -1,
-                cyBottomHeight: -1,
-            };
-            unsafe {
-                // if we want to extend content into the titlebar area, it makes sense to remove any color from it
-                DwmSetWindowAttribute(
-                    self.hwnd,
-                    DWMWA_CAPTION_COLOR,
-                    (&raw const colorref).cast(),
-                    core::mem::size_of::<COLORREF>() as _,
-                )?;
-                DwmSetWindowAttribute(
-                    self.hwnd,
-                    DWMWA_NCRENDERING_POLICY,
-                    (&raw const policy).cast(),
-                    core::mem::size_of::<DWMNCRENDERINGPOLICY>() as _,
-                )?;
-                DwmExtendFrameIntoClientArea(self.hwnd, &raw const margins)
-            }
-        } else {
-            Ok(())
+        let colorref = COLORREF(DWMWA_COLOR_NONE);
+        let margins = MARGINS {
+            cxLeftWidth: -1,
+            cxRightWidth: -1,
+            cyTopHeight: -1,
+            cyBottomHeight: -1,
+        };
+        unsafe {
+            // if we want to extend content into the titlebar area, it makes sense to remove any color from it
+            DwmSetWindowAttribute(
+                self.hwnd,
+                DWMWA_CAPTION_COLOR,
+                (&raw const colorref).cast(),
+                core::mem::size_of::<COLORREF>() as _,
+            )?;
+            DwmExtendFrameIntoClientArea(self.hwnd, &raw const margins)
         }
     }
 
