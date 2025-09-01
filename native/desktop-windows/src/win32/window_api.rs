@@ -119,7 +119,7 @@ fn with_window_mut<R: PanicDefault>(window_ptr: &mut WindowPtr, name: &str, f: i
 pub extern "C" fn window_create(app_ptr: AppPtr, params: WindowParams) -> WindowPtr<'static> {
     let window = ffi_boundary("window_create", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        let window = Window::new(&params, app)?;
+        let window = app.create_window(&params)?;
         Ok(Some(window))
     });
     WindowPtr::from_rc(window)

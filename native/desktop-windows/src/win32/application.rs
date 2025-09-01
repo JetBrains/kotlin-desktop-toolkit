@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use windows::core::Result as WinResult;
 
-use super::{event_loop::EventLoop, events::EventHandler};
+use super::{event_loop::EventLoop, events::EventHandler, window::Window, window_api::WindowParams};
 
 pub struct Application {
     event_loop: Rc<EventLoop>,
@@ -16,8 +16,15 @@ impl Application {
         })
     }
 
-    #[must_use]
-    pub fn event_loop(&self) -> Rc<EventLoop> {
-        self.event_loop.clone()
+    pub fn run_event_loop(&self) {
+        self.event_loop.run();
+    }
+
+    pub fn shutdown(&self) -> WinResult<()> {
+        self.event_loop.shutdown()
+    }
+
+    pub(crate) fn create_window(&self, params: &WindowParams) -> WinResult<Rc<Window>> {
+        Window::new(params, Rc::downgrade(&self.event_loop))
     }
 }

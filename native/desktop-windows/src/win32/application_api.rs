@@ -26,7 +26,7 @@ pub extern "C" fn application_run_event_loop(app_ptr: AppPtr) {
         debug!("Start event loop");
 
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.event_loop().run();
+        app.run_event_loop();
 
         Ok(())
     });
@@ -38,7 +38,7 @@ pub extern "C" fn application_stop_event_loop(app_ptr: AppPtr) {
         debug!("Stop event loop");
 
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.event_loop().shutdown()?;
+        app.shutdown()?;
 
         Ok(())
     });

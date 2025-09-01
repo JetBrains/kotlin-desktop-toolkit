@@ -5,7 +5,6 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use log::error;
 use windows::{
     Win32::{
         Foundation::{COLORREF, ERROR_NO_UNICODE_TRANSLATION, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
@@ -28,7 +27,6 @@ use windows::{
 };
 
 use super::{
-    application::Application,
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalSize, PhysicalPoint, PhysicalSize},
     window_api::{WindowId, WindowParams, WindowStyle, WindowTitleBarKind},
@@ -52,7 +50,7 @@ pub struct Window {
 
 impl Window {
     #[allow(clippy::cast_possible_truncation)]
-    pub fn new(params: &WindowParams, app: &Application) -> WinResult<Rc<Self>> {
+    pub fn new(params: &WindowParams, event_loop: Weak<EventLoop>) -> WinResult<Rc<Self>> {
         const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
         let instance = crate::get_dll_instance();
         let wndclass = WNDCLASSEXW {
@@ -76,7 +74,7 @@ impl Window {
             size: params.size,
             style: params.style,
             mouse_in_client: AtomicBool::new(false),
-            event_loop: Rc::downgrade(&app.event_loop()),
+            event_loop,
         });
         unsafe {
             let _atom = RegisterClassExW(&raw const wndclass);
@@ -254,7 +252,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             event_loop.window_proc(Rc::as_ref(&window), msg, wparam, lparam)
         }
         _ => {
-            error!("could not upgrade the window weak reference, or the window pointer was incorrect");
+            log::error!("could not upgrade the window weak reference, or the window pointer was incorrect");
             unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
         }
     }

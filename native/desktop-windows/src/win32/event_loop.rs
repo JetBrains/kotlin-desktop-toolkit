@@ -1,5 +1,4 @@
 use desktop_common::ffi_utils::RustAllocatedStrPtr;
-use log::{debug, error};
 use windows::{
     Foundation::TypedEventHandler,
     System::DispatcherQueueController,
@@ -61,7 +60,7 @@ impl EventLoop {
         dispatcher_queue_controller
             .DispatcherQueue()?
             .ShutdownCompleted(&TypedEventHandler::new(|_, _| {
-                debug!("Shutting down the dispatcher queue");
+                log::debug!("Shutting down the dispatcher queue");
                 unsafe { PostQuitMessage(0) };
                 Ok(())
             }))?;
@@ -86,7 +85,7 @@ impl EventLoop {
         self.dispatcher_queue_controller
             .ShutdownQueueAsync()
             .map(|_async| ())
-            .inspect_err(|err| error!("Failed to shut down the dispatcher queue: {err:?}"))
+            .inspect_err(|err| log::error!("Failed to shut down the dispatcher queue: {err:?}"))
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -164,7 +163,7 @@ fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
     unsafe { BeginPaint(hwnd, &raw mut paint) };
     let mut rect = RECT::default();
     if let Err(err) = unsafe { GetClientRect(hwnd, &raw mut rect) } {
-        error!("Failed to get client rect: {err:?}");
+        log::error!("Failed to get client rect: {err:?}");
         return Some(LRESULT(1));
     }
     let event = WindowDrawEvent {
