@@ -13,7 +13,7 @@ import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeKind
 import org.jetbrains.desktop.win32.generated.NativeWindowScaleChangedEvent
-import org.jetbrains.desktop.win32.generated.desktop_windows_h
+import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.MemorySegment
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -134,10 +134,10 @@ public sealed class Event {
 public sealed class WindowResizeKind {
     internal companion object {
         internal fun fromNative(s: MemorySegment): WindowResizeKind = when (NativeWindowResizeKind.tag(s)) {
-            desktop_windows_h.NativeWindowResizeKind_Restored() -> Restored
-            desktop_windows_h.NativeWindowResizeKind_Maximized() -> Maximized
-            desktop_windows_h.NativeWindowResizeKind_Minimized() -> Minimized
-            desktop_windows_h.NativeWindowResizeKind_Other() -> Other(NativeWindowResizeKind.other(s).toUInt())
+            desktop_win32_h.NativeWindowResizeKind_Restored() -> Restored
+            desktop_win32_h.NativeWindowResizeKind_Maximized() -> Maximized
+            desktop_win32_h.NativeWindowResizeKind_Minimized() -> Minimized
+            desktop_win32_h.NativeWindowResizeKind_Other() -> Other(NativeWindowResizeKind.other(s).toUInt())
             else -> error("Unexpected WindowResizeKind tag")
         }
     }
@@ -152,23 +152,23 @@ public sealed class WindowResizeKind {
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
-    desktop_windows_h.NativeEvent_KeyDown() -> keyDown(s)
-    desktop_windows_h.NativeEvent_KeyUp() -> keyUp(s)
-    desktop_windows_h.NativeEvent_CharacterReceived() -> characterReceived(s)
-    desktop_windows_h.NativeEvent_MouseEntered() -> mouseEntered(s)
-    desktop_windows_h.NativeEvent_MouseExited() -> mouseExited(s)
-    desktop_windows_h.NativeEvent_MouseMoved() -> mouseMoved(s)
-    desktop_windows_h.NativeEvent_MouseDown() -> mouseDown(s)
-    desktop_windows_h.NativeEvent_MouseUp() -> mouseUp(s)
-    desktop_windows_h.NativeEvent_NCHitTest() -> ncHitTest(s)
-    desktop_windows_h.NativeEvent_ScrollWheelX() -> scrollWheelX(s)
-    desktop_windows_h.NativeEvent_ScrollWheelY() -> scrollWheelY(s)
-    desktop_windows_h.NativeEvent_WindowCloseRequest() -> Event.WindowCloseRequest
-    desktop_windows_h.NativeEvent_WindowDraw() -> windowDraw(s)
-    desktop_windows_h.NativeEvent_WindowKeyboardEnter() -> Event.WindowKeyboardEnter
-    desktop_windows_h.NativeEvent_WindowKeyboardLeave() -> Event.WindowKeyboardLeave
-    desktop_windows_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
-    desktop_windows_h.NativeEvent_WindowResize() -> windowResize(s)
+    desktop_win32_h.NativeEvent_KeyDown() -> keyDown(s)
+    desktop_win32_h.NativeEvent_KeyUp() -> keyUp(s)
+    desktop_win32_h.NativeEvent_CharacterReceived() -> characterReceived(s)
+    desktop_win32_h.NativeEvent_MouseEntered() -> mouseEntered(s)
+    desktop_win32_h.NativeEvent_MouseExited() -> mouseExited(s)
+    desktop_win32_h.NativeEvent_MouseMoved() -> mouseMoved(s)
+    desktop_win32_h.NativeEvent_MouseDown() -> mouseDown(s)
+    desktop_win32_h.NativeEvent_MouseUp() -> mouseUp(s)
+    desktop_win32_h.NativeEvent_NCHitTest() -> ncHitTest(s)
+    desktop_win32_h.NativeEvent_ScrollWheelX() -> scrollWheelX(s)
+    desktop_win32_h.NativeEvent_ScrollWheelY() -> scrollWheelY(s)
+    desktop_win32_h.NativeEvent_WindowCloseRequest() -> Event.WindowCloseRequest
+    desktop_win32_h.NativeEvent_WindowDraw() -> windowDraw(s)
+    desktop_win32_h.NativeEvent_WindowKeyboardEnter() -> Event.WindowKeyboardEnter
+    desktop_win32_h.NativeEvent_WindowKeyboardLeave() -> Event.WindowKeyboardLeave
+    desktop_win32_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
+    desktop_win32_h.NativeEvent_WindowResize() -> windowResize(s)
     else -> error("Unexpected Event tag")
 }
 

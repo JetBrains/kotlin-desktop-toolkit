@@ -2,7 +2,7 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeApplicationCallbacks
 import org.jetbrains.desktop.win32.generated.NativeEventHandler
-import org.jetbrains.desktop.win32.generated.desktop_windows_h
+import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
@@ -13,7 +13,7 @@ public object Application {
     public fun init() {
         ffiDownCall {
             appPtr = Arena.ofConfined().use { arena ->
-                desktop_windows_h.application_init(applicationCallbacks())
+                desktop_win32_h.application_init(applicationCallbacks())
             }
         }
     }
@@ -21,13 +21,13 @@ public object Application {
     public fun runEventLoop(eventHandler: EventHandler) {
         ffiDownCall {
             this.eventHandler = eventHandler
-            desktop_windows_h.application_run_event_loop(appPtr!!)
+            desktop_win32_h.application_run_event_loop(appPtr!!)
         }
     }
 
     public fun stopEventLoop() {
         ffiDownCall {
-            desktop_windows_h.application_stop_event_loop(appPtr!!)
+            desktop_win32_h.application_stop_event_loop(appPtr!!)
         }
     }
 

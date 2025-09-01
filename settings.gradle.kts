@@ -16,4 +16,4 @@ include("kotlin-desktop-toolkit")
 include("kotlin-desktop-toolkit-win32")
 
 include("sample")
-include("sampleWindows")
+include("sampleWin32")

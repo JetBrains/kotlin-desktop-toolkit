@@ -399,7 +399,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "desktop-windows"
+name = "desktop-win32"
 version = "0.1.0"
 dependencies = [
  "anyhow",

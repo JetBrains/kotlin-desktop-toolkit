@@ -12,7 +12,7 @@ bitflags = true
 ## Whether to parse dependent crates and include their types in the output
 ## default: false
 parse_deps = true
-include = ["desktop-windows", "desktop-common"]
+include = ["desktop-win32", "desktop-common"]
 
 [parse.expand]
 # A list of crate names that should be run through `cargo expand` before
@@ -22,7 +22,7 @@ include = ["desktop-windows", "desktop-common"]
 # default: []
 # If you want to turn macro expansion you need to set "RUSTC_BOOTSTRAP=1" before calling bindgen, or use nightly rustc.
 # see: https://github.com/mozilla/cbindgen/issues/1015
-# crates = ["desktop-windows"]
+# crates = ["desktop-win32"]
 
 [enum]
 prefix_with_name = true

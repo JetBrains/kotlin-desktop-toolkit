@@ -1,6 +1,6 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.win32.generated.desktop_windows_h
+import org.jetbrains.desktop.win32.generated.desktop_win32_h
 
 @JvmInline
 public value class MouseKeyState internal constructor(private val value: Short) {
@@ -35,11 +35,11 @@ public enum class MouseButton {
 internal fun MouseKeyState.Companion.fromNative(x: Short): MouseKeyState = MouseKeyState(x)
 
 internal fun MouseButton.Companion.fromNative(x: Int): MouseButton = when (x) {
-    desktop_windows_h.NativeMouseButton_None() -> MouseButton.NONE
-    desktop_windows_h.NativeMouseButton_Left() -> MouseButton.LEFT
-    desktop_windows_h.NativeMouseButton_Right() -> MouseButton.RIGHT
-    desktop_windows_h.NativeMouseButton_Middle() -> MouseButton.MIDDLE
-    desktop_windows_h.NativeMouseButton_XButton1() -> MouseButton.XBUTTON1
-    desktop_windows_h.NativeMouseButton_XButton2() -> MouseButton.XBUTTON2
+    desktop_win32_h.NativeMouseButton_None() -> MouseButton.NONE
+    desktop_win32_h.NativeMouseButton_Left() -> MouseButton.LEFT
+    desktop_win32_h.NativeMouseButton_Right() -> MouseButton.RIGHT
+    desktop_win32_h.NativeMouseButton_Middle() -> MouseButton.MIDDLE
+    desktop_win32_h.NativeMouseButton_XButton1() -> MouseButton.XBUTTON1
+    desktop_win32_h.NativeMouseButton_XButton2() -> MouseButton.XBUTTON2
     else -> error("Unknown mouse button: $x")
 }

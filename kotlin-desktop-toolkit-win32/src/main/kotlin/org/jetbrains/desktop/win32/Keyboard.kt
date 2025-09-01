@@ -2,14 +2,14 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeKeyState
 import org.jetbrains.desktop.win32.generated.NativePhysicalKeyStatus
-import org.jetbrains.desktop.win32.generated.desktop_windows_h
+import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
 public object Keyboard {
     public fun getKeyState(key: VirtualKey): KeyState = ffiDownCall {
         val nativeKeyState = Arena.ofConfined().use { arena ->
-            desktop_windows_h.keyboard_get_key_state(arena, key.value)
+            desktop_win32_h.keyboard_get_key_state(arena, key.value)
         }
         KeyState(
             isDown = NativeKeyState.is_down(nativeKeyState),
