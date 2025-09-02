@@ -19,6 +19,15 @@ type GrGLViewportFn = extern "system" fn(x: egl::Int, y: egl::Int, width: GrGLsi
 pub(crate) type GetPlatformDisplayEXTFn =
     extern "system" fn(platform: egl::Enum, native_display: *mut std::ffi::c_void, attrib_list: *const egl::Int) -> egl::EGLDisplay;
 
+pub(crate) type PostSubBufferNVFn = extern "system" fn(
+    display: egl::EGLDisplay,
+    surface: egl::EGLSurface,
+    x: egl::Int,
+    y: egl::Int,
+    width: egl::Int,
+    height: egl::Int,
+) -> egl::Boolean;
+
 /// cbindgen:ignore
 pub(crate) const GR_GL_STENCIL_BUFFER_BIT: GrGLbitfield = 0x0000_0400;
 

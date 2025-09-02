@@ -408,6 +408,7 @@ dependencies = [
  "log",
  "log4rs",
  "windows",
+ "windows-numerics",
 ]
 
 [[package]]

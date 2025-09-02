@@ -5,25 +5,28 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+use anyhow::{Context, Result};
 use windows::{
+    UI::Composition::{Compositor, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
         Foundation::{COLORREF, ERROR_NO_UNICODE_TRANSLATION, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
         Graphics::Dwm::{
             DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
             DwmSetWindowAttribute,
         },
+        System::WinRT::Composition::ICompositorDesktopInterop,
         UI::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW,
                 IDC_ARROW, LoadCursorW, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER,
-                SWP_NOZORDER, SetPropW, SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE,
-                WINDOW_STYLE, WM_NCCREATE, WM_NCDESTROY, WM_USER, WNDCLASSEXW,
+                SWP_NOZORDER, SetPropW, SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_NCCREATE,
+                WM_NCDESTROY, WM_USER, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
-    core::{Error as WinError, HSTRING, PCWSTR, Result as WinResult, w},
+    core::{Error as WinError, HSTRING, Interface, PCWSTR, Result as WinResult, w},
 };
 
 use super::{
@@ -40,6 +43,7 @@ pub(crate) const WM_REQUEST_UPDATE: u32 = WM_USER + 1;
 
 pub struct Window {
     hwnd: RefCell<HWND>,
+    composition_target: RefCell<Option<DesktopWindowTarget>>,
     min_size: Option<LogicalSize>,
     origin: LogicalPoint,
     size: LogicalSize,
@@ -50,7 +54,7 @@ pub struct Window {
 
 impl Window {
     #[allow(clippy::cast_possible_truncation)]
-    pub fn new(params: &WindowParams, event_loop: Weak<EventLoop>) -> WinResult<Rc<Self>> {
+    pub fn new(params: &WindowParams, event_loop: Weak<EventLoop>, compositor: &Compositor) -> WinResult<Rc<Self>> {
         const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
         let instance = crate::get_dll_instance();
         let wndclass = WNDCLASSEXW {
@@ -69,6 +73,7 @@ impl Window {
             .map(HSTRING::from);
         let window = Rc::new(Self {
             hwnd: RefCell::new(HWND::default()),
+            composition_target: RefCell::new(None),
             min_size: None,
             origin: params.origin,
             size: params.size,
@@ -76,10 +81,10 @@ impl Window {
             mouse_in_client: AtomicBool::new(false),
             event_loop,
         });
-        unsafe {
+        let hwnd = unsafe {
             let _atom = RegisterClassExW(&raw const wndclass);
             CreateWindowExW(
-                WINDOW_EX_STYLE(0),
+                WS_EX_NOREDIRECTIONBITMAP,
                 WNDCLASS_NAME,
                 title.map_or_else(PCWSTR::null, |str| PCWSTR::from_raw(str.as_ptr())),
                 WINDOW_STYLE(0),
@@ -91,8 +96,11 @@ impl Window {
                 None,
                 Some(instance),
                 Some(Rc::downgrade(&window).into_raw().cast()),
-            )?;
-        }
+            )?
+        };
+        let compositor_interop: ICompositorDesktopInterop = compositor.cast()?;
+        let desktop_window_target = unsafe { compositor_interop.CreateDesktopWindowTarget(hwnd, true) }?;
+        window.composition_target.replace(Some(desktop_window_target));
         Ok(window)
     }
 
@@ -104,6 +112,14 @@ impl Window {
     #[inline]
     pub(crate) fn hwnd(&self) -> HWND {
         *self.hwnd.borrow()
+    }
+
+    pub(crate) fn create_sprite_visual(&self) -> Result<SpriteVisual> {
+        let composition_target = self.composition_target.borrow();
+        let desktop_window_target = composition_target.as_ref().context("failed to get composition target")?;
+        let sprite_visual = desktop_window_target.Compositor()?.CreateSpriteVisual()?;
+        desktop_window_target.SetRoot(&sprite_visual)?;
+        Ok(sprite_visual)
     }
 
     #[allow(clippy::cast_precision_loss)]
