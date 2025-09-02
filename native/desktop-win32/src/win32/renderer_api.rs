@@ -62,10 +62,10 @@ pub extern "C" fn renderer_angle_device_create(window_ptr: WindowPtr) -> AngleDe
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn renderer_angle_make_surface(mut angle_device_ptr: AngleDevicePtr, width: i32, height: i32) -> EglSurfaceData {
-    ffi_boundary("renderer_angle_make_surface", || {
+pub extern "C" fn renderer_angle_resize_surface(mut angle_device_ptr: AngleDevicePtr, width: i32, height: i32) -> EglSurfaceData {
+    ffi_boundary("renderer_angle_resize_surface", || {
         let angle_device = unsafe { angle_device_ptr.borrow_mut::<AngleDevice>() };
-        angle_device.make_surface(width, height)
+        angle_device.resize_surface(width, height)
     })
 }
 

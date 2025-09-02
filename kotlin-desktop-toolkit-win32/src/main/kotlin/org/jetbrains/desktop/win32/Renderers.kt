@@ -37,10 +37,10 @@ public class AngleRenderer internal constructor(private val angleDevicePtr: Memo
         }
     }
 
-    public fun makeSurface(width: Int, height: Int): SurfaceParams {
+    public fun resizeSurface(width: Int, height: Int): SurfaceParams {
         return Arena.ofConfined().use { arena ->
             val native = ffiDownCall {
-                desktop_win32_h.renderer_angle_make_surface(arena, angleDevicePtr, width, height)
+                desktop_win32_h.renderer_angle_resize_surface(arena, angleDevicePtr, width, height)
             }
             val framebufferBinding = NativeEglSurfaceData.framebuffer_binding(native)
             SurfaceParams(framebufferBinding)

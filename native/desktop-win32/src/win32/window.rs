@@ -18,8 +18,8 @@ use windows::{
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW,
                 IDC_ARROW, LoadCursorW, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER,
-                SWP_NOZORDER, SetPropW, SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE,
-                WINDOW_STYLE, WM_NCCREATE, WM_NCDESTROY, WM_USER, WNDCLASSEXW,
+                SWP_NOZORDER, SetPropW, SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_NCCREATE,
+                WM_NCDESTROY, WM_USER, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
@@ -79,7 +79,7 @@ impl Window {
         unsafe {
             let _atom = RegisterClassExW(&raw const wndclass);
             CreateWindowExW(
-                WINDOW_EX_STYLE(0),
+                WS_EX_NOREDIRECTIONBITMAP,
                 WNDCLASS_NAME,
                 title.map_or_else(PCWSTR::null, |str| PCWSTR::from_raw(str.as_ptr())),
                 WINDOW_STYLE(0),
