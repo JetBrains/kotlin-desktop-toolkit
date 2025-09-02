@@ -405,7 +405,6 @@ dependencies = [
  "anyhow",
  "desktop-common",
  "khronos-egl",
- "libloading",
  "log",
  "log4rs",
  "windows",

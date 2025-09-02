@@ -1,24 +1,25 @@
 use std::{
+    cell::RefCell,
     mem::ManuallyDrop,
     rc::{Rc, Weak},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
-use log::error;
 use windows::{
     Win32::{
         Foundation::{COLORREF, ERROR_NO_UNICODE_TRANSLATION, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
         Graphics::Dwm::{
-            DWM_SYSTEMBACKDROP_TYPE, DWMNCRENDERINGPOLICY, DWMNCRP_ENABLED, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE,
-            DWMWA_NCRENDERING_POLICY, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
+            DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
+            DwmSetWindowAttribute,
         },
         UI::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
-                CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW, IDC_ARROW,
-                LoadCursorW, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
-                SetPropW, SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE,
-                WM_NCDESTROY, WM_USER, WNDCLASSEXW,
+                CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW,
+                IDC_ARROW, LoadCursorW, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER,
+                SWP_NOZORDER, SetPropW, SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE,
+                WINDOW_STYLE, WM_NCCREATE, WM_NCDESTROY, WM_USER, WNDCLASSEXW,
             },
         },
     },
@@ -26,10 +27,9 @@ use windows::{
 };
 
 use super::{
-    application::Application,
     event_loop::EventLoop,
-    geometry::{LogicalSize, PhysicalPoint, PhysicalSize},
-    window_api::{WindowId, WindowParams, WindowStyle, WindowSystemBackdropType, WindowTitleBarKind},
+    geometry::{LogicalPoint, LogicalSize, PhysicalPoint, PhysicalSize},
+    window_api::{WindowId, WindowParams, WindowStyle, WindowTitleBarKind},
 };
 
 /// cbindgen:ignore
@@ -39,16 +39,18 @@ const WINDOW_PTR_PROP_NAME: PCWSTR = w!("KDT_WINDOW_PTR");
 pub(crate) const WM_REQUEST_UPDATE: u32 = WM_USER + 1;
 
 pub struct Window {
-    hwnd: HWND,
+    hwnd: RefCell<HWND>,
     min_size: Option<LogicalSize>,
+    origin: LogicalPoint,
+    size: LogicalSize,
     style: WindowStyle,
+    mouse_in_client: AtomicBool,
     event_loop: Weak<EventLoop>,
-    john_weak: Weak<Window>,
 }
 
 impl Window {
     #[allow(clippy::cast_possible_truncation)]
-    pub fn new(params: &WindowParams, app: &Application) -> WinResult<Rc<Self>> {
+    pub fn new(params: &WindowParams, event_loop: Weak<EventLoop>) -> WinResult<Rc<Self>> {
         const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
         let instance = crate::get_dll_instance();
         let wndclass = WNDCLASSEXW {
@@ -65,7 +67,16 @@ impl Window {
             .as_optional_str()
             .map_err(|_| WinError::from(ERROR_NO_UNICODE_TRANSLATION))?
             .map(HSTRING::from);
-        let hwnd = unsafe {
+        let window = Rc::new(Self {
+            hwnd: RefCell::new(HWND::default()),
+            min_size: None,
+            origin: params.origin,
+            size: params.size,
+            style: params.style,
+            mouse_in_client: AtomicBool::new(false),
+            event_loop,
+        });
+        unsafe {
             let _atom = RegisterClassExW(&raw const wndclass);
             CreateWindowExW(
                 WINDOW_EX_STYLE(0),
@@ -79,43 +90,26 @@ impl Window {
                 None,
                 None,
                 Some(instance),
-                None,
-            )?
-        };
-        let window = Rc::new_cyclic(|weak| Self {
-            hwnd,
-            min_size: None,
-            style: params.style,
-            event_loop: Rc::downgrade(&app.event_loop()),
-            john_weak: weak.clone(),
-        });
-        unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, params.style.to_system().0 as _) };
-        let scale = window.get_scale();
-        window.set_position(params.origin.to_physical(scale), params.size.to_physical(scale))?;
-        unsafe {
-            SetPropW(
-                hwnd,
-                WINDOW_PTR_PROP_NAME,
-                Some(HANDLE(window.john_weak.as_ptr().cast_mut().cast())),
-            )
-        }?;
+                Some(Rc::downgrade(&window).into_raw().cast()),
+            )?;
+        }
         Ok(window)
     }
 
     #[must_use]
     pub fn id(&self) -> WindowId {
-        WindowId(self.hwnd.0 as isize)
+        WindowId(self.hwnd().0 as isize)
     }
 
     #[inline]
-    pub(crate) const fn hwnd(&self) -> HWND {
-        self.hwnd
+    pub(crate) fn hwnd(&self) -> HWND {
+        *self.hwnd.borrow()
     }
 
     #[allow(clippy::cast_precision_loss)]
     #[must_use]
     pub fn get_scale(&self) -> f32 {
-        let dpi = unsafe { GetDpiForWindow(self.hwnd) };
+        let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
         (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
     }
 
@@ -131,35 +125,22 @@ impl Window {
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn extend_content_into_titlebar(&self) -> WinResult<()> {
-        let should_extend_content_into_titlebar = !(matches!(self.style.title_bar_kind, WindowTitleBarKind::System)
-            && matches!(self.style.system_backdrop_type, WindowSystemBackdropType::None));
-        if should_extend_content_into_titlebar {
-            let colorref = COLORREF(DWMWA_COLOR_NONE);
-            let policy = DWMNCRP_ENABLED;
-            let margins = MARGINS {
-                cxLeftWidth: -1,
-                cxRightWidth: -1,
-                cyTopHeight: -1,
-                cyBottomHeight: -1,
-            };
-            unsafe {
-                // if we want to extend content into the titlebar area, it makes sense to remove any color from it
-                DwmSetWindowAttribute(
-                    self.hwnd,
-                    DWMWA_CAPTION_COLOR,
-                    (&raw const colorref).cast(),
-                    core::mem::size_of::<COLORREF>() as _,
-                )?;
-                DwmSetWindowAttribute(
-                    self.hwnd,
-                    DWMWA_NCRENDERING_POLICY,
-                    (&raw const policy).cast(),
-                    core::mem::size_of::<DWMNCRENDERINGPOLICY>() as _,
-                )?;
-                DwmExtendFrameIntoClientArea(self.hwnd, &raw const margins)
-            }
-        } else {
-            Ok(())
+        let colorref = COLORREF(DWMWA_COLOR_NONE);
+        let margins = MARGINS {
+            cxLeftWidth: -1,
+            cxRightWidth: -1,
+            cyTopHeight: -1,
+            cyBottomHeight: -1,
+        };
+        unsafe {
+            // if we want to extend content into the titlebar area, it makes sense to remove any color from it
+            DwmSetWindowAttribute(
+                self.hwnd(),
+                DWMWA_CAPTION_COLOR,
+                (&raw const colorref).cast(),
+                core::mem::size_of::<COLORREF>() as _,
+            )?;
+            DwmExtendFrameIntoClientArea(self.hwnd(), &raw const margins)
         }
     }
 
@@ -168,7 +149,7 @@ impl Window {
         let backdrop: DWM_SYSTEMBACKDROP_TYPE = self.style.system_backdrop_type.to_system();
         unsafe {
             DwmSetWindowAttribute(
-                self.hwnd,
+                self.hwnd(),
                 DWMWA_SYSTEMBACKDROP_TYPE,
                 (&raw const backdrop).cast(),
                 core::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as _,
@@ -176,23 +157,22 @@ impl Window {
         }
     }
 
-    pub fn show(&self) {
-        let _ = unsafe { ShowWindow(self.hwnd, SW_SHOW) };
+    pub fn show(&self) -> bool {
+        unsafe { ShowWindow(self.hwnd(), SW_SHOW) }.as_bool()
     }
 
     pub fn set_position(&self, origin: PhysicalPoint, size: PhysicalSize) -> WinResult<()> {
         unsafe {
             SetWindowPos(
-                self.hwnd,
+                self.hwnd(),
                 None,
                 origin.x.0,
                 origin.y.0,
                 size.width.0,
                 size.height.0,
                 SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER,
-            )?;
-        };
-        Ok(())
+            )
+        }
     }
 
     #[must_use]
@@ -204,15 +184,27 @@ impl Window {
         self.min_size = Some(size);
     }
 
+    #[inline]
+    pub(crate) fn is_mouse_in_client(&self) -> bool {
+        self.mouse_in_client.load(Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub(crate) fn set_is_mouse_in_client(&self, value: bool) {
+        self.mouse_in_client.store(value, Ordering::Relaxed);
+    }
+
     pub fn request_update(&self) -> WinResult<()> {
-        unsafe { PostMessageW(Some(self.hwnd), WM_REQUEST_UPDATE, WPARAM::default(), LPARAM::default()) }
+        unsafe { PostMessageW(Some(self.hwnd()), WM_REQUEST_UPDATE, WPARAM::default(), LPARAM::default()) }
     }
 }
 
 impl Drop for Window {
     fn drop(&mut self) {
-        if let Err(err) = unsafe { DestroyWindow(self.hwnd) } {
-            error!("Failed to destroy the window: {err:?}");
+        if !self.hwnd().is_invalid() {
+            if let Err(err) = unsafe { DestroyWindow(self.hwnd()) } {
+                log::error!("Failed to destroy the window: {err:?}");
+            }
         }
     }
 }
@@ -221,24 +213,46 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     if hwnd.0.is_null() {
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     }
+
+    // WM_NCCREATE is sent before CreateWindowEx returns and is used to setup the new window
+    if msg == WM_NCCREATE {
+        if let Some(create_struct) = unsafe { (lparam.0 as *mut CREATESTRUCTW).as_mut() } {
+            if unsafe { SetPropW(hwnd, WINDOW_PTR_PROP_NAME, Some(HANDLE(create_struct.lpCreateParams))) }.is_ok() {
+                let window = create_struct.lpCreateParams.cast_const().cast::<Window>();
+                let john_weak = ManuallyDrop::new(unsafe { Weak::from_raw(window) });
+                if let Some(window) = john_weak.upgrade() {
+                    window.hwnd.replace(hwnd);
+                    unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.to_system().0 as _) };
+                    let scale = window.get_scale();
+                    let _ = window.set_position(window.origin.to_physical(scale), window.size.to_physical(scale));
+                    return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
+                }
+            }
+        }
+        log::error!("WM_NCCREATE failed");
+        return LRESULT(windows::Win32::Foundation::FALSE.0 as _);
+    }
+
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
     if msg == WM_NCDESTROY {
         let _ = unsafe { RemovePropW(hwnd, WINDOW_PTR_PROP_NAME) };
         return LRESULT(0);
     }
-    let raw = unsafe { GetPropW(hwnd, WINDOW_PTR_PROP_NAME).0 as *const Window };
+
+    let raw = unsafe { GetPropW(hwnd, WINDOW_PTR_PROP_NAME).0.cast::<Window>() };
     if raw.is_null() {
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     }
+
     // we reuse the weak reference on every iteration of the event loop, so we don't drop it here (see above)
     let this = ManuallyDrop::new(unsafe { Weak::from_raw(raw) });
     match this.upgrade() {
-        Some(window) if hwnd == window.hwnd => {
+        Some(window) if hwnd == window.hwnd() => {
             let event_loop = window.event_loop.upgrade().expect("event loop has been dropped");
-            event_loop.window_proc(window.as_ref(), msg, wparam, lparam)
+            event_loop.window_proc(Rc::as_ref(&window), msg, wparam, lparam)
         }
         _ => {
-            error!("could not upgrade the window weak reference, or the window pointer was incorrect");
+            log::error!("could not upgrade the window weak reference, or the window pointer was incorrect");
             unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
         }
     }

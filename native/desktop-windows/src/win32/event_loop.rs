@@ -1,5 +1,4 @@
 use desktop_common::ffi_utils::RustAllocatedStrPtr;
-use log::{debug, error};
 use windows::{
     Foundation::TypedEventHandler,
     System::DispatcherQueueController,
@@ -11,13 +10,17 @@ use windows::{
         },
         System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
         UI::{
+            Controls::WM_MOUSELEAVE,
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
+            Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent},
             WindowsAndMessaging::{
                 DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
                 HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, PostQuitMessage, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED,
-                SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SetWindowPos, TranslateMessage, USER_DEFAULT_SCREEN_DPI,
-                WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_NCCALCSIZE,
-                WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
+                SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
+                TranslateMessage, USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO,
+                WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL,
+                WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_PAINT, WM_RBUTTONDOWN,
+                WM_RBUTTONUP, WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDOWN, WM_XBUTTONUP,
             },
         },
     },
@@ -26,13 +29,14 @@ use windows::{
 
 use super::{
     events::{
-        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCHitTestEvent, Timestamp, WindowDrawEvent, WindowResizeEvent,
-        WindowResizeKind, WindowScaleChangedEvent,
+        CharacterReceivedEvent, Event, EventHandler, KeyEvent, MouseButtonEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent,
+        NCHitTestEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
+    mouse::{MouseButton, MouseKeyState, get_mouse_position},
     strings::copy_from_wide_string,
-    utils,
+    utils::{GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::{WM_REQUEST_UPDATE, Window},
 };
 
@@ -56,7 +60,7 @@ impl EventLoop {
         dispatcher_queue_controller
             .DispatcherQueue()?
             .ShutdownCompleted(&TypedEventHandler::new(|_, _| {
-                debug!("Shutting down the dispatcher queue");
+                log::debug!("Shutting down the dispatcher queue");
                 unsafe { PostQuitMessage(0) };
                 Ok(())
             }))?;
@@ -81,7 +85,7 @@ impl EventLoop {
         self.dispatcher_queue_controller
             .ShutdownQueueAsync()
             .map(|_async| ())
-            .inspect_err(|err| error!("Failed to shut down the dispatcher queue: {err:?}"))
+            .inspect_err(|err| log::error!("Failed to shut down the dispatcher queue: {err:?}"))
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -111,7 +115,21 @@ impl EventLoop {
 
             WM_KEYUP | WM_SYSKEYUP => on_keyup(self, window, msg, wparam, lparam),
 
+            WM_SETFOCUS => self.handle_event(window, Event::WindowKeyboardEnter),
+
+            WM_KILLFOCUS => self.handle_event(window, Event::WindowKeyboardLeave),
+
             WM_CHAR | WM_DEADCHAR | WM_SYSCHAR | WM_SYSDEADCHAR => on_char(self, window, msg, wparam, lparam),
+
+            WM_MOUSEMOVE | WM_NCMOUSEMOVE => on_mousemove(self, window, wparam, lparam),
+
+            WM_MOUSELEAVE => on_mouseleave(self, window),
+
+            WM_LBUTTONDOWN | WM_MBUTTONDOWN | WM_RBUTTONDOWN | WM_XBUTTONDOWN => on_mousebutton_down(self, window, msg, wparam, lparam),
+
+            WM_LBUTTONUP | WM_MBUTTONUP | WM_RBUTTONUP | WM_XBUTTONUP => on_mousebutton_up(self, window, msg, wparam, lparam),
+
+            WM_MOUSEWHEEL | WM_MOUSEHWHEEL => on_mousewheel(self, window, msg, wparam, lparam),
 
             WM_ACTIVATE => on_activate(window),
 
@@ -133,13 +151,19 @@ impl EventLoop {
     }
 }
 
+#[allow(clippy::cast_sign_loss)]
+#[inline]
+fn get_message_timestamp() -> Timestamp {
+    Timestamp(unsafe { GetMessageTime() } as _)
+}
+
 fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
     let hwnd = window.hwnd();
     let mut paint = PAINTSTRUCT::default();
     unsafe { BeginPaint(hwnd, &raw mut paint) };
     let mut rect = RECT::default();
     if let Err(err) = unsafe { GetClientRect(hwnd, &raw mut rect) } {
-        error!("Failed to get client rect: {err:?}");
+        log::error!("Failed to get client rect: {err:?}");
         return Some(LRESULT(1));
     }
     let event = WindowDrawEvent {
@@ -155,10 +179,10 @@ fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_precision_loss)]
 fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let new_dpi = utils::HIWORD!(wparam.0);
+    let new_dpi = HIWORD!(wparam.0);
     assert_eq!(
         new_dpi,
-        utils::LOWORD!(wparam.0),
+        LOWORD!(wparam.0),
         "The DPI values of the X-axis and the Y-axis should be identical for Windows apps."
     );
     let new_scale = (new_dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
@@ -174,8 +198,8 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
 fn on_size(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let width = utils::LOWORD!(lparam.0);
-    let height = utils::HIWORD!(lparam.0);
+    let width = LOWORD!(lparam.0);
+    let height = HIWORD!(lparam.0);
     let kind = match wparam.0 as u32 {
         SIZE_MAXIMIZED => WindowResizeKind::Maximized,
         SIZE_MINIMIZED => WindowResizeKind::Minimized,
@@ -206,21 +230,9 @@ fn on_getminmaxinfo(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
 #[allow(clippy::unnecessary_wraps)]
 fn on_activate(window: &Window) -> Option<LRESULT> {
     let hwnd = window.hwnd();
-    let _ = window.extend_content_into_titlebar().and_then(|()| window.apply_system_backdrop());
-    let mut rect = RECT::default();
-    unsafe {
-        let _ = GetWindowRect(hwnd, &raw mut rect).and_then(|()| {
-            SetWindowPos(
-                hwnd,
-                None,
-                rect.left,
-                rect.top,
-                rect.right - rect.left,
-                rect.bottom - rect.top,
-                SWP_FRAMECHANGED,
-            )
-        });
-    }
+    let _ = window.extend_content_into_titlebar();
+    let _ = window.apply_system_backdrop();
+    let _ = unsafe { SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED) };
     Some(LRESULT(0))
 }
 
@@ -256,8 +268,8 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     if original_ht != LRESULT(HTCLIENT as _) {
         return Some(original_ht);
     }
-    let mouse_x = utils::GET_X_LPARAM!(lparam.0);
-    let mouse_y = utils::GET_Y_LPARAM!(lparam.0);
+    let mouse_x = GET_X_LPARAM!(lparam.0);
+    let mouse_y = GET_Y_LPARAM!(lparam.0);
     let event = NCHitTestEvent { mouse_x, mouse_y };
     let handled = event_loop.handle_event(window, event.into());
     if handled.is_some() {
@@ -296,7 +308,7 @@ fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LR
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
 fn on_keydown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let vk_code = utils::LOWORD!(wparam.0);
+    let vk_code = LOWORD!(wparam.0);
     let timestamp = unsafe { GetMessageTime() };
     let event = KeyEvent {
         key_code: VirtualKey(vk_code),
@@ -314,8 +326,8 @@ fn on_keydown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM,
             lParam: lparam,
             time: timestamp as _,
             pt: POINT {
-                x: utils::GET_X_LPARAM!(pos),
-                y: utils::GET_Y_LPARAM!(pos),
+                x: GET_X_LPARAM!(pos),
+                y: GET_Y_LPARAM!(pos),
             },
         };
         let _ = unsafe { TranslateMessage(&raw const msg) };
@@ -324,14 +336,13 @@ fn on_keydown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM,
 }
 
 #[allow(clippy::cast_possible_truncation)]
-#[allow(clippy::cast_sign_loss)]
 fn on_keyup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let vk_code = utils::LOWORD!(wparam.0);
+    let vk_code = LOWORD!(wparam.0);
     let event = KeyEvent {
         key_code: VirtualKey(vk_code),
         key_status: PhysicalKeyStatus::parse(lparam),
         is_system_key: matches!(msg, WM_SYSKEYUP),
-        timestamp: Timestamp(unsafe { GetMessageTime() } as _),
+        timestamp: get_message_timestamp(),
     };
     event_loop.handle_event(window, Event::KeyUp(event))
 }
@@ -354,4 +365,84 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
         is_system_key: matches!(msg, WM_SYSCHAR | WM_SYSDEADCHAR),
     };
     event_loop.handle_event(window, event.into())
+}
+
+fn on_mousebutton_down(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    let location_in_window = get_mouse_position(lparam, window.get_scale());
+    let event = MouseButtonEvent {
+        button: MouseButton::from_message(msg, wparam),
+        key_state: MouseKeyState::get(wparam),
+        location_in_window,
+        timestamp: get_message_timestamp(),
+    };
+    event_loop.handle_event(window, Event::MouseDown(event))
+}
+
+fn on_mousebutton_up(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    let location_in_window = get_mouse_position(lparam, window.get_scale());
+    let event = MouseButtonEvent {
+        button: MouseButton::from_message(msg, wparam),
+        key_state: MouseKeyState::get(wparam),
+        location_in_window,
+        timestamp: get_message_timestamp(),
+    };
+    event_loop.handle_event(window, Event::MouseUp(event))
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn on_mousemove(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    let location_in_window = get_mouse_position(lparam, window.get_scale());
+    let event: Event = if window.is_mouse_in_client() {
+        MouseMovedEvent {
+            key_state: MouseKeyState::get(wparam),
+            location_in_window,
+            timestamp: get_message_timestamp(),
+        }
+        .into()
+    } else {
+        // see https://devblogs.microsoft.com/oldnewthing/20031013-00/?p=42193
+        window.set_is_mouse_in_client(true);
+        let mut track_mouse_event = TRACKMOUSEEVENT {
+            cbSize: core::mem::size_of::<TRACKMOUSEEVENT>() as _,
+            dwFlags: TME_LEAVE,
+            hwndTrack: window.hwnd(),
+            ..Default::default()
+        };
+        if let Err(err) = unsafe { TrackMouseEvent(&raw mut track_mouse_event) } {
+            log::error!("Failed to start tracking mouse events: {err:?}");
+        }
+        MouseEnteredEvent {
+            key_state: MouseKeyState::get(wparam),
+            location_in_window,
+            timestamp: get_message_timestamp(),
+        }
+        .into()
+    };
+    event_loop.handle_event(window, event)
+}
+
+fn on_mouseleave(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
+    window.set_is_mouse_in_client(false);
+    let event = MouseExitedEvent {
+        timestamp: get_message_timestamp(),
+    };
+    event_loop.handle_event(window, event.into())
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn on_mousewheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    let scrolling_delta = HIWORD!(wparam.0);
+    let location_in_window = get_mouse_position(lparam, window.get_scale());
+    let event_args = ScrollWheelEvent {
+        scrolling_delta,
+        key_state: MouseKeyState::get(wparam),
+        location_in_window,
+        timestamp: get_message_timestamp(),
+    };
+    let event = match msg {
+        WM_MOUSEWHEEL => Event::ScrollWheelY(event_args),
+        WM_MOUSEHWHEEL => Event::ScrollWheelX(event_args),
+        _ => unreachable!("Expected WM_MOUSEWHEEL or WM_MOUSEHWHEEL"),
+    };
+    event_loop.handle_event(window, event)
 }

@@ -34,7 +34,6 @@ abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
     private val creationTime = TimeSource.Monotonic.markNow()
 
     private var currentSize = PhysicalSize(0, 0)
-    private var renderTarget: BackendRenderTarget? = null
     private var surface: Surface? = null
 
     init {
@@ -73,22 +72,23 @@ abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
     fun performDrawing(size: PhysicalSize, scale: Float) {
         if (isSizeChanged(size) || surface == null) {
             val surfaceParams = angleRenderer.makeSurface(currentSize.width, currentSize.height)
-            renderTarget = BackendRenderTarget.makeGL(
+            BackendRenderTarget.makeGL(
                 width = currentSize.width,
                 height = currentSize.height,
                 sampleCnt = 1,
                 stencilBits = 8,
                 fbId = surfaceParams.framebufferBinding,
                 fbFormat = FramebufferFormat.GR_GL_RGBA8,
-            )
-            surface = Surface.makeFromBackendRenderTarget(
-                context = directContext,
-                rt = renderTarget!!,
-                origin = SurfaceOrigin.BOTTOM_LEFT,
-                colorFormat = SurfaceColorFormat.RGBA_8888,
-                colorSpace = ColorSpace.sRGB,
-                surfaceProps = null,
-            )
+            ).use { renderTarget ->
+                surface = Surface.makeFromBackendRenderTarget(
+                    context = directContext,
+                    rt = renderTarget,
+                    origin = SurfaceOrigin.BOTTOM_LEFT,
+                    colorFormat = SurfaceColorFormat.RGBA_8888,
+                    colorSpace = ColorSpace.sRGB,
+                    surfaceProps = null,
+                )
+            }
         }
         surface!!.let { surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds

@@ -1,8 +1,9 @@
 use desktop_common::ffi_utils::RustAllocatedStrPtr;
 
 use super::{
-    geometry::{PhysicalPoint, PhysicalSize},
+    geometry::{LogicalPoint, PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
+    mouse::{MouseButton, MouseKeyState},
     window_api::WindowId,
 };
 
@@ -13,17 +14,19 @@ pub enum Event {
     KeyDown(KeyEvent),
     KeyUp(KeyEvent),
     CharacterReceived(CharacterReceivedEvent),
-    //MouseEntered(MouseEnteredEvent),
-    //MouseExited(MouseExitedEvent),
-    //MouseMoved(MouseMovedEvent),
-    //MouseDragged(MouseDraggedEvent),
-    //MouseDown(MouseDownEvent),
-    //MouseUp(MouseUpEvent),
+    MouseEntered(MouseEnteredEvent),
+    MouseExited(MouseExitedEvent),
+    MouseMoved(MouseMovedEvent),
+    MouseDown(MouseButtonEvent),
+    MouseUp(MouseButtonEvent),
     NCHitTest(NCHitTestEvent),
-    //ScrollWheel(ScrollWheelEvent),
+    ScrollWheelX(ScrollWheelEvent),
+    ScrollWheelY(ScrollWheelEvent),
     WindowCloseRequest,
     WindowDraw(WindowDrawEvent),
     //WindowFocusChange(WindowFocusChangeEvent),
+    WindowKeyboardEnter,
+    WindowKeyboardLeave,
     //WindowFullScreenToggle(WindowFullScreenToggleEvent),
     WindowScaleChanged(WindowScaleChangedEvent),
     //WindowScreenChange(WindowScreenChangeEvent),
@@ -126,4 +129,62 @@ impl From<CharacterReceivedEvent> for Event {
     fn from(value: CharacterReceivedEvent) -> Self {
         Self::CharacterReceived(value)
     }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct MouseEnteredEvent {
+    pub key_state: MouseKeyState,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
+}
+
+impl From<MouseEnteredEvent> for Event {
+    fn from(value: MouseEnteredEvent) -> Self {
+        Self::MouseEntered(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct MouseExitedEvent {
+    pub timestamp: Timestamp,
+}
+
+impl From<MouseExitedEvent> for Event {
+    fn from(value: MouseExitedEvent) -> Self {
+        Self::MouseExited(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct MouseMovedEvent {
+    pub key_state: MouseKeyState,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
+}
+
+impl From<MouseMovedEvent> for Event {
+    fn from(value: MouseMovedEvent) -> Self {
+        Self::MouseMoved(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct MouseButtonEvent {
+    pub button: MouseButton,
+    pub key_state: MouseKeyState,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct ScrollWheelEvent {
+    pub scrolling_delta: u16,
+    pub key_state: MouseKeyState,
+    pub location_in_window: LogicalPoint,
+    pub timestamp: Timestamp,
 }

@@ -2,7 +2,7 @@
 
 use std::{ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use khronos_egl as egl;
 use windows::{
     Win32::{
@@ -37,9 +37,7 @@ pub struct AngleDevice {
 impl AngleDevice {
     #[allow(clippy::items_after_statements)]
     pub fn create_for_window(window: &Window) -> Result<Self> {
-        let lib_egl = load_angle_libraries()?;
-
-        let egl_instance = unsafe { EglInstance::load_required_from(lib_egl) }.context("Failed to load ANGLE library from libEGL.dll")?;
+        let egl_instance = load_angle_egl_instance()?;
 
         let hdc = unsafe { GetDC(Some(window.hwnd())) };
         let display = get_angle_platform_display(&egl_instance, &hdc)?;
@@ -182,7 +180,7 @@ fn get_angle_platform_display(egl_instance: &EglInstance, hdc: &HDC) -> Result<e
     }
 }
 
-fn load_angle_libraries() -> Result<libloading::Library> {
+fn load_angle_egl_instance() -> Result<EglInstance> {
     let current_module_path: PathBuf = unsafe {
         let hmodule = crate::get_dll_instance().into();
         let mut filename = vec![0u16; 1024];
@@ -192,6 +190,6 @@ fn load_angle_libraries() -> Result<libloading::Library> {
         }?
     };
     let current_directory = current_module_path.parent().ok_or_else(|| WinError::from(ERROR_PATH_NOT_FOUND))?;
-    let lib_egl = unsafe { libloading::Library::new(current_directory.join("libEGL.dll")) }?;
-    Ok(lib_egl)
+    let egl_instance = unsafe { EglInstance::load_required_from_filename(current_directory.join("libEGL.dll")) }?;
+    Ok(egl_instance)
 }

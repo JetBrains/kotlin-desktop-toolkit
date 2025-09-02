@@ -73,3 +73,14 @@ impl LogicalSize {
         )
     }
 }
+
+impl PhysicalPoint {
+    #[allow(clippy::cast_precision_loss)]
+    pub(crate) const fn to_logical(self, scale: f32) -> LogicalPoint {
+        // 0.5 is to ensure that we pixel snap correctly at the edges, this is necessary with odd DPIs like 1.25, 1.5, 1, .75
+        LogicalPoint {
+            x: LogicalPixels((self.x.0 as f32 / scale) + 0.5_f32),
+            y: LogicalPixels((self.y.0 as f32 / scale) + 0.5_f32),
+        }
+    }
+}

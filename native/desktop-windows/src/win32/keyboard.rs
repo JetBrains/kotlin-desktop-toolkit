@@ -3,7 +3,7 @@ use windows::Win32::{
     UI::WindowsAndMessaging::{KF_ALTDOWN, KF_EXTENDED, KF_REPEAT, KF_UP},
 };
 
-use super::utils;
+use super::utils::{HIWORD, LOBYTE, LOWORD};
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -25,10 +25,10 @@ impl PhysicalKeyStatus {
     #[allow(clippy::cast_sign_loss)]
     #[must_use]
     pub const fn parse(lparam: LPARAM) -> Self {
-        let key_flags = utils::HIWORD!(lparam.0);
-        let repeat_count = utils::LOWORD!(lparam.0) as u32;
+        let key_flags = HIWORD!(lparam.0);
+        let repeat_count = LOWORD!(lparam.0) as u32;
 
-        let scan_code = utils::LOBYTE!(key_flags) as u32;
+        let scan_code = LOBYTE!(key_flags) as u32;
         let is_extended_key = (key_flags as u32 & KF_EXTENDED) == KF_EXTENDED;
         let is_menu_key_down = (key_flags as u32 & KF_ALTDOWN) == KF_ALTDOWN;
         let was_key_down = (key_flags as u32 & KF_REPEAT) == KF_REPEAT;

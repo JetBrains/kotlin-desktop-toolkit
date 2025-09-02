@@ -29,7 +29,7 @@ public data class WindowStyle(
     public val isMinimizable: Boolean = true,
     public val isMaximizable: Boolean = true,
 
-    public val systemBackdropType: WindowSystemBackdropType = WindowSystemBackdropType.None,
+    public val systemBackdropType: WindowSystemBackdropType = WindowSystemBackdropType.Auto,
 ) {
     internal fun toNative(arena: Arena): MemorySegment = NativeWindowStyle.allocate(arena).also { nativeWindowStyle ->
         NativeWindowStyle.title_bar_kind(nativeWindowStyle, titleBarKind.toNative())
