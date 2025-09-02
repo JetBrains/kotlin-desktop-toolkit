@@ -1,36 +1,49 @@
 #![allow(non_upper_case_globals)]
 
-use std::{ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf};
+use std::{
+    ffi::OsString,
+    os::windows::ffi::OsStringExt,
+    path::PathBuf,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use anyhow::{Result, anyhow};
 use khronos_egl as egl;
 use windows::{
+    UI::Composition::SpriteVisual,
     Win32::{
-        Foundation::{ERROR_PATH_NOT_FOUND, HWND},
+        Foundation::ERROR_PATH_NOT_FOUND,
         Graphics::Gdi::{GetDC, HDC},
         System::LibraryLoader::GetModuleFileNameW,
     },
-    core::Error as WinError,
+    core::{Error as WinError, Interface},
 };
+use windows_numerics::Vector2;
 
 use super::{
     renderer_api::EglSurfaceData,
     renderer_egl_utils::{
         EglInstance, GR_GL_COLOR_BUFFER_BIT, GR_GL_FRAMEBUFFER_BINDING, GR_GL_STENCIL_BUFFER_BIT, GetPlatformDisplayEXTFn, GrGLFunctions,
-        get_egl_proc,
+        PostSubBufferNVFn, get_egl_proc,
     },
     window::Window,
 };
+
+/// cbindgen:ignore
+const EGL_PLATFORM_ANGLE_ANGLE: egl::Int = 0x3202;
+/// cbindgen:ignore
+const EGL_PLATFORM_ANGLE_TYPE_ANGLE: egl::Int = 0x3203;
+/// cbindgen:ignore
+const EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE: egl::Int = 0x3208;
 
 pub type AngleDeviceDrawFun = extern "C" fn() -> ();
 
 pub struct AngleDevice {
     egl_instance: EglInstance,
-    window: HWND,
+    visual: SpriteVisual,
     display: egl::Display,
     context: egl::Context,
     surface: egl::Surface,
-    surface_config: egl::Config,
     functions: GrGLFunctions,
 }
 
@@ -39,7 +52,9 @@ impl AngleDevice {
     pub fn create_for_window(window: &Window) -> Result<Self> {
         let egl_instance = load_angle_egl_instance()?;
 
-        let hdc = unsafe { GetDC(Some(window.hwnd())) };
+        let hwnd = window.hwnd();
+
+        let hdc = unsafe { GetDC(Some(hwnd)) };
         let display = get_angle_platform_display(&egl_instance, &hdc)?;
 
         let (_major, _minor) = egl_instance.initialize(display)?;
@@ -65,6 +80,7 @@ impl AngleDevice {
         egl_instance.choose_config(display, &config_attribs, &mut configs)?;
 
         let surface_config = configs.pop().ok_or_else(|| anyhow!("No configs were found."))?;
+
         // We currently only support ES3.
         #[rustfmt::skip]
         let context_attribs = [
@@ -73,42 +89,34 @@ impl AngleDevice {
             egl::NONE, egl::NONE,
         ];
         let context = egl_instance.create_context(display, surface_config, None, &context_attribs)?;
+
+        let visual = window.create_sprite_visual()?;
+        let surface = unsafe { egl_instance.create_window_surface(display, surface_config, visual.as_raw(), None) }?;
+
         let functions = GrGLFunctions::init(&egl_instance)?;
 
         Ok(Self {
             egl_instance,
-            window: window.hwnd(),
+            visual,
             display,
             context,
-            surface: unsafe { egl::Surface::from_ptr(egl::NO_SURFACE) },
-            surface_config,
+            surface,
             functions,
         })
     }
 
-    pub fn make_surface(&mut self, width: egl::Int, height: egl::Int) -> Result<EglSurfaceData> {
-        const EGL_FIXED_SIZE_ANGLE: egl::Int = 0x3201;
-
-        #[rustfmt::skip]
-        let surface_attribs = [
-            EGL_FIXED_SIZE_ANGLE, egl::TRUE as _,
-            egl::WIDTH, width,
-            egl::HEIGHT, height,
-            egl::NONE, egl::NONE,
-        ];
-
-        if self.surface.as_ptr() != egl::NO_SURFACE {
-            self.egl_instance.destroy_surface(self.display, self.surface)?;
-        }
-
-        self.surface = unsafe {
-            self.egl_instance
-                .create_window_surface(self.display, self.surface_config, self.window.0.cast(), Some(&surface_attribs))
-        }?;
+    pub fn resize_surface(&mut self, width: egl::Int, height: egl::Int) -> Result<EglSurfaceData> {
+        #[allow(clippy::cast_precision_loss)]
+        self.visual.SetSize(Vector2 {
+            X: width as f32,
+            Y: height as f32,
+        })?;
 
         self.egl_instance
             .make_current(self.display, Some(self.surface), Some(self.surface), Some(self.context))?;
         self.egl_instance.swap_interval(self.display, 1)?;
+
+        post_sub_buffer(&self.egl_instance, self.display, self.surface, 1, 1, width, height)?;
 
         (self.functions.fClearStencil)(0);
         (self.functions.fClearColor)(0_f32, 0_f32, 0_f32, 0_f32);
@@ -158,12 +166,6 @@ impl Drop for AngleDevice {
 }
 
 fn get_angle_platform_display(egl_instance: &EglInstance, hdc: &HDC) -> Result<egl::Display> {
-    const EGL_PLATFORM_ANGLE_ANGLE: egl::Int = 0x3202;
-    const EGL_PLATFORM_ANGLE_TYPE_ANGLE: egl::Int = 0x3203;
-
-    //const EGL_PLATFORM_ANGLE_TYPE_D3D9_ANGLE: egl::Int = 0x3207;
-    const EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE: egl::Int = 0x3208;
-
     let fun: GetPlatformDisplayEXTFn = get_egl_proc!(egl_instance, "eglGetPlatformDisplayEXT")?;
 
     #[rustfmt::skip]
@@ -177,6 +179,38 @@ fn get_angle_platform_display(egl_instance: &EglInstance, hdc: &HDC) -> Result<e
             .get_error()
             .map_or_else(|| anyhow!("Could not get ANGLE platform display."), Into::into)),
         display => Ok(unsafe { egl::Display::from_ptr(display) }),
+    }
+}
+
+fn post_sub_buffer(
+    egl_instance: &EglInstance,
+    display: egl::Display,
+    surface: egl::Surface,
+    x: egl::Int,
+    y: egl::Int,
+    width: egl::Int,
+    height: egl::Int,
+) -> Result<()> {
+    static FUN: AtomicUsize = AtomicUsize::new(0usize);
+
+    let fun = {
+        let temp = FUN.load(Ordering::Relaxed);
+        if temp == 0usize {
+            #[allow(clippy::transmutes_expressible_as_ptr_casts)]
+            FUN.store(get_egl_proc!(egl_instance, "eglPostSubBufferNV")?, Ordering::Release);
+            FUN.load(Ordering::Acquire)
+        } else {
+            temp
+        }
+    };
+    let fun = unsafe { core::mem::transmute::<usize, PostSubBufferNVFn>(fun) };
+
+    match fun(display.as_ptr(), surface.as_ptr(), x, y, width, height) {
+        egl::TRUE => Ok(()),
+        egl::FALSE => Err(egl_instance
+            .get_error()
+            .map_or_else(|| anyhow!("Could not post sub buffer."), Into::into)),
+        _ => unreachable!("Boolean only has two values"),
     }
 }
 

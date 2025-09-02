@@ -1,30 +1,25 @@
 use desktop_common::ffi_utils::RustAllocatedStrPtr;
-use windows::{
-    Foundation::TypedEventHandler,
-    System::DispatcherQueueController,
-    Win32::{
-        Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
-        Graphics::{
-            Dwm::DwmDefWindowProc,
-            Gdi::{BeginPaint, EndPaint, InvalidateRect, PAINTSTRUCT},
-        },
-        System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
-        UI::{
-            Controls::WM_MOUSELEAVE,
-            HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
-            Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent},
-            WindowsAndMessaging::{
-                DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
-                HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, PostQuitMessage, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED,
-                SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
-                TranslateMessage, USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO,
-                WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL,
-                WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_PAINT, WM_RBUTTONDOWN,
-                WM_RBUTTONUP, WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDOWN, WM_XBUTTONUP,
-            },
+
+use windows::Win32::{
+    Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
+    Graphics::{
+        Dwm::DwmDefWindowProc,
+        Gdi::{BeginPaint, EndPaint, InvalidateRect, PAINTSTRUCT},
+    },
+    UI::{
+        Controls::WM_MOUSELEAVE,
+        HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
+        Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent},
+        WindowsAndMessaging::{
+            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
+            HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SM_CXPADDEDBORDER,
+            SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
+            USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP,
+            WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL,
+            WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_PAINT, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETFOCUS, WM_SIZE,
+            WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDOWN, WM_XBUTTONUP,
         },
     },
-    core::Result as WinResult,
 };
 
 use super::{
@@ -41,34 +36,12 @@ use super::{
 };
 
 pub struct EventLoop {
-    dispatcher_queue_controller: DispatcherQueueController,
     event_handler: EventHandler,
 }
 
 impl EventLoop {
-    #[allow(clippy::cast_possible_truncation)]
-    pub fn new(event_handler: EventHandler) -> WinResult<Self> {
-        let dispatcher_queue_controller = unsafe {
-            CreateDispatcherQueueController(DispatcherQueueOptions {
-                dwSize: size_of::<DispatcherQueueOptions>() as _,
-                threadType: DQTYPE_THREAD_CURRENT,
-                apartmentType: DQTAT_COM_NONE,
-            })?
-        };
-
-        // See https://devblogs.microsoft.com/oldnewthing/20240509-52/?p=109738
-        dispatcher_queue_controller
-            .DispatcherQueue()?
-            .ShutdownCompleted(&TypedEventHandler::new(|_, _| {
-                log::debug!("Shutting down the dispatcher queue");
-                unsafe { PostQuitMessage(0) };
-                Ok(())
-            }))?;
-
-        Ok(Self {
-            dispatcher_queue_controller,
-            event_handler,
-        })
+    pub fn new(event_handler: EventHandler) -> Self {
+        Self { event_handler }
     }
 
     #[allow(clippy::unused_self)]
@@ -79,13 +52,6 @@ impl EventLoop {
                 DispatchMessageW(&raw const msg);
             }
         }
-    }
-
-    pub fn shutdown(&self) -> WinResult<()> {
-        self.dispatcher_queue_controller
-            .ShutdownQueueAsync()
-            .map(|_async| ())
-            .inspect_err(|err| log::error!("Failed to shut down the dispatcher queue: {err:?}"))
     }
 
     #[allow(clippy::needless_pass_by_value)]

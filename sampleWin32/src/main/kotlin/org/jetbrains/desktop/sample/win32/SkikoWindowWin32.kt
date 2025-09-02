@@ -41,11 +41,7 @@ abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
     }
 
     private fun isSizeChanged(size: PhysicalSize): Boolean {
-        if (size.width != currentSize.width || size.height != currentSize.height) {
-            currentSize = size
-            return true
-        }
-        return false
+        return (size.width != currentSize.width || size.height != currentSize.height)
     }
 
     open fun handleEvent(event: Event): EventHandlerResult {
@@ -61,7 +57,9 @@ abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
             }
 
             is Event.WindowResize -> {
-                window.requestUpdate()
+                if (isSizeChanged(event.size)) {
+                    makeSurface(event.size, event.scale)
+                }
                 EventHandlerResult.Stop
             }
 
@@ -70,32 +68,37 @@ abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
     }
 
     fun performDrawing(size: PhysicalSize, scale: Float) {
-        if (isSizeChanged(size) || surface == null) {
-            val surfaceParams = angleRenderer.makeSurface(currentSize.width, currentSize.height)
-            BackendRenderTarget.makeGL(
-                width = currentSize.width,
-                height = currentSize.height,
-                sampleCnt = 1,
-                stencilBits = 8,
-                fbId = surfaceParams.framebufferBinding,
-                fbFormat = FramebufferFormat.GR_GL_RGBA8,
-            ).use { renderTarget ->
-                surface = Surface.makeFromBackendRenderTarget(
-                    context = directContext,
-                    rt = renderTarget,
-                    origin = SurfaceOrigin.BOTTOM_LEFT,
-                    colorFormat = SurfaceColorFormat.RGBA_8888,
-                    colorSpace = ColorSpace.sRGB,
-                    surfaceProps = null,
-                )
-            }
+        if (surface == null) {
+            makeSurface(size, scale)
         }
         surface!!.let { surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
             angleRenderer.draw(true) {
-                surface.canvas.draw(currentSize, scale, time)
+                surface.canvas.draw(size, scale, time)
                 surface.flushAndSubmit()
             }
+        }
+    }
+
+    fun makeSurface(size: PhysicalSize, scale: Float) {
+        currentSize = size
+        val surfaceParams = angleRenderer.resizeSurface(size.width, size.height)
+        surface = BackendRenderTarget.makeGL(
+            width = size.width,
+            height = size.height,
+            sampleCnt = 1,
+            stencilBits = 8,
+            fbId = surfaceParams.framebufferBinding,
+            fbFormat = FramebufferFormat.GR_GL_RGBA8,
+        ).use { renderTarget ->
+            Surface.makeFromBackendRenderTarget(
+                context = directContext,
+                rt = renderTarget,
+                origin = SurfaceOrigin.BOTTOM_LEFT,
+                colorFormat = SurfaceColorFormat.RGBA_8888,
+                colorSpace = ColorSpace.sRGB,
+                surfaceProps = null,
+            )
         }
     }
 
