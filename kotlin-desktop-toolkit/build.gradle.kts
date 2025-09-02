@@ -80,7 +80,7 @@ val profiles = listOf("dev", "release")
 fun crateNameForOS(os: Os): String {
     return when (os) {
         Os.MACOS -> "desktop-macos"
-        Os.WINDOWS -> "desktop-windows"
+        Os.WINDOWS -> "desktop-win32"
         Os.LINUX -> "desktop-linux"
     }
 }

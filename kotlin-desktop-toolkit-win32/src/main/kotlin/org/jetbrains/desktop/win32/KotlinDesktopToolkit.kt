@@ -51,7 +51,7 @@ public object KotlinDesktopToolkit {
 
         val debugSuffix = if (useDebugBuild) "+debug" else ""
 
-        val libName = "desktop_windows_${targetSuffix}$debugSuffix"
+        val libName = "desktop_win32_${targetSuffix}$debugSuffix"
         return "$libName.dll"
     }
 

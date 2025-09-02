@@ -2,7 +2,7 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeWindowParams
 import org.jetbrains.desktop.win32.generated.NativeWindowStyle
-import org.jetbrains.desktop.win32.generated.desktop_windows_h
+import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
@@ -48,7 +48,7 @@ public class Window internal constructor(private val ptr: MemorySegment) : AutoC
             return Arena.ofConfined().use { arena ->
                 Window(
                     ffiDownCall {
-                        desktop_windows_h.window_create(appPtr, params.toNative(arena))
+                        desktop_win32_h.window_create(appPtr, params.toNative(arena))
                     },
                 )
             }
@@ -76,29 +76,29 @@ public class Window internal constructor(private val ptr: MemorySegment) : AutoC
     internal inline fun <T> withPointer(block: (MemorySegment) -> T): T = block(this.ptr)
 
     public fun windowId(): WindowId {
-        return ffiDownCall { desktop_windows_h.window_get_window_id(ptr) }
+        return ffiDownCall { desktop_win32_h.window_get_window_id(ptr) }
     }
 
     public fun getScaleFactor(): Float {
-        return ffiDownCall { desktop_windows_h.window_get_scale_factor(ptr) }
+        return ffiDownCall { desktop_win32_h.window_get_scale_factor(ptr) }
     }
 
     public fun setMinSize(size: LogicalSize) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_windows_h.window_set_min_size(ptr, size.toNative(arena))
+                desktop_win32_h.window_set_min_size(ptr, size.toNative(arena))
             }
         }
     }
 
     public fun show() {
-        return ffiDownCall { desktop_windows_h.window_show(ptr) }
+        return ffiDownCall { desktop_win32_h.window_show(ptr) }
     }
 
     public fun setRect(origin: PhysicalPoint, size: PhysicalSize) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_windows_h.window_set_rect(
+                desktop_win32_h.window_set_rect(
                     ptr,
                     origin.toNative(arena),
                     size.toNative(arena),
@@ -108,12 +108,12 @@ public class Window internal constructor(private val ptr: MemorySegment) : AutoC
     }
 
     public fun requestUpdate() {
-        ffiDownCall { desktop_windows_h.window_request_update(ptr) }
+        ffiDownCall { desktop_win32_h.window_request_update(ptr) }
     }
 
     override fun close() {
         ffiDownCall {
-            desktop_windows_h.window_drop(ptr)
+            desktop_win32_h.window_drop(ptr)
         }
     }
 }
@@ -125,9 +125,9 @@ public enum class WindowTitleBarKind {
     ;
 
     public fun toNative(): Int = when (this) {
-        System -> desktop_windows_h.NativeWindowTitleBarKind_System()
-        Custom -> desktop_windows_h.NativeWindowTitleBarKind_Custom()
-        None -> desktop_windows_h.NativeWindowTitleBarKind_None()
+        System -> desktop_win32_h.NativeWindowTitleBarKind_System()
+        Custom -> desktop_win32_h.NativeWindowTitleBarKind_Custom()
+        None -> desktop_win32_h.NativeWindowTitleBarKind_None()
     }
 }
 
@@ -140,10 +140,10 @@ public enum class WindowSystemBackdropType {
     ;
 
     public fun toNative(): Int = when (this) {
-        Auto -> desktop_windows_h.NativeWindowSystemBackdropType_Auto()
-        None -> desktop_windows_h.NativeWindowSystemBackdropType_None()
-        Mica -> desktop_windows_h.NativeWindowSystemBackdropType_Mica()
-        DesktopAcrylic -> desktop_windows_h.NativeWindowSystemBackdropType_DesktopAcrylic()
-        MicaAlt -> desktop_windows_h.NativeWindowSystemBackdropType_MicaAlt()
+        Auto -> desktop_win32_h.NativeWindowSystemBackdropType_Auto()
+        None -> desktop_win32_h.NativeWindowSystemBackdropType_None()
+        Mica -> desktop_win32_h.NativeWindowSystemBackdropType_Mica()
+        DesktopAcrylic -> desktop_win32_h.NativeWindowSystemBackdropType_DesktopAcrylic()
+        MicaAlt -> desktop_win32_h.NativeWindowSystemBackdropType_MicaAlt()
     }
 }

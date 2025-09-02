@@ -82,9 +82,9 @@ fun JavaExec.setUpCrashDumpPath() {
     )
 }
 
-tasks.register<JavaExec>("runSkikoSampleWindows") {
+tasks.register<JavaExec>("runSkikoSampleWin32") {
     group = "application"
-    description = "Runs example of integration with Skiko on Windows"
+    description = "Runs example of integration with Skiko on Windows (Win32)"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("org.jetbrains.desktop.sample.win32.SkikoSampleWin32Kt")
     javaLauncher.set(

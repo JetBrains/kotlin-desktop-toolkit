@@ -2,7 +2,7 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeExceptionsArray
 import org.jetbrains.desktop.win32.generated.NativeLoggerConfiguration
-import org.jetbrains.desktop.win32.generated.desktop_windows_h
+import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.nio.file.Path
 
@@ -21,12 +21,12 @@ public enum class LogLevel {
 
     internal fun toNative(): Int {
         return when (this) {
-            Off -> desktop_windows_h.NativeLogLevel_Off()
-            Error -> desktop_windows_h.NativeLogLevel_Error()
-            Warn -> desktop_windows_h.NativeLogLevel_Warn()
-            Info -> desktop_windows_h.NativeLogLevel_Info()
-            Debug -> desktop_windows_h.NativeLogLevel_Debug()
-            Trace -> desktop_windows_h.NativeLogLevel_Trace()
+            Off -> desktop_win32_h.NativeLogLevel_Off()
+            Error -> desktop_win32_h.NativeLogLevel_Error()
+            Warn -> desktop_win32_h.NativeLogLevel_Warn()
+            Info -> desktop_win32_h.NativeLogLevel_Info()
+            Debug -> desktop_win32_h.NativeLogLevel_Debug()
+            Trace -> desktop_win32_h.NativeLogLevel_Trace()
         }
     }
 }
@@ -191,7 +191,7 @@ internal fun initLogger(logFile: Path, consoleLogLevel: LogLevel, fileLogLevel: 
             NativeLoggerConfiguration.file_path(configuration, arena.allocateUtf8String(logFileStr))
             NativeLoggerConfiguration.console_level(configuration, consoleLogLevel.toNative())
             NativeLoggerConfiguration.file_level(configuration, fileLogLevel.toNative())
-            desktop_windows_h.logger_init(configuration)
+            desktop_win32_h.logger_init(configuration)
         }
     }
 }
@@ -200,7 +200,7 @@ internal class NativeError(messages: List<String>) : Error(messages.joinToString
 
 private fun checkExceptions(): List<String> {
     return Arena.ofConfined().use { arena ->
-        val exceptionsArray = desktop_windows_h.logger_check_exceptions(arena)
+        val exceptionsArray = desktop_win32_h.logger_check_exceptions(arena)
         val count = NativeExceptionsArray.count(exceptionsArray)
         val items = NativeExceptionsArray.items(exceptionsArray)
 
@@ -219,7 +219,7 @@ internal fun <T> ffiDownCall(body: () -> T): T {
     val result = body()
     val exceptions = checkExceptions()
     if (exceptions.isNotEmpty()) {
-        desktop_windows_h.logger_clear_exceptions()
+        desktop_win32_h.logger_clear_exceptions()
         throw NativeError(exceptions)
     }
     return result
@@ -244,6 +244,6 @@ internal inline fun <T> ffiUpCall(defaultResult: T, crossinline body: () -> T): 
 
 public fun outputDebugString(message: String) {
     Arena.ofConfined().use { arena ->
-        ffiDownCall { desktop_windows_h.logger_output_debug_string(arena.allocateUtf8String(message)) }
+        ffiDownCall { desktop_win32_h.logger_output_debug_string(arena.allocateUtf8String(message)) }
     }
 }
