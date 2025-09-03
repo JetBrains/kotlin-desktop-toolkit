@@ -27,10 +27,13 @@ import kotlin.Long
 import kotlin.String
 import kotlin.use
 
-class RotatingBallWindow(windowParams: WindowParams) : SkikoWindowWin32(windowParams) {
+class SkottieWindow(
+    app: Application,
+    windowParams: WindowParams,
+) : SkikoWindowWin32(app, windowParams) {
     companion object {
-        fun createWindow(windowParams: WindowParams): RotatingBallWindow {
-            return RotatingBallWindow(windowParams)
+        fun createWindow(app: Application, windowParams: WindowParams): SkottieWindow {
+            return SkottieWindow(app, windowParams)
         }
 
         private const val ANIMATION_FRAME_COUNT: Int = 151
@@ -69,8 +72,8 @@ class RotatingBallWindow(windowParams: WindowParams) : SkikoWindowWin32(windowPa
     }
 }
 
-class ApplicationState : AutoCloseable {
-    private val windows = mutableMapOf<WindowId, RotatingBallWindow>()
+class ApplicationState(private val app: Application) : AutoCloseable {
+    private val windows = mutableMapOf<WindowId, SkottieWindow>()
 
     fun createWindow() {
         val windowParams = WindowParams(
@@ -82,9 +85,7 @@ class ApplicationState : AutoCloseable {
             ),
         )
 
-        val window = RotatingBallWindow.createWindow(
-            windowParams,
-        )
+        val window = SkottieWindow.createWindow(app, windowParams)
 
         windows[window.window.windowId()] = window
         window.window.show()
@@ -97,7 +98,7 @@ class ApplicationState : AutoCloseable {
                 window.close()
                 windows.remove(windowId)
                 if (windows.isEmpty()) {
-                    Application.stopEventLoop()
+                    app.stopEventLoop()
                 }
                 EventHandlerResult.Stop
             }
@@ -117,11 +118,16 @@ fun main(args: Array<String>) {
     }
     Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
-    Application.init()
-    ApplicationState().use { state ->
-        state.createWindow()
-        Application.runEventLoop { windowId, event ->
-            state.handleEvent(event, windowId)
+    Application().use { app ->
+        ApplicationState(app).use { state ->
+            app.runEventLoop(
+                onStartup = {
+                    state.createWindow()
+                },
+                eventHandler = { windowId, event ->
+                    state.handleEvent(event, windowId)
+                },
+            )
         }
     }
 }

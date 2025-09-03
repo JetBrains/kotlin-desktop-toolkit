@@ -13,17 +13,18 @@ class WindowTests {
     @Test
     fun smokeTest() {
         KotlinDesktopToolkit.init()
-        Application.init()
-        val window1 = Application.createWindow(WindowParams(title = "Test Hello1"))
-        val window2 = Application.createWindow(
-            WindowParams(
-                title = "Hello2",
-                size = LogicalSize(200f, 300f),
-            ),
-        )
-        window1.show()
-        window2.show()
-        window1.close()
-        window2.close()
+        Application().use { app ->
+            val window1 = app.createWindow(WindowParams(title = "Test Hello1"))
+            val window2 = app.createWindow(
+                WindowParams(
+                    title = "Hello2",
+                    size = LogicalSize(200f, 300f),
+                ),
+            )
+            window1.show()
+            window2.show()
+            window1.close()
+            window2.close()
+        }
     }
 }
