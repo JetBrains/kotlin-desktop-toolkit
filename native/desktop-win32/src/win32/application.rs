@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use windows::{
     Foundation::TypedEventHandler,
-    System::DispatcherQueueController,
+    System::{DispatcherQueueController, DispatcherQueueHandler},
     UI::Composition::Compositor,
     Win32::{
         System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
@@ -29,6 +29,15 @@ impl Application {
             event_loop: Rc::new(event_loop),
             compositor: Rc::new(compositor),
         })
+    }
+
+    pub fn invoke_on_dispatcher_queue(&self, callback: extern "C" fn()) -> WinResult<bool> {
+        self.dispatcher_queue_controller
+            .DispatcherQueue()?
+            .TryEnqueue(&DispatcherQueueHandler::new(move || {
+                callback();
+                Ok(())
+            }))
     }
 
     pub fn run_event_loop(&self) {

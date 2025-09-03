@@ -19,7 +19,10 @@ import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
 import kotlin.time.TimeSource
 
-abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
+abstract class SkikoWindowWin32(
+    app: Application,
+    params: WindowParams,
+) : AutoCloseable {
     private val angleRenderer: AngleRenderer by lazy {
         AngleRenderer.create(window)
     }
@@ -30,7 +33,7 @@ abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
         DirectContext.makeGLWithInterface(glInterface)
     }
 
-    val window = Application.createWindow(params)
+    val window = app.createWindow(params)
     private val creationTime = TimeSource.Monotonic.markNow()
 
     private var currentSize = PhysicalSize(0, 0)
@@ -68,7 +71,7 @@ abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
         }
     }
 
-    fun performDrawing(size: PhysicalSize, scale: Float) {
+    private fun performDrawing(size: PhysicalSize, scale: Float) {
         surface!!.let { surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
             angleRenderer.draw(true) {
@@ -78,7 +81,7 @@ abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
         }
     }
 
-    fun makeSurface(size: PhysicalSize, scale: Float) {
+    private fun makeSurface(size: PhysicalSize, scale: Float) {
         currentSize = size
         val surfaceParams = angleRenderer.resizeSurface(size.width, size.height)
         surface = BackendRenderTarget.makeGL(
