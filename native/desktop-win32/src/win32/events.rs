@@ -28,6 +28,7 @@ pub enum Event {
     WindowKeyboardEnter,
     WindowKeyboardLeave,
     //WindowFullScreenToggle(WindowFullScreenToggleEvent),
+    WindowPositionChanging(WindowPositionChangingEvent),
     WindowScaleChanged(WindowScaleChangedEvent),
     //WindowScreenChange(WindowScreenChangeEvent),
     WindowResize(WindowResizeEvent),
@@ -56,11 +57,24 @@ impl From<WindowDrawEvent> for Event {
 
 #[repr(C)]
 #[derive(Debug)]
-#[allow(clippy::struct_field_names)]
+pub struct WindowPositionChangingEvent {
+    pub origin: PhysicalPoint,
+    pub size: PhysicalSize,
+    pub scale: f32,
+}
+
+impl From<WindowPositionChangingEvent> for Event {
+    fn from(value: WindowPositionChangingEvent) -> Self {
+        Self::WindowPositionChanging(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct WindowScaleChangedEvent {
-    pub new_origin: PhysicalPoint,
-    pub new_size: PhysicalSize,
-    pub new_scale: f32,
+    pub origin: PhysicalPoint,
+    pub size: PhysicalSize,
+    pub scale: f32,
 }
 
 impl From<WindowScaleChangedEvent> for Event {
