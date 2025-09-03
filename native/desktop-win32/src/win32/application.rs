@@ -16,7 +16,7 @@ use super::{event_loop::EventLoop, events::EventHandler, window::Window, window_
 pub struct Application {
     dispatcher_queue_controller: DispatcherQueueController,
     event_loop: Rc<EventLoop>,
-    compositor: Compositor,
+    compositor: Rc<Compositor>,
 }
 
 impl Application {
@@ -27,7 +27,7 @@ impl Application {
         Ok(Self {
             dispatcher_queue_controller,
             event_loop: Rc::new(event_loop),
-            compositor,
+            compositor: Rc::new(compositor),
         })
     }
 
@@ -43,7 +43,7 @@ impl Application {
     }
 
     pub(crate) fn create_window(&self, params: &WindowParams) -> WinResult<Rc<Window>> {
-        Window::new(params, Rc::downgrade(&self.event_loop), &self.compositor)
+        Window::new(params, Rc::downgrade(&self.event_loop), Rc::downgrade(&self.compositor))
     }
 }
 

@@ -90,7 +90,7 @@ impl AngleDevice {
         ];
         let context = egl_instance.create_context(display, surface_config, None, &context_attribs)?;
 
-        let visual = window.create_sprite_visual()?;
+        let visual = window.get_visual()?;
         let surface = unsafe { egl_instance.create_window_surface(display, surface_config, visual.as_raw(), None) }?;
 
         let functions = GrGLFunctions::init(&egl_instance)?;
