@@ -3,19 +3,9 @@ use desktop_common::{
     logger::{PanicDefault, ffi_boundary},
 };
 
-use super::{
-    renderer_angle::{AngleDevice, AngleDeviceDrawFun},
-    window::Window,
-    window_api::WindowPtr,
-};
+use super::{renderer_angle::AngleDevice, window::Window, window_api::WindowPtr};
 
 pub type AngleDevicePtr<'a> = RustAllocatedRawPtr<'a>;
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct AngleDeviceCallbacks {
-    pub draw_fun: AngleDeviceDrawFun,
-}
 
 #[derive(Debug)]
 #[repr(C)]
@@ -70,10 +60,19 @@ pub extern "C" fn renderer_angle_resize_surface(mut angle_device_ptr: AngleDevic
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn renderer_angle_draw(angle_device_ptr: AngleDevicePtr, wait_for_vsync: bool, callbacks: AngleDeviceCallbacks) {
-    ffi_boundary("renderer_angle_draw", || {
+pub extern "C" fn renderer_angle_make_current(angle_device_ptr: AngleDevicePtr) {
+    ffi_boundary("renderer_angle_make_current", || {
         let angle_device = unsafe { angle_device_ptr.borrow::<AngleDevice>() };
-        angle_device.draw(wait_for_vsync, callbacks.draw_fun)?;
+        angle_device.make_current()?;
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn renderer_angle_swap_buffers(angle_device_ptr: AngleDevicePtr, wait_for_vsync: bool) {
+    ffi_boundary("renderer_angle_swap_buffers", || {
+        let angle_device = unsafe { angle_device_ptr.borrow::<AngleDevice>() };
+        angle_device.swap_buffers(wait_for_vsync)?;
         Ok(())
     });
 }

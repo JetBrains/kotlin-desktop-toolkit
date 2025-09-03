@@ -1,7 +1,5 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.win32.generated.NativeAngleDeviceCallbacks
-import org.jetbrains.desktop.win32.generated.NativeAngleDeviceDrawFun
 import org.jetbrains.desktop.win32.generated.NativeEglGetProcFuncData
 import org.jetbrains.desktop.win32.generated.NativeEglSurfaceData
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
@@ -47,14 +45,22 @@ public class AngleRenderer internal constructor(private val angleDevicePtr: Memo
         }
     }
 
-    public fun draw(waitForVsync: Boolean, drawFun: () -> Unit) {
-        Arena.ofConfined().use { arena ->
-            val callbacks = NativeAngleDeviceCallbacks.allocate(arena)
-            NativeAngleDeviceCallbacks.draw_fun(callbacks, NativeAngleDeviceDrawFun.allocate(drawFun, arena))
-            ffiDownCall {
-                desktop_win32_h.renderer_angle_draw(angleDevicePtr, waitForVsync, callbacks)
-            }
+    public fun makeCurrent() {
+        ffiDownCall {
+            desktop_win32_h.renderer_angle_make_current(angleDevicePtr)
         }
+    }
+
+    public fun swapBuffers(waitForVsync: Boolean) {
+        ffiDownCall {
+            desktop_win32_h.renderer_angle_swap_buffers(angleDevicePtr, waitForVsync)
+        }
+    }
+
+    public fun draw(waitForVsync: Boolean, drawFun: () -> Unit) {
+        makeCurrent()
+        drawFun()
+        swapBuffers(waitForVsync)
     }
 
     override fun close() {
