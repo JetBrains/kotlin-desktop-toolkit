@@ -55,10 +55,12 @@ use smithay_client_toolkit::{
 
 use crate::linux::{
     application_api::ApplicationCallbacks,
+    events::WindowId,
     events::{
-        Event, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDrawEvent, WindowId, WindowScaleChangedEvent,
+        Event, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDrawEvent, WindowScaleChangedEvent,
         WindowScreenChangeEvent,
     },
+    keyboard::KeymapKey,
     keyboard::send_key_down_event,
     text_input::PendingTextInputEvent,
     window::SimpleWindow,
@@ -95,6 +97,8 @@ pub struct ApplicationState {
     pub active_text_input: Option<ZwpTextInputV3>,
     pub pending_text_input_event: PendingTextInputEvent,
     pub egl: Option<EglInstance>,
+    pub keymap_keys: Vec<KeymapKey>,
+    pub xkb_current_layout: u32,
 }
 
 impl ApplicationState {
@@ -143,6 +147,8 @@ impl ApplicationState {
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
             egl,
+            keymap_keys: Vec::new(),
+            xkb_current_layout: 0,
         }
     }
 
@@ -233,7 +239,7 @@ impl SeatHandler for ApplicationState {
                         // Since wl_keyboard version 10, [smithay_client_toolkit::seat::keyboard::KeyboardHandler::repeat_key]
                         // is used instead.
                         if wl_kbd.version() < 10 {
-                            send_key_down_event(state, event, true);
+                            send_key_down_event(state, event, true, &state.keymap_keys, state.xkb_current_layout);
                         }
                     }),
                 )

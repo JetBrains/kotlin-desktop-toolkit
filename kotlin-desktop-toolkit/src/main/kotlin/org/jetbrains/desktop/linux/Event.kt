@@ -98,6 +98,7 @@ public sealed class Event {
         val characters: String?,
         val key: KeySym,
         val isRepeat: Boolean,
+        val virtualKey: VirtualKey?,
     ) : Event()
 
     public data class KeyUp(

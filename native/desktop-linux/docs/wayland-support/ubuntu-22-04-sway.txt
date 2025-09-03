@@ -1,0 +1,220 @@
+interface: 'wl_shm',                                     version:  1, name:  1
+	formats (fourcc):
+	0x48344241 = 'AB4H'
+	0x48344258 = 'XB4H'
+	0x30334241 = 'AB30'
+	0x30334258 = 'XB30'
+	0x36314752 = 'RG16'
+	0x35314152 = 'RA15'
+	0x35315852 = 'RX15'
+	0x32314152 = 'RA12'
+	0x32315852 = 'RX12'
+	0x34324742 = 'BG24'
+	0x34324241 = 'AB24'
+	0x34324258 = 'XB24'
+	         1 = 'XR24'
+	         0 = 'AR24'
+interface: 'wl_drm',                                     version:  2, name:  2
+interface: 'zwp_linux_dmabuf_v1',                        version:  4, name:  3
+	main device: 0xE280
+	tranche
+		target device: 0xE280
+		flags: none
+		formats (fourcc) and modifiers:
+		0x48344241 = 'AB4H'; 0x00ffffffffffffff
+		0x48344241 = 'AB4H'; 0x00ffffffffffffff
+		0x48344241 = 'AB4H'; 0x0000000000000000
+		0x48344258 = 'XB4H'; 0x00ffffffffffffff
+		0x48344258 = 'XB4H'; 0x00ffffffffffffff
+		0x48344258 = 'XB4H'; 0x0000000000000000
+		0x38344241 = 'AB48'; 0x00ffffffffffffff
+		0x38344241 = 'AB48'; 0x00ffffffffffffff
+		0x38344241 = 'AB48'; 0x0000000000000000
+		0x38344258 = 'XB48'; 0x00ffffffffffffff
+		0x38344258 = 'XB48'; 0x00ffffffffffffff
+		0x38344258 = 'XB48'; 0x0000000000000000
+		0x30335241 = 'AR30'; 0x00ffffffffffffff
+		0x30335241 = 'AR30'; 0x00ffffffffffffff
+		0x30335241 = 'AR30'; 0x0000000000000000
+		0x30335258 = 'XR30'; 0x00ffffffffffffff
+		0x30335258 = 'XR30'; 0x00ffffffffffffff
+		0x30335258 = 'XR30'; 0x0000000000000000
+		0x30334241 = 'AB30'; 0x00ffffffffffffff
+		0x30334241 = 'AB30'; 0x00ffffffffffffff
+		0x30334241 = 'AB30'; 0x0000000000000000
+		0x30334258 = 'XB30'; 0x00ffffffffffffff
+		0x30334258 = 'XB30'; 0x00ffffffffffffff
+		0x30334258 = 'XB30'; 0x0000000000000000
+		0x34325241 = 'AR24'; 0x00ffffffffffffff
+		0x34325241 = 'AR24'; 0x00ffffffffffffff
+		0x34325241 = 'AR24'; 0x0000000000000000
+		0x34324241 = 'AB24'; 0x00ffffffffffffff
+		0x34324241 = 'AB24'; 0x00ffffffffffffff
+		0x34324241 = 'AB24'; 0x0000000000000000
+		0x34325258 = 'XR24'; 0x00ffffffffffffff
+		0x34325258 = 'XR24'; 0x00ffffffffffffff
+		0x34325258 = 'XR24'; 0x0000000000000000
+		0x34324258 = 'XB24'; 0x00ffffffffffffff
+		0x34324258 = 'XB24'; 0x00ffffffffffffff
+		0x34324258 = 'XB24'; 0x0000000000000000
+		0x36314752 = 'RG16'; 0x00ffffffffffffff
+		0x36314752 = 'RG16'; 0x00ffffffffffffff
+		0x36314752 = 'RG16'; 0x0000000000000000
+		0x20203852 = 'R8  '; 0x00ffffffffffffff
+		0x20203852 = 'R8  '; 0x00ffffffffffffff
+		0x20203852 = 'R8  '; 0x0000000000000000
+		0x20363152 = 'R16 '; 0x00ffffffffffffff
+		0x20363152 = 'R16 '; 0x00ffffffffffffff
+		0x20363152 = 'R16 '; 0x0000000000000000
+		0x38385247 = 'GR88'; 0x00ffffffffffffff
+		0x38385247 = 'GR88'; 0x00ffffffffffffff
+		0x38385247 = 'GR88'; 0x0000000000000000
+		0x32335247 = 'GR32'; 0x00ffffffffffffff
+		0x32335247 = 'GR32'; 0x00ffffffffffffff
+		0x32335247 = 'GR32'; 0x0000000000000000
+		0x39565559 = 'YUV9'; 0x00ffffffffffffff
+		0x39565559 = 'YUV9'; 0x00ffffffffffffff
+		0x39565559 = 'YUV9'; 0x0000000000000000
+		0x31315559 = 'YU11'; 0x00ffffffffffffff
+		0x31315559 = 'YU11'; 0x00ffffffffffffff
+		0x31315559 = 'YU11'; 0x0000000000000000
+		0x32315559 = 'YU12'; 0x00ffffffffffffff
+		0x32315559 = 'YU12'; 0x00ffffffffffffff
+		0x32315559 = 'YU12'; 0x0000000000000000
+		0x36315559 = 'YU16'; 0x00ffffffffffffff
+		0x36315559 = 'YU16'; 0x00ffffffffffffff
+		0x36315559 = 'YU16'; 0x0000000000000000
+		0x34325559 = 'YU24'; 0x00ffffffffffffff
+		0x34325559 = 'YU24'; 0x00ffffffffffffff
+		0x34325559 = 'YU24'; 0x0000000000000000
+		0x39555659 = 'YVU9'; 0x00ffffffffffffff
+		0x39555659 = 'YVU9'; 0x00ffffffffffffff
+		0x39555659 = 'YVU9'; 0x0000000000000000
+		0x31315659 = 'YV11'; 0x00ffffffffffffff
+		0x31315659 = 'YV11'; 0x00ffffffffffffff
+		0x31315659 = 'YV11'; 0x0000000000000000
+		0x32315659 = 'YV12'; 0x00ffffffffffffff
+		0x32315659 = 'YV12'; 0x00ffffffffffffff
+		0x32315659 = 'YV12'; 0x0000000000000000
+		0x36315659 = 'YV16'; 0x00ffffffffffffff
+		0x36315659 = 'YV16'; 0x00ffffffffffffff
+		0x36315659 = 'YV16'; 0x0000000000000000
+		0x34325659 = 'YV24'; 0x00ffffffffffffff
+		0x34325659 = 'YV24'; 0x00ffffffffffffff
+		0x34325659 = 'YV24'; 0x0000000000000000
+		0x3231564e = 'NV12'; 0x00ffffffffffffff
+		0x3231564e = 'NV12'; 0x00ffffffffffffff
+		0x3231564e = 'NV12'; 0x0000000000000000
+		0x3132564e = 'NV21'; 0x00ffffffffffffff
+		0x3132564e = 'NV21'; 0x00ffffffffffffff
+		0x3132564e = 'NV21'; 0x0000000000000000
+		0x30313050 = 'P010'; 0x00ffffffffffffff
+		0x30313050 = 'P010'; 0x00ffffffffffffff
+		0x30313050 = 'P010'; 0x0000000000000000
+		0x32313050 = 'P012'; 0x00ffffffffffffff
+		0x32313050 = 'P012'; 0x00ffffffffffffff
+		0x32313050 = 'P012'; 0x0000000000000000
+		0x36313050 = 'P016'; 0x00ffffffffffffff
+		0x36313050 = 'P016'; 0x00ffffffffffffff
+		0x36313050 = 'P016'; 0x0000000000000000
+		0x30333050 = 'P030'; 0x00ffffffffffffff
+		0x30333050 = 'P030'; 0x00ffffffffffffff
+		0x30333050 = 'P030'; 0x0000000000000000
+		0x3631564e = 'NV16'; 0x00ffffffffffffff
+		0x3631564e = 'NV16'; 0x00ffffffffffffff
+		0x3631564e = 'NV16'; 0x0000000000000000
+		0x56555941 = 'AYUV'; 0x00ffffffffffffff
+		0x56555941 = 'AYUV'; 0x00ffffffffffffff
+		0x56555941 = 'AYUV'; 0x0000000000000000
+		0x56555958 = 'XYUV'; 0x00ffffffffffffff
+		0x56555958 = 'XYUV'; 0x00ffffffffffffff
+		0x56555958 = 'XYUV'; 0x0000000000000000
+		0x30313459 = 'Y410'; 0x00ffffffffffffff
+		0x30313459 = 'Y410'; 0x00ffffffffffffff
+		0x30313459 = 'Y410'; 0x0000000000000000
+		0x32313459 = 'Y412'; 0x00ffffffffffffff
+		0x32313459 = 'Y412'; 0x00ffffffffffffff
+		0x32313459 = 'Y412'; 0x0000000000000000
+		0x36313459 = 'Y416'; 0x00ffffffffffffff
+		0x36313459 = 'Y416'; 0x00ffffffffffffff
+		0x36313459 = 'Y416'; 0x0000000000000000
+		0x56595559 = 'YUYV'; 0x00ffffffffffffff
+		0x56595559 = 'YUYV'; 0x00ffffffffffffff
+		0x56595559 = 'YUYV'; 0x0000000000000000
+		0x55595659 = 'YVYU'; 0x00ffffffffffffff
+		0x55595659 = 'YVYU'; 0x00ffffffffffffff
+		0x55595659 = 'YVYU'; 0x0000000000000000
+		0x59565955 = 'UYVY'; 0x00ffffffffffffff
+		0x59565955 = 'UYVY'; 0x00ffffffffffffff
+		0x59565955 = 'UYVY'; 0x0000000000000000
+		0x59555956 = 'VYUY'; 0x00ffffffffffffff
+		0x59555956 = 'VYUY'; 0x00ffffffffffffff
+		0x59555956 = 'VYUY'; 0x0000000000000000
+		0x30313259 = 'Y210'; 0x00ffffffffffffff
+		0x30313259 = 'Y210'; 0x00ffffffffffffff
+		0x30313259 = 'Y210'; 0x0000000000000000
+		0x32313259 = 'Y212'; 0x00ffffffffffffff
+		0x32313259 = 'Y212'; 0x00ffffffffffffff
+		0x32313259 = 'Y212'; 0x0000000000000000
+		0x36313259 = 'Y216'; 0x00ffffffffffffff
+		0x36313259 = 'Y216'; 0x00ffffffffffffff
+		0x36313259 = 'Y216'; 0x0000000000000000
+interface: 'wl_compositor',                              version:  4, name:  4
+interface: 'wl_subcompositor',                           version:  1, name:  5
+interface: 'wl_data_device_manager',                     version:  3, name:  6
+interface: 'zwlr_gamma_control_manager_v1',              version:  1, name:  7
+interface: 'zxdg_output_manager_v1',                     version:  3, name:  8
+	xdg_output_v1
+		output: 41
+		name: 'Virtual-1'
+		description: 'Unknown QEMU Monitor 0x00000000 (Virtual-1)'
+		logical_x: 0, logical_y: 0
+		logical_width: 1280, logical_height: 800
+interface: 'org_kde_kwin_idle',                          version:  1, name:  9
+interface: 'zwp_idle_inhibit_manager_v1',                version:  1, name: 10
+interface: 'zwlr_layer_shell_v1',                        version:  4, name: 11
+interface: 'xdg_wm_base',                                version:  2, name: 12
+interface: 'zwp_tablet_manager_v2',                      version:  1, name: 13
+interface: 'org_kde_kwin_server_decoration_manager',     version:  1, name: 14
+interface: 'zxdg_decoration_manager_v1',                 version:  1, name: 15
+interface: 'zwp_relative_pointer_manager_v1',            version:  1, name: 16
+interface: 'zwp_pointer_constraints_v1',                 version:  1, name: 17
+interface: 'wp_presentation',                            version:  1, name: 18
+	presentation clock id: 1 (CLOCK_MONOTONIC)
+interface: 'zwlr_output_manager_v1',                     version:  2, name: 19
+interface: 'zwlr_output_power_manager_v1',               version:  1, name: 20
+interface: 'zwp_input_method_manager_v2',                version:  1, name: 21
+interface: 'zwp_text_input_manager_v3',                  version:  1, name: 22
+interface: 'zwlr_foreign_toplevel_manager_v1',           version:  3, name: 23
+interface: 'wp_drm_lease_device_v1',                     version:  1, name: 24
+	path: (null)
+interface: 'zwlr_export_dmabuf_manager_v1',              version:  1, name: 25
+interface: 'zwlr_screencopy_manager_v1',                 version:  3, name: 26
+interface: 'zwlr_data_control_manager_v1',               version:  2, name: 27
+interface: 'zwp_primary_selection_device_manager_v1',    version:  1, name: 28
+interface: 'wp_viewporter',                              version:  1, name: 29
+interface: 'zxdg_exporter_v1',                           version:  1, name: 30
+interface: 'zxdg_importer_v1',                           version:  1, name: 31
+interface: 'zxdg_exporter_v2',                           version:  1, name: 32
+interface: 'zxdg_importer_v2',                           version:  1, name: 33
+interface: 'xdg_activation_v1',                          version:  1, name: 34
+interface: 'zwp_virtual_keyboard_manager_v1',            version:  1, name: 35
+interface: 'zwlr_virtual_pointer_manager_v1',            version:  2, name: 36
+interface: 'zwlr_input_inhibit_manager_v1',              version:  1, name: 37
+interface: 'zwp_keyboard_shortcuts_inhibit_manager_v1',  version:  1, name: 38
+interface: 'wl_seat',                                    version:  7, name: 39
+	name: seat0
+	capabilities: pointer keyboard
+	keyboard repeat rate: 25
+	keyboard repeat delay: 600
+interface: 'zwp_pointer_gestures_v1',                    version:  3, name: 40
+interface: 'wl_output',                                  version:  4, name: 41
+	name: Virtual-1
+	description: Unknown QEMU Monitor 0x00000000 (Virtual-1)
+	x: 0, y: 0, scale: 1,
+	physical_width: 320 mm, physical_height: 200 mm,
+	make: 'Unknown', model: 'QEMU Monitor',
+	subpixel_orientation: unknown, output_transform: normal,
+	mode:
+		width: 1280 px, height: 800 px, refresh: 74.994 Hz,
+		flags: current

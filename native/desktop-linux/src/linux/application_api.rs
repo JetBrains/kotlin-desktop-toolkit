@@ -12,9 +12,10 @@ use crate::linux::{
     application_state::EglInstance,
     async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
-    events::{EventHandler, WindowId},
+    events::{EventHandler, KeyModifierBitflag, WindowId},
     geometry::LogicalPoint,
     text_input_api::TextInputContext,
+    virtual_keys::{MappingResult, get_vk_mapping},
 };
 
 #[repr(C)]
@@ -247,4 +248,18 @@ pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: Borrowed
         });
         Ok(())
     });
+}
+
+#[must_use]
+#[unsafe(no_mangle)]
+pub extern "C" fn application_get_key_mapping(app_ptr: AppPtr, modifiers: KeyModifierBitflag, ascii_key: u32) -> MappingResult {
+    ffi_boundary("application_start_drag_and_drop", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        Ok(get_vk_mapping(
+            modifiers,
+            ascii_key,
+            &app.state.keymap_keys,
+            app.state.xkb_current_layout,
+        ))
+    })
 }

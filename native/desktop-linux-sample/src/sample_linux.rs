@@ -24,6 +24,7 @@ use desktop_linux::linux::{
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
+    virtual_keys::VirtualKey,
     window_api::{WindowParams, window_close, window_create, window_show_open_file_dialog, window_show_save_file_dialog},
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
@@ -272,19 +273,14 @@ const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBit
 }
 
 fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> bool {
-    const KEYCODE_BACKSPACE: u32 = 14;
-    const KEYCODE_C: u32 = 46;
-    const KEYCODE_O: u32 = 24;
-    const KEYCODE_S: u32 = 31;
-    const KEYCODE_V: u32 = 47;
     const KEY_MODIFIER_CTRL: u8 = KeyModifier::Ctrl as u8;
 
     let modifiers: KeyModifierBitflag = shortcut_modifiers(state.key_modifiers);
     let window_id = state.key_window_id.expect("Key window not found");
-    let key_code: u32 = event.code.0;
+    let vk = event.vk;
 
-    match (modifiers.0, key_code) {
-        (0, KEYCODE_BACKSPACE) => {
+    match (modifiers.0, vk) {
+        (0, VirtualKey::BackSpace) => {
             let window_state = state.windows.get_mut(&window_id).unwrap();
             window_state.text.pop();
             if window_state.text_input_available {
@@ -293,15 +289,15 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
             true
         }
-        (KEY_MODIFIER_CTRL, KEYCODE_V) => {
+        (KEY_MODIFIER_CTRL, VirtualKey::V) => {
             application_clipboard_paste(app_ptr, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
             true
         }
-        (KEY_MODIFIER_CTRL, KEYCODE_C) => {
+        (KEY_MODIFIER_CTRL, VirtualKey::C) => {
             application_clipboard_put(app_ptr, BorrowedStrPtr::new(ALL_MIMES));
             true
         }
-        (KEY_MODIFIER_CTRL, KEYCODE_O) => {
+        (KEY_MODIFIER_CTRL, VirtualKey::O) => {
             let common_params = CommonFileDialogParams {
                 modal: false,
                 title: c"Open File for Linux Native Sample App test".into(),
@@ -317,7 +313,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             true
         }
 
-        (KEY_MODIFIER_CTRL, KEYCODE_S) => {
+        (KEY_MODIFIER_CTRL, VirtualKey::S) => {
             let common_params = CommonFileDialogParams {
                 modal: false,
                 title: c"Save File for Linux Native Sample App test".into(),

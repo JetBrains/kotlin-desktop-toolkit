@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [ "desktop-common", "desktop-linux", "desktop-linux-sample", "desktop-macos", "desktop-win32" ]
+members = [ "desktop-common", "desktop-linux", "desktop-linux-sample", "desktop-linux-test-helper", "desktop-linux-test-helper-http", "desktop-macos", "desktop-win32" ]
 
 [workspace.package]
 version = "0.1.0"

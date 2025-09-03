@@ -1,0 +1,22 @@
+[package]
+name = "desktop-linux-test-helper"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+name = "desktop_linux_test_helper"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+
+[target.'cfg(target_os="linux")'.dependencies]
+smithay-client-toolkit = "0.20.0"
+tiny_http = "0.12.0"
+tempfile = "3.21.0"
+url = "2.5.4"
+xkbcommon = "0.8.0"

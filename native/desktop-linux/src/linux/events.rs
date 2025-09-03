@@ -21,6 +21,7 @@ use crate::linux::{
     application_api::DataSource,
     data_transfer::DataTransferContentInternal,
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
+    virtual_keys::VirtualKey,
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
 
@@ -197,6 +198,7 @@ pub struct KeyDownEvent<'a> {
     pub characters: BorrowedStrPtr<'a>,
     pub key: u32,
     pub is_repeat: bool,
+    pub vk: VirtualKey,
 }
 
 impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
@@ -206,12 +208,13 @@ impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
 }
 
 impl<'a> KeyDownEvent<'a> {
-    pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a CString>, is_repeat: bool) -> Self {
+    pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a CString>, is_repeat: bool, vk: VirtualKey) -> Self {
         Self {
             code,
             characters: BorrowedStrPtr::new_optional(characters),
             key,
             is_repeat,
+            vk,
         }
     }
 }

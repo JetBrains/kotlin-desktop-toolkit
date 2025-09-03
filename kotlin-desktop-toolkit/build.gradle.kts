@@ -87,7 +87,7 @@ fun crateNamesForOS(os: Os): List<String> {
     return when (os) {
         Os.MACOS -> listOf("desktop-macos")
         Os.WINDOWS -> listOf("desktop-win32")
-        Os.LINUX -> listOf("desktop-linux", "desktop-linux-sample")
+        Os.LINUX -> listOf("desktop-linux", "desktop-linux-sample", "desktop-linux-test-helper", "desktop-linux-test-helper-http")
     }
 }
 

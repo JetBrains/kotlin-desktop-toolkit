@@ -16,6 +16,7 @@ pub mod string_api;
 mod string_utils;
 mod text_input;
 pub mod text_input_api;
+pub mod virtual_keys;
 mod window;
 pub mod window_api;
 pub mod window_resize_edge;

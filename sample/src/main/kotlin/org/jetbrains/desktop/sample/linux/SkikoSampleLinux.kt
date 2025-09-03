@@ -12,7 +12,6 @@ import org.jetbrains.desktop.linux.FileDialog
 import org.jetbrains.desktop.linux.FontAntialiasingValue
 import org.jetbrains.desktop.linux.FontHintingValue
 import org.jetbrains.desktop.linux.FontRgbaOrderValue
-import org.jetbrains.desktop.linux.KeyCode
 import org.jetbrains.desktop.linux.KeyModifiers
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogLevel
@@ -28,6 +27,7 @@ import org.jetbrains.desktop.linux.PointerShape
 import org.jetbrains.desktop.linux.TextInputContentPurpose
 import org.jetbrains.desktop.linux.TextInputContext
 import org.jetbrains.desktop.linux.Timestamp
+import org.jetbrains.desktop.linux.VirtualKey
 import org.jetbrains.desktop.linux.Window
 import org.jetbrains.desktop.linux.WindowCapabilities
 import org.jetbrains.desktop.linux.WindowDecorationMode
@@ -75,12 +75,12 @@ sealed class DataTransferContentType {
     data class UriList(val files: List<String>) : DataTransferContentType()
 }
 
-fun KeyCode.isModifierKey(): Boolean {
-    return when (this.value) {
-        KeyCode.Alt_L, KeyCode.Alt_R,
-        KeyCode.Control_L, KeyCode.Control_R,
-        KeyCode.Shift_L, KeyCode.Shift_R,
-        KeyCode.Super_L, KeyCode.Super_R,
+fun VirtualKey?.isModifierKey(): Boolean {
+    return when (this) {
+        VirtualKey.AltLeft, VirtualKey.AltRight,
+        VirtualKey.CtrlLeft, VirtualKey.CtrlRight,
+        VirtualKey.ShiftLeft, VirtualKey.ShiftRight,
+        VirtualKey.MetaLeft, VirtualKey.MetaRight,
         -> true
 
         else -> false
@@ -358,19 +358,19 @@ class EditorState {
         val shortcutModifiers = shortcutModifiers()
         when (shortcutModifiers) {
             setOf(KeyModifiers.Logo) -> EventHandlerResult.Continue
-            setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
-                KeyCode.V -> {
+            setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.virtualKey) {
+                VirtualKey.V -> {
                     app.clipboardPaste(0, listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                     EventHandlerResult.Stop
                 }
 
-                KeyCode.C -> {
+                VirtualKey.C -> {
                     app.clipboardPut(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                     currentClipboard = DataTransferContentType.UriList(EXAMPLE_FILES)
                     EventHandlerResult.Stop
                 }
 
-                KeyCode.O -> {
+                VirtualKey.O -> {
                     window.showOpenFileDialog(
                         commonParams = FileDialog.CommonDialogParams(
                             modal = false,
@@ -389,13 +389,13 @@ class EditorState {
                 else -> EventHandlerResult.Continue
             }
 
-            setOf(KeyModifiers.Control) -> when (event.keyCode.value) {
-                KeyCode.V -> {
+            setOf(KeyModifiers.Control) -> when (event.virtualKey) {
+                VirtualKey.V -> {
                     app.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
                     EventHandlerResult.Stop
                 }
 
-                KeyCode.C -> {
+                VirtualKey.C -> {
                     getCurrentSelection()?.let { selection ->
                         app.clipboardPut(listOf(TEXT_MIME_TYPE))
                         currentClipboard = DataTransferContentType.Text(selection)
@@ -403,7 +403,7 @@ class EditorState {
                     } ?: EventHandlerResult.Continue
                 }
 
-                KeyCode.O -> {
+                VirtualKey.O -> {
                     window.showOpenFileDialog(
                         commonParams = FileDialog.CommonDialogParams(
                             modal = true,
@@ -421,8 +421,8 @@ class EditorState {
 
                 else -> EventHandlerResult.Continue
             }
-            setOf(KeyModifiers.Shift) -> when (event.keyCode.value) {
-                KeyCode.Up -> {
+            setOf(KeyModifiers.Shift) -> when (event.virtualKey) {
+                VirtualKey.Up -> {
                     if (selectionStartOffset == null) {
                         selectionStartOffset = cursorOffset
                     }
@@ -430,7 +430,7 @@ class EditorState {
                     cursorOffset = 0
                 }
 
-                KeyCode.Down -> {
+                VirtualKey.Down -> {
                     if (selectionStartOffset == null) {
                         selectionStartOffset = cursorOffset
                     }
@@ -439,7 +439,7 @@ class EditorState {
                     cursorOffset = end
                 }
 
-                KeyCode.Left -> {
+                VirtualKey.Left -> {
                     if (selectionStartOffset == null) {
                         selectionStartOffset = cursorOffset
                     }
@@ -447,7 +447,7 @@ class EditorState {
                     selectionEndOffset = cursorOffset
                 }
 
-                KeyCode.Right -> {
+                VirtualKey.Right -> {
                     if (selectionStartOffset == null) {
                         selectionStartOffset = cursorOffset
                     }
@@ -459,8 +459,8 @@ class EditorState {
                     event.characters?.also(::typeIn)
                 }
             }
-            else -> when (event.keyCode.value) {
-                KeyCode.BackSpace -> {
+            else -> when (event.virtualKey) {
+                VirtualKey.BackSpace -> {
                     if (!deleteSelection() && cursorOffset > 0) {
                         val newCursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
                         text.delete(newCursorOffset, cursorOffset)
@@ -468,7 +468,7 @@ class EditorState {
                     }
                 }
 
-                KeyCode.F11 -> {
+                VirtualKey.F11 -> {
                     if (windowState.fullscreen) {
                         window.unsetFullScreen()
                     } else {
@@ -476,19 +476,19 @@ class EditorState {
                     }
                 }
 
-                KeyCode.Up -> {
+                VirtualKey.Up -> {
                     cursorOffset = 0
                 }
 
-                KeyCode.Down -> {
+                VirtualKey.Down -> {
                     cursorOffset = text.length
                 }
 
-                KeyCode.Left -> {
+                VirtualKey.Left -> {
                     cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
                 }
 
-                KeyCode.Right -> {
+                VirtualKey.Right -> {
                     cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
                 }
 
@@ -499,7 +499,7 @@ class EditorState {
         }
 
         if (shortcutModifiers.all { it != KeyModifiers.Shift && it != KeyModifiers.Control && it != KeyModifiers.Logo } &&
-            !event.keyCode.isModifierKey()
+            !event.virtualKey.isModifierKey()
         ) {
             selectionStartOffset = null
             selectionEndOffset = null
