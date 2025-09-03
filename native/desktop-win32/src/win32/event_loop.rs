@@ -14,10 +14,11 @@ use windows::Win32::{
             DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
             HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SM_CXPADDEDBORDER,
             SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
-            USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP,
-            WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL,
-            WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_PAINT, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETFOCUS, WM_SIZE,
-            WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDOWN, WM_XBUTTONUP,
+            USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN,
+            WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
+            WM_MOUSEWHEEL, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_PAINT, WM_RBUTTONDOWN, WM_RBUTTONUP,
+            WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGING, WM_XBUTTONDOWN,
+            WM_XBUTTONUP,
         },
     },
 };
@@ -25,7 +26,8 @@ use windows::Win32::{
 use super::{
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, MouseButtonEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent,
-        NCHitTestEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent,
+        NCHitTestEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowPositionChangingEvent, WindowResizeEvent, WindowResizeKind,
+        WindowScaleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
@@ -72,6 +74,8 @@ impl EventLoop {
             WM_PAINT => on_paint(self, window),
 
             WM_DPICHANGED => on_dpichanged(self, window, wparam, lparam),
+
+            WM_WINDOWPOSCHANGING => on_windowposchanging(self, window, lparam),
 
             WM_SIZE => on_size(self, window, wparam, lparam),
 
@@ -145,19 +149,42 @@ fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_precision_loss)]
 fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let new_dpi = HIWORD!(wparam.0);
+    let dpi = HIWORD!(wparam.0);
     assert_eq!(
-        new_dpi,
+        dpi,
         LOWORD!(wparam.0),
         "The DPI values of the X-axis and the Y-axis should be identical for Windows apps."
     );
-    let new_scale = (new_dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
-    let new_rect = unsafe { *(lparam.0 as *const RECT) };
+    let scale = (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
+    let rect = unsafe { *(lparam.0 as *const RECT) };
     let event = WindowScaleChangedEvent {
-        new_origin: PhysicalPoint::new(new_rect.left, new_rect.top),
-        new_size: PhysicalSize::new(new_rect.right - new_rect.left, new_rect.bottom - new_rect.top),
-        new_scale,
+        origin: PhysicalPoint::new(rect.left, rect.top),
+        size: PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top),
+        scale,
     };
+    event_loop.handle_event(window, event.into())
+}
+
+fn on_windowposchanging(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
+    let scale = window.get_scale();
+    let window_pos = unsafe { (lparam.0 as *const WINDOWPOS).as_ref() }?;
+    let window_rect = std::cell::LazyCell::new(|| {
+        let mut rect = RECT::default();
+        unsafe { GetWindowRect(window.hwnd(), &raw mut rect) }.map(|()| rect).ok()
+    });
+    let origin = if window_pos.flags.contains(SWP_NOMOVE) {
+        let rect = window_rect.as_ref()?;
+        PhysicalPoint::new(rect.left, rect.top)
+    } else {
+        PhysicalPoint::new(window_pos.x, window_pos.y)
+    };
+    let size = if window_pos.flags.contains(SWP_NOSIZE) {
+        let rect = window_rect.as_ref()?;
+        PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top)
+    } else {
+        PhysicalSize::new(window_pos.cx, window_pos.cy)
+    };
+    let event = WindowPositionChangingEvent { origin, size, scale };
     event_loop.handle_event(window, event.into())
 }
 

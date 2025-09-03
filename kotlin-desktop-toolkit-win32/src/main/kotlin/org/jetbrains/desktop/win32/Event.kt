@@ -10,6 +10,7 @@ import org.jetbrains.desktop.win32.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.win32.generated.NativeNCHitTestEvent
 import org.jetbrains.desktop.win32.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
+import org.jetbrains.desktop.win32.generated.NativeWindowPositionChangingEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeKind
 import org.jetbrains.desktop.win32.generated.NativeWindowScaleChangedEvent
@@ -118,10 +119,16 @@ public sealed class Event {
 
     public data object WindowKeyboardLeave : Event()
 
+    public data class WindowPositionChanging(
+        val origin: PhysicalPoint,
+        val size: PhysicalSize,
+        val scale: Float,
+    ) : Event()
+
     public data class WindowScaleChanged(
-        val newOrigin: PhysicalPoint,
-        val newSize: PhysicalSize,
-        val newScale: Float,
+        val origin: PhysicalPoint,
+        val size: PhysicalSize,
+        val scale: Float,
     ) : Event()
 
     public data class WindowResize(
@@ -167,6 +174,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_WindowDraw() -> windowDraw(s)
     desktop_win32_h.NativeEvent_WindowKeyboardEnter() -> Event.WindowKeyboardEnter
     desktop_win32_h.NativeEvent_WindowKeyboardLeave() -> Event.WindowKeyboardLeave
+    desktop_win32_h.NativeEvent_WindowPositionChanging() -> windowPositionChanging(s)
     desktop_win32_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
     desktop_win32_h.NativeEvent_WindowResize() -> windowResize(s)
     else -> error("Unexpected Event tag")
@@ -284,12 +292,21 @@ private fun windowDraw(s: MemorySegment): Event {
     )
 }
 
+private fun windowPositionChanging(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.window_scale_changed(s)
+    return Event.WindowPositionChanging(
+        origin = PhysicalPoint.fromNative(NativeWindowPositionChangingEvent.origin(nativeEvent)),
+        size = PhysicalSize.fromNative(NativeWindowPositionChangingEvent.size(nativeEvent)),
+        scale = NativeWindowPositionChangingEvent.scale(nativeEvent),
+    )
+}
+
 private fun windowScaleChanged(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.window_scale_changed(s)
     return Event.WindowScaleChanged(
-        newOrigin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.new_origin(nativeEvent)),
-        newSize = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.new_size(nativeEvent)),
-        newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent),
+        origin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.origin(nativeEvent)),
+        size = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.size(nativeEvent)),
+        scale = NativeWindowScaleChangedEvent.scale(nativeEvent),
     )
 }
 

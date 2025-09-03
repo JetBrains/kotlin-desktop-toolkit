@@ -52,13 +52,14 @@ abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
             }
 
             is Event.WindowScaleChanged -> {
-                window.setRect(event.newOrigin, event.newSize)
+                window.setRect(event.origin, event.size)
                 EventHandlerResult.Stop
             }
 
-            is Event.WindowResize -> {
+            is Event.WindowPositionChanging -> {
                 if (isSizeChanged(event.size)) {
                     makeSurface(event.size, event.scale)
+                    angleRenderer.swapBuffers(true)
                 }
                 EventHandlerResult.Stop
             }
@@ -68,9 +69,6 @@ abstract class SkikoWindowWin32(params: WindowParams) : AutoCloseable {
     }
 
     fun performDrawing(size: PhysicalSize, scale: Float) {
-        if (surface == null) {
-            makeSurface(size, scale)
-        }
         surface!!.let { surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
             angleRenderer.draw(true) {
