@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-use anyhow::{Context, Result};
+use anyhow::Context;
 use windows::{
     UI::Composition::{Compositor, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
@@ -43,7 +43,9 @@ pub(crate) const WM_REQUEST_UPDATE: u32 = WM_USER + 1;
 
 pub struct Window {
     hwnd: RefCell<HWND>,
+    compositor: Weak<Compositor>,
     composition_target: RefCell<Option<DesktopWindowTarget>>,
+    sprite_visual: RefCell<Option<SpriteVisual>>,
     min_size: Option<LogicalSize>,
     origin: LogicalPoint,
     size: LogicalSize,
@@ -54,7 +56,7 @@ pub struct Window {
 
 impl Window {
     #[allow(clippy::cast_possible_truncation)]
-    pub fn new(params: &WindowParams, event_loop: Weak<EventLoop>, compositor: &Compositor) -> WinResult<Rc<Self>> {
+    pub fn new(params: &WindowParams, event_loop: Weak<EventLoop>, compositor: Weak<Compositor>) -> WinResult<Rc<Self>> {
         const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
         let instance = crate::get_dll_instance();
         let wndclass = WNDCLASSEXW {
@@ -73,7 +75,9 @@ impl Window {
             .map(HSTRING::from);
         let window = Rc::new(Self {
             hwnd: RefCell::new(HWND::default()),
+            compositor,
             composition_target: RefCell::new(None),
+            sprite_visual: RefCell::new(None),
             min_size: None,
             origin: params.origin,
             size: params.size,
@@ -81,7 +85,7 @@ impl Window {
             mouse_in_client: AtomicBool::new(false),
             event_loop,
         });
-        let hwnd = unsafe {
+        unsafe {
             let _atom = RegisterClassExW(&raw const wndclass);
             CreateWindowExW(
                 WS_EX_NOREDIRECTIONBITMAP,
@@ -96,11 +100,8 @@ impl Window {
                 None,
                 Some(instance),
                 Some(Rc::downgrade(&window).into_raw().cast()),
-            )?
-        };
-        let compositor_interop: ICompositorDesktopInterop = compositor.cast()?;
-        let desktop_window_target = unsafe { compositor_interop.CreateDesktopWindowTarget(hwnd, true) }?;
-        window.composition_target.replace(Some(desktop_window_target));
+            )?;
+        }
         Ok(window)
     }
 
@@ -114,12 +115,13 @@ impl Window {
         *self.hwnd.borrow()
     }
 
-    pub(crate) fn create_sprite_visual(&self) -> Result<SpriteVisual> {
-        let composition_target = self.composition_target.borrow();
-        let desktop_window_target = composition_target.as_ref().context("failed to get composition target")?;
-        let sprite_visual = desktop_window_target.Compositor()?.CreateSpriteVisual()?;
-        desktop_window_target.SetRoot(&sprite_visual)?;
-        Ok(sprite_visual)
+    #[inline]
+    pub(crate) fn get_visual(&self) -> anyhow::Result<SpriteVisual> {
+        self.sprite_visual
+            .borrow()
+            .as_ref()
+            .context("Window has not been created yet")
+            .cloned()
     }
 
     #[allow(clippy::cast_precision_loss)]
@@ -232,21 +234,13 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
 
     // WM_NCCREATE is sent before CreateWindowEx returns and is used to setup the new window
     if msg == WM_NCCREATE {
-        if let Some(create_struct) = unsafe { (lparam.0 as *mut CREATESTRUCTW).as_mut() } {
-            if unsafe { SetPropW(hwnd, WINDOW_PTR_PROP_NAME, Some(HANDLE(create_struct.lpCreateParams))) }.is_ok() {
-                let window = create_struct.lpCreateParams.cast_const().cast::<Window>();
-                let john_weak = ManuallyDrop::new(unsafe { Weak::from_raw(window) });
-                if let Some(window) = john_weak.upgrade() {
-                    window.hwnd.replace(hwnd);
-                    unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.to_system().0 as _) };
-                    let scale = window.get_scale();
-                    let _ = window.set_position(window.origin.to_physical(scale), window.size.to_physical(scale));
-                    return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
-                }
+        return match on_nccreate(hwnd, lparam) {
+            Ok(()) => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+            Err(err) => {
+                log::error!("WM_NCCREATE failed: {err}");
+                LRESULT(windows::Win32::Foundation::FALSE.0 as _)
             }
-        }
-        log::error!("WM_NCCREATE failed");
-        return LRESULT(windows::Win32::Foundation::FALSE.0 as _);
+        };
     }
 
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
@@ -272,4 +266,39 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
         }
     }
+}
+
+fn on_nccreate(hwnd: HWND, lparam: LPARAM) -> anyhow::Result<()> {
+    let create_struct = unsafe { (lparam.0 as *mut CREATESTRUCTW).as_mut() }.context("CREATESTRUCTW is null")?;
+
+    unsafe { SetPropW(hwnd, WINDOW_PTR_PROP_NAME, Some(HANDLE(create_struct.lpCreateParams))) }
+        .context("failed to set the window property")?;
+
+    let window_ptr = create_struct.lpCreateParams.cast_const().cast::<Window>();
+    let john_weak = ManuallyDrop::new(unsafe { Weak::from_raw(window_ptr) });
+
+    let window = john_weak.upgrade().context("failed to upgrade the window weak reference")?;
+    initialize_window(&window, hwnd).context("failed to initialize the window")
+}
+
+fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
+    window.hwnd.replace(hwnd);
+    unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.to_system().0 as _) };
+    let scale = window.get_scale();
+    window.set_position(window.origin.to_physical(scale), window.size.to_physical(scale))?;
+    initialize_composition(window, hwnd).context("failed to initialize composition")
+}
+
+fn initialize_composition(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
+    let compositor = window
+        .compositor
+        .upgrade()
+        .context("failed to upgrade the compositor weak reference")?;
+    let compositor_interop: ICompositorDesktopInterop = compositor.cast()?;
+    let desktop_window_target = unsafe { compositor_interop.CreateDesktopWindowTarget(hwnd, true) }?;
+    let sprite_visual = compositor.CreateSpriteVisual()?;
+    desktop_window_target.SetRoot(&sprite_visual)?;
+    window.composition_target.replace(Some(desktop_window_target));
+    window.sprite_visual.replace(Some(sprite_visual));
+    Ok(())
 }
