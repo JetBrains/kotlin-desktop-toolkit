@@ -36,8 +36,6 @@ const EGL_PLATFORM_ANGLE_TYPE_ANGLE: egl::Int = 0x3203;
 /// cbindgen:ignore
 const EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE: egl::Int = 0x3208;
 
-pub type AngleDeviceDrawFun = extern "C" fn() -> ();
-
 pub struct AngleDevice {
     egl_instance: EglInstance,
     visual: SpriteVisual,
@@ -130,16 +128,16 @@ impl AngleDevice {
         Ok(EglSurfaceData { framebuffer_binding })
     }
 
-    #[allow(clippy::bool_to_int_with_if)]
-    pub fn draw(&self, wait_for_vsync: bool, draw_fun: AngleDeviceDrawFun) -> Result<()> {
+    pub fn make_current(&self) -> Result<()> {
         self.egl_instance
             .make_current(self.display, Some(self.surface), Some(self.surface), Some(self.context))?;
+        Ok(())
+    }
 
-        draw_fun();
-
+    #[allow(clippy::bool_to_int_with_if)]
+    pub fn swap_buffers(&self, wait_for_vsync: bool) -> Result<()> {
         self.egl_instance.swap_interval(self.display, if wait_for_vsync { 1 } else { 0 })?;
         self.egl_instance.swap_buffers(self.display, self.surface)?;
-
         Ok(())
     }
 
