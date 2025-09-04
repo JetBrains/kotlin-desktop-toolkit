@@ -107,8 +107,8 @@ public class Window internal constructor(private val ptr: MemorySegment) : AutoC
         }
     }
 
-    public fun requestUpdate() {
-        ffiDownCall { desktop_win32_h.window_request_update(ptr) }
+    public fun requestRedraw() {
+        ffiDownCall { desktop_win32_h.window_request_redraw(ptr) }
     }
 
     override fun close() {

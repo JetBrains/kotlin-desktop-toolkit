@@ -160,9 +160,9 @@ pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: PhysicalPoint, 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_request_update(window_ptr: WindowPtr) {
-    with_window(&window_ptr, "window_request_update", |window| {
-        window.request_update()?;
+pub extern "C" fn window_request_redraw(window_ptr: WindowPtr) {
+    with_window(&window_ptr, "window_request_redraw", |window| {
+        window.request_redraw()?;
         Ok(())
     });
 }

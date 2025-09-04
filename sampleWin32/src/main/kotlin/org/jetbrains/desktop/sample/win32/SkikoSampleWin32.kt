@@ -68,7 +68,7 @@ class SkottieWindow(
         val frame = (time.toFloat() % animationDuration) / animation.fPS
         animation.seekFrame(frame)
         animation.render(canvas, (size.width.toFloat() / 2) - (animation.width / 2), (size.height.toFloat() / 2) - (animation.height / 2))
-        window.requestUpdate()
+        window.requestRedraw()
     }
 }
 

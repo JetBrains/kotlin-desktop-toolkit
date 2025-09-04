@@ -10,9 +10,12 @@ use windows::{
     UI::Composition::{Compositor, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
         Foundation::{COLORREF, ERROR_NO_UNICODE_TRANSLATION, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
-        Graphics::Dwm::{
-            DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
-            DwmSetWindowAttribute,
+        Graphics::{
+            Dwm::{
+                DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
+                DwmSetWindowAttribute,
+            },
+            Gdi::{RDW_INVALIDATE, RDW_NOERASE, RDW_NOFRAME, RedrawWindow},
         },
         System::WinRT::Composition::ICompositorDesktopInterop,
         UI::{
@@ -20,9 +23,9 @@ use windows::{
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW,
-                IDC_ARROW, LoadCursorW, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER,
-                SWP_NOZORDER, SetPropW, SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_NCCREATE,
-                WM_NCDESTROY, WM_USER, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
+                IDC_ARROW, LoadCursorW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW,
+                SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW,
+                WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
@@ -37,9 +40,6 @@ use super::{
 
 /// cbindgen:ignore
 const WINDOW_PTR_PROP_NAME: PCWSTR = w!("KDT_WINDOW_PTR");
-
-/// cbindgen:ignore
-pub(crate) const WM_REQUEST_UPDATE: u32 = WM_USER + 1;
 
 pub struct Window {
     hwnd: RefCell<HWND>,
@@ -212,8 +212,8 @@ impl Window {
         self.mouse_in_client.store(value, Ordering::Relaxed);
     }
 
-    pub fn request_update(&self) -> WinResult<()> {
-        unsafe { PostMessageW(Some(self.hwnd()), WM_REQUEST_UPDATE, WPARAM::default(), LPARAM::default()) }
+    pub fn request_redraw(&self) -> WinResult<()> {
+        unsafe { RedrawWindow(Some(self.hwnd()), None, None, RDW_INVALIDATE | RDW_NOFRAME | RDW_NOERASE) }.ok()
     }
 }
 
