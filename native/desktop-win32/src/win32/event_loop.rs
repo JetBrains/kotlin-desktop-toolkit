@@ -4,7 +4,7 @@ use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::{
         Dwm::DwmDefWindowProc,
-        Gdi::{BeginPaint, EndPaint, InvalidateRect, PAINTSTRUCT},
+        Gdi::{BeginPaint, EndPaint, PAINTSTRUCT},
     },
     UI::{
         Controls::WM_MOUSELEAVE,
@@ -34,7 +34,7 @@ use super::{
     mouse::{MouseButton, MouseKeyState, get_mouse_position},
     strings::copy_from_wide_string,
     utils::{GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
-    window::{WM_REQUEST_UPDATE, Window},
+    window::Window,
 };
 
 pub struct EventLoop {
@@ -66,11 +66,6 @@ impl EventLoop {
         let hwnd = window.hwnd();
 
         let handled = match msg {
-            WM_REQUEST_UPDATE => {
-                let _ = unsafe { InvalidateRect(Some(hwnd), None, false) };
-                Some(LRESULT(0))
-            }
-
             WM_PAINT => on_paint(self, window),
 
             WM_DPICHANGED => on_dpichanged(self, window, wparam, lparam),
