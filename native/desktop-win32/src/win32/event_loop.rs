@@ -14,8 +14,8 @@ use windows::Win32::{
             DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
             HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SM_CXPADDEDBORDER,
             SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
-            USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN,
-            WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
+            USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO,
+            WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
             WM_MOUSEWHEEL, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_PAINT, WM_RBUTTONDOWN, WM_RBUTTONUP,
             WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGING, WM_XBUTTONDOWN,
             WM_XBUTTONUP,
@@ -66,6 +66,8 @@ impl EventLoop {
         let hwnd = window.hwnd();
 
         let handled = match msg {
+            WM_CREATE => on_create(window),
+
             WM_PAINT => on_paint(self, window),
 
             WM_DPICHANGED => on_dpichanged(self, window, wparam, lparam),
@@ -120,6 +122,22 @@ impl EventLoop {
 #[inline]
 fn get_message_timestamp() -> Timestamp {
     Timestamp(unsafe { GetMessageTime() } as _)
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn on_create(window: &Window) -> Option<LRESULT> {
+    let _ = unsafe {
+        SetWindowPos(
+            window.hwnd(),
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
+        )
+    };
+    Some(LRESULT(0))
 }
 
 fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
@@ -217,10 +235,12 @@ fn on_getminmaxinfo(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
 
 #[allow(clippy::unnecessary_wraps)]
 fn on_activate(window: &Window) -> Option<LRESULT> {
-    let hwnd = window.hwnd();
-    let _ = window.extend_content_into_titlebar();
-    let _ = window.apply_system_backdrop();
-    let _ = unsafe { SetWindowPos(hwnd, None, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED) };
+    let _ = window
+        .extend_content_into_titlebar()
+        .inspect_err(|err| log::error!("failed to extend content into the title bar: {err}"));
+    let _ = window
+        .apply_system_backdrop()
+        .inspect_err(|err| log::error!("failed to apply the requested system backdrop: {err}"));
     Some(LRESULT(0))
 }
 
@@ -228,10 +248,12 @@ fn on_nccalcsize(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRES
     if window.has_custom_title_bar() && wparam.0 == windows::Win32::Foundation::TRUE.0 as usize {
         if let Some(calcsize_params) = unsafe { (lparam.0 as *mut NCCALCSIZE_PARAMS).as_mut() } {
             let top = calcsize_params.rgrc[0].top;
-            unsafe { DefWindowProcW(window.hwnd(), WM_NCCALCSIZE, wparam, lparam) };
-            // the top inset should be 0 otherwise Windows will draw full native title bar
-            calcsize_params.rgrc[0].top = top;
-            return Some(LRESULT(0));
+            let result = unsafe { DefWindowProcW(window.hwnd(), WM_NCCALCSIZE, wparam, lparam) };
+            if result.0 == 0 {
+                // the top inset should be 0 otherwise Windows will draw full native title bar
+                calcsize_params.rgrc[0].top = top;
+            }
+            return Some(result);
         }
     }
     None
