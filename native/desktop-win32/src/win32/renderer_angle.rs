@@ -7,34 +7,27 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use khronos_egl as egl;
 use windows::{
     UI::Composition::SpriteVisual,
-    Win32::{
-        Foundation::ERROR_PATH_NOT_FOUND,
-        Graphics::Gdi::{GetDC, HDC},
-        System::LibraryLoader::GetModuleFileNameW,
-    },
+    Win32::{Foundation::ERROR_PATH_NOT_FOUND, Graphics::Gdi::GetDC, System::LibraryLoader::GetModuleFileNameW},
     core::{Error as WinError, Interface},
 };
 use windows_numerics::Vector2;
 
 use super::{
     renderer_api::EglSurfaceData,
-    renderer_egl_utils::{
-        EglInstance, GR_GL_COLOR_BUFFER_BIT, GR_GL_FRAMEBUFFER_BINDING, GR_GL_STENCIL_BUFFER_BIT, GetPlatformDisplayEXTFn, GrGLFunctions,
-        PostSubBufferNVFn, get_egl_proc,
-    },
+    renderer_egl_utils::{EglInstance, GR_GL_FRAMEBUFFER_BINDING, GrGLFunctions, PostSubBufferNVFn, get_egl_proc},
     window::Window,
 };
 
 /// cbindgen:ignore
-const EGL_PLATFORM_ANGLE_ANGLE: egl::Int = 0x3202;
+const EGL_PLATFORM_ANGLE_ANGLE: egl::Enum = 0x3202;
 /// cbindgen:ignore
-const EGL_PLATFORM_ANGLE_TYPE_ANGLE: egl::Int = 0x3203;
+const EGL_PLATFORM_ANGLE_TYPE_ANGLE: egl::Attrib = 0x3203;
 /// cbindgen:ignore
-const EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE: egl::Int = 0x3208;
+const EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE: egl::Attrib = 0x3208;
 
 pub struct AngleDevice {
     egl_instance: EglInstance,
@@ -53,40 +46,43 @@ impl AngleDevice {
         let hwnd = window.hwnd();
 
         let hdc = unsafe { GetDC(Some(hwnd)) };
-        let display = get_angle_platform_display(&egl_instance, &hdc)?;
+        let display = {
+            #[rustfmt::skip]
+            let display_attribs = [
+                EGL_PLATFORM_ANGLE_TYPE_ANGLE, EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE,
+                egl::ATTRIB_NONE, egl::ATTRIB_NONE,
+            ];
+            unsafe { egl_instance.get_platform_display(EGL_PLATFORM_ANGLE_ANGLE, hdc.0, &display_attribs) }?
+        };
 
         let (_major, _minor) = egl_instance.initialize(display)?;
 
-        const sample_count: egl::Int = 1;
-        const sample_buffers: egl::Int = if sample_count > 1 { 1 } else { 0 };
-        const egl_sample_count: egl::Int = if sample_count > 1 { sample_count } else { 0 };
+        let surface_config = {
+            #[rustfmt::skip]
+            let config_attribs = [
+                egl::RENDERABLE_TYPE, egl::OPENGL_ES2_BIT,
+                egl::RED_SIZE, 8,
+                egl::GREEN_SIZE, 8,
+                egl::BLUE_SIZE, 8,
+                egl::ALPHA_SIZE, 8,
+                egl::NONE, egl::NONE,
+            ];
 
-        #[rustfmt::skip]
-        let config_attribs = [
-            // We currently only support ES3.
-            egl::RENDERABLE_TYPE, egl::OPENGL_ES3_BIT,
-            egl::RED_SIZE, 8,
-            egl::GREEN_SIZE, 8,
-            egl::BLUE_SIZE, 8,
-            egl::ALPHA_SIZE, 8,
-            egl::SAMPLE_BUFFERS, sample_buffers,
-            egl::SAMPLES, egl_sample_count,
-            egl::NONE, egl::NONE,
-        ];
+            let mut configs = Vec::with_capacity(1);
+            egl_instance.choose_config(display, &config_attribs, &mut configs)?;
 
-        let mut configs = Vec::with_capacity(1);
-        egl_instance.choose_config(display, &config_attribs, &mut configs)?;
+            configs.pop().context("No configs were found.")?
+        };
 
-        let surface_config = configs.pop().ok_or_else(|| anyhow!("No configs were found."))?;
-
-        // We currently only support ES3.
-        #[rustfmt::skip]
-        let context_attribs = [
-            egl::CONTEXT_MAJOR_VERSION, 3,
-            egl::CONTEXT_MINOR_VERSION, 0,
-            egl::NONE, egl::NONE,
-        ];
-        let context = egl_instance.create_context(display, surface_config, None, &context_attribs)?;
+        let context = {
+            #[rustfmt::skip]
+            let context_attribs = [
+                egl::CONTEXT_MAJOR_VERSION, 2,
+                egl::CONTEXT_MINOR_VERSION, 0,
+                egl::NONE, egl::NONE,
+            ];
+            egl_instance.create_context(display, surface_config, None, &context_attribs)?
+        };
 
         let visual = window.get_visual()?;
         let surface = unsafe { egl_instance.create_window_surface(display, surface_config, visual.as_raw(), None) }?;
@@ -115,12 +111,6 @@ impl AngleDevice {
         self.egl_instance.swap_interval(self.display, 1)?;
 
         post_sub_buffer(&self.egl_instance, self.display, self.surface, 1, 1, width, height)?;
-
-        (self.functions.fClearStencil)(0);
-        (self.functions.fClearColor)(0_f32, 0_f32, 0_f32, 0_f32);
-        (self.functions.fStencilMask)(0xffff_ffff);
-        (self.functions.fClear)(GR_GL_STENCIL_BUFFER_BIT | GR_GL_COLOR_BUFFER_BIT);
-        (self.functions.fViewport)(0, 0, width, height);
 
         let mut framebuffer_binding = 0;
         (self.functions.fGetIntegerv)(GR_GL_FRAMEBUFFER_BINDING, &raw mut framebuffer_binding);
@@ -160,23 +150,6 @@ impl Drop for AngleDevice {
         if self.display.as_ptr() != egl::NO_DISPLAY {
             let _ = self.egl_instance.terminate(self.display);
         }
-    }
-}
-
-fn get_angle_platform_display(egl_instance: &EglInstance, hdc: &HDC) -> Result<egl::Display> {
-    let fun: GetPlatformDisplayEXTFn = get_egl_proc!(egl_instance, "eglGetPlatformDisplayEXT")?;
-
-    #[rustfmt::skip]
-    let display_attribs = [
-        EGL_PLATFORM_ANGLE_TYPE_ANGLE, EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE,
-        egl::NONE, egl::NONE,
-    ];
-
-    match fun(EGL_PLATFORM_ANGLE_ANGLE as _, hdc.0, display_attribs.as_ptr()) {
-        egl::NO_DISPLAY => Err(egl_instance
-            .get_error()
-            .map_or_else(|| anyhow!("Could not get ANGLE platform display."), Into::into)),
-        display => Ok(unsafe { egl::Display::from_ptr(display) }),
     }
 }
 
