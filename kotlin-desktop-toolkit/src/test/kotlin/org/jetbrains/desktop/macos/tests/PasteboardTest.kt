@@ -132,6 +132,26 @@ class PasteboardTest : KDTApplicationTestBase() {
     }
 
     @Test
+    fun putFileWithSpaceInPathTest() {
+        val counter = ui {
+            Pasteboard.clear()
+        }
+        assert(counter > 0L)
+        val file = createTempFile(suffix = "File name with spaces.txt")
+        val success = ui {
+            Pasteboard.writeObjects(
+                Pasteboard.Item.Url("file://${file.absolutePathString()}"),
+            )
+        }
+        assertTrue(success)
+        val files = ui {
+            Pasteboard.readFileItemPaths()
+        }
+        assertEquals(listOf(file.absolutePathString()), files)
+    }
+
+
+    @Test
     fun putHttpsUrl() {
         val url = "https://jetbrains.com"
         val counter = ui {
