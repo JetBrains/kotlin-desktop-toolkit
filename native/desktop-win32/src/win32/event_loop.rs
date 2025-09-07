@@ -11,14 +11,14 @@ use windows::Win32::{
         HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
         Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent},
         WindowsAndMessaging::{
-            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
-            HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SM_CXPADDEDBORDER,
-            SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
-            USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO,
-            WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
-            WM_MOUSEWHEEL, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_PAINT, WM_RBUTTONDOWN, WM_RBUTTONUP,
-            WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGING, WM_XBUTTONDOWN,
-            WM_XBUTTONUP,
+            DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect,
+            HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED,
+            SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
+            TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED,
+            WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP,
+            WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_PAINT,
+            WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
+            WM_WINDOWPOSCHANGING, WM_XBUTTONDOWN, WM_XBUTTONUP,
         },
     },
 };
@@ -63,8 +63,6 @@ impl EventLoop {
     }
 
     pub(crate) fn window_proc(&self, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-        let hwnd = window.hwnd();
-
         let handled = match msg {
             WM_CREATE => on_create(window),
 
@@ -106,14 +104,14 @@ impl EventLoop {
 
             WM_NCMOUSELEAVE => on_ncmouseleave(window, wparam, lparam),
 
-            WM_CLOSE => self.handle_event(window, Event::WindowCloseRequest),
+            WM_CLOSE => on_close(self, window),
 
             _ => None,
         };
 
         match handled {
             Some(result) => result,
-            None => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+            None => unsafe { DefWindowProcW(window.hwnd(), msg, wparam, lparam) },
         }
     }
 }
@@ -138,6 +136,12 @@ fn on_create(window: &Window) -> Option<LRESULT> {
         )
     };
     Some(LRESULT(0))
+}
+
+fn on_close(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
+    let result = event_loop.handle_event(window, Event::WindowCloseRequest);
+    let _ = unsafe { DestroyWindow(window.hwnd()) };
+    result
 }
 
 fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {

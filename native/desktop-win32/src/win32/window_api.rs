@@ -1,5 +1,7 @@
+use std::mem::ManuallyDrop;
+
 use desktop_common::{
-    ffi_utils::{BorrowedStrPtr, RustAllocatedRawPtr},
+    ffi_utils::{BorrowedStrPtr, RustAllocatedRcPtr},
     logger::{PanicDefault, ffi_boundary},
 };
 
@@ -26,7 +28,7 @@ impl PanicDefault for WindowId {
     }
 }
 
-pub type WindowPtr<'a> = RustAllocatedRawPtr<'a>;
+pub type WindowPtr<'a> = RustAllocatedRcPtr<'a>;
 
 #[repr(C)]
 pub struct WindowParams<'a> {
@@ -101,17 +103,10 @@ impl WindowSystemBackdropType {
     }
 }
 
-fn with_window<R: PanicDefault>(window_ptr: &WindowPtr, name: &str, f: impl FnOnce(&Window) -> anyhow::Result<R>) -> R {
+pub(crate) fn with_window<R: PanicDefault>(window_ptr: &WindowPtr, name: &str, f: impl FnOnce(&Window) -> anyhow::Result<R>) -> R {
     ffi_boundary(name, || {
-        let w = unsafe { window_ptr.borrow::<Window>() };
-        f(w)
-    })
-}
-
-fn with_window_mut<R: PanicDefault>(window_ptr: &mut WindowPtr, name: &str, f: impl FnOnce(&mut Window) -> anyhow::Result<R>) -> R {
-    ffi_boundary(name, || {
-        let w = unsafe { window_ptr.borrow_mut::<Window>() };
-        f(w)
+        let w = ManuallyDrop::new(unsafe { window_ptr.to_rc::<Window>() });
+        f(&w)
     })
 }
 
@@ -136,8 +131,8 @@ pub extern "C" fn window_get_scale_factor(window_ptr: WindowPtr) -> f32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_set_min_size(mut window_ptr: WindowPtr, size: LogicalSize) {
-    with_window_mut(&mut window_ptr, "window_set_min_size", |window| {
+pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) {
+    with_window(&window_ptr, "window_set_min_size", |window| {
         window.set_min_size(size);
         Ok(())
     });
@@ -170,7 +165,7 @@ pub extern "C" fn window_request_redraw(window_ptr: WindowPtr) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_drop(window_ptr: WindowPtr) {
     ffi_boundary("window_drop", || {
-        let _window = unsafe { window_ptr.to_owned::<Window>() };
+        let _window = unsafe { window_ptr.to_rc::<Window>() };
         Ok(())
     });
 }

@@ -3,7 +3,10 @@ use desktop_common::{
     logger::{PanicDefault, ffi_boundary},
 };
 
-use super::{renderer_angle::AngleDevice, window::Window, window_api::WindowPtr};
+use super::{
+    renderer_angle::AngleDevice,
+    window_api::{WindowPtr, with_window},
+};
 
 pub type AngleDevicePtr<'a> = RustAllocatedRawPtr<'a>;
 
@@ -43,8 +46,7 @@ pub extern "C" fn renderer_angle_get_egl_get_proc_func(angle_device_ptr: AngleDe
 
 #[unsafe(no_mangle)]
 pub extern "C" fn renderer_angle_device_create(window_ptr: WindowPtr) -> AngleDevicePtr {
-    let angle_device = ffi_boundary("renderer_angle_device_create", || {
-        let window = unsafe { window_ptr.borrow::<Window>() };
+    let angle_device = with_window(&window_ptr, "renderer_angle_device_create", |window| {
         let angle_device = AngleDevice::create_for_window(window)?;
         Ok(Some(angle_device))
     });
