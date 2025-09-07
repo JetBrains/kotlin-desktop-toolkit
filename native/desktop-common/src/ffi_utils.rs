@@ -75,14 +75,6 @@ impl RustAllocatedRawPtr<'_> {
     }
 
     #[must_use]
-    pub fn from_rc<R>(value: Option<Rc<R>>) -> Self {
-        Self(GenericRawPtr {
-            ptr: value.map_or(std::ptr::null(), |v| Rc::into_raw(v)).cast(),
-            phantom: PhantomData,
-        })
-    }
-
-    #[must_use]
     pub const fn is_null(&self) -> bool {
         self.0.ptr.is_null()
     }
@@ -227,7 +219,7 @@ pub struct AutoDropStrPtr(RustAllocatedStrPtr);
 
 impl AutoDropStrPtr {
     #[must_use]
-    pub const fn borrow(&self) -> BorrowedStrPtr {
+    pub const fn borrow(&self) -> BorrowedStrPtr<'_> {
         BorrowedStrPtr(self.0.0)
     }
 }
@@ -320,5 +312,35 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
         }
         let slice = unsafe { slice::from_raw_parts(self.ptr, self.len) };
         Ok(slice)
+    }
+}
+
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct RustAllocatedRcPtr<'a>(GenericRawPtr<'a, std::ffi::c_void>);
+
+impl Clone for RustAllocatedRcPtr<'_> {
+    fn clone(&self) -> Self {
+        Self(GenericRawPtr {
+            ptr: self.0.ptr,
+            phantom: PhantomData,
+        })
+    }
+}
+
+impl RustAllocatedRcPtr<'_> {
+    #[must_use]
+    pub fn from_rc<R>(value: Option<Rc<R>>) -> Self {
+        Self(GenericRawPtr {
+            ptr: value.map_or(std::ptr::null(), |v| Rc::into_raw(v)).cast(),
+            phantom: PhantomData,
+        })
+    }
+
+    #[must_use]
+    pub unsafe fn to_rc<R>(&self) -> Rc<R> {
+        assert!(!self.0.ptr.is_null());
+        let ptr = self.0.ptr.cast_mut().cast::<R>();
+        unsafe { Rc::from_raw(ptr) }
     }
 }
