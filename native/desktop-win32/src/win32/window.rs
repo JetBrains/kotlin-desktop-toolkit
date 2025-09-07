@@ -35,6 +35,7 @@ use windows::{
 use super::{
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalSize, PhysicalPoint, PhysicalSize},
+    utils,
     window_api::{WindowId, WindowParams, WindowStyle, WindowTitleBarKind},
 };
 
@@ -143,36 +144,41 @@ impl Window {
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn extend_content_into_titlebar(&self) -> WinResult<()> {
-        let colorref = COLORREF(DWMWA_COLOR_NONE);
+        if utils::is_windows_11_build_22000_or_higher() {
+            let colorref = COLORREF(DWMWA_COLOR_NONE);
+            unsafe {
+                // if we want to extend content into the titlebar area, it makes sense to remove any color from it
+                DwmSetWindowAttribute(
+                    self.hwnd(),
+                    DWMWA_CAPTION_COLOR,
+                    (&raw const colorref).cast(),
+                    core::mem::size_of::<COLORREF>() as _,
+                )?;
+            }
+        }
         let margins = MARGINS {
             cxLeftWidth: -1,
             cxRightWidth: -1,
             cyTopHeight: -1,
             cyBottomHeight: -1,
         };
-        unsafe {
-            // if we want to extend content into the titlebar area, it makes sense to remove any color from it
-            DwmSetWindowAttribute(
-                self.hwnd(),
-                DWMWA_CAPTION_COLOR,
-                (&raw const colorref).cast(),
-                core::mem::size_of::<COLORREF>() as _,
-            )?;
-            DwmExtendFrameIntoClientArea(self.hwnd(), &raw const margins)
-        }
+        unsafe { DwmExtendFrameIntoClientArea(self.hwnd(), &raw const margins) }
     }
 
     #[allow(clippy::cast_possible_truncation)]
     pub fn apply_system_backdrop(&self) -> WinResult<()> {
-        let backdrop: DWM_SYSTEMBACKDROP_TYPE = self.style.system_backdrop_type.to_system();
-        unsafe {
-            DwmSetWindowAttribute(
-                self.hwnd(),
-                DWMWA_SYSTEMBACKDROP_TYPE,
-                (&raw const backdrop).cast(),
-                core::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as _,
-            )
+        if utils::is_windows_11_build_22621_or_higher() {
+            let backdrop: DWM_SYSTEMBACKDROP_TYPE = self.style.system_backdrop_type.to_system();
+            unsafe {
+                DwmSetWindowAttribute(
+                    self.hwnd(),
+                    DWMWA_SYSTEMBACKDROP_TYPE,
+                    (&raw const backdrop).cast(),
+                    core::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as _,
+                )?;
+            }
         }
+        Ok(())
     }
 
     pub fn show(&self) -> bool {
@@ -255,11 +261,11 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     // we reuse the weak reference on every iteration of the event loop, so we don't drop it here (see above)
     let window = ManuallyDrop::new(unsafe { Rc::from_raw(raw) });
     if hwnd == window.hwnd() {
-            let event_loop = window.event_loop.upgrade().expect("event loop has been dropped");
-            event_loop.window_proc(Rc::as_ref(&window), msg, wparam, lparam)
+        let event_loop = window.event_loop.upgrade().expect("event loop has been dropped");
+        event_loop.window_proc(Rc::as_ref(&window), msg, wparam, lparam)
     } else {
         log::error!("the window pointer was incorrect");
-            unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+        unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
     }
 }
 
