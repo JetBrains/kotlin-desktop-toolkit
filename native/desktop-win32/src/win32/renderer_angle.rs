@@ -11,7 +11,11 @@ use anyhow::{Context, Result, anyhow};
 use khronos_egl as egl;
 use windows::{
     UI::Composition::SpriteVisual,
-    Win32::{Foundation::ERROR_PATH_NOT_FOUND, Graphics::Gdi::GetDC, System::LibraryLoader::GetModuleFileNameW},
+    Win32::{
+        Foundation::ERROR_PATH_NOT_FOUND,
+        Graphics::Gdi::{GetDC, ReleaseDC},
+        System::LibraryLoader::GetModuleFileNameW,
+    },
     core::{Error as WinError, Interface},
 };
 use windows_numerics::Vector2;
@@ -43,16 +47,18 @@ impl AngleDevice {
     pub fn create_for_window(window: &Window) -> Result<Self> {
         let egl_instance = load_angle_egl_instance()?;
 
-        let hwnd = window.hwnd();
-
-        let hdc = unsafe { GetDC(Some(hwnd)) };
         let display = {
             #[rustfmt::skip]
             let display_attribs = [
                 EGL_PLATFORM_ANGLE_TYPE_ANGLE, EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE,
                 egl::ATTRIB_NONE, egl::ATTRIB_NONE,
             ];
-            unsafe { egl_instance.get_platform_display(EGL_PLATFORM_ANGLE_ANGLE, hdc.0, &display_attribs) }?
+
+            let hwnd = window.hwnd();
+            let hdc = unsafe { GetDC(Some(hwnd)) };
+            let display = unsafe { egl_instance.get_platform_display(EGL_PLATFORM_ANGLE_ANGLE, hdc.0, &display_attribs) }?;
+            unsafe { ReleaseDC(Some(hwnd), hdc) };
+            display
         };
 
         let (_major, _minor) = egl_instance.initialize(display)?;
