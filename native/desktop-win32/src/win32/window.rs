@@ -22,9 +22,9 @@ use windows::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
-                CREATESTRUCTW, CS_HREDRAW, CS_OWNDC, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW,
-                IDC_ARROW, LoadCursorW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW,
-                SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW,
+                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, GWL_STYLE, GetPropW, IDC_ARROW, LoadCursorW,
+                RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW, SetWindowLongPtrW,
+                SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW,
                 WS_EX_NOREDIRECTIONBITMAP,
             },
         },
@@ -66,7 +66,7 @@ impl Window {
             lpszClassName: WNDCLASS_NAME,
             lpfnWndProc: Some(wndproc),
             hCursor: unsafe { LoadCursorW(None, IDC_ARROW) }?,
-            style: CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
+            style: CS_HREDRAW | CS_VREDRAW,
             ..Default::default()
         };
         let title = params
