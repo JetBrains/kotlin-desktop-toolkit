@@ -150,7 +150,6 @@ class PasteboardTest : KDTApplicationTestBase() {
         assertEquals(listOf(file.absolutePathString()), files)
     }
 
-
     @Test
     fun putHttpsUrl() {
         val url = "https://jetbrains.com"
