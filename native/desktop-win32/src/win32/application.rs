@@ -22,7 +22,7 @@ pub struct Application {
 impl Application {
     pub fn new(event_handler: EventHandler) -> WinResult<Self> {
         let dispatcher_queue_controller = create_dispatcher_queue()?;
-        let event_loop = EventLoop::new(event_handler);
+        let event_loop = EventLoop::new(event_handler)?;
         let compositor = Compositor::new()?;
         Ok(Self {
             dispatcher_queue_controller,
