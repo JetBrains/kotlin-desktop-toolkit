@@ -90,8 +90,7 @@ fn copy_to_objects(items: &BorrowedArray<PasteboardItem>) -> anyhow::Result<Reta
         match item {
             PasteboardItem::URLItem { url } => {
                 let url = copy_to_ns_string(url)?;
-                let ns_url = unsafe { NSURL::URLWithString_encodingInvalidCharacters(&url, true) }
-                    .with_context(|| format!("Malformed URL: {url:?}"))?;
+                let ns_url = unsafe { NSURL::URLWithString(&url) }.with_context(|| format!("Malformed URL: {url:?}"))?;
                 debug!("is file url: {:?}", unsafe { ns_url.isFileURL() });
                 array.addObject(&ProtocolObject::from_retained(ns_url));
             }
