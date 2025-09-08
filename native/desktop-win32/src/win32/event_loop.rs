@@ -7,31 +7,29 @@ use windows::Win32::{
         Gdi::{BeginPaint, EndPaint, PAINTSTRUCT},
     },
     UI::{
-        Controls::WM_MOUSELEAVE,
         HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
-        Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent},
+        Input::Pointer::EnableMouseInPointer,
         WindowsAndMessaging::{
             DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect,
             HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED,
             SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
             TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED,
-            WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP,
-            WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_PAINT,
-            WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
-            WM_WINDOWPOSCHANGING, WM_XBUTTONDOWN, WM_XBUTTONUP,
+            WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_POINTERDOWN,
+            WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETFOCUS, WM_SIZE, WM_SYSCHAR,
+            WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGING,
         },
     },
 };
 
 use super::{
     events::{
-        CharacterReceivedEvent, Event, EventHandler, KeyEvent, MouseButtonEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent,
-        NCHitTestEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowPositionChangingEvent, WindowResizeEvent, WindowResizeKind,
-        WindowScaleChangedEvent,
+        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCHitTestEvent, PointerButtonEvent, PointerEnteredEvent, PointerExitedEvent,
+        PointerUpdatedEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowPositionChangingEvent, WindowResizeEvent,
+        WindowResizeKind, WindowScaleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    mouse::{MouseButton, MouseKeyState, get_mouse_position},
+    pointer::{get_pointer_event_timestamp, get_pointer_location_in_window, get_pointer_point, get_pointer_state},
     strings::copy_from_wide_string,
     utils::{GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
@@ -42,8 +40,9 @@ pub struct EventLoop {
 }
 
 impl EventLoop {
-    pub fn new(event_handler: EventHandler) -> Self {
-        Self { event_handler }
+    pub fn new(event_handler: EventHandler) -> windows::core::Result<Self> {
+        unsafe { EnableMouseInPointer(true)? };
+        Ok(Self { event_handler })
     }
 
     #[allow(clippy::unused_self)]
@@ -86,15 +85,15 @@ impl EventLoop {
 
             WM_CHAR | WM_DEADCHAR | WM_SYSCHAR | WM_SYSDEADCHAR => on_char(self, window, msg, wparam, lparam),
 
-            WM_MOUSEMOVE | WM_NCMOUSEMOVE => on_mousemove(self, window, wparam, lparam),
+            WM_POINTERUPDATE => on_pointerupdate(self, window, wparam),
 
-            WM_MOUSELEAVE => on_mouseleave(self, window),
+            WM_POINTERDOWN => on_pointerdown(self, window, wparam),
 
-            WM_LBUTTONDOWN | WM_MBUTTONDOWN | WM_RBUTTONDOWN | WM_XBUTTONDOWN => on_mousebutton_down(self, window, msg, wparam, lparam),
+            WM_POINTERUP => on_pointerup(self, window, wparam),
 
-            WM_LBUTTONUP | WM_MBUTTONUP | WM_RBUTTONUP | WM_XBUTTONUP => on_mousebutton_up(self, window, msg, wparam, lparam),
+            WM_POINTERWHEEL | WM_POINTERHWHEEL => on_pointerwheel(self, window, msg, wparam),
 
-            WM_MOUSEWHEEL | WM_MOUSEHWHEEL => on_mousewheel(self, window, msg, wparam, lparam),
+            WM_POINTERLEAVE => on_pointerleave(self, window, wparam),
 
             WM_ACTIVATE => on_activate(window),
 
@@ -102,6 +101,8 @@ impl EventLoop {
 
             WM_NCHITTEST => on_nchittest(self, window, wparam, lparam),
 
+            // we still have to handle this message because we manually hit-test the non-client area
+            // see https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmdefwindowproc
             WM_NCMOUSELEAVE => on_ncmouseleave(window, wparam, lparam),
 
             WM_CLOSE => on_close(self, window),
@@ -363,7 +364,7 @@ fn on_keyup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, l
 
 #[allow(clippy::cast_possible_truncation)]
 fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let char = wparam.0 as u16;
+    let char = LOWORD!(wparam.0);
     let characters = match copy_from_wide_string(&[char]) {
         Ok(chars) => chars,
         Err(err) => {
@@ -381,82 +382,74 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
     event_loop.handle_event(window, event.into())
 }
 
-fn on_mousebutton_down(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let location_in_window = get_mouse_position(lparam, window.get_scale());
-    let event = MouseButtonEvent {
-        button: MouseButton::from_message(msg, wparam),
-        key_state: MouseKeyState::get(wparam),
-        location_in_window,
-        timestamp: get_message_timestamp(),
-    };
-    event_loop.handle_event(window, Event::MouseDown(event))
-}
-
-fn on_mousebutton_up(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let location_in_window = get_mouse_position(lparam, window.get_scale());
-    let event = MouseButtonEvent {
-        button: MouseButton::from_message(msg, wparam),
-        key_state: MouseKeyState::get(wparam),
-        location_in_window,
-        timestamp: get_message_timestamp(),
-    };
-    event_loop.handle_event(window, Event::MouseUp(event))
-}
-
 #[allow(clippy::cast_possible_truncation)]
-fn on_mousemove(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let location_in_window = get_mouse_position(lparam, window.get_scale());
-    let event: Event = if window.is_mouse_in_client() {
-        MouseMovedEvent {
-            key_state: MouseKeyState::get(wparam),
+#[allow(clippy::double_parens)]
+fn on_pointerupdate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
+    let pointer_point = get_pointer_point(wparam)?;
+    let location_in_window = get_pointer_location_in_window(&pointer_point)?;
+    let event: Event = if window.is_pointer_in_client() {
+        PointerUpdatedEvent {
             location_in_window,
-            timestamp: get_message_timestamp(),
+            state: get_pointer_state(&pointer_point)?,
+            timestamp: get_pointer_event_timestamp(&pointer_point)?,
         }
         .into()
     } else {
         // see https://devblogs.microsoft.com/oldnewthing/20031013-00/?p=42193
-        window.set_is_mouse_in_client(true);
-        let mut track_mouse_event = TRACKMOUSEEVENT {
-            cbSize: core::mem::size_of::<TRACKMOUSEEVENT>() as _,
-            dwFlags: TME_LEAVE,
-            hwndTrack: window.hwnd(),
-            ..Default::default()
-        };
-        if let Err(err) = unsafe { TrackMouseEvent(&raw mut track_mouse_event) } {
-            log::error!("Failed to start tracking mouse events: {err:?}");
-        }
-        MouseEnteredEvent {
-            key_state: MouseKeyState::get(wparam),
+        window.set_is_pointer_in_client(true);
+        PointerEnteredEvent {
             location_in_window,
-            timestamp: get_message_timestamp(),
+            state: get_pointer_state(&pointer_point)?,
+            timestamp: get_pointer_event_timestamp(&pointer_point)?,
         }
         .into()
     };
     event_loop.handle_event(window, event)
 }
 
-fn on_mouseleave(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
-    window.set_is_mouse_in_client(false);
-    let event = MouseExitedEvent {
-        timestamp: get_message_timestamp(),
-    };
-    event_loop.handle_event(window, event.into())
+fn on_pointerdown(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
+    let pointer_point = get_pointer_point(wparam)?;
+    let event = PointerButtonEvent::try_from(&pointer_point)
+        .inspect_err(|err| log::error!("failed to create a PointerButtonEvent from the PointerPoint: {err}"))
+        .ok()?;
+    event_loop.handle_event(window, Event::PointerDown(event))
 }
 
-#[allow(clippy::cast_possible_truncation)]
-fn on_mousewheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let scrolling_delta = HIWORD!(wparam.0);
-    let location_in_window = get_mouse_position(lparam, window.get_scale());
+fn on_pointerup(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
+    let pointer_point = get_pointer_point(wparam)?;
+    let event = PointerButtonEvent::try_from(&pointer_point)
+        .inspect_err(|err| log::error!("failed to create a PointerButtonEvent from the PointerPoint: {err}"))
+        .ok()?;
+    event_loop.handle_event(window, Event::PointerUp(event))
+}
+
+fn on_pointerwheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
+    let pointer_point = get_pointer_point(wparam)?;
+    let scrolling_delta = pointer_point
+        .Properties()
+        .and_then(|prop| prop.MouseWheelDelta())
+        .inspect_err(|err| log::error!("failed to get PointerPoint.Properties.MouseWheelDelta: {err}"))
+        .ok()?;
+    let location_in_window = get_pointer_location_in_window(&pointer_point)?;
     let event_args = ScrollWheelEvent {
         scrolling_delta,
-        key_state: MouseKeyState::get(wparam),
         location_in_window,
-        timestamp: get_message_timestamp(),
+        state: get_pointer_state(&pointer_point)?,
+        timestamp: get_pointer_event_timestamp(&pointer_point)?,
     };
     let event = match msg {
-        WM_MOUSEWHEEL => Event::ScrollWheelY(event_args),
-        WM_MOUSEHWHEEL => Event::ScrollWheelX(event_args),
-        _ => unreachable!("Expected WM_MOUSEWHEEL or WM_MOUSEHWHEEL"),
+        WM_POINTERWHEEL => Event::ScrollWheelY(event_args),
+        WM_POINTERHWHEEL => Event::ScrollWheelX(event_args),
+        _ => unreachable!("Expected WM_POINTERWHEEL or WM_POINTERHWHEEL"),
     };
     event_loop.handle_event(window, event)
+}
+
+fn on_pointerleave(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
+    let pointer_point = get_pointer_point(wparam)?;
+    window.set_is_pointer_in_client(false);
+    let event = PointerExitedEvent {
+        timestamp: get_pointer_event_timestamp(&pointer_point)?,
+    };
+    event_loop.handle_event(window, event.into())
 }

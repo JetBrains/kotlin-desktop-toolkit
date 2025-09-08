@@ -47,14 +47,15 @@ pub struct LogicalPoint {
     pub y: LogicalPixels,
 }
 
-#[repr(C)]
-#[derive(Debug, Default, Clone, Copy)]
-pub struct LogicalSize {
-    pub width: LogicalPixels,
-    pub height: LogicalPixels,
-}
-
 impl LogicalPoint {
+    #[must_use]
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self {
+            x: LogicalPixels(x),
+            y: LogicalPixels(y),
+        }
+    }
+
     #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn to_physical(self, scale: f32) -> PhysicalPoint {
         PhysicalPoint::new(
@@ -64,6 +65,13 @@ impl LogicalPoint {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy)]
+pub struct LogicalSize {
+    pub width: LogicalPixels,
+    pub height: LogicalPixels,
+}
+
 impl LogicalSize {
     #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn to_physical(self, scale: f32) -> PhysicalSize {
@@ -71,16 +79,5 @@ impl LogicalSize {
             f32::floor(self.width.0.mul_add(scale, 0.5_f32)) as i32,
             f32::floor(self.height.0.mul_add(scale, 0.5_f32)) as i32,
         )
-    }
-}
-
-impl PhysicalPoint {
-    #[allow(clippy::cast_precision_loss)]
-    pub(crate) const fn to_logical(self, scale: f32) -> LogicalPoint {
-        // 0.5 is to ensure that we pixel snap correctly at the edges, this is necessary with odd DPIs like 1.25, 1.5, 1, .75
-        LogicalPoint {
-            x: LogicalPixels((self.x.0 as f32 / scale) + 0.5_f32),
-            y: LogicalPixels((self.y.0 as f32 / scale) + 0.5_f32),
-        }
     }
 }

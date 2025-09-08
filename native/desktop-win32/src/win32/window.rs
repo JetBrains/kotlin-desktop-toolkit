@@ -51,7 +51,7 @@ pub struct Window {
     origin: LogicalPoint,
     size: LogicalSize,
     style: WindowStyle,
-    mouse_in_client: AtomicBool,
+    pointer_in_client: AtomicBool,
     event_loop: Weak<EventLoop>,
 }
 
@@ -83,7 +83,7 @@ impl Window {
             origin: params.origin,
             size: params.size,
             style: params.style,
-            mouse_in_client: AtomicBool::new(false),
+            pointer_in_client: AtomicBool::new(false),
             event_loop,
         });
         unsafe {
@@ -209,13 +209,13 @@ impl Window {
     }
 
     #[inline]
-    pub(crate) fn is_mouse_in_client(&self) -> bool {
-        self.mouse_in_client.load(Ordering::Relaxed)
+    pub(crate) fn is_pointer_in_client(&self) -> bool {
+        self.pointer_in_client.load(Ordering::Relaxed)
     }
 
     #[inline]
-    pub(crate) fn set_is_mouse_in_client(&self, value: bool) {
-        self.mouse_in_client.store(value, Ordering::Relaxed);
+    pub(crate) fn set_is_pointer_in_client(&self, value: bool) {
+        self.pointer_in_client.store(value, Ordering::Relaxed);
     }
 
     pub fn request_redraw(&self) -> WinResult<()> {

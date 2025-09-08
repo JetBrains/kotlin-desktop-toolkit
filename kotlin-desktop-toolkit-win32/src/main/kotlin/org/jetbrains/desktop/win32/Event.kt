@@ -3,11 +3,11 @@ package org.jetbrains.desktop.win32
 import org.jetbrains.desktop.win32.generated.NativeCharacterReceivedEvent
 import org.jetbrains.desktop.win32.generated.NativeEvent
 import org.jetbrains.desktop.win32.generated.NativeKeyEvent
-import org.jetbrains.desktop.win32.generated.NativeMouseButtonEvent
-import org.jetbrains.desktop.win32.generated.NativeMouseEnteredEvent
-import org.jetbrains.desktop.win32.generated.NativeMouseExitedEvent
-import org.jetbrains.desktop.win32.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.win32.generated.NativeNCHitTestEvent
+import org.jetbrains.desktop.win32.generated.NativePointerButtonEvent
+import org.jetbrains.desktop.win32.generated.NativePointerEnteredEvent
+import org.jetbrains.desktop.win32.generated.NativePointerExitedEvent
+import org.jetbrains.desktop.win32.generated.NativePointerUpdatedEvent
 import org.jetbrains.desktop.win32.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowPositionChangingEvent
@@ -39,6 +39,14 @@ public typealias EventHandler = (WindowId, Event) -> EventHandlerResult
 public sealed class Event {
     internal companion object;
 
+    public data class CharacterReceived(
+        val keyCode: Char,
+        val characters: String,
+        val keyStatus: PhysicalKeyStatus,
+        val isDeadChar: Boolean,
+        val isSystemKey: Boolean,
+    ) : Event()
+
     public data class KeyDown(
         val keyCode: VirtualKey,
         val keyStatus: PhysicalKeyStatus,
@@ -53,58 +61,50 @@ public sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class CharacterReceived(
-        val keyCode: Char,
-        val characters: String,
-        val keyStatus: PhysicalKeyStatus,
-        val isDeadChar: Boolean,
-        val isSystemKey: Boolean,
-    ) : Event()
-
-    public data class MouseEntered(
-        val keyState: MouseKeyState,
-        val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
-    ) : Event()
-
-    public data class MouseExited(val timestamp: Timestamp) : Event()
-
-    public data class MouseMoved(
-        val keyState: MouseKeyState,
-        val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
-    ) : Event()
-
-    public data class MouseDown(
-        val button: MouseButton,
-        val keyState: MouseKeyState,
-        val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
-    ) : Event()
-
-    public data class MouseUp(
-        val button: MouseButton,
-        val keyState: MouseKeyState,
-        val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
-    ) : Event()
-
     public data class NCHitTest(
         val mouseX: Int,
         val mouseY: Int,
     ) : Event()
 
-    public data class ScrollWheelX(
-        val scrollingDelta: Short,
-        val keyState: MouseKeyState,
+    public data class PointerDown(
+        val button: PointerButton,
         val locationInWindow: LogicalPoint,
+        val state: PointerState,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class PointerEntered(
+        val locationInWindow: LogicalPoint,
+        val state: PointerState,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class PointerExited(val timestamp: Timestamp) : Event()
+
+    public data class PointerUpdated(
+        val locationInWindow: LogicalPoint,
+        val state: PointerState,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class PointerUp(
+        val button: PointerButton,
+        val locationInWindow: LogicalPoint,
+        val state: PointerState,
+        val timestamp: Timestamp,
+    ) : Event()
+
+    public data class ScrollWheelX(
+        val scrollingDelta: Int,
+        val locationInWindow: LogicalPoint,
+        val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
 
     public data class ScrollWheelY(
-        val scrollingDelta: Short,
-        val keyState: MouseKeyState,
+        val scrollingDelta: Int,
         val locationInWindow: LogicalPoint,
+        val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
 
@@ -125,16 +125,16 @@ public sealed class Event {
         val scale: Float,
     ) : Event()
 
-    public data class WindowScaleChanged(
-        val origin: PhysicalPoint,
-        val size: PhysicalSize,
-        val scale: Float,
-    ) : Event()
-
     public data class WindowResize(
         val size: PhysicalSize,
         val scale: Float,
         val kind: WindowResizeKind,
+    ) : Event()
+
+    public data class WindowScaleChanged(
+        val origin: PhysicalPoint,
+        val size: PhysicalSize,
+        val scale: Float,
     ) : Event()
 }
 
@@ -159,15 +159,15 @@ public sealed class WindowResizeKind {
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
+    desktop_win32_h.NativeEvent_CharacterReceived() -> characterReceived(s)
     desktop_win32_h.NativeEvent_KeyDown() -> keyDown(s)
     desktop_win32_h.NativeEvent_KeyUp() -> keyUp(s)
-    desktop_win32_h.NativeEvent_CharacterReceived() -> characterReceived(s)
-    desktop_win32_h.NativeEvent_MouseEntered() -> mouseEntered(s)
-    desktop_win32_h.NativeEvent_MouseExited() -> mouseExited(s)
-    desktop_win32_h.NativeEvent_MouseMoved() -> mouseMoved(s)
-    desktop_win32_h.NativeEvent_MouseDown() -> mouseDown(s)
-    desktop_win32_h.NativeEvent_MouseUp() -> mouseUp(s)
     desktop_win32_h.NativeEvent_NCHitTest() -> ncHitTest(s)
+    desktop_win32_h.NativeEvent_PointerDown() -> pointerDown(s)
+    desktop_win32_h.NativeEvent_PointerEntered() -> pointerEntered(s)
+    desktop_win32_h.NativeEvent_PointerExited() -> pointerExited(s)
+    desktop_win32_h.NativeEvent_PointerUpdated() -> pointerUpdated(s)
+    desktop_win32_h.NativeEvent_PointerUp() -> pointerUp(s)
     desktop_win32_h.NativeEvent_ScrollWheelX() -> scrollWheelX(s)
     desktop_win32_h.NativeEvent_ScrollWheelY() -> scrollWheelY(s)
     desktop_win32_h.NativeEvent_WindowCloseRequest() -> Event.WindowCloseRequest
@@ -175,9 +175,20 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_WindowKeyboardEnter() -> Event.WindowKeyboardEnter
     desktop_win32_h.NativeEvent_WindowKeyboardLeave() -> Event.WindowKeyboardLeave
     desktop_win32_h.NativeEvent_WindowPositionChanging() -> windowPositionChanging(s)
-    desktop_win32_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
     desktop_win32_h.NativeEvent_WindowResize() -> windowResize(s)
+    desktop_win32_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
     else -> error("Unexpected Event tag")
+}
+
+private fun characterReceived(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.character_received(s)
+    return Event.CharacterReceived(
+        keyCode = NativeCharacterReceivedEvent.key_code(nativeEvent).toInt().toChar(),
+        characters = NativeCharacterReceivedEvent.characters(nativeEvent).getUtf8String(0),
+        keyStatus = PhysicalKeyStatus.fromNative(NativeCharacterReceivedEvent.key_status(nativeEvent)),
+        isDeadChar = NativeCharacterReceivedEvent.is_dead_char(nativeEvent),
+        isSystemKey = NativeCharacterReceivedEvent.is_system_key(nativeEvent),
+    )
 }
 
 private fun keyDown(s: MemorySegment): Event {
@@ -200,62 +211,6 @@ private fun keyUp(s: MemorySegment): Event {
     )
 }
 
-private fun characterReceived(s: MemorySegment): Event {
-    val nativeEvent = NativeEvent.character_received(s)
-    return Event.CharacterReceived(
-        keyCode = NativeCharacterReceivedEvent.key_code(nativeEvent).toInt().toChar(),
-        characters = NativeCharacterReceivedEvent.characters(nativeEvent).getUtf8String(0),
-        keyStatus = PhysicalKeyStatus.fromNative(NativeCharacterReceivedEvent.key_status(nativeEvent)),
-        isDeadChar = NativeCharacterReceivedEvent.is_dead_char(nativeEvent),
-        isSystemKey = NativeCharacterReceivedEvent.is_system_key(nativeEvent),
-    )
-}
-
-private fun mouseEntered(s: MemorySegment): Event {
-    val nativeEvent = NativeEvent.mouse_entered(s)
-    return Event.MouseEntered(
-        keyState = MouseKeyState.fromNative(NativeMouseEnteredEvent.key_state(nativeEvent)),
-        locationInWindow = LogicalPoint.fromNative(NativeMouseEnteredEvent.location_in_window(nativeEvent)),
-        timestamp = Timestamp(NativeMouseEnteredEvent.timestamp(nativeEvent)),
-    )
-}
-
-private fun mouseExited(s: MemorySegment): Event {
-    val nativeEvent = NativeEvent.mouse_exited(s)
-    return Event.MouseExited(
-        timestamp = Timestamp(NativeMouseExitedEvent.timestamp(nativeEvent)),
-    )
-}
-
-private fun mouseMoved(s: MemorySegment): Event {
-    val nativeEvent = NativeEvent.mouse_moved(s)
-    return Event.MouseMoved(
-        keyState = MouseKeyState.fromNative(NativeMouseMovedEvent.key_state(nativeEvent)),
-        locationInWindow = LogicalPoint.fromNative(NativeMouseMovedEvent.location_in_window(nativeEvent)),
-        timestamp = Timestamp(NativeMouseMovedEvent.timestamp(nativeEvent)),
-    )
-}
-
-private fun mouseDown(s: MemorySegment): Event {
-    val nativeEvent = NativeEvent.mouse_down(s)
-    return Event.MouseDown(
-        button = MouseButton.fromNative(NativeMouseButtonEvent.button(nativeEvent)),
-        keyState = MouseKeyState.fromNative(NativeMouseButtonEvent.key_state(nativeEvent)),
-        locationInWindow = LogicalPoint.fromNative(NativeMouseButtonEvent.location_in_window(nativeEvent)),
-        timestamp = Timestamp(NativeMouseButtonEvent.timestamp(nativeEvent)),
-    )
-}
-
-private fun mouseUp(s: MemorySegment): Event {
-    val nativeEvent = NativeEvent.mouse_up(s)
-    return Event.MouseUp(
-        button = MouseButton.fromNative(NativeMouseButtonEvent.button(nativeEvent)),
-        keyState = MouseKeyState.fromNative(NativeMouseButtonEvent.key_state(nativeEvent)),
-        locationInWindow = LogicalPoint.fromNative(NativeMouseButtonEvent.location_in_window(nativeEvent)),
-        timestamp = Timestamp(NativeMouseButtonEvent.timestamp(nativeEvent)),
-    )
-}
-
 private fun ncHitTest(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.nc_hit_test(s)
     return Event.NCHitTest(
@@ -264,12 +219,57 @@ private fun ncHitTest(s: MemorySegment): Event {
     )
 }
 
+private fun pointerDown(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.pointer_down(s)
+    return Event.PointerDown(
+        button = PointerButton.fromNative(NativePointerButtonEvent.button(nativeEvent)),
+        state = PointerState.fromNative(NativePointerButtonEvent.state(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativePointerButtonEvent.location_in_window(nativeEvent)),
+        timestamp = Timestamp(NativePointerButtonEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun pointerEntered(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.pointer_entered(s)
+    return Event.PointerEntered(
+        state = PointerState.fromNative(NativePointerEnteredEvent.state(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativePointerEnteredEvent.location_in_window(nativeEvent)),
+        timestamp = Timestamp(NativePointerEnteredEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun pointerExited(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.pointer_exited(s)
+    return Event.PointerExited(
+        timestamp = Timestamp(NativePointerExitedEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun pointerUpdated(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.pointer_updated(s)
+    return Event.PointerUpdated(
+        state = PointerState.fromNative(NativePointerUpdatedEvent.state(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativePointerUpdatedEvent.location_in_window(nativeEvent)),
+        timestamp = Timestamp(NativePointerUpdatedEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun pointerUp(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.pointer_up(s)
+    return Event.PointerUp(
+        button = PointerButton.fromNative(NativePointerButtonEvent.button(nativeEvent)),
+        state = PointerState.fromNative(NativePointerButtonEvent.state(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativePointerButtonEvent.location_in_window(nativeEvent)),
+        timestamp = Timestamp(NativePointerButtonEvent.timestamp(nativeEvent)),
+    )
+}
+
 private fun scrollWheelX(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.scroll_wheel_x(s)
     return Event.ScrollWheelX(
         scrollingDelta = NativeScrollWheelEvent.scrolling_delta(nativeEvent),
-        keyState = MouseKeyState.fromNative(NativeScrollWheelEvent.key_state(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
+        state = PointerState.fromNative(NativeScrollWheelEvent.state(nativeEvent)),
         timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
     )
 }
@@ -278,8 +278,8 @@ private fun scrollWheelY(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.scroll_wheel_y(s)
     return Event.ScrollWheelY(
         scrollingDelta = NativeScrollWheelEvent.scrolling_delta(nativeEvent),
-        keyState = MouseKeyState.fromNative(NativeScrollWheelEvent.key_state(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
+        state = PointerState.fromNative(NativeScrollWheelEvent.state(nativeEvent)),
         timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
     )
 }
@@ -301,20 +301,20 @@ private fun windowPositionChanging(s: MemorySegment): Event {
     )
 }
 
-private fun windowScaleChanged(s: MemorySegment): Event {
-    val nativeEvent = NativeEvent.window_scale_changed(s)
-    return Event.WindowScaleChanged(
-        origin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.origin(nativeEvent)),
-        size = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.size(nativeEvent)),
-        scale = NativeWindowScaleChangedEvent.scale(nativeEvent),
-    )
-}
-
 private fun windowResize(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.window_resize(s)
     return Event.WindowResize(
         size = PhysicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
         scale = NativeWindowResizeEvent.scale(nativeEvent),
         kind = WindowResizeKind.fromNative(NativeWindowResizeEvent.kind(nativeEvent)),
+    )
+}
+
+private fun windowScaleChanged(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.window_scale_changed(s)
+    return Event.WindowScaleChanged(
+        origin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.origin(nativeEvent)),
+        size = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.size(nativeEvent)),
+        scale = NativeWindowScaleChangedEvent.scale(nativeEvent),
     )
 }
