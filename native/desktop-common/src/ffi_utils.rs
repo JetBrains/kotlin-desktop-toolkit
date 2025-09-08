@@ -343,4 +343,12 @@ impl RustAllocatedRcPtr<'_> {
         let ptr = self.0.ptr.cast_mut().cast::<R>();
         unsafe { Rc::from_raw(ptr) }
     }
+
+    #[must_use]
+    pub unsafe fn borrow<R>(&self) -> &R {
+        unsafe {
+            let rc = self.to_rc();
+            &*Rc::into_raw(rc)
+        }
+    }
 }

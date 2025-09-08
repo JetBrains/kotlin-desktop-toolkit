@@ -1,5 +1,3 @@
-use std::mem::ManuallyDrop;
-
 use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedRcPtr},
     logger::{PanicDefault, ffi_boundary},
@@ -105,8 +103,8 @@ impl WindowSystemBackdropType {
 
 pub(crate) fn with_window<R: PanicDefault>(window_ptr: &WindowPtr, name: &str, f: impl FnOnce(&Window) -> anyhow::Result<R>) -> R {
     ffi_boundary(name, || {
-        let w = ManuallyDrop::new(unsafe { window_ptr.to_rc::<Window>() });
-        f(&w)
+        let w = unsafe { window_ptr.borrow::<Window>() };
+        f(w)
     })
 }
 
