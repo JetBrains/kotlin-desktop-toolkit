@@ -6,6 +6,7 @@ import org.jetbrains.desktop.macos.generated.NativeCombinedItemElement
 import org.jetbrains.desktop.macos.generated.NativePasteboardContentResult
 import org.jetbrains.desktop.macos.generated.NativePasteboardItem
 import org.jetbrains.desktop.macos.generated.NativePasteboardItem_NativeCombinedItem_Body
+import org.jetbrains.desktop.macos.generated.NativePasteboardItem_NativeFSPathItem_Body
 import org.jetbrains.desktop.macos.generated.NativePasteboardItem_NativeURLItem_Body
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
@@ -30,11 +31,8 @@ public object Pasteboard {
     }
 
     public sealed class Item {
-        /**
-         * If you need to put files in clipboard
-         * use the Url("file:///absolute/path/to/file.ext")
-         */
         public data class Url(val url: String) : Item()
+        public data class File(val path: String) : Item()
         public data class Combined(val elements: List<Element>) : Item() {
             public constructor(vararg elements: Element) : this(elements.toList())
         }
@@ -135,6 +133,12 @@ internal fun Pasteboard.Item.toNative(nativeItem: MemorySegment, arena: Arena) =
             val body = NativePasteboardItem_NativeURLItem_Body.allocate(arena)
             NativePasteboardItem_NativeURLItem_Body.url(body, arena.allocateUtf8String(item.url))
             NativePasteboardItem.url_item(nativeItem, body)
+        }
+        is Pasteboard.Item.File -> {
+            NativePasteboardItem.tag(nativeItem, desktop_macos_h.NativePasteboardItem_FSPathItem())
+            val body = NativePasteboardItem_NativeFSPathItem_Body.allocate(arena)
+            NativePasteboardItem_NativeFSPathItem_Body.path(body, arena.allocateUtf8String(item.path))
+            NativePasteboardItem.fs_path_item(nativeItem, body)
         }
         is Pasteboard.Item.Combined -> {
             NativePasteboardItem.tag(nativeItem, desktop_macos_h.NativePasteboardItem_CombinedItem())

@@ -74,6 +74,9 @@ pub enum PasteboardItem<'a> {
     URLItem {
         url: BorrowedStrPtr<'a>,
     },
+    FSPathItem {
+        path: BorrowedStrPtr<'a>,
+    },
     // todo we could add some more NS* classes that implements NSPasteboardWriting protocol
     CombinedItem {
         elements: BorrowedArray<'a, CombinedItemElement<'a>>,
@@ -87,8 +90,14 @@ fn copy_to_objects(items: &BorrowedArray<PasteboardItem>) -> anyhow::Result<Reta
         match item {
             PasteboardItem::URLItem { url } => {
                 let url = copy_to_ns_string(url)?;
-                let ns_url = unsafe { NSURL::URLWithString(&url) }.with_context(|| format!("Malformed URL: {url:?}"))?;
+                let ns_url = unsafe { NSURL::URLWithString_encodingInvalidCharacters(&url, true) }.with_context(|| format!("Malformed URL: {url:?}"))?;
                 debug!("is file url: {:?}", unsafe { ns_url.isFileURL() });
+                array.addObject(&ProtocolObject::from_retained(ns_url));
+            }
+            PasteboardItem::FSPathItem { path } => {
+                debug!("FSPathItem added: {path:?}");
+                let path = copy_to_ns_string(path)?;
+                let ns_url = unsafe { NSURL::fileURLWithPath(&path) };
                 array.addObject(&ProtocolObject::from_retained(ns_url));
             }
             PasteboardItem::CombinedItem { elements } => {
@@ -369,5 +378,13 @@ mod tests {
                 assert!(result2);
             }
         });
+    }
+
+    #[test]
+    fn test_can_create_url_from_path_with_spaces() {
+        let url = NSString::from_str("https://www.jetbrains.com/idea/download/foo bar.txt");
+        // Spaces will be replaced with %20, but apparently when it's runned from JVM it returns None
+        let ns_url = unsafe { NSURL::URLWithString(&url) };
+        assert!(ns_url.is_some());
     }
 }
