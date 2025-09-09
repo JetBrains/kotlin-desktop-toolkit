@@ -26,7 +26,7 @@ public data class WindowParams(
     val appId: String,
     val title: String,
     val size: LogicalSize? = null,
-    val forceClientSideDecoration: Boolean = false,
+    val preferClientSideDecoration: Boolean = false,
     val forceSoftwareRendering: Boolean = false,
 ) {
     internal fun toNative(arena: Arena): MemorySegment {
@@ -34,7 +34,7 @@ public data class WindowParams(
         NativeWindowParams.size(nativeWindowParams, (size ?: LogicalSize(0f, 0f)).toNative(arena))
         NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
         NativeWindowParams.app_id(nativeWindowParams, arena.allocateUtf8String(appId))
-        NativeWindowParams.force_client_side_decoration(nativeWindowParams, forceClientSideDecoration)
+        NativeWindowParams.prefer_client_side_decoration(nativeWindowParams, preferClientSideDecoration)
         NativeWindowParams.force_software_rendering(nativeWindowParams, forceSoftwareRendering)
         NativeWindowParams.window_id(nativeWindowParams, windowId)
         return nativeWindowParams

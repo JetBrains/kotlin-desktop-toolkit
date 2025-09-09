@@ -1213,7 +1213,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
             size = LogicalSize(width = 640f, height = 480f),
             title = "Window ${windows.count()}",
             appId = "org.jetbrains.desktop.linux.skikoSample1",
-            forceClientSideDecoration = useCustomTitlebar,
+            preferClientSideDecoration = useCustomTitlebar,
             forceSoftwareRendering = forceSoftwareRendering,
         )
 

@@ -57,7 +57,7 @@ pub struct WindowParams<'a> {
     /// See <https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_app_id>
     pub app_id: BorrowedStrPtr<'a>,
 
-    pub force_client_side_decoration: bool,
+    pub prefer_client_side_decoration: bool,
 
     pub force_software_rendering: bool,
 }

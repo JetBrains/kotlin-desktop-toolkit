@@ -462,7 +462,7 @@ extern "C" fn on_application_started() {
                 },
                 title: BorrowedStrPtr::new(c"Window 1"),
                 app_id: BorrowedStrPtr::new(APP_ID),
-                force_client_side_decoration: false,
+                prefer_client_side_decoration: false,
                 force_software_rendering: true,
             },
         );
@@ -479,7 +479,7 @@ extern "C" fn on_application_started() {
                 },
                 title: BorrowedStrPtr::new(c"Window 2"),
                 app_id: BorrowedStrPtr::new(APP_ID),
-                force_client_side_decoration: true,
+                prefer_client_side_decoration: true,
                 force_software_rendering: false,
             },
         );

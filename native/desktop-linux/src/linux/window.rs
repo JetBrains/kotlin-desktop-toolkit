@@ -85,7 +85,7 @@ impl SimpleWindow {
 
         let viewport = state.viewporter.as_ref().map(|vp| vp.get_viewport(&window_surface, qh, ()));
 
-        let decorations = if params.force_client_side_decoration {
+        let decorations = if params.prefer_client_side_decoration {
             WindowDecorations::RequestClient
         } else {
             WindowDecorations::ServerDefault
