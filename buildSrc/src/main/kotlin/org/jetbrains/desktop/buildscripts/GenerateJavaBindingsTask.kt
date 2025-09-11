@@ -24,6 +24,8 @@ import kotlin.io.path.deleteRecursively
 import kotlin.io.path.exists
 import kotlin.io.path.name
 import kotlin.io.path.pathString
+import kotlin.io.path.readLines
+import kotlin.io.path.writeLines
 
 abstract class GenerateJavaBindingsTask @Inject constructor(
     objectFactory: ObjectFactory,
@@ -124,9 +126,10 @@ private fun ExecOperations.generateOsHeader(cbindgenBinary: Path, crateDirectory
     return headerFile
 }
 
-private fun ExecOperations.listHeaderSymbols(jextractBinary: Path, headerFile: Path): List<List<String>> {
+private fun ExecOperations.listHeaderSymbols(jextractBinary: Path, headerFile: Path): Path {
     val symbols = createTempFile("headerSymbols.txt")
-    try {
+    val filteredSymbols = createTempFile("filteredSymbols.txt")
+    return try {
         val args = buildList {
             add("--dump-includes")
             add(symbols.pathString)
@@ -135,10 +138,12 @@ private fun ExecOperations.listHeaderSymbols(jextractBinary: Path, headerFile: P
         exec {
             commandLine(jextractBinary.pathString, *args)
         }
-
-        return symbols.toFile().readLines()
+        val symbols = symbols.readLines()
             .filter { it.endsWith(headerFile.name) && it.startsWith("--") }
-            .map { it.split("\\s+".toRegex()).take(2) }
+            .map { it.split("\\s+".toRegex()).take(2).joinToString(separator = " ") }
+
+        filteredSymbols.writeLines(symbols)
+        filteredSymbols
     } finally {
         symbols.deleteIfExists()
     }
@@ -152,18 +157,20 @@ private fun ExecOperations.generateJavaBindings(
 ) {
     generatedSourcesDirectory.createDirectories()
     val filteredSymbols = listHeaderSymbols(jextractBinary, headerFile)
-    val args = buildList {
-        add("--target-package")
-        add(packageName)
-        add("--output")
-        add(generatedSourcesDirectory.pathString)
-        filteredSymbols.map {
-            addAll(it)
-        }
-        add(headerFile.pathString)
-    }.toTypedArray()
+    try {
+        val args = buildList {
+            add("--target-package")
+            add(packageName)
+            add("--output")
+            add(generatedSourcesDirectory.pathString)
+            add("@${filteredSymbols.absolutePathString()}")
+            add(headerFile.pathString)
+        }.toTypedArray()
 
-    exec {
-        commandLine(jextractBinary.pathString, *args)
+        exec {
+            commandLine(jextractBinary.pathString, *args)
+        }
+    } finally {
+        filteredSymbols.deleteIfExists()
     }
 }

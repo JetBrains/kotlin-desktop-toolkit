@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.sample.win32
 
+import org.jetbrains.desktop.sample.common.runtimeInfo
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
@@ -27,6 +28,10 @@ import kotlin.Long
 import kotlin.String
 import kotlin.use
 
+fun legoAnimation(): String {
+    return object {}.javaClass.getResource("/lego_loader.json")!!.readText()
+}
+
 class SkottieWindow(
     app: Application,
     windowParams: WindowParams,
@@ -41,7 +46,7 @@ class SkottieWindow(
 
     private val animation: Animation by lazy {
         AnimationBuilder().use {
-            it.buildFromFile("resources/lego_loader.json")
+            it.buildFromString(legoAnimation())
         }
     }
 

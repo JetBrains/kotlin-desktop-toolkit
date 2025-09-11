@@ -55,7 +55,7 @@ val nativeLib = configurations.resolvable("nativeParts") {
 
 fun JavaExec.setUpLoggingAndLibraryPath() {
     val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample.log").map { it.asFile.absolutePath }
-    val nativeLibPath = nativeLib.map { it.singleFile.parentFile.absolutePath }
+    val nativeLibPath = nativeLib.map { it.singleFile.absolutePath }
     jvmArgumentProviders.add(
         CommandLineArgumentProvider {
             listOf(
@@ -125,6 +125,40 @@ tasks.register<JavaExec>("runSkikoSampleLinux") {
         "-Djextract.trace.downcalls=false",
     )
     setUpLoggingAndLibraryPath()
+}
+
+fun JavaExec.setUpCrashDumpPath() {
+    val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample_win32_dump.log").map { it.asFile.absolutePath }
+    val crashDumpFilePath = layout.buildDirectory.file("sample-logs/skiko_sample_win32_dump.hprof").map { it.asFile.absolutePath }
+    jvmArgumentProviders.add(
+        CommandLineArgumentProvider {
+            listOf(
+                "-XX:+CreateCoredumpOnCrash",
+                "-XX:+HeapDumpOnOutOfMemoryError",
+                "-XX:ErrorFile=${logFilePath.get()}",
+                "-XX:HeapDumpPath=${crashDumpFilePath.get()}",
+            )
+        },
+    )
+}
+
+tasks.register<JavaExec>("runSkikoSampleWin32") {
+    group = "application"
+    description = "Runs example of integration with Skiko on Windows (Win32)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.desktop.sample.win32.SkikoSampleWin32Kt")
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        },
+    )
+    jvmArgs = listOf(
+        "--enable-preview",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+    )
+    setUpLoggingAndLibraryPath()
+    setUpCrashDumpPath()
 }
 
 tasks.register("lint") {
