@@ -62,7 +62,7 @@ abstract class SkikoWindowWin32(
             is Event.WindowPositionChanging -> {
                 if (isSizeChanged(event.size)) {
                     makeSurface(event.size, event.scale)
-                    angleRenderer.swapBuffers(true)
+                    angleRenderer.swapBuffers()
                 }
                 EventHandlerResult.Stop
             }
@@ -74,7 +74,7 @@ abstract class SkikoWindowWin32(
     private fun performDrawing(size: PhysicalSize, scale: Float) {
         surface!!.let { surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
-            angleRenderer.draw(true) {
+            angleRenderer.draw {
                 surface.canvas.draw(size, scale, time)
                 surface.flushAndSubmit()
             }

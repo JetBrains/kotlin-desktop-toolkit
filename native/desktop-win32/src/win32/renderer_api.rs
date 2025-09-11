@@ -71,10 +71,10 @@ pub extern "C" fn renderer_angle_make_current(angle_device_ptr: AngleDevicePtr) 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn renderer_angle_swap_buffers(angle_device_ptr: AngleDevicePtr, wait_for_vsync: bool) {
+pub extern "C" fn renderer_angle_swap_buffers(angle_device_ptr: AngleDevicePtr) {
     ffi_boundary("renderer_angle_swap_buffers", || {
         let angle_device = unsafe { angle_device_ptr.borrow::<AngleDevice>() };
-        angle_device.swap_buffers(wait_for_vsync)?;
+        angle_device.swap_buffers()?;
         Ok(())
     });
 }
