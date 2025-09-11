@@ -127,18 +127,20 @@ public value class KeyCode internal constructor(public val value: Int) {
         public const val Super_R: RawKeyCode = 126
         public const val Menu: RawKeyCode = 127
 
-        public const val F13: RawKeyCode = 191
-        public const val F14: RawKeyCode = 192
-        public const val F15: RawKeyCode = 193
-        public const val F16: RawKeyCode = 194
-        public const val F17: RawKeyCode = 195
-        public const val F18: RawKeyCode = 196
-        public const val F19: RawKeyCode = 197
-        public const val F20: RawKeyCode = 198
-        public const val F21: RawKeyCode = 199
-        public const val F22: RawKeyCode = 200
-        public const val F23: RawKeyCode = 202
-        public const val F24: RawKeyCode = 203
+        public const val KP_LeftParen: RawKeyCode = 179
+        public const val KP_RightParen: RawKeyCode = 180
+        public const val F13: RawKeyCode = 183
+        public const val F14: RawKeyCode = 184
+        public const val F15: RawKeyCode = 185
+        public const val F16: RawKeyCode = 186
+        public const val F17: RawKeyCode = 187
+        public const val F18: RawKeyCode = 188
+        public const val F19: RawKeyCode = 189
+        public const val F20: RawKeyCode = 190
+        public const val F21: RawKeyCode = 191
+        public const val F22: RawKeyCode = 192
+        public const val F23: RawKeyCode = 193
+        public const val F24: RawKeyCode = 194
     }
 }
 
