@@ -94,13 +94,13 @@ fn load_shader(gl: &OpenGlFuncs, shader_type: GLenum, shader_src: *const GLchar)
         return None;
     }
     // Load the shader source
-    unsafe { (gl.glShaderSource)(shader, 1, &shader_src, std::ptr::null()) };
+    unsafe { (gl.glShaderSource)(shader, 1, &raw const shader_src, std::ptr::null()) };
     // Compile the shader
     unsafe { (gl.glCompileShader)(shader) };
     // Check the compile status
     {
         let mut compiled: GLint = 0;
-        unsafe { (gl.glGetShaderiv)(shader, GL_COMPILE_STATUS, &mut compiled) };
+        unsafe { (gl.glGetShaderiv)(shader, GL_COMPILE_STATUS, &raw mut compiled) };
         if compiled == 0 {
             unsafe { (gl.glDeleteShader)(shader) };
             return None;
@@ -140,7 +140,7 @@ void main()
         // Check the link status
         {
             let mut linked: GLint = 0;
-            (gl.glGetProgramiv)(program, GL_LINK_STATUS, &mut linked);
+            (gl.glGetProgramiv)(program, GL_LINK_STATUS, &raw mut linked);
             if linked == 0 {
                 (gl.glDeleteProgram)(program);
                 return None;
@@ -187,7 +187,7 @@ fn draw_opengl_triangle_with_init(data: &WindowDrawEvent, window_id: WindowId) {
             .or_insert_with(|| create_opengl_program(&opengl_state.funcs).unwrap());
         let window_state = state.windows.get_mut(&window_id).unwrap();
         if window_state.animation_progress == 200 {
-            window_state.animation_progress = 0
+            window_state.animation_progress = 0;
         } else {
             window_state.animation_progress += 1;
         }
@@ -442,7 +442,7 @@ extern "C" fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting) {
                 state.settings.cursor_theme_name = Some(name);
             }
             _ => {}
-        };
+        }
     });
 }
 

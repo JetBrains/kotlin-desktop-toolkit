@@ -77,11 +77,12 @@ val enabledPlatforms = allPlatforms.filter { crossCompilationSettings.enabled(it
 
 val profiles = listOf("dev", "release")
 
-fun crateNameForOS(os: Os): String {
+// The first element of the returned list is the main crate
+fun crateNamesForOS(os: Os): List<String> {
     return when (os) {
-        Os.MACOS -> "desktop-macos"
-        Os.WINDOWS -> "desktop-win32"
-        Os.LINUX -> "desktop-linux"
+        Os.MACOS -> listOf("desktop-macos")
+        Os.WINDOWS -> listOf("desktop-win32")
+        Os.LINUX -> listOf("desktop-linux", "desktop-linux-sample")
     }
 }
 
@@ -93,7 +94,7 @@ val compileNativeTaskByTarget = buildMap {
     for (platform in enabledPlatforms) {
         for (profile in profiles) {
             val buildNativeTask = tasks.register<CompileRustTask>("compileNative-${buildPlatformRustTarget(platform)}-$profile") {
-                crateName = crateNameForOS(platform.os)
+                crateName = crateNamesForOS(platform.os).first()
                 rustProfile = profile
                 rustTarget = platform
                 workspaceRoot = nativeDir
@@ -118,7 +119,7 @@ val generateBindingsTaskByOS = allPlatforms.allOSes().associateWith { os ->
         jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
         packageName = packageNameForOS(os)
         workspaceRoot = nativeDir
-        crateDirectory = nativeDir.dir(crateNameForOS(os))
+        crateDirectory = nativeDir.dir(crateNamesForOS(os).first())
         generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/${os.normalizedName}/main/java/")
     }
 }
@@ -265,20 +266,24 @@ val cargoFmtTask = tasks.register<CargoFmtTask>("cargoFmt") {
     clippyFixTasks.forEach { mustRunAfter(it) }
 }
 
-val clippyCheckTasks = enabledPlatforms.map { target ->
-    tasks.register<ClippyTask>("clippyCheck-${buildPlatformRustTarget(target)}") {
-        checkOnly = true
-        workingDir = nativeDir.asFile
-        targetPlatform = target
-        crateName = crateNameForOS(target.os)
+val clippyCheckTasks = enabledPlatforms.flatMap { target ->
+    crateNamesForOS(target.os).map { targetCrateName ->
+        tasks.register<ClippyTask>("clippyCheck-$targetCrateName") {
+            checkOnly = true
+            workingDir = nativeDir.asFile
+            targetPlatform = target
+            crateName = targetCrateName
+        }
     }
 }
 
-val clippyFixTasks = enabledPlatforms.map { target ->
-    tasks.register<ClippyTask>("clippyFix-${buildPlatformRustTarget(target)}") {
-        workingDir = nativeDir.asFile
-        targetPlatform = target
-        crateName = crateNameForOS(target.os)
+val clippyFixTasks = enabledPlatforms.flatMap { target ->
+    crateNamesForOS(target.os).map { targetCrateName ->
+        tasks.register<ClippyTask>("clippyFix-$targetCrateName") {
+            workingDir = nativeDir.asFile
+            targetPlatform = target
+            crateName = targetCrateName
+        }
     }
 }
 
