@@ -26,7 +26,7 @@ jobs:
             rust_targets: "aarch64-unknown-linux-gnu",
             publish_common: true,
             package_manager: "apt" },
-          { os: "windows-11",
+          { os: "windows-2025",
             rust_targets: "x86_64-pc-windows-msvc",
             publish_common: false,
             package_manager: "winget" },
