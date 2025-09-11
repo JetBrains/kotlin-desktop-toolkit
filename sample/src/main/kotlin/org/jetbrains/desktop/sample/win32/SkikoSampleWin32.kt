@@ -20,7 +20,6 @@ import org.jetbrains.skia.PaintMode
 import org.jetbrains.skia.RRect
 import org.jetbrains.skia.skottie.Animation
 import org.jetbrains.skia.skottie.AnimationBuilder
-import org.jetbrains.skia.skottie.buildFromFile
 import java.lang.AutoCloseable
 import kotlin.Array
 import kotlin.Float
