@@ -4,9 +4,11 @@ use khronos_egl as egl;
 /// cbindgen:ignore
 pub(crate) type EglInstance = egl::DynamicInstance<egl::EGL1_5>;
 
-type GrGLGetIntegervFn = extern "system" fn(pname: egl::Enum, params: *mut egl::Int) -> ();
+/// cbindgen:ignore
+pub(crate) type GrGLGetIntegervFn = unsafe extern "system" fn(pname: egl::Enum, params: *mut egl::Int) -> ();
 
-pub(crate) type PostSubBufferNVFn = extern "system" fn(
+/// cbindgen:ignore
+pub(crate) type PostSubBufferNVFn = unsafe extern "system" fn(
     display: egl::EGLDisplay,
     surface: egl::EGLSurface,
     x: egl::Int,
