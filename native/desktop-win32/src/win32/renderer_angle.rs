@@ -7,7 +7,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::Context;
 use khronos_egl as egl;
 use windows::{
     UI::Composition::SpriteVisual,
@@ -35,16 +35,16 @@ const EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE: egl::Attrib = 0x3208;
 
 pub struct AngleDevice {
     egl_instance: EglInstance,
-    visual: SpriteVisual,
     display: egl::Display,
     context: egl::Context,
+    visual: SpriteVisual,
     surface: egl::Surface,
     functions: GrGLFunctions,
 }
 
 impl AngleDevice {
     #[allow(clippy::items_after_statements)]
-    pub fn create_for_window(window: &Window) -> Result<Self> {
+    pub fn create_for_window(window: &Window) -> anyhow::Result<Self> {
         let egl_instance = load_angle_egl_instance()?;
 
         let display = {
@@ -97,15 +97,15 @@ impl AngleDevice {
 
         Ok(Self {
             egl_instance,
-            visual,
             display,
             context,
+            visual,
             surface,
             functions,
         })
     }
 
-    pub fn resize_surface(&mut self, width: egl::Int, height: egl::Int) -> Result<EglSurfaceData> {
+    pub fn resize_surface(&mut self, width: egl::Int, height: egl::Int) -> anyhow::Result<EglSurfaceData> {
         #[allow(clippy::cast_precision_loss)]
         self.visual.SetSize(Vector2 {
             X: width as f32,
@@ -119,20 +119,20 @@ impl AngleDevice {
         post_sub_buffer(&self.egl_instance, self.display, self.surface, 1, 1, width, height)?;
 
         let mut framebuffer_binding = 0;
-        (self.functions.fGetIntegerv)(GR_GL_FRAMEBUFFER_BINDING, &raw mut framebuffer_binding);
+        unsafe { (self.functions.fGetIntegerv)(GR_GL_FRAMEBUFFER_BINDING, &raw mut framebuffer_binding) };
 
         Ok(EglSurfaceData { framebuffer_binding })
     }
 
-    pub fn make_current(&self) -> Result<()> {
+    pub fn make_current(&self) -> anyhow::Result<()> {
         self.egl_instance
             .make_current(self.display, Some(self.surface), Some(self.surface), Some(self.context))?;
         Ok(())
     }
 
     #[allow(clippy::bool_to_int_with_if)]
-    pub fn swap_buffers(&self, wait_for_vsync: bool) -> Result<()> {
-        self.egl_instance.swap_interval(self.display, if wait_for_vsync { 1 } else { 0 })?;
+    pub fn swap_buffers(&self) -> anyhow::Result<()> {
+        self.egl_instance.swap_interval(self.display, 1)?;
         self.egl_instance.swap_buffers(self.display, self.surface)?;
         Ok(())
     }
@@ -167,7 +167,7 @@ fn post_sub_buffer(
     y: egl::Int,
     width: egl::Int,
     height: egl::Int,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     static FUN: AtomicUsize = AtomicUsize::new(0usize);
 
     let fun = {
@@ -182,16 +182,16 @@ fn post_sub_buffer(
     };
     let fun = unsafe { core::mem::transmute::<usize, PostSubBufferNVFn>(fun) };
 
-    match fun(display.as_ptr(), surface.as_ptr(), x, y, width, height) {
+    match unsafe { fun(display.as_ptr(), surface.as_ptr(), x, y, width, height) } {
         egl::TRUE => Ok(()),
         egl::FALSE => Err(egl_instance
             .get_error()
-            .map_or_else(|| anyhow!("Could not post sub buffer."), Into::into)),
+            .map_or_else(|| anyhow::Error::msg("Could not post sub buffer."), Into::into)),
         _ => unreachable!("Boolean only has two values"),
     }
 }
 
-fn load_angle_egl_instance() -> Result<EglInstance> {
+fn load_angle_egl_instance() -> anyhow::Result<EglInstance> {
     let current_module_path: PathBuf = unsafe {
         let hmodule = crate::get_dll_instance().into();
         let mut filename = vec![0u16; 1024];
