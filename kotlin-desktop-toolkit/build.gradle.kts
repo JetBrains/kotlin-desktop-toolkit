@@ -132,7 +132,7 @@ val collectNativeArtifactsTaskByTarget = buildMap {
                 dependsOn(buildNativeTask)
                 downloadAngleTask?.let {
                     dependsOn(downloadAngleTask)
-                    angleBinaries.setFrom(downloadAngleTask.flatMap { it.binaries })
+                    angleBinaries.setFrom(downloadAngleTask.map { it.binaries })
                 }
                 nativeLibrary = buildNativeTask.flatMap { it.libraryFile }
                 targetDirectory = layout.buildDirectory.dir("native-${buildPlatformRustTarget(platform)}")

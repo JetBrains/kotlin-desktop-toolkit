@@ -127,25 +127,25 @@ private fun ExecOperations.generateOsHeader(cbindgenBinary: Path, crateDirectory
 }
 
 private fun ExecOperations.listHeaderSymbols(jextractBinary: Path, headerFile: Path): Path {
-    val symbols = createTempFile("headerSymbols.txt")
-    val filteredSymbols = createTempFile("filteredSymbols.txt")
+    val symbolsFile = createTempFile("headerSymbols.txt")
+    val filteredSymbolsFile = createTempFile("filteredSymbols.txt")
     return try {
         val args = buildList {
             add("--dump-includes")
-            add(symbols.pathString)
+            add(symbolsFile.pathString)
             add(headerFile.pathString)
         }.toTypedArray()
         exec {
             commandLine(jextractBinary.pathString, *args)
         }
-        val symbols = symbols.readLines()
+        val filteredSymbols = symbolsFile.readLines()
             .filter { it.endsWith(headerFile.name) && it.startsWith("--") }
             .map { it.split("\\s+".toRegex()).take(2).joinToString(separator = " ") }
 
-        filteredSymbols.writeLines(symbols)
-        filteredSymbols
+        filteredSymbolsFile.writeLines(filteredSymbols)
+        filteredSymbolsFile
     } finally {
-        symbols.deleteIfExists()
+        symbolsFile.deleteIfExists()
     }
 }
 
