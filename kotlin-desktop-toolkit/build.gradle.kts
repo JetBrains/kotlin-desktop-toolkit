@@ -13,7 +13,6 @@ import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.Os
 import org.jetbrains.desktop.buildscripts.Platform
-import org.jetbrains.desktop.buildscripts.angleArch
 import org.jetbrains.desktop.buildscripts.buildPlatformRustTarget
 import org.jetbrains.desktop.buildscripts.hostArch
 import org.jetbrains.desktop.buildscripts.hostOs
@@ -117,7 +116,7 @@ val downloadAngleTaskByPlatform = enabledPlatforms.filter { it.os == Os.WINDOWS 
     tasks.register<DownloadAngleTask>("downloadAngle-${buildPlatformRustTarget(platform)}") {
         this.platform = platform
         version = providers.gradleProperty("kdt.win32.angle-version")
-        outputDirectory = layout.buildDirectory.dir("angle-${angleArch(platform.arch)}")
+        // outputDirectory = layout.buildDirectory.dir("angle-${angleArch(platform.arch)}")
     }
 }
 
