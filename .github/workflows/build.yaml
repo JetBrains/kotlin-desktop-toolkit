@@ -9,7 +9,7 @@ on:
 
 env:
   RUST_VERSION: 1.88.0 # the same as in rust-toolchain
-  ACTIONS_STEP_DEBUG: true
+#  ACTIONS_STEP_DEBUG: true
 
 jobs:
   build_all:
@@ -41,8 +41,6 @@ jobs:
           target: ${{ matrix.targets.rust_targets }}
           components: rustfmt, clippy
           cache-workspaces: "./native -> target"
-          cache-all-crates: true
-          cache-workspace-crates: true
           cache: true
 
       - name: Setup Java
@@ -53,8 +51,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-#      - name: Lint with Gradle
-#        run: ./gradlew lint
+      - name: Lint with Gradle
+        run: ./gradlew lint
       - name: Build with Gradle
         run: ./gradlew build
       - name: Test with Gradle
