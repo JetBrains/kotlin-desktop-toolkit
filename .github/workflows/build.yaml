@@ -9,6 +9,7 @@ on:
 
 env:
   RUST_VERSION: 1.88.0 # the same as in rust-toolchain
+  ACTIONS_STEP_DEBUG: true
 
 jobs:
   build_all:
