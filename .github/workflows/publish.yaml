@@ -45,6 +45,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libwayland-dev libxkbcommon-dev
+        shell: bash
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -62,11 +63,11 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
       - name: Publish with Gradle
-        run: >
-          ./gradlew :kotlin-desktop-toolkit:publish
-          -PenableCrossCompileToMacosX86_64=${{ matrix.targets.os == 'macos-14' }}
-          -PpublishCommon=${{ matrix.targets.publish_common }}
-          -PspaceUsername=${{ secrets.SPACE_USERNAME }}
-          -PspacePassword=${{ secrets.SPACE_PASSWORD }}
-          -Pversion=${{ github.ref_name }}
+        run: |
+          ./gradlew :kotlin-desktop-toolkit:publish \
+               -PenableCrossCompileToMacosX86_64="${{ matrix.targets.os == 'macos-14' }}" \
+               -PpublishCommon=${{ matrix.targets.publish_common }} \
+               -PspaceUsername=${{ secrets.SPACE_USERNAME }} \
+               -PspacePassword=${{ secrets.SPACE_PASSWORD }} \
+               -Pversion=${{ github.ref_name }}
         shell: bash
