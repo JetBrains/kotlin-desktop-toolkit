@@ -41,7 +41,6 @@ jobs:
           target: ${{ matrix.targets.rust_targets }}
           components: rustfmt, clippy
           cache-workspaces: "./native -> target"
-          cache-key: ${{ matrix.os }}
           cache-all-crates: true
           cache-workspace-crates: true
           cache: true
