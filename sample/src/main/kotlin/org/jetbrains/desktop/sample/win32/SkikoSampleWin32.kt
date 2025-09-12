@@ -51,7 +51,6 @@ class SkottieWindow(
 
     override fun Canvas.draw(size: PhysicalSize, scale: Float, time: Long) {
         val canvas = this
-        canvas.clear(0)
         Paint().use { paint ->
             paint.color = 0xFF_FF_FF_FF.toInt()
             paint.mode = PaintMode.FILL
