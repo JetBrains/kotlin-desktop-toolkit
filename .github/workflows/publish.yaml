@@ -62,10 +62,10 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
       - name: Build with Gradle
-        run: |
-          ./gradlew :kotlin-desktop-toolkit:publish \
-               -PenableCrossCompileToMacosX86_64="${{ matrix.targets.os == 'macos-14' }}" \
-               -PpublishCommon=${{ matrix.targets.publish_common }} \
-               -PspaceUsername=${{ secrets.SPACE_USERNAME }} \
-               -PspacePassword=${{ secrets.SPACE_PASSWORD }} \
+        run: >
+          ./gradlew :kotlin-desktop-toolkit:publish
+               -PenableCrossCompileToMacosX86_64="${{ matrix.targets.os == 'macos-14' }}"
+               -PpublishCommon=${{ matrix.targets.publish_common }}
+               -PspaceUsername=${{ secrets.SPACE_USERNAME }}
+               -PspacePassword=${{ secrets.SPACE_PASSWORD }}
                -Pversion=${{ github.ref_name }}
