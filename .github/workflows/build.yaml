@@ -39,6 +39,7 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.targets.rust_targets }}
           components: rustfmt, clippy
+          cache-workspaces: "./native -> target"
           cache: true
 
       - name: Setup Java
