@@ -26,6 +26,14 @@ jobs:
             rust_targets: "aarch64-unknown-linux-gnu",
             publish_common: true,
             package_manager: "apt" },
+          { os: "windows-2025",
+            rust_targets: "x86_64-pc-windows-msvc",
+            publish_common: false,
+            package_manager: "winget" },
+          { os: "windows-11-arm",
+            rust_targets: "aarch64-pc-windows-msvc",
+            publish_common: false,
+            package_manager: "winget" }
         ]
     runs-on: ${{ matrix.targets.os }}
     steps:
@@ -37,6 +45,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libwayland-dev libxkbcommon-dev
+        shell: bash
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -53,7 +62,7 @@ jobs:
           java-version: 21
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-      - name: Build with Gradle
+      - name: Publish with Gradle
         run: |
           ./gradlew :kotlin-desktop-toolkit:publish \
                -PenableCrossCompileToMacosX86_64="${{ matrix.targets.os == 'macos-14' }}" \
@@ -61,3 +70,4 @@ jobs:
                -PspaceUsername=${{ secrets.SPACE_USERNAME }} \
                -PspacePassword=${{ secrets.SPACE_PASSWORD }} \
                -Pversion=${{ github.ref_name }}
+        shell: bash

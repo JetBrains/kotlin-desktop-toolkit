@@ -29,11 +29,7 @@ abstract class DownloadAngleTask @Inject constructor(
     val outputDirectory = objectFactory.directoryProperty()
 
     @get:OutputFiles
-    val binaries = outputDirectory.map { dir ->
-        dir.asFileTree
-            .matching { include("**/libEGL.dll", "**/libGLESv2.dll") }
-            .files
-    }
+    val binaries = outputDirectory.asFileTree.matching { include("**/libEGL.dll", "**/libGLESv2.dll") }
 
     @TaskAction
     fun download() {
