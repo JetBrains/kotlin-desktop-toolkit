@@ -9,6 +9,7 @@ on:
 
 env:
   RUST_VERSION: 1.88.0 # the same as in rust-toolchain
+#  ACTIONS_STEP_DEBUG: true
 
 jobs:
   build_all:
@@ -39,6 +40,7 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.targets.rust_targets }}
           components: rustfmt, clippy
+          cache-workspaces: "./native -> target"
           cache: true
 
       - name: Setup Java
