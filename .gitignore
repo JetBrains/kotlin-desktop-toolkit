@@ -8,3 +8,6 @@
 
 # Ignore Gradle build output directory
 build
+
+# Claude Code configuration
+CLAUDE.md
