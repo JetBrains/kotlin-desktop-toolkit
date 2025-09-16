@@ -53,10 +53,35 @@ class CustomTitlebar(
         const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55.0
     }
 
+    private val colors = intArrayOf(
+        0xFFFF0000.toInt(), // Red
+        0xFF00FF00.toInt(), // Green
+        0xFF0000FF.toInt(), // Blue
+        0xFFFFFF00.toInt(), // Yellow
+        0xFFFF00FF.toInt(), // Magenta
+        0xFF00FFFF.toInt(), // Cyan
+        0xFFFFFFFF.toInt(), // White
+        0xFF000000.toInt()  // Black
+    )
+    private var currentColorIndex = 0
+    private var totalClicks = 0
+
+    private fun isPointInSquare(point: LogicalPoint): Boolean {
+        val squareSize = size.height
+        val squareX = origin.x + (size.width - squareSize) / 2
+        return point.x >= squareX && point.x <= squareX + squareSize &&
+               point.y >= origin.y && point.y <= origin.y + size.height
+    }
+
     fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
             is Event.MouseDown -> {
-                if (event.locationInWindow.x > origin.x &&
+                if (isPointInSquare(event.locationInWindow)) {
+                    currentColorIndex = (currentColorIndex + 1) % colors.size
+                    totalClicks++
+                    Logger.info { "Square clicked $totalClicks times total" }
+                    EventHandlerResult.Stop
+                } else if (event.locationInWindow.x > origin.x &&
                     event.locationInWindow.x < origin.x + size.width * 0.75 &&
                     event.locationInWindow.y > origin.y &&
                     event.locationInWindow.y < origin.y + size.height
@@ -91,6 +116,24 @@ class CustomTitlebar(
         Paint().use { paint ->
             paint.color = 0xFFAAAAAA.toInt()
             canvas.drawRect(Rect.makeXYWH(width * 0.75f, y, width * 0.25f, height), paint)
+        }
+        
+        // Draw the color-changing square
+        Paint().use { paint ->
+            paint.color = colors[currentColorIndex]
+            val squareSize = size.height
+            val squarePhysicalX = (origin.x + (size.width - squareSize) / 2) * scale
+            val squarePhysicalY = origin.y * scale
+            val squarePhysicalSize = squareSize * scale
+            canvas.drawRect(
+                Rect.makeXYWH(
+                    squarePhysicalX.toFloat(),
+                    squarePhysicalY.toFloat(),
+                    squarePhysicalSize.toFloat(),
+                    squarePhysicalSize.toFloat()
+                ), 
+                paint
+            )
         }
     }
 }
