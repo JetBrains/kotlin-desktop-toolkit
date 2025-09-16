@@ -34,8 +34,7 @@ pub struct WindowParams<'a> {
     pub is_miniaturizable: bool,
 
     pub is_full_screen_allowed: bool,
-    pub use_custom_titlebar: bool,
-    pub titlebar_height: LogicalPixels,
+    pub titlebar_configuration: TitlebarConfiguration,
 }
 
 #[unsafe(no_mangle)]
@@ -56,6 +55,24 @@ pub extern "C" fn window_drop(window_ptr: WindowPtr) {
         Ok(())
     });
 }
+
+#[repr(C)]
+pub enum TitlebarConfiguration {
+    Regular,
+    Custom {
+        title_bar_height: LogicalPixels,
+    },
+}
+
+// #[unsafe(no_mangle)]
+// pub extern "C" fn window_set_titlebar_mode(window_ptr: WindowPtr, mode: TitlebarConfiguration) {
+//     ffi_boundary("window_set_titlebar_mode", || {
+//         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+//         let window = unsafe { window_ptr.to_owned::<Window>() };
+// //        window.custom_titlebar
+//         Ok(())
+//     })
+// }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {

@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-
+use std::rc::Rc;
 use anyhow::{Context, Ok};
 use log::debug;
 use objc2::{
@@ -21,7 +21,6 @@ use objc2_foundation::{
 use crate::{
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     macos::{
-        custom_titlebar::CustomTitlebar,
         drag_and_drop::{handle_drag_entered, handle_drag_exited, handle_drag_perform, handle_drag_updated},
         events::{
             handle_flags_change, handle_key_up_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
@@ -30,14 +29,13 @@ use crate::{
             handle_window_screen_change,
         },
         string::copy_to_ns_string,
-        text_input_client::NOT_FOUND_NS_RANGE,
+        text_input_client::NOT_FOUND_NS_RANGE, window_api::TitlebarConfiguration,
     },
 };
 use desktop_common::logger::catch_panic;
-
+use crate::macos::titlebar::Titlebar;
 use super::{
     application_api::MyNSApplication,
-    custom_titlebar::CustomTitlebarCell,
     events::handle_key_down_event,
     metal_api::MetalView,
     screen::NSScreenExts,
@@ -53,7 +51,7 @@ pub(crate) struct Window {
     pub(crate) root_view: Retained<RootView>,
     pub(crate) background_state: RefCell<WindowBackgroundState>,
     #[allow(dead_code)]
-    pub(crate) custom_titlebar: Option<CustomTitlebarCell>,
+    pub(crate) titlebar: Rc<RefCell<Titlebar>>,
 }
 
 pub(crate) struct WindowBackgroundState {
@@ -182,7 +180,7 @@ impl Window {
             style |= NSWindowStyleMask::Resizable;
         }
 
-        if params.use_custom_titlebar {
+        if let TitlebarConfiguration::Custom { .. } = &params.titlebar_configuration {
             style |= NSWindowStyleMask::FullSizeContentView;
         }
 
@@ -192,7 +190,7 @@ impl Window {
             .size
             .height;
 
-        // Window rect is relative to primary screen
+        // Window rect is relative to the primary screen
         let frame = LogicalRect::new(params.origin, params.size).as_macos_coords(screen_height);
         let content_rect = unsafe { NSWindow::contentRectForFrameRect_styleMask(frame, style, mtm) };
         let ns_window = MyNSWindow::new(mtm, content_rect, style);
@@ -223,15 +221,8 @@ impl Window {
         unsafe {
             ns_window.setRestorable(false);
         }
-
-        let custom_titlebar = if params.use_custom_titlebar {
-            // see: https://github.com/JetBrains/JetBrainsRuntime/commit/f02479a649f188b4cf7a22fc66904570606a3042
-            let titlebar = CustomTitlebar::init_custom_titlebar(&ns_window, params.titlebar_height);
-            Some(titlebar)
-        } else {
-            None
-        };
-        let delegate = WindowDelegate::new(mtm, ns_window.clone(), custom_titlebar.clone());
+        let titlebar = Rc::new(RefCell::new(Titlebar::new(&ns_window, &params.titlebar_configuration)));
+        let delegate = WindowDelegate::new(mtm, ns_window.clone(), titlebar.clone());
         ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
 
         let root_view = RootView::new(mtm, text_input_client);
@@ -255,7 +246,7 @@ impl Window {
             ns_window,
             delegate,
             root_view,
-            custom_titlebar,
+            titlebar,
             background_state: window_background,
         })
     }
@@ -316,6 +307,17 @@ impl Window {
         Ok(())
     }
 
+//     pub(crate) fn set_titlebar_mode(&self, mtm: MainThreadMarker, titlebar_mode: TitlebarConfiguration) {
+//         match titlebar_mode {
+//             TitlebarConfiguration::Regular => {
+// //                self.custom_titlebar
+//             },
+//             TitlebarConfiguration::Custom { title_bar_height: titlebar_height } => {
+//
+//             },
+//         }
+//     }
+
     pub(crate) fn attach_layer(&self, layer: &MetalView) {
         let content_view = self.ns_window.contentView().unwrap();
 
@@ -328,7 +330,7 @@ impl Window {
 
 pub(crate) struct WindowDelegateIvars {
     ns_window: Retained<MyNSWindow>,
-    custom_titlebar: Option<CustomTitlebarCell>,
+    titlebar: Rc<RefCell<Titlebar>>,
 }
 
 define_class!(
@@ -369,7 +371,7 @@ define_class!(
         unsafe fn window_will_enter_full_screen(&self, _notification: &NSNotification) {
             catch_panic(|| {
                 let ivars = self.ivars();
-                CustomTitlebar::before_enter_fullscreen(ivars.custom_titlebar.as_ref(), &ivars.ns_window);
+                ivars.titlebar.borrow_mut().before_enter_fullscreen();
                 Ok(())
             });
         }
@@ -387,7 +389,7 @@ define_class!(
         unsafe fn window_did_enter_full_screen(&self, _notification: &NSNotification) {
             catch_panic(|| {
                 let ivars = self.ivars();
-                CustomTitlebar::after_enter_fullscreen(ivars.custom_titlebar.as_ref(), &ivars.ns_window);
+                ivars.titlebar.borrow_mut().after_enter_fullscreen();
                 handle_window_full_screen_toggle(&self.ivars().ns_window);
                 Ok(())
             });
@@ -397,7 +399,7 @@ define_class!(
         unsafe fn window_will_exit_full_screen(&self, _notification: &NSNotification) {
             catch_panic(|| {
                 let ivars = self.ivars();
-                CustomTitlebar::before_exit_fullscreen(ivars.custom_titlebar.as_ref(), &ivars.ns_window);
+                ivars.titlebar.borrow_mut().before_exit_fullscreen();
                 Ok(())
             });
         }
@@ -406,7 +408,7 @@ define_class!(
         unsafe fn window_did_exit_full_screen(&self, _notification: &NSNotification) {
             catch_panic(|| {
                 let ivars = self.ivars();
-                CustomTitlebar::after_exit_fullscreen(ivars.custom_titlebar.as_ref(), &ivars.ns_window);
+                ivars.titlebar.borrow_mut().after_exit_fullscreen();
                 handle_window_full_screen_toggle(&self.ivars().ns_window);
                 Ok(())
             });
@@ -472,11 +474,11 @@ define_class!(
 );
 
 impl WindowDelegate {
-    fn new(mtm: MainThreadMarker, ns_window: Retained<MyNSWindow>, custom_titlebar: Option<CustomTitlebarCell>) -> Retained<Self> {
+    fn new(mtm: MainThreadMarker, ns_window: Retained<MyNSWindow>, titlebar: Rc<RefCell<Titlebar>>) -> Retained<Self> {
         let this = mtm.alloc();
         let this = this.set_ivars(WindowDelegateIvars {
             ns_window,
-            custom_titlebar,
+            titlebar,
         });
         unsafe { msg_send![super(this), init] }
     }

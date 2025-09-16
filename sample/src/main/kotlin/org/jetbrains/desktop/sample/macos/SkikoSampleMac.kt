@@ -27,6 +27,7 @@ import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.PhysicalPoint
 import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.Screen
+import org.jetbrains.desktop.macos.TitlebarConfiguration
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
 import org.jetbrains.desktop.macos.WindowEvent
@@ -325,8 +326,9 @@ class RotatingBallWindow(
                 size = windowSize,
                 title = title,
                 origin = origin,
-                useCustomTitlebar = useCustomTitlebar,
-                titlebarHeight = container.customTitlebar?.size?.height ?: 0.0,
+                titlebarConfiguration = if (useCustomTitlebar) {
+                    TitlebarConfiguration.Custom(titlebarHeight = container.customTitlebar?.size?.height ?: 0.0)
+                } else TitlebarConfiguration.Regular
             )
 
             return RotatingBallWindow(device, queue, container, windowParams)

@@ -1,5 +1,7 @@
 package org.jetbrains.desktop.macos
 
+import org.jetbrains.desktop.macos.generated.NativeTitlebarConfiguration
+import org.jetbrains.desktop.macos.generated.NativeTitlebarConfiguration_NativeCustom_Body
 import org.jetbrains.desktop.macos.generated.NativeWindowBackground
 import org.jetbrains.desktop.macos.generated.NativeWindowParams
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
@@ -20,8 +22,7 @@ public class Window internal constructor(
         val isClosable: Boolean = true,
         val isMiniaturizable: Boolean = true,
         val isFullScreenAllowed: Boolean = true,
-        val useCustomTitlebar: Boolean = false,
-        val titlebarHeight: LogicalPixels = 28.0,
+        val titlebarConfiguration: TitlebarConfiguration = TitlebarConfiguration.Regular,
     ) {
         internal fun toNative(arena: Arena): MemorySegment {
             val nativeWindowParams = NativeWindowParams.allocate(arena)
@@ -33,8 +34,7 @@ public class Window internal constructor(
             NativeWindowParams.is_closable(nativeWindowParams, isClosable)
             NativeWindowParams.is_miniaturizable(nativeWindowParams, isMiniaturizable)
             NativeWindowParams.is_full_screen_allowed(nativeWindowParams, isFullScreenAllowed)
-            NativeWindowParams.use_custom_titlebar(nativeWindowParams, useCustomTitlebar)
-            NativeWindowParams.titlebar_height(nativeWindowParams, titlebarHeight)
+            NativeWindowParams.titlebar_configuration(nativeWindowParams, titlebarConfiguration.toNative(arena))
             return nativeWindowParams
         }
     }
@@ -60,7 +60,7 @@ public class Window internal constructor(
             isClosable: Boolean = true,
             isMiniaturizable: Boolean = true,
             isFullScreenAllowed: Boolean = true,
-            useCustomTitlebar: Boolean = false,
+            titlebarConfiguration: TitlebarConfiguration = TitlebarConfiguration.Regular,
         ): Window {
             return create(
                 WindowParams(
@@ -71,7 +71,7 @@ public class Window internal constructor(
                     isClosable,
                     isMiniaturizable,
                     isFullScreenAllowed,
-                    useCustomTitlebar,
+                    titlebarConfiguration,
                 ),
             )
         }
@@ -348,6 +348,27 @@ public sealed class WindowBackground {
             is VisualEffect -> {
                 NativeWindowBackground.tag(result, desktop_macos_h.NativeWindowBackground_VisualEffect())
                 NativeWindowBackground.visual_effect(result, effect.toNative())
+            }
+        }
+        return result
+    }
+}
+
+public sealed class TitlebarConfiguration {
+    public data object Regular : TitlebarConfiguration()
+    public data class Custom(val titlebarHeight: LogicalPixels) : TitlebarConfiguration()
+
+    internal fun toNative(arena: Arena): MemorySegment {
+        val result = NativeTitlebarConfiguration.allocate(arena)
+        when (this) {
+            Regular -> {
+                NativeTitlebarConfiguration.tag(result, desktop_macos_h.NativeTitlebarConfiguration_Regular())
+            }
+            is Custom -> {
+                NativeTitlebarConfiguration.tag(result, desktop_macos_h.NativeTitlebarConfiguration_Custom())
+                val custom = NativeTitlebarConfiguration_NativeCustom_Body.allocate(arena)
+                NativeTitlebarConfiguration_NativeCustom_Body.title_bar_height(custom, titlebarHeight)
+                NativeTitlebarConfiguration.custom(result, custom)
             }
         }
         return result
