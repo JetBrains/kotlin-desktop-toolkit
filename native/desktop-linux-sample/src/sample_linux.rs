@@ -17,7 +17,7 @@ use desktop_linux::linux::{
         application_set_cursor_theme, application_shutdown, application_start_drag_and_drop, application_stop_event_loop,
         application_text_input_disable, application_text_input_enable, application_text_input_update,
     },
-    events::{Event, KeyModifiers, SoftwareDrawData, WindowDrawEvent, WindowId},
+    events::{DataTransferContent, Event, KeyDownEvent, KeyModifiers, SoftwareDrawData, TextInputEvent, WindowDrawEvent, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
@@ -56,6 +56,15 @@ pub const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
 pub const ALL_MIMES: &CStr = c"text/uri-list,text/plain;charset=utf-8";
 
 #[derive(Debug)]
+struct OptionalAppPtr(Option<AppPtr<'static>>);
+
+impl OptionalAppPtr {
+    fn get(&self) -> AppPtr<'static> {
+        self.0.as_ref().unwrap().clone()
+    }
+}
+
+#[derive(Debug)]
 struct OpenglState {
     funcs: OpenGlFuncs,
     programs: HashMap<WindowId, GLuint>,
@@ -78,14 +87,19 @@ struct WindowState {
 
 #[derive(Debug)]
 struct State {
-    app_ptr: AppPtr<'static>,
+    app_ptr: OptionalAppPtr,
     windows: HashMap<WindowId, WindowState>,
     opengl: Option<OpenglState>,
     settings: Settings,
 }
 
 thread_local! {
-    static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
+    static STATE: RefCell<State> = RefCell::new(State {
+            app_ptr: OptionalAppPtr(None),
+            windows: HashMap::new(),
+            opengl: None,
+            settings: Settings::default(),
+        });
 }
 
 const V_POSITION: GLuint = 0;
@@ -171,44 +185,48 @@ fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEven
     }
 }
 
-fn draw_opengl_triangle_with_init(data: &WindowDrawEvent, window_id: WindowId) {
-    STATE.with(|c| {
-        let mut state = c.borrow_mut();
-        let state = state.as_mut().unwrap();
-        let opengl_state = state.opengl.get_or_insert_with(|| {
-            let egl_lib = application_get_egl_proc_func(state.app_ptr.clone());
-            let funcs = OpenGlFuncs::new(&egl_lib).unwrap();
-            let program = create_opengl_program(&funcs).unwrap();
-            debug!("draw_opengl_triangle_with_init, program = {program}, event = {data:?}");
-            let mut programs = HashMap::new();
-            programs.insert(window_id, program);
-            OpenglState { funcs, programs }
-        });
-        let program = opengl_state
-            .programs
-            .entry(window_id)
-            .or_insert_with(|| create_opengl_program(&opengl_state.funcs).unwrap());
-        let window_state = state.windows.get_mut(&window_id).unwrap();
-        if window_state.animation_progress == 200 {
-            window_state.animation_progress = 0;
-        } else {
-            window_state.animation_progress += 1;
-        }
-
-        let animation_progress = if window_state.animation_progress < 100 {
-            -1.0 + (f32::from(window_state.animation_progress) / 50.)
-        } else {
-            1.0 - (f32::from(window_state.animation_progress - 100) / 50.)
-        };
-
-        draw_opengl_triangle(&opengl_state.funcs, *program, data, animation_progress);
+fn draw_opengl_triangle_with_init(
+    data: &WindowDrawEvent,
+    app_ptr: AppPtr<'_>,
+    window_id: WindowId,
+    window_state: &mut WindowState,
+    opengl_state: &mut Option<OpenglState>,
+) {
+    let opengl_state = opengl_state.get_or_insert_with(|| {
+        let egl_lib = application_get_egl_proc_func(app_ptr);
+        let funcs = OpenGlFuncs::new(&egl_lib).unwrap();
+        let program = create_opengl_program(&funcs).unwrap();
+        debug!("draw_opengl_triangle_with_init, program = {program}");
+        let mut programs = HashMap::new();
+        programs.insert(window_id, program);
+        OpenglState { funcs, programs }
     });
+    let program = opengl_state
+        .programs
+        .entry(window_id)
+        .or_insert_with(|| create_opengl_program(&opengl_state.funcs).unwrap());
+    if window_state.animation_progress == 200 {
+        window_state.animation_progress = 0;
+    } else {
+        window_state.animation_progress += 1;
+    }
+
+    let animation_progress = if window_state.animation_progress < 100 {
+        -1.0 + (f32::from(window_state.animation_progress) / 50.)
+    } else {
+        1.0 - (f32::from(window_state.animation_progress - 100) / 50.)
+    };
+
+    draw_opengl_triangle(&opengl_state.funcs, *program, data, animation_progress);
 }
 
 #[allow(clippy::many_single_char_names)]
 fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f64) {
     const BYTES_PER_PIXEL: u8 = 4;
-    let canvas = unsafe { std::slice::from_raw_parts_mut(data.canvas, usize::try_from(physical_size.height.0 * data.stride).unwrap()) };
+    let canvas = {
+        let len = usize::try_from(physical_size.height.0 * data.stride).unwrap();
+        unsafe { std::slice::from_raw_parts_mut(data.canvas, len) }
+    };
     let w = f64::from(physical_size.width.0);
     let h = f64::from(physical_size.height.0);
     let line_thickness = 5.0 * scale;
@@ -235,20 +253,8 @@ fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f6
     }
 }
 
-#[allow(clippy::many_single_char_names)]
-fn draw(event: &WindowDrawEvent, window_id: WindowId) {
-    if event.software_draw_data.canvas.is_null() {
-        draw_opengl_triangle_with_init(event, window_id);
-    } else {
-        draw_software(&event.software_draw_data, event.physical_size, event.scale);
-    }
-}
-
 fn create_text_input_context<'a>(text: &str, text_cstring: &'a CString, change_caused_by_input_method: bool) -> TextInputContext<'a> {
-    let mut codepoints_count = 0;
-    for _ in text.chars() {
-        codepoints_count += 1;
-    }
+    let codepoints_count = u16::try_from(text.chars().count()).unwrap();
     TextInputContext {
         surrounding_text: BorrowedStrPtr::new(text_cstring),
         cursor_codepoint_offset: codepoints_count,
@@ -277,223 +283,222 @@ fn update_text_input_context(app_ptr: AppPtr<'_>, text: &str, change_caused_by_i
     );
 }
 
-#[allow(clippy::too_many_lines)]
+fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, window_id: WindowId, window_state: &mut WindowState) {
+    const KEYCODE_BACKSPACE: u32 = 14;
+    const KEYCODE_C: u32 = 46;
+    const KEYCODE_O: u32 = 24;
+    const KEYCODE_S: u32 = 31;
+    const KEYCODE_V: u32 = 47;
+
+    let key_code = event.code.0;
+
+    match key_code {
+        KEYCODE_BACKSPACE => {
+            window_state.text.pop();
+            if window_state.text_input_available {
+                update_text_input_context(app_ptr, &window_state.text, false);
+            }
+            debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
+        }
+        _ => {
+            if key_code == KEYCODE_V && window_state.key_modifiers.ctrl {
+                window_clipboard_paste(app_ptr, window_id, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
+            } else if key_code == KEYCODE_C && window_state.key_modifiers.ctrl {
+                application_clipboard_put(app_ptr, BorrowedStrPtr::new(ALL_MIMES));
+            } else if key_code == KEYCODE_O && window_state.key_modifiers.ctrl {
+                let common_params = CommonFileDialogParams {
+                    modal: false,
+                    title: c"Open File for Linux Native Sample App test".into(),
+                    accept_label: c"Let's go!".into(),
+                    current_folder: c"/etc".into(),
+                };
+                let open_params = OpenFileDialogParams {
+                    select_directories: false,
+                    allows_multiple_selection: true,
+                };
+                let request_id = window_show_open_file_dialog(app_ptr, window_id, &common_params, &open_params);
+                debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
+            } else if key_code == KEYCODE_S && window_state.key_modifiers.ctrl {
+                let common_params = CommonFileDialogParams {
+                    modal: false,
+                    title: c"Save File for Linux Native Sample App test".into(),
+                    accept_label: c"Let's go!".into(),
+                    current_folder: c"/tmp".into(),
+                };
+                let save_params = SaveFileDialogParams {
+                    name_field_string_value: c"file from Linux Native Sample App.txt".into(),
+                };
+                let request_id = window_show_save_file_dialog(app_ptr, window_id, &common_params, &save_params);
+                debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
+            } else if let Some(event_chars) = event.characters.as_optional_str().unwrap() {
+                window_state.text += event_chars;
+                if window_state.text_input_available {
+                    update_text_input_context(app_ptr, &window_state.text, false);
+                }
+                debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
+            }
+        }
+    }
+}
+
+fn on_text_input_availability_changed(available: bool, app_ptr: AppPtr<'_>, window_state: &mut WindowState) {
+    if available {
+        let surrounding_text_cstring = CString::from_str(&window_state.text).unwrap();
+        let context = create_text_input_context(&window_state.text, &surrounding_text_cstring, false);
+        application_text_input_enable(app_ptr, context);
+    } else {
+        application_text_input_disable(app_ptr);
+    }
+    window_state.text_input_available = available;
+}
+
+fn on_text_input(event: &TextInputEvent, app_ptr: AppPtr<'_>, window_id: WindowId, window_state: &mut WindowState) {
+    window_state.composed_text.clear();
+    if event.has_delete_surrounding_text {
+        let cursor_pos = window_state.text.len();
+        let range = (cursor_pos - event.delete_surrounding_text.before_length_in_bytes as usize)
+            ..(cursor_pos + event.delete_surrounding_text.after_length_in_bytes as usize);
+        window_state.text.drain(range);
+    }
+    if event.has_commit_string {
+        if let Some(commit_string) = event.commit_string.as_optional_str().unwrap() {
+            debug!("{window_id:?} commit_string: {commit_string}");
+            window_state.text += commit_string;
+        }
+    }
+    if event.has_delete_surrounding_text || event.has_commit_string {
+        update_text_input_context(app_ptr, &window_state.text, true);
+    }
+
+    if event.has_preedit_string {
+        if event.preedit_string.cursor_begin_byte_pos == -1 && event.preedit_string.cursor_end_byte_pos == -1 {
+            // TODO: hide cursor
+        } else if let Some(preedit_string) = event.preedit_string.text.as_optional_str().unwrap() {
+            window_state.composed_text.push_str(preedit_string);
+        }
+    }
+
+    debug!("{window_id:?} : {} : {:?}", window_state.text.len(), window_state);
+}
+
+fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut WindowState) {
+    if content
+        .mime_types
+        .as_str()
+        .unwrap()
+        .split(',')
+        .any(|s| s == URI_LIST_MIME_TYPE.to_str().unwrap())
+    {
+        let list_str = str::from_utf8(content.data.as_slice().unwrap()).unwrap();
+        let list = list_str.trim_ascii_end().split("\r\n").collect::<Vec<_>>();
+        info!("Pasted file list: {list:?}");
+    } else if content
+        .mime_types
+        .as_str()
+        .unwrap()
+        .split(',')
+        .any(|s| s == TEXT_MIME_TYPE.to_str().unwrap())
+    {
+        let data_str = str::from_utf8(content.data.as_slice().unwrap()).unwrap();
+        window_state.text += data_str;
+    }
+}
+
 extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
     match event {
         Event::WindowDraw(_) | Event::MouseMoved(_) => {}
         _ => {
-            debug!("event_handler start: window_id={window_id:?} : {event:?}");
+            debug!("event_handler: window_id={window_id:?} : {event:?}");
         }
     }
 
-    STATE.with(|c| {
-        let state = c.borrow();
-        let state = state.as_ref().unwrap();
-        let is_event_loop_thread = application_is_event_loop_thread(state.app_ptr.clone());
+    STATE.with_borrow_mut(|state| {
+        let app_ptr = state.app_ptr.get();
+        let is_event_loop_thread = application_is_event_loop_thread(app_ptr.clone());
         assert!(is_event_loop_thread);
-    });
-    match event {
-        Event::WindowDraw(data) => {
-            draw(data, window_id);
-            return true;
-        }
-        Event::WindowCloseRequest => STATE.with(|c| {
-            let mut state = c.borrow_mut();
-            let state = state.as_mut().unwrap();
-            state.windows.retain(|&k, _v| k != window_id);
-            window_close(state.app_ptr.clone(), window_id);
-            if state.windows.is_empty() {
-                application_stop_event_loop(state.app_ptr.clone());
-            }
-        }),
-        Event::MouseDown(_) => STATE.with(|c| {
-            let mut state = c.borrow_mut();
-            let state = state.as_mut().unwrap();
-            application_start_drag_and_drop(state.app_ptr.clone(), window_id, BorrowedStrPtr::new(ALL_MIMES), DragAction::Copy);
-        }),
-        Event::ModifiersChanged(data) => STATE.with(|c| {
-            let mut state = c.borrow_mut();
-            let state = state.as_mut().unwrap();
-            let window_state = state.windows.get_mut(&window_id).unwrap();
-            window_state.key_modifiers = data.modifiers;
-        }),
-        Event::KeyDown(data) => STATE.with(|c| {
-            const KEYCODE_BACKSPACE: u32 = 14;
-            const KEYCODE_C: u32 = 46;
-            const KEYCODE_O: u32 = 24;
-            const KEYCODE_S: u32 = 31;
-            const KEYCODE_V: u32 = 47;
 
-            let mut state = c.borrow_mut();
-            let state = state.as_mut().unwrap();
-            let window_state = state.windows.get_mut(&window_id).unwrap();
-            match data.code.0 {
-                KEYCODE_BACKSPACE => {
-                    window_state.text.pop();
-                    if window_state.text_input_available {
-                        update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
-                    }
-                }
-                _ => {
-                    if data.code.0 == KEYCODE_V && window_state.key_modifiers.ctrl {
-                        window_clipboard_paste(state.app_ptr.clone(), window_id, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
-                    } else if data.code.0 == KEYCODE_C && window_state.key_modifiers.ctrl {
-                        application_clipboard_put(state.app_ptr.clone(), BorrowedStrPtr::new(ALL_MIMES));
-                    } else if data.code.0 == KEYCODE_O && window_state.key_modifiers.ctrl {
-                        let common_params = CommonFileDialogParams {
-                            modal: false,
-                            title: c"Open File for Linux Native Sample App test".into(),
-                            accept_label: c"Let's go!".into(),
-                            current_folder: c"/etc".into(),
-                        };
-                        let open_params = OpenFileDialogParams {
-                            select_directories: false,
-                            allows_multiple_selection: true,
-                        };
-                        let request_id = window_show_open_file_dialog(state.app_ptr.clone(), window_id, &common_params, &open_params);
-                        debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
-                    } else if data.code.0 == KEYCODE_S && window_state.key_modifiers.ctrl {
-                        let common_params = CommonFileDialogParams {
-                            modal: false,
-                            title: c"Save File for Linux Native Sample App test".into(),
-                            accept_label: c"Let's go!".into(),
-                            current_folder: c"/tmp".into(),
-                        };
-                        let save_params = SaveFileDialogParams {
-                            name_field_string_value: c"file from Linux Native Sample App.txt".into(),
-                        };
-                        let request_id = window_show_save_file_dialog(state.app_ptr.clone(), window_id, &common_params, &save_params);
-                        debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
-                    } else if let Some(event_chars) = data.characters.as_optional_str().unwrap() {
-                        window_state.text += event_chars;
-                        if window_state.text_input_available {
-                            update_text_input_context(state.app_ptr.clone(), &window_state.text, false);
-                        }
-                    }
-                }
-            }
-
-            debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
-        }),
-        Event::FileChooserResponse(file_chooser_response) => match file_chooser_response.newline_separated_files.as_optional_str() {
-            Ok(s) => {
-                let files = s.map(|s| s.trim_ascii_end().split("\r\n").collect::<Vec<_>>());
-                info!("Selected files: {files:?}");
-            }
-            Err(e) => error!("{e}"),
-        },
-        Event::DataTransfer(data) => {
-            if data
-                .mime_types
-                .as_str()
-                .unwrap()
-                .split(',')
-                .any(|s| s == URI_LIST_MIME_TYPE.to_str().unwrap())
-            {
-                let list_str = str::from_utf8(data.data.as_slice().unwrap()).unwrap();
-                let list = list_str.trim_ascii_end().split("\r\n").collect::<Vec<_>>();
-                info!("Pasted file list: {list:?}");
-            } else if data
-                .mime_types
-                .as_str()
-                .unwrap()
-                .split(',')
-                .any(|s| s == TEXT_MIME_TYPE.to_str().unwrap())
-            {
-                STATE.with(|c| {
-                    let mut state = c.borrow_mut();
-                    let state = state.as_mut().unwrap();
+        match event {
+            Event::WindowDraw(event) => {
+                if event.software_draw_data.canvas.is_null() {
                     let window_state = state.windows.get_mut(&window_id).unwrap();
-                    let data_str = str::from_utf8(data.data.as_slice().unwrap()).unwrap();
-                    window_state.text += data_str;
-                });
+                    draw_opengl_triangle_with_init(event, app_ptr, window_id, window_state, &mut state.opengl);
+                } else {
+                    draw_software(&event.software_draw_data, event.physical_size, event.scale);
+                }
+                return true;
             }
-        }
-        Event::TextInputAvailability(data) => STATE.with(|c| {
-            let mut state = c.borrow_mut();
-            let state = state.as_mut().unwrap();
-            let window_state = state.windows.get_mut(&window_id).unwrap();
-            if data.available {
-                let surrounding_text_cstring = CString::from_str(&window_state.text).unwrap();
-                application_text_input_enable(
-                    state.app_ptr.clone(),
-                    create_text_input_context(&window_state.text, &surrounding_text_cstring, false),
-                );
-                window_state.text_input_available = true;
-            } else {
-                application_text_input_disable(state.app_ptr.clone());
-                window_state.text_input_available = false;
-            }
-        }),
-        Event::TextInput(data) => STATE.with(|c| {
-            let mut state = c.borrow_mut();
-            let state = state.as_mut().unwrap();
-            let window_state = state.windows.get_mut(&window_id).unwrap();
-            window_state.composed_text.clear();
-            if data.has_delete_surrounding_text {
-                let cursor_pos = window_state.text.len();
-                let range = (cursor_pos - data.delete_surrounding_text.before_length_in_bytes as usize)
-                    ..(cursor_pos + data.delete_surrounding_text.after_length_in_bytes as usize);
-                window_state.text.drain(range);
-            }
-            if data.has_commit_string {
-                if let Some(commit_string) = data.commit_string.as_optional_str().unwrap() {
-                    debug!("{window_id:?} commit_string: {commit_string}");
-                    window_state.text += commit_string;
+            Event::WindowCloseRequest => {
+                state.windows.retain(|&k, _v| k != window_id);
+                window_close(app_ptr.clone(), window_id);
+                if state.windows.is_empty() {
+                    application_stop_event_loop(app_ptr);
                 }
             }
-            if data.has_delete_surrounding_text || data.has_commit_string {
-                update_text_input_context(state.app_ptr.clone(), &window_state.text, true);
+            Event::MouseDown(_) => {
+                application_start_drag_and_drop(app_ptr, window_id, BorrowedStrPtr::new(ALL_MIMES), DragAction::Copy);
             }
-
-            if data.has_preedit_string {
-                if data.preedit_string.cursor_begin_byte_pos == -1 && data.preedit_string.cursor_end_byte_pos == -1 {
-                    // TODO: hide cursor
-                } else if let Some(preedit_string) = data.preedit_string.text.as_optional_str().unwrap() {
-                    window_state.composed_text.push_str(preedit_string);
-                }
+            Event::ModifiersChanged(data) => {
+                let window_state = state.windows.get_mut(&window_id).unwrap();
+                window_state.key_modifiers = data.modifiers;
             }
-
-            debug!("{window_id:?} : {} : {:?}", window_state.text.len(), window_state);
-        }),
-        _ => {}
-    }
-    true
-}
-
-extern "C" fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting) {
-    debug!("{s:?}");
-    STATE.with(|c| {
-        let mut state = c.borrow_mut();
-        let state = state.as_mut().unwrap();
-        match s {
-            XdgDesktopSetting::CursorSize(v) => {
-                let size = (*v).try_into().unwrap();
-                if let Some(name) = &state.settings.cursor_theme_name {
-                    application_set_cursor_theme(state.app_ptr.clone(), BorrowedStrPtr::new(name), size);
-                }
-                state.settings.cursor_theme_size = Some(size);
+            Event::KeyDown(event) => {
+                let window_state = state.windows.get_mut(&window_id).unwrap();
+                on_keydown(event, app_ptr, window_id, window_state);
             }
-            XdgDesktopSetting::CursorTheme(v) => {
-                let name = CString::new(v.as_str().unwrap()).unwrap();
-                if let Some(size) = state.settings.cursor_theme_size {
-                    application_set_cursor_theme(state.app_ptr.clone(), BorrowedStrPtr::new(&name), size);
+            Event::FileChooserResponse(file_chooser_response) => match file_chooser_response.newline_separated_files.as_optional_str() {
+                Ok(s) => {
+                    let files = s.map(|s| s.trim_ascii_end().split("\r\n").collect::<Vec<_>>());
+                    info!("Selected files: {files:?}");
                 }
-                state.settings.cursor_theme_name = Some(name);
+                Err(e) => error!("{e}"),
+            },
+            Event::DataTransfer(content) => {
+                let window_state = state.windows.get_mut(&window_id).unwrap();
+                on_data_transfer_received(content, window_state);
+            }
+            Event::TextInputAvailability(data) => {
+                let window_state = state.windows.get_mut(&window_id).unwrap();
+                on_text_input_availability_changed(data.available, app_ptr, window_state);
+            }
+            Event::TextInput(event) => {
+                let window_state = state.windows.get_mut(&window_id).unwrap();
+                on_text_input(event, app_ptr, window_id, window_state);
             }
             _ => {}
         }
+        true
+    })
+}
+
+extern "C" fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting) {
+    debug!("on_xdg_desktop_settings_change start: {s:?}");
+    STATE.with_borrow_mut(|state| match s {
+        XdgDesktopSetting::CursorSize(v) => {
+            let size = (*v).try_into().unwrap();
+            if let Some(name) = &state.settings.cursor_theme_name {
+                application_set_cursor_theme(state.app_ptr.get(), BorrowedStrPtr::new(name), size);
+            }
+            state.settings.cursor_theme_size = Some(size);
+        }
+        XdgDesktopSetting::CursorTheme(v) => {
+            let name = CString::new(v.as_str().unwrap()).unwrap();
+            if let Some(size) = state.settings.cursor_theme_size {
+                application_set_cursor_theme(state.app_ptr.get(), BorrowedStrPtr::new(&name), size);
+            }
+            state.settings.cursor_theme_name = Some(name);
+        }
+        _ => {}
     });
+    debug!("on_xdg_desktop_settings_change end");
 }
 
 extern "C" fn on_application_started() {
     const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
-    STATE.with(|c| {
-        let mut state = c.borrow_mut();
-        let state = state.as_mut().unwrap();
+    debug!("on_application_started start");
+    STATE.with_borrow_mut(|state| {
         let window_1_id = WindowId(1);
         window_create(
-            state.app_ptr.clone(),
+            state.app_ptr.get(),
             WindowParams {
                 window_id: window_1_id,
                 size: LogicalSize {
@@ -510,7 +515,7 @@ extern "C" fn on_application_started() {
 
         let window_2_id = WindowId(2);
         window_create(
-            state.app_ptr.clone(),
+            state.app_ptr.get(),
             WindowParams {
                 window_id: window_2_id,
                 size: LogicalSize {
@@ -525,6 +530,7 @@ extern "C" fn on_application_started() {
         );
         state.windows.insert(window_2_id, WindowState::default());
     });
+    debug!("on_application_started end");
 }
 
 extern "C" fn get_drag_and_drop_supported_mime_types(data: &DragAndDropQueryData) -> BorrowedStrPtr<'static> {
@@ -588,13 +594,8 @@ pub fn main() {
         get_data_transfer_data,
         on_data_transfer_cancelled,
     });
-    STATE.with(|c| {
-        c.replace(Some(State {
-            app_ptr: app_ptr.clone(),
-            windows: HashMap::new(),
-            opengl: None,
-            settings: Settings::default(),
-        }));
+    STATE.with_borrow_mut(|state| {
+        state.app_ptr = OptionalAppPtr(Some(app_ptr.clone()));
     });
     application_run_event_loop(app_ptr.clone());
     application_shutdown(app_ptr);
