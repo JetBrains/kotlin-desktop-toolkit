@@ -32,6 +32,10 @@ pub struct ScreenId(pub u32);
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct WindowId(pub i64);
 
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct RequestId(pub u32);
+
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct MouseButton(pub u32);
