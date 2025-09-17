@@ -14,20 +14,15 @@ abstract class ClippyTask: Exec() {
     @get:Input
     val crateName = objectFactory.property<String>()
 
-    @get:Nested
-    val targetPlatform = objectFactory.property<Platform>()
-
     init {
         outputs.upToDateWhen { false }
         executable("cargo")
     }
 
     override fun exec() {
-        val rustTarget = buildPlatformRustTarget(targetPlatform.get())
         val crateName = crateName.get()
         args(buildList {
             add("clippy")
-            add("--target=$rustTarget")
             add("--package=$crateName")
             add("--all-targets")
             add("--all-features")

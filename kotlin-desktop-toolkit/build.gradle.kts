@@ -82,12 +82,13 @@ val enabledPlatforms = allPlatforms.filter { crossCompilationSettings.enabled(it
 
 val profiles = listOf("dev", "release")
 
-// The first element of the returned list is the main crate
-fun crateNamesForOS(os: Os): List<String> {
+val allCrates = listOf("desktop-common", "desktop-macos", "desktop-win32", "desktop-linux", "desktop-linux-sample")
+
+fun mainCrateForOS(os: Os): String {
     return when (os) {
-        Os.MACOS -> listOf("desktop-macos")
-        Os.WINDOWS -> listOf("desktop-win32")
-        Os.LINUX -> listOf("desktop-linux", "desktop-linux-sample")
+        Os.MACOS -> "desktop-macos"
+        Os.WINDOWS -> "desktop-win32"
+        Os.LINUX -> "desktop-linux"
     }
 }
 
@@ -99,7 +100,7 @@ val compileNativeTaskByTarget = buildMap {
     for (platform in enabledPlatforms) {
         for (profile in profiles) {
             val buildNativeTask = tasks.register<CompileRustTask>("compileNative-${buildPlatformRustTarget(platform)}-$profile") {
-                crateName = crateNamesForOS(platform.os).first()
+                crateName = mainCrateForOS(platform.os)
                 rustProfile = profile
                 rustTarget = platform
                 workspaceRoot = nativeDir
@@ -160,7 +161,7 @@ val generateBindingsTaskByOS = allPlatforms.allOSes().associateWith { os ->
         jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
         packageName = packageNameForOS(os)
         workspaceRoot = nativeDir
-        crateDirectory = nativeDir.dir(crateNamesForOS(os).first())
+        crateDirectory = nativeDir.dir(mainCrateForOS(os))
         generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/${os.normalizedName}/main/java/")
     }
 }
@@ -307,24 +308,18 @@ val cargoFmtTask = tasks.register<CargoFmtTask>("cargoFmt") {
     clippyFixTasks.forEach { mustRunAfter(it) }
 }
 
-val clippyCheckTasks = enabledPlatforms.flatMap { target ->
-    crateNamesForOS(target.os).map { targetCrateName ->
-        tasks.register<ClippyTask>("clippyCheck-$targetCrateName") {
-            checkOnly = true
-            workingDir = nativeDir.asFile
-            targetPlatform = target
-            crateName = targetCrateName
-        }
+val clippyCheckTasks = allCrates.map { targetCrateName ->
+    tasks.register<ClippyTask>("clippyCheck-$targetCrateName") {
+        checkOnly = true
+        workingDir = nativeDir.asFile
+        crateName = targetCrateName
     }
 }
 
-val clippyFixTasks = enabledPlatforms.flatMap { target ->
-    crateNamesForOS(target.os).map { targetCrateName ->
-        tasks.register<ClippyTask>("clippyFix-$targetCrateName") {
-            workingDir = nativeDir.asFile
-            targetPlatform = target
-            crateName = targetCrateName
-        }
+val clippyFixTasks = allCrates.map { targetCrateName ->
+    tasks.register<ClippyTask>("clippyFix-$targetCrateName") {
+        workingDir = nativeDir.asFile
+        crateName = targetCrateName
     }
 }
 
@@ -370,7 +365,7 @@ tasks.test {
         events("skipped")
     }
 
-    // We run every test class in separate JVM
+    // We run every test class in a separate JVM
     forkEvery = 1
     maxParallelForks = 1
 }
