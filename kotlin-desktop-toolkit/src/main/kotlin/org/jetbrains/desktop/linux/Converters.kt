@@ -650,6 +650,9 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 files = filesString?.trimEnd()?.split("\r\n") ?: emptyList(),
             )
         }
+        desktop_linux_h.NativeEvent_KeyboardLayoutChanged() -> {
+            Event.KeyboardLayoutChanged
+        }
         desktop_linux_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
             Event.KeyDown(

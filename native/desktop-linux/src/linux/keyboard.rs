@@ -14,7 +14,7 @@ use xkbcommon::xkb;
 use super::events::{KeyUpEvent, ModifiersChangedEvent};
 use crate::linux::{
     application_state::ApplicationState,
-    events::{KeyCode, KeyDownEvent, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent},
+    events::{Event, KeyCode, KeyDownEvent, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent},
     virtual_keys::VirtualKey,
 };
 
@@ -89,8 +89,8 @@ impl KeyboardHandler for ApplicationState {
     ) {
         debug!("KeyboardHandler::update_modifiers: layout={layout}, modifiers={modifiers:?}");
         if self.xkb_current_layout != layout {
-            // TODO: add layout changed event
             self.xkb_current_layout = layout;
+            self.send_event(Event::KeyboardLayoutChanged);
         }
 
         self.send_event(ModifiersChangedEvent::new(modifiers));
@@ -109,8 +109,8 @@ impl KeyboardHandler for ApplicationState {
             xkb::Keymap::new_from_string(&context, keymap_str, xkb::KEYMAP_FORMAT_TEXT_V1, xkb::KEYMAP_COMPILE_NO_FLAGS).unwrap();
 
         self.keymap_keys.clear();
-        // TODO: add layout changed event
         self.xkb_current_layout = 0;
+        self.send_event(Event::KeyboardLayoutChanged);
 
         // let mut level_modifier_mapping = HashMap::new();
         // level_modifier_mapping.insert(xkb_keymap.mod_get_index(xkb::MOD_NAME_SHIFT), KeyModifier::Shift);

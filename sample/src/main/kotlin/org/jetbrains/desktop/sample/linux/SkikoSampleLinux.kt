@@ -1433,6 +1433,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
             }
             Event.ApplicationWantsToTerminate -> EventHandlerResult.Continue
             Event.ApplicationWillTerminate -> EventHandlerResult.Continue
+            Event.KeyboardLayoutChanged -> EventHandlerResult.Continue
             is Event.DisplayConfigurationChange -> EventHandlerResult.Continue
             is Event.XdgDesktopSettingChange -> {
                 settingChanged(event.setting)

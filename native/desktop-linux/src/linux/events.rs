@@ -658,6 +658,8 @@ pub enum Event<'a> {
     DataTransferCancelled(DataTransferCancelledEvent),
     FileChooserResponse(FileChooserResponse<'a>),
 
+    KeyboardLayoutChanged,
+
     /// Modifier keys (e.g Ctrl, Shift, etc) are never reported. Use `ModifiersChanged` for them.
     KeyDown(KeyDownEvent<'a>),
 

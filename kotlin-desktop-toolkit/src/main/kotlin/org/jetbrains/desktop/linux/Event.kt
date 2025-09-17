@@ -73,6 +73,8 @@ public sealed class Event {
 
     public data object ApplicationWillTerminate : Event()
 
+    public data object KeyboardLayoutChanged : Event()
+
     public data class XdgDesktopSettingChange(val setting: XdgDesktopSetting) : Event()
 
     public data class DataTransferAvailable(val mimeTypes: List<String>) : Event()
