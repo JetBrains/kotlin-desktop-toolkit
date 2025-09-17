@@ -13,9 +13,9 @@ use desktop_common::{
 use desktop_linux::linux::{
     application_api::{
         AppPtr, ApplicationCallbacks, DataSource, DragAction, DragAndDropQueryData, application_clipboard_put,
-        application_get_egl_proc_func, application_init, application_run_event_loop, application_set_cursor_theme, application_shutdown,
-        application_start_drag_and_drop, application_stop_event_loop, application_text_input_disable, application_text_input_enable,
-        application_text_input_update,
+        application_get_egl_proc_func, application_init, application_is_event_loop_thread, application_run_event_loop,
+        application_set_cursor_theme, application_shutdown, application_start_drag_and_drop, application_stop_event_loop,
+        application_text_input_disable, application_text_input_enable, application_text_input_update,
     },
     events::{Event, KeyModifiers, SoftwareDrawData, WindowDrawEvent, WindowId},
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
@@ -286,6 +286,12 @@ fn update_text_input_context(app_ptr: AppPtr<'_>, text: &str, change_caused_by_i
 #[allow(clippy::too_many_lines)]
 extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
     log_event(event, window_id);
+    STATE.with(|c| {
+        let state = c.borrow();
+        let state = state.as_ref().unwrap();
+        let is_event_loop_thread = application_is_event_loop_thread(state.app_ptr.clone());
+        assert!(is_event_loop_thread);
+    });
     match event {
         Event::WindowDraw(data) => {
             draw(data, window_id);
