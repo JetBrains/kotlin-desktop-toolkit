@@ -11,23 +11,20 @@ pub(crate) struct Titlebar {
 }
 
 enum TitlebarState {
-    Default,
+    Regular,
     Custom(CustomTitlebarState),
 }
 
 impl Titlebar {
     pub(crate) fn new(ns_window: &NSWindow, title_bar_mode: &TitlebarConfiguration) -> Self {
         let state = match title_bar_mode {
-            TitlebarConfiguration::Regular => TitlebarState::Default,
+            TitlebarConfiguration::Regular => TitlebarState::Regular,
             TitlebarConfiguration::Custom { title_bar_height } => {
                 let mut state = CustomTitlebarState {
                     height: *title_bar_height,
                     constraints: None,
                 };
-                if !ns_window.styleMask().contains(NSWindowStyleMask::FullScreen) {
-                    set_default_titlebar_enabled(ns_window, false);
-                    state.activate_constraints(ns_window).unwrap();
-                }
+                state.init(ns_window);
                 TitlebarState::Custom(state)
             }
         };
@@ -37,14 +34,32 @@ impl Titlebar {
         }
     }
 
-    // pub(crate) fn set_mode(&mut self, titlebar_mode: &TitlebarConfiguration) {
-    //     match (titlebar_mode, &self.state) {
-    //         (TitlebarConfiguration::Regular, TitlebarState::Default) => {}
-    //         (TitlebarConfiguration::Regular, TitlebarState::Custom(_)) => {}
-    //         (TitlebarConfiguration::Custom { .. }, TitlebarState::Default) => {}
-    //         (TitlebarConfiguration::Custom { .. }, TitlebarState::Custom(_)) => {}
-    //     }
-    // }
+    pub(crate) fn set_mode(&mut self, titlebar_mode: &TitlebarConfiguration) {
+        match (&mut self.state, titlebar_mode) {
+            (TitlebarState::Regular, TitlebarConfiguration::Regular) => {
+                // do nothing
+            }
+            (TitlebarState::Custom(state), TitlebarConfiguration::Regular) => {
+                state.deinit(&self.ns_window);
+                self.state = TitlebarState::Regular;
+            }
+            (TitlebarState::Regular, TitlebarConfiguration::Custom { title_bar_height }) => {
+                let mut state = CustomTitlebarState {
+                    height: *title_bar_height,
+                    constraints: None,
+                };
+                state.init(&self.ns_window);
+                self.state = TitlebarState::Custom(state);
+            }
+            (TitlebarState::Custom(state), TitlebarConfiguration::Custom { title_bar_height }) => {
+                if state.height != *title_bar_height {
+                    state.deactivate_constraints(&self.ns_window).unwrap();
+                    state.height = *title_bar_height;
+                    state.activate_constraints(&self.ns_window).unwrap();
+                }
+            }
+        }
+    }
 
     pub(crate) fn before_enter_fullscreen(&mut self) {
         if let TitlebarState::Custom(ref mut state) = self.state {
@@ -77,6 +92,26 @@ struct CustomTitlebarState {
 }
 
 impl CustomTitlebarState {
+    fn init(&mut self, ns_window: &NSWindow) {
+        let mut style_mask = ns_window.styleMask();
+        style_mask |= NSWindowStyleMask::FullSizeContentView;
+        ns_window.setStyleMask(style_mask);
+        if !style_mask.contains(NSWindowStyleMask::FullScreen) {
+            set_default_titlebar_enabled(ns_window, false);
+            self.activate_constraints(ns_window).unwrap();
+        }
+    }
+
+    fn deinit(&mut self, ns_window: &NSWindow) {
+        let mut style_mask = ns_window.styleMask();
+        style_mask &= !NSWindowStyleMask::FullSizeContentView;
+        ns_window.setStyleMask(style_mask);
+        if !style_mask.contains(NSWindowStyleMask::FullScreen) {
+            self.deactivate_constraints(ns_window).unwrap();
+            set_default_titlebar_enabled(ns_window, true);
+        }
+    }
+
     fn activate_constraints(&mut self, ns_window: &NSWindow) -> anyhow::Result<()> {
         ensure!(self.constraints.is_none());
 

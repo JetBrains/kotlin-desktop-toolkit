@@ -29,7 +29,7 @@ use crate::{
             handle_window_screen_change,
         },
         string::copy_to_ns_string,
-        text_input_client::NOT_FOUND_NS_RANGE, window_api::TitlebarConfiguration,
+        text_input_client::NOT_FOUND_NS_RANGE,
     },
 };
 use desktop_common::logger::catch_panic;
@@ -180,10 +180,6 @@ impl Window {
             style |= NSWindowStyleMask::Resizable;
         }
 
-        if let TitlebarConfiguration::Custom { .. } = &params.titlebar_configuration {
-            style |= NSWindowStyleMask::FullSizeContentView;
-        }
-
         let screen_height = NSScreen::primary(mtm)
             .context("Can't create a window without a screen")?
             .frame()
@@ -306,17 +302,6 @@ impl Window {
         }
         Ok(())
     }
-
-//     pub(crate) fn set_titlebar_mode(&self, mtm: MainThreadMarker, titlebar_mode: TitlebarConfiguration) {
-//         match titlebar_mode {
-//             TitlebarConfiguration::Regular => {
-// //                self.custom_titlebar
-//             },
-//             TitlebarConfiguration::Custom { title_bar_height: titlebar_height } => {
-//
-//             },
-//         }
-//     }
 
     pub(crate) fn attach_layer(&self, layer: &MetalView) {
         let content_view = self.ns_window.contentView().unwrap();

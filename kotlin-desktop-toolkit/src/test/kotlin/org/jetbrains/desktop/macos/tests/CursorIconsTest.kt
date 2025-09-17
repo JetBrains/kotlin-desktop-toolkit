@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
 @EnabledOnOs(OS.MAC)
 class CursorIconsTest : KDTApplicationTestBase() {
     @Test
-    fun interateCursorIconsTest() {
+    fun iterateCursorIconsTest() {
         val window1 = ui {
             Window.create(origin = LogicalPoint(100.0, 200.0), title = "Hello1")
         }

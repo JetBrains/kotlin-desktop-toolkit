@@ -281,6 +281,14 @@ public class Window internal constructor(
         }
     }
 
+    public fun setTitlebarConfiguration(configuration: TitlebarConfiguration) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_macos_h.window_set_titlebar_configuration(pointer, configuration.toNative(arena))
+            }
+        }
+    }
+
     public var overriddenAppearance: Appearance?
         get() {
             return if (ffiDownCall { desktop_macos_h.window_appearance_is_overridden(pointer) }) {

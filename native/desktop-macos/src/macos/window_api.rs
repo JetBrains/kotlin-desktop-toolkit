@@ -64,15 +64,15 @@ pub enum TitlebarConfiguration {
     },
 }
 
-// #[unsafe(no_mangle)]
-// pub extern "C" fn window_set_titlebar_mode(window_ptr: WindowPtr, mode: TitlebarConfiguration) {
-//     ffi_boundary("window_set_titlebar_mode", || {
-//         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-//         let window = unsafe { window_ptr.to_owned::<Window>() };
-// //        window.custom_titlebar
-//         Ok(())
-//     })
-// }
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_titlebar_configuration(window_ptr: WindowPtr, mode: TitlebarConfiguration) {
+    ffi_boundary("window_set_titlebar_mode", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        window.titlebar.borrow_mut().set_mode(&mode);
+        Ok(())
+    })
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
