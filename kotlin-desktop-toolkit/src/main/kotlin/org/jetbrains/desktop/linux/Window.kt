@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.desktop_linux_h
+import org.jetbrains.desktop.macos.FileDialog.CommonDialogParams
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
@@ -166,6 +167,42 @@ public class Window internal constructor(
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_linux_h.window_clipboard_paste(appPtr, windowId, serial, mimeTypesToNative(arena, supportedMimeTypes))
+            }
+        }
+    }
+
+    /**
+     * Will produce [Event.FileChooserResponse] event if there is clipboard content,
+     * with the [Event.FileChooserResponse.requestId] field same as this function's return value.
+     */
+    public fun showOpenFileDialog(commonParams: FileDialog.CommonDialogParams, openParams: FileDialog.OpenDialogParams): RequestId {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                val requestIdVal = desktop_linux_h.window_show_open_file_dialog(
+                    appPtr,
+                    windowId,
+                    commonParams.toNative(arena),
+                    openParams.toNative(arena),
+                )
+                RequestId(requestIdVal)
+            }
+        }
+    }
+
+    /**
+     * Will produce [Event.FileChooserResponse] event if there is clipboard content,
+     * with the [Event.FileChooserResponse.requestId] field same as this function's return value.
+     */
+    public fun showSaveFileDialog(commonParams: FileDialog.CommonDialogParams, saveParams: FileDialog.SaveDialogParams): RequestId {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                val requestIdVal = desktop_linux_h.window_show_save_file_dialog(
+                    appPtr,
+                    windowId,
+                    commonParams.toNative(arena),
+                    saveParams.toNative(arena),
+                )
+                RequestId(requestIdVal)
             }
         }
     }

@@ -21,9 +21,6 @@ pub extern "C" fn logger_init(logger_configuration: &LoggerConfiguration) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn logger_output_debug_string(message: BorrowedStrPtr) {
-    let cstr = message
-        .as_optional_cstr()
-        .expect("Invalid debug string")
-        .expect("The debug string pointer is null.");
+    let cstr = message.as_optional_cstr().expect("The debug string pointer is null.");
     unsafe { OutputDebugStringA(PCSTR::from_raw(cstr.as_ptr().cast())) };
 }

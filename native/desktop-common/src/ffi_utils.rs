@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::{Context, bail};
-use log::debug;
+use log::{debug, trace};
 
 #[derive(Debug, Copy)]
 #[repr(transparent)]
@@ -98,6 +98,45 @@ impl RustAllocatedRawPtr<'_> {
     }
 }
 
+impl GenericRawPtr<'_, std::ffi::c_char> {
+    fn as_str(&self) -> anyhow::Result<&str> {
+        self.as_optional_str().transpose().expect("BorrowedStrPtr has null pointer")
+    }
+
+    #[must_use]
+    const fn as_optional_cstr(&self) -> Option<&CStr> {
+        if self.ptr.is_null() {
+            return None;
+        }
+        Some(unsafe { CStr::from_ptr(self.ptr) })
+    }
+
+    fn as_optional_str(&self) -> anyhow::Result<Option<&str>> {
+        self.as_optional_cstr()
+            .map(|cstr| cstr.to_str().with_context(|| format!("Invalid UTF-8 in {cstr:?}")))
+            .transpose()
+    }
+
+    fn fmt(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.as_optional_str() {
+            Ok(None) => write!(f, "null"),
+            Ok(Some(s)) => {
+                f.write_char('"')?;
+                for c in s.chars() {
+                    if c.is_ascii() && !c.is_ascii_control() && !c.is_ascii_whitespace() {
+                        f.write_char(c)?;
+                    } else {
+                        write!(f, "{}", c.escape_debug())?;
+                    }
+                }
+                f.write_char('"')?;
+                Ok(())
+            }
+            Err(e) => write!(f, "{e}"),
+        }
+    }
+}
+
 #[repr(transparent)]
 pub struct BorrowedStrPtr<'a>(GenericRawPtr<'a, std::ffi::c_char>);
 
@@ -106,6 +145,14 @@ impl<'a> BorrowedStrPtr<'a> {
     pub const fn new(s: &'a CStr) -> Self {
         Self(GenericRawPtr {
             ptr: s.as_ptr(),
+            phantom: PhantomData,
+        })
+    }
+
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(GenericRawPtr {
+            ptr: std::ptr::null(),
             phantom: PhantomData,
         })
     }
@@ -128,45 +175,32 @@ impl<'a> BorrowedStrPtr<'a> {
     }
 
     pub fn as_str(&self) -> anyhow::Result<&str> {
-        self.as_optional_str().transpose().expect("BorrowedStrPtr has null pointer")
+        self.0.as_str()
     }
 
-    pub const fn as_optional_cstr(&self) -> anyhow::Result<Option<&CStr>> {
-        if self.0.ptr.is_null() {
-            return Ok(None);
-        }
-        Ok(Some(unsafe { CStr::from_ptr(self.0.ptr) }))
+    #[must_use]
+    pub const fn as_optional_cstr(&self) -> Option<&CStr> {
+        self.0.as_optional_cstr()
     }
 
     pub fn as_optional_str(&self) -> anyhow::Result<Option<&str>> {
-        self.as_optional_cstr()?
-            .map(|cstr| cstr.to_str().with_context(|| format!("Invalid UTF-8 in {cstr:?}")))
-            .transpose()
+        self.0.as_optional_str()
+    }
+}
+
+impl<'a> From<&'a CStr> for BorrowedStrPtr<'a> {
+    fn from(value: &'a CStr) -> Self {
+        Self::new(value)
     }
 }
 
 impl std::fmt::Debug for BorrowedStrPtr<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.as_optional_str() {
-            Ok(None) => write!(f, "null"),
-            Ok(Some(s)) => {
-                f.write_char('"')?;
-                for c in s.chars() {
-                    if c.is_ascii() && !c.is_ascii_control() && !c.is_ascii_whitespace() {
-                        f.write_char(c)?;
-                    } else {
-                        write!(f, "{}", c.escape_unicode())?;
-                    }
-                }
-                f.write_char('"')?;
-                Ok(())
-            }
-            Err(e) => write!(f, "{e}"),
-        }
+        self.0.fmt(f)
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct RustAllocatedStrPtr(GenericRawPtr<'static, std::ffi::c_char>);
 
@@ -207,14 +241,18 @@ impl RustAllocatedStrPtr {
     }
 
     pub fn as_str(&self) -> anyhow::Result<&str> {
-        assert!(!self.0.ptr.is_null());
-        let c_str = unsafe { CStr::from_ptr(self.0.ptr) };
-        c_str.to_str().with_context(|| format!("Invalid unicode in {c_str:?}"))
+        self.0.as_str()
+    }
+}
+
+impl std::fmt::Debug for RustAllocatedStrPtr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
 #[repr(transparent)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AutoDropStrPtr(RustAllocatedStrPtr);
 
 impl AutoDropStrPtr {
@@ -226,7 +264,14 @@ impl AutoDropStrPtr {
 
 impl Drop for AutoDropStrPtr {
     fn drop(&mut self) {
+        trace!("Drop for AutoDropStrPtr");
         self.0.deallocate();
+    }
+}
+
+impl std::fmt::Debug for AutoDropStrPtr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -258,8 +303,33 @@ impl<T> AutoDropArray<T> {
     }
 }
 
+impl AutoDropArray<AutoDropStrPtr> {
+    #[must_use]
+    pub const fn read_at(&self, i: usize) -> BorrowedStrPtr {
+        assert!(i < self.len);
+        let p = self.ptr.wrapping_add(i).cast::<BorrowedStrPtr>();
+        unsafe { p.read() }
+    }
+}
+
+impl std::fmt::Display for AutoDropArray<AutoDropStrPtr> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.ptr.is_null() {
+            write!(f, "AutoDropArray(null)")
+        } else {
+            f.write_str("AutoDropArray[")?;
+            for i in 0..self.len {
+                std::fmt::Debug::fmt(&self.read_at(i), f)?;
+            }
+            f.write_char(']')?;
+            Ok(())
+        }
+    }
+}
+
 impl<T> Drop for AutoDropArray<T> {
     fn drop(&mut self) {
+        trace!("Drop for AutoDropArray");
         if !self.ptr.is_null() {
             let array = unsafe {
                 let s = slice::from_raw_parts_mut(self.ptr.cast_mut(), self.len);

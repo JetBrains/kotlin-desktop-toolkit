@@ -1,7 +1,10 @@
 use core::f64;
 use std::ffi::{CStr, CString};
 
-use desktop_common::ffi_utils::{BorrowedArray, BorrowedStrPtr};
+use desktop_common::{
+    ffi_utils::{BorrowedArray, BorrowedStrPtr},
+    logger::PanicDefault,
+};
 use smithay_client_toolkit::{
     reexports::client::{Proxy, protocol::wl_output::WlOutput},
     seat::{
@@ -35,6 +38,12 @@ pub struct WindowId(pub i64);
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct RequestId(pub u32);
+
+impl PanicDefault for RequestId {
+    fn default() -> Self {
+        Self(0)
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
@@ -520,9 +529,23 @@ impl From<WindowScreenChangeEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct FileChooserResponse<'a> {
+    pub request_id: RequestId,
+    pub newline_separated_files: BorrowedStrPtr<'a>,
+}
+
+impl<'a> From<FileChooserResponse<'a>> for Event<'a> {
+    fn from(value: FileChooserResponse<'a>) -> Self {
+        Self::FileChooserResponse(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub enum Event<'a> {
     DataTransfer(DataTransferContent<'a>),
     DataTransferAvailable(DataTransferAvailable<'a>),
+    FileChooserResponse(FileChooserResponse<'a>),
     KeyDown(KeyDownEvent<'a>),
     KeyUp(KeyUpEvent),
     ModifiersChanged(ModifiersChangedEvent),

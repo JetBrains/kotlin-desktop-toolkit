@@ -3,10 +3,12 @@ package org.jetbrains.desktop.linux
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
+import org.jetbrains.desktop.linux.generated.NativeCommonFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailable
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
 import org.jetbrains.desktop.linux.generated.NativeEvent
+import org.jetbrains.desktop.linux.generated.NativeFileChooserResponse
 import org.jetbrains.desktop.linux.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.linux.generated.NativeKeyModifiers
 import org.jetbrains.desktop.linux.generated.NativeKeyUpEvent
@@ -19,7 +21,9 @@ import org.jetbrains.desktop.linux.generated.NativeMouseEnteredEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseExitedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseUpEvent
+import org.jetbrains.desktop.linux.generated.NativeOpenFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativePhysicalSize
+import org.jetbrains.desktop.linux.generated.NativeSaveFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.linux.generated.NativeSoftwareDrawData
 import org.jetbrains.desktop.linux.generated.NativeTextInputAvailabilityEvent
@@ -434,6 +438,14 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
                 data = DataTransferContent.fromNative(nativeEvent),
             )
         }
+        desktop_linux_h.NativeEvent_FileChooserResponse() -> {
+            val nativeEvent = NativeEvent.file_chooser_response(s)
+            val filesString = fromOptionalNativeString(NativeFileChooserResponse.newline_separated_files(nativeEvent))
+            Event.FileChooserResponse(
+                requestId = RequestId(NativeFileChooserResponse.request_id(nativeEvent)),
+                files = filesString?.trimEnd()?.split("\r\n") ?: emptyList(),
+            )
+        }
         desktop_linux_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
             Event.KeyDown(
@@ -574,4 +586,29 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             error("Unexpected Event tag")
         }
     }
+}
+
+internal fun FileDialog.CommonDialogParams.toNative(arena: Arena): MemorySegment {
+    val result = NativeCommonFileDialogParams.allocate(arena)
+    NativeCommonFileDialogParams.modal(result, modal)
+    NativeCommonFileDialogParams.title(result, title?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+    NativeCommonFileDialogParams.accept_label(result, acceptLabel?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+    NativeCommonFileDialogParams.current_folder(result, currentFolder?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+    return result
+}
+
+internal fun FileDialog.OpenDialogParams.toNative(arena: Arena): MemorySegment {
+    val result = NativeOpenFileDialogParams.allocate(arena)
+    NativeOpenFileDialogParams.select_directories(result, selectDirectories)
+    NativeOpenFileDialogParams.allows_multiple_selection(result, allowsMultipleSelections)
+    return result
+}
+
+internal fun FileDialog.SaveDialogParams.toNative(arena: Arena): MemorySegment {
+    val result = NativeSaveFileDialogParams.allocate(arena)
+    NativeSaveFileDialogParams.name_field_string_value(
+        result,
+        nameFieldStringValue?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+    )
+    return result
 }

@@ -18,12 +18,15 @@ use desktop_linux::linux::{
         application_text_input_disable, application_text_input_enable, application_text_input_update,
     },
     events::{Event, KeyModifiers, SoftwareDrawData, WindowDrawEvent, WindowId},
+    file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
-    window_api::{WindowParams, window_clipboard_paste, window_close, window_create},
+    window_api::{
+        WindowParams, window_clipboard_paste, window_close, window_create, window_show_open_file_dialog, window_show_save_file_dialog,
+    },
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
-use log::{debug, info};
+use log::{debug, error, info};
 
 use crate::gl_sys::{
     GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
@@ -320,6 +323,8 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
         Event::KeyDown(data) => STATE.with(|c| {
             const KEYCODE_BACKSPACE: u32 = 14;
             const KEYCODE_C: u32 = 46;
+            const KEYCODE_O: u32 = 24;
+            const KEYCODE_S: u32 = 31;
             const KEYCODE_V: u32 = 47;
 
             let mut state = c.borrow_mut();
@@ -337,6 +342,31 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                         window_clipboard_paste(state.app_ptr.clone(), window_id, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
                     } else if data.code.0 == KEYCODE_C && window_state.key_modifiers.ctrl {
                         application_clipboard_put(state.app_ptr.clone(), BorrowedStrPtr::new(ALL_MIMES));
+                    } else if data.code.0 == KEYCODE_O && window_state.key_modifiers.ctrl {
+                        let common_params = CommonFileDialogParams {
+                            modal: false,
+                            title: c"Open File for Linux Native Sample App test".into(),
+                            accept_label: c"Let's go!".into(),
+                            current_folder: c"/etc".into(),
+                        };
+                        let open_params = OpenFileDialogParams {
+                            select_directories: false,
+                            allows_multiple_selection: true,
+                        };
+                        let request_id = window_show_open_file_dialog(state.app_ptr.clone(), window_id, &common_params, &open_params);
+                        debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
+                    } else if data.code.0 == KEYCODE_S && window_state.key_modifiers.ctrl {
+                        let common_params = CommonFileDialogParams {
+                            modal: false,
+                            title: c"Save File for Linux Native Sample App test".into(),
+                            accept_label: c"Let's go!".into(),
+                            current_folder: c"/tmp".into(),
+                        };
+                        let save_params = SaveFileDialogParams {
+                            name_field_string_value: c"file from Linux Native Sample App.txt".into(),
+                        };
+                        let request_id = window_show_save_file_dialog(state.app_ptr.clone(), window_id, &common_params, &save_params);
+                        debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
                     } else if let Some(event_chars) = data.characters.as_optional_str().unwrap() {
                         window_state.text += event_chars;
                         if window_state.text_input_available {
@@ -348,6 +378,13 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
 
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
         }),
+        Event::FileChooserResponse(file_chooser_response) => match file_chooser_response.newline_separated_files.as_optional_str() {
+            Ok(s) => {
+                let files = s.map(|s| s.trim_ascii_end().split("\r\n").collect::<Vec<_>>());
+                info!("Selected files: {files:?}");
+            }
+            Err(e) => error!("{e}"),
+        },
         Event::DataTransfer(data) => {
             if data
                 .mime_types
@@ -513,7 +550,7 @@ fn leaked_string_data(s: &str) -> &'static [u8] {
 }
 
 extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedStrPtr) -> BorrowedArray<'static, u8> {
-    let mime_type_cstr = mime_type.as_optional_cstr().unwrap().unwrap();
+    let mime_type_cstr = mime_type.as_optional_cstr().unwrap();
     let v = if mime_type_cstr == URI_LIST_MIME_TYPE {
         match source {
             DataSource::Clipboard => leaked_string_data("file:///etc/hosts"),
