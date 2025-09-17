@@ -65,7 +65,6 @@ public class Application : AutoCloseable {
         }
     }, Arena.global())
 
-    public lateinit var screens: AllScreens
     private val mimeTypeReturnCache: HashMap<List<String>, MemorySegment> = hashMapOf()
     private var appPtr: MemorySegment? = null
 
