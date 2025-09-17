@@ -144,15 +144,13 @@ public value class KeyCode internal constructor(public val value: Int) {
     }
 }
 
-public data class KeyModifiers(
-    val capsLock: Boolean,
-    val shift: Boolean,
-    val control: Boolean,
-    val alt: Boolean,
-    val logo: Boolean,
-    val numLock: Boolean,
-) {
-    internal companion object
+public enum class KeyModifiers {
+    Control,
+    Alt,
+    Shift,
+    CapsLock,
+    Logo,
+    NumLock,
 }
 
 public typealias RawKeysym = Int

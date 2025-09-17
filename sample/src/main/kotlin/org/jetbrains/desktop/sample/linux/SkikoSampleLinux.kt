@@ -195,14 +195,7 @@ class EditorState {
     private var cursorRectangle = LogicalRect(LogicalPoint(0f, 0f), LogicalSize(0f, 0f))
     private var selectionStartOffset: Int? = null
     private var selectionEndOffset: Int? = null
-    var modifiers = KeyModifiers(
-        capsLock = false,
-        shift = false,
-        control = false,
-        alt = false,
-        logo = false,
-        numLock = false,
-    )
+    private var modifiers = setOf<KeyModifiers>()
     private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
     private var statsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
     var currentClipboard: DataTransferContentType? = null
@@ -319,6 +312,11 @@ class EditorState {
         }
     }
 
+    fun shortcutModifiers(): Set<KeyModifiers> = modifiers.toMutableSet().also {
+        it.remove(KeyModifiers.CapsLock)
+        it.remove(KeyModifiers.NumLock)
+    }
+
     private fun getSelectionRange(): Pair<Int, Int>? {
         val selectionStartOffset = selectionStartOffset
         val selectionEndOffset = selectionEndOffset
@@ -345,6 +343,12 @@ class EditorState {
         return false
     }
 
+    fun typeIn(characters: String) {
+        deleteSelection()
+        text.insert(cursorOffset, characters)
+        cursorOffset += characters.length
+    }
+
     fun handleEvent(event: Event, app: Application, window: Window): EventHandlerResult {
         return when (event) {
             is Event.ModifiersChanged -> {
@@ -352,19 +356,21 @@ class EditorState {
                 EventHandlerResult.Stop
             }
             is Event.KeyDown -> {
-                if (modifiers.logo) {
-                    EventHandlerResult.Continue
-                } else if (modifiers.control && modifiers.shift) {
-                    when (event.keyCode.value) {
+                val shortcutModifiers = shortcutModifiers()
+                when (shortcutModifiers) {
+                    setOf(KeyModifiers.Logo) -> EventHandlerResult.Continue
+                    setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
                         KeyCode.V -> {
                             window.clipboardPaste(0, listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                             EventHandlerResult.Stop
                         }
+
                         KeyCode.C -> {
                             app.clipboardPut(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                             currentClipboard = DataTransferContentType.UriList(EXAMPLE_FILES)
                             EventHandlerResult.Stop
                         }
+
                         KeyCode.O -> {
                             window.showOpenFileDialog(
                                 commonParams = FileDialog.CommonDialogParams(
@@ -380,14 +386,16 @@ class EditorState {
                             )
                             EventHandlerResult.Stop
                         }
+
                         else -> EventHandlerResult.Continue
                     }
-                } else if (modifiers.control) {
-                    when (event.keyCode.value) {
+
+                    setOf(KeyModifiers.Control) -> when (event.keyCode.value) {
                         KeyCode.V -> {
                             window.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
                             EventHandlerResult.Stop
                         }
+
                         KeyCode.C -> {
                             getCurrentSelection()?.let { selection ->
                                 app.clipboardPut(listOf(TEXT_MIME_TYPE))
@@ -395,6 +403,7 @@ class EditorState {
                                 EventHandlerResult.Stop
                             } ?: EventHandlerResult.Continue
                         }
+
                         KeyCode.O -> {
                             window.showOpenFileDialog(
                                 commonParams = FileDialog.CommonDialogParams(
@@ -410,54 +419,48 @@ class EditorState {
                             )
                             EventHandlerResult.Stop
                         }
+
                         else -> EventHandlerResult.Continue
                     }
-                } else if (modifiers.control) {
-                    when (event.keyCode.value) {
-                        KeyCode.V -> {
-                            window.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
-                            EventHandlerResult.Stop
+                    setOf(KeyModifiers.Shift) -> when (event.keyCode.value) {
+                        KeyCode.Up -> {
+                            if (selectionStartOffset == null) {
+                                selectionStartOffset = cursorOffset
+                            }
+                            selectionEndOffset = 0
+                            cursorOffset = 0
                         }
-                        KeyCode.C -> {
-                            getCurrentSelection()?.let { selection ->
-                                app.clipboardPut(listOf(TEXT_MIME_TYPE))
-                                currentClipboard = DataTransferContentType.Text(selection)
-                                EventHandlerResult.Stop
-                            } ?: EventHandlerResult.Continue
+
+                        KeyCode.Down -> {
+                            if (selectionStartOffset == null) {
+                                selectionStartOffset = cursorOffset
+                            }
+                            val end = text.length
+                            selectionEndOffset = end
+                            cursorOffset = end
                         }
-                        KeyCode.O -> {
-                            window.showOpenFileDialog(
-                                commonParams = FileDialog.CommonDialogParams(
-                                    modal = true,
-                                    title = "Open Files",
-                                    acceptLabel = null,
-                                    currentFolder = null,
-                                ),
-                                openParams = FileDialog.OpenDialogParams(
-                                    allowsMultipleSelections = true,
-                                    selectDirectories = false,
-                                ),
-                            )
-                            EventHandlerResult.Stop
+
+                        KeyCode.Left -> {
+                            if (selectionStartOffset == null) {
+                                selectionStartOffset = cursorOffset
+                            }
+                            cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
+                            selectionEndOffset = cursorOffset
                         }
-                        KeyCode.S -> {
-                            window.showSaveFileDialog(
-                                commonParams = FileDialog.CommonDialogParams(
-                                    modal = true,
-                                    title = "Save File",
-                                    acceptLabel = null,
-                                    currentFolder = null,
-                                ),
-                                saveParams = FileDialog.SaveDialogParams(
-                                    nameFieldStringValue = null,
-                                ),
-                            )
-                            EventHandlerResult.Stop
+
+                        KeyCode.Right -> {
+                            if (selectionStartOffset == null) {
+                                selectionStartOffset = cursorOffset
+                            }
+                            cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
+                            selectionEndOffset = cursorOffset
                         }
-                        else -> EventHandlerResult.Continue
+
+                        else -> {
+                            event.characters?.also(::typeIn)
+                        }
                     }
-                } else {
-                    when (event.keyCode.value) {
+                    else -> when (event.keyCode.value) {
                         KeyCode.BackSpace -> {
                             if (!deleteSelection() && cursorOffset > 0) {
                                 val newCursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
@@ -467,72 +470,38 @@ class EditorState {
                         }
 
                         KeyCode.Up -> {
-                            if (modifiers.shift) {
-                                if (selectionStartOffset == null) {
-                                    selectionStartOffset = cursorOffset
-                                }
-                                selectionEndOffset = 0
-                                cursorOffset = 0
-                            } else {
-                                cursorOffset = 0
-                            }
+                            cursorOffset = 0
                         }
 
                         KeyCode.Down -> {
-                            if (modifiers.shift) {
-                                if (selectionStartOffset == null) {
-                                    selectionStartOffset = cursorOffset
-                                }
-                                val end = text.length
-                                selectionEndOffset = end
-                                cursorOffset = end
-                            } else {
-                                cursorOffset = text.length
-                            }
+                            cursorOffset = text.length
                         }
 
                         KeyCode.Left -> {
-                            if (modifiers.shift) {
-                                if (selectionStartOffset == null) {
-                                    selectionStartOffset = cursorOffset
-                                }
-                                cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
-                                selectionEndOffset = cursorOffset
-                            } else {
-                                cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
-                            }
+                            cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
                         }
 
                         KeyCode.Right -> {
-                            if (modifiers.shift) {
-                                if (selectionStartOffset == null) {
-                                    selectionStartOffset = cursorOffset
-                                }
-                                cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
-                                selectionEndOffset = cursorOffset
-                            } else {
-                                cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
-                            }
+                            cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
                         }
 
                         else -> {
-                            event.characters?.let { characters ->
-                                deleteSelection()
-                                text.insert(cursorOffset, characters)
-                                cursorOffset += characters.length
-                            }
+                            event.characters?.also(::typeIn)
                         }
                     }
-
-                    if (!modifiers.shift && !modifiers.control && !modifiers.logo && !event.keyCode.isModifierKey()) {
-                        selectionStartOffset = null
-                        selectionEndOffset = null
-                    }
-                    if (textInputEnabled) {
-                        app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
-                    }
-                    EventHandlerResult.Stop
                 }
+
+                if (shortcutModifiers.all { it != KeyModifiers.Shift && it != KeyModifiers.Control && it != KeyModifiers.Logo } &&
+                    !event.keyCode.isModifierKey()
+                ) {
+                    selectionStartOffset = null
+                    selectionEndOffset = null
+                }
+
+                if (textInputEnabled) {
+                    app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+                }
+                EventHandlerResult.Stop
             }
             is Event.DataTransfer -> {
                 val data = event.data
@@ -948,16 +917,20 @@ class ContentArea(
                 EventHandlerResult.Continue
             }
             is Event.MouseDown -> {
-                if (editorState.modifiers.shift) {
-                    window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Move)
-                    currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
-                } else if (editorState.modifiers.control) {
-                    window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Copy)
-                    currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
-                } else {
-                    currentDragContent = editorState.getCurrentSelection()?.let {
-                        window.startDrag(listOf(TEXT_MIME_TYPE), DragAction.Copy)
-                        DataTransferContentType.Text(it)
+                when (editorState.shortcutModifiers()) {
+                    setOf(KeyModifiers.Shift) -> {
+                        window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Move)
+                        currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
+                    }
+                    setOf(KeyModifiers.Control) -> {
+                        window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Copy)
+                        currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
+                    }
+                    else -> {
+                        currentDragContent = editorState.getCurrentSelection()?.let {
+                            window.startDrag(listOf(TEXT_MIME_TYPE), DragAction.Copy)
+                            DataTransferContentType.Text(it)
+                        }
                     }
                 }
                 EventHandlerResult.Stop

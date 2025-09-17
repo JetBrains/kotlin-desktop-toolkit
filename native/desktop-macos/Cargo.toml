@@ -19,7 +19,6 @@ anyhow.workspace = true
 log.workspace = true
 log4rs.workspace = true
 desktop-common = { path = "../desktop-common" }
-bitflags = "2.6.0"
 
 [build-dependencies]
 build-target = "0.8.0"
