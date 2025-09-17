@@ -287,15 +287,15 @@ impl OutputHandler for ApplicationState {
     }
 
     fn new_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
-        (self.callbacks.on_display_configuration_change)();
+        self.send_event(Event::DisplayConfigurationChange);
     }
 
     fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
-        (self.callbacks.on_display_configuration_change)();
+        self.send_event(Event::DisplayConfigurationChange);
     }
 
     fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
-        (self.callbacks.on_display_configuration_change)();
+        self.send_event(Event::DisplayConfigurationChange);
     }
 }
 

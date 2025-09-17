@@ -4,7 +4,8 @@ import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
 import org.jetbrains.desktop.linux.generated.NativeCommonFileDialogParams
-import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailable
+import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailableEvent
+import org.jetbrains.desktop.linux.generated.NativeDataTransferCancelledEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
 import org.jetbrains.desktop.linux.generated.NativeEvent
@@ -441,12 +442,37 @@ private fun readNativeU32Array(nativeU32Array: MemorySegment): List<Int> {
     return values
 }
 
-internal fun Event.Companion.fromNative(s: MemorySegment): Event {
+internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Event {
     return when (NativeEvent.tag(s)) {
+        desktop_linux_h.NativeEvent_ApplicationStarted() -> {
+            Event.ApplicationStarted
+        }
+        desktop_linux_h.NativeEvent_ApplicationWantsToTerminate() -> {
+            Event.ApplicationWantsToTerminate
+        }
+        desktop_linux_h.NativeEvent_ApplicationWillTerminate() -> {
+            Event.ApplicationWillTerminate
+        }
+        desktop_linux_h.NativeEvent_DisplayConfigurationChange() -> {
+            Event.DisplayConfigurationChange(screens = app.allScreens())
+        }
+        desktop_linux_h.NativeEvent_XdgDesktopSettingChange() -> {
+            val nativeEvent = NativeEvent.xdg_desktop_setting_change(s)
+            Event.XdgDesktopSettingChange(
+                setting = XdgDesktopSetting.fromNative(nativeEvent),
+            )
+        }
+
         desktop_linux_h.NativeEvent_DataTransferAvailable() -> {
             val nativeEvent = NativeEvent.data_transfer_available(s)
-            val mimeTypesString = NativeDataTransferAvailable.mime_types(nativeEvent).getUtf8String(0)
+            val mimeTypesString = NativeDataTransferAvailableEvent.mime_types(nativeEvent).getUtf8String(0)
             Event.DataTransferAvailable(mimeTypes = mimeTypesString.split(","))
+        }
+        desktop_linux_h.NativeEvent_DataTransferCancelled() -> {
+            val nativeEvent = NativeEvent.data_transfer_cancelled(s)
+            Event.DataTransferCancelled(
+                dataSource = DataSource.fromNative(NativeDataTransferCancelledEvent.data_source(nativeEvent)),
+            )
         }
         desktop_linux_h.NativeEvent_DataTransfer() -> {
             val nativeEvent = NativeEvent.data_transfer(s)

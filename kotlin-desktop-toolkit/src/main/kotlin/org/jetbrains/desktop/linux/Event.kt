@@ -67,12 +67,24 @@ public data class RequestId(val id: Int)
 public sealed class Event {
     internal companion object;
 
+    public data object ApplicationStarted : Event()
+
+    public data object ApplicationWantsToTerminate : Event()
+
+    public data object ApplicationWillTerminate : Event()
+
+    public data class XdgDesktopSettingChange(val setting: XdgDesktopSetting) : Event()
+
     public data class DataTransferAvailable(val mimeTypes: List<String>) : Event()
 
     public data class DataTransfer(
         val serial: Int,
         val data: DataTransferContent,
     ) : Event()
+
+    public data class DataTransferCancelled(val dataSource: DataSource) : Event()
+
+    public data class DisplayConfigurationChange(val screens: AllScreens) : Event()
 
     public data class FileChooserResponse(
         val requestId: RequestId,

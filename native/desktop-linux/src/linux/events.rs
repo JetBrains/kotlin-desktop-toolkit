@@ -18,8 +18,10 @@ use smithay_client_toolkit::{
 };
 
 use crate::linux::{
+    application_api::DataSource,
     data_transfer::DataTransferContentInternal,
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
+    xdg_desktop_settings_api::XdgDesktopSetting,
 };
 
 // return true if event was handled
@@ -157,22 +159,34 @@ impl<'a> DataTransferContent<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct DataTransferAvailable<'a> {
+pub struct DataTransferAvailableEvent<'a> {
     pub mime_types: BorrowedStrPtr<'a>,
 }
 
-impl<'a> From<DataTransferAvailable<'a>> for Event<'a> {
-    fn from(value: DataTransferAvailable<'a>) -> Self {
+impl<'a> From<DataTransferAvailableEvent<'a>> for Event<'a> {
+    fn from(value: DataTransferAvailableEvent<'a>) -> Self {
         Self::DataTransferAvailable(value)
     }
 }
 
-impl<'a> DataTransferAvailable<'a> {
+impl<'a> DataTransferAvailableEvent<'a> {
     #[must_use]
     pub const fn new(mime_types: &'a CStr) -> Self {
         Self {
             mime_types: BorrowedStrPtr::new(mime_types),
         }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct DataTransferCancelledEvent {
+    pub data_source: DataSource,
+}
+
+impl From<DataTransferCancelledEvent> for Event<'_> {
+    fn from(value: DataTransferCancelledEvent) -> Self {
+        Self::DataTransferCancelled(value)
     }
 }
 
@@ -630,8 +644,15 @@ impl<'a> From<FileChooserResponse<'a>> for Event<'a> {
 #[repr(C)]
 #[derive(Debug)]
 pub enum Event<'a> {
+    ApplicationStarted,
+    // Return `true` from the event handler if the application should _not_ terminate.
+    ApplicationWantsToTerminate,
+    ApplicationWillTerminate,
+    DisplayConfigurationChange,
+    XdgDesktopSettingChange(XdgDesktopSetting<'a>),
     DataTransfer(DataTransferContent<'a>),
-    DataTransferAvailable(DataTransferAvailable<'a>),
+    DataTransferAvailable(DataTransferAvailableEvent<'a>),
+    DataTransferCancelled(DataTransferCancelledEvent),
     FileChooserResponse(FileChooserResponse<'a>),
 
     /// Modifier keys (e.g Ctrl, Shift, etc) are never reported. Use `ModifiersChanged` for them.

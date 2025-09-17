@@ -34,19 +34,6 @@ use crate::gl_sys::{
     GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
 };
 
-extern "C" fn on_should_terminate() -> bool {
-    println!("on_should_terminate");
-    true
-}
-
-extern "C" fn on_will_terminate() {
-    println!("on_will_terminate");
-}
-
-extern "C" fn on_display_configuration_change() {
-    println!("on_display_configuration_change");
-}
-
 fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
 }
@@ -284,7 +271,7 @@ const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBit
     KeyModifierBitflag(all_modifiers.0 & !(KeyModifier::CapsLock as u8) & !(KeyModifier::NumLock as u8))
 }
 
-fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) {
+fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> bool {
     const KEYCODE_BACKSPACE: u32 = 14;
     const KEYCODE_C: u32 = 46;
     const KEYCODE_O: u32 = 24;
@@ -304,12 +291,15 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) {
                 update_text_input_context(app_ptr, &window_state.text, false);
             }
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
+            true
         }
         (KEY_MODIFIER_CTRL, KEYCODE_V) => {
             application_clipboard_paste(app_ptr, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
+            true
         }
         (KEY_MODIFIER_CTRL, KEYCODE_C) => {
             application_clipboard_put(app_ptr, BorrowedStrPtr::new(ALL_MIMES));
+            true
         }
         (KEY_MODIFIER_CTRL, KEYCODE_O) => {
             let common_params = CommonFileDialogParams {
@@ -324,6 +314,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) {
             };
             let request_id = window_show_open_file_dialog(app_ptr, window_id, &common_params, &open_params);
             debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
+            true
         }
 
         (KEY_MODIFIER_CTRL, KEYCODE_S) => {
@@ -338,8 +329,9 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) {
             };
             let request_id = window_show_save_file_dialog(app_ptr, window_id, &common_params, &save_params);
             debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
+            true
         }
-        (_, _) => {}
+        (_, _) => false,
     }
 }
 
@@ -406,6 +398,44 @@ fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut W
     }
 }
 
+fn on_application_started(state: &mut State) {
+    const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
+
+    let window_1_id = WindowId(1);
+    window_create(
+        state.app_ptr.get(),
+        WindowParams {
+            window_id: window_1_id,
+            size: LogicalSize {
+                width: LogicalPixels(200.),
+                height: LogicalPixels(300.),
+            },
+            title: BorrowedStrPtr::new(c"Window 1"),
+            app_id: BorrowedStrPtr::new(APP_ID),
+            prefer_client_side_decoration: false,
+            force_software_rendering: true,
+        },
+    );
+    state.windows.insert(window_1_id, WindowState::default());
+
+    let window_2_id = WindowId(2);
+    window_create(
+        state.app_ptr.get(),
+        WindowParams {
+            window_id: window_2_id,
+            size: LogicalSize {
+                width: LogicalPixels(300.),
+                height: LogicalPixels(200.),
+            },
+            title: BorrowedStrPtr::new(c"Window 2"),
+            app_id: BorrowedStrPtr::new(APP_ID),
+            prefer_client_side_decoration: true,
+            force_software_rendering: false,
+        },
+    );
+    state.windows.insert(window_2_id, WindowState::default());
+}
+
 extern "C" fn event_handler(event: &Event) -> bool {
     match event {
         Event::WindowDraw(_) | Event::MouseMoved(_) => {}
@@ -420,6 +450,14 @@ extern "C" fn event_handler(event: &Event) -> bool {
         assert!(is_event_loop_thread);
 
         match event {
+            Event::ApplicationStarted => {
+                on_application_started(state);
+                true
+            }
+            Event::XdgDesktopSettingChange(data) => {
+                on_xdg_desktop_settings_change(data, state);
+                true
+            }
             Event::WindowDraw(data) => {
                 if data.software_draw_data.canvas.is_null() {
                     let window_state = state.windows.get_mut(&data.window_id).unwrap();
@@ -427,7 +465,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 } else {
                     draw_software(&data.software_draw_data, data.physical_size, data.scale);
                 }
-                return true;
+                true
             }
             Event::WindowCloseRequest(data) => {
                 state.windows.retain(|&k, _v| k != data.window_id);
@@ -435,48 +473,59 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 if state.windows.is_empty() {
                     application_stop_event_loop(app_ptr);
                 }
+                true
             }
             Event::MouseDown(data) => {
                 application_start_drag_and_drop(app_ptr, data.window_id, BorrowedStrPtr::new(ALL_MIMES), DragAction::Copy);
+                true
             }
             Event::ModifiersChanged(data) => {
                 state.key_modifiers = data.modifiers;
+                true
             }
-            Event::KeyDown(event) => {
-                on_keydown(event, app_ptr, state);
-            }
-            Event::FileChooserResponse(file_chooser_response) => match file_chooser_response.newline_separated_files.as_optional_str() {
-                Ok(s) => {
-                    let files = s.map(|s| s.trim_ascii_end().split("\r\n").collect::<Vec<_>>());
-                    info!("Selected files: {files:?}");
+            Event::KeyDown(event) => on_keydown(event, app_ptr, state),
+            Event::FileChooserResponse(file_chooser_response) => {
+                match file_chooser_response.newline_separated_files.as_optional_str() {
+                    Ok(s) => {
+                        let files = s.map(|s| s.trim_ascii_end().split("\r\n").collect::<Vec<_>>());
+                        info!("Selected files: {files:?}");
+                    }
+                    Err(e) => {
+                        error!("{e}");
+                    }
                 }
-                Err(e) => error!("{e}"),
-            },
+                true
+            }
             Event::DataTransfer(content) => {
                 if let Some(key_window_id) = state.key_window_id {
                     let window_state = state.windows.get_mut(&key_window_id).unwrap();
                     on_data_transfer_received(content, window_state);
+                    true
+                } else {
+                    false
                 }
             }
             Event::TextInputAvailability(data) => {
                 let window_state = state.windows.get_mut(&data.window_id).unwrap();
                 on_text_input_availability_changed(data.available, app_ptr, window_state);
+                true
             }
             Event::TextInput(event) => {
                 if let Some(key_window_id) = state.key_window_id {
                     let window_state = state.windows.get_mut(&key_window_id).unwrap();
                     on_text_input(event, app_ptr, key_window_id, window_state);
+                    true
+                } else {
+                    false
                 }
             }
-            _ => {}
+            _ => false,
         }
-        true
     })
 }
 
-extern "C" fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting) {
-    debug!("on_xdg_desktop_settings_change start: {s:?}");
-    STATE.with_borrow_mut(|state| match s {
+fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting, state: &mut State) {
+    match s {
         XdgDesktopSetting::CursorSize(v) => {
             let size = (*v).try_into().unwrap();
             if let Some(name) = &state.settings.cursor_theme_name {
@@ -492,49 +541,7 @@ extern "C" fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting) {
             state.settings.cursor_theme_name = Some(name);
         }
         _ => {}
-    });
-    debug!("on_xdg_desktop_settings_change end");
-}
-
-extern "C" fn on_application_started() {
-    const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
-    debug!("on_application_started start");
-    STATE.with_borrow_mut(|state| {
-        let window_1_id = WindowId(1);
-        window_create(
-            state.app_ptr.get(),
-            WindowParams {
-                window_id: window_1_id,
-                size: LogicalSize {
-                    width: LogicalPixels(200.),
-                    height: LogicalPixels(300.),
-                },
-                title: BorrowedStrPtr::new(c"Window 1"),
-                app_id: BorrowedStrPtr::new(APP_ID),
-                prefer_client_side_decoration: false,
-                force_software_rendering: true,
-            },
-        );
-        state.windows.insert(window_1_id, WindowState::default());
-
-        let window_2_id = WindowId(2);
-        window_create(
-            state.app_ptr.get(),
-            WindowParams {
-                window_id: window_2_id,
-                size: LogicalSize {
-                    width: LogicalPixels(300.),
-                    height: LogicalPixels(200.),
-                },
-                title: BorrowedStrPtr::new(c"Window 2"),
-                app_id: BorrowedStrPtr::new(APP_ID),
-                prefer_client_side_decoration: true,
-                force_software_rendering: false,
-            },
-        );
-        state.windows.insert(window_2_id, WindowState::default());
-    });
-    debug!("on_application_started end");
+    }
 }
 
 extern "C" fn get_drag_and_drop_supported_mime_types(data: &DragAndDropQueryData) -> BorrowedStrPtr<'static> {
@@ -577,10 +584,6 @@ extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedStrP
     a
 }
 
-extern "C" fn on_data_transfer_cancelled(source: DataSource) {
-    debug!("on_data_transfer_cancelled: {source:?}");
-}
-
 pub fn main() {
     logger_init_impl(&LoggerConfiguration {
         file_path: BorrowedStrPtr::new(c"/tmp/a"),
@@ -588,15 +591,9 @@ pub fn main() {
         file_level: LogLevel::Error,
     });
     let app_ptr = application_init(ApplicationCallbacks {
-        on_application_started,
-        on_should_terminate,
-        on_will_terminate,
-        on_display_configuration_change,
-        on_xdg_desktop_settings_change,
         event_handler,
         get_drag_and_drop_supported_mime_types,
         get_data_transfer_data,
-        on_data_transfer_cancelled,
     });
     STATE.with_borrow_mut(|state| {
         state.app_ptr = OptionalAppPtr(Some(app_ptr.clone()));

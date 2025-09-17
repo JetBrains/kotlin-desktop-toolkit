@@ -1428,6 +1428,17 @@ class ApplicationState(private val app: Application) : AutoCloseable {
         }
 
         return when (event) {
+            Event.ApplicationStarted -> {
+                createWindow(useCustomTitlebar = true, forceSoftwareRendering = false)
+                EventHandlerResult.Stop
+            }
+            Event.ApplicationWantsToTerminate -> EventHandlerResult.Continue
+            Event.ApplicationWillTerminate -> EventHandlerResult.Continue
+            is Event.DisplayConfigurationChange -> EventHandlerResult.Continue
+            is Event.XdgDesktopSettingChange -> {
+                settingChanged(event.setting)
+                EventHandlerResult.Stop
+            }
             is Event.WindowCloseRequest -> {
                 val windowId = event.windowId
                 val window = windows[windowId] ?: return EventHandlerResult.Continue
@@ -1453,6 +1464,10 @@ class ApplicationState(private val app: Application) : AutoCloseable {
             }
             is Event.DataTransfer -> {
                 editorState.onDataTransfer(event, app)
+            }
+            is Event.DataTransferCancelled -> {
+                onDataTransferCancelled(event.dataSource)
+                EventHandlerResult.Stop
             }
             is Event.DataTransferAvailable -> EventHandlerResult.Continue
             is Event.FileChooserResponse -> {
@@ -1551,21 +1566,12 @@ fun main(args: Array<String>) {
     ApplicationState(app).use { state ->
         app.runEventLoop(
             ApplicationConfig(
-                onApplicationStarted = {
-                    state.createWindow(useCustomTitlebar = true, forceSoftwareRendering = false)
-                },
-                onXdgDesktopSettingsChange = {
-                    state.settingChanged(it)
-                },
                 eventHandler = { state.handleEvent(it) },
                 getDragAndDropSupportedMimeTypes = { queryData ->
                     state.windows[queryData.windowId]!!.getDragAndDropSupportedMimeTypes(queryData.point)
                 },
                 getDataTransferData = { dataSource, mimeType ->
                     state.getDataTransferData(dataSource, mimeType)
-                },
-                onDataTransferCancelled = { dataSource ->
-                    state.onDataTransferCancelled(dataSource)
                 },
             ),
         )
