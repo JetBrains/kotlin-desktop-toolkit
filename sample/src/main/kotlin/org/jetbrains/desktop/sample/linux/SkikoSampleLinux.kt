@@ -8,6 +8,7 @@ import org.jetbrains.desktop.linux.DesktopTitlebarAction
 import org.jetbrains.desktop.linux.DragAction
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
+import org.jetbrains.desktop.linux.FileDialog
 import org.jetbrains.desktop.linux.FontAntialiasingValue
 import org.jetbrains.desktop.linux.FontHintingValue
 import org.jetbrains.desktop.linux.FontRgbaOrderValue
@@ -72,6 +73,18 @@ val EXAMPLE_FILES: List<String> = listOf(
 sealed class DataTransferContentType {
     data class Text(val text: String) : DataTransferContentType()
     data class UriList(val files: List<String>) : DataTransferContentType()
+}
+
+fun KeyCode.isModifierKey(): Boolean {
+    return when (this.value) {
+        KeyCode.Alt_L, KeyCode.Alt_R,
+        KeyCode.Control_L, KeyCode.Control_R,
+        KeyCode.Shift_L, KeyCode.Shift_R,
+        KeyCode.Super_L, KeyCode.Super_R,
+        -> true
+
+        else -> false
+    }
 }
 
 enum class WindowButtonType {
@@ -352,6 +365,21 @@ class EditorState {
                             currentClipboard = DataTransferContentType.UriList(EXAMPLE_FILES)
                             EventHandlerResult.Stop
                         }
+                        KeyCode.O -> {
+                            window.showOpenFileDialog(
+                                commonParams = FileDialog.CommonDialogParams(
+                                    modal = false,
+                                    title = "Open Directory",
+                                    acceptLabel = null,
+                                    currentFolder = null,
+                                ),
+                                openParams = FileDialog.OpenDialogParams(
+                                    allowsMultipleSelections = false,
+                                    selectDirectories = true,
+                                ),
+                            )
+                            EventHandlerResult.Stop
+                        }
                         else -> EventHandlerResult.Continue
                     }
                 } else if (modifiers.control) {
@@ -366,6 +394,65 @@ class EditorState {
                                 currentClipboard = DataTransferContentType.Text(selection)
                                 EventHandlerResult.Stop
                             } ?: EventHandlerResult.Continue
+                        }
+                        KeyCode.O -> {
+                            window.showOpenFileDialog(
+                                commonParams = FileDialog.CommonDialogParams(
+                                    modal = true,
+                                    title = "Open Files",
+                                    acceptLabel = null,
+                                    currentFolder = null,
+                                ),
+                                openParams = FileDialog.OpenDialogParams(
+                                    allowsMultipleSelections = true,
+                                    selectDirectories = false,
+                                ),
+                            )
+                            EventHandlerResult.Stop
+                        }
+                        else -> EventHandlerResult.Continue
+                    }
+                } else if (modifiers.control) {
+                    when (event.keyCode.value) {
+                        KeyCode.V -> {
+                            window.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
+                            EventHandlerResult.Stop
+                        }
+                        KeyCode.C -> {
+                            getCurrentSelection()?.let { selection ->
+                                app.clipboardPut(listOf(TEXT_MIME_TYPE))
+                                currentClipboard = DataTransferContentType.Text(selection)
+                                EventHandlerResult.Stop
+                            } ?: EventHandlerResult.Continue
+                        }
+                        KeyCode.O -> {
+                            window.showOpenFileDialog(
+                                commonParams = FileDialog.CommonDialogParams(
+                                    modal = true,
+                                    title = "Open Files",
+                                    acceptLabel = null,
+                                    currentFolder = null,
+                                ),
+                                openParams = FileDialog.OpenDialogParams(
+                                    allowsMultipleSelections = true,
+                                    selectDirectories = false,
+                                ),
+                            )
+                            EventHandlerResult.Stop
+                        }
+                        KeyCode.S -> {
+                            window.showSaveFileDialog(
+                                commonParams = FileDialog.CommonDialogParams(
+                                    modal = true,
+                                    title = "Save File",
+                                    acceptLabel = null,
+                                    currentFolder = null,
+                                ),
+                                saveParams = FileDialog.SaveDialogParams(
+                                    nameFieldStringValue = null,
+                                ),
+                            )
+                            EventHandlerResult.Stop
                         }
                         else -> EventHandlerResult.Continue
                     }
@@ -437,7 +524,7 @@ class EditorState {
                         }
                     }
 
-                    if (!modifiers.shift && !modifiers.control && !modifiers.logo && !event.key.isModifierKey()) {
+                    if (!modifiers.shift && !modifiers.control && !modifiers.logo && !event.keyCode.isModifierKey()) {
                         selectionStartOffset = null
                         selectionEndOffset = null
                     }
@@ -464,6 +551,10 @@ class EditorState {
                         app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
                     }
                 }
+                EventHandlerResult.Stop
+            }
+            is Event.FileChooserResponse -> {
+                Logger.info { "File chooser response: $event" }
                 EventHandlerResult.Stop
             }
             is Event.TextInputAvailability -> {

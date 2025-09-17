@@ -10,7 +10,11 @@ use smithay_client_toolkit::{
             channel::{self, Sender},
         },
         calloop_wayland_source::WaylandSource,
-        client::{Connection, Proxy, QueueHandle, globals::registry_queue_init, protocol::wl_data_device_manager::DndAction},
+        client::{
+            Connection, Proxy, QueueHandle,
+            globals::registry_queue_init,
+            protocol::{wl_data_device_manager::DndAction, wl_surface::WlSurface},
+        },
     },
     shell::WaylandSurface,
 };
@@ -190,17 +194,22 @@ impl Application {
         self.state.window_id_to_surface_id.insert(window_id, surface_id);
     }
 
-    #[must_use]
-    pub fn get_window(&self, window_id: WindowId) -> Option<&SimpleWindow> {
-        self.state.get_window_by_id(window_id)
+    pub fn get_window(&self, window_id: WindowId) -> anyhow::Result<&SimpleWindow> {
+        self.state
+            .get_window_by_id(window_id)
+            .with_context(|| format!("Couldn't find window for {window_id:?}"))
     }
 
-    #[must_use]
-    pub fn get_window_mut(&mut self, window_id: WindowId) -> Option<&mut SimpleWindow> {
+    pub fn get_wl_surface(&self, window_id: WindowId) -> anyhow::Result<WlSurface> {
+        Ok(self.get_window(window_id)?.window.wl_surface().clone())
+    }
+
+    pub fn get_window_mut(&mut self, window_id: WindowId) -> anyhow::Result<&mut SimpleWindow> {
         self.state
             .window_id_to_surface_id
             .get(&window_id)
             .and_then(|surface_id| self.state.windows.get_mut(surface_id))
+            .with_context(|| format!("Couldn't find window for {window_id:?}"))
     }
 
     pub fn set_cursor_theme(&mut self, name: &str, size: u32) -> anyhow::Result<()> {

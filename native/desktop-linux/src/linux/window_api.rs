@@ -1,4 +1,5 @@
 use anyhow::Context;
+use ashpd::desktop::file_chooser;
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger::{PanicDefault, ffi_boundary},
@@ -10,7 +11,9 @@ use super::window::SimpleWindow;
 use crate::linux::{
     application::Application,
     application_api::AppPtr,
-    events::{WindowDecorationMode, WindowId},
+    async_event_result::AsyncEventResult,
+    events::{RequestId, WindowDecorationMode, WindowId},
+    file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
     pointer_shapes::PointerShape,
     window_resize_edge::WindowResizeEdge,
@@ -231,4 +234,95 @@ pub extern "C" fn window_unset_decoration_mode(app_ptr: AppPtr, window_id: Windo
         w.window.request_decoration_mode(None);
         Ok(())
     });
+}
+
+impl OpenFileDialogParams {
+    fn apply(&self, request: file_chooser::OpenFileRequest) -> file_chooser::OpenFileRequest {
+        request.directory(self.select_directories).multiple(self.allows_multiple_selection)
+    }
+}
+
+impl SaveFileDialogParams<'_> {
+    fn apply(&self, mut request: file_chooser::SaveFileRequest) -> anyhow::Result<file_chooser::SaveFileRequest> {
+        if let Some(name_field_string_value) = self.name_field_string_value.as_optional_str()? {
+            request = request.current_name(name_field_string_value);
+        }
+        Ok(request)
+    }
+}
+
+impl CommonFileDialogParams<'_> {
+    fn create_open_request(&self, open_params: &OpenFileDialogParams) -> anyhow::Result<file_chooser::OpenFileRequest> {
+        let mut request = file_chooser::SelectedFiles::open_file().modal(self.modal);
+        if let Some(title) = self.title.as_optional_str()? {
+            request = request.title(title);
+        }
+        if let Some(accept_label) = self.accept_label.as_optional_str()? {
+            request = request.accept_label(accept_label);
+        }
+        if let Some(current_folder) = self.current_folder.as_optional_str()? {
+            request = request.current_folder(current_folder)?;
+        }
+        Ok(open_params.apply(request))
+    }
+
+    fn create_save_request(&self, save_params: &SaveFileDialogParams) -> anyhow::Result<file_chooser::SaveFileRequest> {
+        let mut request = file_chooser::SelectedFiles::save_file().modal(self.modal);
+        if let Some(title) = self.title.as_optional_str()? {
+            request = request.title(title);
+        }
+        if let Some(accept_label) = self.accept_label.as_optional_str()? {
+            request = request.accept_label(accept_label);
+        }
+        if let Some(current_folder) = self.current_folder.as_optional_str()? {
+            request = request.current_folder(current_folder)?;
+        }
+        save_params.apply(request)
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_show_open_file_dialog(
+    mut app_ptr: AppPtr,
+    window_id: WindowId,
+    common_params: &CommonFileDialogParams,
+    open_params: &OpenFileDialogParams,
+) -> RequestId {
+    debug!("window_show_open_file_dialog");
+    ffi_boundary("window_show_open_file_dialog", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        let wl_surface = app.get_wl_surface(window_id)?;
+        let request = common_params.create_open_request(open_params)?;
+        Ok(app.run_async(|request_id| async move {
+            let result = SimpleWindow::show_open_file_dialog(&wl_surface, request).await;
+            AsyncEventResult::FileChooserResponse {
+                request_id,
+                window_id,
+                result,
+            }
+        }))
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_show_save_file_dialog(
+    mut app_ptr: AppPtr,
+    window_id: WindowId,
+    common_params: &CommonFileDialogParams,
+    save_params: &SaveFileDialogParams,
+) -> RequestId {
+    debug!("window_show_save_file_dialog");
+    ffi_boundary("window_show_save_file_dialog", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        let wl_surface = app.get_wl_surface(window_id)?;
+        let request = common_params.create_save_request(save_params)?;
+        Ok(app.run_async(|request_id| async move {
+            let result = SimpleWindow::show_save_file_dialog(&wl_surface, request).await;
+            AsyncEventResult::FileChooserResponse {
+                request_id,
+                window_id,
+                result,
+            }
+        }))
+    })
 }

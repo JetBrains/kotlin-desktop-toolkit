@@ -1,9 +1,10 @@
+use ashpd::desktop::file_chooser;
 use log::{debug, error, info, warn};
 use smithay_client_toolkit::{
     reexports::{
         client::{
             Connection, Proxy, QueueHandle,
-            protocol::{wl_output::WlOutput, wl_seat::WlSeat},
+            protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface},
         },
         csd_frame::WindowManagerCapabilities,
         protocols::wp::viewporter::client::wp_viewport::WpViewport,
@@ -325,5 +326,23 @@ impl SimpleWindow {
         let serial = self.current_mouse_down_serial.unwrap();
         let seat = self.current_mouse_down_seat.as_ref().unwrap();
         self.window.show_window_menu(seat, serial, (position.x.round(), position.y.round()));
+    }
+
+    pub async fn show_open_file_dialog(
+        wl_surface: &WlSurface,
+        request: file_chooser::OpenFileRequest,
+    ) -> Result<file_chooser::SelectedFiles, ashpd::Error> {
+        let identifier = ashpd::WindowIdentifier::from_wayland(wl_surface).await;
+        let open_file_request = request.identifier(identifier);
+        open_file_request.send().await.unwrap().response()
+    }
+
+    pub async fn show_save_file_dialog(
+        wl_surface: &WlSurface,
+        request: file_chooser::SaveFileRequest,
+    ) -> Result<file_chooser::SelectedFiles, ashpd::Error> {
+        let identifier = ashpd::WindowIdentifier::from_wayland(wl_surface).await;
+        let open_file_request = request.identifier(identifier);
+        open_file_request.send().await.unwrap().response()
     }
 }

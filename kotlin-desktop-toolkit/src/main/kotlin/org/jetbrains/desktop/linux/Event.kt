@@ -62,6 +62,8 @@ public enum class WindowDecorationMode {
     internal companion object;
 }
 
+public data class RequestId(val id: Int)
+
 public sealed class Event {
     internal companion object;
 
@@ -70,6 +72,13 @@ public sealed class Event {
     public data class DataTransfer(
         val serial: Int,
         val data: DataTransferContent,
+    ) : Event()
+
+    public data class FileChooserResponse(
+        val requestId: RequestId,
+
+        /** URL-encoded file paths */
+        val files: List<String>,
     ) : Event()
 
     public data class KeyDown(
