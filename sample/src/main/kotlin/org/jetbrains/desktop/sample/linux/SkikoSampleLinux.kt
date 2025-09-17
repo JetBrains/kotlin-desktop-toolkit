@@ -784,35 +784,34 @@ class CustomTitlebar(
         windowState: WindowState,
     ): EventHandlerResult {
         val headerRect = LogicalRect(origin, size)
-        return if (event.button == MouseButton.LEFT) {
+        if (event.button == MouseButton.LEFT) {
             leftClickStartLocation = null
             isDragging = false
-            if (headerRect.contains(event.locationInWindow)) {
-                rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second?.let { windowButton ->
-                    if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
-                        handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
-                    ) {
-                        executeTitlebarAction(
-                            xdgDesktopSettings.actionDoubleClickTitlebar,
-                            window,
-                            event.locationInWindow,
-                            windowState,
-                        )
-                        EventHandlerResult.Stop
-                    } else {
-                        executeWindowAction(
-                            windowButton,
-                            event.button,
-                            event.locationInWindow,
-                            window,
-                            xdgDesktopSettings,
-                            windowState,
-                        )
-                    }
-                } ?: EventHandlerResult.Continue
-            } else {
-                EventHandlerResult.Continue
-            }
+        }
+        return if (headerRect.contains(event.locationInWindow)) {
+            rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second?.let { windowButton ->
+                if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
+                    event.button == MouseButton.LEFT &&
+                    handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
+                ) {
+                    executeTitlebarAction(
+                        xdgDesktopSettings.actionDoubleClickTitlebar,
+                        window,
+                        event.locationInWindow,
+                        windowState,
+                    )
+                    EventHandlerResult.Stop
+                } else {
+                    executeWindowAction(
+                        windowButton,
+                        event.button,
+                        event.locationInWindow,
+                        window,
+                        xdgDesktopSettings,
+                        windowState,
+                    )
+                }
+            } ?: EventHandlerResult.Continue
         } else {
             EventHandlerResult.Continue
         }
