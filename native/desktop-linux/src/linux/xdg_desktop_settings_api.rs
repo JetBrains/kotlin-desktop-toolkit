@@ -39,6 +39,15 @@ pub enum FontRgbaOrder {
 
 #[repr(C)]
 #[derive(Debug)]
+pub enum DesktopTitlebarAction {
+    Minimize,
+    ToggleMaximize,
+    Menu,
+    None,
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct Color {
     pub red: f64,
     pub green: f64,
@@ -50,6 +59,10 @@ pub struct Color {
 #[derive(Debug)]
 pub enum XdgDesktopSetting<'a> {
     TitlebarLayout(BorrowedStrPtr<'a>),
+    ActionDoubleClickTitlebar(DesktopTitlebarAction),
+    ActionRightClickTitlebar(DesktopTitlebarAction),
+    ActionMiddleClickTitlebar(DesktopTitlebarAction),
+
     DoubleClickIntervalMs(i32),
     ColorScheme(XdgDesktopColorScheme),
     AccentColor(Color),

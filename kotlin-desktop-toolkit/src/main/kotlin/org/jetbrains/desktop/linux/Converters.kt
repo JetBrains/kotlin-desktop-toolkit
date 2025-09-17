@@ -172,6 +172,16 @@ internal fun Color.Companion.fromNative(s: MemorySegment) = Color(
     alpha = NativeColor.alpha(s),
 )
 
+private fun DesktopTitlebarAction.Companion.fromNative(raw: Int): DesktopTitlebarAction {
+    return when (raw) {
+        desktop_linux_h.NativeDesktopTitlebarAction_Minimize() -> DesktopTitlebarAction.Minimize
+        desktop_linux_h.NativeDesktopTitlebarAction_ToggleMaximize() -> DesktopTitlebarAction.ToggleMaximize
+        desktop_linux_h.NativeDesktopTitlebarAction_Menu() -> DesktopTitlebarAction.Menu
+        desktop_linux_h.NativeDesktopTitlebarAction_None() -> DesktopTitlebarAction.None
+        else -> error("Unexpected desktop titlebar action value: $raw")
+    }
+}
+
 private fun WindowDecorationMode.Companion.fromNative(raw: Int): WindowDecorationMode {
     return when (raw) {
         desktop_linux_h.NativeWindowDecorationMode_Client() -> WindowDecorationMode.Client
@@ -192,6 +202,21 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
     return when (nativeTag) {
         desktop_linux_h.NativeXdgDesktopSetting_TitlebarLayout() -> {
             XdgDesktopSetting.TitlebarLayout(NativeXdgDesktopSetting.titlebar_layout(s).getUtf8String(0))
+        }
+        desktop_linux_h.NativeXdgDesktopSetting_ActionDoubleClickTitlebar() -> {
+            XdgDesktopSetting.ActionDoubleClickTitlebar(
+                DesktopTitlebarAction.fromNative(NativeXdgDesktopSetting.action_double_click_titlebar(s)),
+            )
+        }
+        desktop_linux_h.NativeXdgDesktopSetting_ActionRightClickTitlebar() -> {
+            XdgDesktopSetting.ActionRightClickTitlebar(
+                DesktopTitlebarAction.fromNative(NativeXdgDesktopSetting.action_right_click_titlebar(s)),
+            )
+        }
+        desktop_linux_h.NativeXdgDesktopSetting_ActionMiddleClickTitlebar() -> {
+            XdgDesktopSetting.ActionMiddleClickTitlebar(
+                DesktopTitlebarAction.fromNative(NativeXdgDesktopSetting.action_middle_click_titlebar(s)),
+            )
         }
         desktop_linux_h.NativeXdgDesktopSetting_DoubleClickIntervalMs() -> XdgDesktopSetting.DoubleClickInterval(
             value = NativeXdgDesktopSetting.double_click_interval_ms(s).milliseconds,

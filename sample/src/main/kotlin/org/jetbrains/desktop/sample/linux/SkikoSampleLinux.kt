@@ -4,6 +4,7 @@ import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.ApplicationConfig
 import org.jetbrains.desktop.linux.ColorSchemeValue
 import org.jetbrains.desktop.linux.DataSource
+import org.jetbrains.desktop.linux.DesktopTitlebarAction
 import org.jetbrains.desktop.linux.DragAction
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
@@ -136,6 +137,9 @@ data class XdgDesktopSettings(
     var cursorBlinkTimeout: Duration = 10.toDuration(DurationUnit.SECONDS),
     var overlayScrolling: Boolean = false,
     var audibleBell: Boolean = true,
+    var actionDoubleClickTitlebar: DesktopTitlebarAction = DesktopTitlebarAction.ToggleMaximize,
+    var actionMiddleClickTitlebar: DesktopTitlebarAction = DesktopTitlebarAction.None,
+    var actionRightClickTitlebar: DesktopTitlebarAction = DesktopTitlebarAction.Menu,
 ) {
     private fun colorDoubleToInt(v: Double): Int = (v * 255).roundToInt()
 
@@ -160,6 +164,9 @@ data class XdgDesktopSettings(
             is XdgDesktopSetting.OverlayScrolling -> overlayScrolling = s.value
             is XdgDesktopSetting.CursorSize -> cursorSize = s.value
             is XdgDesktopSetting.CursorTheme -> cursorTheme = s.value
+            is XdgDesktopSetting.ActionDoubleClickTitlebar -> actionDoubleClickTitlebar = s.value
+            is XdgDesktopSetting.ActionMiddleClickTitlebar -> actionMiddleClickTitlebar = s.value
+            is XdgDesktopSetting.ActionRightClickTitlebar -> actionRightClickTitlebar = s.value
         }
     }
 }
@@ -610,11 +617,27 @@ class CustomTitlebar(
         }
     }
 
+    private fun executeTitlebarAction(action: DesktopTitlebarAction, window: Window, locationInWindow: LogicalPoint) {
+        when (action) {
+            DesktopTitlebarAction.ToggleMaximize -> {
+                toggleMaximize(window)
+            }
+            DesktopTitlebarAction.Minimize -> {
+                window.minimize()
+            }
+            DesktopTitlebarAction.None -> {}
+            DesktopTitlebarAction.Menu -> {
+                window.showMenu(locationInWindow)
+            }
+        }
+    }
+
     private fun executeWindowAction(
         windowButton: WindowButtonType,
         mouseButton: MouseButton,
         locationInWindow: LogicalPoint,
         window: Window,
+        xdgDesktopSettings: XdgDesktopSettings,
     ): Boolean {
         return when (windowButton) {
             WindowButtonType.AppMenu, WindowButtonType.Icon -> {
@@ -623,11 +646,16 @@ class CustomTitlebar(
             }
             WindowButtonType.Spacer,
             WindowButtonType.Title,
-            -> if (mouseButton == MouseButton.RIGHT) {
-                window.showMenu(locationInWindow)
-                true
-            } else {
-                false
+            -> when (mouseButton) {
+                MouseButton.RIGHT -> {
+                    executeTitlebarAction(xdgDesktopSettings.actionRightClickTitlebar, window, locationInWindow)
+                    true
+                }
+                MouseButton.MIDDLE -> {
+                    executeTitlebarAction(xdgDesktopSettings.actionMiddleClickTitlebar, window, locationInWindow)
+                    true
+                }
+                else -> false
             }
             WindowButtonType.Minimize -> {
                 window.minimize()
@@ -679,10 +707,10 @@ class CustomTitlebar(
                             if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
                                 handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
                             ) {
-                                toggleMaximize(window)
+                                executeTitlebarAction(xdgDesktopSettings.actionDoubleClickTitlebar, window, event.locationInWindow)
                                 true
                             } else {
-                                executeWindowAction(windowButton, event.button, event.locationInWindow, window)
+                                executeWindowAction(windowButton, event.button, event.locationInWindow, window, xdgDesktopSettings)
                             }
                         } ?: false
                     } else {

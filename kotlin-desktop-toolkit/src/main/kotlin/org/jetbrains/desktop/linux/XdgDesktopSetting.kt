@@ -59,8 +59,24 @@ public enum class FontRgbaOrderValue {
     Vbgr,
 }
 
+public enum class DesktopTitlebarAction {
+    Minimize,
+    ToggleMaximize,
+    Menu,
+    None,
+    ;
+
+    internal companion object
+}
+
 public sealed class XdgDesktopSetting {
     public data class TitlebarLayout(val value: String) : XdgDesktopSetting()
+
+    public data class ActionDoubleClickTitlebar(val value: DesktopTitlebarAction) : XdgDesktopSetting()
+
+    public data class ActionRightClickTitlebar(val value: DesktopTitlebarAction) : XdgDesktopSetting()
+
+    public data class ActionMiddleClickTitlebar(val value: DesktopTitlebarAction) : XdgDesktopSetting()
 
     public data class DoubleClickInterval(val value: Duration) : XdgDesktopSetting()
 
