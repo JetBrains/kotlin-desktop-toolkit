@@ -2,7 +2,6 @@ package org.jetbrains.desktop.sample.linux
 
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.Event
-import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.LogicalSize
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.SoftwareDrawData
@@ -36,22 +35,6 @@ abstract class SkikoWindowLinux(
 
     init {
         window.setMinSize(LogicalSize(320.0f, 240.0f))
-    }
-
-    open fun handleEvent(event: Event, app: Application): EventHandlerResult {
-        return when (event) {
-            is Event.WindowDraw -> {
-                if (performDrawing(event)) {
-                    EventHandlerResult.Stop
-                } else {
-                    EventHandlerResult.Continue
-                }
-            }
-            is Event.WindowScreenChange -> {
-                EventHandlerResult.Continue
-            }
-            else -> EventHandlerResult.Continue
-        }
     }
 
     private fun performSoftwareDrawing(event: Event.WindowDraw, softwareDrawData: SoftwareDrawData): Boolean {

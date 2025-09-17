@@ -11,7 +11,7 @@ use smithay_client_toolkit::{
 
 use crate::linux::{
     application_state::ApplicationState,
-    events::{MouseDownEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScrollWheelEvent},
+    events::{Event, MouseDownEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScrollWheelEvent},
     window::SimpleWindow,
 };
 
@@ -19,12 +19,17 @@ impl PointerHandler for ApplicationState {
     fn pointer_frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
         for event in events {
             #[allow(clippy::cast_possible_truncation)]
-            let scale = if let Some(window) = self.windows.get_mut(&event.surface.id()) {
-                window.pointer_event(pointer, event);
-                window.current_scale.round() as i32
+            let (event_to_send, scale) = if let Some(window) = self.windows.get_mut(&event.surface.id()) {
+                let pointer_event = window.make_pointer_event(pointer, event);
+                let scale = window.current_scale.round() as i32;
+                (Some(pointer_event), scale)
             } else {
-                1
+                (None, 1)
             };
+
+            if let Some(event_to_send) = event_to_send {
+                self.send_event(event_to_send);
+            }
 
             if let PointerEventKind::Enter { .. } = event.kind {
                 if let Some(themed_pointer) = self.themed_pointer.take() {
@@ -51,39 +56,33 @@ impl PointerHandler for ApplicationState {
 delegate_pointer!(ApplicationState);
 
 impl SimpleWindow {
-    pub fn pointer_event(&mut self, pointer: &WlPointer, event: &PointerEvent) {
+    pub fn make_pointer_event(&mut self, pointer: &WlPointer, event: &PointerEvent) -> Event<'static> {
         match event.kind {
             PointerEventKind::Enter { .. } => {
                 self.set_cursor = true;
-                (self.event_handler)(&MouseEnteredEvent::new(event).into());
+                MouseEnteredEvent::new(self.window_id, event).into()
             }
-            PointerEventKind::Leave { .. } => {
-                (self.event_handler)(&MouseExitedEvent::new(event).into());
-            }
-            PointerEventKind::Motion { time } => {
-                (self.event_handler)(&MouseMovedEvent::new(event, time).into());
-            }
+            PointerEventKind::Leave { .. } => MouseExitedEvent::new(self.window_id, event).into(),
+            PointerEventKind::Motion { time } => MouseMovedEvent::new(self.window_id, event, time).into(),
             PointerEventKind::Press { button, serial, time } => {
-                let e = MouseDownEvent::new(event, button, time);
+                let e = MouseDownEvent::new(self.window_id, event, button, time);
                 let pointer_data = pointer.data::<PointerData>().unwrap();
                 let seat = pointer_data.seat();
                 self.current_mouse_down_seat = Some(seat.clone());
                 self.current_mouse_down_serial = Some(serial);
-                (self.event_handler)(&e.into());
+                e.into()
             }
             PointerEventKind::Release { button, serial: _, time } => {
                 //self.current_mouse_down_seat = None;
                 //self.current_mouse_down_serial = None;
-                (self.event_handler)(&MouseUpEvent::new(event, button, time).into());
+                MouseUpEvent::new(self.window_id, event, button, time).into()
             }
             PointerEventKind::Axis {
                 time,
                 horizontal,
                 vertical,
                 ..
-            } => {
-                (self.event_handler)(&ScrollWheelEvent::new(event, time, horizontal, vertical).into());
-            }
+            } => ScrollWheelEvent::new(self.window_id, event, time, horizontal, vertical).into(),
         }
     }
 }

@@ -65,7 +65,7 @@ impl EglRendering {
         self.wl_egl_surface.resize(size.width.0, size.height.0, 0, 0);
     }
 
-    pub fn draw<F: FnOnce(Option<SoftwareDrawData>) -> bool>(&self, surface: &WlSurface, egl: &EglInstance, do_draw: F) {
+    pub fn draw(&self, surface: &WlSurface, egl: &EglInstance, do_draw: &dyn Fn(Option<SoftwareDrawData>) -> bool) {
         egl.make_current(
             self.egl_display,
             Some(self.egl_window_surface),

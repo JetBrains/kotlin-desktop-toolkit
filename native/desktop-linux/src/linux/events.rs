@@ -23,9 +23,7 @@ use crate::linux::{
 };
 
 // return true if event was handled
-pub type EventHandler = extern "C" fn(&Event, WindowId) -> bool;
-
-pub(crate) type InternalEventHandler = dyn Fn(&Event) -> bool;
+pub type EventHandler = extern "C" fn(&Event) -> bool;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -247,12 +245,14 @@ impl From<ModifiersChangedEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseEnteredEvent {
+    pub window_id: WindowId,
     pub location_in_window: LogicalPoint,
 }
 
 impl MouseEnteredEvent {
-    pub(crate) const fn new(event: &PointerEvent) -> Self {
+    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent) -> Self {
         Self {
+            window_id,
             location_in_window: LogicalPoint {
                 x: LogicalPixels(event.position.0),
                 y: LogicalPixels(event.position.1),
@@ -270,12 +270,14 @@ impl From<MouseEnteredEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseExitedEvent {
+    pub window_id: WindowId,
     pub location_in_window: LogicalPoint,
 }
 
 impl MouseExitedEvent {
-    pub(crate) const fn new(event: &PointerEvent) -> Self {
+    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent) -> Self {
         Self {
+            window_id,
             location_in_window: LogicalPoint {
                 x: LogicalPixels(event.position.0),
                 y: LogicalPixels(event.position.1),
@@ -293,13 +295,15 @@ impl From<MouseExitedEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseMovedEvent {
+    pub window_id: WindowId,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
 }
 
 impl MouseMovedEvent {
-    pub(crate) const fn new(event: &PointerEvent, time: u32) -> Self {
+    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent, time: u32) -> Self {
         Self {
+            window_id,
             location_in_window: LogicalPoint {
                 x: LogicalPixels(event.position.0),
                 y: LogicalPixels(event.position.1),
@@ -318,20 +322,16 @@ impl From<MouseMovedEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseDownEvent {
+    pub window_id: WindowId,
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
 }
 
-impl From<MouseDownEvent> for Event<'_> {
-    fn from(value: MouseDownEvent) -> Self {
-        Self::MouseDown(value)
-    }
-}
-
 impl MouseDownEvent {
-    pub(crate) const fn new(event: &PointerEvent, button: u32, time: u32) -> Self {
+    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent, button: u32, time: u32) -> Self {
         Self {
+            window_id,
             button: MouseButton(button),
             location_in_window: LogicalPoint {
                 x: LogicalPixels(event.position.0),
@@ -342,17 +342,25 @@ impl MouseDownEvent {
     }
 }
 
+impl From<MouseDownEvent> for Event<'_> {
+    fn from(value: MouseDownEvent) -> Self {
+        Self::MouseDown(value)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct MouseUpEvent {
+    pub window_id: WindowId,
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
 }
 
 impl MouseUpEvent {
-    pub(crate) const fn new(event: &PointerEvent, button: u32, time: u32) -> Self {
+    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent, button: u32, time: u32) -> Self {
         Self {
+            window_id,
             button: MouseButton(button),
             location_in_window: LogicalPoint {
                 x: LogicalPixels(event.position.0),
@@ -372,6 +380,7 @@ impl From<MouseUpEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ScrollWheelEvent {
+    pub window_id: WindowId,
     pub scrolling_delta_x: LogicalPixels,
     pub scrolling_delta_y: LogicalPixels,
     pub location_in_window: LogicalPoint,
@@ -379,8 +388,9 @@ pub struct ScrollWheelEvent {
 }
 
 impl ScrollWheelEvent {
-    pub(crate) const fn new(event: &PointerEvent, time: u32, horizontal: AxisScroll, vertical: AxisScroll) -> Self {
+    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent, time: u32, horizontal: AxisScroll, vertical: AxisScroll) -> Self {
         Self {
+            window_id,
             scrolling_delta_x: LogicalPixels(horizontal.absolute),
             scrolling_delta_y: LogicalPixels(vertical.absolute),
             location_in_window: LogicalPoint {
@@ -427,6 +437,7 @@ pub struct TextInputDeleteSurroundingTextData {
 #[repr(C)]
 #[derive(Debug)]
 pub struct TextInputAvailabilityEvent {
+    pub window_id: WindowId,
     /// Indicates if the Text Input support is available.
     /// Call `application_text_input_enable` to enable it or `application_text_input_disable` to disable it afterward.
     pub available: bool,
@@ -481,7 +492,20 @@ pub struct WindowCapabilities {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct WindowCloseRequestEvent {
+    pub window_id: WindowId,
+}
+
+impl From<WindowCloseRequestEvent> for Event<'_> {
+    fn from(value: WindowCloseRequestEvent) -> Self {
+        Self::WindowCloseRequest(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct WindowConfigureEvent {
+    pub window_id: WindowId,
     pub size: LogicalSize,
     pub active: bool,
     pub maximized: bool,
@@ -506,6 +530,7 @@ pub struct SoftwareDrawData {
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowDrawEvent {
+    pub window_id: WindowId,
     pub software_draw_data: SoftwareDrawData,
     pub physical_size: PhysicalSize,
     pub scale: f64,
@@ -520,13 +545,15 @@ impl From<WindowDrawEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowKeyboardEnterEvent<'a> {
+    pub window_id: WindowId,
     pub raw: BorrowedArray<'a, u32>,
     pub keysyms: BorrowedArray<'a, u32>,
 }
 
 impl<'a> WindowKeyboardEnterEvent<'a> {
-    pub(crate) fn new(raw: &'a [u32], keysyms: &'a [u32]) -> Self {
+    pub(crate) fn new(window_id: WindowId, raw: &'a [u32], keysyms: &'a [u32]) -> Self {
         Self {
+            window_id,
             raw: BorrowedArray::from_slice(raw),
             keysyms: BorrowedArray::from_slice(keysyms),
         }
@@ -541,7 +568,20 @@ impl<'a> From<WindowKeyboardEnterEvent<'a>> for Event<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct WindowKeyboardLeaveEvent {
+    pub window_id: WindowId,
+}
+
+impl From<WindowKeyboardLeaveEvent> for Event<'_> {
+    fn from(value: WindowKeyboardLeaveEvent) -> Self {
+        Self::WindowKeyboardLeave(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct WindowScaleChangedEvent {
+    pub window_id: WindowId,
     pub new_scale: f64,
 }
 
@@ -554,12 +594,14 @@ impl From<WindowScaleChangedEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowScreenChangeEvent {
+    pub window_id: WindowId,
     pub new_screen_id: ScreenId,
 }
 
 impl WindowScreenChangeEvent {
-    pub(crate) fn new(output: &WlOutput) -> Self {
+    pub(crate) fn new(window_id: WindowId, output: &WlOutput) -> Self {
         Self {
+            window_id,
             new_screen_id: ScreenId(output.id().protocol_id()),
         }
     }
@@ -574,6 +616,7 @@ impl From<WindowScreenChangeEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct FileChooserResponse<'a> {
+    pub window_id: WindowId,
     pub request_id: RequestId,
     pub newline_separated_files: BorrowedStrPtr<'a>,
 }
@@ -606,11 +649,11 @@ pub enum Event<'a> {
     ScrollWheel(ScrollWheelEvent),
     TextInputAvailability(TextInputAvailabilityEvent),
     TextInput(TextInputEvent<'a>),
-    WindowCloseRequest,
+    WindowCloseRequest(WindowCloseRequestEvent),
     WindowConfigure(WindowConfigureEvent),
     WindowDraw(WindowDrawEvent),
     WindowKeyboardEnter(WindowKeyboardEnterEvent<'a>),
-    WindowKeyboardLeave,
+    WindowKeyboardLeave(WindowKeyboardLeaveEvent),
     WindowScaleChanged(WindowScaleChangedEvent),
     WindowScreenChange(WindowScreenChangeEvent),
 }

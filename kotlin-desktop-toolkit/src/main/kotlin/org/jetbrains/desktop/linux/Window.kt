@@ -20,7 +20,6 @@ public class Window internal constructor(
     params: WindowParams,
 ) : AutoCloseable {
     public val windowId: WindowId = params.windowId
-    private var pointerShape = PointerShape.Default
 
     init {
         Arena.ofConfined().use { arena ->
@@ -32,10 +31,6 @@ public class Window internal constructor(
 
     override fun toString(): String {
         return "${javaClass.typeName}(windowId=$windowId, appPtr=0x${appPtr.address().toString(16)})"
-    }
-
-    public fun windowId(): WindowId {
-        return windowId
     }
 
     public fun getSize(): LogicalSize {
@@ -101,16 +96,6 @@ public class Window internal constructor(
         }
     }
 
-//    public val isKey: Boolean
-//        get() {
-//            return ffiDownCall { desktop_h.window_is_key(appPtr, windowId) }
-//        }
-//
-//    public val isMain: Boolean
-//        get() {
-//            return ffiDownCall { desktop_h.window_is_main(appPtr, windowId) }
-//        }
-
     public fun setMinSize(size: LogicalSize) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
@@ -128,11 +113,8 @@ public class Window internal constructor(
     }
 
     public fun setPointerShape(shape: PointerShape) {
-        if (pointerShape != shape) {
-            pointerShape = shape
-            ffiDownCall {
-                desktop_linux_h.window_set_pointer_shape(appPtr, windowId, shape.toNative())
-            }
+        ffiDownCall {
+            desktop_linux_h.window_set_pointer_shape(appPtr, windowId, shape.toNative())
         }
     }
 
@@ -157,15 +139,6 @@ public class Window internal constructor(
         Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_linux_h.application_start_drag_and_drop(appPtr, windowId, mimeTypesToNative(arena, mimeTypes), action.toNative())
-            }
-        }
-    }
-
-    /** Will produce [Event.DataTransfer] event if there is clipboard content. */
-    public fun clipboardPaste(serial: Int, supportedMimeTypes: List<String>): Boolean {
-        return Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                desktop_linux_h.window_clipboard_paste(appPtr, windowId, serial, mimeTypesToNative(arena, supportedMimeTypes))
             }
         }
     }

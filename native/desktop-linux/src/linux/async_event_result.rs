@@ -36,10 +36,11 @@ impl AsyncEventResult {
             } => {
                 let send = |newline_separated_files| {
                     let response = FileChooserResponse {
+                        window_id,
                         request_id,
                         newline_separated_files,
                     };
-                    event_handler(&response.into(), window_id)
+                    event_handler(&response.into())
                 };
                 match convert_file_chooser_response(result) {
                     Ok(files) => {
