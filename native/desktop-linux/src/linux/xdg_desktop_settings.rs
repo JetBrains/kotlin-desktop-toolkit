@@ -11,7 +11,7 @@ use log::{debug, error};
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::linux::xdg_desktop_settings_api::{
-    Color, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme, XdgDesktopSetting,
+    Color, DesktopTitlebarAction, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme, XdgDesktopSetting,
 };
 
 /// cbindgen:ignore
@@ -26,6 +26,11 @@ const GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE: &str = "org.gnome.desktop.wm.prefe
 #[derive(Debug)]
 pub enum InternalXdgDesktopSetting {
     TitlebarLayout(String),
+
+    ActionDoubleClickTitlebar(DesktopTitlebarAction),
+    ActionRightClickTitlebar(DesktopTitlebarAction),
+    ActionMiddleClickTitlebar(DesktopTitlebarAction),
+
     DoubleClickIntervalMs(i32),
     ColorScheme(ColorScheme),
     AccentColor(Color),
@@ -83,6 +88,18 @@ impl FontRgbaOrder {
     }
 }
 
+impl DesktopTitlebarAction {
+    fn parse(value: &str) -> anyhow::Result<Self> {
+        match value {
+            "toggle-maximize" | "toggle-maximize-horizontally" | "toggle-maximize-vertically" => Ok(Self::ToggleMaximize),
+            "minimize" | "lower" => Ok(Self::Minimize),
+            "none" => Ok(Self::None),
+            "menu" => Ok(Self::Menu),
+            _ => bail!("Unknown DesktopTitlebarAction value {value}"),
+        }
+    }
+}
+
 impl XdgDesktopSetting<'_> {
     pub fn with(s: InternalXdgDesktopSetting, f: impl FnOnce(&XdgDesktopSetting)) {
         match s {
@@ -90,6 +107,9 @@ impl XdgDesktopSetting<'_> {
                 let cs = CString::new(v).unwrap();
                 f(&XdgDesktopSetting::TitlebarLayout(BorrowedStrPtr::new(&cs)));
             }
+            InternalXdgDesktopSetting::ActionDoubleClickTitlebar(v) => f(&XdgDesktopSetting::ActionDoubleClickTitlebar(v)),
+            InternalXdgDesktopSetting::ActionRightClickTitlebar(v) => f(&XdgDesktopSetting::ActionRightClickTitlebar(v)),
+            InternalXdgDesktopSetting::ActionMiddleClickTitlebar(v) => f(&XdgDesktopSetting::ActionMiddleClickTitlebar(v)),
             InternalXdgDesktopSetting::DoubleClickIntervalMs(v) => f(&Self::DoubleClickIntervalMs(v)),
             InternalXdgDesktopSetting::ColorScheme(v) => f(&Self::ColorScheme(match v {
                 ColorScheme::NoPreference => XdgDesktopColorScheme::NoPreference,
@@ -197,17 +217,18 @@ impl InternalXdgDesktopSetting {
                 "double-click" => Some(Self::DoubleClickIntervalMs(read_i32(value)?)),
                 _ => None,
             },
-            GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE => {
-                match key {
-                    "audible-bell" => Some(Self::AudibleBell(read_bool(value)?)),
-                    "button-layout" => Some(Self::TitlebarLayout(read_string(value)?)),
-                    //// Valid values: "toggle-maximize", "toggle-maximize-horizontally", "toggle-maximize-vertically", "menu", "lower", "none"
-                    //"action-double-click-titlebar" => {},
-                    //"action-right-click-titlebar" => {},
-                    //"action-middle-click-titlebar" => {},
-                    _ => None,
+            GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE => match key {
+                "audible-bell" => Some(Self::AudibleBell(read_bool(value)?)),
+                "button-layout" => Some(Self::TitlebarLayout(read_string(value)?)),
+                "action-double-click-titlebar" => {
+                    Some(Self::ActionDoubleClickTitlebar(DesktopTitlebarAction::parse(&read_string(value)?)?))
                 }
-            }
+                "action-right-click-titlebar" => Some(Self::ActionRightClickTitlebar(DesktopTitlebarAction::parse(&read_string(value)?)?)),
+                "action-middle-click-titlebar" => {
+                    Some(Self::ActionMiddleClickTitlebar(DesktopTitlebarAction::parse(&read_string(value)?)?))
+                }
+                _ => None,
+            },
             _ => None,
         })
     }
