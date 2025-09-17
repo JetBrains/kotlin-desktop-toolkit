@@ -59,9 +59,7 @@ pub extern "C" fn window_drop(window_ptr: WindowPtr) {
 #[repr(C)]
 pub enum TitlebarConfiguration {
     Regular,
-    Custom {
-        title_bar_height: LogicalPixels,
-    },
+    Custom { title_bar_height: LogicalPixels },
 }
 
 #[unsafe(no_mangle)]
@@ -71,7 +69,7 @@ pub extern "C" fn window_set_titlebar_configuration(window_ptr: WindowPtr, mode:
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.titlebar.borrow_mut().set_mode(&mode);
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]

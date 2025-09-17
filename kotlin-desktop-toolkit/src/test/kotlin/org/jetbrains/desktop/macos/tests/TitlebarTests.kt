@@ -4,7 +4,6 @@ import org.jetbrains.desktop.macos.TitlebarConfiguration
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
-import java.lang.Thread.sleep
 import kotlin.test.Test
 
 @EnabledOnOs(OS.MAC)
@@ -23,7 +22,7 @@ class TitlebarTests : KDTApplicationTestBase() {
     fun windowWithCustomTitlebarTest() {
         val window = ui {
             Window.create(
-                titlebarConfiguration = TitlebarConfiguration.Custom(titlebarHeight = 42.0)
+                titlebarConfiguration = TitlebarConfiguration.Custom(titlebarHeight = 42.0),
             )
         }
         ui {
@@ -35,7 +34,7 @@ class TitlebarTests : KDTApplicationTestBase() {
     fun `window noop switch`() {
         switchTitlebarHelper(
             from = TitlebarConfiguration.Regular,
-            to = TitlebarConfiguration.Regular
+            to = TitlebarConfiguration.Regular,
         )
     }
 
@@ -43,7 +42,7 @@ class TitlebarTests : KDTApplicationTestBase() {
     fun `window changes it's titlebar height`() {
         switchTitlebarHelper(
             from = TitlebarConfiguration.Custom(titlebarHeight = 42.0),
-            to = TitlebarConfiguration.Custom(titlebarHeight = 22.0)
+            to = TitlebarConfiguration.Custom(titlebarHeight = 22.0),
         )
     }
 
@@ -51,7 +50,7 @@ class TitlebarTests : KDTApplicationTestBase() {
     fun `window switch to custom titlebar`() {
         switchTitlebarHelper(
             from = TitlebarConfiguration.Regular,
-            to = TitlebarConfiguration.Custom(titlebarHeight = 22.0)
+            to = TitlebarConfiguration.Custom(titlebarHeight = 22.0),
         )
     }
 
@@ -59,14 +58,14 @@ class TitlebarTests : KDTApplicationTestBase() {
     fun `window switch to regular titlebar`() {
         switchTitlebarHelper(
             from = TitlebarConfiguration.Custom(titlebarHeight = 22.0),
-            to = TitlebarConfiguration.Regular
+            to = TitlebarConfiguration.Regular,
         )
     }
 
     fun switchTitlebarHelper(from: TitlebarConfiguration, to: TitlebarConfiguration) {
         val window = ui {
             Window.create(
-                titlebarConfiguration = from
+                titlebarConfiguration = from,
             )
         }
         ui {

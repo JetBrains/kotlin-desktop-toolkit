@@ -1,5 +1,3 @@
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
 use anyhow::{Context, Ok};
 use log::debug;
 use objc2::{
@@ -17,7 +15,18 @@ use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
     NSRangePointer, NSRect, NSUInteger,
 };
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
+use super::{
+    application_api::MyNSApplication,
+    events::handle_key_down_event,
+    metal_api::MetalView,
+    screen::NSScreenExts,
+    text_input_client::{TextInputClient, TextInputClientHandler},
+    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
+};
+use crate::macos::titlebar::Titlebar;
 use crate::{
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     macos::{
@@ -33,15 +42,6 @@ use crate::{
     },
 };
 use desktop_common::logger::catch_panic;
-use crate::macos::titlebar::Titlebar;
-use super::{
-    application_api::MyNSApplication,
-    events::handle_key_down_event,
-    metal_api::MetalView,
-    screen::NSScreenExts,
-    text_input_client::{TextInputClient, TextInputClientHandler},
-    window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
-};
 
 #[allow(clippy::struct_field_names)]
 pub(crate) struct Window {
@@ -461,10 +461,7 @@ define_class!(
 impl WindowDelegate {
     fn new(mtm: MainThreadMarker, ns_window: Retained<MyNSWindow>, titlebar: Rc<RefCell<Titlebar>>) -> Retained<Self> {
         let this = mtm.alloc();
-        let this = this.set_ivars(WindowDelegateIvars {
-            ns_window,
-            titlebar,
-        });
+        let this = this.set_ivars(WindowDelegateIvars { ns_window, titlebar });
         unsafe { msg_send![super(this), init] }
     }
 }

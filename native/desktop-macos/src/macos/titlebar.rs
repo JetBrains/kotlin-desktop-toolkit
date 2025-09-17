@@ -1,9 +1,9 @@
-use anyhow::{ensure, Context};
+use crate::geometry::LogicalPixels;
+use crate::macos::window_api::TitlebarConfiguration;
+use anyhow::{Context, ensure};
 use objc2::rc::Retained;
 use objc2_app_kit::{NSButton, NSLayoutConstraint, NSView, NSWindow, NSWindowButton, NSWindowStyleMask, NSWindowTitleVisibility};
 use objc2_foundation::NSArray;
-use crate::geometry::LogicalPixels;
-use crate::macos::window_api::TitlebarConfiguration;
 
 pub(crate) struct Titlebar {
     ns_window: Retained<NSWindow>,
@@ -51,7 +51,9 @@ impl Titlebar {
                 state.init(&self.ns_window);
                 self.state = TitlebarState::Custom(state);
             }
-            (TitlebarState::Custom(state), TitlebarConfiguration::Custom { title_bar_height }) => {
+            (TitlebarState::Custom(state), TitlebarConfiguration::Custom { title_bar_height }) =>
+            {
+                #[allow(clippy::float_cmp)]
                 if state.height != *title_bar_height {
                     state.height = *title_bar_height;
                     if !self.ns_window.styleMask().contains(NSWindowStyleMask::FullScreen) {
@@ -69,13 +71,13 @@ impl Titlebar {
         }
     }
 
-    pub(crate) fn after_enter_fullscreen(&mut self) {
+    pub(crate) fn after_enter_fullscreen(&self) {
         if let TitlebarState::Custom(..) = self.state {
             set_default_titlebar_enabled(&self.ns_window, true);
         }
     }
 
-    pub(crate) fn before_exit_fullscreen(&mut self) {
+    pub(crate) fn before_exit_fullscreen(&self) {
         if let TitlebarState::Custom(..) = self.state {
             set_default_titlebar_enabled(&self.ns_window, false);
         }
@@ -243,11 +245,15 @@ impl TitlebarViews {
         let height_constraint = unsafe { self.title_bar_container.heightAnchor().constraintEqualToConstant(titlebar_height) };
         constraints_array.push(height_constraint);
 
-        for view in [&self.title_bar] {
+        {
+            let view = &self.title_bar;
             constraints_array.push(unsafe { view.leftAnchor().constraintEqualToAnchor(&self.title_bar_container.leftAnchor()) });
             constraints_array.push(unsafe { view.rightAnchor().constraintEqualToAnchor(&self.title_bar_container.rightAnchor()) });
             constraints_array.push(unsafe { view.topAnchor().constraintEqualToAnchor(&self.title_bar_container.topAnchor()) });
-            constraints_array.push(unsafe { view.bottomAnchor().constraintEqualToAnchor(&self.title_bar_container.bottomAnchor()) });
+            constraints_array.push(unsafe {
+                view.bottomAnchor()
+                    .constraintEqualToAnchor(&self.title_bar_container.bottomAnchor())
+            });
         }
 
         let horizontal_button_offset = Self::horizontal_button_offset(titlebar_height);

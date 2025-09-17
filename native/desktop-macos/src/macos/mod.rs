@@ -16,7 +16,7 @@ pub mod pasteboard;
 pub mod screen;
 pub mod string;
 pub mod text_input_client;
+pub mod titlebar;
 pub mod url;
 pub mod window;
 pub mod window_api;
-pub mod titlebar;
