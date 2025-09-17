@@ -244,15 +244,6 @@ fn draw(event: &WindowDrawEvent, window_id: WindowId) {
     }
 }
 
-fn log_event(event: &Event, window_id: WindowId) {
-    match event {
-        Event::WindowDraw(_) | Event::MouseMoved(_) => {}
-        _ => {
-            debug!("{window_id:?} : {event:?}");
-        }
-    }
-}
-
 fn create_text_input_context<'a>(text: &str, text_cstring: &'a CString, change_caused_by_input_method: bool) -> TextInputContext<'a> {
     let mut codepoints_count = 0;
     for _ in text.chars() {
@@ -288,7 +279,13 @@ fn update_text_input_context(app_ptr: AppPtr<'_>, text: &str, change_caused_by_i
 
 #[allow(clippy::too_many_lines)]
 extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
-    log_event(event, window_id);
+    match event {
+        Event::WindowDraw(_) | Event::MouseMoved(_) => {}
+        _ => {
+            debug!("event_handler start: window_id={window_id:?} : {event:?}");
+        }
+    }
+
     STATE.with(|c| {
         let state = c.borrow();
         let state = state.as_ref().unwrap();
@@ -553,19 +550,19 @@ extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedStrP
     let mime_type_cstr = mime_type.as_optional_cstr().unwrap();
     let v = if mime_type_cstr == URI_LIST_MIME_TYPE {
         match source {
-            DataSource::Clipboard => leaked_string_data("file:///etc/hosts"),
-            DataSource::DragAndDrop => leaked_string_data("file:///boot/efi/"),
+            DataSource::Clipboard => "file:///etc/hosts",
+            DataSource::DragAndDrop => "file:///boot/efi/",
         }
     } else if mime_type_cstr == TEXT_MIME_TYPE {
         match source {
-            DataSource::Clipboard => leaked_string_data("/etc/hosts (from clipboard)"),
-            DataSource::DragAndDrop => leaked_string_data("/boot/efi/ (from d&d)"),
+            DataSource::Clipboard => "/etc/hosts (from clipboard)",
+            DataSource::DragAndDrop => "/boot/efi/ (from d&d)",
         }
     } else {
-        leaked_string_data(mime_type_cstr.to_str().unwrap())
+        mime_type_cstr.to_str().unwrap()
     };
 
-    let mut a = BorrowedArray::from_slice(v);
+    let mut a = BorrowedArray::from_slice(leaked_string_data(v));
     a.deinit = Some(deinit_u8_vec);
     a
 }

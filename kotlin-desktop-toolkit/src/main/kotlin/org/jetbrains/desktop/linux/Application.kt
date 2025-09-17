@@ -74,9 +74,7 @@ public class Application : AutoCloseable {
 
     init {
         ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                appPtr = desktop_linux_h.application_init(applicationCallbacks())
-            }
+            appPtr = desktop_linux_h.application_init(applicationCallbacks())
         }
     }
 

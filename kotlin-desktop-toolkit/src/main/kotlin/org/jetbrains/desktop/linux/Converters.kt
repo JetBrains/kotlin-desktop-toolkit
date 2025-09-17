@@ -202,8 +202,7 @@ internal fun WindowDecorationMode.toNative(): Int {
 }
 
 internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDesktopSetting {
-    val nativeTag = NativeXdgDesktopSetting.tag(s)
-    return when (nativeTag) {
+    return when (val nativeTag = NativeXdgDesktopSetting.tag(s)) {
         desktop_linux_h.NativeXdgDesktopSetting_TitlebarLayout() -> {
             XdgDesktopSetting.TitlebarLayout(NativeXdgDesktopSetting.titlebar_layout(s).getUtf8String(0))
         }
@@ -390,7 +389,7 @@ internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
 
         NativeBorrowedArray_u8.deinit(
             nativeDataArray,
-            NativeBorrowedArray_u8.deinit.allocate({ ptr, len ->
+            NativeBorrowedArray_u8.deinit.allocate({ _, _ ->
                 arena.close()
             }, arena),
         )

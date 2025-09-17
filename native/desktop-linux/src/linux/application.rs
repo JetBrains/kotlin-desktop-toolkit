@@ -24,7 +24,7 @@ use crate::linux::{
     application_state::ApplicationState,
     async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
-    events::{DataTransferContent, RequestId, WindowId},
+    events::{DataTransferContent, Event, RequestId, WindowId},
     window::SimpleWindow,
     window_api::WindowParams,
     xdg_desktop_settings::xdg_desktop_settings_notifier,
@@ -186,7 +186,13 @@ impl Application {
             window_id,
             &self.state,
             &self.qh,
-            Box::new(move |e| catch_panic(|| Ok(event_handler(e, window_id))).unwrap_or(false)),
+            Box::new(move |e| {
+                match e {
+                    Event::MouseMoved(_) | Event::WindowDraw(_) => {}
+                    _ => debug!("Sending event for {window_id:?}: {e:?}"),
+                }
+                catch_panic(|| Ok(event_handler(e, window_id))).unwrap_or(false)
+            }),
             params,
         );
         let surface_id = w.window.wl_surface().id();
