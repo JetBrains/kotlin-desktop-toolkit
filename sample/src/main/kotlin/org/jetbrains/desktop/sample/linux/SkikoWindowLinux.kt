@@ -38,7 +38,7 @@ abstract class SkikoWindowLinux(
         window.setMinSize(LogicalSize(320.0f, 240.0f))
     }
 
-    open fun handleEvent(event: Event): EventHandlerResult {
+    open fun handleEvent(event: Event, app: Application): EventHandlerResult {
         return when (event) {
             is Event.WindowDraw -> {
                 if (performDrawing(event)) {
