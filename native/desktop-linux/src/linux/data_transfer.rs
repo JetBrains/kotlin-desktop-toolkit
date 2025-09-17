@@ -29,7 +29,6 @@ use crate::linux::{
     application_api::{DataSource, DragAndDropQueryData},
     application_state::ApplicationState,
     events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent},
-    geometry::{LogicalPixels, LogicalPoint},
 };
 
 delegate_data_device!(ApplicationState);
@@ -57,10 +56,7 @@ impl DataDeviceHandler for ApplicationState {
         self.drag_destination_mime_type = drag_offer.with_mime_types(|mime_types| {
             let drag_and_drop_query_data = DragAndDropQueryData {
                 window_id: self.get_window(&drag_offer.surface).unwrap().window_id,
-                point: LogicalPoint {
-                    x: LogicalPixels(x),
-                    y: LogicalPixels(y),
-                },
+                point: (x, y).into(),
             };
             let supported_mime_types = (self.callbacks.get_drag_and_drop_supported_mime_types)(&drag_and_drop_query_data);
 

@@ -39,21 +39,12 @@ impl ScreenInfo {
                 || RustAllocatedStrPtr::null().to_auto_drop(),
                 |s| RustAllocatedStrPtr::allocate(s.as_bytes()).unwrap().to_auto_drop(),
             ),
-            origin: info.logical_position.map_or(
-                LogicalPoint {
-                    x: LogicalPixels(0.0),
-                    y: LogicalPixels(0.0),
-                },
-                |pos| LogicalPoint {
-                    x: LogicalPixels(pos.0.into()),
-                    y: LogicalPixels(pos.1.into()),
-                },
-            ),
+            origin: info.logical_position.map(|pos| pos.into()).unwrap_or_default(),
             size: info
                 .logical_size
                 .map(|size| LogicalSize {
-                    width: LogicalPixels(f64::from(size.0)),
-                    height: LogicalPixels(f64::from(size.1)),
+                    width: LogicalPixels(size.0.into()),
+                    height: LogicalPixels(size.1.into()),
                 })
                 .unwrap_or_default(),
             scale: info.scale_factor.into(),

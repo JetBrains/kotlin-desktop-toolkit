@@ -9,10 +9,6 @@ use desktop_common::{
     logger::PanicDefault,
 };
 use enumflags2::{BitFlag, BitFlags, bitflags};
-use smithay_client_toolkit::seat::{
-    keyboard::Modifiers,
-    pointer::{AxisScroll, PointerEvent},
-};
 
 use crate::linux::{
     application_api::DataSource,
@@ -232,21 +228,6 @@ pub struct ModifiersChangedEvent {
     pub modifiers: KeyModifierBitflag,
 }
 
-impl ModifiersChangedEvent {
-    pub(crate) fn new(modifiers: Modifiers) -> Self {
-        let mut key_modifiers = BitFlags::<KeyModifier>::EMPTY;
-        key_modifiers.set(KeyModifier::Ctrl, modifiers.ctrl);
-        key_modifiers.set(KeyModifier::Alt, modifiers.alt);
-        key_modifiers.set(KeyModifier::Shift, modifiers.shift);
-        key_modifiers.set(KeyModifier::CapsLock, modifiers.caps_lock);
-        key_modifiers.set(KeyModifier::Logo, modifiers.logo);
-        key_modifiers.set(KeyModifier::NumLock, modifiers.num_lock);
-        Self {
-            modifiers: KeyModifierBitflag(key_modifiers.bits_c()),
-        }
-    }
-}
-
 impl From<ModifiersChangedEvent> for Event<'_> {
     fn from(value: ModifiersChangedEvent) -> Self {
         Self::ModifiersChanged(value)
@@ -258,18 +239,6 @@ impl From<ModifiersChangedEvent> for Event<'_> {
 pub struct MouseEnteredEvent {
     pub window_id: WindowId,
     pub location_in_window: LogicalPoint,
-}
-
-impl MouseEnteredEvent {
-    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent) -> Self {
-        Self {
-            window_id,
-            location_in_window: LogicalPoint {
-                x: LogicalPixels(event.position.0),
-                y: LogicalPixels(event.position.1),
-            },
-        }
-    }
 }
 
 impl From<MouseEnteredEvent> for Event<'_> {
@@ -285,18 +254,6 @@ pub struct MouseExitedEvent {
     pub location_in_window: LogicalPoint,
 }
 
-impl MouseExitedEvent {
-    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent) -> Self {
-        Self {
-            window_id,
-            location_in_window: LogicalPoint {
-                x: LogicalPixels(event.position.0),
-                y: LogicalPixels(event.position.1),
-            },
-        }
-    }
-}
-
 impl From<MouseExitedEvent> for Event<'_> {
     fn from(value: MouseExitedEvent) -> Self {
         Self::MouseExited(value)
@@ -309,19 +266,6 @@ pub struct MouseMovedEvent {
     pub window_id: WindowId,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
-}
-
-impl MouseMovedEvent {
-    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent, time: u32) -> Self {
-        Self {
-            window_id,
-            location_in_window: LogicalPoint {
-                x: LogicalPixels(event.position.0),
-                y: LogicalPixels(event.position.1),
-            },
-            timestamp: Timestamp(time),
-        }
-    }
 }
 
 impl From<MouseMovedEvent> for Event<'_> {
@@ -339,20 +283,6 @@ pub struct MouseDownEvent {
     pub timestamp: Timestamp,
 }
 
-impl MouseDownEvent {
-    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent, button: u32, time: u32) -> Self {
-        Self {
-            window_id,
-            button: MouseButton(button),
-            location_in_window: LogicalPoint {
-                x: LogicalPixels(event.position.0),
-                y: LogicalPixels(event.position.1),
-            },
-            timestamp: Timestamp(time),
-        }
-    }
-}
-
 impl From<MouseDownEvent> for Event<'_> {
     fn from(value: MouseDownEvent) -> Self {
         Self::MouseDown(value)
@@ -366,20 +296,6 @@ pub struct MouseUpEvent {
     pub button: MouseButton,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
-}
-
-impl MouseUpEvent {
-    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent, button: u32, time: u32) -> Self {
-        Self {
-            window_id,
-            button: MouseButton(button),
-            location_in_window: LogicalPoint {
-                x: LogicalPixels(event.position.0),
-                y: LogicalPixels(event.position.1),
-            },
-            timestamp: Timestamp(time),
-        }
-    }
 }
 
 impl From<MouseUpEvent> for Event<'_> {
@@ -396,21 +312,6 @@ pub struct ScrollWheelEvent {
     pub scrolling_delta_y: LogicalPixels,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
-}
-
-impl ScrollWheelEvent {
-    pub(crate) const fn new(window_id: WindowId, event: &PointerEvent, time: u32, horizontal: AxisScroll, vertical: AxisScroll) -> Self {
-        Self {
-            window_id,
-            scrolling_delta_x: LogicalPixels(horizontal.absolute),
-            scrolling_delta_y: LogicalPixels(vertical.absolute),
-            location_in_window: LogicalPoint {
-                x: LogicalPixels(event.position.0),
-                y: LogicalPixels(event.position.1),
-            },
-            timestamp: Timestamp(time),
-        }
-    }
 }
 
 impl From<ScrollWheelEvent> for Event<'_> {

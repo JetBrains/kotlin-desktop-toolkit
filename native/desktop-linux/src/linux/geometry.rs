@@ -28,10 +28,19 @@ pub struct PhysicalSize {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct LogicalPoint {
     pub x: LogicalPixels,
     pub y: LogicalPixels,
+}
+
+impl<T: Into<f64>> From<(T, T)> for LogicalPoint {
+    fn from(value: (T, T)) -> Self {
+        Self {
+            x: LogicalPixels(value.0.into()),
+            y: LogicalPixels(value.1.into()),
+        }
+    }
 }
 
 #[repr(C)]
