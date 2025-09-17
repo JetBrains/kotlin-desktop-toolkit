@@ -29,3 +29,4 @@ prefix_with_name = true
 
 [export]
 prefix = "Native"
+include = ["KeyModifier"]

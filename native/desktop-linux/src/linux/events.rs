@@ -1,10 +1,14 @@
 use core::f64;
-use std::ffi::{CStr, CString};
+use std::{
+    ffi::{CStr, CString},
+    fmt::Write,
+};
 
 use desktop_common::{
     ffi_utils::{BorrowedArray, BorrowedStrPtr},
     logger::PanicDefault,
 };
+use enumflags2::{BitFlag, BitFlags, bitflags};
 use smithay_client_toolkit::{
     reexports::client::{Proxy, protocol::wl_output::WlOutput},
     seat::{
@@ -49,36 +53,69 @@ impl PanicDefault for RequestId {
 #[repr(transparent)]
 pub struct MouseButton(pub u32);
 
-#[derive(Debug)]
-#[repr(transparent)]
-pub struct MouseButtonsSet(pub u32);
-
-#[derive(Clone, Copy, Debug, Default)]
-#[repr(C)]
-pub struct KeyModifiers {
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum KeyModifier {
     /// The "control" key
-    pub ctrl: bool,
+    Ctrl = 0b0000_0001,
 
     /// The "alt" key
-    pub alt: bool,
+    Alt = 0b0000_0010,
 
     /// The "shift" key
-    pub shift: bool,
+    Shift = 0b0000_0100,
 
     /// The "Caps lock" key
-    pub caps_lock: bool,
+    CapsLock = 0b0000_1000,
 
     /// The "logo" key
     ///
     /// Also known as the "windows" or "super" key on a keyboard.
-    pub logo: bool,
+    Logo = 0b0001_0000,
 
     /// The "Num lock" key
-    pub num_lock: bool,
+    NumLock = 0b0010_0000,
+}
+
+#[derive(Default, Clone, Copy, Eq, PartialEq)]
+#[repr(transparent)]
+pub struct KeyModifierBitflag(pub u8);
+
+impl std::fmt::Debug for KeyModifierBitflag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "KeyModifierBitflag({:#08b}, ", &self.0)?;
+        let bitflags = KeyModifier::from_bits(self.0).unwrap();
+
+        for (i, field) in bitflags.into_iter().enumerate() {
+            if i > 0 {
+                f.write_char('|')?;
+            }
+            field.fmt(f)?;
+        }
+
+        f.write_char(')')
+    }
+}
+
+impl From<KeyModifier> for KeyModifierBitflag {
+    fn from(value: KeyModifier) -> Self {
+        Self(BitFlags::from_flag(value).bits_c())
+    }
+}
+
+impl From<BitFlags<KeyModifier>> for KeyModifierBitflag {
+    fn from(value: BitFlags<KeyModifier>) -> Self {
+        Self(value.bits_c())
+    }
+}
+
+impl KeyModifierBitflag {
+    pub const EMPTY: Self = Self(0);
 }
 
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct KeyCode(pub u32);
 
 #[repr(C)]
@@ -183,20 +220,21 @@ impl From<KeyUpEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ModifiersChangedEvent {
-    pub modifiers: KeyModifiers,
+    pub modifiers: KeyModifierBitflag,
 }
 
 impl ModifiersChangedEvent {
-    pub(crate) const fn new(modifiers: Modifiers) -> Self {
-        let key_modifiers = KeyModifiers {
-            ctrl: modifiers.ctrl,
-            alt: modifiers.alt,
-            shift: modifiers.shift,
-            caps_lock: modifiers.caps_lock,
-            logo: modifiers.logo,
-            num_lock: modifiers.num_lock,
-        };
-        Self { modifiers: key_modifiers }
+    pub(crate) fn new(modifiers: Modifiers) -> Self {
+        let mut key_modifiers = BitFlags::<KeyModifier>::EMPTY;
+        key_modifiers.set(KeyModifier::Ctrl, modifiers.ctrl);
+        key_modifiers.set(KeyModifier::Alt, modifiers.alt);
+        key_modifiers.set(KeyModifier::Shift, modifiers.shift);
+        key_modifiers.set(KeyModifier::CapsLock, modifiers.caps_lock);
+        key_modifiers.set(KeyModifier::Logo, modifiers.logo);
+        key_modifiers.set(KeyModifier::NumLock, modifiers.num_lock);
+        Self {
+            modifiers: KeyModifierBitflag(key_modifiers.bits_c()),
+        }
     }
 }
 
@@ -394,6 +432,12 @@ pub struct TextInputAvailabilityEvent {
     pub available: bool,
 }
 
+impl From<TextInputAvailabilityEvent> for Event<'_> {
+    fn from(value: TextInputAvailabilityEvent) -> Self {
+        Self::TextInputAvailability(value)
+    }
+}
+
 /// The application must proceed by evaluating the changes in the following order:
 /// 1. Replace the existing preedit string with the cursor.
 /// 2. Delete the requested surrounding text.
@@ -546,8 +590,13 @@ pub enum Event<'a> {
     DataTransfer(DataTransferContent<'a>),
     DataTransferAvailable(DataTransferAvailable<'a>),
     FileChooserResponse(FileChooserResponse<'a>),
+
+    /// Modifier keys (e.g Ctrl, Shift, etc) are never reported. Use `ModifiersChanged` for them.
     KeyDown(KeyDownEvent<'a>),
+
+    /// Modifier keys (e.g Ctrl, Shift, etc) are never reported. Use `ModifiersChanged` for them.
     KeyUp(KeyUpEvent),
+
     ModifiersChanged(ModifiersChangedEvent),
     MouseEntered(MouseEnteredEvent),
     MouseExited(MouseExitedEvent),

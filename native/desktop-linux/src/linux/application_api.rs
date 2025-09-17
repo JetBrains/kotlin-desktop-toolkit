@@ -101,7 +101,7 @@ extern "C" fn egl_get_proc_address(ctx_ptr: BorrowedOpaquePtr<'_>, name_ptr: Bor
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_get_egl_proc_func(app_ptr: AppPtr<'_>) -> GetEglProcFuncData<'_> {
+pub extern "C" fn application_get_egl_proc_func(app_ptr: AppPtr) -> GetEglProcFuncData<'_> {
     debug!("application_get_egl_proc_func");
     let app = unsafe { app_ptr.borrow::<Application>() };
     GetEglProcFuncData {
@@ -111,7 +111,7 @@ pub extern "C" fn application_get_egl_proc_func(app_ptr: AppPtr<'_>) -> GetEglPr
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_is_event_loop_thread(app_ptr: AppPtr<'_>) -> bool {
+pub extern "C" fn application_is_event_loop_thread(app_ptr: AppPtr) -> bool {
     ffi_boundary("application_is_event_loop_thread", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
         if let Some(t) = app.event_loop_thread_id {
@@ -124,7 +124,7 @@ pub extern "C" fn application_is_event_loop_thread(app_ptr: AppPtr<'_>) -> bool 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr<'_>, f: extern "C" fn()) {
+pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr, f: extern "C" fn()) {
     ffi_boundary("application_run_on_event_loop_async", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
         if let Some(s) = &app.run_on_event_loop {
@@ -136,7 +136,7 @@ pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr<'_>, f: ex
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_set_cursor_theme(mut app_ptr: AppPtr<'_>, name: BorrowedStrPtr, size: u32) {
+pub extern "C" fn application_set_cursor_theme(mut app_ptr: AppPtr, name: BorrowedStrPtr, size: u32) {
     debug!("application_set_cursor_theme");
     ffi_boundary("application_set_cursor_theme", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
@@ -145,7 +145,7 @@ pub extern "C" fn application_set_cursor_theme(mut app_ptr: AppPtr<'_>, name: Bo
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_text_input_enable(mut app_ptr: AppPtr<'_>, context: TextInputContext) {
+pub extern "C" fn application_text_input_enable(mut app_ptr: AppPtr, context: TextInputContext) {
     debug!("application_text_input_enable {context:?}");
     ffi_boundary("application_text_input_enable", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
@@ -156,7 +156,7 @@ pub extern "C" fn application_text_input_enable(mut app_ptr: AppPtr<'_>, context
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_text_input_update(mut app_ptr: AppPtr<'_>, context: TextInputContext) {
+pub extern "C" fn application_text_input_update(mut app_ptr: AppPtr, context: TextInputContext) {
     debug!("application_text_input_update {context:?}");
     ffi_boundary("application_text_input_update", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
@@ -166,7 +166,7 @@ pub extern "C" fn application_text_input_update(mut app_ptr: AppPtr<'_>, context
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr<'_>) {
+pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr) {
     debug!("application_text_input_disable");
     ffi_boundary("application_text_input_disable", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
@@ -178,7 +178,7 @@ pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr<'_>) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr<'_>, mime_types: BorrowedStrPtr) {
+pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr, mime_types: BorrowedStrPtr) {
     debug!("application_clipboard_put");
     ffi_boundary("application_clipboard_put", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
@@ -188,7 +188,7 @@ pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr<'_>, mime_types:
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_get_available_mimetypes(mut app_ptr: AppPtr<'_>) -> RustAllocatedStrPtr {
+pub extern "C" fn application_clipboard_get_available_mimetypes(mut app_ptr: AppPtr) -> RustAllocatedStrPtr {
     debug!("application_clipboard_get_available_mimetypes");
     ffi_boundary("application_clipboard_get_available_mimetypes", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };

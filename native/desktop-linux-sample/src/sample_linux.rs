@@ -17,7 +17,10 @@ use desktop_linux::linux::{
         application_set_cursor_theme, application_shutdown, application_start_drag_and_drop, application_stop_event_loop,
         application_text_input_disable, application_text_input_enable, application_text_input_update,
     },
-    events::{DataTransferContent, Event, KeyDownEvent, KeyModifiers, SoftwareDrawData, TextInputEvent, WindowDrawEvent, WindowId},
+    events::{
+        DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, SoftwareDrawData, TextInputEvent, WindowDrawEvent,
+        WindowId,
+    },
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
@@ -81,7 +84,7 @@ struct WindowState {
     text_input_available: bool,
     composed_text: String,
     text: String,
-    key_modifiers: KeyModifiers,
+    key_modifiers: KeyModifierBitflag,
     animation_progress: u16,
 }
 
@@ -283,61 +286,64 @@ fn update_text_input_context(app_ptr: AppPtr<'_>, text: &str, change_caused_by_i
     );
 }
 
+const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBitflag {
+    KeyModifierBitflag(all_modifiers.0 & !(KeyModifier::CapsLock as u8) & !(KeyModifier::NumLock as u8))
+}
+
 fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, window_id: WindowId, window_state: &mut WindowState) {
     const KEYCODE_BACKSPACE: u32 = 14;
     const KEYCODE_C: u32 = 46;
     const KEYCODE_O: u32 = 24;
     const KEYCODE_S: u32 = 31;
     const KEYCODE_V: u32 = 47;
+    const KEY_MODIFIER_CTRL: u8 = KeyModifier::Ctrl as u8;
 
-    let key_code = event.code.0;
+    let modifiers: KeyModifierBitflag = shortcut_modifiers(window_state.key_modifiers);
+    let key_code: u32 = event.code.0;
 
-    match key_code {
-        KEYCODE_BACKSPACE => {
+    match (modifiers.0, key_code) {
+        (0, KEYCODE_BACKSPACE) => {
             window_state.text.pop();
             if window_state.text_input_available {
                 update_text_input_context(app_ptr, &window_state.text, false);
             }
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
         }
-        _ => {
-            if key_code == KEYCODE_V && window_state.key_modifiers.ctrl {
-                window_clipboard_paste(app_ptr, window_id, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
-            } else if key_code == KEYCODE_C && window_state.key_modifiers.ctrl {
-                application_clipboard_put(app_ptr, BorrowedStrPtr::new(ALL_MIMES));
-            } else if key_code == KEYCODE_O && window_state.key_modifiers.ctrl {
-                let common_params = CommonFileDialogParams {
-                    modal: false,
-                    title: c"Open File for Linux Native Sample App test".into(),
-                    accept_label: c"Let's go!".into(),
-                    current_folder: c"/etc".into(),
-                };
-                let open_params = OpenFileDialogParams {
-                    select_directories: false,
-                    allows_multiple_selection: true,
-                };
-                let request_id = window_show_open_file_dialog(app_ptr, window_id, &common_params, &open_params);
-                debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
-            } else if key_code == KEYCODE_S && window_state.key_modifiers.ctrl {
-                let common_params = CommonFileDialogParams {
-                    modal: false,
-                    title: c"Save File for Linux Native Sample App test".into(),
-                    accept_label: c"Let's go!".into(),
-                    current_folder: c"/tmp".into(),
-                };
-                let save_params = SaveFileDialogParams {
-                    name_field_string_value: c"file from Linux Native Sample App.txt".into(),
-                };
-                let request_id = window_show_save_file_dialog(app_ptr, window_id, &common_params, &save_params);
-                debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
-            } else if let Some(event_chars) = event.characters.as_optional_str().unwrap() {
-                window_state.text += event_chars;
-                if window_state.text_input_available {
-                    update_text_input_context(app_ptr, &window_state.text, false);
-                }
-                debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
-            }
+        (KEY_MODIFIER_CTRL, KEYCODE_V) => {
+            window_clipboard_paste(app_ptr, window_id, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
         }
+        (KEY_MODIFIER_CTRL, KEYCODE_C) => {
+            application_clipboard_put(app_ptr, BorrowedStrPtr::new(ALL_MIMES));
+        }
+        (KEY_MODIFIER_CTRL, KEYCODE_O) => {
+            let common_params = CommonFileDialogParams {
+                modal: false,
+                title: c"Open File for Linux Native Sample App test".into(),
+                accept_label: c"Let's go!".into(),
+                current_folder: c"/etc".into(),
+            };
+            let open_params = OpenFileDialogParams {
+                select_directories: false,
+                allows_multiple_selection: true,
+            };
+            let request_id = window_show_open_file_dialog(app_ptr, window_id, &common_params, &open_params);
+            debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
+        }
+
+        (KEY_MODIFIER_CTRL, KEYCODE_S) => {
+            let common_params = CommonFileDialogParams {
+                modal: false,
+                title: c"Save File for Linux Native Sample App test".into(),
+                accept_label: c"Let's go!".into(),
+                current_folder: c"/tmp".into(),
+            };
+            let save_params = SaveFileDialogParams {
+                name_field_string_value: c"file from Linux Native Sample App.txt".into(),
+            };
+            let request_id = window_show_save_file_dialog(app_ptr, window_id, &common_params, &save_params);
+            debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
+        }
+        (_, _) => {}
     }
 }
 

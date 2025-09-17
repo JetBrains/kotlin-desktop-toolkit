@@ -93,7 +93,7 @@ public sealed class Event {
         val key: KeySym,
     ) : Event()
 
-    public data class ModifiersChanged(val modifiers: KeyModifiers) : Event()
+    public data class ModifiersChanged(val modifiers: Set<KeyModifiers>) : Event()
 
     public data class MouseMoved(
         val locationInWindow: LogicalPoint,

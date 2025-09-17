@@ -183,9 +183,9 @@ dependencies = [
 
 [[package]]
 name = "bitflags"
-version = "2.9.1"
+version = "2.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
+checksum = "34efbcccd345379ca2868b2b2c9d3782e9cc58ba87bc7d79d5b53d9c9ae6f25d"
 
 [[package]]
 name = "block2"
@@ -352,6 +352,7 @@ dependencies = [
  "anyhow",
  "ashpd",
  "desktop-common",
+ "enumflags2",
  "futures-lite",
  "khronos-egl",
  "libloading",
@@ -378,7 +379,6 @@ name = "desktop-macos"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bitflags",
  "block2",
  "build-target",
  "desktop-common",

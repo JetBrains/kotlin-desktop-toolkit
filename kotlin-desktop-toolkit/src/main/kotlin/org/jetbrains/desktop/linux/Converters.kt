@@ -10,7 +10,6 @@ import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
 import org.jetbrains.desktop.linux.generated.NativeEvent
 import org.jetbrains.desktop.linux.generated.NativeFileChooserResponse
 import org.jetbrains.desktop.linux.generated.NativeKeyDownEvent
-import org.jetbrains.desktop.linux.generated.NativeKeyModifiers
 import org.jetbrains.desktop.linux.generated.NativeKeyUpEvent
 import org.jetbrains.desktop.linux.generated.NativeLogicalPoint
 import org.jetbrains.desktop.linux.generated.NativeLogicalRect
@@ -42,6 +41,7 @@ import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemoryLayout
 import java.lang.foreign.MemorySegment
+import kotlin.experimental.and
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
@@ -114,14 +114,30 @@ internal fun PhysicalSize.Companion.fromNative(s: MemorySegment) = PhysicalSize(
     height = NativePhysicalSize.height(s),
 )
 
-internal fun KeyModifiers.Companion.fromNative(s: MemorySegment) = KeyModifiers(
-    capsLock = NativeKeyModifiers.caps_lock(s),
-    shift = NativeKeyModifiers.shift(s),
-    control = NativeKeyModifiers.ctrl(s),
-    alt = NativeKeyModifiers.alt(s),
-    logo = NativeKeyModifiers.logo(s),
-    numLock = NativeKeyModifiers.num_lock(s),
-)
+private fun keyModifiersFromNative(nativeModifiers: Byte): Set<KeyModifiers> {
+    val modifiers = buildSet {
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_Ctrl().toByte() > 0) {
+            add(KeyModifiers.Control)
+        }
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_Alt().toByte() > 0) {
+            add(KeyModifiers.Alt)
+        }
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_Shift().toByte() > 0) {
+            add(KeyModifiers.Shift)
+        }
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_CapsLock().toByte() > 0) {
+            add(KeyModifiers.CapsLock)
+        }
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_Logo().toByte() > 0) {
+            add(KeyModifiers.Logo)
+        }
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_NumLock().toByte() > 0) {
+            add(KeyModifiers.NumLock)
+        }
+    }
+
+    return modifiers
+}
 
 internal fun PointerShape.toNative(): Int {
     return when (this) {
@@ -489,9 +505,8 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_linux_h.NativeEvent_ModifiersChanged() -> {
             val nativeEvent = NativeEvent.modifiers_changed(s)
-            Event.ModifiersChanged(
-                modifiers = KeyModifiers.fromNative(NativeModifiersChangedEvent.modifiers(nativeEvent)),
-            )
+            val nativeModifiers = NativeModifiersChangedEvent.modifiers(nativeEvent)
+            Event.ModifiersChanged(modifiers = keyModifiersFromNative(nativeModifiers))
         }
         desktop_linux_h.NativeEvent_MouseMoved() -> {
             val nativeEvent = NativeEvent.mouse_moved(s)
