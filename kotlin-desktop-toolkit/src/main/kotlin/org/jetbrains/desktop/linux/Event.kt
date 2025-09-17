@@ -96,27 +96,37 @@ public sealed class Event {
     public data class ModifiersChanged(val modifiers: Set<KeyModifiers>) : Event()
 
     public data class MouseMoved(
+        val windowId: WindowId,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class MouseEntered(val locationInWindow: LogicalPoint) : Event()
+    public data class MouseEntered(
+        val windowId: WindowId,
+        val locationInWindow: LogicalPoint,
+    ) : Event()
 
-    public data class MouseExited(val locationInWindow: LogicalPoint) : Event()
+    public data class MouseExited(
+        val windowId: WindowId,
+        val locationInWindow: LogicalPoint,
+    ) : Event()
 
     public data class MouseUp(
+        val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
     ) : Event()
 
     public data class MouseDown(
+        val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
     ) : Event()
 
     public data class ScrollWheel(
+        val windowId: WindowId,
         val scrollingDeltaX: LogicalPixels,
         val scrollingDeltaY: LogicalPixels,
         val locationInWindow: LogicalPoint,
@@ -126,7 +136,10 @@ public sealed class Event {
     /** Indicates if the Text Input support is available.
      * Call [Application.textInputEnable] to enable it or [Application.textInputDisable] to disable it afterward.
      */
-    public data class TextInputAvailability(val available: Boolean) : Event()
+    public data class TextInputAvailability(
+        val windowId: WindowId,
+        val available: Boolean,
+    ) : Event()
 
     /** The application must proceed by evaluating the changes in the following order:
      * 1. Replace the existing preedit string with the cursor.
@@ -142,9 +155,10 @@ public sealed class Event {
         val deleteSurroundingTextData: TextInputDeleteSurroundingTextData?,
     ) : Event()
 
-    public data object WindowCloseRequest : Event()
+    public data class WindowCloseRequest(val windowId: WindowId) : Event()
 
     public data class WindowConfigure(
+        val windowId: WindowId,
         val size: LogicalSize,
         val active: Boolean,
         val maximized: Boolean,
@@ -154,19 +168,27 @@ public sealed class Event {
     ) : Event()
 
     public data class WindowKeyboardEnter(
+        val windowId: WindowId,
         val keyCodes: List<KeyCode>,
         val keySyms: List<KeySym>,
     ) : Event()
 
-    public data object WindowKeyboardLeave : Event()
+    public data class WindowKeyboardLeave(val windowId: WindowId) : Event()
 
     public data class WindowDraw(
+        val windowId: WindowId,
         val softwareDrawData: SoftwareDrawData?,
         val size: PhysicalSize,
         val scale: Double,
     ) : Event()
 
-    public data class WindowScaleChanged(val newScale: Double) : Event()
+    public data class WindowScaleChanged(
+        val windowId: WindowId,
+        val newScale: Double,
+    ) : Event()
 
-    public data class WindowScreenChange(val newScreenId: ScreenId) : Event()
+    public data class WindowScreenChange(
+        val windowId: WindowId,
+        val newScreenId: ScreenId,
+    ) : Event()
 }

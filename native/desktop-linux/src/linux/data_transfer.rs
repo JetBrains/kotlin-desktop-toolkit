@@ -5,7 +5,7 @@ use std::{
 };
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
-use log::{debug, error, warn};
+use log::{debug, error};
 use smithay_client_toolkit::{
     data_device_manager::{
         WritePipe,
@@ -88,13 +88,8 @@ impl DataDeviceHandler for ApplicationState {
         };
         selection_offer.with_mime_types(|mime_types| {
             debug!("DataDeviceHandler::selection: mime_types={mime_types:?}");
-
-            if let Some(key_window) = self.get_key_window() {
-                let mime_types = CString::new(mime_types.join(",")).unwrap();
-                (key_window.event_handler)(&DataTransferAvailable::new(&mime_types).into());
-            } else {
-                warn!("DataDeviceHandler::selection: No target window");
-            }
+            let mime_types = CString::new(mime_types.join(",")).unwrap();
+            self.send_event(DataTransferAvailable::new(&mime_types));
         });
     }
 
@@ -123,12 +118,8 @@ impl DataDeviceHandler for ApplicationState {
 
                 debug!("DataDeviceHandler::drop_performed read {size} bytes for {mime_type}");
                 debug!("DataDeviceHandler::drop_performed value: {buf:?}");
-                if let Some(target_window) = state.get_window(&drag_offer.surface) {
-                    let mime_type_cstr = CString::from_str(&mime_type).unwrap();
-                    (target_window.event_handler)(&DataTransferContent::new(-1, &buf, &mime_type_cstr).into());
-                } else {
-                    warn!("DataDeviceHandler::drop_performed: No target window");
-                }
+                let mime_type_cstr = CString::from_str(&mime_type).unwrap();
+                state.send_event(DataTransferContent::new(-1, &buf, &mime_type_cstr));
 
                 PostAction::Remove
             })

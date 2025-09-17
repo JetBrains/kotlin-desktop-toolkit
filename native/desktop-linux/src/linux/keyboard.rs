@@ -4,7 +4,7 @@ use log::debug;
 use smithay_client_toolkit::{
     delegate_keyboard,
     reexports::client::{
-        Connection, Proxy, QueueHandle,
+        Connection, QueueHandle,
         protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
     },
     seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
@@ -13,9 +13,14 @@ use smithay_client_toolkit::{
 use super::events::{KeyUpEvent, ModifiersChangedEvent};
 use crate::linux::{
     application_state::ApplicationState,
-    events::{Event, KeyCode, KeyDownEvent, WindowKeyboardEnterEvent},
-    window::SimpleWindow,
+    events::{KeyCode, KeyDownEvent, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent},
 };
+
+pub fn send_key_down_event(state: &ApplicationState, event: KeyEvent, is_repeat: bool) {
+    let characters = event.utf8.map(|s| CString::new(s).unwrap());
+    let code = KeyCode(event.raw_code);
+    state.send_event(KeyDownEvent::new(code, event.keysym.raw(), characters.as_ref(), is_repeat));
+}
 
 impl KeyboardHandler for ApplicationState {
     fn enter(
@@ -28,30 +33,32 @@ impl KeyboardHandler for ApplicationState {
         raw: &[u32],
         keysyms: &[Keysym],
     ) {
-        self.key_surface = Some(surface.id());
         if let Some(window) = self.get_window(surface) {
-            window.keyboard_enter(raw, keysyms);
+            debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
+            let ks: Vec<u32> = keysyms.iter().map(|e| e.raw()).collect();
+            self.send_event(WindowKeyboardEnterEvent::new(window.window_id, raw, &ks));
         }
     }
 
     fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, surface: &WlSurface, _serial: u32) {
         if let Some(window) = self.get_window(surface) {
-            window.keyboard_leave();
+            self.send_event(WindowKeyboardLeaveEvent {
+                window_id: window.window_id,
+            });
         }
-        self.key_surface = None;
     }
 
     fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, serial: u32, event: KeyEvent) {
         self.last_key_down_serial = Some(serial);
-        if let Some(window) = self.get_key_window() {
-            window.press_key(event);
-        }
+        send_key_down_event(self, event, false);
     }
 
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, _serial: u32, event: KeyEvent) {
-        if let Some(window) = self.get_key_window() {
-            window.release_key(&event);
-        }
+        debug!("KeyboardHandler::release_key");
+        self.send_event(KeyUpEvent {
+            code: KeyCode(event.raw_code),
+            key: event.keysym.raw(),
+        });
     }
 
     fn update_modifiers(
@@ -64,57 +71,12 @@ impl KeyboardHandler for ApplicationState {
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
-        if let Some(window) = self.get_key_window() {
-            window.update_modifiers(modifiers);
-        }
+        self.send_event(ModifiersChangedEvent::new(modifiers));
     }
 
     fn repeat_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, _serial: u32, event: KeyEvent) {
-        if let Some(window) = self.get_key_window() {
-            window.on_key_repeat(event);
-        }
+        send_key_down_event(self, event, true);
     }
 }
 
 delegate_keyboard!(ApplicationState);
-
-impl SimpleWindow {
-    pub fn keyboard_enter(&self, raw: &[u32], keysyms: &[Keysym]) {
-        debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
-        let ks: Vec<u32> = keysyms.iter().map(|e| e.raw()).collect();
-        let e = WindowKeyboardEnterEvent::new(raw, &ks);
-        (self.event_handler)(&e.into());
-    }
-
-    pub fn keyboard_leave(&self) {
-        (self.event_handler)(&Event::WindowKeyboardLeave);
-    }
-
-    fn send_key_down_event(&self, event: KeyEvent, is_repeat: bool) {
-        let characters = event.utf8.map(|s| CString::new(s).unwrap());
-        let e = KeyDownEvent::new(KeyCode(event.raw_code), event.keysym.raw(), characters.as_ref(), is_repeat);
-        (self.event_handler)(&e.into());
-    }
-
-    pub fn press_key(&self, event: KeyEvent) {
-        self.send_key_down_event(event, false);
-    }
-
-    pub fn on_key_repeat(&self, event: KeyEvent) {
-        self.send_key_down_event(event, true);
-    }
-
-    pub fn release_key(&self, event: &KeyEvent) {
-        (self.event_handler)(
-            &KeyUpEvent {
-                code: KeyCode(event.raw_code),
-                key: event.keysym.raw(),
-            }
-            .into(),
-        );
-    }
-
-    pub fn update_modifiers(&self, modifiers: Modifiers) {
-        (self.event_handler)(&ModifiersChangedEvent::new(modifiers).into());
-    }
-}

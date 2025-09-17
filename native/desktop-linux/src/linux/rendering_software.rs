@@ -50,7 +50,7 @@ impl SoftwareRendering {
         }
     }
 
-    pub fn draw<F: FnOnce(Option<SoftwareDrawData>) -> bool>(&mut self, surface: &WlSurface, size: PhysicalSize, do_draw: F) {
+    pub fn draw(&mut self, surface: &WlSurface, size: PhysicalSize, do_draw: &dyn Fn(Option<SoftwareDrawData>) -> bool) {
         let canvas = if let Some(canvas) = self.pool.canvas(&self.buffer) {
             canvas
         } else {

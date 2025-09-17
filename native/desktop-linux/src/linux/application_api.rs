@@ -188,6 +188,16 @@ pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr, mime_types: Bor
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedStrPtr) -> bool {
+    let t = std::thread::current();
+    debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
+    ffi_boundary("application_clipboard_paste", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        app.clipboard_paste(serial, supported_mime_types.as_str()?)
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn application_clipboard_get_available_mimetypes(mut app_ptr: AppPtr) -> RustAllocatedStrPtr {
     debug!("application_clipboard_get_available_mimetypes");
     ffi_boundary("application_clipboard_get_available_mimetypes", || {

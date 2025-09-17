@@ -187,21 +187,6 @@ pub extern "C" fn window_unset_fullscreen(app_ptr: AppPtr, window_id: WindowId) 
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn window_clipboard_paste(
-    app_ptr: AppPtr<'_>,
-    window_id: WindowId,
-    serial: i32,
-    supported_mime_types: BorrowedStrPtr,
-) -> bool {
-    let t = std::thread::current();
-    debug!("window_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
-    ffi_boundary("window_clipboard_paste", || {
-        let app = unsafe { app_ptr.borrow::<Application>() };
-        app.clipboard_paste(window_id, serial, supported_mime_types.as_str()?)
-    })
-}
-
 impl From<WindowDecorationMode> for DecorationMode {
     fn from(value: WindowDecorationMode) -> Self {
         match value {

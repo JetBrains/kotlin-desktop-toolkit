@@ -12,7 +12,7 @@ use smithay_client_toolkit::reexports::{
 
 use crate::linux::{
     application_state::ApplicationState,
-    events::{Event, TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData},
+    events::{TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData},
 };
 
 delegate_noop!(ApplicationState: ignore ZwpTextInputManagerV3);
@@ -38,12 +38,14 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
             zwp_text_input_v3::Event::Enter { surface } => {
                 debug!("zwp_text_input_v3::Event::Enter: {}", surface.id());
                 this.active_text_input = Some(text_input.clone());
-                this.active_text_input_surface = Some(surface.id());
                 let Some(w) = this.windows.get(&surface.id()) else {
                     warn!("Couldn't find window for: {event:?}");
                     return;
                 };
-                (w.event_handler)(&Event::TextInputAvailability(TextInputAvailabilityEvent { available: true }));
+                this.send_event(TextInputAvailabilityEvent {
+                    window_id: w.window_id,
+                    available: true,
+                });
             }
             zwp_text_input_v3::Event::Leave { surface } => {
                 debug!("zwp_text_input_v3::Event::Leave: {}", surface.id());
@@ -51,9 +53,11 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                     warn!("Couldn't find window for: {event:?}");
                     return;
                 };
-                (w.event_handler)(&Event::TextInputAvailability(TextInputAvailabilityEvent { available: false }));
+                this.send_event(TextInputAvailabilityEvent {
+                    window_id: w.window_id,
+                    available: false,
+                });
                 this.active_text_input = None;
-                this.active_text_input_surface = None;
             }
             zwp_text_input_v3::Event::PreeditString {
                 text,
@@ -84,15 +88,6 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                 }
 
                 let v = std::mem::take(&mut this.pending_text_input_event);
-                let Some(active_text_input_surface) = &this.active_text_input_surface else {
-                    warn!("No active text input surface for: {event:?}");
-                    return;
-                };
-
-                let Some(w) = this.windows.get(active_text_input_surface) else {
-                    warn!("Couldn't find key window for: {event:?}");
-                    return;
-                };
 
                 let (has_commit_string, commit_string) = match v.commit_string {
                     Some(zwp_text_input_v3::Event::CommitString { text }) => (true, text.map(|t| CString::new(t).unwrap())),
@@ -132,7 +127,7 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                     has_delete_surrounding_text: delete_surrounding_text.is_some(),
                     delete_surrounding_text: delete_surrounding_text.unwrap_or_default(),
                 };
-                (w.event_handler)(&e.into());
+                this.send_event(e);
             }
             _ => {
                 warn!("Unknown event: {event:?}");

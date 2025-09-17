@@ -12,7 +12,7 @@ use desktop_common::{
 };
 use desktop_linux::linux::{
     application_api::{
-        AppPtr, ApplicationCallbacks, DataSource, DragAction, DragAndDropQueryData, application_clipboard_put,
+        AppPtr, ApplicationCallbacks, DataSource, DragAction, DragAndDropQueryData, application_clipboard_paste, application_clipboard_put,
         application_get_egl_proc_func, application_init, application_is_event_loop_thread, application_run_event_loop,
         application_set_cursor_theme, application_shutdown, application_start_drag_and_drop, application_stop_event_loop,
         application_text_input_disable, application_text_input_enable, application_text_input_update,
@@ -24,9 +24,7 @@ use desktop_linux::linux::{
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
-    window_api::{
-        WindowParams, window_clipboard_paste, window_close, window_create, window_show_open_file_dialog, window_show_save_file_dialog,
-    },
+    window_api::{WindowParams, window_close, window_create, window_show_open_file_dialog, window_show_save_file_dialog},
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use log::{debug, error, info};
@@ -58,7 +56,7 @@ pub const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
 
 pub const ALL_MIMES: &CStr = c"text/uri-list,text/plain;charset=utf-8";
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct OptionalAppPtr(Option<AppPtr<'static>>);
 
 impl OptionalAppPtr {
@@ -84,25 +82,21 @@ struct WindowState {
     text_input_available: bool,
     composed_text: String,
     text: String,
-    key_modifiers: KeyModifierBitflag,
     animation_progress: u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct State {
     app_ptr: OptionalAppPtr,
+    key_window_id: Option<WindowId>,
+    key_modifiers: KeyModifierBitflag,
     windows: HashMap<WindowId, WindowState>,
     opengl: Option<OpenglState>,
     settings: Settings,
 }
 
 thread_local! {
-    static STATE: RefCell<State> = RefCell::new(State {
-            app_ptr: OptionalAppPtr(None),
-            windows: HashMap::new(),
-            opengl: None,
-            settings: Settings::default(),
-        });
+    static STATE: RefCell<State> = RefCell::new(State::default());
 }
 
 const V_POSITION: GLuint = 0;
@@ -290,7 +284,7 @@ const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBit
     KeyModifierBitflag(all_modifiers.0 & !(KeyModifier::CapsLock as u8) & !(KeyModifier::NumLock as u8))
 }
 
-fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, window_id: WindowId, window_state: &mut WindowState) {
+fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) {
     const KEYCODE_BACKSPACE: u32 = 14;
     const KEYCODE_C: u32 = 46;
     const KEYCODE_O: u32 = 24;
@@ -298,11 +292,13 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, window_id: WindowId, wi
     const KEYCODE_V: u32 = 47;
     const KEY_MODIFIER_CTRL: u8 = KeyModifier::Ctrl as u8;
 
-    let modifiers: KeyModifierBitflag = shortcut_modifiers(window_state.key_modifiers);
+    let modifiers: KeyModifierBitflag = shortcut_modifiers(state.key_modifiers);
+    let window_id = state.key_window_id.expect("Key window not found");
     let key_code: u32 = event.code.0;
 
     match (modifiers.0, key_code) {
         (0, KEYCODE_BACKSPACE) => {
+            let window_state = state.windows.get_mut(&window_id).unwrap();
             window_state.text.pop();
             if window_state.text_input_available {
                 update_text_input_context(app_ptr, &window_state.text, false);
@@ -310,7 +306,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, window_id: WindowId, wi
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
         }
         (KEY_MODIFIER_CTRL, KEYCODE_V) => {
-            window_clipboard_paste(app_ptr, window_id, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
+            application_clipboard_paste(app_ptr, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
         }
         (KEY_MODIFIER_CTRL, KEYCODE_C) => {
             application_clipboard_put(app_ptr, BorrowedStrPtr::new(ALL_MIMES));
@@ -410,11 +406,11 @@ fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut W
     }
 }
 
-extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
+extern "C" fn event_handler(event: &Event) -> bool {
     match event {
         Event::WindowDraw(_) | Event::MouseMoved(_) => {}
         _ => {
-            debug!("event_handler: window_id={window_id:?} : {event:?}");
+            debug!("event_handler: {event:?}");
         }
     }
 
@@ -424,32 +420,30 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
         assert!(is_event_loop_thread);
 
         match event {
-            Event::WindowDraw(event) => {
-                if event.software_draw_data.canvas.is_null() {
-                    let window_state = state.windows.get_mut(&window_id).unwrap();
-                    draw_opengl_triangle_with_init(event, app_ptr, window_id, window_state, &mut state.opengl);
+            Event::WindowDraw(data) => {
+                if data.software_draw_data.canvas.is_null() {
+                    let window_state = state.windows.get_mut(&data.window_id).unwrap();
+                    draw_opengl_triangle_with_init(data, app_ptr, data.window_id, window_state, &mut state.opengl);
                 } else {
-                    draw_software(&event.software_draw_data, event.physical_size, event.scale);
+                    draw_software(&data.software_draw_data, data.physical_size, data.scale);
                 }
                 return true;
             }
-            Event::WindowCloseRequest => {
-                state.windows.retain(|&k, _v| k != window_id);
-                window_close(app_ptr.clone(), window_id);
+            Event::WindowCloseRequest(data) => {
+                state.windows.retain(|&k, _v| k != data.window_id);
+                window_close(app_ptr.clone(), data.window_id);
                 if state.windows.is_empty() {
                     application_stop_event_loop(app_ptr);
                 }
             }
-            Event::MouseDown(_) => {
-                application_start_drag_and_drop(app_ptr, window_id, BorrowedStrPtr::new(ALL_MIMES), DragAction::Copy);
+            Event::MouseDown(data) => {
+                application_start_drag_and_drop(app_ptr, data.window_id, BorrowedStrPtr::new(ALL_MIMES), DragAction::Copy);
             }
             Event::ModifiersChanged(data) => {
-                let window_state = state.windows.get_mut(&window_id).unwrap();
-                window_state.key_modifiers = data.modifiers;
+                state.key_modifiers = data.modifiers;
             }
             Event::KeyDown(event) => {
-                let window_state = state.windows.get_mut(&window_id).unwrap();
-                on_keydown(event, app_ptr, window_id, window_state);
+                on_keydown(event, app_ptr, state);
             }
             Event::FileChooserResponse(file_chooser_response) => match file_chooser_response.newline_separated_files.as_optional_str() {
                 Ok(s) => {
@@ -459,16 +453,20 @@ extern "C" fn event_handler(event: &Event, window_id: WindowId) -> bool {
                 Err(e) => error!("{e}"),
             },
             Event::DataTransfer(content) => {
-                let window_state = state.windows.get_mut(&window_id).unwrap();
-                on_data_transfer_received(content, window_state);
+                if let Some(key_window_id) = state.key_window_id {
+                    let window_state = state.windows.get_mut(&key_window_id).unwrap();
+                    on_data_transfer_received(content, window_state);
+                }
             }
             Event::TextInputAvailability(data) => {
-                let window_state = state.windows.get_mut(&window_id).unwrap();
+                let window_state = state.windows.get_mut(&data.window_id).unwrap();
                 on_text_input_availability_changed(data.available, app_ptr, window_state);
             }
             Event::TextInput(event) => {
-                let window_state = state.windows.get_mut(&window_id).unwrap();
-                on_text_input(event, app_ptr, window_id, window_state);
+                if let Some(key_window_id) = state.key_window_id {
+                    let window_state = state.windows.get_mut(&key_window_id).unwrap();
+                    on_text_input(event, app_ptr, key_window_id, window_state);
+                }
             }
             _ => {}
         }

@@ -349,236 +349,231 @@ class EditorState {
         cursorOffset += characters.length
     }
 
-    fun handleEvent(event: Event, app: Application, window: Window, windowState: WindowState): EventHandlerResult {
-        return when (event) {
-            is Event.ModifiersChanged -> {
-                modifiers = event.modifiers
-                EventHandlerResult.Stop
+    fun onModifiersChanged(event: Event.ModifiersChanged): EventHandlerResult {
+        modifiers = event.modifiers
+        return EventHandlerResult.Stop
+    }
+
+    fun onKeyDown(event: Event.KeyDown, app: Application, window: Window, windowState: WindowState): EventHandlerResult {
+        val shortcutModifiers = shortcutModifiers()
+        when (shortcutModifiers) {
+            setOf(KeyModifiers.Logo) -> EventHandlerResult.Continue
+            setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
+                KeyCode.V -> {
+                    app.clipboardPaste(0, listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                    EventHandlerResult.Stop
+                }
+
+                KeyCode.C -> {
+                    app.clipboardPut(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                    currentClipboard = DataTransferContentType.UriList(EXAMPLE_FILES)
+                    EventHandlerResult.Stop
+                }
+
+                KeyCode.O -> {
+                    window.showOpenFileDialog(
+                        commonParams = FileDialog.CommonDialogParams(
+                            modal = false,
+                            title = "Open Directory",
+                            acceptLabel = null,
+                            currentFolder = null,
+                        ),
+                        openParams = FileDialog.OpenDialogParams(
+                            allowsMultipleSelections = false,
+                            selectDirectories = true,
+                        ),
+                    )
+                    EventHandlerResult.Stop
+                }
+
+                else -> EventHandlerResult.Continue
             }
-            is Event.KeyDown -> {
-                val shortcutModifiers = shortcutModifiers()
-                when (shortcutModifiers) {
-                    setOf(KeyModifiers.Logo) -> EventHandlerResult.Continue
-                    setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
-                        KeyCode.V -> {
-                            window.clipboardPaste(0, listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
-                            EventHandlerResult.Stop
-                        }
 
-                        KeyCode.C -> {
-                            app.clipboardPut(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
-                            currentClipboard = DataTransferContentType.UriList(EXAMPLE_FILES)
-                            EventHandlerResult.Stop
-                        }
-
-                        KeyCode.O -> {
-                            window.showOpenFileDialog(
-                                commonParams = FileDialog.CommonDialogParams(
-                                    modal = false,
-                                    title = "Open Directory",
-                                    acceptLabel = null,
-                                    currentFolder = null,
-                                ),
-                                openParams = FileDialog.OpenDialogParams(
-                                    allowsMultipleSelections = false,
-                                    selectDirectories = true,
-                                ),
-                            )
-                            EventHandlerResult.Stop
-                        }
-
-                        else -> EventHandlerResult.Continue
-                    }
-
-                    setOf(KeyModifiers.Control) -> when (event.keyCode.value) {
-                        KeyCode.V -> {
-                            window.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
-                            EventHandlerResult.Stop
-                        }
-
-                        KeyCode.C -> {
-                            getCurrentSelection()?.let { selection ->
-                                app.clipboardPut(listOf(TEXT_MIME_TYPE))
-                                currentClipboard = DataTransferContentType.Text(selection)
-                                EventHandlerResult.Stop
-                            } ?: EventHandlerResult.Continue
-                        }
-
-                        KeyCode.O -> {
-                            window.showOpenFileDialog(
-                                commonParams = FileDialog.CommonDialogParams(
-                                    modal = true,
-                                    title = "Open Files",
-                                    acceptLabel = null,
-                                    currentFolder = null,
-                                ),
-                                openParams = FileDialog.OpenDialogParams(
-                                    allowsMultipleSelections = true,
-                                    selectDirectories = false,
-                                ),
-                            )
-                            EventHandlerResult.Stop
-                        }
-
-                        else -> EventHandlerResult.Continue
-                    }
-                    setOf(KeyModifiers.Shift) -> when (event.keyCode.value) {
-                        KeyCode.Up -> {
-                            if (selectionStartOffset == null) {
-                                selectionStartOffset = cursorOffset
-                            }
-                            selectionEndOffset = 0
-                            cursorOffset = 0
-                        }
-
-                        KeyCode.Down -> {
-                            if (selectionStartOffset == null) {
-                                selectionStartOffset = cursorOffset
-                            }
-                            val end = text.length
-                            selectionEndOffset = end
-                            cursorOffset = end
-                        }
-
-                        KeyCode.Left -> {
-                            if (selectionStartOffset == null) {
-                                selectionStartOffset = cursorOffset
-                            }
-                            cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
-                            selectionEndOffset = cursorOffset
-                        }
-
-                        KeyCode.Right -> {
-                            if (selectionStartOffset == null) {
-                                selectionStartOffset = cursorOffset
-                            }
-                            cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
-                            selectionEndOffset = cursorOffset
-                        }
-
-                        else -> {
-                            event.characters?.also(::typeIn)
-                        }
-                    }
-                    else -> when (event.keyCode.value) {
-                        KeyCode.BackSpace -> {
-                            if (!deleteSelection() && cursorOffset > 0) {
-                                val newCursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
-                                text.delete(newCursorOffset, cursorOffset)
-                                cursorOffset = newCursorOffset
-                            }
-                        }
-
-                        KeyCode.F11 -> {
-                            if (windowState.fullscreen) {
-                                window.unsetFullScreen()
-                            } else {
-                                window.setFullScreen()
-                            }
-                        }
-
-                        KeyCode.Up -> {
-                            cursorOffset = 0
-                        }
-
-                        KeyCode.Down -> {
-                            cursorOffset = text.length
-                        }
-
-                        KeyCode.Left -> {
-                            cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
-                        }
-
-                        KeyCode.Right -> {
-                            cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
-                        }
-
-                        else -> {
-                            event.characters?.also(::typeIn)
-                        }
-                    }
+            setOf(KeyModifiers.Control) -> when (event.keyCode.value) {
+                KeyCode.V -> {
+                    app.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
+                    EventHandlerResult.Stop
                 }
 
-                if (shortcutModifiers.all { it != KeyModifiers.Shift && it != KeyModifiers.Control && it != KeyModifiers.Logo } &&
-                    !event.keyCode.isModifierKey()
-                ) {
-                    selectionStartOffset = null
-                    selectionEndOffset = null
+                KeyCode.C -> {
+                    getCurrentSelection()?.let { selection ->
+                        app.clipboardPut(listOf(TEXT_MIME_TYPE))
+                        currentClipboard = DataTransferContentType.Text(selection)
+                        EventHandlerResult.Stop
+                    } ?: EventHandlerResult.Continue
                 }
 
-                if (textInputEnabled) {
-                    app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+                KeyCode.O -> {
+                    window.showOpenFileDialog(
+                        commonParams = FileDialog.CommonDialogParams(
+                            modal = true,
+                            title = "Open Files",
+                            acceptLabel = null,
+                            currentFolder = null,
+                        ),
+                        openParams = FileDialog.OpenDialogParams(
+                            allowsMultipleSelections = true,
+                            selectDirectories = false,
+                        ),
+                    )
+                    EventHandlerResult.Stop
                 }
-                EventHandlerResult.Stop
+
+                else -> EventHandlerResult.Continue
             }
-            is Event.DataTransfer -> {
-                val data = event.data
-                if (data.mimeTypes.contains(URI_LIST_MIME_TYPE)) {
-                    val files = data.data.decodeToString().trimEnd().split("\r\n")
-                    Logger.info { "Pasted ${files.size} files:" }
-                    for (file in files) {
-                        Logger.info { file }
+            setOf(KeyModifiers.Shift) -> when (event.keyCode.value) {
+                KeyCode.Up -> {
+                    if (selectionStartOffset == null) {
+                        selectionStartOffset = cursorOffset
                     }
-                } else if (data.mimeTypes.contains(TEXT_MIME_TYPE)) {
-                    deleteSelection()
-                    val pastedText = data.data.decodeToString()
-                    text.insert(cursorOffset, pastedText)
-                    cursorOffset += pastedText.length
-                    selectionStartOffset = null
-                    selectionEndOffset = null
-                    if (textInputEnabled) {
-                        app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+                    selectionEndOffset = 0
+                    cursorOffset = 0
+                }
+
+                KeyCode.Down -> {
+                    if (selectionStartOffset == null) {
+                        selectionStartOffset = cursorOffset
                     }
+                    val end = text.length
+                    selectionEndOffset = end
+                    cursorOffset = end
                 }
-                EventHandlerResult.Stop
-            }
-            is Event.FileChooserResponse -> {
-                Logger.info { "File chooser response: $event" }
-                EventHandlerResult.Stop
-            }
-            is Event.TextInputAvailability -> {
-                if (event.available) {
-                    app.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
-                    textInputEnabled = true
-                } else {
-                    app.textInputDisable()
-                    textInputEnabled = false
+
+                KeyCode.Left -> {
+                    if (selectionStartOffset == null) {
+                        selectionStartOffset = cursorOffset
+                    }
+                    cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
+                    selectionEndOffset = cursorOffset
                 }
-                EventHandlerResult.Stop
-            }
-            is Event.TextInput -> {
-                composedText = ""
-                event.deleteSurroundingTextData?.let { deleteSurroundingTextData ->
-                    val deleteStart = cursorOffset - utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.beforeLengthInBytes)
-                    val deleteEnd = cursorOffset + utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.afterLengthInBytes)
-                    this.text.delete(deleteStart, deleteEnd)
+
+                KeyCode.Right -> {
+                    if (selectionStartOffset == null) {
+                        selectionStartOffset = cursorOffset
+                    }
+                    cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
+                    selectionEndOffset = cursorOffset
                 }
-                event.commitStringData?.let { commitStringData ->
-                    commitStringData.text?.let { commitString ->
-                        this.text.insert(cursorOffset, commitString)
-                        cursorOffset += commitString.length
+
+                else -> {
+                    event.characters?.also(::typeIn)
+                }
+            }
+            else -> when (event.keyCode.value) {
+                KeyCode.BackSpace -> {
+                    if (!deleteSelection() && cursorOffset > 0) {
+                        val newCursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
+                        text.delete(newCursorOffset, cursorOffset)
+                        cursorOffset = newCursorOffset
                     }
                 }
-                event.preeditStringData?.let { preeditStringData ->
-                    deleteSelection()
-                    cursorVisible = !(preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1)
-                    preeditStringData.text?.let { preeditString ->
-                        composedText = preeditString
-                        composedTextStartOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBeginBytePos)
-                        composedTextEndOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorEndBytePos)
+
+                KeyCode.F11 -> {
+                    if (windowState.fullscreen) {
+                        window.unsetFullScreen()
+                    } else {
+                        window.setFullScreen()
                     }
-                } ?: run {
-                    composedTextStartOffset = null
-                    composedTextEndOffset = null
-                    cursorVisible = true
                 }
-                if (event.deleteSurroundingTextData != null || event.commitStringData != null) {
-                    app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = true))
+
+                KeyCode.Up -> {
+                    cursorOffset = 0
                 }
-                EventHandlerResult.Stop
+
+                KeyCode.Down -> {
+                    cursorOffset = text.length
+                }
+
+                KeyCode.Left -> {
+                    cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
+                }
+
+                KeyCode.Right -> {
+                    cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
+                }
+
+                else -> {
+                    event.characters?.also(::typeIn)
+                }
             }
-            else -> EventHandlerResult.Continue
         }
+
+        if (shortcutModifiers.all { it != KeyModifiers.Shift && it != KeyModifiers.Control && it != KeyModifiers.Logo } &&
+            !event.keyCode.isModifierKey()
+        ) {
+            selectionStartOffset = null
+            selectionEndOffset = null
+        }
+
+        if (textInputEnabled) {
+            app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+        }
+        return EventHandlerResult.Stop
+    }
+
+    fun onDataTransfer(event: Event.DataTransfer, app: Application): EventHandlerResult {
+        val data = event.data
+        if (data.mimeTypes.contains(URI_LIST_MIME_TYPE)) {
+            val files = data.data.decodeToString().trimEnd().split("\r\n")
+            Logger.info { "Pasted ${files.size} files:" }
+            for (file in files) {
+                Logger.info { file }
+            }
+        } else if (data.mimeTypes.contains(TEXT_MIME_TYPE)) {
+            deleteSelection()
+            val pastedText = data.data.decodeToString()
+            text.insert(cursorOffset, pastedText)
+            cursorOffset += pastedText.length
+            selectionStartOffset = null
+            selectionEndOffset = null
+            if (textInputEnabled) {
+                app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+            }
+        }
+        return EventHandlerResult.Stop
+    }
+
+    fun onTextInputAvailability(event: Event.TextInputAvailability, app: Application): EventHandlerResult {
+        if (event.available) {
+            app.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
+            textInputEnabled = true
+        } else {
+            app.textInputDisable()
+            textInputEnabled = false
+        }
+        return EventHandlerResult.Stop
+    }
+
+    fun onTextInput(event: Event.TextInput, app: Application): EventHandlerResult {
+        composedText = ""
+        event.deleteSurroundingTextData?.let { deleteSurroundingTextData ->
+            val deleteStart = cursorOffset - utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.beforeLengthInBytes)
+            val deleteEnd = cursorOffset + utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.afterLengthInBytes)
+            this.text.delete(deleteStart, deleteEnd)
+        }
+        event.commitStringData?.let { commitStringData ->
+            commitStringData.text?.let { commitString ->
+                this.text.insert(cursorOffset, commitString)
+                cursorOffset += commitString.length
+            }
+        }
+        event.preeditStringData?.let { preeditStringData ->
+            deleteSelection()
+            cursorVisible = !(preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1)
+            preeditStringData.text?.let { preeditString ->
+                composedText = preeditString
+                composedTextStartOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBeginBytePos)
+                composedTextEndOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorEndBytePos)
+            }
+        } ?: run {
+            composedTextStartOffset = null
+            composedTextEndOffset = null
+            cursorVisible = true
+        }
+        if (event.deleteSurroundingTextData != null || event.commitStringData != null) {
+            app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = true))
+        }
+        return EventHandlerResult.Stop
     }
 }
 
@@ -623,6 +618,7 @@ class WindowState {
     var maximized: Boolean = false
     var fullscreen: Boolean = false
     var capabilities: WindowCapabilities? = null
+    var pointerShape: PointerShape = PointerShape.Default
 
     fun configure(event: Event.WindowConfigure) {
         active = event.active
@@ -722,36 +718,36 @@ class CustomTitlebar(
         window: Window,
         xdgDesktopSettings: XdgDesktopSettings,
         windowState: WindowState,
-    ): Boolean {
+    ): EventHandlerResult {
         return when (windowButton) {
             WindowButtonType.AppMenu, WindowButtonType.Icon -> {
                 window.showMenu(locationInWindow)
-                true
+                EventHandlerResult.Stop
             }
             WindowButtonType.Spacer,
             WindowButtonType.Title,
             -> when (mouseButton) {
                 MouseButton.RIGHT -> {
                     executeTitlebarAction(xdgDesktopSettings.actionRightClickTitlebar, window, locationInWindow, windowState)
-                    true
+                    EventHandlerResult.Stop
                 }
                 MouseButton.MIDDLE -> {
                     executeTitlebarAction(xdgDesktopSettings.actionMiddleClickTitlebar, window, locationInWindow, windowState)
-                    true
+                    EventHandlerResult.Stop
                 }
-                else -> false
+                else -> EventHandlerResult.Continue
             }
             WindowButtonType.Minimize -> {
                 window.minimize()
-                true
+                EventHandlerResult.Stop
             }
             WindowButtonType.Maximize -> {
                 toggleMaximize(window, windowState)
-                true
+                EventHandlerResult.Stop
             }
             WindowButtonType.Close -> {
                 requestClose()
-                true
+                EventHandlerResult.Stop
             }
         }
     }
@@ -770,77 +766,82 @@ class CustomTitlebar(
         return false
     }
 
-    fun handleEvent(event: Event, xdgDesktopSettings: XdgDesktopSettings, window: Window, windowState: WindowState): EventHandlerResult {
+    fun onMouseDown(event: Event.MouseDown): EventHandlerResult {
         val headerRect = LogicalRect(origin, size)
-        val handled: Boolean = when (event) {
-            is Event.MouseDown -> {
-                if (headerRect.contains(event.locationInWindow) && event.button == MouseButton.LEFT) {
-                    leftClickStartLocation = event.locationInWindow
-                    isDragging = false
-                    true
-                } else {
-                    false
-                }
-            }
-            is Event.MouseUp -> {
-                if (event.button == MouseButton.LEFT) {
-                    leftClickStartLocation = null
-                    isDragging = false
-                    if (headerRect.contains(event.locationInWindow)) {
-                        rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second?.let { windowButton ->
-                            if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
-                                handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
-                            ) {
-                                executeTitlebarAction(
-                                    xdgDesktopSettings.actionDoubleClickTitlebar,
-                                    window,
-                                    event.locationInWindow,
-                                    windowState,
-                                )
-                                true
-                            } else {
-                                executeWindowAction(
-                                    windowButton,
-                                    event.button,
-                                    event.locationInWindow,
-                                    window,
-                                    xdgDesktopSettings,
-                                    windowState,
-                                )
-                            }
-                        } ?: false
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            }
-            is Event.MouseMoved -> {
-                lastMouseLocation = event.locationInWindow
-                if (headerRect.contains(event.locationInWindow) &&
-                    !isDragging &&
-                    (leftClickStartLocation?.isInsideCircle(event.locationInWindow, MOVE_RADIUS) == false)
-                ) {
-                    isDragging = true
-                    leftClickStartLocation = null
-                    window.startMove()
-                    true
-                } else {
-                    false
-                }
-            }
-            is Event.MouseExited -> {
-                leftClickStartLocation = null
-                false
-            }
-            is Event.MouseEntered -> {
-                isDragging = false
-                false
-            }
-            else -> false
+        return if (headerRect.contains(event.locationInWindow) && event.button == MouseButton.LEFT) {
+            leftClickStartLocation = event.locationInWindow
+            isDragging = false
+            EventHandlerResult.Stop
+        } else {
+            EventHandlerResult.Continue
         }
-        return if (handled) EventHandlerResult.Stop else EventHandlerResult.Continue
+    }
+
+    fun onMouseUp(
+        event: Event.MouseUp,
+        xdgDesktopSettings: XdgDesktopSettings,
+        window: Window,
+        windowState: WindowState,
+    ): EventHandlerResult {
+        val headerRect = LogicalRect(origin, size)
+        return if (event.button == MouseButton.LEFT) {
+            leftClickStartLocation = null
+            isDragging = false
+            if (headerRect.contains(event.locationInWindow)) {
+                rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second?.let { windowButton ->
+                    if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
+                        handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
+                    ) {
+                        executeTitlebarAction(
+                            xdgDesktopSettings.actionDoubleClickTitlebar,
+                            window,
+                            event.locationInWindow,
+                            windowState,
+                        )
+                        EventHandlerResult.Stop
+                    } else {
+                        executeWindowAction(
+                            windowButton,
+                            event.button,
+                            event.locationInWindow,
+                            window,
+                            xdgDesktopSettings,
+                            windowState,
+                        )
+                    }
+                } ?: EventHandlerResult.Continue
+            } else {
+                EventHandlerResult.Continue
+            }
+        } else {
+            EventHandlerResult.Continue
+        }
+    }
+
+    fun onMouseMoved(event: Event.MouseMoved, window: Window): EventHandlerResult {
+        val headerRect = LogicalRect(origin, size)
+        lastMouseLocation = event.locationInWindow
+        return if (headerRect.contains(event.locationInWindow) &&
+            !isDragging &&
+            (leftClickStartLocation?.isInsideCircle(event.locationInWindow, MOVE_RADIUS) == false)
+        ) {
+            isDragging = true
+            leftClickStartLocation = null
+            window.startMove()
+            EventHandlerResult.Stop
+        } else {
+            EventHandlerResult.Continue
+        }
+    }
+
+    fun onMouseEntered(): EventHandlerResult {
+        isDragging = false
+        return EventHandlerResult.Continue
+    }
+
+    fun onMouseExited(): EventHandlerResult {
+        leftClickStartLocation = null
+        return EventHandlerResult.Continue
     }
 
     private fun drawUnfilledRect(r: Rect, canvas: Canvas, paint: Paint) {
@@ -953,43 +954,41 @@ class ContentArea(
     private var markerPosition: LogicalPoint? = null
     var currentDragContent: DataTransferContentType? = null
 
-    fun handleEvent(event: Event, window: Window, editorState: EditorState): EventHandlerResult {
-        return when (event) {
-            is Event.MouseMoved -> {
-                markerPosition = LogicalPoint(
-                    event.locationInWindow.x - origin.x,
-                    event.locationInWindow.y - origin.y,
-                )
-                EventHandlerResult.Continue
+    fun onMouseMoved(event: Event.MouseMoved): EventHandlerResult {
+        markerPosition = LogicalPoint(
+            event.locationInWindow.x - origin.x,
+            event.locationInWindow.y - origin.y,
+        )
+        return EventHandlerResult.Continue
+    }
+
+    fun onMouseDown(window: Window, editorState: EditorState): EventHandlerResult {
+        when (editorState.shortcutModifiers()) {
+            setOf(KeyModifiers.Shift) -> {
+                window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Move)
+                currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
             }
-            is Event.MouseDown -> {
-                when (editorState.shortcutModifiers()) {
-                    setOf(KeyModifiers.Shift) -> {
-                        window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Move)
-                        currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
-                    }
-                    setOf(KeyModifiers.Control) -> {
-                        window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Copy)
-                        currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
-                    }
-                    else -> {
-                        currentDragContent = editorState.getCurrentSelection()?.let {
-                            window.startDrag(listOf(TEXT_MIME_TYPE), DragAction.Copy)
-                            DataTransferContentType.Text(it)
-                        }
-                    }
+            setOf(KeyModifiers.Control) -> {
+                window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Copy)
+                currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
+            }
+            else -> {
+                currentDragContent = editorState.getCurrentSelection()?.let {
+                    window.startDrag(listOf(TEXT_MIME_TYPE), DragAction.Copy)
+                    DataTransferContentType.Text(it)
                 }
-                EventHandlerResult.Stop
             }
-            is Event.MouseUp -> {
-                currentDragContent = null
-                Logger.info { "$window: currentDragContent = null" }
-                EventHandlerResult.Stop
-            }
-            is Event.TextInput -> {
-                EventHandlerResult.Stop
-            }
-            else -> EventHandlerResult.Continue
+        }
+        return EventHandlerResult.Stop
+    }
+
+    fun onMouseUp(event: Event.MouseUp): EventHandlerResult {
+        return if (event.button == MouseButton.LEFT) {
+            currentDragContent = null
+            Logger.info { "currentDragContent = null" }
+            EventHandlerResult.Stop
+        } else {
+            EventHandlerResult.Continue
         }
     }
 
@@ -1151,20 +1150,14 @@ class CustomBorders {
         return null
     }
 
-    fun handleEvent(event: Event, window: Window): EventHandlerResult {
-        when (event) {
-            is Event.MouseDown -> {
-                val edge = toEdge(event.locationInWindow)
-                if (edge != null) {
-                    window.startResize(edge)
-                    return EventHandlerResult.Stop
-                }
-            }
-            is Event.MouseMoved -> {
-            }
-            else -> {}
+    fun onMouseDown(event: Event.MouseDown, window: Window): EventHandlerResult {
+        val edge = toEdge(event.locationInWindow)
+        return if (edge != null) {
+            window.startResize(edge)
+            EventHandlerResult.Stop
+        } else {
+            EventHandlerResult.Continue
         }
-        return EventHandlerResult.Continue
     }
 }
 
@@ -1242,18 +1235,47 @@ class WindowContainer(
         }
     }
 
-    fun handleEvent(event: Event, window: Window, editorState: EditorState, windowState: WindowState): EventHandlerResult {
-        return when {
-            customBorders?.handleEvent(event, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
-            customTitlebar?.handleEvent(
-                event,
-                xdgDesktopSettings,
-                window,
-                windowState,
-            ) == EventHandlerResult.Stop -> EventHandlerResult.Stop
-            contentArea.handleEvent(event, window, editorState) == EventHandlerResult.Stop -> EventHandlerResult.Stop
-            else -> EventHandlerResult.Continue
+    fun onMouseEntered(): EventHandlerResult {
+        if (customTitlebar?.onMouseEntered() == EventHandlerResult.Stop) {
+            return EventHandlerResult.Stop
         }
+        return EventHandlerResult.Continue
+    }
+
+    fun onMouseExited(): EventHandlerResult {
+        if (customTitlebar?.onMouseExited() == EventHandlerResult.Stop) {
+            return EventHandlerResult.Stop
+        }
+        return EventHandlerResult.Continue
+    }
+
+    fun onMouseMoved(event: Event.MouseMoved, window: Window): EventHandlerResult {
+        if (customTitlebar?.onMouseMoved(event, window) == EventHandlerResult.Stop) {
+            return EventHandlerResult.Stop
+        }
+        return contentArea.onMouseMoved(event)
+    }
+
+    fun onMouseDown(event: Event.MouseDown, window: Window, editorState: EditorState): EventHandlerResult {
+        if (customBorders?.onMouseDown(event, window) == EventHandlerResult.Stop) {
+            return EventHandlerResult.Stop
+        }
+        if (customTitlebar?.onMouseDown(event) == EventHandlerResult.Stop) {
+            return EventHandlerResult.Stop
+        }
+        return contentArea.onMouseDown(window, editorState)
+    }
+
+    fun onMouseUp(
+        event: Event.MouseUp,
+        xdgDesktopSettings: XdgDesktopSettings,
+        window: Window,
+        windowState: WindowState,
+    ): EventHandlerResult {
+        if (customTitlebar?.onMouseUp(event, xdgDesktopSettings, window, windowState) == EventHandlerResult.Stop) {
+            return EventHandlerResult.Stop
+        }
+        return contentArea.onMouseUp(event)
     }
 
     fun draw(canvas: Canvas, time: Long, scale: Float, title: String, editorState: EditorState, windowState: WindowState) {
@@ -1310,45 +1332,72 @@ class RotatingBallWindow(
         }
     }
 
-    override fun handleEvent(event: Event, app: Application): EventHandlerResult {
-        return if (super.handleEvent(event, app) == EventHandlerResult.Continue) {
-            if (editorState.handleEvent(event, app, window, windowState) == EventHandlerResult.Stop) {
-                return EventHandlerResult.Stop
-            }
-            when (event) {
-                is Event.WindowConfigure -> {
-                    windowState.configure(event)
-                    windowContainer.configure(event)
-                    // performDrawing(syncWithCA = true)
-                    EventHandlerResult.Stop
-                }
-                is Event.MouseMoved -> {
-                    val borderEdge = windowContainer.customBorders?.toEdge(event.locationInWindow)
-                    if (borderEdge != null) {
-                        window.setPointerShape(CustomBorders.edgeToPointerShape(borderEdge))
-                        EventHandlerResult.Stop
-                    } else {
-                        window.setPointerShape(PointerShape.Default)
-                        windowContainer.handleEvent(event, window, editorState, windowState)
-                    }
-                }
-                else -> {
-                    windowContainer.handleEvent(event, window, editorState, windowState)
-                }
-            }
-        } else {
-            EventHandlerResult.Stop
-        }
-    }
-
     override fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long) {
         val canvas = this
         windowContainer.draw(canvas, time, scale.toFloat(), title, editorState, windowState)
+    }
+
+    fun configure(event: Event.WindowConfigure): EventHandlerResult {
+        windowState.configure(event)
+        windowContainer.configure(event)
+        // performDrawing(syncWithCA = true)
+        return EventHandlerResult.Stop
+    }
+
+    private fun changePointerShape(newPointerShape: PointerShape) {
+        if (windowState.pointerShape != newPointerShape) {
+            windowState.pointerShape = newPointerShape
+            window.setPointerShape(newPointerShape)
+        }
+    }
+
+    fun onMouseMoved(event: Event.MouseMoved): EventHandlerResult {
+        val borderEdge = windowContainer.customBorders?.toEdge(event.locationInWindow)
+        return if (borderEdge != null) {
+            changePointerShape(CustomBorders.edgeToPointerShape(borderEdge))
+            EventHandlerResult.Stop
+        } else {
+            changePointerShape(PointerShape.Default)
+            windowContainer.onMouseMoved(event, window)
+        }
+    }
+
+    fun onKeyDown(event: Event.KeyDown, app: Application): EventHandlerResult {
+        return editorState.onKeyDown(event, app, window, windowState)
+    }
+
+    fun onModifiersChanged(event: Event.ModifiersChanged): EventHandlerResult {
+        return editorState.onModifiersChanged(event)
+    }
+
+    fun onTextInputAvailability(event: Event.TextInputAvailability, app: Application): EventHandlerResult {
+        return editorState.onTextInputAvailability(event, app)
+    }
+
+    fun onTextInput(event: Event.TextInput, app: Application): EventHandlerResult {
+        return editorState.onTextInput(event, app)
+    }
+
+    fun onMouseEntered(): EventHandlerResult {
+        return windowContainer.onMouseEntered()
+    }
+
+    fun onMouseExited(): EventHandlerResult {
+        return windowContainer.onMouseExited()
+    }
+
+    fun onMouseDown(event: Event.MouseDown): EventHandlerResult {
+        return windowContainer.onMouseDown(event, window, editorState)
+    }
+
+    fun onMouseUp(event: Event.MouseUp, xdgDesktopSettings: XdgDesktopSettings): EventHandlerResult {
+        return windowContainer.onMouseUp(event, xdgDesktopSettings, window, windowState)
     }
 }
 
 class ApplicationState(private val app: Application) : AutoCloseable {
     val windows = mutableMapOf<WindowId, RotatingBallWindow>()
+    var keyWindowId: WindowId? = null
     private val xdgDesktopSettings = XdgDesktopSettings()
     private val editorState = EditorState()
 
@@ -1369,24 +1418,19 @@ class ApplicationState(private val app: Application) : AutoCloseable {
             windowParams,
             xdgDesktopSettings,
         ) {
-            handleEvent(Event.WindowCloseRequest, windowId)
+            handleEvent(Event.WindowCloseRequest(windowId))
         }
     }
 
-    private fun logEvents(event: Event) {
-        when (event) {
-            is Event.MouseMoved, is Event.WindowDraw -> {}
-            else -> {
-                Logger.info { "$event" }
-            }
+    fun handleEvent(event: Event): EventHandlerResult {
+        if (event !is Event.MouseMoved && event !is Event.WindowDraw) {
+            Logger.info { "$event" }
         }
-    }
 
-    fun handleEvent(event: Event, windowId: WindowId): EventHandlerResult {
-        logEvents(event)
-        val window = windows[windowId] ?: return EventHandlerResult.Continue
         return when (event) {
             is Event.WindowCloseRequest -> {
+                val windowId = event.windowId
+                val window = windows[windowId] ?: return EventHandlerResult.Continue
                 window.close()
                 windows.remove(windowId)
                 if (windows.isEmpty()) {
@@ -1394,7 +1438,47 @@ class ApplicationState(private val app: Application) : AutoCloseable {
                 }
                 EventHandlerResult.Stop
             }
-            else -> window.handleEvent(event, app)
+            is Event.WindowDraw -> {
+                if (windows[event.windowId]?.performDrawing(event) == true) {
+                    EventHandlerResult.Stop
+                } else {
+                    EventHandlerResult.Continue
+                }
+            }
+            is Event.WindowConfigure -> {
+                windows[event.windowId]?.configure(event) ?: EventHandlerResult.Continue
+            }
+            is Event.MouseMoved -> {
+                windows[event.windowId]?.onMouseMoved(event) ?: EventHandlerResult.Continue
+            }
+            is Event.DataTransfer -> {
+                editorState.onDataTransfer(event, app)
+            }
+            is Event.DataTransferAvailable -> EventHandlerResult.Continue
+            is Event.FileChooserResponse -> {
+                Logger.info { "File chooser response: $event" }
+                EventHandlerResult.Stop
+            }
+            is Event.KeyDown -> windows[keyWindowId]?.onKeyDown(event, app) ?: EventHandlerResult.Continue
+            is Event.KeyUp -> EventHandlerResult.Continue
+            is Event.ModifiersChanged -> windows[keyWindowId]?.onModifiersChanged(event) ?: EventHandlerResult.Continue
+            is Event.MouseDown -> windows[keyWindowId]?.onMouseDown(event) ?: EventHandlerResult.Continue
+            is Event.MouseEntered -> windows[keyWindowId]?.onMouseEntered() ?: EventHandlerResult.Continue
+            is Event.MouseExited -> windows[keyWindowId]?.onMouseExited() ?: EventHandlerResult.Continue
+            is Event.MouseUp -> windows[keyWindowId]?.onMouseUp(event, xdgDesktopSettings) ?: EventHandlerResult.Continue
+            is Event.ScrollWheel -> EventHandlerResult.Continue
+            is Event.TextInput -> windows[keyWindowId]?.onTextInput(event, app) ?: EventHandlerResult.Continue
+            is Event.TextInputAvailability -> windows[keyWindowId]?.onTextInputAvailability(event, app) ?: EventHandlerResult.Continue
+            is Event.WindowKeyboardEnter -> {
+                keyWindowId = event.windowId
+                EventHandlerResult.Continue
+            }
+            is Event.WindowKeyboardLeave -> {
+                check(keyWindowId == event.windowId)
+                keyWindowId = null
+                EventHandlerResult.Continue
+            }
+            is Event.WindowScaleChanged, is Event.WindowScreenChange -> EventHandlerResult.Continue
         }
     }
 
@@ -1473,7 +1557,7 @@ fun main(args: Array<String>) {
                 onXdgDesktopSettingsChange = {
                     state.settingChanged(it)
                 },
-                eventHandler = { event, windowId -> state.handleEvent(event, windowId) },
+                eventHandler = { state.handleEvent(it) },
                 getDragAndDropSupportedMimeTypes = { queryData ->
                     state.windows[queryData.windowId]!!.getDragAndDropSupportedMimeTypes(queryData.point)
                 },

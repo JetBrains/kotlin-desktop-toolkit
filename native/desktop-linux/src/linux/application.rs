@@ -1,7 +1,6 @@
 use std::{ffi::CString, io::Read, str::FromStr, thread::ThreadId, time::Duration};
 
 use anyhow::{Context, anyhow};
-use desktop_common::logger::catch_panic;
 use log::{debug, warn};
 use smithay_client_toolkit::{
     reexports::{
@@ -24,7 +23,7 @@ use crate::linux::{
     application_state::ApplicationState,
     async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
-    events::{DataTransferContent, Event, RequestId, WindowId},
+    events::{DataTransferContent, RequestId, WindowId},
     window::SimpleWindow,
     window_api::WindowParams,
     xdg_desktop_settings::xdg_desktop_settings_notifier,
@@ -181,20 +180,7 @@ impl Application {
 
     pub fn new_window(&mut self, params: &WindowParams) {
         let window_id = params.window_id;
-        let event_handler = self.state.callbacks.event_handler;
-        let w = SimpleWindow::new(
-            window_id,
-            &self.state,
-            &self.qh,
-            Box::new(move |e| {
-                match e {
-                    Event::MouseMoved(_) | Event::WindowDraw(_) => {}
-                    _ => debug!("Sending event for {window_id:?}: {e:?}"),
-                }
-                catch_panic(|| Ok(event_handler(e, window_id))).unwrap_or(false)
-            }),
-            params,
-        );
+        let w = SimpleWindow::new(window_id, &self.state, &self.qh, params);
         let surface_id = w.window.wl_surface().id();
         self.state.windows.insert(surface_id.clone(), w);
         self.state.window_id_to_surface_id.insert(window_id, surface_id);
@@ -256,7 +242,7 @@ impl Application {
         selection_offer.with_mime_types(|mime_types| Some(mime_types.join(",")))
     }
 
-    pub fn clipboard_paste(&self, window_id: WindowId, serial: i32, supported_mime_types: &str) -> anyhow::Result<bool> {
+    pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> anyhow::Result<bool> {
         let Some(data_device) = self.state.data_device.as_ref() else {
             warn!("Application::clipboard_paste: No data device available");
             return Ok(false);
@@ -284,12 +270,8 @@ impl Application {
             let size = f.read_to_end(&mut buf).unwrap();
 
             debug!("Application::clipboard_paste read {size} bytes");
-            if let Some(target_window) = state.get_window_by_id(window_id) {
-                let mime_type_cstr = CString::from_str(&mime_type).unwrap();
-                (target_window.event_handler)(&DataTransferContent::new(serial, &buf, &mime_type_cstr).into());
-            } else {
-                warn!("Application::clipboard_paste: No target window");
-            }
+            let mime_type_cstr = CString::from_str(&mime_type).unwrap();
+            state.send_event(DataTransferContent::new(serial, &buf, &mime_type_cstr));
 
             PostAction::Remove
         })?;

@@ -4,9 +4,8 @@ use smithay_client_toolkit::{
     reexports::{
         client::{
             Connection, Proxy, QueueHandle,
-            protocol::{wl_output::WlOutput, wl_seat::WlSeat, wl_surface::WlSurface},
+            protocol::{wl_seat::WlSeat, wl_surface::WlSurface},
         },
-        csd_frame::WindowManagerCapabilities,
         protocols::wp::viewporter::client::wp_viewport::WpViewport,
     },
     seat::pointer::{CursorIcon, ThemedPointer},
@@ -22,10 +21,7 @@ use smithay_client_toolkit::{
 
 use crate::linux::{
     application_state::{ApplicationState, EglInstance},
-    events::{
-        Event, InternalEventHandler, SoftwareDrawData, WindowCapabilities, WindowConfigureEvent, WindowDecorationMode, WindowDrawEvent,
-        WindowId, WindowScaleChangedEvent, WindowScreenChangeEvent,
-    },
+    events::{SoftwareDrawData, WindowDecorationMode, WindowDrawEvent, WindowId},
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
     rendering_egl::EglRendering,
     rendering_software::SoftwareRendering,
@@ -50,7 +46,6 @@ impl From<DecorationMode> for WindowDecorationMode {
 
 pub struct SimpleWindow {
     pub window_id: WindowId,
-    pub event_handler: Box<InternalEventHandler>,
     pub close: bool,
     pub size: Option<LogicalSize>,
     viewport: Option<WpViewport>,
@@ -67,13 +62,7 @@ pub struct SimpleWindow {
 
 impl SimpleWindow {
     #[must_use]
-    pub fn new(
-        window_id: WindowId,
-        app_state: &ApplicationState,
-        qh: &QueueHandle<ApplicationState>,
-        event_handler: Box<InternalEventHandler>,
-        params: &WindowParams,
-    ) -> Self {
+    pub fn new(window_id: WindowId, app_state: &ApplicationState, qh: &QueueHandle<ApplicationState>, params: &WindowParams) -> Self {
         let state = app_state;
 
         let window_surface = state.compositor_state.create_surface(qh);
@@ -107,7 +96,6 @@ impl SimpleWindow {
         debug!("Creating new window with id={:?} and surface_id={surface_id}", params.window_id);
         Self {
             window_id,
-            event_handler,
             close: false,
             size,
             viewport,
@@ -123,13 +111,8 @@ impl SimpleWindow {
         }
     }
 
-    pub fn request_close(&self) {
-        (self.event_handler)(&Event::WindowCloseRequest);
-    }
-
-    pub fn close(&mut self) {
+    pub const fn close(&mut self) {
         self.close = true;
-        self.event_handler = Box::new(|_| false);
     }
 
     pub fn configure(
@@ -166,23 +149,6 @@ impl SimpleWindow {
         window.xdg_surface().set_window_geometry(0, 0, width.round(), height.round());
         // TODO: wl_surface::set_opaque_region?
 
-        (self.event_handler)(
-            &WindowConfigureEvent {
-                size,
-                active: configure.is_activated(),
-                maximized: configure.is_maximized(),
-                fullscreen: configure.is_fullscreen(),
-                decoration_mode: configure.decoration_mode.into(),
-                capabilities: WindowCapabilities {
-                    window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
-                    maximixe: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
-                    fullscreen: configure.capabilities.contains(WindowManagerCapabilities::FULLSCREEN),
-                    minimize: configure.capabilities.contains(WindowManagerCapabilities::MINIMIZE),
-                },
-            }
-            .into(),
-        );
-
         let physical_size = size.to_physical(self.current_scale);
         debug!("SimpleWindow::configure: size={size:?}, physical_size={physical_size:?}");
 
@@ -216,6 +182,7 @@ impl SimpleWindow {
         qh: &QueueHandle<ApplicationState>,
         themed_pointer: Option<&mut ThemedPointer>,
         egl: Option<&EglInstance>,
+        callback: &dyn Fn(WindowDrawEvent) -> bool,
     ) {
         let surface = self.window.wl_surface();
         if self.set_cursor {
@@ -235,17 +202,15 @@ impl SimpleWindow {
         let physical_size = self.size.unwrap().to_physical(self.current_scale);
 
         let do_draw = |software_draw_data: Option<SoftwareDrawData>| {
-            let did_draw = (self.event_handler)(
-                &WindowDrawEvent {
-                    software_draw_data: software_draw_data.unwrap_or(SoftwareDrawData {
-                        canvas: std::ptr::null_mut(),
-                        stride: 0,
-                    }),
-                    physical_size,
-                    scale: self.current_scale,
-                }
-                .into(),
-            );
+            let did_draw = callback(WindowDrawEvent {
+                window_id: self.window_id,
+                software_draw_data: software_draw_data.unwrap_or(SoftwareDrawData {
+                    canvas: std::ptr::null_mut(),
+                    stride: 0,
+                }),
+                physical_size,
+                scale: self.current_scale,
+            });
 
             if did_draw {
                 // Damage the entire window
@@ -258,16 +223,12 @@ impl SimpleWindow {
         };
 
         match &mut self.rendering_data {
-            Some(RenderingData::Egl(r)) => r.draw(surface, egl.unwrap(), do_draw),
-            Some(RenderingData::Software(r)) => r.draw(surface, physical_size, do_draw),
+            Some(RenderingData::Egl(r)) => r.draw(surface, egl.unwrap(), &do_draw),
+            Some(RenderingData::Software(r)) => r.draw(surface, physical_size, &do_draw),
             None => warn!("Rendering data not initialized in draw"),
         }
 
         surface.commit();
-    }
-
-    pub fn output_changed(&self, output: &WlOutput) {
-        (self.event_handler)(&WindowScreenChangeEvent::new(output).into());
     }
 
     fn on_resize(&mut self, size: &LogicalSize, physical_size: PhysicalSize, shm: &Shm) {
@@ -301,13 +262,13 @@ impl SimpleWindow {
         if let Some(size) = self.size {
             self.on_resize(&size, size.to_physical(self.current_scale), shm);
         }
-
-        (self.event_handler)(&WindowScaleChangedEvent { new_scale }.into());
     }
 
-    pub const fn set_cursor_icon(&mut self, cursor_icon: CursorIcon) {
-        self.set_cursor = true;
-        self.decorations_cursor = cursor_icon;
+    pub fn set_cursor_icon(&mut self, cursor_icon: CursorIcon) {
+        if self.decorations_cursor != cursor_icon {
+            self.set_cursor = true;
+            self.decorations_cursor = cursor_icon;
+        }
     }
 
     pub fn start_move(&self) {

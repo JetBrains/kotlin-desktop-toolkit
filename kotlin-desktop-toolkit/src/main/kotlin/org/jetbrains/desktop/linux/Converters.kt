@@ -31,9 +31,11 @@ import org.jetbrains.desktop.linux.generated.NativeTextInputDeleteSurroundingTex
 import org.jetbrains.desktop.linux.generated.NativeTextInputEvent
 import org.jetbrains.desktop.linux.generated.NativeTextInputPreeditStringData
 import org.jetbrains.desktop.linux.generated.NativeWindowCapabilities
+import org.jetbrains.desktop.linux.generated.NativeWindowCloseRequestEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowConfigureEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardEnterEvent
+import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
 import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
@@ -479,7 +481,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_linux_h.NativeEvent_TextInputAvailability() -> {
             val nativeEvent = NativeEvent.text_input(s)
-            Event.TextInputAvailability(NativeTextInputAvailabilityEvent.available(nativeEvent))
+            Event.TextInputAvailability(
+                windowId = NativeTextInputAvailabilityEvent.window_id(nativeEvent),
+                available = NativeTextInputAvailabilityEvent.available(nativeEvent),
+            )
         }
         desktop_linux_h.NativeEvent_TextInput() -> {
             val nativeEvent = NativeEvent.text_input(s)
@@ -511,6 +516,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_linux_h.NativeEvent_MouseMoved() -> {
             val nativeEvent = NativeEvent.mouse_moved(s)
             Event.MouseMoved(
+                windowId = NativeMouseMovedEvent.window_id(nativeEvent),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseMovedEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(NativeMouseMovedEvent.timestamp(nativeEvent)),
             )
@@ -518,18 +524,21 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_linux_h.NativeEvent_MouseEntered() -> {
             val nativeEvent = NativeEvent.mouse_entered(s)
             Event.MouseEntered(
+                windowId = NativeMouseEnteredEvent.window_id(nativeEvent),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseEnteredEvent.location_in_window(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_MouseExited() -> {
             val nativeEvent = NativeEvent.mouse_exited(s)
             Event.MouseExited(
+                windowId = NativeMouseExitedEvent.window_id(nativeEvent),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseExitedEvent.location_in_window(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_MouseUp() -> {
             val nativeEvent = NativeEvent.mouse_up(s)
             Event.MouseUp(
+                windowId = NativeMouseUpEvent.window_id(nativeEvent),
                 button = MouseButton(NativeMouseUpEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseUpEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(NativeMouseUpEvent.timestamp(nativeEvent)),
@@ -538,6 +547,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_linux_h.NativeEvent_MouseDown() -> {
             val nativeEvent = NativeEvent.mouse_down(s)
             Event.MouseDown(
+                windowId = NativeMouseDownEvent.window_id(nativeEvent),
                 button = MouseButton(NativeMouseDownEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseDownEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(NativeMouseDownEvent.timestamp(nativeEvent)),
@@ -546,6 +556,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_linux_h.NativeEvent_ScrollWheel() -> {
             val nativeEvent = NativeEvent.scroll_wheel(s)
             Event.ScrollWheel(
+                windowId = NativeScrollWheelEvent.window_id(nativeEvent),
                 scrollingDeltaX = NativeScrollWheelEvent.scrolling_delta_x(nativeEvent).toFloat(),
                 scrollingDeltaY = NativeScrollWheelEvent.scrolling_delta_y(nativeEvent).toFloat(),
                 locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
@@ -554,12 +565,14 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         } desktop_linux_h.NativeEvent_WindowScreenChange() -> {
             val nativeEvent = NativeEvent.window_screen_change(s)
             Event.WindowScreenChange(
+                windowId = NativeWindowScreenChangeEvent.window_id(nativeEvent),
                 newScreenId = NativeWindowScreenChangeEvent.new_screen_id(nativeEvent),
             )
         }
         desktop_linux_h.NativeEvent_WindowConfigure() -> {
             val nativeEvent = NativeEvent.window_configure(s)
             Event.WindowConfigure(
+                windowId = NativeWindowConfigureEvent.window_id(nativeEvent),
                 size = LogicalSize.fromNative(NativeWindowConfigureEvent.size(nativeEvent)),
                 active = NativeWindowConfigureEvent.active(nativeEvent),
                 maximized = NativeWindowConfigureEvent.maximized(nativeEvent),
@@ -574,17 +587,24 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             val keyCodes = readNativeU32Array(NativeWindowKeyboardEnterEvent.raw(nativeEvent)).map { KeyCode(it) }
             val keySyms = readNativeU32Array(NativeWindowKeyboardEnterEvent.keysyms(nativeEvent)).map { KeySym(it) }
 
-            Event.WindowKeyboardEnter(keyCodes, keySyms)
+            Event.WindowKeyboardEnter(
+                windowId = NativeWindowKeyboardEnterEvent.window_id(nativeEvent),
+                keyCodes,
+                keySyms,
+            )
         }
         desktop_linux_h.NativeEvent_WindowKeyboardLeave() -> {
-            Event.WindowKeyboardLeave
+            val nativeEvent = NativeEvent.window_keyboard_leave(s)
+            Event.WindowKeyboardLeave(windowId = NativeWindowKeyboardLeaveEvent.window_id(nativeEvent))
         }
         desktop_linux_h.NativeEvent_WindowCloseRequest() -> {
-            Event.WindowCloseRequest
+            val nativeEvent = NativeEvent.window_close_request(s)
+            Event.WindowCloseRequest(windowId = NativeWindowCloseRequestEvent.window_id(nativeEvent))
         }
         desktop_linux_h.NativeEvent_WindowDraw() -> {
             val nativeEvent = NativeEvent.window_draw(s)
             Event.WindowDraw(
+                windowId = NativeWindowDrawEvent.window_id(nativeEvent),
                 softwareDrawData = SoftwareDrawData.fromNative(NativeWindowDrawEvent.software_draw_data(nativeEvent)),
                 size = PhysicalSize.fromNative(NativeWindowDrawEvent.physical_size(nativeEvent)),
                 scale = NativeWindowDrawEvent.scale(nativeEvent),
@@ -593,6 +613,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         desktop_linux_h.NativeEvent_WindowScaleChanged() -> {
             val nativeEvent = NativeEvent.window_scale_changed(s)
             Event.WindowScaleChanged(
+                windowId = NativeWindowScaleChangedEvent.window_id(nativeEvent),
                 newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent),
             )
         }

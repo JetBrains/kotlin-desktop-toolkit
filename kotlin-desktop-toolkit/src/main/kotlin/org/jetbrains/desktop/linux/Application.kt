@@ -17,7 +17,7 @@ public enum class EventHandlerResult {
     Stop,
 }
 
-public typealias EventHandler = (Event, WindowId) -> EventHandlerResult
+public typealias EventHandler = (Event) -> EventHandlerResult
 
 public class CustomTitlebarParams
 
@@ -83,10 +83,10 @@ public class Application : AutoCloseable {
     }
 
     // called from native
-    private fun onEvent(nativeEvent: MemorySegment, windowId: WindowId): Boolean {
+    private fun onEvent(nativeEvent: MemorySegment): Boolean {
         val event = Event.fromNative(nativeEvent)
         return ffiUpCall(defaultResult = false) {
-            val result = applicationConfig?.eventHandler(event, windowId)
+            val result = applicationConfig?.eventHandler(event)
             when (result) {
                 EventHandlerResult.Continue -> false
                 EventHandlerResult.Stop -> true
@@ -307,6 +307,15 @@ public class Application : AutoCloseable {
     public fun textInputDisable() {
         ffiDownCall {
             desktop_linux_h.application_text_input_disable(appPtr)
+        }
+    }
+
+    /** Will produce [Event.DataTransfer] event if there is clipboard content. */
+    public fun clipboardPaste(serial: Int, supportedMimeTypes: List<String>): Boolean {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_linux_h.application_clipboard_paste(appPtr, serial, mimeTypesToNative(arena, supportedMimeTypes))
+            }
         }
     }
 

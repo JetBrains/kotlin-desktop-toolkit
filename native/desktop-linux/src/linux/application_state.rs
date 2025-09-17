@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use desktop_common::logger::catch_panic;
 use khronos_egl;
 use log::{debug, warn};
 use smithay_client_toolkit::{
@@ -26,6 +27,7 @@ use smithay_client_toolkit::{
                 wl_surface::WlSurface,
             },
         },
+        csd_frame::WindowManagerCapabilities,
         protocols::wp::{
             fractional_scale::v1::client::{
                 wp_fractional_scale_manager_v1::WpFractionalScaleManagerV1,
@@ -51,7 +53,16 @@ use smithay_client_toolkit::{
     shm::{Shm, ShmHandler},
 };
 
-use crate::linux::{application_api::ApplicationCallbacks, events::WindowId, text_input::PendingTextInputEvent, window::SimpleWindow};
+use crate::linux::{
+    application_api::ApplicationCallbacks,
+    events::{
+        Event, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDrawEvent, WindowId, WindowScaleChangedEvent,
+        WindowScreenChangeEvent,
+    },
+    keyboard::send_key_down_event,
+    text_input::PendingTextInputEvent,
+    window::SimpleWindow,
+};
 
 /// cbindgen:ignore
 pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
@@ -80,11 +91,9 @@ pub struct ApplicationState {
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
-    pub(crate) last_key_down_serial: Option<u32>,
-    pub(crate) key_surface: Option<ObjectId>,
-    pub(crate) active_text_input: Option<ZwpTextInputV3>,
-    pub(crate) active_text_input_surface: Option<ObjectId>,
-    pub(crate) pending_text_input_event: PendingTextInputEvent,
+    pub last_key_down_serial: Option<u32>,
+    pub active_text_input: Option<ZwpTextInputV3>,
+    pub pending_text_input_event: PendingTextInputEvent,
     pub egl: Option<EglInstance>,
 }
 
@@ -131,9 +140,7 @@ impl ApplicationState {
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             last_key_down_serial: None,
-            key_surface: None,
             active_text_input: None,
-            active_text_input_surface: None,
             pending_text_input_event: PendingTextInputEvent::default(),
             egl,
         }
@@ -148,10 +155,6 @@ impl ApplicationState {
         self.window_id_to_surface_id
             .get(&window_id)
             .and_then(|surface_id| self.windows.get(surface_id))
-    }
-
-    pub(crate) fn get_key_window(&self) -> Option<&SimpleWindow> {
-        self.key_surface.as_ref().and_then(|surface_id| self.windows.get(surface_id))
     }
 
     fn update_themed_cursor_with_seat(&mut self, qh: &QueueHandle<Self>, seat: &WlSeat) -> anyhow::Result<()> {
@@ -185,6 +188,22 @@ impl ApplicationState {
         self.cursor_theme = Some((name.to_string(), size));
         self.update_themed_cursor(qh)
     }
+
+    pub fn send_event<'a, T: Into<Event<'a>>>(&self, event_data: T) -> bool {
+        let event: Event = event_data.into();
+        self.callbacks.send_event(event)
+    }
+}
+
+impl ApplicationCallbacks {
+    #[allow(clippy::needless_pass_by_value)]
+    fn send_event(&self, event: Event) -> bool {
+        match event {
+            Event::MouseMoved(_) | Event::WindowDraw(_) => {}
+            _ => debug!("Sending event: {event:?}"),
+        }
+        catch_panic(|| Ok((self.event_handler)(&event))).unwrap_or(false)
+    }
 }
 
 impl SeatHandler for ApplicationState {
@@ -213,10 +232,8 @@ impl SeatHandler for ApplicationState {
                     Box::new(|state, wl_kbd, event| {
                         // Since wl_keyboard version 10, [smithay_client_toolkit::seat::keyboard::KeyboardHandler::repeat_key]
                         // is used instead.
-                        if wl_kbd.version() < 10
-                            && let Some(window) = state.get_key_window()
-                        {
-                            window.on_key_repeat(event);
+                        if wl_kbd.version() < 10 {
+                            send_key_down_event(state, event, true);
                         }
                     }),
                 )
@@ -297,7 +314,16 @@ impl CompositorHandler for ApplicationState {
         debug!("scale_factor_changed for {}: {new_factor}", surface.id());
         if self.fractional_scale_manager.is_none() {
             if let Some(window) = self.windows.get_mut(&surface.id()) {
-                window.scale_changed(new_factor.into(), &self.shm_state);
+                let new_scale: f64 = new_factor.into();
+                window.scale_changed(new_scale, &self.shm_state);
+
+                self.callbacks.send_event(
+                    WindowScaleChangedEvent {
+                        window_id: window.window_id,
+                        new_scale,
+                    }
+                    .into(),
+                );
             }
         }
     }
@@ -308,7 +334,9 @@ impl CompositorHandler for ApplicationState {
 
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, _time: u32) {
         if let Some(window) = self.windows.get_mut(&surface.id()) {
-            window.draw(conn, qh, self.themed_pointer.as_mut(), self.egl.as_ref());
+            window.draw(conn, qh, self.themed_pointer.as_mut(), self.egl.as_ref(), &|e: WindowDrawEvent| {
+                self.callbacks.send_event(e.into())
+            });
         }
     }
 
@@ -316,14 +344,14 @@ impl CompositorHandler for ApplicationState {
         debug!("surface_enter for {}: {}", surface.id(), output.id());
         if let Some(window) = self.get_window(surface) {
             //let screen_info = ScreenInfo::new(self.output_state.info(output));  // TODO?
-            window.output_changed(output);
+            self.send_event(WindowScreenChangeEvent::new(window.window_id, output));
         }
     }
 
     fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &WlOutput) {
         debug!("surface_leave for {}: {}", surface.id(), output.id());
         if let Some(window) = self.get_window(surface) {
-            window.output_changed(output);
+            self.send_event(WindowScreenChangeEvent::new(window.window_id, output));
         }
     }
 }
@@ -333,16 +361,40 @@ delegate_compositor!(ApplicationState);
 impl WindowHandler for ApplicationState {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &Window) {
         if let Some(window) = self.get_window(window.wl_surface()) {
-            window.request_close();
+            self.send_event(WindowCloseRequestEvent {
+                window_id: window.window_id,
+            });
         }
     }
 
     fn configure(&mut self, conn: &Connection, qh: &QueueHandle<Self>, window: &Window, configure: WindowConfigure, _serial: u32) {
         if let Some(w) = self.windows.get_mut(&window.wl_surface().id()) {
             let egl = self.egl.as_ref();
-            if w.configure(conn, &self.shm_state, window, &configure, egl) {
+            let is_first_configure = w.configure(conn, &self.shm_state, window, &configure, egl);
+
+            self.callbacks.send_event(
+                WindowConfigureEvent {
+                    window_id: w.window_id,
+                    size: w.size.unwrap(),
+                    active: configure.is_activated(),
+                    maximized: configure.is_maximized(),
+                    fullscreen: configure.is_fullscreen(),
+                    decoration_mode: configure.decoration_mode.into(),
+                    capabilities: WindowCapabilities {
+                        window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
+                        maximixe: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
+                        fullscreen: configure.capabilities.contains(WindowManagerCapabilities::FULLSCREEN),
+                        minimize: configure.capabilities.contains(WindowManagerCapabilities::MINIMIZE),
+                    },
+                }
+                .into(),
+            );
+
+            if is_first_configure {
                 // Initiate the first draw.
-                w.draw(conn, qh, self.themed_pointer.as_mut(), egl);
+                w.draw(conn, qh, self.themed_pointer.as_mut(), egl, &|e: WindowDrawEvent| {
+                    self.callbacks.send_event(e.into())
+                });
             }
         }
     }
@@ -371,7 +423,16 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
             debug!("wp_fractional_scale_v1::Event::PreferredScale: {scale}");
             if let Some(window) = this.windows.get_mut(surface_id) {
-                window.scale_changed(f64::from(scale) / 120.0, &this.shm_state);
+                let new_scale = f64::from(scale) / 120.0;
+                window.scale_changed(new_scale, &this.shm_state);
+
+                this.callbacks.send_event(
+                    WindowScaleChangedEvent {
+                        window_id: window.window_id,
+                        new_scale,
+                    }
+                    .into(),
+                );
             }
         }
     }
