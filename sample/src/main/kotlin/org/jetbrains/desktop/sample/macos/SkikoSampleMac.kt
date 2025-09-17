@@ -55,14 +55,9 @@ class CustomTitlebar(
     }
 
     private val colors = intArrayOf(
-        0xFFFF0000.toInt(), // Red
-        0xFF00FF00.toInt(), // Green
-        0xFF0000FF.toInt(), // Blue
-        0xFFFFFF00.toInt(), // Yellow
-        0xFFFF00FF.toInt(), // Magenta
-        0xFF00FFFF.toInt(), // Cyan
-        0xFFFFFFFF.toInt(), // White
-        0xFF000000.toInt()  // Black
+        Color.RED,
+        Color.YELLOW,
+        Color.GREEN
     )
     private var currentColorIndex = 0
     private var totalClicks = 0
