@@ -2,7 +2,7 @@ use std::{ffi::CString, io::Read, str::FromStr, thread::ThreadId, time::Duration
 
 use anyhow::{Context, anyhow};
 use desktop_common::logger::catch_panic;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use smithay_client_toolkit::{
     reexports::{
         calloop::{
@@ -18,8 +18,9 @@ use smithay_client_toolkit::{
 use crate::linux::{
     application_api::ApplicationCallbacks,
     application_state::ApplicationState,
+    async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
-    events::{DataTransferContent, WindowId},
+    events::{DataTransferContent, RequestId, WindowId},
     window::SimpleWindow,
     window_api::WindowParams,
     xdg_desktop_settings::xdg_desktop_settings_notifier,
@@ -34,6 +35,23 @@ pub struct Application {
     pub run_on_event_loop: Option<Sender<extern "C" fn()>>,
     pub event_loop_thread_id: Option<ThreadId>,
     rt: tokio::runtime::Runtime,
+    async_request_counter: u32,
+    run_async_sender: Sender<AsyncEventResult>,
+}
+
+fn create_run_async_sender(event_loop: &EventLoop<'static, ApplicationState>) -> Sender<AsyncEventResult> {
+    let (sender, c) = channel::channel();
+
+    event_loop
+        .handle()
+        .insert_source(c, move |event: channel::Event<AsyncEventResult>, (), state| {
+            if let channel::Event::Msg(e) = event {
+                e.send_as_event(state.callbacks.event_handler);
+            }
+        })
+        .unwrap();
+
+    sender
 }
 
 impl Application {
@@ -56,6 +74,8 @@ impl Application {
             .worker_threads(1)
             .build()
             .unwrap();
+        let run_async_sender = create_run_async_sender(&event_loop);
+
         Ok(Self {
             event_loop,
             qh,
@@ -64,19 +84,28 @@ impl Application {
             run_on_event_loop: None,
             event_loop_thread_id: None,
             rt,
+            async_request_counter: 0,
+            run_async_sender,
         })
     }
 
-    pub fn run_async<F>(&self, future: F)
+    /// Executes the future produced by the provided function.
+    /// Return value is the same as the one passed to the function, representing the request id,
+    /// so that the response (optionally produced by the future) can be matched to the request.
+    pub fn run_async<F>(&mut self, f: impl FnOnce(RequestId) -> F) -> RequestId
     where
-        F: Future<Output = anyhow::Result<()>> + Send + 'static,
+        F: Future<Output = AsyncEventResult> + Send + 'static,
         F::Output: Send + 'static,
     {
+        self.async_request_counter = self.async_request_counter.wrapping_add(1);
+        let request_id = RequestId(self.async_request_counter);
+        let future = f(request_id);
+        let sender = self.run_async_sender.clone();
+
         self.rt.spawn(async move {
-            if let Err(e) = future.await {
-                error!("{e}");
-            }
+            sender.send(future.await).unwrap();
         });
+        request_id
     }
 
     fn init_xdg_desktop_settings_notifier(&self) {

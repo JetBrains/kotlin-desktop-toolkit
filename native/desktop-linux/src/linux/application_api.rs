@@ -10,6 +10,7 @@ use smithay_client_toolkit::reexports::client::protocol::wl_data_device_manager:
 use crate::linux::{
     application::Application,
     application_state::EglInstance,
+    async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
     events::{EventHandler, WindowId},
     geometry::LogicalPoint,
@@ -231,16 +232,16 @@ pub extern "C" fn application_start_drag_and_drop(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_open_url(app_ptr: AppPtr, url_string: BorrowedStrPtr) {
+pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: BorrowedStrPtr) {
     debug!("application_open_url");
     ffi_boundary("application_open_url", || {
-        let app = unsafe { app_ptr.borrow::<Application>() };
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
         let uri = Url::parse(url_string.as_str()?)?;
 
-        app.run_async(async move {
+        app.run_async(|request_id| async move {
             let request = ashpd::desktop::open_uri::OpenFileRequest::default().ask(false);
-            request.send_uri(&uri).await?;
-            Ok(())
+            let error = request.send_uri(&uri).await.err();
+            AsyncEventResult::UrlOpenResponse { request_id, error }
         });
         Ok(())
     });
