@@ -23,7 +23,7 @@ use crate::linux::{
     application_state::ApplicationState,
     async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
-    events::{DataTransferContent, RequestId, WindowId},
+    events::{DataTransferContent, Event, RequestId, WindowId},
     window::SimpleWindow,
     window_api::WindowParams,
     xdg_desktop_settings::xdg_desktop_settings_notifier,
@@ -119,7 +119,9 @@ impl Application {
             .handle()
             .insert_source(xdg_settings_channel, move |event, (), state| {
                 if let channel::Event::Msg(e) = event {
-                    XdgDesktopSetting::with(e, |s| (state.callbacks.on_xdg_desktop_settings_change)(s));
+                    XdgDesktopSetting::with(e, |s| {
+                        state.send_event(Event::XdgDesktopSettingChange(s));
+                    });
                 }
             })
             .unwrap();
@@ -152,9 +154,9 @@ impl Application {
             }
         });
 
-        if self.exit && (self.state.callbacks.on_should_terminate)() {
+        if self.exit && !self.state.send_event(Event::ApplicationWantsToTerminate) {
             debug!("Exiting");
-            (self.state.callbacks.on_will_terminate)();
+            self.state.send_event(Event::ApplicationWillTerminate);
             self.state.windows.clear();
             Ok(false)
         } else {
@@ -169,7 +171,7 @@ impl Application {
         self.init_run_on_event_loop();
 
         self.event_loop_thread_id = Some(std::thread::current().id());
-        (self.state.callbacks.on_application_started)();
+        self.state.send_event(Event::ApplicationStarted);
 
         while self.event_loop_iteration()? {
             // debug!("Application event loop: continuing");

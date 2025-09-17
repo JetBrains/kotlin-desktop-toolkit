@@ -101,34 +101,37 @@ impl DesktopTitlebarAction {
 }
 
 impl XdgDesktopSetting<'_> {
-    pub fn with(s: InternalXdgDesktopSetting, f: impl FnOnce(&XdgDesktopSetting)) {
+    pub fn with<F>(s: InternalXdgDesktopSetting, f: F)
+    where
+        for<'a> F: Fn(XdgDesktopSetting<'a>),
+    {
         match s {
             InternalXdgDesktopSetting::TitlebarLayout(v) => {
                 let cs = CString::new(v).unwrap();
-                f(&XdgDesktopSetting::TitlebarLayout(BorrowedStrPtr::new(&cs)));
+                f(XdgDesktopSetting::TitlebarLayout(BorrowedStrPtr::new(&cs)));
             }
-            InternalXdgDesktopSetting::ActionDoubleClickTitlebar(v) => f(&XdgDesktopSetting::ActionDoubleClickTitlebar(v)),
-            InternalXdgDesktopSetting::ActionRightClickTitlebar(v) => f(&XdgDesktopSetting::ActionRightClickTitlebar(v)),
-            InternalXdgDesktopSetting::ActionMiddleClickTitlebar(v) => f(&XdgDesktopSetting::ActionMiddleClickTitlebar(v)),
-            InternalXdgDesktopSetting::DoubleClickIntervalMs(v) => f(&Self::DoubleClickIntervalMs(v)),
-            InternalXdgDesktopSetting::ColorScheme(v) => f(&Self::ColorScheme(match v {
+            InternalXdgDesktopSetting::ActionDoubleClickTitlebar(v) => f(XdgDesktopSetting::ActionDoubleClickTitlebar(v)),
+            InternalXdgDesktopSetting::ActionRightClickTitlebar(v) => f(XdgDesktopSetting::ActionRightClickTitlebar(v)),
+            InternalXdgDesktopSetting::ActionMiddleClickTitlebar(v) => f(XdgDesktopSetting::ActionMiddleClickTitlebar(v)),
+            InternalXdgDesktopSetting::DoubleClickIntervalMs(v) => f(Self::DoubleClickIntervalMs(v)),
+            InternalXdgDesktopSetting::ColorScheme(v) => f(Self::ColorScheme(match v {
                 ColorScheme::NoPreference => XdgDesktopColorScheme::NoPreference,
                 ColorScheme::PreferDark => XdgDesktopColorScheme::PreferDark,
                 ColorScheme::PreferLight => XdgDesktopColorScheme::PreferLight,
             })),
-            InternalXdgDesktopSetting::AccentColor(v) => f(&Self::AccentColor(v)),
-            InternalXdgDesktopSetting::FontAntialiasing(v) => f(&Self::FontAntialiasing(v)),
-            InternalXdgDesktopSetting::FontHinting(v) => f(&Self::FontHinting(v)),
-            InternalXdgDesktopSetting::FontRgbaOrder(v) => f(&Self::FontRgbaOrder(v)),
-            InternalXdgDesktopSetting::CursorBlink(v) => f(&Self::CursorBlink(v)),
-            InternalXdgDesktopSetting::CursorBlinkTimeMs(v) => f(&Self::CursorBlinkTimeMs(v)),
-            InternalXdgDesktopSetting::CursorBlinkTimeoutMs(v) => f(&Self::CursorBlinkTimeoutMs(v)),
-            InternalXdgDesktopSetting::OverlayScrolling(v) => f(&Self::OverlayScrolling(v)),
-            InternalXdgDesktopSetting::AudibleBell(v) => f(&Self::AudibleBell(v)),
-            InternalXdgDesktopSetting::CursorSize(v) => f(&Self::CursorSize(v)),
+            InternalXdgDesktopSetting::AccentColor(v) => f(Self::AccentColor(v)),
+            InternalXdgDesktopSetting::FontAntialiasing(v) => f(Self::FontAntialiasing(v)),
+            InternalXdgDesktopSetting::FontHinting(v) => f(Self::FontHinting(v)),
+            InternalXdgDesktopSetting::FontRgbaOrder(v) => f(Self::FontRgbaOrder(v)),
+            InternalXdgDesktopSetting::CursorBlink(v) => f(Self::CursorBlink(v)),
+            InternalXdgDesktopSetting::CursorBlinkTimeMs(v) => f(Self::CursorBlinkTimeMs(v)),
+            InternalXdgDesktopSetting::CursorBlinkTimeoutMs(v) => f(Self::CursorBlinkTimeoutMs(v)),
+            InternalXdgDesktopSetting::OverlayScrolling(v) => f(Self::OverlayScrolling(v)),
+            InternalXdgDesktopSetting::AudibleBell(v) => f(Self::AudibleBell(v)),
+            InternalXdgDesktopSetting::CursorSize(v) => f(Self::CursorSize(v)),
             InternalXdgDesktopSetting::CursorTheme(v) => {
                 let cs = CString::new(v).unwrap();
-                f(&XdgDesktopSetting::CursorTheme(BorrowedStrPtr::new(&cs)));
+                f(XdgDesktopSetting::CursorTheme(BorrowedStrPtr::new(&cs)));
             }
         }
     }

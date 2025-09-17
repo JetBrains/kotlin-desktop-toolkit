@@ -50,12 +50,9 @@ public enum class DataSource {
 }
 
 public data class ApplicationConfig(
-    val onApplicationStarted: () -> Unit,
-    val onXdgDesktopSettingsChange: (XdgDesktopSetting) -> Unit,
     val eventHandler: EventHandler,
     val getDragAndDropSupportedMimeTypes: (DragAndDropQueryData) -> List<String>,
     val getDataTransferData: (DataSource, String) -> ByteArray?,
-    val onDataTransferCancelled: (DataSource) -> Unit,
 )
 
 public class Application : AutoCloseable {
@@ -84,7 +81,7 @@ public class Application : AutoCloseable {
 
     // called from native
     private fun onEvent(nativeEvent: MemorySegment): Boolean {
-        val event = Event.fromNative(nativeEvent)
+        val event = Event.fromNative(nativeEvent, this)
         return ffiUpCall(defaultResult = false) {
             val result = applicationConfig?.eventHandler(event)
             when (result) {
@@ -122,14 +119,6 @@ public class Application : AutoCloseable {
         }
     }
 
-    // called from native
-    private fun onDataTransferCancelled(nativeDataSource: Int) {
-        val dataSource = DataSource.fromNative(nativeDataSource)
-        ffiUpCall {
-            applicationConfig?.onDataTransferCancelled(dataSource)
-        }
-    }
-
     public fun runEventLoop(applicationConfig: ApplicationConfig) {
         this.applicationConfig = applicationConfig
         ffiDownCall {
@@ -149,10 +138,6 @@ public class Application : AutoCloseable {
         }
     }
 
-    public fun setQuitHandler(isSafeToQuit: () -> Boolean) {
-        this.isSafeToQuit = isSafeToQuit
-    }
-
     public fun openURL(url: String) {
         ffiDownCall {
             Arena.ofConfined().use { arena ->
@@ -161,59 +146,9 @@ public class Application : AutoCloseable {
         }
     }
 
-    private var isSafeToQuit: () -> Boolean = { true }
-
-    // called from native
-    private fun onShouldTerminate(): Boolean {
-        Logger.info { "onShouldTerminate" }
-        return ffiUpCall(defaultResult = false) {
-            isSafeToQuit()
-        }
-    }
-
-    // called from native
-    private fun onWillTerminate() {
-        Logger.info { "onWillTerminate" }
-        // This method will never be executed because
-        // the application halt is performed immediately after that,
-        // which means that JVM shutdown hooks might be interrupted
-        ffiUpCall {
-        }
-    }
-
-    private fun onApplicationStarted() {
-        applicationConfig?.onApplicationStarted()
-    }
-
-    private fun onNativeXdgSettingsChanged(s: MemorySegment) {
-        applicationConfig?.onXdgDesktopSettingsChange(XdgDesktopSetting.fromNative(s))
-    }
-
     private fun applicationCallbacks(): MemorySegment {
         val arena = Arena.global()
         val callbacks = NativeApplicationCallbacks.allocate(arena)
-        NativeApplicationCallbacks.on_application_started(
-            callbacks,
-            NativeApplicationCallbacks.on_application_started.allocate(::onApplicationStarted, arena),
-        )
-        NativeApplicationCallbacks.on_should_terminate(
-            callbacks,
-            NativeApplicationCallbacks.on_should_terminate.allocate(::onShouldTerminate, arena),
-        )
-        NativeApplicationCallbacks.on_will_terminate(
-            callbacks,
-            NativeApplicationCallbacks.on_will_terminate.allocate(::onWillTerminate, arena),
-        )
-        NativeApplicationCallbacks.on_display_configuration_change(
-            callbacks,
-            NativeApplicationCallbacks.on_display_configuration_change.allocate({
-                screens = allScreens()
-            }, arena),
-        )
-        NativeApplicationCallbacks.on_xdg_desktop_settings_change(
-            callbacks,
-            NativeApplicationCallbacks.on_xdg_desktop_settings_change.allocate(::onNativeXdgSettingsChanged, arena),
-        )
         NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
         NativeApplicationCallbacks.get_drag_and_drop_supported_mime_types(
             callbacks,
@@ -222,10 +157,6 @@ public class Application : AutoCloseable {
         NativeApplicationCallbacks.get_data_transfer_data(
             callbacks,
             NativeApplicationCallbacks.get_data_transfer_data.allocate(::onGetDataTransferData, arena),
-        )
-        NativeApplicationCallbacks.on_data_transfer_cancelled(
-            callbacks,
-            NativeApplicationCallbacks.on_data_transfer_cancelled.allocate(::onDataTransferCancelled, arena),
         )
         return callbacks
     }

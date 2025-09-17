@@ -28,7 +28,7 @@ use smithay_client_toolkit::{
 use crate::linux::{
     application_api::{DataSource, DragAndDropQueryData},
     application_state::ApplicationState,
-    events::{DataTransferAvailable, DataTransferContent},
+    events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent},
     geometry::{LogicalPixels, LogicalPoint},
 };
 
@@ -89,7 +89,7 @@ impl DataDeviceHandler for ApplicationState {
         selection_offer.with_mime_types(|mime_types| {
             debug!("DataDeviceHandler::selection: mime_types={mime_types:?}");
             let mime_types = CString::new(mime_types.join(",")).unwrap();
-            self.send_event(DataTransferAvailable::new(&mime_types));
+            self.send_event(DataTransferAvailableEvent::new(&mime_types));
         });
     }
 
@@ -174,7 +174,7 @@ impl DataSourceHandler for ApplicationState {
             None
         };
         if let Some(data_source) = data_source {
-            (self.callbacks.on_data_transfer_cancelled)(data_source);
+            self.send_event(DataTransferCancelledEvent { data_source });
         }
     }
 

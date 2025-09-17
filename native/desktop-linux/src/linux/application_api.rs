@@ -15,7 +15,6 @@ use crate::linux::{
     events::{EventHandler, WindowId},
     geometry::LogicalPoint,
     text_input_api::TextInputContext,
-    xdg_desktop_settings_api::XdgDesktopSetting,
 };
 
 #[repr(C)]
@@ -35,16 +34,9 @@ pub enum DataSource {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ApplicationCallbacks {
-    pub on_application_started: extern "C" fn(),
-    // Returns true if application should terminate, otherwise termination will be canceled
-    pub on_should_terminate: extern "C" fn() -> bool,
-    pub on_will_terminate: extern "C" fn(),
-    pub on_display_configuration_change: extern "C" fn(),
-    pub on_xdg_desktop_settings_change: extern "C" fn(&XdgDesktopSetting),
     pub event_handler: EventHandler,
     pub get_drag_and_drop_supported_mime_types: extern "C" fn(&DragAndDropQueryData) -> BorrowedStrPtr<'static>,
     pub get_data_transfer_data: extern "C" fn(DataSource, BorrowedStrPtr) -> BorrowedArray<'static, u8>,
-    pub on_data_transfer_cancelled: extern "C" fn(DataSource),
 }
 
 pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
