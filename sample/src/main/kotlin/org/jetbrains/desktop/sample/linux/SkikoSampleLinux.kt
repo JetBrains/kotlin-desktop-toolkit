@@ -349,7 +349,7 @@ class EditorState {
         cursorOffset += characters.length
     }
 
-    fun handleEvent(event: Event, app: Application, window: Window): EventHandlerResult {
+    fun handleEvent(event: Event, app: Application, window: Window, windowState: WindowState): EventHandlerResult {
         return when (event) {
             is Event.ModifiersChanged -> {
                 modifiers = event.modifiers
@@ -466,6 +466,14 @@ class EditorState {
                                 val newCursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
                                 text.delete(newCursorOffset, cursorOffset)
                                 cursorOffset = newCursorOffset
+                            }
+                        }
+
+                        KeyCode.F11 -> {
+                            if (windowState.fullscreen) {
+                                window.unsetFullScreen()
+                            } else {
+                                window.setFullScreen()
                             }
                         }
 
@@ -608,6 +616,20 @@ fun jbIconBytes(): ByteArray {
     return object {}.javaClass.getResource("/jb-logo.png")!!.readBytes()
 }
 
+class WindowState {
+    var active: Boolean = false
+    var maximized: Boolean = false
+    var fullscreen: Boolean = false
+    var capabilities: WindowCapabilities? = null
+
+    fun configure(event: Event.WindowConfigure) {
+        active = event.active
+        maximized = event.maximized
+        fullscreen = event.fullscreen
+        capabilities = event.capabilities
+    }
+}
+
 class CustomTitlebar(
     private var origin: LogicalPoint,
     var size: LogicalSize,
@@ -615,9 +637,6 @@ class CustomTitlebar(
     val requestClose: () -> Unit,
 ) {
     private var rectangles = ArrayList<Pair<LogicalRect, WindowButtonType>>()
-    private var active: Boolean = false
-    private var maximized: Boolean = false
-    private var fullscreen: Boolean = false
     private var lastHeaderMouseDownTime: Timestamp? = null
     private var lastMouseLocation: LogicalPoint? = null
     private var leftClickStartLocation: LogicalPoint? = null
@@ -638,14 +657,11 @@ class CustomTitlebar(
 
     fun configure(event: Event.WindowConfigure, layout: TitlebarLayout) {
         size = LogicalSize(width = event.size.width, height = CUSTOM_TITLEBAR_HEIGHT)
-        active = event.active
-        maximized = event.maximized
-        fullscreen = event.fullscreen
         setLayout(layout)
     }
 
-    fun toggleMaximize(window: Window) {
-        if (maximized) {
+    fun toggleMaximize(window: Window, windowState: WindowState) {
+        if (windowState.maximized) {
             window.unmaximize()
         } else {
             window.maximize()
@@ -677,10 +693,15 @@ class CustomTitlebar(
         }
     }
 
-    private fun executeTitlebarAction(action: DesktopTitlebarAction, window: Window, locationInWindow: LogicalPoint) {
+    private fun executeTitlebarAction(
+        action: DesktopTitlebarAction,
+        window: Window,
+        locationInWindow: LogicalPoint,
+        windowState: WindowState,
+    ) {
         when (action) {
             DesktopTitlebarAction.ToggleMaximize -> {
-                toggleMaximize(window)
+                toggleMaximize(window, windowState)
             }
             DesktopTitlebarAction.Minimize -> {
                 window.minimize()
@@ -698,6 +719,7 @@ class CustomTitlebar(
         locationInWindow: LogicalPoint,
         window: Window,
         xdgDesktopSettings: XdgDesktopSettings,
+        windowState: WindowState,
     ): Boolean {
         return when (windowButton) {
             WindowButtonType.AppMenu, WindowButtonType.Icon -> {
@@ -708,11 +730,11 @@ class CustomTitlebar(
             WindowButtonType.Title,
             -> when (mouseButton) {
                 MouseButton.RIGHT -> {
-                    executeTitlebarAction(xdgDesktopSettings.actionRightClickTitlebar, window, locationInWindow)
+                    executeTitlebarAction(xdgDesktopSettings.actionRightClickTitlebar, window, locationInWindow, windowState)
                     true
                 }
                 MouseButton.MIDDLE -> {
-                    executeTitlebarAction(xdgDesktopSettings.actionMiddleClickTitlebar, window, locationInWindow)
+                    executeTitlebarAction(xdgDesktopSettings.actionMiddleClickTitlebar, window, locationInWindow, windowState)
                     true
                 }
                 else -> false
@@ -722,7 +744,7 @@ class CustomTitlebar(
                 true
             }
             WindowButtonType.Maximize -> {
-                toggleMaximize(window)
+                toggleMaximize(window, windowState)
                 true
             }
             WindowButtonType.Close -> {
@@ -746,7 +768,7 @@ class CustomTitlebar(
         return false
     }
 
-    fun handleEvent(event: Event, xdgDesktopSettings: XdgDesktopSettings, window: Window): EventHandlerResult {
+    fun handleEvent(event: Event, xdgDesktopSettings: XdgDesktopSettings, window: Window, windowState: WindowState): EventHandlerResult {
         val headerRect = LogicalRect(origin, size)
         val handled: Boolean = when (event) {
             is Event.MouseDown -> {
@@ -767,10 +789,22 @@ class CustomTitlebar(
                             if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
                                 handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
                             ) {
-                                executeTitlebarAction(xdgDesktopSettings.actionDoubleClickTitlebar, window, event.locationInWindow)
+                                executeTitlebarAction(
+                                    xdgDesktopSettings.actionDoubleClickTitlebar,
+                                    window,
+                                    event.locationInWindow,
+                                    windowState,
+                                )
                                 true
                             } else {
-                                executeWindowAction(windowButton, event.button, event.locationInWindow, window, xdgDesktopSettings)
+                                executeWindowAction(
+                                    windowButton,
+                                    event.button,
+                                    event.locationInWindow,
+                                    window,
+                                    xdgDesktopSettings,
+                                    windowState,
+                                )
                             }
                         } ?: false
                     } else {
@@ -807,6 +841,13 @@ class CustomTitlebar(
         return if (handled) EventHandlerResult.Stop else EventHandlerResult.Continue
     }
 
+    private fun drawUnfilledRect(r: Rect, canvas: Canvas, paint: Paint) {
+        canvas.drawLine(r.left, r.top, r.left, r.bottom, paint)
+        canvas.drawLine(r.left, r.top, r.right, r.top, paint)
+        canvas.drawLine(r.right, r.top, r.right, r.bottom, paint)
+        canvas.drawLine(r.left, r.bottom, r.right, r.bottom, paint)
+    }
+
     private fun drawButton(
         canvas: Canvas,
         button: WindowButtonType,
@@ -815,6 +856,7 @@ class CustomTitlebar(
         hovered: Boolean,
         scale: Float,
         title: String,
+        windowState: WindowState,
     ) {
         val w = rect.size.width * scale
         val h = rect.size.height * scale
@@ -864,24 +906,26 @@ class CustomTitlebar(
                     canvas.drawLine(xLeft, yBottom, xRight, yBottom, paint)
                 }
                 WindowButtonType.Maximize -> {
-                    canvas.drawLine(xLeft, yTop, xLeft, yBottom, paint)
-                    canvas.drawLine(xLeft, yTop, xRight, yTop, paint)
-                    canvas.drawLine(xRight, yTop, xRight, yBottom, paint)
-                    canvas.drawLine(xLeft, yBottom, xRight, yBottom, paint)
+                    if (windowState.maximized) {
+                        drawUnfilledRect(Rect(xLeft + (w / 5), yTop, xRight, yBottom - (h / 5)), canvas, paint)
+                        drawUnfilledRect(Rect(xLeft, yTop + (h / 5), xRight - (w / 5), yBottom), canvas, paint)
+                    } else {
+                        drawUnfilledRect(Rect(xLeft, yTop, xRight, yBottom), canvas, paint)
+                    }
                 }
                 WindowButtonType.Close -> {
                     canvas.drawLine(xLeft, yTop, xRight, yBottom, paint)
                     canvas.drawLine(xRight, yTop, xLeft, yBottom, paint)
                 }
                 WindowButtonType.Title -> {
-                    paint.color = if (active) Color.WHITE else COLOR_LIGHT_GRAY
+                    paint.color = if (windowState.active) Color.WHITE else COLOR_LIGHT_GRAY
                     canvas.drawTextLine(titleTextLineCreator.makeTextLine(title, CUSTOM_TITLEBAR_HEIGHT * scale), xOffset, yBottom, paint)
                 }
             }
         }
     }
 
-    fun draw(canvas: Canvas, scale: Float, xdgDesktopSettings: XdgDesktopSettings, title: String) {
+    fun draw(canvas: Canvas, scale: Float, xdgDesktopSettings: XdgDesktopSettings, title: String, windowState: WindowState) {
         val physicalOrigin = origin.toPhysical(scale)
         val physicalSize = size.toPhysical(scale)
         val l = physicalOrigin.x.toFloat()
@@ -895,7 +939,7 @@ class CustomTitlebar(
         for ((rect, button) in rectangles) {
             val hovered = !isDragging && (lastMouseLocation?.let { rect.contains(it) } == true)
             val highlighted = hovered && (leftClickStartLocation?.let { rect.contains(it) } == true)
-            drawButton(canvas, button, rect, highlighted = highlighted, hovered = hovered, scale, title)
+            drawButton(canvas, button, rect, highlighted = highlighted, hovered = hovered, scale, title, windowState)
         }
     }
 }
@@ -1129,8 +1173,6 @@ class WindowContainer(
     private var xdgDesktopSettings: XdgDesktopSettings,
     val requestClose: () -> Unit,
 ) {
-    private var capabilities: WindowCapabilities? = null
-
     companion object {
         fun create(windowContentSize: LogicalSize, xdgDesktopSettings: XdgDesktopSettings, requestClose: () -> Unit): WindowContainer {
             val contentArea = ContentArea(LogicalPoint.Zero, windowContentSize)
@@ -1154,9 +1196,9 @@ class WindowContainer(
         }
     }
 
-    fun settingsChanged(xdgDesktopSettings: XdgDesktopSettings) {
+    fun settingsChanged(xdgDesktopSettings: XdgDesktopSettings, windowState: WindowState) {
         this.xdgDesktopSettings = xdgDesktopSettings
-        capabilities?.let { capabilities ->
+        windowState.capabilities?.let { capabilities ->
             customTitlebar?.setLayout(
                 TitlebarLayout(
                     layoutLeft = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutLeft, capabilities),
@@ -1167,47 +1209,52 @@ class WindowContainer(
     }
 
     fun configure(event: Event.WindowConfigure) {
-        capabilities = event.capabilities
-        when (event.decorationMode) {
-            WindowDecorationMode.Client -> {
-                val titlebarLayout = TitlebarLayout(
-                    layoutLeft = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutLeft, event.capabilities),
-                    layoutRight = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutRight, event.capabilities),
-                )
-                val titlebarSize = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
-                val titlebar = customTitlebar ?: CustomTitlebar(
-                    origin = LogicalPoint.Zero,
-                    size = titlebarSize,
-                    titlebarLayout,
-                    requestClose,
-                ).also {
-                    customTitlebar = it
-                }
-                titlebar.configure(event, titlebarLayout)
-                val customBorders = customBorders ?: CustomBorders().also { customBorders = it }
-                customBorders.configure(event)
-                contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height)
-                contentArea.size =
-                    LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
+        val shouldUseCustomTitlebar = when (event.decorationMode) {
+            WindowDecorationMode.Client -> !event.fullscreen
+            WindowDecorationMode.Server -> false
+        }
+        if (shouldUseCustomTitlebar) {
+            val titlebarLayout = TitlebarLayout(
+                layoutLeft = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutLeft, event.capabilities),
+                layoutRight = filterUnsupportedButtons(xdgDesktopSettings.titlebarLayout.layoutRight, event.capabilities),
+            )
+            val titlebarSize = LogicalSize(width = event.size.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
+            val titlebar = customTitlebar ?: CustomTitlebar(
+                origin = LogicalPoint.Zero,
+                size = titlebarSize,
+                titlebarLayout,
+                requestClose,
+            ).also {
+                customTitlebar = it
             }
-            WindowDecorationMode.Server -> {
-                customTitlebar = null
-                contentArea.origin = LogicalPoint(x = 0f, y = 0f)
-                contentArea.size = event.size
-            }
+            titlebar.configure(event, titlebarLayout)
+            val customBorders = customBorders ?: CustomBorders().also { customBorders = it }
+            customBorders.configure(event)
+            contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height)
+            contentArea.size =
+                LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
+        } else {
+            customTitlebar = null
+            contentArea.origin = LogicalPoint(x = 0f, y = 0f)
+            contentArea.size = event.size
         }
     }
 
-    fun handleEvent(event: Event, window: Window, editorState: EditorState): EventHandlerResult {
+    fun handleEvent(event: Event, window: Window, editorState: EditorState, windowState: WindowState): EventHandlerResult {
         return when {
             customBorders?.handleEvent(event, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
-            customTitlebar?.handleEvent(event, xdgDesktopSettings, window) == EventHandlerResult.Stop -> EventHandlerResult.Stop
+            customTitlebar?.handleEvent(
+                event,
+                xdgDesktopSettings,
+                window,
+                windowState,
+            ) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             contentArea.handleEvent(event, window, editorState) == EventHandlerResult.Stop -> EventHandlerResult.Stop
             else -> EventHandlerResult.Continue
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Float, title: String, editorState: EditorState) {
+    fun draw(canvas: Canvas, time: Long, scale: Float, title: String, editorState: EditorState, windowState: WindowState) {
         val backgroundColor = if (xdgDesktopSettings.colorScheme == ColorSchemeValue.PreferDark) {
             Color.makeARGB(
                 240,
@@ -1219,7 +1266,7 @@ class WindowContainer(
             Color.makeARGB(240, 200, 200, 200)
         }
         canvas.clear(backgroundColor)
-        customTitlebar?.draw(canvas, scale, xdgDesktopSettings, title)
+        customTitlebar?.draw(canvas, scale, xdgDesktopSettings, title, windowState)
         contentArea.draw(canvas, time, scale, editorState)
     }
 }
@@ -1231,6 +1278,7 @@ class RotatingBallWindow(
     windowParams: WindowParams,
 ) : SkikoWindowLinux(app, windowParams) {
     private var title: String = windowParams.title
+    private var windowState = WindowState()
 
     companion object {
         fun createWindow(
@@ -1249,7 +1297,7 @@ class RotatingBallWindow(
     }
 
     fun settingsChanged(xdgDesktopSettings: XdgDesktopSettings) {
-        windowContainer.settingsChanged(xdgDesktopSettings)
+        windowContainer.settingsChanged(xdgDesktopSettings, windowState)
     }
 
     fun getDragAndDropSupportedMimeTypes(point: LogicalPoint): List<String> {
@@ -1260,10 +1308,14 @@ class RotatingBallWindow(
         }
     }
 
-    override fun handleEvent(event: Event): EventHandlerResult {
-        return if (super.handleEvent(event) == EventHandlerResult.Continue) {
+    override fun handleEvent(event: Event, app: Application): EventHandlerResult {
+        return if (super.handleEvent(event, app) == EventHandlerResult.Continue) {
+            if (editorState.handleEvent(event, app, window, windowState) == EventHandlerResult.Stop) {
+                return EventHandlerResult.Stop
+            }
             when (event) {
                 is Event.WindowConfigure -> {
+                    windowState.configure(event)
                     windowContainer.configure(event)
                     // performDrawing(syncWithCA = true)
                     EventHandlerResult.Stop
@@ -1275,11 +1327,11 @@ class RotatingBallWindow(
                         EventHandlerResult.Stop
                     } else {
                         window.setPointerShape(PointerShape.Default)
-                        windowContainer.handleEvent(event, window, editorState)
+                        windowContainer.handleEvent(event, window, editorState, windowState)
                     }
                 }
                 else -> {
-                    windowContainer.handleEvent(event, window, editorState)
+                    windowContainer.handleEvent(event, window, editorState, windowState)
                 }
             }
         } else {
@@ -1289,7 +1341,7 @@ class RotatingBallWindow(
 
     override fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long) {
         val canvas = this
-        windowContainer.draw(canvas, time, scale.toFloat(), title, editorState)
+        windowContainer.draw(canvas, time, scale.toFloat(), title, editorState, windowState)
     }
 }
 
@@ -1331,9 +1383,6 @@ class ApplicationState(private val app: Application) : AutoCloseable {
     fun handleEvent(event: Event, windowId: WindowId): EventHandlerResult {
         logEvents(event)
         val window = windows[windowId] ?: return EventHandlerResult.Continue
-        if (window.editorState.handleEvent(event, app, window.window) == EventHandlerResult.Stop) {
-            return EventHandlerResult.Stop
-        }
         return when (event) {
             is Event.WindowCloseRequest -> {
                 window.close()
@@ -1343,7 +1392,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
                 }
                 EventHandlerResult.Stop
             }
-            else -> window.handleEvent(event)
+            else -> window.handleEvent(event, app)
         }
     }
 
