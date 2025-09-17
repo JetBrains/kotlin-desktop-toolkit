@@ -51,7 +51,7 @@ class CustomTitlebar(
     var zoomBoxClicked: (() -> Unit)? = null,
 ) {
     companion object {
-        const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55.0
+        const val DEFAULT_CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55.0
     }
 
     private val colors = intArrayOf(
@@ -66,7 +66,7 @@ class CustomTitlebar(
         val squareSize = size.height
         val squareX = origin.x + (size.width - squareSize) / 2
         return point.x >= squareX && point.x <= squareX + squareSize &&
-               point.y >= origin.y && point.y <= origin.y + size.height
+                point.y >= origin.y && point.y <= origin.y + size.height
     }
 
     fun handleEvent(event: Event): EventHandlerResult {
@@ -113,7 +113,7 @@ class CustomTitlebar(
             paint.color = 0xFFAAAAAA.toInt()
             canvas.drawRect(Rect.makeXYWH(width * 0.75f, y, width * 0.25f, height), paint)
         }
-        
+
         // Draw the color-changing square
         Paint().use { paint ->
             paint.color = colors[currentColorIndex]
@@ -127,7 +127,7 @@ class CustomTitlebar(
                     squarePhysicalY.toFloat(),
                     squarePhysicalSize.toFloat(),
                     squarePhysicalSize.toFloat()
-                ), 
+                ),
                 paint
             )
         }
@@ -244,7 +244,7 @@ class ContentArea(
 }
 
 class WindowContainer(
-    val customTitlebar: CustomTitlebar?,
+    var customTitlebar: CustomTitlebar?,
     private val contentArea: ContentArea,
 ) {
     companion object {
@@ -252,10 +252,10 @@ class WindowContainer(
             return if (useCustomTitlebar) {
                 val titlebar = CustomTitlebar(
                     LogicalPoint.Zero,
-                    LogicalSize(width = windowContentSize.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT),
+                    LogicalSize(width = windowContentSize.width, height = CustomTitlebar.DEFAULT_CUSTOM_TITLEBAR_HEIGHT),
                 )
                 val contentArea = ContentArea(
-                    LogicalPoint(x = 0.0, y = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT),
+                    LogicalPoint(x = 0.0, y = titlebar.size.height),
                     LogicalSize(
                         width = windowContentSize.width,
                         height = windowContentSize.height - titlebar.size.height,
@@ -270,12 +270,14 @@ class WindowContainer(
     }
 
     fun resize(windowSize: LogicalSize) {
+        val customTitlebar = customTitlebar
         if (customTitlebar != null) {
-            customTitlebar.size = LogicalSize(width = windowSize.width, height = CustomTitlebar.CUSTOM_TITLEBAR_HEIGHT)
+            customTitlebar.size = LogicalSize(width = windowSize.width, height = customTitlebar.size.height)
             contentArea.origin = LogicalPoint(x = 0.0, y = customTitlebar.size.height)
             contentArea.size =
                 LogicalSize(width = windowSize.width, height = windowSize.height - customTitlebar.size.height)
         } else {
+            contentArea.origin = LogicalPoint.Zero
             contentArea.size = windowSize
         }
     }
@@ -297,7 +299,7 @@ class WindowContainer(
 class RotatingBallWindow(
     device: MetalDevice,
     queue: MetalCommandQueue,
-    private val windowContainer: WindowContainer,
+    val windowContainer: WindowContainer,
     windowParams: Window.WindowParams,
 ) : SkikoWindow(
     device,
@@ -359,7 +361,7 @@ class RotatingBallWindow(
 
     override fun Canvas.draw(size: PhysicalSize, time: Long) {
         val canvas = this
-//        canvas.clear(Color.TRANSPARENT) // use RED to debug
+        // canvas.clear(Color.RED) // use RED to debug
         windowContainer.draw(canvas, time, window.scaleFactor())
     }
 }
@@ -414,6 +416,37 @@ class ApplicationState : AutoCloseable {
                 ),
                 animateTransition = true,
             )
+        }
+    }
+
+    private fun changeTitlebarHeight(delta: LogicalPixels) {
+        mainWindow()?.let { window ->
+            window.windowContainer.customTitlebar?.let { currentTitlebar ->
+                val size = currentTitlebar.size
+                val newSize = LogicalSize(width = size.width, height = size.height + delta)
+                currentTitlebar.size = newSize
+                window.window.setTitlebarConfiguration(configuration = TitlebarConfiguration.Custom(newSize.height))
+                window.windowContainer.resize(window.window.size)
+            }
+        }
+    }
+
+    private fun setCustomTitlebarEnabled(enabled: Boolean) {
+        mainWindow()?.let { window ->
+            if (enabled) {
+                val configuration = TitlebarConfiguration.Custom(CustomTitlebar.DEFAULT_CUSTOM_TITLEBAR_HEIGHT)
+                window.windowContainer.customTitlebar = CustomTitlebar(
+                    LogicalPoint.Zero,
+                    LogicalSize(width = window.window.contentSize.width, height = CustomTitlebar.DEFAULT_CUSTOM_TITLEBAR_HEIGHT),
+                )
+                window.window.setTitlebarConfiguration(configuration = configuration)
+                window.windowContainer.resize(window.window.size)
+            } else {
+                val configuration = TitlebarConfiguration.Regular
+                window.windowContainer.customTitlebar = null
+                window.window.setTitlebarConfiguration(configuration = configuration)
+                window.windowContainer.resize(window.window.size)
+            }
         }
     }
 
@@ -682,9 +715,34 @@ class ApplicationState : AutoCloseable {
                     perform = { changeCurrentWindowSize(50.0) },
                 ),
                 AppMenuItem.Action(
-                    title = "Drecrease Size",
+                    title = "Decrease Size",
                     keystroke = Keystroke(key = "-", modifiers = KeyModifiersSet.create(command = true)),
                     perform = { changeCurrentWindowSize(-50.0) },
+                ),
+                AppMenuItem.SubMenu(
+                    title = "Titlebar",
+                    AppMenuItem.Action(
+                        title = "Increate Titlebar Height",
+                        keystroke = Keystroke(key = "+", modifiers = KeyModifiersSet.create(option = true, command = true)),
+                        perform = {
+                            changeTitlebarHeight(2.0)
+                        }
+                    ),
+                    AppMenuItem.Action(
+                        title = "Decrease Titlebar Height",
+                        keystroke = Keystroke(key = "-", modifiers = KeyModifiersSet.create(option = true, command = true)),
+                        perform = {
+                            changeTitlebarHeight(-2.0)
+                        }
+                    ),
+                    AppMenuItem.Action(
+                        title = "Switch to Custom Titlebar",
+                        perform = { setCustomTitlebarEnabled(true) },
+                    ),
+                    AppMenuItem.Action(
+                        title = "Switch to Regular Titlebar",
+                        perform = { setCustomTitlebarEnabled(false) },
+                    )
                 ),
                 AppMenuItem.Action(
                     title = "Toggle Miniaturize first Window",

@@ -53,9 +53,11 @@ impl Titlebar {
             }
             (TitlebarState::Custom(state), TitlebarConfiguration::Custom { title_bar_height }) => {
                 if state.height != *title_bar_height {
-                    state.deactivate_constraints(&self.ns_window).unwrap();
                     state.height = *title_bar_height;
-                    state.activate_constraints(&self.ns_window).unwrap();
+                    if !self.ns_window.styleMask().contains(NSWindowStyleMask::FullScreen) {
+                        state.deactivate_constraints(&self.ns_window).unwrap();
+                        state.activate_constraints(&self.ns_window).unwrap();
+                    }
                 }
             }
         }
