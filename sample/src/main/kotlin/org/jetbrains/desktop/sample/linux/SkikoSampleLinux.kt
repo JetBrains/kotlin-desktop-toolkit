@@ -524,6 +524,8 @@ class EditorState {
                     val pastedText = data.data.decodeToString()
                     text.insert(cursorOffset, pastedText)
                     cursorOffset += pastedText.length
+                    selectionStartOffset = null
+                    selectionEndOffset = null
                     if (textInputEnabled) {
                         app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
                     }
