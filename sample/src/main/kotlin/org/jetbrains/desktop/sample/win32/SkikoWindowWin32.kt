@@ -56,17 +56,8 @@ abstract class SkikoWindowWin32(
                 EventHandlerResult.Stop
             }
 
-            is Event.WindowScaleChanged -> with(event) {
-                window.setRect(origin, size)
-                EventHandlerResult.Stop
-            }
-
-            is Event.WindowPositionChanging -> with(event) {
-                if (surfaceParams == null || isSizeChanged(size)) {
-                    currentSize = size
-                    surfaceParams = angleRenderer.resizeSurface(size.width, size.height)
-                    angleRenderer.swapBuffers()
-                }
+            is Event.NCCalcSize -> with(event) {
+                performDrawing(size, scale)
                 EventHandlerResult.Stop
             }
 
@@ -75,9 +66,13 @@ abstract class SkikoWindowWin32(
     }
 
     private fun performDrawing(size: PhysicalSize, scale: Float) {
+        if (surfaceParams == null || isSizeChanged(size)) {
+            currentSize = size
+            surfaceParams = angleRenderer.resizeSurface(size.width, size.height)
+        }
         BackendRenderTarget.makeGL(
-            width = currentSize.width,
-            height = currentSize.height,
+            width = size.width,
+            height = size.height,
             sampleCnt = 1,
             stencilBits = 8,
             fbId = surfaceParams!!.framebufferBinding,

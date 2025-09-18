@@ -3,6 +3,7 @@ package org.jetbrains.desktop.win32
 import org.jetbrains.desktop.win32.generated.NativeCharacterReceivedEvent
 import org.jetbrains.desktop.win32.generated.NativeEvent
 import org.jetbrains.desktop.win32.generated.NativeKeyEvent
+import org.jetbrains.desktop.win32.generated.NativeNCCalcSizeEvent
 import org.jetbrains.desktop.win32.generated.NativeNCHitTestEvent
 import org.jetbrains.desktop.win32.generated.NativePointerButtonEvent
 import org.jetbrains.desktop.win32.generated.NativePointerEnteredEvent
@@ -10,7 +11,6 @@ import org.jetbrains.desktop.win32.generated.NativePointerExitedEvent
 import org.jetbrains.desktop.win32.generated.NativePointerUpdatedEvent
 import org.jetbrains.desktop.win32.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
-import org.jetbrains.desktop.win32.generated.NativeWindowPositionChangingEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeKind
 import org.jetbrains.desktop.win32.generated.NativeWindowScaleChangedEvent
@@ -59,6 +59,12 @@ public sealed class Event {
         val keyStatus: PhysicalKeyStatus,
         val isSystemKey: Boolean,
         val timestamp: Timestamp,
+    ) : Event()
+
+    public data class NCCalcSize(
+        val origin: PhysicalPoint,
+        val size: PhysicalSize,
+        val scale: Float,
     ) : Event()
 
     public data class NCHitTest(
@@ -119,12 +125,6 @@ public sealed class Event {
 
     public data object WindowKeyboardLeave : Event()
 
-    public data class WindowPositionChanging(
-        val origin: PhysicalPoint,
-        val size: PhysicalSize,
-        val scale: Float,
-    ) : Event()
-
     public data class WindowResize(
         val size: PhysicalSize,
         val scale: Float,
@@ -162,6 +162,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_CharacterReceived() -> characterReceived(s)
     desktop_win32_h.NativeEvent_KeyDown() -> keyDown(s)
     desktop_win32_h.NativeEvent_KeyUp() -> keyUp(s)
+    desktop_win32_h.NativeEvent_NCCalcSize() -> ncCalcSize(s)
     desktop_win32_h.NativeEvent_NCHitTest() -> ncHitTest(s)
     desktop_win32_h.NativeEvent_PointerDown() -> pointerDown(s)
     desktop_win32_h.NativeEvent_PointerEntered() -> pointerEntered(s)
@@ -174,7 +175,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_WindowDraw() -> windowDraw(s)
     desktop_win32_h.NativeEvent_WindowKeyboardEnter() -> Event.WindowKeyboardEnter
     desktop_win32_h.NativeEvent_WindowKeyboardLeave() -> Event.WindowKeyboardLeave
-    desktop_win32_h.NativeEvent_WindowPositionChanging() -> windowPositionChanging(s)
     desktop_win32_h.NativeEvent_WindowResize() -> windowResize(s)
     desktop_win32_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
     else -> error("Unexpected Event tag")
@@ -208,6 +208,15 @@ private fun keyUp(s: MemorySegment): Event {
         keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
         isSystemKey = NativeKeyEvent.is_system_key(nativeEvent),
         timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun ncCalcSize(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.nc_calc_size(s)
+    return Event.NCCalcSize(
+        origin = PhysicalPoint.fromNative(NativeNCCalcSizeEvent.origin(nativeEvent)),
+        size = PhysicalSize.fromNative(NativeNCCalcSizeEvent.size(nativeEvent)),
+        scale = NativeNCCalcSizeEvent.scale(nativeEvent),
     )
 }
 
@@ -289,15 +298,6 @@ private fun windowDraw(s: MemorySegment): Event {
     return Event.WindowDraw(
         size = PhysicalSize.fromNative(NativeWindowDrawEvent.size(nativeEvent)),
         scale = NativeWindowDrawEvent.scale(nativeEvent),
-    )
-}
-
-private fun windowPositionChanging(s: MemorySegment): Event {
-    val nativeEvent = NativeEvent.window_scale_changed(s)
-    return Event.WindowPositionChanging(
-        origin = PhysicalPoint.fromNative(NativeWindowPositionChangingEvent.origin(nativeEvent)),
-        size = PhysicalSize.fromNative(NativeWindowPositionChangingEvent.size(nativeEvent)),
-        scale = NativeWindowPositionChangingEvent.scale(nativeEvent),
     )
 }
 
