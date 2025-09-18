@@ -14,6 +14,7 @@ pub enum Event {
     CharacterReceived(CharacterReceivedEvent),
     KeyDown(KeyEvent),
     KeyUp(KeyEvent),
+    NCCalcSize(NCCalcSizeEvent),
     NCHitTest(NCHitTestEvent),
     PointerDown(PointerButtonEvent),
     PointerEntered(PointerEnteredEvent),
@@ -29,7 +30,6 @@ pub enum Event {
     WindowKeyboardEnter,
     WindowKeyboardLeave,
     //WindowMove(WindowMoveEvent),
-    WindowPositionChanging(WindowPositionChangingEvent),
     WindowResize(WindowResizeEvent),
     WindowScaleChanged(WindowScaleChangedEvent),
 }
@@ -64,6 +64,20 @@ pub struct KeyEvent {
     pub key_status: PhysicalKeyStatus,
     pub is_system_key: bool,
     pub timestamp: Timestamp,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct NCCalcSizeEvent {
+    pub origin: PhysicalPoint,
+    pub size: PhysicalSize,
+    pub scale: f32,
+}
+
+impl From<NCCalcSizeEvent> for Event {
+    fn from(value: NCCalcSizeEvent) -> Self {
+        Self::NCCalcSize(value)
+    }
 }
 
 #[repr(C)]
@@ -147,20 +161,6 @@ pub struct WindowDrawEvent {
 impl From<WindowDrawEvent> for Event {
     fn from(value: WindowDrawEvent) -> Self {
         Self::WindowDraw(value)
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct WindowPositionChangingEvent {
-    pub origin: PhysicalPoint,
-    pub size: PhysicalSize,
-    pub scale: f32,
-}
-
-impl From<WindowPositionChangingEvent> for Event {
-    fn from(value: WindowPositionChangingEvent) -> Self {
-        Self::WindowPositionChanging(value)
     }
 }
 

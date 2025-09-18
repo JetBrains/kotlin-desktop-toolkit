@@ -13,19 +13,19 @@ use windows::Win32::{
             DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect,
             HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED,
             SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
-            TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED,
+            TranslateMessage, USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED,
             WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_POINTERDOWN,
             WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETFOCUS, WM_SIZE, WM_SYSCHAR,
-            WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGING,
+            WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
         },
     },
 };
 
 use super::{
     events::{
-        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCHitTestEvent, PointerButtonEvent, PointerEnteredEvent, PointerExitedEvent,
-        PointerUpdatedEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowPositionChangingEvent, WindowResizeEvent,
-        WindowResizeKind, WindowScaleChangedEvent,
+        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerButtonEvent, PointerEnteredEvent,
+        PointerExitedEvent, PointerUpdatedEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowResizeEvent, WindowResizeKind,
+        WindowScaleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
@@ -69,8 +69,6 @@ impl EventLoop {
 
             WM_DPICHANGED => on_dpichanged(self, window, wparam, lparam),
 
-            WM_WINDOWPOSCHANGING => on_windowposchanging(self, window, lparam),
-
             WM_SIZE => on_size(self, window, wparam, lparam),
 
             WM_GETMINMAXINFO => on_getminmaxinfo(window, lparam),
@@ -97,7 +95,7 @@ impl EventLoop {
 
             WM_ACTIVATE => on_activate(window),
 
-            WM_NCCALCSIZE => on_nccalcsize(window, wparam, lparam),
+            WM_NCCALCSIZE => on_nccalcsize(self, window, wparam, lparam),
 
             WM_NCHITTEST => on_nchittest(self, window, wparam, lparam),
 
@@ -183,29 +181,6 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     event_loop.handle_event(window, event.into())
 }
 
-fn on_windowposchanging(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
-    let scale = window.get_scale();
-    let window_pos = unsafe { (lparam.0 as *const WINDOWPOS).as_ref() }?;
-    let window_rect = std::cell::LazyCell::new(|| {
-        let mut rect = RECT::default();
-        unsafe { GetWindowRect(window.hwnd(), &raw mut rect) }.map(|()| rect).ok()
-    });
-    let origin = if window_pos.flags.contains(SWP_NOMOVE) {
-        let rect = window_rect.as_ref()?;
-        PhysicalPoint::new(rect.left, rect.top)
-    } else {
-        PhysicalPoint::new(window_pos.x, window_pos.y)
-    };
-    let size = if window_pos.flags.contains(SWP_NOSIZE) {
-        let rect = window_rect.as_ref()?;
-        PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top)
-    } else {
-        PhysicalSize::new(window_pos.cx, window_pos.cy)
-    };
-    let event = WindowPositionChangingEvent { origin, size, scale };
-    event_loop.handle_event(window, event.into())
-}
-
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
 fn on_size(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
@@ -249,16 +224,24 @@ fn on_activate(window: &Window) -> Option<LRESULT> {
     Some(LRESULT(0))
 }
 
-fn on_nccalcsize(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    if window.has_custom_title_bar() && wparam.0 == windows::Win32::Foundation::TRUE.0 as usize {
+fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    if wparam.0 == windows::Win32::Foundation::TRUE.0 as usize {
         if let Some(calcsize_params) = unsafe { (lparam.0 as *mut NCCALCSIZE_PARAMS).as_mut() } {
             let top = calcsize_params.rgrc[0].top;
             let result = unsafe { DefWindowProcW(window.hwnd(), WM_NCCALCSIZE, wparam, lparam) };
-            if result.0 == 0 {
+            if window.has_custom_title_bar() && result.0 == 0 {
                 // the top inset should be 0 otherwise Windows will draw full native title bar
                 calcsize_params.rgrc[0].top = top;
             }
-            return Some(result);
+            let origin = PhysicalPoint::new(calcsize_params.rgrc[0].left, calcsize_params.rgrc[0].top);
+            let size = PhysicalSize::new(
+                calcsize_params.rgrc[0].right - calcsize_params.rgrc[0].left,
+                calcsize_params.rgrc[0].bottom - calcsize_params.rgrc[0].top,
+            );
+            let scale = window.get_scale();
+            let event = NCCalcSizeEvent { origin, size, scale };
+            event_loop.handle_event(window, event.into());
+            return Some(LRESULT(0));
         }
     }
     None
