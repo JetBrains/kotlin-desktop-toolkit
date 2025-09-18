@@ -34,7 +34,7 @@ use windows::{
 
 use super::{
     event_loop::EventLoop,
-    geometry::{LogicalPoint, LogicalSize, PhysicalPoint, PhysicalSize},
+    geometry::{LogicalPoint, LogicalSize},
     utils,
     window_api::{WindowId, WindowParams, WindowStyle, WindowTitleBarKind},
 };
@@ -185,15 +185,18 @@ impl Window {
         unsafe { ShowWindow(self.hwnd(), SW_SHOW) }.as_bool()
     }
 
-    pub fn set_position(&self, origin: PhysicalPoint, size: PhysicalSize) -> WinResult<()> {
+    pub fn set_position(&self, origin: LogicalPoint, size: LogicalSize) -> WinResult<()> {
+        let scale = self.get_scale();
+        let physical_origin = origin.to_physical(scale);
+        let physical_size = size.to_physical(scale);
         unsafe {
             SetWindowPos(
                 self.hwnd(),
                 None,
-                origin.x.0,
-                origin.y.0,
-                size.width.0,
-                size.height.0,
+                physical_origin.x.0,
+                physical_origin.y.0,
+                physical_size.width.0,
+                physical_size.height.0,
                 SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER,
             )
         }
@@ -285,8 +288,7 @@ fn on_nccreate(hwnd: HWND, lparam: LPARAM) -> anyhow::Result<()> {
 fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.hwnd.store(hwnd.0, Ordering::Release);
     unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.to_system().0 as _) };
-    let scale = window.get_scale();
-    window.set_position(window.origin.to_physical(scale), window.size.to_physical(scale))?;
+    window.set_position(window.origin, window.size)?;
     initialize_composition(window, hwnd).context("failed to initialize composition")
 }
 
