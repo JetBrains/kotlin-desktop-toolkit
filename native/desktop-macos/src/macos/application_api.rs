@@ -350,6 +350,35 @@ define_class!(
     #[derive(Debug)]
     struct AppDelegate;
 
+    impl AppDelegate {
+        #[unsafe(method(observeValueForKeyPath:ofObject:change:context:))]
+        fn observe_value(
+            &self,
+            key_path: Option<&NSString>,
+            object: Option<&AnyObject>,
+            change: Option<&NSDictionary<NSKeyValueChangeKey, AnyObject>>,
+            context: *mut c_void,
+        ) {
+            catch_panic(|| {
+                match (object, key_path) {
+                    (Some(object), Some(key_path))
+                        if object.class().superclass() == Some(MyNSApplication::class())
+                            && key_path == ns_string!("effectiveAppearance") =>
+                    {
+                        handle_application_appearance_change();
+                    }
+                    _ => unsafe {
+                        let _: () = msg_send![super(self), observeValueForKeyPath: key_path,
+                                                                     ofObject: object,
+                                                                       change: change,
+                                                                      context: context];
+                    },
+                }
+                Ok(())
+            });
+        }
+    }
+
     unsafe impl NSObjectProtocol for AppDelegate {}
 
     unsafe impl NSApplicationDelegate for AppDelegate {
@@ -387,33 +416,6 @@ define_class!(
         #[unsafe(method(applicationWillTerminate:))]
         fn will_terminate(&self, _notification: &NSNotification) {
             (self.ivars().callbacks.on_will_terminate)();
-        }
-
-        #[unsafe(method(observeValueForKeyPath:ofObject:change:context:))]
-        fn observe_value(
-            &self,
-            key_path: Option<&NSString>,
-            object: Option<&AnyObject>,
-            change: Option<&NSDictionary<NSKeyValueChangeKey, AnyObject>>,
-            context: *mut c_void,
-        ) {
-            catch_panic(|| {
-                match (object, key_path) {
-                    (Some(object), Some(key_path))
-                        if object.class().superclass() == Some(MyNSApplication::class())
-                            && key_path == ns_string!("effectiveAppearance") =>
-                    {
-                        handle_application_appearance_change();
-                    }
-                    _ => unsafe {
-                        let _: () = msg_send![super(self), observeValueForKeyPath: key_path,
-                                                                     ofObject: object,
-                                                                       change: change,
-                                                                      context: context];
-                    },
-                }
-                Ok(())
-            });
         }
     }
 );
