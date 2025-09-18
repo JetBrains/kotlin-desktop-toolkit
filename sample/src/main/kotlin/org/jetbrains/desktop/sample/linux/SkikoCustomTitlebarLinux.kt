@@ -38,7 +38,7 @@ internal class SkikoCustomTitlebarLinux(
     private var leftClickStartLocation: LogicalPoint? = null
     private var isDragging: Boolean = false
 
-    private var titleTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    private var titleTextLineCreator = TextLineCreator()
 
     companion object {
         const val CUSTOM_TITLEBAR_HEIGHT: LogicalPixels = 55f
