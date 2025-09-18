@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     mem::ManuallyDrop,
     rc::{Rc, Weak},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicPtr, Ordering},
 };
 
 use anyhow::Context;
@@ -43,7 +43,7 @@ use super::{
 const WINDOW_PTR_PROP_NAME: PCWSTR = w!("KDT_WINDOW_PTR");
 
 pub struct Window {
-    hwnd: RefCell<HWND>,
+    hwnd: AtomicPtr<core::ffi::c_void>,
     compositor: Weak<Compositor>,
     composition_target: RefCell<Option<DesktopWindowTarget>>,
     sprite_visual: RefCell<Option<SpriteVisual>>,
@@ -75,7 +75,7 @@ impl Window {
             .map_err(|_| WinError::from(ERROR_NO_UNICODE_TRANSLATION))?
             .map_or_else(HSTRING::new, HSTRING::from);
         let window = Rc::new(Self {
-            hwnd: RefCell::new(HWND::default()),
+            hwnd: AtomicPtr::default(),
             compositor,
             composition_target: RefCell::new(None),
             sprite_visual: RefCell::new(None),
@@ -113,7 +113,7 @@ impl Window {
 
     #[inline]
     pub(crate) fn hwnd(&self) -> HWND {
-        *self.hwnd.borrow()
+        HWND(self.hwnd.load(Ordering::Acquire))
     }
 
     #[inline]
@@ -283,7 +283,7 @@ fn on_nccreate(hwnd: HWND, lparam: LPARAM) -> anyhow::Result<()> {
 }
 
 fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
-    window.hwnd.replace(hwnd);
+    window.hwnd.store(hwnd.0, Ordering::Release);
     unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.to_system().0 as _) };
     let scale = window.get_scale();
     window.set_position(window.origin.to_physical(scale), window.size.to_physical(scale))?;
