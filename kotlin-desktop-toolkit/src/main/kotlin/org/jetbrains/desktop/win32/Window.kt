@@ -95,7 +95,7 @@ public class Window internal constructor(private val ptr: MemorySegment) : AutoC
         return ffiDownCall { desktop_win32_h.window_show(ptr) }
     }
 
-    public fun setRect(origin: PhysicalPoint, size: PhysicalSize) {
+    public fun setRect(origin: LogicalPoint, size: LogicalSize) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_win32_h.window_set_rect(

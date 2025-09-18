@@ -12,7 +12,7 @@ use windows::Win32::{
 use super::{
     application::Application,
     application_api::AppPtr,
-    geometry::{LogicalPoint, LogicalSize, PhysicalPoint, PhysicalSize},
+    geometry::{LogicalPoint, LogicalSize},
     window::Window,
 };
 
@@ -145,7 +145,7 @@ pub extern "C" fn window_show(window_ptr: WindowPtr) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: PhysicalPoint, size: PhysicalSize) {
+pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: LogicalPoint, size: LogicalSize) {
     with_window(&window_ptr, "window_set_rect", |window| {
         window.set_position(origin, size)?;
         Ok(())
