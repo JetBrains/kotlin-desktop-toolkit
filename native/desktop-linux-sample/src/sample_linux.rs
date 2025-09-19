@@ -483,6 +483,15 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 state.key_modifiers = data.modifiers;
                 true
             }
+            Event::WindowKeyboardEnter(event) => {
+                state.key_window_id = Some(event.window_id);
+                true
+            }
+            Event::WindowKeyboardLeave(event) => {
+                assert!(state.key_window_id == Some(event.window_id));
+                state.key_window_id = None;
+                true
+            }
             Event::KeyDown(event) => on_keydown(event, app_ptr, state),
             Event::FileChooserResponse(file_chooser_response) => {
                 match file_chooser_response.newline_separated_files.as_optional_str() {
