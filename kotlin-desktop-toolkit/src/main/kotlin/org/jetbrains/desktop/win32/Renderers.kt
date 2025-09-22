@@ -57,12 +57,6 @@ public class AngleRenderer internal constructor(private val angleDevicePtr: Memo
         }
     }
 
-    public fun draw(drawFun: () -> Unit) {
-        makeCurrent()
-        drawFun()
-        swapBuffers()
-    }
-
     override fun close() {
         ffiDownCall {
             desktop_win32_h.renderer_angle_drop(angleDevicePtr)
