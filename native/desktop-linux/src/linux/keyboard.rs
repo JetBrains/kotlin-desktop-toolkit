@@ -1,5 +1,6 @@
 use std::ffi::CString;
 
+use anyhow::Context;
 use log::debug;
 use smithay_client_toolkit::{
     delegate_keyboard,
@@ -17,7 +18,11 @@ use crate::linux::{
 };
 
 pub fn send_key_down_event(state: &ApplicationState, event: KeyEvent, is_repeat: bool) {
-    let characters = event.utf8.map(|s| CString::new(s).unwrap());
+    let characters = event.utf8.map(|s| {
+        CString::new(s)
+            .with_context(|| format!("event: raw_code={}, keysym={:?}", event.raw_code, event.keysym))
+            .unwrap()
+    });
     let code = KeyCode(event.raw_code);
     state.send_event(KeyDownEvent::new(code, event.keysym.raw(), characters.as_ref(), is_repeat));
 }
