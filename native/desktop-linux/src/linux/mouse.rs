@@ -3,19 +3,34 @@ use smithay_client_toolkit::{
     compositor::SurfaceData,
     delegate_pointer,
     reexports::client::{
-        Connection, Dispatch, Proxy, QueueHandle,
-        protocol::{wl_pointer::WlPointer, wl_surface, wl_surface::WlSurface},
+        protocol::{wl_pointer::{AxisRelativeDirection, WlPointer}, wl_surface::{self, WlSurface}}, Connection, Dispatch, Proxy, QueueHandle
     },
-    seat::pointer::{PointerData, PointerEvent, PointerEventKind, PointerHandler},
+    seat::pointer::{AxisScroll, PointerData, PointerEvent, PointerEventKind, PointerHandler},
 };
 
 use crate::linux::{
     application_state::ApplicationState,
     events::{
-        MouseButton, MouseDownEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScrollWheelEvent, Timestamp,
+        MouseButton, MouseDownEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScrollData, ScrollWheelEvent, Timestamp
     },
     geometry::LogicalPixels,
 };
+
+impl From<AxisScroll> for ScrollData {
+    fn from(value: AxisScroll) -> Self {
+        let wheel_value120 = if value.value120 != 0 {
+            value.value120
+        } else {
+            value.discrete * 120
+        };
+        Self {
+            delta: LogicalPixels(value.absolute),
+            wheel_value120,
+            is_inverted: value.relative_direction == Some(AxisRelativeDirection::Inverted),
+            is_stop: value.stop,
+        }
+    }
+}
 
 impl PointerHandler for ApplicationState {
     fn pointer_frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
@@ -79,13 +94,16 @@ impl PointerHandler for ApplicationState {
                         horizontal,
                         vertical,
                         ..
-                    } => self.send_event(ScrollWheelEvent {
-                        window_id,
-                        scrolling_delta_x: LogicalPixels(horizontal.absolute),
-                        scrolling_delta_y: LogicalPixels(vertical.absolute),
-                        location_in_window: event.position.into(),
-                        timestamp: Timestamp(time),
-                    }),
+                    } => {
+                        debug!("wl_pointer vertical={vertical:?}");
+                        self.send_event(ScrollWheelEvent {
+                            window_id,
+                            location_in_window: event.position.into(),
+                            timestamp: Timestamp(time),
+                            horizontal_scroll: horizontal.into(),
+                            vertical_scroll: vertical.into(),
+                        })
+                    }
                 }
             }
 

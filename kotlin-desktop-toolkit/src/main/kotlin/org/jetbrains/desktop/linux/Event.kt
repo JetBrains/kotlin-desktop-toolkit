@@ -64,6 +64,15 @@ public enum class WindowDecorationMode {
 
 public data class RequestId(val id: Int)
 
+public data class ScrollData(
+    val delta: LogicalPixels,
+    val wheelValue120: Int,
+    val isInverted: Boolean,
+    val isStop: Boolean,
+) {
+    internal companion object
+}
+
 public sealed class Event {
     internal companion object;
 
@@ -139,10 +148,14 @@ public sealed class Event {
 
     public data class ScrollWheel(
         val windowId: WindowId,
+        @Deprecated("Use `horizontalScroll` instead")
         val scrollingDeltaX: LogicalPixels,
+        @Deprecated("Use `verticalScroll` instead")
         val scrollingDeltaY: LogicalPixels,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
+        val horizontalScroll: ScrollData,
+        val verticalScroll: ScrollData,
     ) : Event()
 
     /** Indicates if the Text Input support is available.

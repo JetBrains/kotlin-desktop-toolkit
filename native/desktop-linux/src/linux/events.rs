@@ -306,12 +306,21 @@ impl From<MouseUpEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct ScrollData {
+    pub delta: LogicalPixels,
+    pub wheel_value120: i32,
+    pub is_inverted: bool,
+    pub is_stop: bool,
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct ScrollWheelEvent {
     pub window_id: WindowId,
-    pub scrolling_delta_x: LogicalPixels,
-    pub scrolling_delta_y: LogicalPixels,
     pub location_in_window: LogicalPoint,
     pub timestamp: Timestamp,
+    pub horizontal_scroll: ScrollData,
+    pub vertical_scroll: ScrollData,
 }
 
 impl From<ScrollWheelEvent> for Event<'_> {

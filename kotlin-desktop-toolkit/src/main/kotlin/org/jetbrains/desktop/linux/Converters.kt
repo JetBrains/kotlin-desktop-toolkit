@@ -24,6 +24,7 @@ import org.jetbrains.desktop.linux.generated.NativeMouseUpEvent
 import org.jetbrains.desktop.linux.generated.NativeOpenFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativePhysicalSize
 import org.jetbrains.desktop.linux.generated.NativeSaveFileDialogParams
+import org.jetbrains.desktop.linux.generated.NativeScrollData
 import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.linux.generated.NativeSoftwareDrawData
 import org.jetbrains.desktop.linux.generated.NativeTextInputAvailabilityEvent
@@ -430,6 +431,15 @@ internal fun DragAction.toNative(): Int = when (this) {
     DragAction.Ask -> desktop_linux_h.NativeDragAction_Ask()
 }
 
+internal fun ScrollData.Companion.fromNative(s: MemorySegment): ScrollData {
+    return ScrollData(
+        delta = NativeScrollData.delta(s).toFloat(),
+        wheelValue120 = NativeScrollData.wheel_value120(s),
+        isInverted = NativeScrollData.is_inverted(s),
+        isStop = NativeScrollData.is_stop(s),
+    )
+}
+
 private fun readNativeU32Array(nativeU32Array: MemorySegment): List<Int> {
     val len = NativeBorrowedArray_u32.len(nativeU32Array)
     val dataPtr = NativeBorrowedArray_u32.ptr(nativeU32Array)
@@ -581,12 +591,16 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         }
         desktop_linux_h.NativeEvent_ScrollWheel() -> {
             val nativeEvent = NativeEvent.scroll_wheel(s)
+            val horizontalScroll = ScrollData.fromNative(NativeScrollWheelEvent.horizontal_scroll(nativeEvent))
+            val verticalScroll = ScrollData.fromNative(NativeScrollWheelEvent.vertical_scroll(nativeEvent))
             Event.ScrollWheel(
                 windowId = NativeScrollWheelEvent.window_id(nativeEvent),
-                scrollingDeltaX = NativeScrollWheelEvent.scrolling_delta_x(nativeEvent).toFloat(),
-                scrollingDeltaY = NativeScrollWheelEvent.scrolling_delta_y(nativeEvent).toFloat(),
+                scrollingDeltaX = horizontalScroll.delta,
+                scrollingDeltaY = verticalScroll.delta,
                 locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
+                horizontalScroll = horizontalScroll,
+                verticalScroll = verticalScroll,
             )
         } desktop_linux_h.NativeEvent_WindowScreenChange() -> {
             val nativeEvent = NativeEvent.window_screen_change(s)
