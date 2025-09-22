@@ -9,12 +9,9 @@ use desktop_common::{
     logger::PanicDefault,
 };
 use enumflags2::{BitFlag, BitFlags, bitflags};
-use smithay_client_toolkit::{
-    reexports::client::{Proxy, protocol::wl_output::WlOutput},
-    seat::{
-        keyboard::Modifiers,
-        pointer::{AxisScroll, PointerEvent},
-    },
+use smithay_client_toolkit::seat::{
+    keyboard::Modifiers,
+    pointer::{AxisScroll, PointerEvent},
 };
 
 use crate::linux::{
@@ -610,15 +607,6 @@ impl From<WindowScaleChangedEvent> for Event<'_> {
 pub struct WindowScreenChangeEvent {
     pub window_id: WindowId,
     pub new_screen_id: ScreenId,
-}
-
-impl WindowScreenChangeEvent {
-    pub(crate) fn new(window_id: WindowId, output: &WlOutput) -> Self {
-        Self {
-            window_id,
-            new_screen_id: ScreenId(output.id().protocol_id()),
-        }
-    }
 }
 
 impl From<WindowScreenChangeEvent> for Event<'_> {

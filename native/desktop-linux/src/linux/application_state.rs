@@ -56,8 +56,8 @@ use smithay_client_toolkit::{
 use crate::linux::{
     application_api::ApplicationCallbacks,
     events::{
-        Event, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDrawEvent, WindowId, WindowScaleChangedEvent,
-        WindowScreenChangeEvent,
+        Event, ScreenId, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDrawEvent, WindowId,
+        WindowScaleChangedEvent, WindowScreenChangeEvent,
     },
     keyboard::send_key_down_event,
     text_input::PendingTextInputEvent,
@@ -342,17 +342,18 @@ impl CompositorHandler for ApplicationState {
 
     fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &WlOutput) {
         debug!("surface_enter for {}: {}", surface.id(), output.id());
-        if let Some(window) = self.get_window(surface) {
-            //let screen_info = ScreenInfo::new(self.output_state.info(output));  // TODO?
-            self.send_event(WindowScreenChangeEvent::new(window.window_id, output));
+        if let Some(window) = self.get_window(surface)
+            && let Some(output_info) = self.output_state.info(output)
+        {
+            self.send_event(WindowScreenChangeEvent {
+                window_id: window.window_id,
+                new_screen_id: ScreenId(output_info.id),
+            });
         }
     }
 
     fn surface_leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &WlOutput) {
         debug!("surface_leave for {}: {}", surface.id(), output.id());
-        if let Some(window) = self.get_window(surface) {
-            self.send_event(WindowScreenChangeEvent::new(window.window_id, output));
-        }
     }
 }
 
