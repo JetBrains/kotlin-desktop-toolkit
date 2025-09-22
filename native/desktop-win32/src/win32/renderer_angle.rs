@@ -1,11 +1,6 @@
 #![allow(non_upper_case_globals)]
 
-use std::{
-    ffi::OsString,
-    os::windows::ffi::OsStringExt,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::{ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf, sync::atomic::AtomicUsize};
 
 use anyhow::Context;
 use khronos_egl as egl;
@@ -22,7 +17,7 @@ use windows_numerics::Vector2;
 
 use super::{
     renderer_api::EglSurfaceData,
-    renderer_egl_utils::{EglInstance, GR_GL_FRAMEBUFFER_BINDING, GrGLFunctions, PostSubBufferNVFn, get_egl_proc},
+    renderer_egl_utils::{EGLOk, EglInstance, GR_GL_FRAMEBUFFER_BINDING, GrGLFunctions, PostSubBufferNVFn, load_egl_function},
     window::Window,
 };
 
@@ -165,27 +160,13 @@ fn post_sub_buffer(
     width: egl::Int,
     height: egl::Int,
 ) -> anyhow::Result<()> {
-    static FUN: AtomicUsize = AtomicUsize::new(0usize);
+    static POST_SUB_BUFFER_FN: AtomicUsize = AtomicUsize::new(0usize);
 
-    let fun = {
-        let temp = FUN.load(Ordering::Relaxed);
-        if temp == 0usize {
-            #[allow(clippy::transmutes_expressible_as_ptr_casts)]
-            FUN.store(get_egl_proc!(egl_instance, "eglPostSubBufferNV")?, Ordering::Release);
-            FUN.load(Ordering::Acquire)
-        } else {
-            temp
-        }
-    };
-    let fun = unsafe { core::mem::transmute::<usize, PostSubBufferNVFn>(fun) };
+    let post_sub_buffer_fn: PostSubBufferNVFn = unsafe { load_egl_function(&POST_SUB_BUFFER_FN, egl_instance, "eglPostSubBufferNV")? };
 
-    match unsafe { fun(display.as_ptr(), surface.as_ptr(), x, y, width, height) } {
-        egl::TRUE => Ok(()),
-        egl::FALSE => Err(egl_instance
-            .get_error()
-            .map_or_else(|| anyhow::Error::msg("Could not post sub buffer."), Into::into)),
-        _ => unreachable!("Boolean only has two values"),
-    }
+    unsafe { post_sub_buffer_fn(display.as_ptr(), surface.as_ptr(), x, y, width, height) }
+        .ok(egl_instance)
+        .context("Could not post sub buffer.")
 }
 
 fn load_angle_egl_instance() -> anyhow::Result<EglInstance> {

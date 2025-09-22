@@ -1,4 +1,6 @@
-use anyhow::Result;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use anyhow::Context;
 use khronos_egl as egl;
 
 /// cbindgen:ignore
@@ -24,7 +26,7 @@ macro_rules! get_egl_proc {
     ($egl_instance:ident, $name:literal) => {
         $egl_instance
             .get_proc_address($name)
-            .ok_or_else(|| anyhow::anyhow!("Could not load the {} function.", $name))
+            .with_context(|| format!("Could not load the {} function.", $name))
             .map(|f| unsafe { core::mem::transmute(f) })
     };
 }
@@ -36,9 +38,43 @@ pub(crate) struct GrGLFunctions {
 }
 
 impl GrGLFunctions {
-    pub fn init(egl_instance: &EglInstance) -> Result<Self> {
+    pub fn init(egl_instance: &EglInstance) -> anyhow::Result<Self> {
         Ok(Self {
             fGetIntegerv: get_egl_proc!(egl_instance, "glGetIntegerv")?,
         })
+    }
+}
+
+pub(crate) unsafe fn load_egl_function<T>(
+    cache: &'static AtomicUsize,
+    egl_instance: &EglInstance,
+    name: &'static str,
+) -> anyhow::Result<T> {
+    let egl_func = {
+        let cached_value = cache.load(Ordering::Relaxed);
+        if cached_value == 0usize {
+            let f = egl_instance
+                .get_proc_address(name)
+                .with_context(|| format!("Could not get address of the \"{name}\" function."))?;
+            cache.store(f as usize, Ordering::Release);
+            cache.load(Ordering::Acquire)
+        } else {
+            cached_value
+        }
+    };
+    Ok(unsafe { core::mem::transmute_copy::<usize, T>(&egl_func) })
+}
+
+pub(crate) trait EGLOk {
+    fn ok(&self, egl_instance: &EglInstance) -> anyhow::Result<()>;
+}
+
+impl EGLOk for egl::Boolean {
+    fn ok(&self, egl_instance: &EglInstance) -> anyhow::Result<()> {
+        match *self {
+            egl::TRUE => Ok(()),
+            egl::FALSE => Err(egl_instance.get_error().map_or_else(|| anyhow::Error::msg("EGL_FALSE"), Into::into)),
+            _ => unreachable!("Boolean only has two values"),
+        }
     }
 }
