@@ -20,6 +20,20 @@ pub(crate) type PostSubBufferNVFn = unsafe extern "system" fn(
 ) -> egl::Boolean;
 
 /// cbindgen:ignore
+pub(crate) type EGLDeviceEXT = *mut core::ffi::c_void;
+
+/// cbindgen:ignore
+pub(crate) type QueryDisplayAttribEXTFn =
+    unsafe extern "system" fn(display: egl::EGLDisplay, attribute: egl::Int, value: *mut egl::Attrib) -> egl::Boolean;
+
+/// cbindgen:ignore
+pub(crate) type QueryDeviceAttribEXTFn =
+    unsafe extern "system" fn(device: EGLDeviceEXT, attribute: egl::Int, value: *mut egl::Attrib) -> egl::Boolean;
+
+/// cbindgen:ignore
+pub(crate) const EGL_DEVICE_EXT: egl::Int = 0x322C;
+
+/// cbindgen:ignore
 pub(crate) const GR_GL_FRAMEBUFFER_BINDING: egl::Enum = 0x8CA6;
 
 macro_rules! get_egl_proc {
