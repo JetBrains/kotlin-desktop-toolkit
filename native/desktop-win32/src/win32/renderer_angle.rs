@@ -8,7 +8,12 @@ use windows::{
     UI::Composition::SpriteVisual,
     Win32::{
         Foundation::ERROR_PATH_NOT_FOUND,
-        Graphics::Gdi::{GetDC, ReleaseDC},
+        Graphics::{
+            Direct3D11::ID3D11Device,
+            Dwm::DwmFlush,
+            Dxgi::{IDXGIDevice1, IDXGIOutput},
+            Gdi::{GetDC, MONITOR_DEFAULTTONULL, MonitorFromWindow, ReleaseDC},
+        },
         System::LibraryLoader::GetModuleFileNameW,
     },
     core::{Error as WinError, Interface},
@@ -17,7 +22,10 @@ use windows_numerics::Vector2;
 
 use super::{
     renderer_api::EglSurfaceData,
-    renderer_egl_utils::{EGLOk, EglInstance, GR_GL_FRAMEBUFFER_BINDING, GrGLFunctions, PostSubBufferNVFn, load_egl_function},
+    renderer_egl_utils::{
+        EGL_DEVICE_EXT, EGLDeviceEXT, EGLOk, EglInstance, GR_GL_FRAMEBUFFER_BINDING, GrGLFunctions, PostSubBufferNVFn,
+        QueryDeviceAttribEXTFn, QueryDisplayAttribEXTFn, load_egl_function,
+    },
     window::Window,
 };
 
@@ -27,10 +35,19 @@ const EGL_PLATFORM_ANGLE_ANGLE: egl::Enum = 0x3202;
 const EGL_PLATFORM_ANGLE_TYPE_ANGLE: egl::Attrib = 0x3203;
 /// cbindgen:ignore
 const EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE: egl::Attrib = 0x3208;
+/// cbindgen:ignore
+const EGL_D3D11_DEVICE_ANGLE: egl::Int = 0x33A1;
+/// cbindgen:ignore
+const EGL_EXPERIMENTAL_PRESENT_PATH_ANGLE: egl::Attrib = 0x33A4;
+/// cbindgen:ignore
+const EGL_EXPERIMENTAL_PRESENT_PATH_FAST_ANGLE: egl::Attrib = 0x33A9;
+/// cbindgen:ignore
+const EGL_POST_SUB_BUFFER_SUPPORTED_NV: egl::Int = 0x30BE;
 
 pub struct AngleDevice {
     egl_instance: EglInstance,
     display: egl::Display,
+    output: IDXGIOutput,
     context: egl::Context,
     visual: SpriteVisual,
     surface: egl::Surface,
@@ -42,14 +59,16 @@ impl AngleDevice {
     pub fn create_for_window(window: &Window) -> anyhow::Result<Self> {
         let egl_instance = load_angle_egl_instance()?;
 
+        let hwnd = window.hwnd();
+
         let display = {
             #[rustfmt::skip]
             let display_attribs = [
                 EGL_PLATFORM_ANGLE_TYPE_ANGLE, EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE,
+                EGL_EXPERIMENTAL_PRESENT_PATH_ANGLE, EGL_EXPERIMENTAL_PRESENT_PATH_FAST_ANGLE,
                 egl::ATTRIB_NONE, egl::ATTRIB_NONE,
             ];
 
-            let hwnd = window.hwnd();
             let hdc = unsafe { GetDC(Some(hwnd)) };
             let display = unsafe { egl_instance.get_platform_display(EGL_PLATFORM_ANGLE_ANGLE, hdc.0, &display_attribs) }?;
             unsafe { ReleaseDC(Some(hwnd), hdc) };
@@ -57,6 +76,22 @@ impl AngleDevice {
         };
 
         let (_major, _minor) = egl_instance.initialize(display)?;
+
+        let device = query_d3d11device_from_angle(&egl_instance, display)?;
+        unsafe { device.SetMaximumFrameLatency(1)? };
+
+        let adapter = unsafe { device.GetAdapter()? };
+        let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL) };
+
+        let mut i = 0;
+        let output = loop {
+            let output = unsafe { adapter.EnumOutputs(i)? };
+            let desc = unsafe { output.GetDesc()? };
+            if desc.Monitor == monitor {
+                break output;
+            }
+            i += 1;
+        };
 
         let surface_config = {
             #[rustfmt::skip]
@@ -86,13 +121,21 @@ impl AngleDevice {
         };
 
         let visual = window.get_visual()?;
-        let surface = unsafe { egl_instance.create_window_surface(display, surface_config, visual.as_raw(), None) }?;
+        let surface = unsafe {
+            #[rustfmt::skip]
+            let surface_attribs = [
+                EGL_POST_SUB_BUFFER_SUPPORTED_NV, egl::TRUE as _,
+                egl::NONE, egl::NONE
+            ];
+            egl_instance.create_window_surface(display, surface_config, visual.as_raw(), Some(&surface_attribs))
+        }?;
 
         let functions = GrGLFunctions::init(&egl_instance)?;
 
         Ok(Self {
             egl_instance,
             display,
+            output,
             context,
             visual,
             surface,
@@ -107,8 +150,12 @@ impl AngleDevice {
             Y: height as f32,
         })?;
 
-        self.egl_instance.swap_interval(self.display, 1)?;
+        unsafe { DwmFlush()? };
+
+        self.egl_instance.swap_interval(self.display, 0)?;
         post_sub_buffer(&self.egl_instance, self.display, self.surface, 1, 1, width, height)?;
+
+        unsafe { self.output.WaitForVBlank()? };
 
         let mut framebuffer_binding = 0;
         unsafe { (self.functions.fGetIntegerv)(GR_GL_FRAMEBUFFER_BINDING, &raw mut framebuffer_binding) };
@@ -124,7 +171,7 @@ impl AngleDevice {
 
     #[allow(clippy::bool_to_int_with_if)]
     pub fn swap_buffers(&self) -> anyhow::Result<()> {
-        self.egl_instance.swap_interval(self.display, 1)?;
+        self.egl_instance.swap_interval(self.display, 0)?;
         self.egl_instance.swap_buffers(self.display, self.surface)?;
         Ok(())
     }
@@ -167,6 +214,31 @@ fn post_sub_buffer(
     unsafe { post_sub_buffer_fn(display.as_ptr(), surface.as_ptr(), x, y, width, height) }
         .ok(egl_instance)
         .context("Could not post sub buffer.")
+}
+
+fn query_d3d11device_from_angle(egl_instance: &EglInstance, display: egl::Display) -> anyhow::Result<IDXGIDevice1> {
+    static QUERY_DISPLAY_ATTRIB_FN: AtomicUsize = AtomicUsize::new(0usize);
+    static QUERY_DEVICE_ATTRIB_FN: AtomicUsize = AtomicUsize::new(0usize);
+
+    let query_display_attrib_fun: QueryDisplayAttribEXTFn =
+        unsafe { load_egl_function(&QUERY_DISPLAY_ATTRIB_FN, egl_instance, "eglQueryDisplayAttribEXT")? };
+    let query_device_attrib_fn: QueryDeviceAttribEXTFn =
+        unsafe { load_egl_function(&QUERY_DEVICE_ATTRIB_FN, egl_instance, "eglQueryDeviceAttribEXT")? };
+
+    let mut device = 0;
+    unsafe { query_display_attrib_fun(display.as_ptr(), EGL_DEVICE_EXT, &raw mut device) }
+        .ok(egl_instance)
+        .context("failed to query device from ANGLE display")?;
+
+    let mut d3d11_device_raw = 0;
+    unsafe { query_device_attrib_fn(device as EGLDeviceEXT, EGL_D3D11_DEVICE_ANGLE, &raw mut d3d11_device_raw) }
+        .ok(egl_instance)
+        .context("failed to query ID3D11Device from ANGLE device")?;
+
+    let d3d11_device = unsafe { ID3D11Device::from_raw(d3d11_device_raw as _) };
+    d3d11_device
+        .cast()
+        .context("failed to query interface from ID3D11Device to IDXGIDevice1")
 }
 
 fn load_angle_egl_instance() -> anyhow::Result<EglInstance> {
