@@ -66,6 +66,7 @@ abstract class SkikoWindowWin32(
     }
 
     private fun performDrawing(size: PhysicalSize, scale: Float) {
+        angleRenderer.makeCurrent()
         if (surfaceParams == null || isSizeChanged(size)) {
             currentSize = size
             surfaceParams = angleRenderer.resizeSurface(size.width, size.height)
@@ -87,11 +88,10 @@ abstract class SkikoWindowWin32(
                 surfaceProps = null,
             )!!.use { surface ->
                 val time = creationTime.elapsedNow().inWholeMilliseconds
-                angleRenderer.draw {
-                    surface.canvas.clear(Color.TRANSPARENT)
-                    surface.canvas.draw(size, scale, time)
-                    surface.flushAndSubmit()
-                }
+                surface.canvas.clear(Color.TRANSPARENT)
+                surface.canvas.draw(size, scale, time)
+                surface.flushAndSubmit()
+                angleRenderer.swapBuffers()
             }
         }
     }

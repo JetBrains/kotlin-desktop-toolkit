@@ -112,10 +112,7 @@ impl AngleDevice {
             Y: height as f32,
         })?;
 
-        self.egl_instance
-            .make_current(self.display, Some(self.surface), Some(self.surface), Some(self.context))?;
         self.egl_instance.swap_interval(self.display, 1)?;
-
         post_sub_buffer(&self.egl_instance, self.display, self.surface, 1, 1, width, height)?;
 
         let mut framebuffer_binding = 0;
