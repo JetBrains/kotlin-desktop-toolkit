@@ -12,7 +12,7 @@ abstract class ClippyTask: Exec() {
     val checkOnly = objectFactory.property<Boolean>()
 
     @get:Input
-    val crateName = objectFactory.property<String>()
+    val targetPlatform = objectFactory.property<Platform>()
 
     init {
         outputs.upToDateWhen { false }
@@ -20,11 +20,11 @@ abstract class ClippyTask: Exec() {
     }
 
     override fun exec() {
-        val crateName = crateName.get()
+        val rustTarget = buildPlatformRustTarget(targetPlatform.get())
         args(buildList {
             add("clippy")
-            add("--package=$crateName")
-            add("--all-targets")
+            add("--target=$rustTarget")  // required for the cross-compilation support
+            add("--all-targets")  // also check non-lib targets (e.g. tests)
             add("--all-features")
             if (checkOnly.getOrElse(false)) {
                 add("--")

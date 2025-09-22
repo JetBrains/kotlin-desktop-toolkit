@@ -10,11 +10,17 @@ data class Platform(
     @get:Input val os: Os,
     @get:Input val arch: Arch,
 ) : java.io.Serializable {
-    fun name(): String = "${os.normalizedName}-${arch.name}"
+    fun name(): String {
+        val os = os.normalizedName.replaceFirstChar { it.uppercase() }
+        val arch = arch.name.replaceFirstChar { it.uppercase() }
+        return "${os}${arch}"
+    }
 }
 
 enum class Os(val normalizedName: String) {
     LINUX("linux"), MACOS("macos"), WINDOWS("windows");
+
+    fun titlecase(): String = normalizedName.replaceFirstChar { it.uppercase() }
 }
 
 enum class Arch {
