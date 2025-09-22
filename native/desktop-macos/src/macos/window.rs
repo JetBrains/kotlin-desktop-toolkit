@@ -487,13 +487,13 @@ impl MyNSWindow {
         let ns_window: Retained<Self> = unsafe {
             msg_send![super(this), initWithContentRect: content_rect,
                                                 styleMask: style,
-                                                 // the only non depricated NSBackingStoreType
+                                                 // the only non-deprecated NSBackingStoreType
                                                   backing: NSBackingStoreType::Buffered,
                                                  // When true, the window server defers creating the window device until the window is moved onscreen.
                                                     defer: false,
                                                  // Screen
-                                                 // When sceen is specified the rect considered to be in its coordinate system
-                                                 // By default it's relative to primary screen
+                                                 // When screen is specified, the rect considered to be in its coordinate system,
+                                                 // By default, it's relative to the primary screen
                                                    screen: Option::<&NSScreen>::None]
         };
         ns_window
