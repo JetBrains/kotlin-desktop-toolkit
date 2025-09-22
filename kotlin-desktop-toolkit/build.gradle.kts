@@ -82,8 +82,6 @@ val enabledPlatforms = allPlatforms.filter { crossCompilationSettings.enabled(it
 
 val profiles = listOf("dev", "release")
 
-val allCrates = listOf("desktop-common", "desktop-macos", "desktop-win32", "desktop-linux", "desktop-linux-sample")
-
 fun mainCrateForOS(os: Os): String {
     return when (os) {
         Os.MACOS -> "desktop-macos"
@@ -156,7 +154,7 @@ fun packageNameForOS(os: Os): String {
 }
 
 val generateBindingsTaskByOS = allPlatforms.allOSes().associateWith { os ->
-    tasks.register<GenerateJavaBindingsTask>("generateBindingsFor${os.normalizedName}") {
+    tasks.register<GenerateJavaBindingsTask>("generateBindingsFor${os.titlecase()}") {
         dependsOn(downloadJExtractTask)
         jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
         packageName = packageNameForOS(os)
@@ -308,18 +306,18 @@ val cargoFmtTask = tasks.register<CargoFmtTask>("cargoFmt") {
     clippyFixTasks.forEach { mustRunAfter(it) }
 }
 
-val clippyCheckTasks = allCrates.map { targetCrateName ->
-    tasks.register<ClippyTask>("clippyCheck-$targetCrateName") {
+val clippyCheckTasks = enabledPlatforms.map { platform ->
+    tasks.register<ClippyTask>("clippyCheckFor${platform.name()}") {
         checkOnly = true
         workingDir = nativeDir.asFile
-        crateName = targetCrateName
+        targetPlatform = platform
     }
 }
 
-val clippyFixTasks = allCrates.map { targetCrateName ->
-    tasks.register<ClippyTask>("clippyFix-$targetCrateName") {
+val clippyFixTasks = enabledPlatforms.map { platform ->
+    tasks.register<ClippyTask>("clippyFixFor${platform.name()}") {
         workingDir = nativeDir.asFile
-        crateName = targetCrateName
+        targetPlatform = platform
     }
 }
 

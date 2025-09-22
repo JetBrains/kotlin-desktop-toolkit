@@ -39,7 +39,7 @@ impl ScreenInfo {
                 || RustAllocatedStrPtr::null().to_auto_drop(),
                 |s| RustAllocatedStrPtr::allocate(s.as_bytes()).unwrap().to_auto_drop(),
             ),
-            origin: info.logical_position.map(std::convert::Into::into).unwrap_or_default(),
+            origin: info.logical_position.map(Into::into).unwrap_or_default(),
             size: info
                 .logical_size
                 .map(|size| LogicalSize {
