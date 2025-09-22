@@ -7,7 +7,6 @@ public typealias ScreenId = Int
 
 public data class Screen(
     val screenId: ScreenId,
-    val isPrimary: Boolean,
     val name: String?,
     val origin: LogicalPoint,
     val size: LogicalSize,
@@ -19,7 +18,6 @@ public data class Screen(
             val nativeName = NativeScreenInfo.name(s)
             return Screen(
                 screenId = NativeScreenInfo.screen_id(s),
-                isPrimary = NativeScreenInfo.is_primary(s),
                 name = if (nativeName == MemorySegment.NULL) {
                     null
                 } else {

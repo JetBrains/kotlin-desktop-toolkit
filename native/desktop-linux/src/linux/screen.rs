@@ -15,9 +15,7 @@ pub type ScreenId = u32;
 #[repr(C)]
 pub struct ScreenInfo {
     pub screen_id: ScreenId,
-    pub is_primary: bool,
     pub name: AutoDropStrPtr,
-    // relative to primary screen
     pub origin: LogicalPoint,
     pub size: LogicalSize,
     pub scale: f64,
@@ -37,8 +35,6 @@ impl ScreenInfo {
         let current_mode = info.modes.iter().find(|m| m.current);
         Self {
             screen_id: info.id,
-            // The screen containing the menu bar is always the first object (index 0) in the array returned by the screens method.
-            is_primary: false,
             name: info.name.map_or_else(
                 || RustAllocatedStrPtr::null().to_auto_drop(),
                 |s| RustAllocatedStrPtr::allocate(s.as_bytes()).unwrap().to_auto_drop(),
