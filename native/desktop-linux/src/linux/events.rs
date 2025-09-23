@@ -12,7 +12,6 @@ use enumflags2::{BitFlag, BitFlags, bitflags};
 
 use crate::linux::{
     application_api::DataSource,
-    data_transfer::DataTransferContentInternal,
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
@@ -124,29 +123,30 @@ pub enum WindowDecorationMode {
 #[repr(C)]
 #[derive(Debug)]
 pub struct DataTransferContent<'a> {
-    pub serial: i32,
     pub data: BorrowedArray<'a, u8>,
     pub mime_types: BorrowedStrPtr<'a>,
 }
 
-impl<'a> From<DataTransferContent<'a>> for Event<'a> {
-    fn from(value: DataTransferContent<'a>) -> Self {
-        Self::DataTransfer(value)
-    }
-}
-
 impl<'a> DataTransferContent<'a> {
     #[must_use]
-    pub fn new(serial: i32, data: &'a [u8], mime_types: &'a CStr) -> Self {
+    pub fn new(data: &'a [u8], mime_types: &'a CStr) -> Self {
         Self {
-            serial,
             data: BorrowedArray::from_slice(data),
             mime_types: BorrowedStrPtr::new(mime_types),
         }
     }
+}
 
-    pub fn to_internal(&self) -> anyhow::Result<DataTransferContentInternal> {
-        Ok(DataTransferContentInternal::new(self.data.as_slice()?, self.mime_types.as_str()?))
+#[repr(C)]
+#[derive(Debug)]
+pub struct DataTransferEvent<'a> {
+    pub serial: i32,
+    pub content: DataTransferContent<'a>,
+}
+
+impl<'a> From<DataTransferEvent<'a>> for Event<'a> {
+    fn from(value: DataTransferEvent<'a>) -> Self {
+        Self::DataTransfer(value)
     }
 }
 
@@ -552,7 +552,10 @@ pub enum Event<'a> {
     DisplayConfigurationChange,
 
     XdgDesktopSettingChange(XdgDesktopSetting<'a>),
-    DataTransfer(DataTransferContent<'a>),
+
+    /// Data received from clipboard or primary selection. For drag&drop, see `DropPerformed`.
+    DataTransfer(DataTransferEvent<'a>),
+
     DataTransferAvailable(DataTransferAvailableEvent<'a>),
 
     /// Data transfer for data from our application was canceled

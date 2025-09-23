@@ -7,6 +7,7 @@ import org.jetbrains.desktop.linux.generated.NativeCommonFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailableEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferCancelledEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
+import org.jetbrains.desktop.linux.generated.NativeDataTransferEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
 import org.jetbrains.desktop.linux.generated.NativeEvent
 import org.jetbrains.desktop.linux.generated.NativeFileChooserResponse
@@ -486,9 +487,11 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         }
         desktop_linux_h.NativeEvent_DataTransfer() -> {
             val nativeEvent = NativeEvent.data_transfer(s)
+            val content = DataTransferContent.fromNative(NativeDataTransferEvent.content(nativeEvent))
             Event.DataTransfer(
-                serial = NativeDataTransferContent.serial(nativeEvent),
-                data = DataTransferContent.fromNative(nativeEvent),
+                serial = NativeDataTransferEvent.serial(nativeEvent),
+                data = content,
+                content = content,
             )
         }
         desktop_linux_h.NativeEvent_FileChooserResponse() -> {

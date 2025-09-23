@@ -505,10 +505,10 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 }
                 true
             }
-            Event::DataTransfer(content) => {
+            Event::DataTransfer(data) => {
                 if let Some(key_window_id) = state.key_window_id {
                     let window_state = state.windows.get_mut(&key_window_id).unwrap();
-                    on_data_transfer_received(content, window_state);
+                    on_data_transfer_received(&data.content, window_state);
                     true
                 } else {
                     false

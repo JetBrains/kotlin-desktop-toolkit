@@ -28,7 +28,7 @@ use smithay_client_toolkit::{
 use crate::linux::{
     application_api::{DataSource, DragAndDropQueryData},
     application_state::ApplicationState,
-    events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent},
+    events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent, DataTransferEvent},
 };
 
 delegate_data_device!(ApplicationState);
@@ -115,7 +115,8 @@ impl DataDeviceHandler for ApplicationState {
                 debug!("DataDeviceHandler::drop_performed read {size} bytes for {mime_type}");
                 debug!("DataDeviceHandler::drop_performed value: {buf:?}");
                 let mime_type_cstr = CString::from_str(&mime_type).unwrap();
-                state.send_event(DataTransferContent::new(-1, &buf, &mime_type_cstr));
+                let content = DataTransferContent::new(&buf, &mime_type_cstr);
+                state.send_event(DataTransferEvent { serial: -1, content });
 
                 PostAction::Remove
             })
@@ -197,20 +198,6 @@ impl MimeTypes {
     pub fn new(mime_types_str: &str) -> Self {
         Self {
             val: mime_types_str.split(',').map(str::to_owned).collect(),
-        }
-    }
-}
-
-pub struct DataTransferContentInternal {
-    pub data: Vec<u8>,
-    pub mime_types: Vec<String>,
-}
-
-impl DataTransferContentInternal {
-    pub(crate) fn new(data: &[u8], mime_types_str: &str) -> Self {
-        Self {
-            data: data.to_owned(),
-            mime_types: mime_types_str.split(',').map(str::to_owned).collect(),
         }
     }
 }
