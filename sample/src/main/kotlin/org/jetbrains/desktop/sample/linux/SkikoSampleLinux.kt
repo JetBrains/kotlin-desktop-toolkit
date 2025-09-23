@@ -4,8 +4,10 @@ import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.ApplicationConfig
 import org.jetbrains.desktop.linux.ColorSchemeValue
 import org.jetbrains.desktop.linux.DataSource
+import org.jetbrains.desktop.linux.DataTransferContent
 import org.jetbrains.desktop.linux.DesktopTitlebarAction
 import org.jetbrains.desktop.linux.DragAction
+import org.jetbrains.desktop.linux.DragAndDropQueryData
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.FileDialog
@@ -70,6 +72,13 @@ val EXAMPLE_FILES: List<String> = listOf(
 sealed class DataTransferContentType {
     data class Text(val text: String) : DataTransferContentType()
     data class UriList(val files: List<String>) : DataTransferContentType()
+
+    fun mimeTypes(): List<String> {
+        return when (this) {
+            is Text -> listOf(TEXT_MIME_TYPE)
+            is UriList -> listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE)
+        }
+    }
 }
 
 fun KeyCode.isModifierKey(): Boolean {
@@ -181,6 +190,12 @@ internal data class XdgDesktopSettings(
     }
 }
 
+private interface ClipboardHandler {
+    fun copy(content: DataTransferContentType)
+    fun paste(supportedMimeTypes: List<String>)
+    fun startDrag(content: DataTransferContentType, action: DragAction)
+}
+
 private class EditorState {
     private var textInputEnabled: Boolean = false
     private var composedText: String = ""
@@ -195,7 +210,6 @@ private class EditorState {
     private var modifiers = setOf<KeyModifiers>()
     private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
     private var statsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
-    var currentClipboard: DataTransferContentType? = null
 
     companion object {
         private fun codepointFromOffset(sb: StringBuilder, offset: Int): Short {
@@ -351,19 +365,24 @@ private class EditorState {
         return EventHandlerResult.Stop
     }
 
-    fun onKeyDown(event: Event.KeyDown, app: Application, window: Window, windowState: WindowState): EventHandlerResult {
+    fun onKeyDown(
+        event: Event.KeyDown,
+        app: Application,
+        window: Window,
+        windowState: WindowState,
+        clipboardHandler: ClipboardHandler,
+    ): EventHandlerResult {
         val shortcutModifiers = shortcutModifiers()
         when (shortcutModifiers) {
             setOf(KeyModifiers.Logo) -> EventHandlerResult.Continue
             setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
                 KeyCode.V -> {
-                    app.clipboardPaste(0, listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                    clipboardHandler.paste(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                     EventHandlerResult.Stop
                 }
 
                 KeyCode.C -> {
-                    app.clipboardPut(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
-                    currentClipboard = DataTransferContentType.UriList(EXAMPLE_FILES)
+                    clipboardHandler.copy(DataTransferContentType.UriList(EXAMPLE_FILES))
                     EventHandlerResult.Stop
                 }
 
@@ -388,14 +407,13 @@ private class EditorState {
 
             setOf(KeyModifiers.Control) -> when (event.keyCode.value) {
                 KeyCode.V -> {
-                    app.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
+                    clipboardHandler.paste(listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
                     EventHandlerResult.Stop
                 }
 
                 KeyCode.C -> {
                     getCurrentSelection()?.let { selection ->
-                        app.clipboardPut(listOf(TEXT_MIME_TYPE))
-                        currentClipboard = DataTransferContentType.Text(selection)
+                        clipboardHandler.copy(DataTransferContentType.Text(selection))
                         EventHandlerResult.Stop
                     } ?: EventHandlerResult.Continue
                 }
@@ -508,17 +526,16 @@ private class EditorState {
         return EventHandlerResult.Stop
     }
 
-    fun onDataTransfer(event: Event.DataTransfer, app: Application): EventHandlerResult {
-        val data = event.data
-        if (data.mimeTypes.contains(URI_LIST_MIME_TYPE)) {
-            val files = data.data.decodeToString().trimEnd().split("\r\n")
+    fun onDataTransfer(content: DataTransferContent, app: Application): EventHandlerResult {
+        if (content.mimeTypes.contains(URI_LIST_MIME_TYPE)) {
+            val files = content.data.decodeToString().trimEnd().split("\r\n")
             Logger.info { "Pasted ${files.size} files:" }
             for (file in files) {
                 Logger.info { file }
             }
-        } else if (data.mimeTypes.contains(TEXT_MIME_TYPE)) {
+        } else if (content.mimeTypes.contains(TEXT_MIME_TYPE)) {
             deleteSelection()
-            val pastedText = data.data.decodeToString()
+            val pastedText = content.data.decodeToString()
             text.insert(cursorOffset, pastedText)
             cursorOffset += pastedText.length
             selectionStartOffset = null
@@ -624,7 +641,6 @@ private class ContentArea(
     var size: LogicalSize,
 ) {
     private var markerPosition: LogicalPoint? = null
-    var currentDragContent: DataTransferContentType? = null
 
     fun onMouseMoved(event: Event.MouseMoved): EventHandlerResult {
         markerPosition = LogicalPoint(
@@ -634,34 +650,21 @@ private class ContentArea(
         return EventHandlerResult.Continue
     }
 
-    fun onMouseDown(window: Window, editorState: EditorState): EventHandlerResult {
+    fun onMouseDown(clipboardHandler: ClipboardHandler, editorState: EditorState): EventHandlerResult {
         when (editorState.shortcutModifiers()) {
             setOf(KeyModifiers.Shift) -> {
-                window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Move)
-                currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
+                clipboardHandler.startDrag(DataTransferContentType.UriList(EXAMPLE_FILES), DragAction.Move)
             }
             setOf(KeyModifiers.Control) -> {
-                window.startDrag(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), DragAction.Copy)
-                currentDragContent = DataTransferContentType.UriList(EXAMPLE_FILES)
+                clipboardHandler.startDrag(DataTransferContentType.UriList(EXAMPLE_FILES), DragAction.Copy)
             }
             else -> {
-                currentDragContent = editorState.getCurrentSelection()?.let {
-                    window.startDrag(listOf(TEXT_MIME_TYPE), DragAction.Copy)
-                    DataTransferContentType.Text(it)
+                editorState.getCurrentSelection()?.let {
+                    clipboardHandler.startDrag(DataTransferContentType.Text(it), DragAction.Copy)
                 }
             }
         }
         return EventHandlerResult.Stop
-    }
-
-    fun onMouseUp(event: Event.MouseUp): EventHandlerResult {
-        return if (event.button == MouseButton.LEFT) {
-            currentDragContent = null
-            Logger.info { "currentDragContent = null" }
-            EventHandlerResult.Stop
-        } else {
-            EventHandlerResult.Continue
-        }
     }
 
     fun draw(canvas: Canvas, time: Long, scale: Float, editorState: EditorState) {
@@ -834,11 +837,11 @@ private class CustomBorders {
 }
 
 private class WindowContainer(
-    var customTitlebar: SkikoCustomTitlebarLinux?,
+    private var customTitlebar: SkikoCustomTitlebarLinux?,
     var customBorders: CustomBorders?,
     val contentArea: ContentArea,
     private var xdgDesktopSettings: XdgDesktopSettings,
-    val requestClose: () -> Unit,
+    private val requestClose: () -> Unit,
 ) {
     companion object {
         fun create(windowContentSize: LogicalSize, xdgDesktopSettings: XdgDesktopSettings, requestClose: () -> Unit): WindowContainer {
@@ -928,14 +931,19 @@ private class WindowContainer(
         return contentArea.onMouseMoved(event)
     }
 
-    fun onMouseDown(event: Event.MouseDown, window: Window, editorState: EditorState): EventHandlerResult {
+    fun onMouseDown(
+        event: Event.MouseDown,
+        window: Window,
+        editorState: EditorState,
+        clipboardHandler: ClipboardHandler,
+    ): EventHandlerResult {
         if (customBorders?.onMouseDown(event, window) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
         if (customTitlebar?.onMouseDown(event) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
-        return contentArea.onMouseDown(window, editorState)
+        return contentArea.onMouseDown(clipboardHandler, editorState)
     }
 
     fun onMouseUp(
@@ -947,7 +955,7 @@ private class WindowContainer(
         if (customTitlebar?.onMouseUp(event, xdgDesktopSettings, window, windowState) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
-        return contentArea.onMouseUp(event)
+        return EventHandlerResult.Continue
     }
 
     fun draw(canvas: Canvas, time: Long, scale: Float, title: String, editorState: EditorState, windowState: WindowState) {
@@ -968,18 +976,17 @@ private class WindowContainer(
 }
 
 private class RotatingBallWindow(
-    val windowContainer: WindowContainer,
+    private val windowContainer: WindowContainer,
     app: Application,
-    val editorState: EditorState,
     windowParams: WindowParams,
 ) : SkikoWindowLinux(app, windowParams) {
+    private val editorState = EditorState()
     private var title: String = windowParams.title
     private var windowState = WindowState()
 
     companion object {
         fun createWindow(
             app: Application,
-            editorState: EditorState,
             windowParams: WindowParams,
             xdgDesktopSettings: XdgDesktopSettings,
             requestClose: () -> Unit,
@@ -988,7 +995,7 @@ private class RotatingBallWindow(
             val windowContentSize = windowSize // todo it's incorrect
             val container = WindowContainer.create(windowContentSize, xdgDesktopSettings, requestClose)
 
-            return RotatingBallWindow(container, app, editorState, windowParams)
+            return RotatingBallWindow(container, app, windowParams)
         }
     }
 
@@ -1023,6 +1030,10 @@ private class RotatingBallWindow(
         }
     }
 
+    fun onDataTransfer(content: DataTransferContent, app: Application): EventHandlerResult {
+        return editorState.onDataTransfer(content, app)
+    }
+
     fun onMouseMoved(event: Event.MouseMoved): EventHandlerResult {
         val borderEdge = windowContainer.customBorders?.toEdge(event.locationInWindow)
         return if (borderEdge != null) {
@@ -1034,8 +1045,8 @@ private class RotatingBallWindow(
         }
     }
 
-    fun onKeyDown(event: Event.KeyDown, app: Application): EventHandlerResult {
-        return editorState.onKeyDown(event, app, window, windowState)
+    fun onKeyDown(event: Event.KeyDown, app: Application, clipboardHandler: ClipboardHandler): EventHandlerResult {
+        return editorState.onKeyDown(event, app, window, windowState, clipboardHandler)
     }
 
     fun onModifiersChanged(event: Event.ModifiersChanged): EventHandlerResult {
@@ -1058,8 +1069,8 @@ private class RotatingBallWindow(
         return windowContainer.onMouseExited()
     }
 
-    fun onMouseDown(event: Event.MouseDown): EventHandlerResult {
-        return windowContainer.onMouseDown(event, window, editorState)
+    fun onMouseDown(event: Event.MouseDown, clipboardHandler: ClipboardHandler): EventHandlerResult {
+        return windowContainer.onMouseDown(event, window, editorState, clipboardHandler)
     }
 
     fun onMouseUp(event: Event.MouseUp, xdgDesktopSettings: XdgDesktopSettings): EventHandlerResult {
@@ -1068,10 +1079,14 @@ private class RotatingBallWindow(
 }
 
 private class ApplicationState(private val app: Application) : AutoCloseable {
-    val windows = mutableMapOf<WindowId, RotatingBallWindow>()
-    var keyWindowId: WindowId? = null
+    private val windows = mutableMapOf<WindowId, RotatingBallWindow>()
+    private var keyWindowId: WindowId? = null
     private val xdgDesktopSettings = XdgDesktopSettings()
-    private val editorState = EditorState()
+    private val windowClipboardHandlers = mutableMapOf<WindowId, ClipboardHandler>()
+    private var currentClipboard: DataTransferContentType? = null
+    private var currentClipboardPasteSerial = 0
+    private val clipboardPasteSerialToWindow = mutableMapOf<Int, WindowId>()
+    private var currentDragContent: DataTransferContentType? = null
 
     fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
         val windowId = windows.count().toLong()
@@ -1084,13 +1099,30 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             forceSoftwareRendering = forceSoftwareRendering,
         )
 
-        windows[windowId] = RotatingBallWindow.createWindow(
+        val window = RotatingBallWindow.createWindow(
             app,
-            editorState,
             windowParams,
             xdgDesktopSettings,
         ) {
             handleEvent(Event.WindowCloseRequest(windowId))
+        }
+        windows[windowId] = window
+        windowClipboardHandlers[windowId] = object : ClipboardHandler {
+            override fun copy(content: DataTransferContentType) {
+                currentClipboard = content
+                app.clipboardPut(content.mimeTypes())
+            }
+
+            override fun paste(supportedMimeTypes: List<String>) {
+                currentClipboardPasteSerial += 1
+                clipboardPasteSerialToWindow[currentClipboardPasteSerial] = keyWindowId!!
+                app.clipboardPaste(currentClipboardPasteSerial, supportedMimeTypes)
+            }
+
+            override fun startDrag(content: DataTransferContentType, action: DragAction) {
+                currentDragContent = content
+                window.window.startDrag(content.mimeTypes(), action)
+            }
         }
     }
 
@@ -1116,6 +1148,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 val window = windows[windowId] ?: return EventHandlerResult.Continue
                 window.close()
                 windows.remove(windowId)
+                windowClipboardHandlers.remove(windowId)
                 if (windows.isEmpty()) {
                     app.stopEventLoop()
                 }
@@ -1135,7 +1168,9 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 windows[event.windowId]?.onMouseMoved(event) ?: EventHandlerResult.Continue
             }
             is Event.DataTransfer -> {
-                editorState.onDataTransfer(event, app)
+                clipboardPasteSerialToWindow.remove(event.serial)?.let { windowId ->
+                    windows[windowId]?.onDataTransfer(event.data, app)
+                } ?: EventHandlerResult.Continue
             }
             is Event.DataTransferCancelled -> {
                 onDataTransferCancelled(event.dataSource)
@@ -1146,16 +1181,23 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 Logger.info { "File chooser response: $event" }
                 EventHandlerResult.Stop
             }
-            is Event.KeyDown -> windows[keyWindowId]?.onKeyDown(event, app) ?: EventHandlerResult.Continue
+            is Event.KeyDown -> windows[keyWindowId]?.onKeyDown(event, app, windowClipboardHandlers[keyWindowId]!!)
+                ?: EventHandlerResult.Continue
             is Event.KeyUp -> EventHandlerResult.Continue
             is Event.ModifiersChanged -> windows[keyWindowId]?.onModifiersChanged(event) ?: EventHandlerResult.Continue
-            is Event.MouseDown -> windows[keyWindowId]?.onMouseDown(event) ?: EventHandlerResult.Continue
-            is Event.MouseEntered -> windows[keyWindowId]?.onMouseEntered() ?: EventHandlerResult.Continue
-            is Event.MouseExited -> windows[keyWindowId]?.onMouseExited() ?: EventHandlerResult.Continue
-            is Event.MouseUp -> windows[keyWindowId]?.onMouseUp(event, xdgDesktopSettings) ?: EventHandlerResult.Continue
+            is Event.MouseDown -> windows[event.windowId]?.onMouseDown(event, windowClipboardHandlers[event.windowId]!!)
+                ?: EventHandlerResult.Continue
+            is Event.MouseEntered -> windows[event.windowId]?.onMouseEntered() ?: EventHandlerResult.Continue
+            is Event.MouseExited -> windows[event.windowId]?.onMouseExited() ?: EventHandlerResult.Continue
+            is Event.MouseUp -> {
+                if (event.button == MouseButton.LEFT) {
+                    currentDragContent = null
+                }
+                windows[event.windowId]?.onMouseUp(event, xdgDesktopSettings) ?: EventHandlerResult.Continue
+            }
             is Event.ScrollWheel -> EventHandlerResult.Continue
             is Event.TextInput -> windows[keyWindowId]?.onTextInput(event, app) ?: EventHandlerResult.Continue
-            is Event.TextInputAvailability -> windows[keyWindowId]?.onTextInputAvailability(event, app) ?: EventHandlerResult.Continue
+            is Event.TextInputAvailability -> windows[event.windowId]?.onTextInputAvailability(event, app) ?: EventHandlerResult.Continue
             is Event.WindowKeyboardEnter -> {
                 keyWindowId = event.windowId
                 EventHandlerResult.Continue
@@ -1179,12 +1221,14 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         windows.values.forEach { it.settingsChanged(xdgDesktopSettings) }
     }
 
+    fun getDragAndDropSupportedMimeTypes(queryData: DragAndDropQueryData): List<String> {
+        return windows[queryData.windowId]!!.getDragAndDropSupportedMimeTypes(queryData.point)
+    }
+
     fun getDataTransferData(dataSource: DataSource, mimeType: String): ByteArray {
         val content = when (dataSource) {
-            DataSource.Clipboard -> editorState.currentClipboard
-            DataSource.DragAndDrop -> {
-                windows.values.firstNotNullOf { it.windowContainer.contentArea.currentDragContent }
-            }
+            DataSource.Clipboard -> currentClipboard
+            DataSource.DragAndDrop -> currentDragContent
         }
         return when (content) {
             is DataTransferContentType.Text -> {
@@ -1213,10 +1257,10 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
     fun onDataTransferCancelled(dataSource: DataSource) {
         when (dataSource) {
             DataSource.Clipboard -> {
-                editorState.currentClipboard = null
+                currentClipboard = null
             }
             DataSource.DragAndDrop -> {
-                windows.values.forEach { it.windowContainer.contentArea.currentDragContent = null }
+                currentDragContent = null
             }
         }
     }
@@ -1224,6 +1268,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
     override fun close() {
         windows.values.forEach(AutoCloseable::close)
         windows.clear()
+        windowClipboardHandlers.clear()
         app.close()
     }
 }
@@ -1240,7 +1285,7 @@ fun main(args: Array<String>) {
             ApplicationConfig(
                 eventHandler = { state.handleEvent(it) },
                 getDragAndDropSupportedMimeTypes = { queryData ->
-                    state.windows[queryData.windowId]!!.getDragAndDropSupportedMimeTypes(queryData.point)
+                    state.getDragAndDropSupportedMimeTypes(queryData)
                 },
                 getDataTransferData = { dataSource, mimeType ->
                     state.getDataTransferData(dataSource, mimeType)
