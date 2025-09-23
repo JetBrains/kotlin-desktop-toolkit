@@ -42,6 +42,7 @@ import org.jetbrains.skia.Color
 import org.jetbrains.skia.Font
 import org.jetbrains.skia.FontMgr
 import org.jetbrains.skia.FontStyle
+import org.jetbrains.skia.Image
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.TextLine
@@ -60,6 +61,7 @@ import kotlin.time.toDuration
 
 const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
 const val URI_LIST_MIME_TYPE = "text/uri-list"
+const val PNG_MIME_TYPE = "image/png"
 
 // TODO
 val EXAMPLE_FILES: List<String> = listOf(
@@ -198,6 +200,7 @@ private class EditorState {
     private var modifiers = setOf<KeyModifiers>()
     private var textLineCreator = TextLineCreator()
     private var scrollValue: Float = 0f
+    private var pastedImage: Image? = null
     var currentClipboard: DataTransferContentType? = null
 
     companion object {
@@ -281,6 +284,17 @@ private class EditorState {
     }
 
     fun draw(canvas: Canvas, contentOrigin: PhysicalPoint, contentSize: PhysicalSize, scale: Float) {
+        pastedImage?.let {
+            Paint().use { paint ->
+                val imageRect = it.imageInfo.bounds
+                canvas.drawImageRect(
+                    it,
+                    src = imageRect.toRect(),
+                    dst = Rect(contentOrigin.x.toFloat(), contentOrigin.y.toFloat(), imageRect.width * scale, imageRect.height * scale),
+                    paint,
+                )
+            }
+        }
         val lineHeight = 30 * scale
         drawLines(canvas, contentOrigin, contentSize, scale)
         val x = 40f * scale
@@ -390,7 +404,7 @@ private class EditorState {
             setOf(KeyModifiers.Logo) -> EventHandlerResult.Continue
             setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
                 KeyCode.V -> {
-                    app.clipboardPaste(0, listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                    app.clipboardPaste(0, listOf(PNG_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                     EventHandlerResult.Stop
                 }
 
@@ -421,7 +435,7 @@ private class EditorState {
 
             setOf(KeyModifiers.Control) -> when (event.keyCode.value) {
                 KeyCode.V -> {
-                    app.clipboardPaste(0, listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
+                    app.clipboardPaste(0, listOf(PNG_MIME_TYPE, TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
                     EventHandlerResult.Stop
                 }
 
@@ -559,6 +573,8 @@ private class EditorState {
             if (textInputEnabled) {
                 app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
             }
+        } else if (content.mimeTypes.contains(PNG_MIME_TYPE)) {
+            pastedImage = Image.makeFromEncoded(content.data)
         }
         return EventHandlerResult.Stop
     }
