@@ -43,6 +43,7 @@ import org.jetbrains.skia.Color
 import org.jetbrains.skia.Font
 import org.jetbrains.skia.FontMgr
 import org.jetbrains.skia.FontStyle
+import org.jetbrains.skia.Image
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.TextLine
@@ -61,6 +62,7 @@ import kotlin.time.toDuration
 
 const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
 const val URI_LIST_MIME_TYPE = "text/uri-list"
+const val PNG_MIME_TYPE = "image/png"
 
 // TODO
 val EXAMPLE_FILES: List<String> = listOf(
@@ -212,6 +214,7 @@ private class EditorState {
     private var modifiers = setOf<KeyModifiers>()
     private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
     private var statsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    private var pastedImage: Image? = null
 
     companion object {
         private fun codepointFromOffset(sb: StringBuilder, offset: Int): Short {
@@ -271,6 +274,17 @@ private class EditorState {
 
     fun draw(canvas: Canvas, y: Float, scale: Float) {
         val textLineStats = statsTextLineCreator.makeTextLine(getTextLineStatsString(), 20 * scale)
+        pastedImage?.let {
+            Paint().use { paint ->
+                val imageRect = it.imageInfo.bounds
+                canvas.drawImageRect(
+                    it,
+                    src = imageRect.toRect(),
+                    dst = Rect(0f, 0f, imageRect.width * scale, imageRect.height * scale),
+                    paint,
+                )
+            }
+        }
         val composedTextStartOffset = this.composedTextStartOffset
         val cursorOffset = cursorOffset
         val stringLine = if (composedText.isEmpty()) {
@@ -379,7 +393,7 @@ private class EditorState {
             setOf(KeyModifiers.Logo) -> EventHandlerResult.Continue
             setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
                 KeyCode.V -> {
-                    clipboardHandler.paste(listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                    clipboardHandler.paste(listOf(PNG_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
                     EventHandlerResult.Stop
                 }
 
@@ -409,7 +423,7 @@ private class EditorState {
 
             setOf(KeyModifiers.Control) -> when (event.keyCode.value) {
                 KeyCode.V -> {
-                    clipboardHandler.paste(listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
+                    clipboardHandler.paste(listOf(PNG_MIME_TYPE, TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
                     EventHandlerResult.Stop
                 }
 
@@ -546,6 +560,8 @@ private class EditorState {
             if (textInputEnabled) {
                 app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
             }
+        } else if (content.mimeTypes.contains(PNG_MIME_TYPE)) {
+            pastedImage = Image.makeFromEncoded(content.data)
         }
         return EventHandlerResult.Stop
     }
