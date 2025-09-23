@@ -146,19 +146,9 @@ impl ApplicationState {
         }
     }
 
-    pub fn get_window(&self, surface: &WlSurface) -> Option<&SimpleWindow> {
-        let surface_id: &ObjectId = &surface.id();
-        self.windows.get(surface_id)
-    }
-
     pub fn get_window_id(&self, surface: &WlSurface) -> Option<WindowId> {
-        self.get_window(surface).map(|w| w.window_id)
-    }
-
-    pub fn get_window_by_id(&self, window_id: WindowId) -> Option<&SimpleWindow> {
-        self.window_id_to_surface_id
-            .get(&window_id)
-            .and_then(|surface_id| self.windows.get(surface_id))
+        let surface_id: &ObjectId = &surface.id();
+        self.windows.get(surface_id).map(|w| w.window_id)
     }
 
     fn update_themed_cursor_with_seat(&mut self, qh: &QueueHandle<Self>, seat: &WlSeat) -> anyhow::Result<()> {
@@ -346,11 +336,11 @@ impl CompositorHandler for ApplicationState {
 
     fn surface_enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, output: &WlOutput) {
         debug!("surface_enter for {}: {}", surface.id(), output.id());
-        if let Some(window) = self.get_window(surface)
+        if let Some(window_id) = self.get_window_id(surface)
             && let Some(output_info) = self.output_state.info(output)
         {
             self.send_event(WindowScreenChangeEvent {
-                window_id: window.window_id,
+                window_id,
                 new_screen_id: ScreenId(output_info.id),
             });
         }
@@ -365,10 +355,8 @@ delegate_compositor!(ApplicationState);
 
 impl WindowHandler for ApplicationState {
     fn request_close(&mut self, _: &Connection, _: &QueueHandle<Self>, window: &Window) {
-        if let Some(window) = self.get_window(window.wl_surface()) {
-            self.send_event(WindowCloseRequestEvent {
-                window_id: window.window_id,
-            });
+        if let Some(window_id) = self.get_window_id(window.wl_surface()) {
+            self.send_event(WindowCloseRequestEvent { window_id });
         }
     }
 
