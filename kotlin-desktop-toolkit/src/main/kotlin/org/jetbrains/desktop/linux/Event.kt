@@ -87,9 +87,12 @@ public sealed class Event {
 
     public data class DataTransferAvailable(val mimeTypes: List<String>) : Event()
 
+    /** Data received from clipboard or primary selection. For drag&drop, see [DropPerformed]. */
     public data class DataTransfer(
         val serial: Int,
+        @Deprecated("Use content instead")
         val data: DataTransferContent,
+        val content: DataTransferContent,
     ) : Event()
 
     /** Data transfer for data from our application was canceled */

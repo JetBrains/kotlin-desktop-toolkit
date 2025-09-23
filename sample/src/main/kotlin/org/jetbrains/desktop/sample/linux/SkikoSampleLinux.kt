@@ -1169,7 +1169,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             }
             is Event.DataTransfer -> {
                 clipboardPasteSerialToWindow.remove(event.serial)?.let { windowId ->
-                    windows[windowId]?.onDataTransfer(event.data, app)
+                    windows[windowId]?.onDataTransfer(event.content, app)
                 } ?: EventHandlerResult.Continue
             }
             is Event.DataTransferCancelled -> {
