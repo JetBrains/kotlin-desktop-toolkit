@@ -196,7 +196,7 @@ fn load_angle_egl_instance() -> anyhow::Result<EglInstance> {
         let hmodule = crate::get_dll_instance().into();
         let mut filename = vec![0u16; 1024];
         match GetModuleFileNameW(Some(hmodule), &mut filename) {
-            0 => Err(WinError::from_win32()),
+            0 => Err(WinError::from_thread()),
             len => Ok(OsString::from_wide(&filename[..len as _]).into()),
         }?
     };

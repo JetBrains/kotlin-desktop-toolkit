@@ -69,7 +69,7 @@ impl AppMenuStructureSafe {
     fn from_unsafe(menu: &AppMenuStructure) -> Result<Self> {
         let items = {
             if menu.items.is_null() {
-                return Err(anyhow!("Null found in {:?}", menu));
+                return Err(anyhow!("Null found in {menu:?}"));
             }
             unsafe { slice::from_raw_parts(menu.items, menu.items_count) }
         };
@@ -115,7 +115,7 @@ impl AppMenuItemSafe {
             } => {
                 let items = {
                     if items.is_null() {
-                        return Err(anyhow!("Null found in {:?}", sub_menu));
+                        return Err(anyhow!("Null found in {sub_menu:?}"));
                     }
                     unsafe { slice::from_raw_parts(items, items_count) }
                 };

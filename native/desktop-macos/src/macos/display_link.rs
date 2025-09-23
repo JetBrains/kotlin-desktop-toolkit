@@ -238,15 +238,15 @@ mod display_link_sys {
                 let mut display_link: *mut CVDisplayLink = 0 as _;
 
                 let code = CVDisplayLinkCreateWithActiveCGDisplays(&raw mut display_link);
-                anyhow::ensure!(code == 0, "could not create display link, code: {}", code);
+                anyhow::ensure!(code == 0, "could not create display link, code: {code}");
 
                 let mut display_link = Self::from_ptr(display_link);
 
                 let code = CVDisplayLinkSetOutputCallback(&mut display_link, callback, user_info);
-                anyhow::ensure!(code == 0, "could not set output callback, code: {}", code);
+                anyhow::ensure!(code == 0, "could not set output callback, code: {code}");
 
                 let code = CVDisplayLinkSetCurrentCGDisplay(&mut display_link, display_id);
-                anyhow::ensure!(code == 0, "could not assign display to display link, code: {}", code);
+                anyhow::ensure!(code == 0, "could not assign display to display link, code: {code}");
 
                 Ok(display_link)
             }
@@ -257,14 +257,14 @@ mod display_link_sys {
         /// Apple docs: [CVDisplayLinkStart](https://developer.apple.com/documentation/corevideo/1457193-cvdisplaylinkstart?language=objc)
         pub unsafe fn start(&mut self) -> Result<()> {
             let code = unsafe { CVDisplayLinkStart(self) };
-            anyhow::ensure!(code == 0, "could not start display link, code: {}", code);
+            anyhow::ensure!(code == 0, "could not start display link, code: {code}");
             Ok(())
         }
 
         /// Apple docs: [CVDisplayLinkStop](https://developer.apple.com/documentation/corevideo/1457281-cvdisplaylinkstop?language=objc)
         pub unsafe fn stop(&mut self) -> Result<()> {
             let code = unsafe { CVDisplayLinkStop(self) };
-            anyhow::ensure!(code == 0, "could not stop display link, code: {}", code);
+            anyhow::ensure!(code == 0, "could not stop display link, code: {code}");
             Ok(())
         }
 

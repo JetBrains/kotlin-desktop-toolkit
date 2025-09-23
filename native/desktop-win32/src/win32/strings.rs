@@ -12,7 +12,7 @@ use windows::{
 pub(crate) fn copy_from_wide_string(s: &[u16]) -> WinResult<CString> {
     let len = unsafe { WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, s, None, None, None) };
     if len == 0 {
-        return Err(WinError::from_win32());
+        return Err(WinError::from_thread());
     }
     let mut buf = vec![0u8; len as usize + 1]; // ensure that we definitely have a terminating null character
     unsafe { WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, s, Some(buf.as_mut_slice()), None, None) };
