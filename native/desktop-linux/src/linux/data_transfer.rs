@@ -5,7 +5,7 @@ use std::{
 };
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
-use log::{debug, error};
+use log::{debug, error, warn};
 use smithay_client_toolkit::{
     data_device_manager::{
         WritePipe,
@@ -28,7 +28,7 @@ use smithay_client_toolkit::{
 use crate::linux::{
     application_api::{DataSource, DragAndDropQueryData},
     application_state::ApplicationState,
-    events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent},
+    events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent, DropPerformedEvent},
 };
 
 delegate_data_device!(ApplicationState);
@@ -52,10 +52,14 @@ impl DataDeviceHandler for ApplicationState {
         let Some(drag_offer) = data_device.data().drag_offer() else {
             return;
         };
+        let Some(window_id) = self.get_window_id(&drag_offer.surface) else {
+            warn!("DataDeviceHandler::motion: couldn't find window for {:?}", drag_offer.surface);
+            return;
+        };
 
         self.drag_destination_mime_type = drag_offer.with_mime_types(|mime_types| {
             let drag_and_drop_query_data = DragAndDropQueryData {
-                window_id: self.get_window(&drag_offer.surface).unwrap().window_id,
+                window_id,
                 point: (x, y).into(),
             };
             let supported_mime_types = (self.callbacks.get_drag_and_drop_supported_mime_types)(&drag_and_drop_query_data);
@@ -108,14 +112,21 @@ impl DataDeviceHandler for ApplicationState {
         let read_pipe = drag_offer.receive(mime_type.clone()).unwrap();
         self.loop_handle
             .insert_source(read_pipe, move |(), res, state| {
+                let Some(window_id) = state.get_window_id(&drag_offer.surface) else {
+                    warn!(
+                        "DataDeviceHandler::drop_performed: couldn't find window for {:?}",
+                        drag_offer.surface
+                    );
+                    return PostAction::Remove;
+                };
                 let f = unsafe { res.get_mut() };
                 let mut buf = Vec::new();
                 let size = f.read_to_end(&mut buf).unwrap();
-
                 debug!("DataDeviceHandler::drop_performed read {size} bytes for {mime_type}");
                 debug!("DataDeviceHandler::drop_performed value: {buf:?}");
                 let mime_type_cstr = CString::from_str(&mime_type).unwrap();
-                state.send_event(DataTransferContent::new(-1, &buf, &mime_type_cstr));
+                let content = DataTransferContent::new(&buf, &mime_type_cstr);
+                state.send_event(DropPerformedEvent { window_id, content });
 
                 PostAction::Remove
             })
@@ -197,20 +208,6 @@ impl MimeTypes {
     pub fn new(mime_types_str: &str) -> Self {
         Self {
             val: mime_types_str.split(',').map(str::to_owned).collect(),
-        }
-    }
-}
-
-pub struct DataTransferContentInternal {
-    pub data: Vec<u8>,
-    pub mime_types: Vec<String>,
-}
-
-impl DataTransferContentInternal {
-    pub(crate) fn new(data: &[u8], mime_types_str: &str) -> Self {
-        Self {
-            data: data.to_owned(),
-            mime_types: mime_types_str.split(',').map(str::to_owned).collect(),
         }
     }
 }

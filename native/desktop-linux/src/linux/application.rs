@@ -23,7 +23,7 @@ use crate::linux::{
     application_state::ApplicationState,
     async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
-    events::{DataTransferContent, Event, RequestId, WindowId},
+    events::{DataTransferContent, DataTransferEvent, Event, RequestId, WindowId},
     window::SimpleWindow,
     window_api::WindowParams,
     xdg_desktop_settings::xdg_desktop_settings_notifier,
@@ -273,7 +273,8 @@ impl Application {
 
             debug!("Application::clipboard_paste read {size} bytes");
             let mime_type_cstr = CString::from_str(&mime_type).unwrap();
-            state.send_event(DataTransferContent::new(serial, &buf, &mime_type_cstr));
+            let content = DataTransferContent::new(&buf, &mime_type_cstr);
+            state.send_event(DataTransferEvent { serial, content });
 
             PostAction::Remove
         })?;

@@ -4,6 +4,7 @@ import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.ApplicationConfig
 import org.jetbrains.desktop.linux.ColorSchemeValue
 import org.jetbrains.desktop.linux.DataSource
+import org.jetbrains.desktop.linux.DataTransferContent
 import org.jetbrains.desktop.linux.DesktopTitlebarAction
 import org.jetbrains.desktop.linux.DragAction
 import org.jetbrains.desktop.linux.Event
@@ -45,7 +46,9 @@ import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.TextLine
 import java.lang.AutoCloseable
+import java.net.URI
 import java.text.BreakIterator
+import kotlin.io.path.Path
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -538,17 +541,17 @@ private class EditorState {
         return EventHandlerResult.Stop
     }
 
-    fun onDataTransfer(event: Event.DataTransfer, app: Application): EventHandlerResult {
-        val data = event.data
-        if (data.mimeTypes.contains(URI_LIST_MIME_TYPE)) {
-            val files = data.data.decodeToString().trimEnd().split("\r\n")
+    fun onDataTransfer(content: DataTransferContent, app: Application): EventHandlerResult {
+        if (content.mimeTypes.contains(URI_LIST_MIME_TYPE)) {
+            val files = content.data.decodeToString().trimEnd().split("\r\n")
             Logger.info { "Pasted ${files.size} files:" }
             for (file in files) {
-                Logger.info { file }
+                val path = URI(file).path
+                Logger.info { path }
             }
-        } else if (data.mimeTypes.contains(TEXT_MIME_TYPE)) {
+        } else if (content.mimeTypes.contains(TEXT_MIME_TYPE)) {
             deleteSelection()
-            val pastedText = data.data.decodeToString()
+            val pastedText = content.data.decodeToString()
             text.insert(cursorOffset, pastedText)
             cursorOffset += pastedText.length
             selectionStartOffset = null
@@ -1171,7 +1174,11 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 windows[event.windowId]?.onMouseMoved(event) ?: EventHandlerResult.Continue
             }
             is Event.DataTransfer -> {
-                editorState.onDataTransfer(event, app)
+                editorState.onDataTransfer(event.data, app)
+            }
+            is Event.DropPerformed -> {
+                // TODO: per-window editor state
+                editorState.onDataTransfer(event.content, app)
             }
             is Event.DataTransferCancelled -> {
                 onDataTransferCancelled(event.dataSource)
@@ -1233,7 +1240,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                         content.files.joinToString("\n").encodeToByteArray()
                     }
                     URI_LIST_MIME_TYPE -> {
-                        content.files.joinToString("\r\n", postfix = "\r\n") { "file://$it" }.encodeToByteArray()
+                        content.files.joinToString("\r\n", postfix = "\r\n") { Path(it).toUri().toString() }.encodeToByteArray()
                     }
                     else -> {
                         error("Unsupported mime type: $mimeType")

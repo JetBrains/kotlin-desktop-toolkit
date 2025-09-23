@@ -38,8 +38,14 @@ fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
 }
 
+const fn cstr_to_str(cstr: &CStr) -> &str {
+    unsafe { str::from_utf8_unchecked(cstr.to_bytes()) }
+}
+
 pub const TEXT_MIME_TYPE: &CStr = c"text/plain;charset=utf-8";
+pub const TEXT_MIME_TYPE_STR: &str = cstr_to_str(TEXT_MIME_TYPE);
 pub const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
+pub const URI_LIST_MIME_TYPE_STR: &str = cstr_to_str(URI_LIST_MIME_TYPE);
 
 pub const ALL_MIMES: &CStr = c"text/uri-list,text/plain;charset=utf-8";
 
@@ -376,23 +382,11 @@ fn on_text_input(event: &TextInputEvent, app_ptr: AppPtr<'_>, window_id: WindowI
 }
 
 fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut WindowState) {
-    if content
-        .mime_types
-        .as_str()
-        .unwrap()
-        .split(',')
-        .any(|s| s == URI_LIST_MIME_TYPE.to_str().unwrap())
-    {
+    if content.mime_types.as_str().unwrap().split(',').any(|s| s == URI_LIST_MIME_TYPE_STR) {
         let list_str = str::from_utf8(content.data.as_slice().unwrap()).unwrap();
         let list = list_str.trim_ascii_end().split("\r\n").collect::<Vec<_>>();
         info!("Pasted file list: {list:?}");
-    } else if content
-        .mime_types
-        .as_str()
-        .unwrap()
-        .split(',')
-        .any(|s| s == TEXT_MIME_TYPE.to_str().unwrap())
-    {
+    } else if content.mime_types.as_str().unwrap().split(',').any(|s| s == TEXT_MIME_TYPE_STR) {
         let data_str = str::from_utf8(content.data.as_slice().unwrap()).unwrap();
         window_state.text += data_str;
     }
@@ -505,10 +499,18 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 }
                 true
             }
-            Event::DataTransfer(content) => {
+            Event::DataTransfer(data) => {
                 if let Some(key_window_id) = state.key_window_id {
                     let window_state = state.windows.get_mut(&key_window_id).unwrap();
-                    on_data_transfer_received(content, window_state);
+                    on_data_transfer_received(&data.content, window_state);
+                    true
+                } else {
+                    false
+                }
+            }
+            Event::DropPerformed(data) => {
+                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                    on_data_transfer_received(&data.content, window_state);
                     true
                 } else {
                     false

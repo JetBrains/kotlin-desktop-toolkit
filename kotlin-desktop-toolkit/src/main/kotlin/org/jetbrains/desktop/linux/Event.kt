@@ -88,12 +88,19 @@ public sealed class Event {
 
     public data class DataTransfer(
         val serial: Int,
+        @Deprecated("Use content instead")
         val data: DataTransferContent,
+        val content: DataTransferContent,
     ) : Event()
 
     public data class DataTransferCancelled(val dataSource: DataSource) : Event()
 
     public data class DisplayConfigurationChange(val screens: AllScreens) : Event()
+
+    public data class DropPerformed(
+        val windowId: WindowId,
+        val content: DataTransferContent,
+    ) : Event()
 
     public data class FileChooserResponse(
         val requestId: RequestId,
