@@ -34,18 +34,16 @@ impl KeyboardHandler for ApplicationState {
         raw: &[u32],
         keysyms: &[Keysym],
     ) {
-        if let Some(window) = self.get_window(surface) {
+        if let Some(window_id) = self.get_window_id(surface) {
             debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
             let ks: Vec<u32> = keysyms.iter().map(|e| e.raw()).collect();
-            self.send_event(WindowKeyboardEnterEvent::new(window.window_id, raw, &ks));
+            self.send_event(WindowKeyboardEnterEvent::new(window_id, raw, &ks));
         }
     }
 
     fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, surface: &WlSurface, _serial: u32) {
-        if let Some(window) = self.get_window(surface) {
-            self.send_event(WindowKeyboardLeaveEvent {
-                window_id: window.window_id,
-            });
+        if let Some(window_id) = self.get_window_id(surface) {
+            self.send_event(WindowKeyboardLeaveEvent { window_id });
         }
     }
 

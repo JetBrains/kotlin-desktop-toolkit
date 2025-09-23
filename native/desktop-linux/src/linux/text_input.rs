@@ -38,23 +38,23 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
             zwp_text_input_v3::Event::Enter { surface } => {
                 debug!("zwp_text_input_v3::Event::Enter: {}", surface.id());
                 this.active_text_input = Some(text_input.clone());
-                let Some(w) = this.windows.get(&surface.id()) else {
+                let Some(window_id) = this.get_window_id(surface) else {
                     warn!("Couldn't find window for: {event:?}");
                     return;
                 };
                 this.send_event(TextInputAvailabilityEvent {
-                    window_id: w.window_id,
+                    window_id,
                     available: true,
                 });
             }
             zwp_text_input_v3::Event::Leave { surface } => {
                 debug!("zwp_text_input_v3::Event::Leave: {}", surface.id());
-                let Some(w) = this.windows.get(&surface.id()) else {
+                let Some(window_id) = this.get_window_id(surface) else {
                     warn!("Couldn't find window for: {event:?}");
                     return;
                 };
                 this.send_event(TextInputAvailabilityEvent {
-                    window_id: w.window_id,
+                    window_id,
                     available: false,
                 });
                 this.active_text_input = None;
