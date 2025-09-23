@@ -74,7 +74,7 @@ pub(crate) struct FlagsChangedInfo {
 
 pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<FlagsChangedInfo> {
     if unsafe { ns_event.r#type() } != NSEventType::FlagsChanged {
-        bail!("Unexpected type of event {:?}", ns_event);
+        bail!("Unexpected type of event {ns_event:?}");
     }
     let modifiers = unsafe { ns_event.modifierFlags() }.into();
     let code = unsafe { ns_event.keyCode() };

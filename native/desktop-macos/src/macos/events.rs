@@ -234,7 +234,7 @@ pub(crate) fn handle_key_down_event(ns_event: &NSEvent, might_have_key_equivalen
             });
             Ok((state.event_handler)(&event))
         }
-        _ => bail!("Unexpected type of event {:?}", ns_event),
+        _ => bail!("Unexpected type of event {ns_event:?}"),
     });
     handled
 }
@@ -254,7 +254,7 @@ pub(crate) fn handle_key_up_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
             });
             Ok((state.event_handler)(&event))
         }
-        _ => bail!("Unexpected type of event {:?}", ns_event),
+        _ => bail!("Unexpected type of event {ns_event:?}"),
     });
     handled
 }
