@@ -468,8 +468,8 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 true
             }
             Event::WindowCloseRequest(data) => {
-                state.windows.retain(|&k, _v| k != data.window_id);
                 window_close(app_ptr.clone(), data.window_id);
+                state.windows.retain(|&k, _v| k != data.window_id);
                 if state.windows.is_empty() {
                     application_stop_event_loop(app_ptr);
                 }
