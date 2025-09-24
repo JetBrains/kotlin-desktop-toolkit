@@ -354,11 +354,11 @@ fn on_text_input(event: &TextInputEvent, app_ptr: AppPtr<'_>, window_id: WindowI
             ..(cursor_pos + event.delete_surrounding_text.after_length_in_bytes as usize);
         window_state.text.drain(range);
     }
-    if event.has_commit_string {
-        if let Some(commit_string) = event.commit_string.as_optional_str().unwrap() {
-            debug!("{window_id:?} commit_string: {commit_string}");
-            window_state.text += commit_string;
-        }
+    if event.has_commit_string
+        && let Some(commit_string) = event.commit_string.as_optional_str().unwrap()
+    {
+        debug!("{window_id:?} commit_string: {commit_string}");
+        window_state.text += commit_string;
     }
     if event.has_delete_surrounding_text || event.has_commit_string {
         update_text_input_context(app_ptr, &window_state.text, true);

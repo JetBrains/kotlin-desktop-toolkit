@@ -15,7 +15,7 @@ impl LogicalPixels {
 
     #[allow(clippy::cast_possible_truncation)]
     #[must_use]
-    pub fn round(&self) -> i32 {
+    pub const fn round(&self) -> i32 {
         self.0.round() as i32
     }
 }
