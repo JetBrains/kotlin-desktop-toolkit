@@ -305,7 +305,7 @@ impl<T> AutoDropArray<T> {
 
 impl AutoDropArray<AutoDropStrPtr> {
     #[must_use]
-    pub const fn read_at(&self, i: usize) -> BorrowedStrPtr {
+    pub const fn read_at(&self, i: usize) -> BorrowedStrPtr<'_> {
         assert!(i < self.len);
         let p = self.ptr.wrapping_add(i).cast::<BorrowedStrPtr>();
         unsafe { p.read() }

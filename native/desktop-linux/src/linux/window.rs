@@ -185,16 +185,16 @@ impl SimpleWindow {
         callback: &dyn Fn(WindowDrawEvent) -> bool,
     ) {
         let surface = self.window.wl_surface();
-        if self.set_cursor {
-            if let Some(themed_pointer) = themed_pointer {
-                debug!("Updating cursor to {} for {}", self.decorations_cursor, surface.id());
-                match themed_pointer.set_cursor(conn, self.decorations_cursor) {
-                    Ok(()) => {
-                        self.set_cursor = false;
-                    }
-                    Err(e) => {
-                        error!("Failed to set cursor, error: {e:?}");
-                    }
+        if self.set_cursor
+            && let Some(themed_pointer) = themed_pointer
+        {
+            debug!("Updating cursor to {} for {}", self.decorations_cursor, surface.id());
+            match themed_pointer.set_cursor(conn, self.decorations_cursor) {
+                Ok(()) => {
+                    self.set_cursor = false;
+                }
+                Err(e) => {
+                    error!("Failed to set cursor, error: {e:?}");
                 }
             }
         }

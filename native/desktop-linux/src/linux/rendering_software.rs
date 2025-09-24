@@ -24,7 +24,7 @@ impl SoftwareRendering {
     /// cbindgen:ignore
     const BYTES_PER_PIXEL: u8 = 4;
 
-    fn create_buffer(pool: &mut SlotPool, size: PhysicalSize) -> SoftwareBuffer {
+    fn create_buffer(pool: &mut SlotPool, size: PhysicalSize) -> SoftwareBuffer<'_> {
         let stride = size.width.0 * i32::from(Self::BYTES_PER_PIXEL);
         let (buffer, canvas) = pool
             .create_buffer(size.width.0, size.height.0, stride, wl_shm::Format::Argb8888)

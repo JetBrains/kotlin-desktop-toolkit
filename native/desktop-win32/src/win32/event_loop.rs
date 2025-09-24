@@ -201,14 +201,14 @@ fn on_size(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPAR
 }
 
 fn on_getminmaxinfo(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
-    if let Some(min_max_info) = unsafe { (lparam.0 as *mut MINMAXINFO).as_mut() } {
-        if let Some(min_size) = window.get_min_size() {
-            let scale = window.get_scale();
-            let physical_size = min_size.to_physical(scale);
-            min_max_info.ptMinTrackSize.x = physical_size.width.0;
-            min_max_info.ptMinTrackSize.y = physical_size.height.0;
-            return Some(LRESULT(0));
-        }
+    if let Some(min_max_info) = unsafe { (lparam.0 as *mut MINMAXINFO).as_mut() }
+        && let Some(min_size) = window.get_min_size()
+    {
+        let scale = window.get_scale();
+        let physical_size = min_size.to_physical(scale);
+        min_max_info.ptMinTrackSize.x = physical_size.width.0;
+        min_max_info.ptMinTrackSize.y = physical_size.height.0;
+        return Some(LRESULT(0));
     }
     None
 }
@@ -225,24 +225,24 @@ fn on_activate(window: &Window) -> Option<LRESULT> {
 }
 
 fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    if wparam.0 == windows::Win32::Foundation::TRUE.0 as usize {
-        if let Some(calcsize_params) = unsafe { (lparam.0 as *mut NCCALCSIZE_PARAMS).as_mut() } {
-            let top = calcsize_params.rgrc[0].top;
-            let result = unsafe { DefWindowProcW(window.hwnd(), WM_NCCALCSIZE, wparam, lparam) };
-            if window.has_custom_title_bar() && result.0 == 0 {
-                // the top inset should be 0 otherwise Windows will draw full native title bar
-                calcsize_params.rgrc[0].top = top;
-            }
-            let origin = PhysicalPoint::new(calcsize_params.rgrc[0].left, calcsize_params.rgrc[0].top);
-            let size = PhysicalSize::new(
-                calcsize_params.rgrc[0].right - calcsize_params.rgrc[0].left,
-                calcsize_params.rgrc[0].bottom - calcsize_params.rgrc[0].top,
-            );
-            let scale = window.get_scale();
-            let event = NCCalcSizeEvent { origin, size, scale };
-            event_loop.handle_event(window, event.into());
-            return Some(LRESULT(0));
+    if wparam.0 == windows::Win32::Foundation::TRUE.0 as usize
+        && let Some(calcsize_params) = unsafe { (lparam.0 as *mut NCCALCSIZE_PARAMS).as_mut() }
+    {
+        let top = calcsize_params.rgrc[0].top;
+        let result = unsafe { DefWindowProcW(window.hwnd(), WM_NCCALCSIZE, wparam, lparam) };
+        if window.has_custom_title_bar() && result.0 == 0 {
+            // the top inset should be 0 otherwise Windows will draw full native title bar
+            calcsize_params.rgrc[0].top = top;
         }
+        let origin = PhysicalPoint::new(calcsize_params.rgrc[0].left, calcsize_params.rgrc[0].top);
+        let size = PhysicalSize::new(
+            calcsize_params.rgrc[0].right - calcsize_params.rgrc[0].left,
+            calcsize_params.rgrc[0].bottom - calcsize_params.rgrc[0].top,
+        );
+        let scale = window.get_scale();
+        let event = NCCalcSizeEvent { origin, size, scale };
+        event_loop.handle_event(window, event.into());
+        return Some(LRESULT(0));
     }
     None
 }

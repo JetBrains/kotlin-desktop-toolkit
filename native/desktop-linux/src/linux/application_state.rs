@@ -252,18 +252,18 @@ impl SeatHandler for ApplicationState {
     }
 
     fn remove_capability(&mut self, _conn: &Connection, _: &QueueHandle<Self>, _: WlSeat, capability: Capability) {
-        if capability == Capability::Keyboard {
-            if let Some(keyboard) = self.keyboard.take() {
-                debug!("Unset keyboard capability");
-                keyboard.release();
-            }
+        if capability == Capability::Keyboard
+            && let Some(keyboard) = self.keyboard.take()
+        {
+            debug!("Unset keyboard capability");
+            keyboard.release();
         }
 
-        if capability == Capability::Pointer {
-            if let Some(themed_pointer) = self.themed_pointer.take() {
-                debug!("Unset pointer capability");
-                themed_pointer.pointer().release();
-            }
+        if capability == Capability::Pointer
+            && let Some(themed_pointer) = self.themed_pointer.take()
+        {
+            debug!("Unset pointer capability");
+            themed_pointer.pointer().release();
         }
     }
 
@@ -312,19 +312,19 @@ delegate_shm!(ApplicationState);
 impl CompositorHandler for ApplicationState {
     fn scale_factor_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_factor: i32) {
         debug!("scale_factor_changed for {}: {new_factor}", surface.id());
-        if self.fractional_scale_manager.is_none() {
-            if let Some(window) = self.windows.get_mut(&surface.id()) {
-                let new_scale: f64 = new_factor.into();
-                window.scale_changed(new_scale, &self.shm_state);
+        if self.fractional_scale_manager.is_none()
+            && let Some(window) = self.windows.get_mut(&surface.id())
+        {
+            let new_scale: f64 = new_factor.into();
+            window.scale_changed(new_scale, &self.shm_state);
 
-                self.callbacks.send_event(
-                    WindowScaleChangedEvent {
-                        window_id: window.window_id,
-                        new_scale,
-                    }
-                    .into(),
-                );
-            }
+            self.callbacks.send_event(
+                WindowScaleChangedEvent {
+                    window_id: window.window_id,
+                    new_scale,
+                }
+                .into(),
+            );
         }
     }
 

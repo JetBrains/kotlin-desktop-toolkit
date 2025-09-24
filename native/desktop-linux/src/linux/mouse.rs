@@ -89,26 +89,19 @@ impl PointerHandler for ApplicationState {
                 }
             }
 
-            if let PointerEventKind::Enter { .. } = event.kind {
-                if let Some(themed_pointer) = self.themed_pointer.take() {
-                    let pointer_surface = themed_pointer.surface();
-                    if let Some(pointer_surface_data) = pointer_surface.data() {
-                        #[allow(clippy::cast_possible_truncation)]
-                        let pointer_surface_event = wl_surface::Event::PreferredBufferScale {
-                            factor: scale.round() as i32,
-                        };
-                        debug!("Setting cursor scale to {scale:?}");
-                        Dispatch::<WlSurface, SurfaceData>::event(
-                            self,
-                            pointer_surface,
-                            pointer_surface_event,
-                            pointer_surface_data,
-                            conn,
-                            qh,
-                        );
-                    }
-                    self.themed_pointer = Some(themed_pointer);
+            if let PointerEventKind::Enter { .. } = event.kind
+                && let Some(themed_pointer) = self.themed_pointer.take()
+            {
+                let pointer_surface = themed_pointer.surface();
+                if let Some(pointer_surface_data) = pointer_surface.data() {
+                    #[allow(clippy::cast_possible_truncation)]
+                    let pointer_surface_event = wl_surface::Event::PreferredBufferScale {
+                        factor: scale.round() as i32,
+                    };
+                    debug!("Setting cursor scale to {scale:?}");
+                    Dispatch::<WlSurface, SurfaceData>::event(self, pointer_surface, pointer_surface_event, pointer_surface_data, conn, qh);
                 }
+                self.themed_pointer = Some(themed_pointer);
             }
         }
     }
