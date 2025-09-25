@@ -12,7 +12,7 @@ use windows::{
             Direct3D11::ID3D11Device,
             Dwm::DwmFlush,
             Dxgi::{IDXGIDevice1, IDXGIOutput},
-            Gdi::{GetDC, MONITOR_DEFAULTTONULL, MonitorFromWindow, ReleaseDC},
+            Gdi::{MONITOR_DEFAULTTONULL, MonitorFromWindow},
         },
         System::LibraryLoader::GetModuleFileNameW,
     },
@@ -43,6 +43,8 @@ const EGL_EXPERIMENTAL_PRESENT_PATH_ANGLE: egl::Attrib = 0x33A4;
 const EGL_EXPERIMENTAL_PRESENT_PATH_FAST_ANGLE: egl::Attrib = 0x33A9;
 /// cbindgen:ignore
 const EGL_POST_SUB_BUFFER_SUPPORTED_NV: egl::Int = 0x30BE;
+/// cbindgen:ignore
+const EGL_D3D11_ONLY_DISPLAY_ANGLE: egl::NativeDisplayType = -3isize as egl::NativeDisplayType;
 
 pub struct AngleDevice {
     egl_instance: EglInstance,
@@ -59,8 +61,6 @@ impl AngleDevice {
     pub fn create_for_window(window: &Window) -> anyhow::Result<Self> {
         let egl_instance = load_angle_egl_instance()?;
 
-        let hwnd = window.hwnd();
-
         let display = {
             #[rustfmt::skip]
             let display_attribs = [
@@ -68,11 +68,7 @@ impl AngleDevice {
                 EGL_EXPERIMENTAL_PRESENT_PATH_ANGLE, EGL_EXPERIMENTAL_PRESENT_PATH_FAST_ANGLE,
                 egl::ATTRIB_NONE, egl::ATTRIB_NONE,
             ];
-
-            let hdc = unsafe { GetDC(Some(hwnd)) };
-            let display = unsafe { egl_instance.get_platform_display(EGL_PLATFORM_ANGLE_ANGLE, hdc.0, &display_attribs) }?;
-            unsafe { ReleaseDC(Some(hwnd), hdc) };
-            display
+            unsafe { egl_instance.get_platform_display(EGL_PLATFORM_ANGLE_ANGLE, EGL_D3D11_ONLY_DISPLAY_ANGLE, &display_attribs) }?
         };
 
         let (_major, _minor) = egl_instance.initialize(display)?;
@@ -81,7 +77,7 @@ impl AngleDevice {
         unsafe { device.SetMaximumFrameLatency(1)? };
 
         let adapter = unsafe { device.GetAdapter()? };
-        let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL) };
+        let monitor = unsafe { MonitorFromWindow(window.hwnd(), MONITOR_DEFAULTTONULL) };
 
         let mut i = 0;
         let output = loop {
