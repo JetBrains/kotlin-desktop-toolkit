@@ -166,8 +166,8 @@ impl AngleDevice {
     }
 
     #[allow(clippy::bool_to_int_with_if)]
-    pub fn swap_buffers(&self) -> anyhow::Result<()> {
-        self.egl_instance.swap_interval(self.display, 0)?;
+    pub fn swap_buffers(&self, wait_for_vsync: bool) -> anyhow::Result<()> {
+        self.egl_instance.swap_interval(self.display, if wait_for_vsync { 1 } else { 0 })?;
         self.egl_instance.swap_buffers(self.display, self.surface)?;
         Ok(())
     }

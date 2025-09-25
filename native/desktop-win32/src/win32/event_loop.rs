@@ -242,7 +242,7 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         let scale = window.get_scale();
         let event = NCCalcSizeEvent { origin, size, scale };
         event_loop.handle_event(window, event.into());
-        return Some(LRESULT(0));
+        return Some(result);
     }
     None
 }

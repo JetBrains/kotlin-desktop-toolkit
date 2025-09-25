@@ -51,9 +51,9 @@ public class AngleRenderer internal constructor(private val angleDevicePtr: Memo
         }
     }
 
-    public fun swapBuffers() {
+    public fun swapBuffers(waitForVsync: Boolean) {
         ffiDownCall {
-            desktop_win32_h.renderer_angle_swap_buffers(angleDevicePtr)
+            desktop_win32_h.renderer_angle_swap_buffers(angleDevicePtr, waitForVsync)
         }
     }
 
