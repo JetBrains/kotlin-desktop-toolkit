@@ -25,7 +25,7 @@ abstract class CollectWindowsArtifactsTask @Inject constructor(
     @TaskAction
     fun copyBinaries() {
         fs.copy {
-            from(angleBinaries)
+            from(angleBinaries.files)
             into(targetDirectory)
         }
         fs.copy {
