@@ -13,21 +13,26 @@ data class Platform(
     fun name(): String {
         val os = os.normalizedName.replaceFirstChar { it.uppercase() }
         val arch = arch.name.replaceFirstChar { it.uppercase() }
-        return "${os}${arch}"
+        return "${os}$arch"
     }
 }
 
 enum class Os(val normalizedName: String) {
-    LINUX("linux"), MACOS("macos"), WINDOWS("windows");
+    LINUX("linux"),
+    MACOS("macos"),
+    WINDOWS("windows"),
+    ;
 
     fun titlecase(): String = normalizedName.replaceFirstChar { it.uppercase() }
 }
 
+@Suppress("EnumEntryName")
 enum class Arch {
-    aarch64, x86_64
+    aarch64,
+    x86_64,
 }
 
-fun hostOs(): Os  {
+fun hostOs(): Os {
     val os = System.getProperty("os.name").lowercase()
     return when {
         os.contains("win") -> Os.WINDOWS

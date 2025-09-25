@@ -2,7 +2,7 @@ package org.jetbrains.desktop.buildscripts
 
 import org.gradle.api.Project
 
- // `rustup target add --toolchain 1.90.0 x86_64-apple-darwin`
+// `rustup target add --toolchain 1.90.0 x86_64-apple-darwin`
 
 data class CrossCompilationSettings(private val platforms: List<Platform>) {
     companion object {
@@ -34,18 +34,20 @@ data class CrossCompilationSettings(private val platforms: List<Platform>) {
         fun create(project: Project): CrossCompilationSettings {
             val host = hostPlatform()
             val targetArch = targetArch(project)
-            return CrossCompilationSettings(buildList {
-                for (os in Os.entries) {
-                    for (arch in Arch.entries) {
-                        if (targetArch == null || arch == targetArch) {
-                            val platform = Platform(os, arch)
-                            if (enabled(platform, host, project)) {
-                                add(platform)
+            return CrossCompilationSettings(
+                buildList {
+                    for (os in Os.entries) {
+                        for (arch in Arch.entries) {
+                            if (targetArch == null || arch == targetArch) {
+                                val platform = Platform(os, arch)
+                                if (enabled(platform, host, project)) {
+                                    add(platform)
+                                }
                             }
                         }
                     }
-                }
-            })
+                },
+            )
         }
     }
 

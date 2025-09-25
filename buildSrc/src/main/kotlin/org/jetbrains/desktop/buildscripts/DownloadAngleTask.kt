@@ -48,7 +48,7 @@ private fun downloadAngle(
     version: String,
     targetDir: Path,
     fs: FileSystemOperations,
-    archiveOperations: ArchiveOperations
+    archiveOperations: ArchiveOperations,
 ) {
     val tempFile = createTempFile("angle", ".zip").toFile()
     val url = URI(angleUrl(platform, version)).toURL()
@@ -71,7 +71,7 @@ private fun angleUrl(platform: Platform, version: String): String {
         else -> error("ANGLE is currently only supported on Windows. Current OS: ${platform.os}")
     }
     val angleArch = angleArch(platform.arch)
-    return "https://github.com/JetBrains/angle-pack/releases/download/${version}/Angle-${version}-${angleOs}-Release-${angleArch}.zip"
+    return "https://github.com/JetBrains/angle-pack/releases/download/$version/Angle-$version-$angleOs-Release-$angleArch.zip"
 }
 
 fun angleArch(arch: Arch): String = when (arch) {

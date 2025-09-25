@@ -5,23 +5,28 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Optional
 import org.gradle.kotlin.dsl.property
 
-abstract class CargoFmtTask: Exec() {
+abstract class CargoFmtTask : Exec() {
     @get:Input
     @Optional
     val checkOnly = objectFactory.property<Boolean>()
 
+    @get:Input
+    val cargoCommand = objectFactory.property<String>()
+
     init {
         outputs.upToDateWhen { false }
-        executable("cargo")
     }
 
     override fun exec() {
-        args(buildList {
-            add("fmt")
-            if (checkOnly.getOrElse(false)) {
-                add("--check")
-            }
-        })
+        executable(cargoCommand.get())
+        args(
+            buildList {
+                add("fmt")
+                if (checkOnly.getOrElse(false)) {
+                    add("--check")
+                }
+            },
+        )
         super.exec()
     }
 }
