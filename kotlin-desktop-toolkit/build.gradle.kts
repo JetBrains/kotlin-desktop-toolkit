@@ -8,15 +8,17 @@ import org.jetbrains.desktop.buildscripts.CrossCompilationSettings
 import org.jetbrains.desktop.buildscripts.DownloadAngleTask
 import org.jetbrains.desktop.buildscripts.DownloadJExtractTask
 import org.jetbrains.desktop.buildscripts.GenerateJavaBindingsTask
+import org.jetbrains.desktop.buildscripts.InstallCargoProgram
+import org.jetbrains.desktop.buildscripts.InstallRust
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.Os
 import org.jetbrains.desktop.buildscripts.Platform
 import org.jetbrains.desktop.buildscripts.angleArch
-import org.jetbrains.desktop.buildscripts.buildPlatformRustTarget
 import org.jetbrains.desktop.buildscripts.hostArch
 import org.jetbrains.desktop.buildscripts.hostOs
+import org.jetbrains.desktop.buildscripts.hostPlatform
 import org.jetbrains.desktop.buildscripts.targetArch
 
 private val crossCompilationSettings = CrossCompilationSettings.create(project)
@@ -94,14 +96,105 @@ fun List<Platform>.allOSes(): List<Os> {
     return this.map { it.os }.distinct()
 }
 
-val compileNativeTaskByTarget = buildMap {
+private fun ProviderFactory.cargoCommand(): Provider<String> {
+    val cargoCommand = gradleProperty("rust.cargoCommand").map {
+        it.ifEmpty {
+            val homePath = systemProperty("user.home").get()
+            val defaultRustupCargoPath = File("$homePath/.cargo/bin/cargo")
+            if (defaultRustupCargoPath.canExecute()) {
+                defaultRustupCargoPath.path
+            } else {
+                "cargo"
+            }
+        }
+    }
+    return cargoCommand
+}
+
+private fun ProviderFactory.rustupCommand(): Provider<String> {
+    val rustupCommand = gradleProperty("rust.rustupCommand").map {
+        it.ifEmpty {
+            val homePath = systemProperty("user.home").get()
+            val defaultRustupPath = File("$homePath/.cargo/bin/rustup")
+            if (defaultRustupPath.canExecute()) {
+                defaultRustupPath.path
+            } else {
+                "rustup"
+            }
+        }
+    }
+    return rustupCommand
+}
+
+private fun ProviderFactory.rustcCommand(): Provider<String> {
+    val rustcCommand = gradleProperty("rust.rustcCommand").map {
+        it.ifEmpty {
+            val homePath = systemProperty("user.home").get()
+            val defaultRustupPath = File("$homePath/.cargo/bin/rustc")
+            if (defaultRustupPath.canExecute()) {
+                defaultRustupPath.path
+            } else {
+                "rustc"
+            }
+        }
+    }
+    return rustcCommand
+}
+
+/**
+ * All workspace files under the directory, excluding compilation outputs and caches
+ */
+internal fun Directory.rustWorkspaceFiles(): FileTree = this.asFileTree.matching {
+    exclude("target/**/*")
+}
+
+fun buildPlatformRustTarget(platform: Platform): String {
+    return when (platform.os) {
+        Os.WINDOWS -> when (platform.arch) {
+            Arch.aarch64 -> "aarch64-pc-windows-msvc"
+            Arch.x86_64 -> "x86_64-pc-windows-msvc"
+        }
+        Os.MACOS -> when (platform.arch) {
+            Arch.aarch64 -> "aarch64-apple-darwin"
+            Arch.x86_64 -> "x86_64-apple-darwin"
+        }
+        Os.LINUX -> when (platform.arch) {
+            Arch.aarch64 -> "aarch64-unknown-linux-gnu"
+            Arch.x86_64 -> "x86_64-unknown-linux-gnu"
+        }
+    }
+}
+
+val installRustTaskByPlatform = buildMap {
     for (platform in enabledPlatforms) {
+        val target = buildPlatformRustTarget(platform)
+        val taskName = "installRust-$target"
+        val otherInstallRustTasks = this.values.toList()
+        val installRustTask = tasks.register<InstallRust>(taskName) {
+            rustupCommand = providers.rustupCommand().get()
+            rustcCommand = providers.rustcCommand().get()
+            rustToolchainFile = nativeDir.file("rust-toolchain")
+            rustTarget = target
+            // Using rustup concurrently is not supported: https://github.com/rust-lang/rustup/issues/988
+            mustRunAfter(otherInstallRustTasks)
+        }
+
+        put(platform, installRustTask)
+    }
+}
+
+val compileNativeTaskByTarget = buildMap {
+    for ((platform, installRustTask) in installRustTaskByPlatform) {
         for (profile in profiles) {
             val buildNativeTask = tasks.register<CompileRustTask>("compileNative-${buildPlatformRustTarget(platform)}-$profile") {
+                dependsOn(installRustTask)
+                cargoCommand = providers.cargoCommand().get()
                 crateName = mainCrateForOS(platform.os)
                 rustProfile = profile
-                rustTarget = platform
-                workspaceRoot = nativeDir
+                rustTarget = buildPlatformRustTarget(platform)
+                targetPlatform = platform
+                workspaceRoot = nativeDir.asFile.path
+                workspaceFiles = nativeDir.rustWorkspaceFiles()
             }
             put(RustTarget(platform, profile), buildNativeTask)
         }
@@ -121,24 +214,18 @@ val downloadAngleTaskByPlatform = enabledPlatforms.filter { it.os == Os.WINDOWS 
     }
 }
 
-val collectNativeArtifactsTaskByTarget = buildMap {
-    for (platform in enabledPlatforms) {
-        val downloadAngleTask = downloadAngleTaskByPlatform[platform]
-        for (profile in profiles) {
-            val buildNativeTask = compileNativeTaskByTarget[RustTarget(platform, profile)]!!
-            val collectWindowsArtifactsTask = tasks.register<CollectWindowsArtifactsTask>(
-                "collectWindowsArtifacts-${buildPlatformRustTarget(platform)}-$profile",
-            ) {
-                dependsOn(buildNativeTask)
-                downloadAngleTask?.let {
-                    dependsOn(downloadAngleTask)
-                    angleBinaries.setFrom(downloadAngleTask.map { it.binaries })
-                }
-                nativeLibrary = buildNativeTask.flatMap { it.libraryFile }
-                targetDirectory = layout.buildDirectory.dir("native-${buildPlatformRustTarget(platform)}")
-            }
-            put(RustTarget(platform, profile), collectWindowsArtifactsTask)
+val collectNativeArtifactsTaskByTarget = compileNativeTaskByTarget.mapValues { (target, buildNativeTask) ->
+    val downloadAngleTask = downloadAngleTaskByPlatform[target.platform]
+    tasks.register<CollectWindowsArtifactsTask>(
+        "collectWindowsArtifacts-${buildPlatformRustTarget(target.platform)}-${target.profile}",
+    ) {
+        dependsOn(buildNativeTask)
+        downloadAngleTask?.let {
+            dependsOn(downloadAngleTask)
+            angleBinaries.setFrom(downloadAngleTask.map { it.binaries })
         }
+        nativeLibrary = buildNativeTask.flatMap { it.libraryFile }
+        targetDirectory = layout.buildDirectory.dir("native-${buildPlatformRustTarget(target.platform)}")
     }
 }
 
@@ -153,12 +240,21 @@ fun packageNameForOS(os: Os): String {
     return "org.jetbrains.desktop.${os.getKdtName()}.generated"
 }
 
+val installCbindgenTask = tasks.register<InstallCargoProgram>("installCbindgen") {
+    dependsOn(installRustTaskByPlatform[hostPlatform()]!!)
+    cargoCommand = providers.cargoCommand().get()
+    crate = "cbindgen"
+    version = "0.29.0"
+}
+
 val generateBindingsTaskByOS = allPlatforms.allOSes().associateWith { os ->
     tasks.register<GenerateJavaBindingsTask>("generateBindingsFor${os.titlecase()}") {
         dependsOn(downloadJExtractTask)
+        dependsOn(installCbindgenTask)
+        cbindgenBinary = installCbindgenTask.flatMap { it.targetBinPath }
         jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
         packageName = packageNameForOS(os)
-        workspaceRoot = nativeDir
+        workspaceFiles = nativeDir.rustWorkspaceFiles()
         crateDirectory = nativeDir.dir(mainCrateForOS(os))
         generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/${os.normalizedName}/main/java/")
     }
@@ -299,25 +395,33 @@ collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let
 val cargoFmtCheckTask = tasks.register<CargoFmtTask>("cargoFmtCheck") {
     checkOnly = true
     workingDir = nativeDir.asFile
+    cargoCommand = providers.cargoCommand()
+    dependsOn(installRustTaskByPlatform[hostPlatform()]!!)
 }
 
 val cargoFmtTask = tasks.register<CargoFmtTask>("cargoFmt") {
     workingDir = nativeDir.asFile
+    cargoCommand = providers.cargoCommand()
     clippyFixTasks.forEach { mustRunAfter(it) }
+    dependsOn(installRustTaskByPlatform[hostPlatform()]!!)
 }
 
-val clippyCheckTasks = enabledPlatforms.map { platform ->
+val clippyCheckTasks = installRustTaskByPlatform.map { (platform, installRustTask) ->
     tasks.register<ClippyTask>("clippyCheckFor${platform.name()}") {
         checkOnly = true
         workingDir = nativeDir.asFile
-        targetPlatform = platform
+        cargoCommand = providers.cargoCommand()
+        rustTarget = buildPlatformRustTarget(platform)
+        dependsOn(installRustTask)
     }
 }
 
-val clippyFixTasks = enabledPlatforms.map { platform ->
+val clippyFixTasks = installRustTaskByPlatform.map { (platform, installRustTask) ->
     tasks.register<ClippyTask>("clippyFixFor${platform.name()}") {
         workingDir = nativeDir.asFile
-        targetPlatform = platform
+        cargoCommand = providers.cargoCommand()
+        rustTarget = buildPlatformRustTarget(platform)
+        dependsOn(installRustTask)
     }
 }
 
