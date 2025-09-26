@@ -3,7 +3,7 @@ use desktop_common::ffi_utils::RustAllocatedStrPtr;
 use super::{
     geometry::{LogicalPoint, PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButton, PointerState},
+    pointer::{PointerButtons, PointerState},
     window_api::WindowId,
 };
 
@@ -96,7 +96,7 @@ impl From<NCHitTestEvent> for Event {
 #[repr(C)]
 #[derive(Debug)]
 pub struct PointerButtonEvent {
-    pub button: PointerButton,
+    pub button: PointerButtons,
     pub location_in_window: LogicalPoint,
     pub state: PointerState,
     pub timestamp: Timestamp,

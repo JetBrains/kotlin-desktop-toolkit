@@ -28,7 +28,13 @@ macro_rules! GET_Y_LPARAM {
     };
 }
 
-pub(crate) use {GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOBYTE, LOWORD};
+macro_rules! GET_WHEEL_DELTA_WPARAM {
+    ($arg:ident) => {
+        ((((($arg.0) as usize >> 16) & 0xffff) as i16) as i32)
+    };
+}
+
+pub(crate) use {GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOBYTE, LOWORD};
 
 pub(crate) fn is_windows_11_build_22000_or_higher() -> bool {
     unsafe {
