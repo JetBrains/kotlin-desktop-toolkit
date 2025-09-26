@@ -29,9 +29,9 @@ use super::{
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{get_pointer_event_timestamp, get_pointer_location_in_window, get_pointer_point, get_pointer_state},
+    pointer::{PointerButtons, PointerInfo},
     strings::copy_from_wide_string,
-    utils::{GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
+    utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
 };
 
@@ -118,7 +118,7 @@ impl EventLoop {
 #[allow(clippy::cast_sign_loss)]
 #[inline]
 fn get_message_timestamp() -> Timestamp {
-    Timestamp(unsafe { GetMessageTime() } as _)
+    Timestamp(unsafe { GetMessageTime() } as u64 * 1000)
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -368,22 +368,21 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::double_parens)]
 fn on_pointerupdate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
-    let pointer_point = get_pointer_point(wparam)?;
-    let location_in_window = get_pointer_location_in_window(&pointer_point)?;
+    let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
     let event: Event = if window.is_pointer_in_client() {
         PointerUpdatedEvent {
-            location_in_window,
-            state: get_pointer_state(&pointer_point)?,
-            timestamp: get_pointer_event_timestamp(&pointer_point)?,
+            location_in_window: pointer_info.get_location_in_window(),
+            state: pointer_info.get_pointer_state(),
+            timestamp: pointer_info.get_timestamp(),
         }
         .into()
     } else {
         // see https://devblogs.microsoft.com/oldnewthing/20031013-00/?p=42193
         window.set_is_pointer_in_client(true);
         PointerEnteredEvent {
-            location_in_window,
-            state: get_pointer_state(&pointer_point)?,
-            timestamp: get_pointer_event_timestamp(&pointer_point)?,
+            location_in_window: pointer_info.get_location_in_window(),
+            state: pointer_info.get_pointer_state(),
+            timestamp: pointer_info.get_timestamp(),
         }
         .into()
     };
@@ -391,34 +390,42 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> 
 }
 
 fn on_pointerdown(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
-    let pointer_point = get_pointer_point(wparam)?;
-    let event = PointerButtonEvent::try_from(&pointer_point)
-        .inspect_err(|err| log::error!("failed to create a PointerButtonEvent from the PointerPoint: {err}"))
+    let event = PointerInfo::try_from_message(wparam)
+        .map(|pointer_info| PointerButtonEvent {
+            button: PointerButtons::from_message_flags(wparam),
+            location_in_window: pointer_info.get_location_in_window(),
+            state: pointer_info.get_pointer_state(),
+            timestamp: pointer_info.get_timestamp(),
+        })
+        .inspect_err(|err| log::error!("failed to create a PointerButtonEvent from WPARAM: {err}"))
         .ok()?;
     event_loop.handle_event(window, Event::PointerDown(event))
 }
 
 fn on_pointerup(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
-    let pointer_point = get_pointer_point(wparam)?;
-    let event = PointerButtonEvent::try_from(&pointer_point)
-        .inspect_err(|err| log::error!("failed to create a PointerButtonEvent from the PointerPoint: {err}"))
+    let event = PointerInfo::try_from_message(wparam)
+        .map(|pointer_info| PointerButtonEvent {
+            button: PointerButtons::from_message_flags(wparam),
+            location_in_window: pointer_info.get_location_in_window(),
+            state: pointer_info.get_pointer_state(),
+            timestamp: pointer_info.get_timestamp(),
+        })
+        .inspect_err(|err| log::error!("failed to create a PointerButtonEvent from WPARAM: {err}"))
         .ok()?;
     event_loop.handle_event(window, Event::PointerUp(event))
 }
 
+#[allow(clippy::cast_lossless)]
+#[allow(clippy::cast_possible_truncation)]
 fn on_pointerwheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
-    let pointer_point = get_pointer_point(wparam)?;
-    let scrolling_delta = pointer_point
-        .Properties()
-        .and_then(|prop| prop.MouseWheelDelta())
-        .inspect_err(|err| log::error!("failed to get PointerPoint.Properties.MouseWheelDelta: {err}"))
-        .ok()?;
-    let location_in_window = get_pointer_location_in_window(&pointer_point)?;
+    let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
+    let scrolling_delta = GET_WHEEL_DELTA_WPARAM!(wparam);
+    let location_in_window = pointer_info.get_location_in_window();
     let event_args = ScrollWheelEvent {
         scrolling_delta,
         location_in_window,
-        state: get_pointer_state(&pointer_point)?,
-        timestamp: get_pointer_event_timestamp(&pointer_point)?,
+        state: pointer_info.get_pointer_state(),
+        timestamp: pointer_info.get_timestamp(),
     };
     let event = match msg {
         WM_POINTERWHEEL => Event::ScrollWheelY(event_args),
@@ -429,10 +436,10 @@ fn on_pointerwheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WP
 }
 
 fn on_pointerleave(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
-    let pointer_point = get_pointer_point(wparam)?;
+    let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
     window.set_is_pointer_in_client(false);
     let event = PointerExitedEvent {
-        timestamp: get_pointer_event_timestamp(&pointer_point)?,
+        timestamp: pointer_info.get_timestamp(),
     };
     event_loop.handle_event(window, event.into())
 }

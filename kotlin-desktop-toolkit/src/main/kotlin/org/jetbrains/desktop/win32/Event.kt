@@ -73,7 +73,7 @@ public sealed class Event {
     ) : Event()
 
     public data class PointerDown(
-        val button: PointerButton,
+        val button: PointerButtons,
         val locationInWindow: LogicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
@@ -94,7 +94,7 @@ public sealed class Event {
     ) : Event()
 
     public data class PointerUp(
-        val button: PointerButton,
+        val button: PointerButtons,
         val locationInWindow: LogicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
@@ -231,7 +231,7 @@ private fun ncHitTest(s: MemorySegment): Event {
 private fun pointerDown(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_down(s)
     return Event.PointerDown(
-        button = PointerButton.fromNative(NativePointerButtonEvent.button(nativeEvent)),
+        button = PointerButtons(NativePointerButtonEvent.button(nativeEvent)),
         state = PointerState.fromNative(NativePointerButtonEvent.state(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativePointerButtonEvent.location_in_window(nativeEvent)),
         timestamp = Timestamp(NativePointerButtonEvent.timestamp(nativeEvent)),
@@ -266,7 +266,7 @@ private fun pointerUpdated(s: MemorySegment): Event {
 private fun pointerUp(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_up(s)
     return Event.PointerUp(
-        button = PointerButton.fromNative(NativePointerButtonEvent.button(nativeEvent)),
+        button = PointerButtons(NativePointerButtonEvent.button(nativeEvent)),
         state = PointerState.fromNative(NativePointerButtonEvent.state(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativePointerButtonEvent.location_in_window(nativeEvent)),
         timestamp = Timestamp(NativePointerButtonEvent.timestamp(nativeEvent)),
