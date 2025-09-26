@@ -29,7 +29,7 @@ use super::{
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButtons, PointerInfo},
+    pointer::{PointerButtons, PointerInfo, get_pointer_location_in_window_via_pointer_point},
     strings::copy_from_wide_string,
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
@@ -369,9 +369,18 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
 #[allow(clippy::double_parens)]
 fn on_pointerupdate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
-    let location_in_window = pointer_info.get_location_in_window();
+    let location_in_window = get_pointer_location_in_window_via_pointer_point(wparam).ok()?;
+    let location_in_window_2 = pointer_info.get_location_in_window();
+
+    if (location_in_window.x.0 - location_in_window_2.x.0).abs() > 0.001
+        || (location_in_window.y.0 - location_in_window_2.y.0).abs() > 0.001
+    {
+        log::error!("Location in window different: (1) {location_in_window:?} vs. (2) {location_in_window_2:?}");
+    }
+
     let event: Event = if window.is_pointer_in_client() {
         PointerUpdatedEvent {
+            kind: pointer_info.get_update_kind(),
             location_in_window,
             state: pointer_info.get_pointer_state(),
             timestamp: pointer_info.get_timestamp(),
@@ -391,7 +400,10 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> 
 }
 
 fn on_pointerdown(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
-    let event = PointerInfo::try_from_message(wparam)
+    let event = PointerButtonEvent::try_from_pointer_point(wparam)
+        .inspect_err(|err| log::error!("failed to create a PointerButtonEvent from the PointerPoint: {err}"))
+        .ok()?;
+    let event2 = PointerInfo::try_from_message(wparam)
         .map(|pointer_info| PointerButtonEvent {
             button: PointerButtons::from_message_flags(wparam),
             location_in_window: pointer_info.get_location_in_window(),
@@ -400,18 +412,14 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Op
         })
         .inspect_err(|err| log::error!("failed to create a PointerButtonEvent from WPARAM: {err}"))
         .ok()?;
+    log::debug!("Pointer Button event from PointerPoint: {event:#?}");
+    log::debug!("Pointer Button event from WPARAM: {event2:#?}");
     event_loop.handle_event(window, Event::PointerDown(event))
 }
 
 fn on_pointerup(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
-    let event = PointerInfo::try_from_message(wparam)
-        .map(|pointer_info| PointerButtonEvent {
-            button: PointerButtons::from_message_flags(wparam),
-            location_in_window: pointer_info.get_location_in_window(),
-            state: pointer_info.get_pointer_state(),
-            timestamp: pointer_info.get_timestamp(),
-        })
-        .inspect_err(|err| log::error!("failed to create a PointerButtonEvent from WPARAM: {err}"))
+    let event = PointerButtonEvent::try_from_pointer_point(wparam)
+        .inspect_err(|err| log::error!("failed to create a PointerButtonEvent from the PointerPoint: {err}"))
         .ok()?;
     event_loop.handle_event(window, Event::PointerUp(event))
 }

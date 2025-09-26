@@ -1,22 +1,25 @@
-use windows::Win32::{
-    Foundation::{POINT, WPARAM},
-    Graphics::Gdi::MapWindowPoints,
-    UI::{
-        HiDpi::GetDpiForWindow,
-        Input::Pointer::{
-            GetPointerInfo, GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_FLAG_FIFTHBUTTON, POINTER_FLAG_FIRSTBUTTON,
-            POINTER_FLAG_FOURTHBUTTON, POINTER_FLAG_SECONDBUTTON, POINTER_FLAG_THIRDBUTTON, POINTER_INFO, POINTER_PEN_INFO,
-            POINTER_TOUCH_INFO,
-        },
-        WindowsAndMessaging::{
-            POINTER_INPUT_TYPE, POINTER_MESSAGE_FLAG_FIFTHBUTTON, POINTER_MESSAGE_FLAG_FIRSTBUTTON, POINTER_MESSAGE_FLAG_FOURTHBUTTON,
-            POINTER_MESSAGE_FLAG_SECONDBUTTON, POINTER_MESSAGE_FLAG_THIRDBUTTON, PT_PEN, PT_TOUCH, USER_DEFAULT_SCREEN_DPI,
+use windows::{
+    UI::Input::{PointerPoint, PointerUpdateKind},
+    Win32::{
+        Foundation::{POINT, WPARAM},
+        Graphics::Gdi::MapWindowPoints,
+        UI::{
+            HiDpi::GetDpiForWindow,
+            Input::Pointer::{
+                GetPointerInfo, GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_FLAG_FIFTHBUTTON, POINTER_FLAG_FIRSTBUTTON,
+                POINTER_FLAG_FOURTHBUTTON, POINTER_FLAG_SECONDBUTTON, POINTER_FLAG_THIRDBUTTON, POINTER_INFO, POINTER_PEN_INFO,
+                POINTER_TOUCH_INFO,
+            },
+            WindowsAndMessaging::{
+                POINTER_INPUT_TYPE, POINTER_MESSAGE_FLAG_FIFTHBUTTON, POINTER_MESSAGE_FLAG_FIRSTBUTTON, POINTER_MESSAGE_FLAG_FOURTHBUTTON,
+                POINTER_MESSAGE_FLAG_SECONDBUTTON, POINTER_MESSAGE_FLAG_THIRDBUTTON, PT_PEN, PT_TOUCH, USER_DEFAULT_SCREEN_DPI,
+            },
         },
     },
 };
 
 use super::{
-    events::Timestamp,
+    events::{PointerButtonEvent, Timestamp},
     geometry::LogicalPoint,
     utils::{HIWORD, LOWORD},
 };
@@ -166,5 +169,87 @@ impl PointerButtons {
         } else {
             Self(0_u32)
         }
+    }
+}
+
+/*****
+ *
+ * TO DELETE
+ *
+**/
+
+impl PointerButtonEvent {
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::double_parens)]
+    pub(crate) fn try_from_pointer_point(wparam: WPARAM) -> windows::core::Result<Self> {
+        let pointer_id = u32::from(LOWORD!(wparam.0));
+        let pointer_point = PointerPoint::GetCurrentPoint(pointer_id)
+            .inspect_err(|err| log::error!("failed to get PointerPoint for pointer ID {pointer_id}: {err}"))?;
+        let properties = pointer_point.Properties()?;
+        let contact_rect = properties.ContactRect()?;
+        let update_kind = properties.PointerUpdateKind()?;
+        Ok(Self {
+            button: PointerButtons::from(update_kind),
+            location_in_window: LogicalPoint::new(contact_rect.X, contact_rect.Y),
+            state: PointerState {
+                pressed_buttons: PointerButtons::try_from(&pointer_point)?,
+                modifiers: PointerModifiers(0),
+            },
+            timestamp: Timestamp(pointer_point.Timestamp()?),
+        })
+    }
+}
+
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::double_parens)]
+#[inline]
+pub(crate) fn get_pointer_location_in_window_via_pointer_point(wparam: WPARAM) -> windows::core::Result<LogicalPoint> {
+    let pointer_point = {
+        let pointer_id = u32::from(LOWORD!(wparam.0));
+        PointerPoint::GetCurrentPoint(pointer_id)
+            .inspect_err(|err| log::error!("failed to get PointerPoint for pointer ID {pointer_id}: {err}"))?
+    };
+    let contact_rect = pointer_point
+        .Properties()
+        .and_then(|prop| prop.ContactRect())
+        .inspect_err(|err| log::error!("failed to get PointerPoint.Properties.ContactRect property: {err}"))?;
+    Ok(LogicalPoint::new(contact_rect.X, contact_rect.Y))
+}
+
+impl From<PointerUpdateKind> for PointerButtons {
+    fn from(value: PointerUpdateKind) -> Self {
+        match value {
+            PointerUpdateKind::LeftButtonPressed | PointerUpdateKind::LeftButtonReleased => Self(POINTER_BUTTON_LEFT),
+            PointerUpdateKind::RightButtonPressed | PointerUpdateKind::RightButtonReleased => Self(POINTER_BUTTON_RIGHT),
+            PointerUpdateKind::MiddleButtonPressed | PointerUpdateKind::MiddleButtonReleased => Self(POINTER_BUTTON_MIDDLE),
+            PointerUpdateKind::XButton1Pressed | PointerUpdateKind::XButton1Released => Self(POINTER_BUTTON_XBUTTON1),
+            PointerUpdateKind::XButton2Pressed | PointerUpdateKind::XButton2Released => Self(POINTER_BUTTON_XBUTTON2),
+            _ => Self(0_u32),
+        }
+    }
+}
+
+impl TryFrom<&PointerPoint> for PointerButtons {
+    type Error = windows::core::Error;
+
+    fn try_from(value: &PointerPoint) -> Result<Self, Self::Error> {
+        let properties = value.Properties()?;
+        let mut buttons = 0_u32;
+        if properties.IsLeftButtonPressed()? {
+            buttons |= POINTER_BUTTON_LEFT;
+        }
+        if properties.IsRightButtonPressed()? {
+            buttons |= POINTER_BUTTON_RIGHT;
+        }
+        if properties.IsMiddleButtonPressed()? {
+            buttons |= POINTER_BUTTON_MIDDLE;
+        }
+        if properties.IsXButton1Pressed()? {
+            buttons |= POINTER_BUTTON_XBUTTON1;
+        }
+        if properties.IsXButton2Pressed()? {
+            buttons |= POINTER_BUTTON_XBUTTON2;
+        }
+        Ok(Self(buttons))
     }
 }
