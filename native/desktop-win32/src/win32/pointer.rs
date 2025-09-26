@@ -6,9 +6,9 @@ use windows::{
         UI::{
             HiDpi::GetDpiForWindow,
             Input::Pointer::{
-                GetPointerInfo, GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_FLAG_FIFTHBUTTON, POINTER_FLAG_FIRSTBUTTON,
-                POINTER_FLAG_FOURTHBUTTON, POINTER_FLAG_SECONDBUTTON, POINTER_FLAG_THIRDBUTTON, POINTER_INFO, POINTER_PEN_INFO,
-                POINTER_TOUCH_INFO,
+                GetPointerInfo, GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_FLAG_DOWN, POINTER_FLAG_FIFTHBUTTON,
+                POINTER_FLAG_FIRSTBUTTON, POINTER_FLAG_FOURTHBUTTON, POINTER_FLAG_SECONDBUTTON, POINTER_FLAG_THIRDBUTTON, POINTER_FLAG_UP,
+                POINTER_FLAG_UPDATE, POINTER_INFO, POINTER_PEN_INFO, POINTER_TOUCH_INFO,
             },
             WindowsAndMessaging::{
                 POINTER_INPUT_TYPE, POINTER_MESSAGE_FLAG_FIFTHBUTTON, POINTER_MESSAGE_FLAG_FIRSTBUTTON, POINTER_MESSAGE_FLAG_FOURTHBUTTON,
@@ -148,6 +148,20 @@ impl PointerInfo {
         let x = ((location[0].x * USER_DEFAULT_SCREEN_DPI as i32) as f32) / (window_dpi as f32);
         let y = ((location[0].y * USER_DEFAULT_SCREEN_DPI as i32) as f32) / (window_dpi as f32);
         LogicalPoint::new(x, y)
+    }
+
+    pub(crate) fn get_update_kind(&self) -> super::events::PointerUpdateKind {
+        let native_pointer_info = self.get_native_pointer_info();
+        let pointer_flags = native_pointer_info.pointerFlags;
+        if (pointer_flags & POINTER_FLAG_DOWN) == POINTER_FLAG_DOWN {
+            super::events::PointerUpdateKind::Pressed
+        } else if (pointer_flags & POINTER_FLAG_UP) == POINTER_FLAG_UP {
+            super::events::PointerUpdateKind::Released
+        } else if (pointer_flags & POINTER_FLAG_UPDATE) == POINTER_FLAG_UPDATE {
+            super::events::PointerUpdateKind::Moved
+        } else {
+            super::events::PointerUpdateKind::Unknown
+        }
     }
 }
 

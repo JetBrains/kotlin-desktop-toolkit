@@ -131,9 +131,19 @@ impl From<PointerExitedEvent> for Event {
 #[repr(C)]
 #[derive(Debug)]
 pub struct PointerUpdatedEvent {
+    pub kind: PointerUpdateKind,
     pub location_in_window: LogicalPoint,
     pub state: PointerState,
     pub timestamp: Timestamp,
+}
+
+#[repr(u32)]
+#[derive(Debug)]
+pub enum PointerUpdateKind {
+    Unknown,
+    Moved,
+    Pressed,
+    Released,
 }
 
 impl From<PointerUpdatedEvent> for Event {
