@@ -1067,6 +1067,10 @@ private class RotatingBallWindow(
     }
 
     fun onKeyDown(event: Event.KeyDown, app: Application, clipboardHandler: ClipboardHandler): EventHandlerResult {
+        if (editorState.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.H) {
+            changePointerShape(PointerShape.Hidden)
+            return EventHandlerResult.Stop
+        }
         return editorState.onKeyDown(event, app, window, windowState, clipboardHandler)
     }
 

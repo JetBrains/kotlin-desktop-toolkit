@@ -1,6 +1,8 @@
 package org.jetbrains.desktop.linux
 
 public enum class PointerShape {
+    Hidden,
+
     /** The platform-dependent default cursor.
      *
      * Often rendered as arrow.
