@@ -75,6 +75,13 @@ public object Application {
             }
         }
 
+    public val textDirection: TextDirection
+        get() {
+            return ffiDownCall {
+                TextDirection.fromNative(desktop_macos_h.application_get_text_direction())
+            }
+        }
+
     public fun hide() {
         ffiDownCall {
             desktop_macos_h.application_hide()

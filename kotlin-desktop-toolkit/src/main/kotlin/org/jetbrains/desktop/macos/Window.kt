@@ -317,6 +317,13 @@ public class Window internal constructor(
 
     public val textInputContext: TextInputContext = TextInputContext(this)
 
+    public val textDirection: TextDirection
+        get() {
+            return ffiDownCall {
+                TextDirection.fromNative(desktop_macos_h.window_get_text_direction(pointer))
+            }
+        }
+
     public fun registerForDraggedTypes(types: List<String>) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {

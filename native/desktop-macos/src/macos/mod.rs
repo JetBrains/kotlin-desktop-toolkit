@@ -15,6 +15,7 @@ pub mod mouse;
 pub mod pasteboard;
 pub mod screen;
 pub mod string;
+pub mod text_direction;
 pub mod text_input_client;
 pub mod titlebar;
 pub mod url;

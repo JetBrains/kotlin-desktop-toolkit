@@ -15,6 +15,7 @@ use super::{
     metal_api::{MetalView, MetalViewPtr},
     screen::{NSScreenExts, ScreenId},
     string::{copy_to_c_string, copy_to_ns_string},
+    text_direction::TextDirection,
     text_input_client::TextInputClient,
     window::{NSWindowExts, Window},
 };
@@ -479,4 +480,14 @@ pub extern "C" fn window_set_background(window_ptr: WindowPtr, background: Windo
         window.set_background(mtm, background).unwrap();
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_get_text_direction(window_ptr: WindowPtr) -> TextDirection {
+    ffi_boundary("window_get_text_direction", || -> Result<TextDirection, anyhow::Error> {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let layout_direction = unsafe { window.root_view.userInterfaceLayoutDirection() };
+        Ok(TextDirection::from_ns_layout_direction(layout_direction))
+    })
 }

@@ -30,6 +30,7 @@ use super::{
     drag_and_drop::DragAndDropHandlerState,
     events::EventHandler,
     string::{copy_to_c_string, copy_to_ns_string},
+    text_direction::TextDirection,
 };
 
 thread_local! {
@@ -120,6 +121,16 @@ pub extern "C" fn application_get_appearance() -> Appearance {
         let app = MyNSApplication::sharedApplication(mtm);
         let appearance = app.effectiveAppearance();
         Ok(Appearance::from_ns_appearance(&appearance))
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_get_text_direction() -> TextDirection {
+    ffi_boundary("application_get_text_direction", || -> Result<TextDirection, anyhow::Error> {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        let layout_direction = unsafe { app.userInterfaceLayoutDirection() };
+        Ok(TextDirection::from_ns_layout_direction(layout_direction))
     })
 }
 
