@@ -51,7 +51,7 @@ pub struct SimpleWindow {
     viewport: Option<WpViewport>,
     pub window: Window,
     pub set_cursor: bool,
-    decorations_cursor: CursorIcon,
+    decorations_cursor: Option<CursorIcon>,
     pub current_scale: f64,
     decoration_mode: DecorationMode,
     rendering_data: Option<RenderingData>,
@@ -101,7 +101,7 @@ impl SimpleWindow {
             viewport,
             window,
             set_cursor: false,
-            decorations_cursor: CursorIcon::Default,
+            decorations_cursor: Some(CursorIcon::Default),
             current_scale: 1.0,
             decoration_mode: DecorationMode::Client,
             rendering_data: None,
@@ -188,14 +188,20 @@ impl SimpleWindow {
         if self.set_cursor
             && let Some(themed_pointer) = themed_pointer
         {
-            debug!("Updating cursor to {} for {}", self.decorations_cursor, surface.id());
-            match themed_pointer.set_cursor(conn, self.decorations_cursor) {
-                Ok(()) => {
-                    self.set_cursor = false;
+            debug!("Updating cursor to {:?} for {}", self.decorations_cursor, surface.id());
+            if let Some(decorations_cursor) = self.decorations_cursor {
+                match themed_pointer.set_cursor(conn, decorations_cursor) {
+                    Ok(()) => {
+                        self.set_cursor = false;
+                    }
+                    Err(e) => {
+                        error!("Failed to set cursor, error: {e:?}");
+                    }
                 }
-                Err(e) => {
-                    error!("Failed to set cursor, error: {e:?}");
-                }
+            } else if let Err(e) = themed_pointer.hide_cursor() {
+                warn!("Failed to hide cursor: {e}");
+            } else {
+                self.set_cursor = false;
             }
         }
 
@@ -264,7 +270,7 @@ impl SimpleWindow {
         }
     }
 
-    pub fn set_cursor_icon(&mut self, cursor_icon: CursorIcon) {
+    pub fn set_cursor_icon(&mut self, cursor_icon: Option<CursorIcon>) {
         if self.decorations_cursor != cursor_icon {
             self.set_cursor = true;
             self.decorations_cursor = cursor_icon;

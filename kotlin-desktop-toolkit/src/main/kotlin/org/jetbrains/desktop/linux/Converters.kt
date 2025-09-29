@@ -147,6 +147,7 @@ private fun keyModifiersFromNative(nativeModifiers: Byte): Set<KeyModifiers> {
 
 internal fun PointerShape.toNative(): Int {
     return when (this) {
+        PointerShape.Hidden -> desktop_linux_h.NativePointerShape_Hidden()
         PointerShape.Default -> desktop_linux_h.NativePointerShape_Default()
         PointerShape.ContextMenu -> desktop_linux_h.NativePointerShape_ContextMenu()
         PointerShape.Help -> desktop_linux_h.NativePointerShape_Help()

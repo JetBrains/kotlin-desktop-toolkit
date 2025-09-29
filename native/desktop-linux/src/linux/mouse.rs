@@ -3,7 +3,11 @@ use smithay_client_toolkit::{
     compositor::SurfaceData,
     delegate_pointer,
     reexports::client::{
-        protocol::{wl_pointer::{AxisRelativeDirection, WlPointer}, wl_surface::{self, WlSurface}}, Connection, Dispatch, Proxy, QueueHandle
+        Connection, Dispatch, Proxy, QueueHandle,
+        protocol::{
+            wl_pointer::{AxisRelativeDirection, WlPointer},
+            wl_surface::{self, WlSurface},
+        },
     },
     seat::pointer::{AxisScroll, PointerData, PointerEvent, PointerEventKind, PointerHandler},
 };
@@ -11,7 +15,8 @@ use smithay_client_toolkit::{
 use crate::linux::{
     application_state::ApplicationState,
     events::{
-        MouseButton, MouseDownEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScrollData, ScrollWheelEvent, Timestamp
+        MouseButton, MouseDownEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScrollData, ScrollWheelEvent,
+        Timestamp,
     },
     geometry::LogicalPixels,
 };
