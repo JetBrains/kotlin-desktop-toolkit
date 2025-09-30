@@ -5,10 +5,10 @@ use log::debug;
 use smithay_client_toolkit::{
     delegate_keyboard,
     reexports::client::{
-        Connection, QueueHandle,
+        Connection, Proxy as _, QueueHandle,
         protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
     },
-    seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
+    seat::keyboard::{KeyEvent, KeyboardData, KeyboardHandler, Keysym, Modifiers, RawModifiers},
 };
 
 use super::events::{KeyUpEvent, ModifiersChangedEvent};
@@ -30,10 +30,11 @@ impl KeyboardHandler for ApplicationState {
         _: &QueueHandle<Self>,
         _: &WlKeyboard,
         surface: &WlSurface,
-        _serial: u32,
+        serial: u32,
         raw: &[u32],
         keysyms: &[Keysym],
     ) {
+        self.last_keyboard_event_serial = Some(serial);
         if let Some(window_id) = self.get_window_id(surface) {
             debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
             let ks: Vec<u32> = keysyms.iter().map(|e| e.raw()).collect();
@@ -47,12 +48,17 @@ impl KeyboardHandler for ApplicationState {
         }
     }
 
-    fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, serial: u32, event: KeyEvent) {
-        self.last_key_down_serial = Some(serial);
+    fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, keyboard: &WlKeyboard, serial: u32, event: KeyEvent) {
+        self.last_keyboard_event_serial = Some(serial);
+        if let Some(keyboard_data) = keyboard.data::<KeyboardData<Self>>() {
+            let seat = keyboard_data.seat();
+            debug!("KeyboardHandler::press_key: setting last_implicit_grab_seat to {seat:?}");
+        }
         send_key_down_event(self, event, false);
     }
 
-    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, _serial: u32, event: KeyEvent) {
+    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, serial: u32, event: KeyEvent) {
+        self.last_keyboard_event_serial = Some(serial);
         debug!("KeyboardHandler::release_key");
         self.send_event(KeyUpEvent {
             code: KeyCode(event.raw_code),
@@ -65,11 +71,12 @@ impl KeyboardHandler for ApplicationState {
         _: &Connection,
         _: &QueueHandle<Self>,
         _: &WlKeyboard,
-        _serial: u32,
+        serial: u32,
         modifiers: Modifiers,
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
+        self.last_keyboard_event_serial = Some(serial);
         let event = {
             let mut key_modifiers = BitFlags::<KeyModifier>::EMPTY;
             key_modifiers.set(KeyModifier::Ctrl, modifiers.ctrl);
