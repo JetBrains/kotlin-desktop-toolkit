@@ -107,24 +107,48 @@ pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_tit
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_start_move(app_ptr: AppPtr, window_id: WindowId) {
-    with_window(&app_ptr, window_id, "window_start_move", |w| {
-        w.start_move();
+    ffi_boundary("window_start_move", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let w = app
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
+        // Required to have a mouse button pressed serial, e.g.
+        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L335
+        if let Some((seat, serial)) = app.state.get_latest_pointer_button_seat_and_serial() {
+            w.start_move(seat, serial);
+        }
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_start_resize(app_ptr: AppPtr, window_id: WindowId, edge: WindowResizeEdge) {
-    with_window(&app_ptr, window_id, "window_start_resize", |w| {
-        w.start_resize(edge);
+    ffi_boundary("window_start_resize", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let w = app
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
+        // Required to have a mouse button pressed serial, e.g.
+        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L387
+        if let Some((seat, serial)) = app.state.get_latest_pointer_button_seat_and_serial() {
+            w.start_resize(edge, seat, serial);
+        }
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_show_menu(app_ptr: AppPtr, window_id: WindowId, position: LogicalPoint) {
-    with_window(&app_ptr, window_id, "window_show_menu", |w| {
-        w.show_menu(position);
+    ffi_boundary("window_show_menu", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let w = app
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
+        // Required to have a mouse button pressed or released serial, e.g.
+        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L309
+        if let Some((seat, serial)) = app.state.get_latest_pointer_button_seat_and_serial() {
+            w.show_menu(position, seat, serial);
+        }
         Ok(())
     });
 }

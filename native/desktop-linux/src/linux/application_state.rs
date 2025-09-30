@@ -77,7 +77,7 @@ pub struct ApplicationState {
     pub compositor_state: CompositorState,
     pub shm_state: Shm,
     pub xdg_shell_state: XdgShell,
-    keyboard: Option<WlKeyboard>,
+    pub keyboard: Option<WlKeyboard>,
     cursor_theme: Option<(String, u32)>,
     pub themed_pointer: Option<ThemedPointer>,
     pub viewporter: Option<WpViewporter>,
@@ -91,7 +91,7 @@ pub struct ApplicationState {
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
-    pub last_key_down_serial: Option<u32>,
+    pub last_keyboard_event_serial: Option<u32>,
     pub active_text_input: Option<ZwpTextInputV3>,
     pub pending_text_input_event: PendingTextInputEvent,
     pub egl: Option<EglInstance>,
@@ -139,7 +139,7 @@ impl ApplicationState {
             data_device: None,
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
-            last_key_down_serial: None,
+            last_keyboard_event_serial: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
             egl,
@@ -186,6 +186,27 @@ impl ApplicationState {
     pub fn send_event<'a, T: Into<Event<'a>>>(&self, event_data: T) -> bool {
         let event: Event = event_data.into();
         self.callbacks.send_event(event)
+    }
+
+    pub fn get_latest_pointer_button_seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
+        if let Some(p) = self.themed_pointer.as_ref()
+            && let Some(d) = p.pointer().data::<PointerData>()
+            && let Some(s) = d.latest_button_serial()
+        {
+            Some((d.seat(), s))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_latest_event_serial(&self) -> Option<u32> {
+        [
+            self.get_latest_pointer_button_seat_and_serial().map(|e| e.1),
+            self.last_keyboard_event_serial,
+        ]
+        .into_iter()
+        .max()
+        .flatten()
     }
 }
 

@@ -10,7 +10,7 @@ use smithay_client_toolkit::{
         },
         calloop_wayland_source::WaylandSource,
         client::{
-            Connection, Proxy, QueueHandle,
+            Connection, Proxy as _, QueueHandle,
             globals::registry_queue_init,
             protocol::{wl_data_device_manager::DndAction, wl_surface::WlSurface},
         },
@@ -144,15 +144,10 @@ impl Application {
     pub fn event_loop_iteration(&mut self) -> Result<bool, anyhow::Error> {
         self.event_loop.dispatch(Duration::from_millis(16), &mut self.state)?;
 
-        self.state.windows.retain(|k, v| {
-            if v.close {
-                debug!("Closing window {k}");
-                self.state.window_id_to_surface_id.retain(|_window_id, surface_id| k != surface_id);
-                false
-            } else {
-                true
-            }
-        });
+        for (k, v) in self.state.windows.extract_if(|_, v| v.close) {
+            debug!("Closing window {:?} ({k})", v.window_id);
+            self.state.window_id_to_surface_id.remove(&v.window_id);
+        }
 
         if self.exit && !self.state.send_event(Event::ApplicationWantsToTerminate) {
             debug!("Exiting");
@@ -222,7 +217,7 @@ impl Application {
             warn!("application_clipboard_put: No data device");
             return;
         };
-        if let Some(serial) = self.state.last_key_down_serial {
+        if let Some(serial) = self.state.get_latest_event_serial() {
             let copy_paste_source = self
                 .state
                 .data_device_manager_state
@@ -230,7 +225,7 @@ impl Application {
             copy_paste_source.set_selection(device, serial);
             self.state.copy_paste_source = Some(copy_paste_source);
         } else {
-            warn!("application_clipboard_put: No last key down serial");
+            warn!("application_clipboard_put: No last event serial");
         }
     }
 
@@ -298,12 +293,15 @@ impl Application {
             .data_device_manager_state
             .create_drag_and_drop_source(&self.qh, mime_types.val, action);
         let d = self.state.data_device.as_ref().context("No data device found")?;
-        d.inner().start_drag(
-            Some(drag_source.inner()),
-            w.window.wl_surface(),
-            None,
-            w.current_mouse_down_serial.unwrap(),
-        );
+
+        // Required to have a mouse button pressed serial, e.g.
+        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-data-device.c#L894
+        let (_seat, serial) = self
+            .state
+            .get_latest_pointer_button_seat_and_serial()
+            .context("Called start_drag without an implicit grab")?;
+
+        d.inner().start_drag(Some(drag_source.inner()), w.window.wl_surface(), None, serial);
         self.state.drag_source = Some(drag_source);
         Ok(())
     }

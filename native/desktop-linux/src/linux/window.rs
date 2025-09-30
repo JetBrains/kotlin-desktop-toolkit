@@ -56,8 +56,6 @@ pub struct SimpleWindow {
     decoration_mode: DecorationMode,
     rendering_data: Option<RenderingData>,
     force_software_rendering: bool,
-    pub current_mouse_down_seat: Option<WlSeat>,
-    pub current_mouse_down_serial: Option<u32>,
 }
 
 impl SimpleWindow {
@@ -106,8 +104,6 @@ impl SimpleWindow {
             decoration_mode: DecorationMode::Client,
             rendering_data: None,
             force_software_rendering: params.force_software_rendering,
-            current_mouse_down_seat: None,
-            current_mouse_down_serial: None,
         }
     }
 
@@ -277,21 +273,15 @@ impl SimpleWindow {
         }
     }
 
-    pub fn start_move(&self) {
-        let serial = self.current_mouse_down_serial.unwrap();
-        let seat = self.current_mouse_down_seat.as_ref().unwrap();
+    pub fn start_move(&self, seat: &WlSeat, serial: u32) {
         self.window.move_(seat, serial);
     }
 
-    pub fn start_resize(&self, edge: WindowResizeEdge) {
-        let serial = self.current_mouse_down_serial.unwrap();
-        let seat = self.current_mouse_down_seat.as_ref().unwrap();
+    pub fn start_resize(&self, edge: WindowResizeEdge, seat: &WlSeat, serial: u32) {
         self.window.resize(seat, serial, edge.into());
     }
 
-    pub fn show_menu(&self, position: LogicalPoint) {
-        let serial = self.current_mouse_down_serial.unwrap();
-        let seat = self.current_mouse_down_seat.as_ref().unwrap();
+    pub fn show_menu(&self, position: LogicalPoint, seat: &WlSeat, serial: u32) {
         self.window.show_window_menu(seat, serial, (position.x.round(), position.y.round()));
     }
 

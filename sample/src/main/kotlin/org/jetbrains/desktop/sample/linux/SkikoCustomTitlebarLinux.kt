@@ -117,6 +117,7 @@ internal class SkikoCustomTitlebarLinux(
         xdgDesktopSettings: XdgDesktopSettings,
         windowState: WindowState,
     ): EventHandlerResult {
+        Logger.info { "executeWindowAction: $mouseButton , $windowButton" }
         return when (windowButton) {
             WindowButtonType.AppMenu, WindowButtonType.Icon -> {
                 window.showMenu(locationInWindow)
@@ -182,13 +183,18 @@ internal class SkikoCustomTitlebarLinux(
         windowState: WindowState,
     ): EventHandlerResult {
         val headerRect = LogicalRect(origin, size)
+        val leftClickStartWindowButton = leftClickStartLocation?.let { leftClickStartLocation ->
+            rectangles.firstOrNull { it.first.contains(leftClickStartLocation) }?.second
+        }
         if (event.button == MouseButton.LEFT) {
             leftClickStartLocation = null
             isDragging = false
         }
         return if (headerRect.contains(event.locationInWindow)) {
             rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second?.let { windowButton ->
-                if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
+                if (event.button == MouseButton.LEFT && leftClickStartWindowButton != windowButton) {
+                    EventHandlerResult.Continue
+                } else if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
                     event.button == MouseButton.LEFT &&
                     handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
                 ) {
