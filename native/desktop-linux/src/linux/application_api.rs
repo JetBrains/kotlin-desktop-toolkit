@@ -29,6 +29,7 @@ pub struct DragAndDropQueryData {
 pub enum DataSource {
     Clipboard,
     DragAndDrop,
+    PrimarySelection,
 }
 
 #[repr(C)]
@@ -186,6 +187,26 @@ pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, 
     ffi_boundary("application_clipboard_paste", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
         app.clipboard_paste(serial, supported_mime_types.as_str()?)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_primary_selection_put(mut app_ptr: AppPtr, mime_types: BorrowedStrPtr) {
+    debug!("application_primary_selection_put");
+    ffi_boundary("application_primary_selection_put", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        app.primary_selection_put(MimeTypes::new(mime_types.as_str()?));
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_primary_selection_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedStrPtr) -> bool {
+    let t = std::thread::current();
+    debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
+    ffi_boundary("application_clipboard_paste", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        app.primary_selection_paste(serial, supported_mime_types.as_str()?)
     })
 }
 

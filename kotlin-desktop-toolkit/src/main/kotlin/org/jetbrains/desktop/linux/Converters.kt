@@ -389,6 +389,7 @@ internal fun DataTransferContent.Companion.fromNative(s: MemorySegment): DataTra
 internal fun DataSource.Companion.fromNative(nativeDataSource: Int): DataSource = when (nativeDataSource) {
     desktop_linux_h.NativeDataSource_Clipboard() -> DataSource.Clipboard
     desktop_linux_h.NativeDataSource_DragAndDrop() -> DataSource.DragAndDrop
+    desktop_linux_h.NativeDataSource_PrimarySelection() -> DataSource.PrimarySelection
     else -> error("Unexpected data source type $nativeDataSource")
 }
 

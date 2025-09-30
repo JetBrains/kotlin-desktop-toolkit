@@ -196,7 +196,9 @@ internal data class XdgDesktopSettings(
 
 private interface ClipboardHandler {
     fun copy(content: DataTransferContentType)
+    fun copyToPrimarySelection(content: DataTransferContentType)
     fun paste(supportedMimeTypes: List<String>)
+    fun pasteFromPrimarySelection(supportedMimeTypes: List<String>)
     fun startDrag(content: DataTransferContentType, action: DragAction)
 }
 
@@ -1011,13 +1013,18 @@ private class WindowContainer(
             return EventHandlerResult.Stop
         }
 
-        return if (event.button == MouseButton.RIGHT) {
+        return if (event.button == MouseButton.MIDDLE) {
             when (editorState.shortcutModifiers()) {
                 setOf(KeyModifiers.Control) -> {
                     editorState.getCurrentSelection()?.let { selection ->
-                        clipboardHandler.copy(DataTransferContentType.Text(selection))
+                        clipboardHandler.copyToPrimarySelection(DataTransferContentType.Text(selection))
                         EventHandlerResult.Stop
                     } ?: EventHandlerResult.Continue
+                }
+
+                setOf(KeyModifiers.Shift) -> {
+                    clipboardHandler.pasteFromPrimarySelection(listOf(PNG_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                    EventHandlerResult.Stop
                 }
 
                 emptySet<KeyModifiers>() -> {
@@ -1181,6 +1188,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
     private var currentClipboardPasteSerial = 0
     private val clipboardPasteSerialToWindow = mutableMapOf<Int, WindowId>()
     private var currentDragContent: DataTransferContentType? = null
+    private var currentPrimarySelectionContent: DataTransferContentType? = null
 
     fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
         val windowId = windows.count().toLong()
@@ -1206,11 +1214,21 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 currentClipboard = content
                 app.clipboardPut(content.mimeTypes())
             }
+            override fun copyToPrimarySelection(content: DataTransferContentType) {
+                currentPrimarySelectionContent = content
+                app.primarySelectionPut(content.mimeTypes())
+            }
 
             override fun paste(supportedMimeTypes: List<String>) {
                 currentClipboardPasteSerial += 1
                 clipboardPasteSerialToWindow[currentClipboardPasteSerial] = keyWindowId!!
                 app.clipboardPaste(currentClipboardPasteSerial, supportedMimeTypes)
+            }
+
+            override fun pasteFromPrimarySelection(supportedMimeTypes: List<String>) {
+                currentClipboardPasteSerial += 1
+                clipboardPasteSerialToWindow[currentClipboardPasteSerial] = keyWindowId!!
+                app.primarySelectionPaste(currentClipboardPasteSerial, supportedMimeTypes)
             }
 
             override fun startDrag(content: DataTransferContentType, action: DragAction) {
@@ -1326,6 +1344,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         val content = when (dataSource) {
             DataSource.Clipboard -> currentClipboard
             DataSource.DragAndDrop -> currentDragContent
+            DataSource.PrimarySelection -> currentPrimarySelectionContent
         }
         return when (content) {
             is DataTransferContentType.Text -> {
@@ -1353,12 +1372,9 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
 
     fun onDataTransferCancelled(dataSource: DataSource) {
         when (dataSource) {
-            DataSource.Clipboard -> {
-                currentClipboard = null
-            }
-            DataSource.DragAndDrop -> {
-                currentDragContent = null
-            }
+            DataSource.Clipboard -> currentClipboard = null
+            DataSource.DragAndDrop -> currentDragContent = null
+            DataSource.PrimarySelection -> currentPrimarySelectionContent = null
         }
     }
 

@@ -213,7 +213,7 @@ impl Application {
             warn!("Application::clipboard_put: None");
             return;
         }
-        let Some(data_device) = self.state.data_device.as_ref() else {
+        let Some(device) = self.state.data_device.as_ref() else {
             warn!("Application::clipboard_put: No data device");
             return;
         };
@@ -222,7 +222,7 @@ impl Application {
                 .state
                 .data_device_manager_state
                 .create_copy_paste_source(&self.qh, mime_types.val);
-            copy_paste_source.set_selection(data_device, serial);
+            copy_paste_source.set_selection(device, serial);
             self.state.copy_paste_source = Some(copy_paste_source);
         } else {
             warn!("Application::clipboard_put: No last key down serial");
@@ -241,16 +241,75 @@ impl Application {
         selection_offer.with_mime_types(|mime_types| Some(mime_types.join(",")))
     }
 
+    pub fn primary_selection_put(&mut self, mime_types: MimeTypes) {
+        if mime_types.val.is_empty() {
+            self.state.primary_selection_source = None;
+            warn!("Application::clipboard_put: None");
+            return;
+        }
+        let Some(device) = self.state.primary_selection_device.as_ref() else {
+            warn!("Application::clipboard_put: No primary selection device");
+            return;
+        };
+        let Some(manager) = self.state.primary_selection_manager.as_ref() else {
+            warn!("Application::clipboard_put: No primary selection manager");
+            return;
+        };
+        if let Some(serial) = self.state.last_implicit_grab_serial {
+            let source = manager.create_selection_source(&self.qh, mime_types.val);
+            source.set_selection(device, serial);
+            self.state.primary_selection_source = Some(source);
+        } else {
+            warn!("Application::clipboard_put: No last key down serial");
+        }
+    }
+
+    pub fn primary_selection_paste(&self, serial: i32, supported_mime_types: &str) -> anyhow::Result<bool> {
+        let Some(device) = self.state.primary_selection_device.as_ref() else {
+            return Ok(false);
+        };
+
+        let Some(offer) = device.data().selection_offer() else {
+            debug!("Application::primary_selection_paste: No selection offer found");
+            return Ok(false);
+        };
+        let Some(mime_type) = offer.with_mime_types(|mime_types| {
+            debug!("Application::primary_selection_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
+            supported_mime_types
+                .split(',')
+                .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
+                .map(str::to_owned)
+        }) else {
+            debug!("Application::primary_selection_paste: clipboard content not supported");
+            return Ok(false);
+        };
+        debug!("Application::primary_selection_paste reading {mime_type}");
+        let read_pipe = offer.receive(mime_type.clone())?;
+        self.event_loop.handle().insert_source(read_pipe, move |(), res, state| {
+            let f = unsafe { res.get_mut() };
+            let mut buf = Vec::new();
+            let size = f.read_to_end(&mut buf).unwrap();
+
+            debug!("Application::primary_selection_paste read {size} bytes");
+            let mime_type_cstr = CString::from_str(&mime_type).unwrap();
+            let content = DataTransferContent::new(&buf, &mime_type_cstr);
+            state.send_event(DataTransferEvent { serial, content });
+
+            PostAction::Remove
+        })?;
+        Ok(true)
+    }
+
     pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> anyhow::Result<bool> {
-        let Some(data_device) = self.state.data_device.as_ref() else {
+        let Some(device) = self.state.data_device.as_ref() else {
             warn!("Application::clipboard_paste: No data device available");
             return Ok(false);
         };
-        let Some(selection_offer) = data_device.data().selection_offer() else {
+        let Some(offer) = device.data().selection_offer() else {
             debug!("Application::clipboard_paste: No selection offer found");
             return Ok(false);
         };
-        let Some(mime_type) = selection_offer.with_mime_types(|mime_types| {
+        let Some(mime_type) = offer.with_mime_types(|mime_types| {
             debug!("Application::clipboard_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
             supported_mime_types
                 .split(',')
@@ -262,7 +321,7 @@ impl Application {
         };
 
         debug!("Application::clipboard_paste reading {mime_type}");
-        let read_pipe = selection_offer.receive(mime_type.clone())?;
+        let read_pipe = offer.receive(mime_type.clone())?;
         self.event_loop.handle().insert_source(read_pipe, move |(), res, state| {
             let f = unsafe { res.get_mut() };
             let mut buf = Vec::new();

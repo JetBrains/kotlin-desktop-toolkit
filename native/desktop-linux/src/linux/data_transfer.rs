@@ -8,12 +8,13 @@ use desktop_common::ffi_utils::BorrowedStrPtr;
 use log::{debug, error, warn};
 use smithay_client_toolkit::{
     data_device_manager::{
-        WritePipe,
+        self, WritePipe,
         data_device::DataDeviceHandler,
         data_offer::{DataOfferHandler, DragOffer},
         data_source::{CopyPasteSource, DataSourceHandler, DragSource},
     },
-    delegate_data_device,
+    delegate_data_device, delegate_primary_selection,
+    primary_selection::{device::PrimarySelectionDeviceHandler, selection::PrimarySelectionSourceHandler},
     reexports::{
         calloop::PostAction,
         client::{
@@ -21,6 +22,9 @@ use smithay_client_toolkit::{
             protocol::{
                 wl_data_device::WlDataDevice, wl_data_device_manager::DndAction, wl_data_source::WlDataSource, wl_surface::WlSurface,
             },
+        },
+        protocols::wp::primary_selection::zv1::client::{
+            zwp_primary_selection_device_v1::ZwpPrimarySelectionDeviceV1, zwp_primary_selection_source_v1::ZwpPrimarySelectionSourceV1,
         },
     },
 };
@@ -32,6 +36,7 @@ use crate::linux::{
 };
 
 delegate_data_device!(ApplicationState);
+delegate_primary_selection!(ApplicationState);
 
 impl DataDeviceHandler for ApplicationState {
     fn enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice, x: f64, y: f64, wl_surface: &WlSurface) {
@@ -209,5 +214,39 @@ impl MimeTypes {
         Self {
             val: mime_types_str.split(',').map(str::to_owned).collect(),
         }
+    }
+}
+
+impl PrimarySelectionDeviceHandler for ApplicationState {
+    fn selection(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _primary_selection_device: &ZwpPrimarySelectionDeviceV1) {
+        debug!("PrimarySelectionDeviceHandler::selection");
+    }
+}
+
+impl PrimarySelectionSourceHandler for ApplicationState {
+    fn send_request(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        _source: &ZwpPrimarySelectionSourceV1,
+        mime: String,
+        mut write_pipe: data_device_manager::WritePipe,
+    ) {
+        debug!("PrimarySelectionSourceHandler::send_request: mime={mime}");
+        let mime_cstr = CString::new(mime).unwrap();
+        let data = (self.callbacks.get_data_transfer_data)(DataSource::PrimarySelection, BorrowedStrPtr::new(&mime_cstr));
+        match data.as_slice() {
+            Ok(slice) => {
+                write_pipe.write_all(slice).expect("Write to data source failed");
+                data.deinit();
+            }
+            Err(e) => error!("Error sending clipboard data: {e}"),
+        }
+    }
+
+    fn cancelled(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &ZwpPrimarySelectionSourceV1) {
+        debug!("PrimarySelectionSourceHandler::cancelled");
+        self.primary_selection_source.take();
+        source.destroy();
     }
 }
