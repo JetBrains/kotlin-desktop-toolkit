@@ -3,7 +3,7 @@ use log::{debug, error, info, warn};
 use smithay_client_toolkit::{
     reexports::{
         client::{
-            Connection, Proxy, QueueHandle,
+            Connection, QueueHandle,
             protocol::{wl_seat::WlSeat, wl_surface::WlSurface},
         },
         protocols::wp::viewporter::client::wp_viewport::WpViewport,
@@ -56,8 +56,6 @@ pub struct SimpleWindow {
     decoration_mode: DecorationMode,
     rendering_data: Option<RenderingData>,
     force_software_rendering: bool,
-    pub current_mouse_down_seat: Option<WlSeat>,
-    pub current_mouse_down_serial: Option<u32>,
 }
 
 impl SimpleWindow {
@@ -67,10 +65,8 @@ impl SimpleWindow {
 
         let window_surface = state.compositor_state.create_surface(qh);
 
-        let surface_id = window_surface.id();
-
         if let Some(fractional_scale_manager) = state.fractional_scale_manager.as_ref() {
-            fractional_scale_manager.get_fractional_scale(&window_surface, qh, surface_id.clone());
+            fractional_scale_manager.get_fractional_scale(&window_surface, qh, ());
         }
 
         let viewport = state.viewporter.as_ref().map(|vp| vp.get_viewport(&window_surface, qh, ()));
@@ -80,6 +76,9 @@ impl SimpleWindow {
         } else {
             WindowDecorations::ServerDefault
         };
+
+        debug!("Creating new window with id={:?} and surface={window_surface:?}", params.window_id);
+
         let window = state.xdg_shell_state.create_window(window_surface, decorations, qh);
         window.set_title(params.title.as_str().unwrap());
         window.set_app_id(params.app_id.as_str().unwrap());
@@ -93,7 +92,6 @@ impl SimpleWindow {
         // the correct options.
         window.commit();
 
-        debug!("Creating new window with id={:?} and surface_id={surface_id}", params.window_id);
         Self {
             window_id,
             close: false,
@@ -106,8 +104,6 @@ impl SimpleWindow {
             decoration_mode: DecorationMode::Client,
             rendering_data: None,
             force_software_rendering: params.force_software_rendering,
-            current_mouse_down_seat: None,
-            current_mouse_down_serial: None,
         }
     }
 
@@ -188,7 +184,7 @@ impl SimpleWindow {
         if self.set_cursor
             && let Some(themed_pointer) = themed_pointer
         {
-            debug!("Updating cursor to {:?} for {}", self.decorations_cursor, surface.id());
+            debug!("Updating cursor to {:?} for {surface:?}", self.decorations_cursor);
             if let Some(decorations_cursor) = self.decorations_cursor {
                 match themed_pointer.set_cursor(conn, decorations_cursor) {
                     Ok(()) => {
@@ -277,22 +273,17 @@ impl SimpleWindow {
         }
     }
 
-    pub fn start_move(&self) {
-        let serial = self.current_mouse_down_serial.unwrap();
-        let seat = self.current_mouse_down_seat.as_ref().unwrap();
-        self.window.move_(seat, serial);
+    pub fn start_move(&self, seat: &WlSeat, last_implicit_grab_serial: u32) {
+        self.window.move_(seat, last_implicit_grab_serial);
     }
 
-    pub fn start_resize(&self, edge: WindowResizeEdge) {
-        let serial = self.current_mouse_down_serial.unwrap();
-        let seat = self.current_mouse_down_seat.as_ref().unwrap();
-        self.window.resize(seat, serial, edge.into());
+    pub fn start_resize(&self, edge: WindowResizeEdge, seat: &WlSeat, last_implicit_grab_serial: u32) {
+        self.window.resize(seat, last_implicit_grab_serial, edge.into());
     }
 
-    pub fn show_menu(&self, position: LogicalPoint) {
-        let serial = self.current_mouse_down_serial.unwrap();
-        let seat = self.current_mouse_down_seat.as_ref().unwrap();
-        self.window.show_window_menu(seat, serial, (position.x.round(), position.y.round()));
+    pub fn show_menu(&self, position: LogicalPoint, seat: &WlSeat, last_implicit_grab_serial: u32) {
+        self.window
+            .show_window_menu(seat, last_implicit_grab_serial, (position.x.round(), position.y.round()));
     }
 
     pub async fn show_open_file_dialog(

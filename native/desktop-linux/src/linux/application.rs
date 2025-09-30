@@ -10,7 +10,7 @@ use smithay_client_toolkit::{
         },
         calloop_wayland_source::WaylandSource,
         client::{
-            Connection, Proxy, QueueHandle,
+            Connection, Proxy as _, QueueHandle,
             globals::registry_queue_init,
             protocol::{wl_data_device_manager::DndAction, wl_surface::WlSurface},
         },
@@ -144,15 +144,10 @@ impl Application {
     pub fn event_loop_iteration(&mut self) -> Result<bool, anyhow::Error> {
         self.event_loop.dispatch(Duration::from_millis(16), &mut self.state)?;
 
-        self.state.windows.retain(|k, v| {
-            if v.close {
-                debug!("Closing window {k}");
-                self.state.window_id_to_surface_id.retain(|_window_id, surface_id| k != surface_id);
-                false
-            } else {
-                true
-            }
-        });
+        for (k, v) in self.state.windows.extract_if(|_, v| v.close) {
+            debug!("Closing window {:?} ({k})", v.window_id);
+            self.state.window_id_to_surface_id.remove(&v.window_id);
+        }
 
         if self.exit && !self.state.send_event(Event::ApplicationWantsToTerminate) {
             debug!("Exiting");
@@ -222,7 +217,7 @@ impl Application {
             warn!("Application::clipboard_put: No data device");
             return;
         };
-        if let Some(serial) = self.state.last_key_down_serial {
+        if let Some(serial) = self.state.last_implicit_grab_serial {
             let copy_paste_source = self
                 .state
                 .data_device_manager_state
@@ -300,7 +295,7 @@ impl Application {
             Some(drag_source.inner()),
             w.window.wl_surface(),
             None,
-            w.current_mouse_down_serial.unwrap(),
+            self.state.last_implicit_grab_serial.unwrap(),
         );
         self.state.drag_source = Some(drag_source);
         Ok(())

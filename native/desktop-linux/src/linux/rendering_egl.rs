@@ -1,7 +1,7 @@
 use anyhow::Context;
 use khronos_egl as egl;
 use log::info;
-use smithay_client_toolkit::reexports::client::{Connection, Proxy, protocol::wl_surface::WlSurface};
+use smithay_client_toolkit::reexports::client::{Connection, Proxy as _, protocol::wl_surface::WlSurface};
 use wayland_egl::WlEglSurface;
 
 use crate::linux::{application_state::EglInstance, events::SoftwareDrawData, geometry::PhysicalSize};

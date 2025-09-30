@@ -3,7 +3,7 @@ use smithay_client_toolkit::{
     compositor::SurfaceData,
     delegate_pointer,
     reexports::client::{
-        Connection, Dispatch, Proxy, QueueHandle,
+        Connection, Dispatch, Proxy as _, QueueHandle,
         protocol::{
             wl_pointer::{AxisRelativeDirection, WlPointer},
             wl_surface::{self, WlSurface},
@@ -41,25 +41,8 @@ impl PointerHandler for ApplicationState {
     fn pointer_frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, pointer: &WlPointer, events: &[PointerEvent]) {
         for event in events {
             let (window_id, scale) = if let Some(window) = self.windows.get_mut(&event.surface.id()) {
-                match event.kind {
-                    PointerEventKind::Enter { .. } => {
-                        window.set_cursor = true;
-                    }
-                    PointerEventKind::Press {
-                        button: _,
-                        serial,
-                        time: _,
-                    } => {
-                        let pointer_data = pointer.data::<PointerData>().unwrap();
-                        let seat = pointer_data.seat();
-                        window.current_mouse_down_seat = Some(seat.clone());
-                        window.current_mouse_down_serial = Some(serial);
-                    }
-                    // PointerEventKind::Release { button: _, serial: _, time: _ } => {
-                    //     self.current_mouse_down_seat = None;
-                    //     self.current_mouse_down_serial = None;
-                    // }
-                    _ => {}
+                if let PointerEventKind::Enter { .. } = event.kind {
+                    window.set_cursor = true;
                 }
                 let scale = window.current_scale;
                 (Some(window.window_id), scale)
@@ -82,12 +65,19 @@ impl PointerHandler for ApplicationState {
                         location_in_window: event.position.into(),
                         timestamp: Timestamp(time),
                     }),
-                    PointerEventKind::Press { button, serial: _, time } => self.send_event(MouseDownEvent {
-                        window_id,
-                        button: MouseButton(button),
-                        location_in_window: event.position.into(),
-                        timestamp: Timestamp(time),
-                    }),
+                    PointerEventKind::Press { button, serial, time } => {
+                        if let Some(pointer_data) = pointer.data::<PointerData>() {
+                            let seat = pointer_data.seat();
+                            self.last_implicit_grab_seat = Some(seat.clone());
+                        }
+                        self.last_implicit_grab_serial = Some(serial);
+                        self.send_event(MouseDownEvent {
+                            window_id,
+                            button: MouseButton(button),
+                            location_in_window: event.position.into(),
+                            timestamp: Timestamp(time),
+                        })
+                    }
                     PointerEventKind::Release { button, serial: _, time } => self.send_event(MouseUpEvent {
                         window_id,
                         button: MouseButton(button),

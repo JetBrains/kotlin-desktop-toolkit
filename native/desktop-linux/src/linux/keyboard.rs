@@ -5,10 +5,10 @@ use log::debug;
 use smithay_client_toolkit::{
     delegate_keyboard,
     reexports::client::{
-        Connection, QueueHandle,
+        Connection, Proxy as _, QueueHandle,
         protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
     },
-    seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
+    seat::keyboard::{KeyEvent, KeyboardData, KeyboardHandler, Keysym, Modifiers, RawModifiers},
 };
 
 use super::events::{KeyUpEvent, ModifiersChangedEvent};
@@ -47,8 +47,13 @@ impl KeyboardHandler for ApplicationState {
         }
     }
 
-    fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, serial: u32, event: KeyEvent) {
-        self.last_key_down_serial = Some(serial);
+    fn press_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, keyboard: &WlKeyboard, serial: u32, event: KeyEvent) {
+        if let Some(keyboard_data) = keyboard.data::<KeyboardData<Self>>() {
+            let seat = keyboard_data.seat();
+            debug!("KeyboardHandler::press_key: setting last_implicit_grab_seat to {seat:?}");
+            self.last_implicit_grab_seat = Some(seat.clone());
+        }
+        self.last_implicit_grab_serial = Some(serial);
         send_key_down_event(self, event, false);
     }
 

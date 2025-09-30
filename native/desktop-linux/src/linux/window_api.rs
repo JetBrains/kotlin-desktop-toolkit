@@ -107,24 +107,42 @@ pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_tit
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_start_move(app_ptr: AppPtr, window_id: WindowId) {
-    with_window(&app_ptr, window_id, "window_start_move", |w| {
-        w.start_move();
+    ffi_boundary("window_start_move", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let w = app
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
+        let seat = app.state.last_implicit_grab_seat.as_ref().unwrap();
+        let last_implicit_grab_serial = app.state.last_implicit_grab_serial.unwrap();
+        w.start_move(seat, last_implicit_grab_serial);
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_start_resize(app_ptr: AppPtr, window_id: WindowId, edge: WindowResizeEdge) {
-    with_window(&app_ptr, window_id, "window_start_resize", |w| {
-        w.start_resize(edge);
+    ffi_boundary("window_start_resize", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let w = app
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
+        let seat = app.state.last_implicit_grab_seat.as_ref().unwrap();
+        let last_implicit_grab_serial = app.state.last_implicit_grab_serial.unwrap();
+        w.start_resize(edge, seat, last_implicit_grab_serial);
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_show_menu(app_ptr: AppPtr, window_id: WindowId, position: LogicalPoint) {
-    with_window(&app_ptr, window_id, "window_show_menu", |w| {
-        w.show_menu(position);
+    ffi_boundary("window_show_menu", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        let w = app
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
+        let seat = app.state.last_implicit_grab_seat.as_ref().unwrap();
+        let last_implicit_grab_serial = app.state.last_implicit_grab_serial.unwrap();
+        w.show_menu(position, seat, last_implicit_grab_serial);
         Ok(())
     });
 }

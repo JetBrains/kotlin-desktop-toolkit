@@ -480,6 +480,11 @@ private class EditorState {
                     EventHandlerResult.Stop
                 }
 
+                KeyCode.M -> {
+                    window.startMove()
+                    EventHandlerResult.Stop
+                }
+
                 else -> EventHandlerResult.Continue
             }
             setOf(KeyModifiers.Shift) -> when (event.keyCode.value) {
@@ -701,21 +706,29 @@ private class ContentArea(
         return EventHandlerResult.Continue
     }
 
-    fun onMouseDown(clipboardHandler: ClipboardHandler, editorState: EditorState): EventHandlerResult {
-        when (editorState.shortcutModifiers()) {
-            setOf(KeyModifiers.Shift) -> {
-                clipboardHandler.startDrag(DataTransferContentType.UriList(EXAMPLE_FILES), DragAction.Move)
-            }
-            setOf(KeyModifiers.Control) -> {
-                clipboardHandler.startDrag(DataTransferContentType.UriList(EXAMPLE_FILES), DragAction.Copy)
-            }
-            else -> {
-                editorState.getCurrentSelection()?.let {
-                    clipboardHandler.startDrag(DataTransferContentType.Text(it), DragAction.Copy)
+    fun onMouseDown(event: Event.MouseDown, clipboardHandler: ClipboardHandler, editorState: EditorState): EventHandlerResult {
+        return when (event.button) {
+            MouseButton.LEFT -> when (editorState.shortcutModifiers()) {
+                setOf(KeyModifiers.Shift) -> {
+                    clipboardHandler.startDrag(DataTransferContentType.UriList(EXAMPLE_FILES), DragAction.Move)
+                    EventHandlerResult.Stop
+                }
+
+                setOf(KeyModifiers.Control) -> {
+                    clipboardHandler.startDrag(DataTransferContentType.UriList(EXAMPLE_FILES), DragAction.Copy)
+                    EventHandlerResult.Stop
+                }
+
+                else -> {
+                    editorState.getCurrentSelection()?.let {
+                        clipboardHandler.startDrag(DataTransferContentType.Text(it), DragAction.Copy)
+                        EventHandlerResult.Stop
+                    } ?: EventHandlerResult.Continue
                 }
             }
+
+            else -> EventHandlerResult.Continue
         }
-        return EventHandlerResult.Stop
     }
 
     fun draw(canvas: Canvas, time: Long, scale: Float, editorState: EditorState) {
@@ -994,7 +1007,29 @@ private class WindowContainer(
         if (customTitlebar?.onMouseDown(event) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
-        return contentArea.onMouseDown(clipboardHandler, editorState)
+        if (contentArea.onMouseDown(event, clipboardHandler, editorState) == EventHandlerResult.Stop) {
+            return EventHandlerResult.Stop
+        }
+
+        return if (event.button == MouseButton.RIGHT) {
+            when (editorState.shortcutModifiers()) {
+                setOf(KeyModifiers.Control) -> {
+                    editorState.getCurrentSelection()?.let { selection ->
+                        clipboardHandler.copy(DataTransferContentType.Text(selection))
+                        EventHandlerResult.Stop
+                    } ?: EventHandlerResult.Continue
+                }
+
+                emptySet<KeyModifiers>() -> {
+                    window.startResize(WindowResizeEdge.Top)
+                    EventHandlerResult.Stop
+                }
+
+                else -> EventHandlerResult.Continue
+            }
+        } else {
+            EventHandlerResult.Continue
+        }
     }
 
     fun onMouseUp(
