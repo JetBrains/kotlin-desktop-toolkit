@@ -1271,6 +1271,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             is Event.DropPerformed -> {
                 windows[event.windowId]?.onDataTransfer(event.content, app) ?: EventHandlerResult.Continue
             }
+            is Event.DragAndDropLeave -> EventHandlerResult.Stop
             is Event.DataTransferCancelled -> {
                 onDataTransferCancelled(event.dataSource)
                 EventHandlerResult.Stop

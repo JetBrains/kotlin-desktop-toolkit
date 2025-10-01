@@ -8,6 +8,7 @@ import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailableEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferCancelledEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferEvent
+import org.jetbrains.desktop.linux.generated.NativeDragAndDropLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
 import org.jetbrains.desktop.linux.generated.NativeDropPerformedEvent
 import org.jetbrains.desktop.linux.generated.NativeEvent
@@ -525,6 +526,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 serial = NativeDataTransferEvent.serial(nativeEvent),
                 content = content,
             )
+        }
+        desktop_linux_h.NativeEvent_DragAndDropLeave() -> {
+            val nativeEvent = NativeEvent.drag_and_drop_leave(s)
+            Event.DragAndDropLeave(windowId = NativeDragAndDropLeaveEvent.window_id(nativeEvent))
         }
         desktop_linux_h.NativeEvent_DropPerformed() -> {
             val nativeEvent = NativeEvent.drop_performed(s)
