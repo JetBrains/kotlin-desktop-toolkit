@@ -152,6 +152,18 @@ impl<'a> From<DataTransferEvent<'a>> for Event<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct DragAndDropLeaveEvent {
+    pub window_id: WindowId,
+}
+
+impl From<DragAndDropLeaveEvent> for Event<'_> {
+    fn from(value: DragAndDropLeaveEvent) -> Self {
+        Self::DragAndDropLeave(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct DropPerformedEvent<'a> {
     pub window_id: WindowId,
     pub content: DataTransferContent<'a>,
@@ -562,6 +574,7 @@ pub enum Event<'a> {
     DisplayConfigurationChange,
     XdgDesktopSettingChange(XdgDesktopSetting<'a>),
     DataTransfer(DataTransferEvent<'a>),
+    DragAndDropLeave(DragAndDropLeaveEvent),
     DropPerformed(DropPerformedEvent<'a>),
     DataTransferAvailable(DataTransferAvailableEvent<'a>),
     DataTransferCancelled(DataTransferCancelledEvent),

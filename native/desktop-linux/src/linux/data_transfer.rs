@@ -9,7 +9,7 @@ use log::{debug, error, warn};
 use smithay_client_toolkit::{
     data_device_manager::{
         self, WritePipe,
-        data_device::DataDeviceHandler,
+        data_device::{DataDeviceData, DataDeviceHandler},
         data_offer::{DataOfferHandler, DragOffer},
         data_source::{CopyPasteSource, DataSourceHandler, DragSource},
     },
@@ -32,37 +32,25 @@ use smithay_client_toolkit::{
 use crate::linux::{
     application_api::{DataSource, DragAndDropQueryData},
     application_state::ApplicationState,
-    events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent, DropPerformedEvent},
+    events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent, DragAndDropLeaveEvent, DropPerformedEvent},
 };
 
 delegate_data_device!(ApplicationState);
 delegate_primary_selection!(ApplicationState);
 
-impl DataDeviceHandler for ApplicationState {
-    fn enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice, x: f64, y: f64, wl_surface: &WlSurface) {
-        debug!("DataDeviceHandler::enter: {}, {x}x{y}", wl_surface.id());
-    }
-
-    fn leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice) {
-        debug!("DataDeviceHandler::leave");
-        self.drag_destination_mime_type = None;
-    }
-
-    fn motion(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice, x: f64, y: f64) {
-        debug!("DataDeviceHandler::motion: {x}x{y}");
-
-        let Some(data_device) = &self.data_device else {
-            return;
-        };
-        let Some(drag_offer) = data_device.data().drag_offer() else {
+impl ApplicationState {
+    fn on_drag_enter_or_move(&mut self, data_device: &WlDataDevice, x: f64, y: f64) {
+        let Some(drag_offer) = data_device.data::<DataDeviceData>().and_then(DataDeviceData::drag_offer) else {
             return;
         };
         let Some(window_id) = self.get_window_id(&drag_offer.surface) else {
-            warn!("DataDeviceHandler::motion: couldn't find window for {:?}", drag_offer.surface);
+            warn!("Drop handler: couldn't find window for {:?}", drag_offer.surface);
             return;
         };
 
         self.drag_destination_mime_type = drag_offer.with_mime_types(|mime_types| {
+            debug!("Drop handler: {x}x{y}, mime_types={mime_types:?}");
+
             let drag_and_drop_query_data = DragAndDropQueryData {
                 window_id,
                 point: (x, y).into(),
@@ -82,13 +70,35 @@ impl DataDeviceHandler for ApplicationState {
             drag_offer.set_actions(DndAction::Copy, DndAction::Copy);
         }
     }
+}
 
-    fn selection(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, wl_data_device: &WlDataDevice) {
-        let Some(data_device) = &self.data_device else { return };
-        if data_device.inner() != wl_data_device {
+impl DataDeviceHandler for ApplicationState {
+    fn enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice, x: f64, y: f64, wl_surface: &WlSurface) {
+        debug!("DataDeviceHandler::enter: {}, {x}x{y}", wl_surface.id());
+        self.on_drag_enter_or_move(data_device, x, y);
+    }
+
+    fn leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice) {
+        debug!("DataDeviceHandler::leave");
+        self.drag_destination_mime_type = None;
+        // TODO: add event
+        let Some(drag_offer) = data_device.data::<DataDeviceData>().and_then(DataDeviceData::drag_offer) else {
+            debug!("DataDeviceHandler::leave: no drag offer");
             return;
-        }
-        let Some(selection_offer) = data_device.data().selection_offer() else {
+        };
+        let Some(window_id) = self.get_window_id(&drag_offer.surface) else {
+            warn!("DataDeviceHandler::leave: couldn't find window for {:?}", drag_offer.surface);
+            return;
+        };
+        self.send_event(DragAndDropLeaveEvent { window_id });
+    }
+
+    fn motion(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice, x: f64, y: f64) {
+        self.on_drag_enter_or_move(data_device, x, y);
+    }
+
+    fn selection(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice) {
+        let Some(selection_offer) = data_device.data::<DataDeviceData>().and_then(DataDeviceData::selection_offer) else {
             return;
         };
         selection_offer.with_mime_types(|mime_types| {
@@ -98,14 +108,8 @@ impl DataDeviceHandler for ApplicationState {
         });
     }
 
-    fn drop_performed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice) {
-        debug!("DataDeviceHandler::drop_performed");
-
-        let Some(data_device) = &self.data_device else {
-            debug!("DataDeviceHandler::drop_performed: no data device");
-            return;
-        };
-        let Some(drag_offer) = data_device.data().drag_offer() else {
+    fn drop_performed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice) {
+        let Some(drag_offer) = data_device.data::<DataDeviceData>().and_then(DataDeviceData::drag_offer) else {
             debug!("DataDeviceHandler::drop_performed: no drag offer");
             return;
         };
@@ -114,6 +118,9 @@ impl DataDeviceHandler for ApplicationState {
             debug!("DataDeviceHandler::drop_performed: destination MIME type not set");
             return;
         };
+
+        debug!("DataDeviceHandler::drop_performed, mime_type={mime_type}");
+
         let read_pipe = drag_offer.receive(mime_type.clone()).unwrap();
         self.loop_handle
             .insert_source(read_pipe, move |(), res, state| {
@@ -127,8 +134,7 @@ impl DataDeviceHandler for ApplicationState {
                 let f = unsafe { res.get_mut() };
                 let mut buf = Vec::new();
                 let size = f.read_to_end(&mut buf).unwrap();
-                debug!("DataDeviceHandler::drop_performed read {size} bytes for {mime_type}");
-                debug!("DataDeviceHandler::drop_performed value: {buf:?}");
+                debug!("DataDeviceHandler::drop_performed read {size} bytes for {mime_type}, value: {buf:?}");
                 let mime_type_cstr = CString::from_str(&mime_type).unwrap();
                 let content = DataTransferContent::new(&buf, &mime_type_cstr);
                 state.send_event(DropPerformedEvent { window_id, content });

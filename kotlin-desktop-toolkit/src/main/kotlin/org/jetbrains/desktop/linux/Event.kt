@@ -97,6 +97,8 @@ public sealed class Event {
 
     public data class DisplayConfigurationChange(val screens: AllScreens) : Event()
 
+    public data class DragAndDropLeave(val windowId: WindowId) : Event()
+
     public data class DropPerformed(
         val windowId: WindowId,
         val content: DataTransferContent,
