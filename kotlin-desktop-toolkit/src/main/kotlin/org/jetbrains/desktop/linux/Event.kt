@@ -101,6 +101,9 @@ public sealed class Event {
 
     public data class DisplayConfigurationChange(val screens: AllScreens) : Event()
 
+    /** Drag&drop targeting our application left the specified window. */
+    public data class DragAndDropLeave(val windowId: WindowId) : Event()
+
     /** Drag&drop targeting our window is finished, and we received data from it. */
     public data class DropPerformed(
         val windowId: WindowId,
