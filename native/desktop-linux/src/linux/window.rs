@@ -3,7 +3,7 @@ use log::{debug, error, warn};
 use smithay_client_toolkit::{
     reexports::{
         client::{
-            Connection, Proxy, QueueHandle,
+            Connection, Proxy as _, QueueHandle,
             protocol::{wl_display::WlDisplay, wl_seat::WlSeat, wl_surface::WlSurface},
         },
         protocols::wp::viewporter::client::wp_viewport::WpViewport,

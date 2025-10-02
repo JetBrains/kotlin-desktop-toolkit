@@ -45,8 +45,28 @@ public class DataTransferContent(
 
 public data class DragAndDropQueryData(
     public val windowId: WindowId,
-    public val point: LogicalPoint,
+    public val locationInWindow: LogicalPoint,
 ) {
+    internal companion object;
+}
+
+public enum class DragAndDropAction {
+    Copy,
+    Move,
+    ;
+
+    internal companion object;
+}
+
+public class SupportedActionsForMime(
+    public val supportedMimeType: String,
+    public val supportedActions: Set<DragAndDropAction>,
+    public val preferredAction: DragAndDropAction?,
+) {
+    internal companion object;
+}
+
+public class DragAndDropQueryResponse(public val supportedActionsPerMime: List<SupportedActionsForMime>) {
     internal companion object;
 }
 
@@ -108,6 +128,13 @@ public sealed class Event {
     public data class DropPerformed(
         val windowId: WindowId,
         val content: DataTransferContent?,
+        val action: DragAndDropAction?,
+    ) : Event()
+
+    /** Drag&drop that was initiated from our window has finished. */
+    public data class DragAndDropFinished(
+        val windowId: WindowId,
+        val action: DragAndDropAction?,
     ) : Event()
 
     public data class FileChooserResponse(

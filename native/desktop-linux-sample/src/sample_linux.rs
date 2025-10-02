@@ -12,20 +12,19 @@ use desktop_common::{
 };
 use desktop_linux::linux::{
     application_api::{
-        AppPtr, ApplicationCallbacks, DataSource, DragAction, DragAndDropQueryData, RenderingMode, application_clipboard_paste,
-        application_clipboard_put, application_get_egl_proc_func, application_init, application_is_event_loop_thread,
-        application_primary_selection_paste, application_run_event_loop, application_set_cursor_theme, application_shutdown,
-        application_start_drag_and_drop, application_stop_event_loop, application_text_input_disable, application_text_input_enable,
-        application_text_input_update,
+        AppPtr, ApplicationCallbacks, DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData, DragAndDropQueryResponse,
+        RenderingMode, SupportedActionsForMime, application_clipboard_paste, application_clipboard_put, application_get_egl_proc_func,
+        application_init, application_is_event_loop_thread, application_primary_selection_paste, application_run_event_loop,
+        application_set_cursor_theme, application_shutdown, application_stop_event_loop, application_text_input_disable,
+        application_text_input_enable, application_text_input_update,
     },
-    events::{
-        DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, SoftwareDrawData, TextInputEvent, WindowDrawEvent,
-        WindowId,
-    },
+    events::{DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, SoftwareDrawData, TextInputEvent, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
-    window_api::{WindowParams, window_close, window_create, window_show_open_file_dialog, window_show_save_file_dialog},
+    window_api::{
+        WindowParams, window_close, window_create, window_show_open_file_dialog, window_show_save_file_dialog, window_start_drag_and_drop,
+    },
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use log::{debug, error, info};
@@ -43,12 +42,14 @@ const fn cstr_to_str(cstr: &CStr) -> &str {
     unsafe { str::from_utf8_unchecked(cstr.to_bytes()) }
 }
 
+const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
 const TEXT_MIME_TYPE: &CStr = c"text/plain;charset=utf-8";
 const TEXT_MIME_TYPE_STR: &str = cstr_to_str(TEXT_MIME_TYPE);
 const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
 const URI_LIST_MIME_TYPE_STR: &str = cstr_to_str(URI_LIST_MIME_TYPE);
 
 const ALL_MIMES: &CStr = c"text/uri-list,text/plain;charset=utf-8";
+const DRAG_ICON_WINDOW_ID: WindowId = WindowId(-1);
 
 #[derive(Debug, Default)]
 struct OptionalAppPtr(Option<AppPtr<'static>>);
@@ -77,6 +78,9 @@ struct WindowState {
     composed_text: String,
     text: String,
     animation_progress: u16,
+    drag_and_drop_target: bool,
+    drag_and_drop_source: bool,
+    opengl: Option<OpenglState>,
 }
 
 #[derive(Debug, Default)]
@@ -85,7 +89,6 @@ struct State {
     key_window_id: Option<WindowId>,
     key_modifiers: KeyModifierBitflag,
     windows: HashMap<WindowId, WindowState>,
-    opengl: Option<OpenglState>,
     settings: Settings,
 }
 
@@ -94,6 +97,7 @@ thread_local! {
 }
 
 const V_POSITION: GLuint = 0;
+const DRAG_AND_DROP_LEFT_OF: f64 = 100.;
 
 fn load_shader(gl: &OpenGlFuncs, shader_type: GLenum, shader_src: *const GLchar) -> Option<GLuint> {
     // Create the shader object
@@ -160,11 +164,11 @@ void main()
 }
 
 /// Draw a triangle using the shader pair created in `Init()`
-fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEvent, animation_progress: f32) {
+fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, physical_size: PhysicalSize, animation_progress: f32) {
     //    debug!("draw_opengl_triangle, program = {program}, event = {data:?}");
     let v_vertices: [f32; 6] = [animation_progress, 1.0, -1.0, -1.0, 1.0, -1.0];
     unsafe {
-        (gl.glViewport)(0, 0, data.physical_size.width.0, data.physical_size.height.0);
+        (gl.glViewport)(0, 0, physical_size.width.0, physical_size.height.0);
         (gl.glClear)(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
         (gl.glUseProgram)(program);
         //let v_position = (gl.glGetAttribLocation)(program, c"vPosition".as_ptr());
@@ -176,14 +180,8 @@ fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, data: &WindowDrawEven
     }
 }
 
-fn draw_opengl_triangle_with_init(
-    data: &WindowDrawEvent,
-    app_ptr: AppPtr<'_>,
-    window_id: WindowId,
-    window_state: &mut WindowState,
-    opengl_state: &mut Option<OpenglState>,
-) {
-    let opengl_state = opengl_state.get_or_insert_with(|| {
+fn draw_opengl_triangle_with_init(physical_size: PhysicalSize, app_ptr: AppPtr<'_>, window_id: WindowId, window_state: &mut WindowState) {
+    let opengl_state = window_state.opengl.get_or_insert_with(|| {
         let egl_lib = application_get_egl_proc_func(app_ptr);
         let funcs = OpenGlFuncs::new(&egl_lib).unwrap();
         let program = create_opengl_program(&funcs).unwrap();
@@ -208,12 +206,13 @@ fn draw_opengl_triangle_with_init(
         1.0 - (f32::from(window_state.animation_progress - 100) / 50.)
     };
 
-    draw_opengl_triangle(&opengl_state.funcs, *program, data, animation_progress);
+    draw_opengl_triangle(&opengl_state.funcs, *program, physical_size, animation_progress);
 }
 
 #[allow(clippy::many_single_char_names)]
-fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f64) {
+fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f64, window_state: &WindowState) {
     const BYTES_PER_PIXEL: u8 = 4;
+    let drag_source_indicator_heigh = 100. * scale;
     let canvas = {
         let len = usize::try_from(physical_size.height.0 * data.stride).unwrap();
         unsafe { std::slice::from_raw_parts_mut(data.canvas, len) }
@@ -227,7 +226,15 @@ fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f6
         let i = f64::from(i);
         let x = i % w;
         let y = (i / f64::from(data.stride)) * f64::from(BYTES_PER_PIXEL);
-        if between(x, line_thickness,  line_thickness * 2.0)  // left border
+        if between(
+            x,
+            DRAG_AND_DROP_LEFT_OF * scale,
+            DRAG_AND_DROP_LEFT_OF.mul_add(scale, line_thickness),
+        ) {
+            pixel[0] = 0;
+            pixel[1] = 0;
+            pixel[2] = 0;
+        } else if between(x, line_thickness,  line_thickness * 2.0)  // left border
            || between(y, line_thickness,  line_thickness * 2.0)  // top border
            || between(x, line_thickness.mul_add(-2.0, w), w - line_thickness)  // right border
            || between(y, line_thickness.mul_add(-2.0, h), h - line_thickness)  // bottom border
@@ -235,11 +242,23 @@ fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f6
         {
             pixel[0] = 0;
             pixel[1] = 0;
+            pixel[2] = 255;
+        } else if x < DRAG_AND_DROP_LEFT_OF
+            && window_state.drag_and_drop_source
+            && between(y, drag_source_indicator_heigh, drag_source_indicator_heigh + line_thickness)
+        {
+            pixel[0] = 255;
+            pixel[1] = 0;
+            pixel[2] = 0;
+        } else if x < DRAG_AND_DROP_LEFT_OF && window_state.drag_and_drop_target {
+            pixel[0] = 128;
+            pixel[1] = 0;
+            pixel[2] = 0;
         } else {
             pixel[0] = 255;
             pixel[1] = 255;
+            pixel[2] = 255;
         }
-        pixel[2] = 255;
         pixel[3] = 255;
     }
 }
@@ -281,6 +300,7 @@ const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBit
 fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> bool {
     const KEYCODE_BACKSPACE: u32 = 14;
     const KEYCODE_C: u32 = 46;
+    const KEYCODE_N: u32 = 49;
     const KEYCODE_O: u32 = 24;
     const KEYCODE_S: u32 = 31;
     const KEYCODE_V: u32 = 47;
@@ -338,6 +358,25 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
             true
         }
+        (KEY_MODIFIER_CTRL, KEYCODE_N) => {
+            let new_window_id = WindowId(state.windows.len() as i64 + 1);
+            window_create(
+                state.app_ptr.get(),
+                WindowParams {
+                    window_id: new_window_id,
+                    size: LogicalSize {
+                        width: LogicalPixels(300.),
+                        height: LogicalPixels(200.),
+                    },
+                    title: BorrowedStrPtr::new(c"Window N"),
+                    app_id: BorrowedStrPtr::new(APP_ID),
+                    prefer_client_side_decoration: true,
+                    rendering_mode: RenderingMode::Auto,
+                },
+            );
+            state.windows.insert(new_window_id, WindowState::default());
+            true
+        }
         (_, _) => false,
     }
 }
@@ -391,11 +430,10 @@ fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut W
         let data_str = str::from_utf8(content.data.as_slice().unwrap()).unwrap();
         window_state.text += data_str;
     }
+    window_state.drag_and_drop_target = false;
 }
 
 fn on_application_started(state: &mut State) {
-    const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
-
     let window_1_id = WindowId(1);
     window_create(
         state.app_ptr.get(),
@@ -458,11 +496,11 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 true
             }
             Event::WindowDraw(data) => {
+                let window_state = state.windows.get_mut(&data.window_id).unwrap();
                 if data.software_draw_data.canvas.is_null() {
-                    let window_state = state.windows.get_mut(&data.window_id).unwrap();
-                    draw_opengl_triangle_with_init(data, app_ptr, data.window_id, window_state, &mut state.opengl);
+                    draw_opengl_triangle_with_init(data.physical_size, app_ptr, data.window_id, window_state);
                 } else {
-                    draw_software(&data.software_draw_data, data.physical_size, data.scale);
+                    draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
                 }
                 true
             }
@@ -476,7 +514,17 @@ extern "C" fn event_handler(event: &Event) -> bool {
             }
             Event::MouseDown(data) => match data.button.0 {
                 MOUSE_BUTTON_LEFT => {
-                    application_start_drag_and_drop(app_ptr, data.window_id, BorrowedStrPtr::new(ALL_MIMES), DragAction::Copy);
+                    if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF {
+                        let mime_types = if state.key_modifiers.0 == KeyModifier::Shift as u8 {
+                            ALL_MIMES
+                        } else {
+                            TEXT_MIME_TYPE
+                        };
+                        let actions = DragAndDropActions(DragAndDropAction::Copy as u8 | DragAndDropAction::Move as u8);
+                        window_start_drag_and_drop(app_ptr, data.window_id, BorrowedStrPtr::new(mime_types), actions);
+                        let window_state = state.windows.get_mut(&data.window_id).unwrap();
+                        window_state.drag_and_drop_source = true;
+                    }
                     true
                 }
                 MOUSE_BUTTON_MIDDLE => {
@@ -528,6 +576,35 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     false
                 }
             }
+            Event::DragAndDropLeave(data) => {
+                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                    window_state.drag_and_drop_target = false;
+                    true
+                } else {
+                    false
+                }
+            }
+            Event::DragAndDropFinished(data) => {
+                state.windows.remove(&DRAG_ICON_WINDOW_ID);
+                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                    window_state.drag_and_drop_source = false;
+                    info!("Finished initiated drag and drop with action {:?}", data.action);
+                    true
+                } else {
+                    false
+                }
+            }
+            Event::DataTransferCancelled(data) => {
+                if data.data_source == DataSource::DragAndDrop {
+                    for window_state in state.windows.values_mut() {
+                        window_state.drag_and_drop_source = false;
+                    }
+                    state.windows.remove(&DRAG_ICON_WINDOW_ID);
+                    true
+                } else {
+                    false
+                }
+            }
             Event::TextInputAvailability(data) => {
                 let window_state = state.windows.get_mut(&data.window_id).unwrap();
                 on_text_input_availability_changed(data.available, app_ptr, window_state);
@@ -567,11 +644,32 @@ fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting, state: &mut State) {
     }
 }
 
-extern "C" fn get_drag_and_drop_supported_mime_types(data: &DragAndDropQueryData) -> BorrowedStrPtr<'static> {
-    if data.point.x.0 < 100. {
-        BorrowedStrPtr::new(ALL_MIMES)
+extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> DragAndDropQueryResponse<'_> {
+    STATE.with_borrow_mut(|state| {
+        let window_state = state.windows.get_mut(&data.window_id).unwrap();
+        window_state.drag_and_drop_target = true;
+    });
+    if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF {
+        const SUPPORTED_ACTIONS_PER_MIME: [SupportedActionsForMime; 2] = [
+            SupportedActionsForMime {
+                supported_mime_type: BorrowedStrPtr::new(URI_LIST_MIME_TYPE),
+                supported_actions: DragAndDropActions(DragAndDropAction::Copy as u8),
+                preferred_action: DragAndDropAction::Copy,
+            },
+            SupportedActionsForMime {
+                supported_mime_type: BorrowedStrPtr::new(TEXT_MIME_TYPE),
+                supported_actions: DragAndDropActions(DragAndDropAction::Move as u8 | DragAndDropAction::Copy as u8),
+                preferred_action: DragAndDropAction::Copy,
+            },
+        ];
+
+        DragAndDropQueryResponse {
+            supported_actions_per_mime: BorrowedArray::from_slice(&SUPPORTED_ACTIONS_PER_MIME),
+        }
     } else {
-        BorrowedStrPtr::new(c"")
+        DragAndDropQueryResponse {
+            supported_actions_per_mime: BorrowedArray::from_slice(&[]),
+        }
     }
 }
 
@@ -596,9 +694,9 @@ extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedStrP
         }
     } else if mime_type_cstr == TEXT_MIME_TYPE {
         match source {
-            DataSource::Clipboard => "/etc/hosts (from clipboard)",
-            DataSource::DragAndDrop => "/boot/efi/ (from d&d)",
-            DataSource::PrimarySelection => "/etc/hosts (from primary selection)",
+            DataSource::Clipboard => "clipboard text",
+            DataSource::DragAndDrop => "d&d text",
+            DataSource::PrimarySelection => "primary selection text",
         }
     } else {
         mime_type_cstr.to_str().unwrap()
@@ -617,7 +715,7 @@ pub fn main() {
     });
     let app_ptr = application_init(ApplicationCallbacks {
         event_handler,
-        get_drag_and_drop_supported_mime_types,
+        query_drag_and_drop_target,
         get_data_transfer_data,
     });
     STATE.with_borrow_mut(|state| {

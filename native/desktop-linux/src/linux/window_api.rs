@@ -10,8 +10,9 @@ use smithay_client_toolkit::shell::xdg::window::DecorationMode;
 use super::window::SimpleWindow;
 use crate::linux::{
     application::Application,
-    application_api::{AppPtr, RenderingMode},
+    application_api::{AppPtr, DragAndDropActions, RenderingMode},
     async_event_result::AsyncEventResult,
+    data_transfer::MimeTypes,
     events::{RequestId, WindowDecorationMode, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
@@ -207,6 +208,20 @@ pub extern "C" fn window_unset_fullscreen(app_ptr: AppPtr, window_id: WindowId) 
     with_window(&app_ptr, window_id, "window_toggle_full_screen", |w| {
         w.window.unset_fullscreen();
         Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_start_drag_and_drop(
+    mut app_ptr: AppPtr,
+    window_id: WindowId,
+    mime_types: BorrowedStrPtr,
+    actions: DragAndDropActions,
+) {
+    debug!("application_start_drag_and_drop");
+    ffi_boundary("application_start_drag_and_drop", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        app.start_drag(window_id, MimeTypes::new(mime_types.as_str()?), actions.into())
     });
 }
 
