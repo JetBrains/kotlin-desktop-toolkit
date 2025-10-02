@@ -115,7 +115,7 @@ impl ApplicationState {
         };
         let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, x, y, window_id);
         drag_offer.set_actions(mime_type_and_actions.supported_actions, mime_type_and_actions.preferred_action);
-        drag_offer.accept_mime_type(0, mime_type_and_actions.mime_type); // TODO?: proper serial
+        drag_offer.accept_mime_type(drag_offer.serial, mime_type_and_actions.mime_type);
         Some(window_id)
     }
 }
