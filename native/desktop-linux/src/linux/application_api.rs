@@ -5,7 +5,6 @@ use desktop_common::{
     logger::ffi_boundary,
 };
 use log::debug;
-use smithay_client_toolkit::reexports::client::protocol::wl_data_device_manager::DndAction;
 
 use crate::linux::{
     application::Application,
@@ -17,15 +16,47 @@ use crate::linux::{
     text_input_api::TextInputContext,
 };
 
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum DragAndDropAction {
+    None = 0b0000_0000,
+
+    Copy = 0b0000_0001,
+
+    Move = 0b0000_0010,
+    // TODO?: Ask
+}
+
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+#[repr(transparent)]
+pub struct DragAndDropActions(pub u8);
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct DragAndDropQueryData {
     pub window_id: WindowId,
-    pub point: LogicalPoint,
+    pub location_in_window: LogicalPoint,
 }
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct DragAndDropQueryResponse<'a> {
+    pub supported_mime_types: BorrowedStrPtr<'a>,
+    pub supported_actions: DragAndDropActions,
+    pub preferred_action: DragAndDropAction,
+    pub deinit: Option<extern "C" fn()>,
+}
+
+impl Drop for DragAndDropQueryResponse<'_> {
+    fn drop(&mut self) {
+        if let Some(deinit) = self.deinit {
+            deinit();
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum DataSource {
     Clipboard,
     DragAndDrop,
@@ -36,8 +67,8 @@ pub enum DataSource {
 #[derive(Debug)]
 pub struct ApplicationCallbacks {
     pub event_handler: EventHandler,
-    pub get_drag_and_drop_supported_mime_types: extern "C" fn(&DragAndDropQueryData) -> BorrowedStrPtr<'static>,
-    pub get_data_transfer_data: extern "C" fn(DataSource, BorrowedStrPtr) -> BorrowedArray<'static, u8>,
+    pub query_drag_and_drop_target: extern "C" fn(&DragAndDropQueryData) -> DragAndDropQueryResponse,
+    pub get_data_transfer_data: extern "C" fn(DataSource, BorrowedStrPtr) -> BorrowedArray<'_, u8>,
 }
 
 pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
@@ -223,34 +254,17 @@ pub extern "C" fn application_clipboard_get_available_mimetypes(mut app_ptr: App
     })
 }
 
-#[repr(C)]
-pub enum DragAction {
-    Copy,
-    Move,
-    Ask,
-}
-
-impl From<DragAction> for DndAction {
-    fn from(value: DragAction) -> Self {
-        match value {
-            DragAction::Copy => Self::Copy,
-            DragAction::Move => Self::Move,
-            DragAction::Ask => Self::Ask,
-        }
-    }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn application_start_drag_and_drop(
     mut app_ptr: AppPtr,
     window_id: WindowId,
     mime_types: BorrowedStrPtr,
-    action: DragAction,
+    actions: DragAndDropActions,
 ) {
     debug!("application_start_drag_and_drop");
     ffi_boundary("application_start_drag_and_drop", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.start_drag(window_id, MimeTypes::new(mime_types.as_str()?), action.into())
+        app.start_drag(window_id, MimeTypes::new(mime_types.as_str()?), actions.into())
     });
 }
 

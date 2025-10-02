@@ -8,8 +8,10 @@ import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailableEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferCancelledEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferEvent
+import org.jetbrains.desktop.linux.generated.NativeDragAndDropFinishedEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
+import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryResponse
 import org.jetbrains.desktop.linux.generated.NativeDropPerformedEvent
 import org.jetbrains.desktop.linux.generated.NativeEvent
 import org.jetbrains.desktop.linux.generated.NativeFileChooserResponse
@@ -49,6 +51,7 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemoryLayout
 import java.lang.foreign.MemorySegment
 import kotlin.experimental.and
+import kotlin.experimental.or
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
@@ -426,14 +429,39 @@ internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
 internal fun DragAndDropQueryData.Companion.fromNative(s: MemorySegment): DragAndDropQueryData {
     return DragAndDropQueryData(
         windowId = NativeDragAndDropQueryData.window_id(s),
-        point = LogicalPoint.fromNative(NativeDragAndDropQueryData.point(s)),
+        locationInWindow = LogicalPoint.fromNative(NativeDragAndDropQueryData.location_in_window(s)),
     )
 }
 
-internal fun DragAction.toNative(): Int = when (this) {
-    DragAction.Copy -> desktop_linux_h.NativeDragAction_Copy()
-    DragAction.Move -> desktop_linux_h.NativeDragAction_Move()
-    DragAction.Ask -> desktop_linux_h.NativeDragAction_Ask()
+internal fun DragAndDropAction?.toNative(): Byte = when (this) {
+    null -> desktop_linux_h.NativeDragAndDropAction_None()
+    DragAndDropAction.Copy -> desktop_linux_h.NativeDragAndDropAction_Copy()
+    DragAndDropAction.Move -> desktop_linux_h.NativeDragAndDropAction_Move()
+}.toByte()
+
+internal fun DragAndDropAction.Companion.fromNative(nativeVal: Int): DragAndDropAction? = when (nativeVal) {
+    desktop_linux_h.NativeDragAndDropAction_None() -> null
+    desktop_linux_h.NativeDragAndDropAction_Copy() -> DragAndDropAction.Copy
+    desktop_linux_h.NativeDragAndDropAction_Move() -> DragAndDropAction.Move
+    else -> null
+}
+
+internal fun Set<DragAndDropAction>.toNative(): Byte {
+    var result = desktop_linux_h.NativeDragAndDropAction_None().toByte()
+    for (e in this) {
+        result = result or e.toNative()
+    }
+    return result
+}
+
+internal fun DragAndDropQueryResponse.toNative(mimeTypesToNative: (List<String>) -> MemorySegment): MemorySegment {
+    val arena = Arena.ofConfined()
+    val result = NativeDragAndDropQueryResponse.allocate(arena)
+    NativeDragAndDropQueryResponse.deinit(result, NativeDragAndDropQueryResponse.deinit.allocate({ arena.close() }, arena))
+    NativeDragAndDropQueryResponse.supported_mime_types(result, mimeTypesToNative(supportedMimeTypes))
+    NativeDragAndDropQueryResponse.supported_actions(result, supportedActions.toNative())
+    NativeDragAndDropQueryResponse.preferred_action(result, preferredAction.toNative())
+    return result
 }
 
 internal fun ScrollData.Companion.fromNative(s: MemorySegment): ScrollData {
@@ -507,6 +535,14 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.DropPerformed(
                 windowId = NativeDropPerformedEvent.window_id(nativeEvent),
                 content = DataTransferContent.fromNative(NativeDropPerformedEvent.content(nativeEvent)),
+                action = DragAndDropAction.fromNative(NativeDropPerformedEvent.action(nativeEvent).toInt()),
+            )
+        }
+        desktop_linux_h.NativeEvent_DragAndDropFinished() -> {
+            val nativeEvent = NativeEvent.drag_and_drop_finished(s)
+            Event.DragAndDropFinished(
+                windowId = NativeDragAndDropFinishedEvent.window_id(nativeEvent),
+                action = DragAndDropAction.fromNative(NativeDragAndDropFinishedEvent.action(nativeEvent).toInt()),
             )
         }
         desktop_linux_h.NativeEvent_FileChooserResponse() -> {

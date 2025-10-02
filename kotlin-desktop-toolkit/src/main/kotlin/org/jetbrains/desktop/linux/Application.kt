@@ -52,7 +52,7 @@ public enum class DataSource {
 
 public data class ApplicationConfig(
     val eventHandler: EventHandler,
-    val getDragAndDropSupportedMimeTypes: (DragAndDropQueryData) -> List<String>,
+    val queryDragAndDropTarget: (DragAndDropQueryData) -> DragAndDropQueryResponse,
     val getDataTransferData: (DataSource, String) -> ByteArray?,
 )
 
@@ -111,11 +111,15 @@ public class Application : AutoCloseable {
     }
 
     // called from native
-    private fun onGetDragAndDropSupportedMimeTypes(nativeQueryData: MemorySegment): MemorySegment {
+    private fun onQueryDragAndDropTarget(nativeQueryData: MemorySegment): MemorySegment {
         val queryData = DragAndDropQueryData.fromNative(nativeQueryData)
         return ffiUpCall(defaultResult = MemorySegment.NULL) {
-            val result = applicationConfig?.getDragAndDropSupportedMimeTypes(queryData) ?: emptyList()
-            mimeTypesToNative(result)
+            val result = applicationConfig?.queryDragAndDropTarget(queryData) ?: DragAndDropQueryResponse(
+                supportedMimeTypes = emptyList(),
+                supportedActions = emptySet(),
+                preferredAction = null,
+            )
+            result.toNative(::mimeTypesToNative)
         }
     }
 
@@ -150,9 +154,9 @@ public class Application : AutoCloseable {
         val arena = Arena.global()
         val callbacks = NativeApplicationCallbacks.allocate(arena)
         NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
-        NativeApplicationCallbacks.get_drag_and_drop_supported_mime_types(
+        NativeApplicationCallbacks.query_drag_and_drop_target(
             callbacks,
-            NativeApplicationCallbacks.get_drag_and_drop_supported_mime_types.allocate(::onGetDragAndDropSupportedMimeTypes, arena),
+            NativeApplicationCallbacks.query_drag_and_drop_target.allocate(::onQueryDragAndDropTarget, arena),
         )
         NativeApplicationCallbacks.get_data_transfer_data(
             callbacks,

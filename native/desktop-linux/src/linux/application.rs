@@ -349,13 +349,15 @@ impl Application {
             .state
             .data_device_manager_state
             .create_drag_and_drop_source(&self.qh, mime_types.val, action);
-        let d = self.state.data_device.as_ref().context("No data device found")?;
-        d.inner().start_drag(
-            Some(drag_source.inner()),
-            w.window.wl_surface(),
-            None,
-            self.state.last_implicit_grab_serial.unwrap(),
-        );
+        let device = self.state.data_device.as_ref().context("No data device found")?;
+        let origin = w.window.wl_surface();
+        let serial = self
+            .state
+            .last_implicit_grab_serial
+            .context("Called start_drag without an implicit grab")?;
+
+        drag_source.start_drag(device, origin, None, serial); // TODO: icon
+        self.state.current_drag_source_window_id = Some(window_id);
         self.state.drag_source = Some(drag_source);
         Ok(())
     }

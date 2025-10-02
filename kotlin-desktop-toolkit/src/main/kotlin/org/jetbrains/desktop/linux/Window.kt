@@ -6,15 +6,6 @@ import java.lang.foreign.MemorySegment
 
 public typealias WindowId = Long
 
-public enum class DragAction {
-    Copy,
-    Move,
-    Ask,
-    ;
-
-    internal companion object
-}
-
 public class Window internal constructor(
     private val appPtr: MemorySegment,
     params: WindowParams,
@@ -135,10 +126,15 @@ public class Window internal constructor(
      * Later, [ApplicationConfig.getDataTransferData] may be called, with [DataSource.DragAndDrop] argument,
      * to actually get the data with the specified MIME type.
      */
-    public fun startDrag(mimeTypes: List<String>, action: DragAction) {
+    public fun startDragAndDrop(mimeTypes: List<String>, supportedActions: Set<DragAndDropAction>) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_linux_h.application_start_drag_and_drop(appPtr, windowId, mimeTypesToNative(arena, mimeTypes), action.toNative())
+                desktop_linux_h.application_start_drag_and_drop(
+                    appPtr,
+                    windowId,
+                    mimeTypesToNative(arena, mimeTypes),
+                    supportedActions.toNative(),
+                )
             }
         }
     }

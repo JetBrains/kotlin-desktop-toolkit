@@ -348,6 +348,14 @@ pub struct BorrowedArray<'a, T> {
     phantom: PhantomData<&'a T>,
 }
 
+impl<T> Drop for BorrowedArray<'_, T> {
+    fn drop(&mut self) {
+        if let Some(d) = self.deinit {
+            d(self.ptr, self.len);
+        }
+    }
+}
+
 impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
     pub fn from_slice(s: &'a [T]) -> Self {
         debug!("BorrowedArray::from_slice: {s:?}");
@@ -356,12 +364,6 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
             len: s.len(),
             deinit: None,
             phantom: PhantomData,
-        }
-    }
-
-    pub fn deinit(&self) {
-        if let Some(d) = self.deinit {
-            d(self.ptr, self.len);
         }
     }
 
