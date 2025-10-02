@@ -58,7 +58,7 @@ public enum class DataSource {
 
 public data class ApplicationConfig(
     val eventHandler: EventHandler,
-    val getDragAndDropSupportedMimeTypes: (DragAndDropQueryData) -> List<String>,
+    val queryDragAndDropTarget: (DragAndDropQueryData) -> DragAndDropQueryResponse,
     val getDataTransferData: (DataSource, String) -> ByteArray?,
 )
 
@@ -108,21 +108,17 @@ public class Application : AutoCloseable {
     private fun onGetDataTransferData(nativeDataSource: Int, nativeMimeType: MemorySegment): MemorySegment {
         val dataSource = DataSource.fromNative(nativeDataSource)
         val mimeType = nativeMimeType.getUtf8String(0)
-        return ffiUpCall(defaultResult = MemorySegment.NULL) {
-            val result = applicationConfig?.getDataTransferData(dataSource, mimeType)
-            val arena = Arena.ofConfined()
-            val nativeResult = result.toNative(arena)
-            nativeResult
-        }
+        val result = applicationConfig?.getDataTransferData(dataSource, mimeType)
+        return result.toNative()
     }
 
     // called from native
-    private fun onGetDragAndDropSupportedMimeTypes(nativeQueryData: MemorySegment): MemorySegment {
+    private fun onQueryDragAndDropTarget(nativeQueryData: MemorySegment): MemorySegment {
         val queryData = DragAndDropQueryData.fromNative(nativeQueryData)
-        return ffiUpCall(defaultResult = MemorySegment.NULL) {
-            val result = applicationConfig?.getDragAndDropSupportedMimeTypes(queryData) ?: emptyList()
-            mimeTypesToNative(result)
-        }
+        val result = applicationConfig?.queryDragAndDropTarget(queryData) ?: DragAndDropQueryResponse(
+            supportedActionsPerMime = emptyList(),
+        )
+        return result.toNative()
     }
 
     public fun runEventLoop(applicationConfig: ApplicationConfig) {
@@ -156,9 +152,9 @@ public class Application : AutoCloseable {
         val arena = Arena.global()
         val callbacks = NativeApplicationCallbacks.allocate(arena)
         NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
-        NativeApplicationCallbacks.get_drag_and_drop_supported_mime_types(
+        NativeApplicationCallbacks.query_drag_and_drop_target(
             callbacks,
-            NativeApplicationCallbacks.get_drag_and_drop_supported_mime_types.allocate(::onGetDragAndDropSupportedMimeTypes, arena),
+            NativeApplicationCallbacks.query_drag_and_drop_target.allocate(::onQueryDragAndDropTarget, arena),
         )
         NativeApplicationCallbacks.get_data_transfer_data(
             callbacks,

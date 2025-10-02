@@ -11,7 +11,7 @@ use desktop_common::{
 use enumflags2::{BitFlag, BitFlags, bitflags};
 
 use crate::linux::{
-    application_api::DataSource,
+    application_api::{DataSource, DragAndDropAction},
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
@@ -172,9 +172,23 @@ impl From<DragAndDropLeaveEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct DragAndDropFinishedEvent {
+    pub window_id: WindowId,
+    pub action: DragAndDropAction,
+}
+
+impl From<DragAndDropFinishedEvent> for Event<'_> {
+    fn from(value: DragAndDropFinishedEvent) -> Self {
+        Self::DragAndDropFinished(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct DropPerformedEvent<'a> {
     pub window_id: WindowId,
     pub content: DataTransferContent<'a>,
+    pub action: DragAndDropAction,
 }
 
 impl<'a> From<DropPerformedEvent<'a>> for Event<'a> {
@@ -594,6 +608,9 @@ pub enum Event<'a> {
 
     /// Drag&drop targeting our application left the specified window.
     DragAndDropLeave(DragAndDropLeaveEvent),
+
+    /// Drag&drop that was initiated from our window has finished.
+    DragAndDropFinished(DragAndDropFinishedEvent),
 
     /// Drag&drop targeting our window is finished, and we received data from it.
     DropPerformed(DropPerformedEvent<'a>),

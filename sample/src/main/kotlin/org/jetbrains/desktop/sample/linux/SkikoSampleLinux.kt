@@ -6,8 +6,9 @@ import org.jetbrains.desktop.linux.ColorSchemeValue
 import org.jetbrains.desktop.linux.DataSource
 import org.jetbrains.desktop.linux.DataTransferContent
 import org.jetbrains.desktop.linux.DesktopTitlebarAction
-import org.jetbrains.desktop.linux.DragAction
+import org.jetbrains.desktop.linux.DragAndDropAction
 import org.jetbrains.desktop.linux.DragAndDropQueryData
+import org.jetbrains.desktop.linux.DragAndDropQueryResponse
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.FileDialog
@@ -28,6 +29,8 @@ import org.jetbrains.desktop.linux.PhysicalPoint
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.PointerShape
 import org.jetbrains.desktop.linux.RenderingMode
+import org.jetbrains.desktop.linux.StartDragAndDropParams
+import org.jetbrains.desktop.linux.SupportedActionsForMime
 import org.jetbrains.desktop.linux.TextInputContentPurpose
 import org.jetbrains.desktop.linux.TextInputContext
 import org.jetbrains.desktop.linux.Window
@@ -207,7 +210,7 @@ private interface ClipboardHandler {
     fun copyToPrimarySelection(content: DataTransferContentType)
     fun paste(supportedMimeTypes: List<String>)
     fun pasteFromPrimarySelection(supportedMimeTypes: List<String>)
-    fun startDrag(content: DataTransferContentType, action: DragAction)
+    fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams)
 }
 
 private class EditorState {
@@ -571,6 +574,15 @@ private class EditorState {
         return EventHandlerResult.Stop
     }
 
+    fun onDragAndDropFinished(action: DragAndDropAction?): EventHandlerResult {
+        if (action == DragAndDropAction.Move) {
+            deleteSelection()
+            selectionStartOffset = null
+            selectionEndOffset = null
+        }
+        return EventHandlerResult.Stop
+    }
+
     fun onTextInputAvailability(event: Event.TextInputAvailability, app: Application): EventHandlerResult {
         if (event.available) {
             app.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
@@ -682,19 +694,24 @@ private class ContentArea(
     ): EventHandlerResult {
         return when (event.button) {
             MouseButton.LEFT -> when (modifiers.shortcutModifiers()) {
-                setOf(KeyModifiers.Shift) -> {
-                    clipboardHandler.startDrag(DataTransferContentType.UriList(EXAMPLE_FILES), DragAction.Move)
-                    EventHandlerResult.Stop
-                }
-
-                setOf(KeyModifiers.Control) -> {
-                    clipboardHandler.startDrag(DataTransferContentType.UriList(EXAMPLE_FILES), DragAction.Copy)
+                setOf(KeyModifiers.Alt) -> {
+                    val content = DataTransferContentType.UriList(EXAMPLE_FILES)
+                    val startDragAndDropParams = StartDragAndDropParams(
+                        mimeTypes = content.mimeTypes(),
+                        actions = setOf(DragAndDropAction.Copy),
+                    )
+                    clipboardHandler.startDrag(content, startDragAndDropParams)
                     EventHandlerResult.Stop
                 }
 
                 else -> {
                     editorState.getCurrentSelection()?.let {
-                        clipboardHandler.startDrag(DataTransferContentType.Text(it), DragAction.Copy)
+                        val content = DataTransferContentType.Text(it)
+                        val startDragAndDropParams = StartDragAndDropParams(
+                            mimeTypes = content.mimeTypes(),
+                            actions = setOf(DragAndDropAction.Copy, DragAndDropAction.Move),
+                        )
+                        clipboardHandler.startDrag(content, startDragAndDropParams)
                         EventHandlerResult.Stop
                     } ?: EventHandlerResult.Continue
                 }
@@ -1073,12 +1090,40 @@ private class RotatingBallWindow(
         windowContainer.settingsChanged(xdgDesktopSettings, windowState)
     }
 
-    fun getDragAndDropSupportedMimeTypes(point: LogicalPoint): List<String> {
-        return if (point.x < windowContainer.contentArea.size.width / 2) {
-            listOf(URI_LIST_MIME_TYPE, TEXT_MIME_TYPE)
+    fun queryDragAndDropTarget(locationInWindow: LogicalPoint): DragAndDropQueryResponse {
+        val response = if (locationInWindow.x < windowContainer.contentArea.size.width / 2) {
+            DragAndDropQueryResponse(
+                supportedActionsPerMime = listOf(
+                    SupportedActionsForMime(
+                        supportedMimeType = URI_LIST_MIME_TYPE,
+                        supportedActions = setOf(DragAndDropAction.Copy),
+                        preferredAction = DragAndDropAction.Copy,
+                    ),
+                    SupportedActionsForMime(
+                        supportedMimeType = TEXT_MIME_TYPE,
+                        supportedActions = setOf(DragAndDropAction.Copy, DragAndDropAction.Move),
+                        preferredAction = DragAndDropAction.Copy,
+                    ),
+                ),
+            )
         } else {
-            listOf(TEXT_MIME_TYPE, URI_LIST_MIME_TYPE)
+            DragAndDropQueryResponse(
+                supportedActionsPerMime = listOf(
+                    SupportedActionsForMime(
+                        supportedMimeType = TEXT_MIME_TYPE,
+                        supportedActions = setOf(DragAndDropAction.Copy, DragAndDropAction.Move),
+                        preferredAction = DragAndDropAction.Copy,
+                    ),
+                    SupportedActionsForMime(
+                        supportedMimeType = URI_LIST_MIME_TYPE,
+                        supportedActions = setOf(DragAndDropAction.Copy),
+                        preferredAction = DragAndDropAction.Copy,
+                    ),
+                ),
+            )
         }
+
+        return response
     }
 
     override fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long) {
@@ -1104,6 +1149,10 @@ private class RotatingBallWindow(
         return content?.let {
             editorState.onDataTransfer(it, app)
         } ?: EventHandlerResult.Stop
+    }
+
+    fun onDragAndDropFinished(action: DragAndDropAction?): EventHandlerResult {
+        return editorState.onDragAndDropFinished(action)
     }
 
     fun onMouseMoved(event: Event.MouseMoved): EventHandlerResult {
@@ -1215,9 +1264,9 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 app.primarySelectionPaste(currentClipboardPasteSerial, supportedMimeTypes)
             }
 
-            override fun startDrag(content: DataTransferContentType, action: DragAction) {
+            override fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams) {
                 currentDragContent = content
-                window.window.startDrag(content.mimeTypes(), action)
+                window.window.startDragAndDrop(params)
             }
         }
     }
@@ -1272,6 +1321,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 windows[event.windowId]?.onDataTransfer(event.content, app) ?: EventHandlerResult.Continue
             }
             is Event.DragAndDropLeave -> EventHandlerResult.Stop
+            is Event.DragAndDropFinished -> windows[event.windowId]?.onDragAndDropFinished(event.action) ?: EventHandlerResult.Continue
             is Event.DataTransferCancelled -> {
                 onDataTransferCancelled(event.dataSource)
                 EventHandlerResult.Stop
@@ -1336,8 +1386,8 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         windows.values.forEach { it.settingsChanged(xdgDesktopSettings) }
     }
 
-    fun getDragAndDropSupportedMimeTypes(queryData: DragAndDropQueryData): List<String> {
-        return windows[queryData.windowId]!!.getDragAndDropSupportedMimeTypes(queryData.point)
+    fun queryDragAndDropTarget(queryData: DragAndDropQueryData): DragAndDropQueryResponse {
+        return windows[queryData.windowId]!!.queryDragAndDropTarget(queryData.locationInWindow)
     }
 
     fun getDataTransferData(dataSource: DataSource, mimeType: String): ByteArray {
@@ -1397,8 +1447,8 @@ fun main(args: Array<String>) {
         app.runEventLoop(
             ApplicationConfig(
                 eventHandler = { state.handleEvent(it) },
-                getDragAndDropSupportedMimeTypes = { queryData ->
-                    state.getDragAndDropSupportedMimeTypes(queryData)
+                queryDragAndDropTarget = { queryData ->
+                    state.queryDragAndDropTarget(queryData)
                 },
                 getDataTransferData = { dataSource, mimeType ->
                     state.getDataTransferData(dataSource, mimeType)

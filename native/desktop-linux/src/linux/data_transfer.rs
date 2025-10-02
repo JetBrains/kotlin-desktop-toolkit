@@ -29,13 +29,50 @@ use smithay_client_toolkit::{
 };
 
 use crate::linux::{
-    application_api::{DataSource, DragAndDropQueryData},
+    application_api::{DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData},
     application_state::ApplicationState,
-    events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent, DragAndDropLeaveEvent, DropPerformedEvent},
+    events::{
+        DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent, DragAndDropFinishedEvent, DragAndDropLeaveEvent,
+        DropPerformedEvent, WindowId,
+    },
 };
 
 delegate_data_device!(ApplicationState);
 delegate_primary_selection!(ApplicationState);
+
+impl From<DragAndDropAction> for DndAction {
+    fn from(value: DragAndDropAction) -> Self {
+        match value {
+            DragAndDropAction::None => Self::None,
+            DragAndDropAction::Copy => Self::Copy,
+            DragAndDropAction::Move => Self::Move,
+        }
+    }
+}
+
+impl From<DragAndDropActions> for DndAction {
+    fn from(value: DragAndDropActions) -> Self {
+        Self::from_bits_truncate(value.0.into())
+    }
+}
+
+impl From<DndAction> for DragAndDropAction {
+    fn from(value: DndAction) -> Self {
+        match value {
+            DndAction::None => Self::None,
+            DndAction::Copy => Self::Copy,
+            DndAction::Move => Self::Move,
+            DndAction::Ask => Self::Copy, // TODO
+            _ => Self::None,
+        }
+    }
+}
+
+struct DragOfferMimetypeAndActions {
+    pub mime_type: Option<String>,
+    pub supported_actions: DndAction,
+    pub preferred_action: DndAction,
+}
 
 #[must_use]
 pub fn read_from_pipe<'l, F>(
@@ -74,62 +111,75 @@ where
 }
 
 impl ApplicationState {
-    fn on_drag_enter_or_move(&mut self, data_device: &WlDataDevice, x: f64, y: f64) {
-        let Some(drag_offer) = data_device.data::<DataDeviceData>().and_then(DataDeviceData::drag_offer) else {
-            return;
-        };
-        let Some(window_id) = self.get_window_id(&drag_offer.surface) else {
-            warn!("Drop handler: couldn't find window for {:?}", drag_offer.surface);
-            return;
-        };
-
-        self.drag_destination_mime_type = drag_offer.with_mime_types(|mime_types| {
+    #[must_use]
+    fn get_drag_offer_actions(&self, drag_offer: &DragOffer, x: f64, y: f64, window_id: WindowId) -> DragOfferMimetypeAndActions {
+        drag_offer.with_mime_types(|mime_types| {
             debug!("Drop handler: {x}x{y}, mime_types={mime_types:?}");
 
             let drag_and_drop_query_data = DragAndDropQueryData {
                 window_id,
-                point: (x, y).into(),
+                location_in_window: (x, y).into(),
             };
-            let supported_mime_types = (self.callbacks.get_drag_and_drop_supported_mime_types)(&drag_and_drop_query_data);
+            let target_info = (self.callbacks.query_drag_and_drop_target)(&drag_and_drop_query_data);
 
-            supported_mime_types
-                .as_str()
+            let supported_mime_with_actions = target_info
+                .supported_actions_per_mime
+                .as_slice()
                 .unwrap()
-                .split(',')
-                .find(|supported_mime_type| mime_types.iter().any(|s| s == supported_mime_type))
-                .map(str::to_owned)
-        });
-        drag_offer.accept_mime_type(0, self.drag_destination_mime_type.clone());
-        if self.drag_destination_mime_type.is_some() {
-            // Accept the action
-            drag_offer.set_actions(DndAction::Copy, DndAction::Copy);
-        }
+                .iter()
+                .find(|&e| mime_types.iter().any(|s| s == e.supported_mime_type.as_str().unwrap()));
+
+            debug!("query_drag_and_drop_target -> {target_info:?}, supported_mime_with_actions={supported_mime_with_actions:?}");
+
+            if let Some(v) = supported_mime_with_actions {
+                DragOfferMimetypeAndActions {
+                    mime_type: Some(v.supported_mime_type.as_str().unwrap().to_owned()),
+                    supported_actions: v.supported_actions.into(),
+                    preferred_action: v.preferred_action.into(),
+                }
+            } else {
+                DragOfferMimetypeAndActions {
+                    mime_type: None,
+                    supported_actions: DndAction::None,
+                    preferred_action: DndAction::None,
+                }
+            }
+        })
+    }
+
+    #[must_use]
+    fn on_drag_enter_or_move(&self, data_device: &WlDataDevice, x: f64, y: f64, wl_surface: Option<&WlSurface>) -> Option<WindowId> {
+        let drag_offer = data_device.data::<DataDeviceData>().and_then(DataDeviceData::drag_offer)?;
+        let surface = wl_surface.unwrap_or(&drag_offer.surface);
+        let Some(window_id) = self.get_window_id(surface) else {
+            warn!("Drop handler: couldn't find window for {surface:?}");
+            return None;
+        };
+        let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, x, y, window_id);
+        drag_offer.set_actions(mime_type_and_actions.supported_actions, mime_type_and_actions.preferred_action);
+        drag_offer.accept_mime_type(drag_offer.serial, mime_type_and_actions.mime_type);
+        Some(window_id)
     }
 }
 
 impl DataDeviceHandler for ApplicationState {
     fn enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice, x: f64, y: f64, wl_surface: &WlSurface) {
         debug!("DataDeviceHandler::enter: {}, {x}x{y}", wl_surface.id());
-        self.on_drag_enter_or_move(data_device, x, y);
-    }
-
-    fn leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice) {
-        debug!("DataDeviceHandler::leave");
-        self.drag_destination_mime_type = None;
-        // TODO: add event
-        let Some(drag_offer) = data_device.data::<DataDeviceData>().and_then(DataDeviceData::drag_offer) else {
-            debug!("DataDeviceHandler::leave: no drag offer");
-            return;
-        };
-        let Some(window_id) = self.get_window_id(&drag_offer.surface) else {
-            warn!("DataDeviceHandler::leave: couldn't find window for {:?}", drag_offer.surface);
-            return;
-        };
-        self.send_event(DragAndDropLeaveEvent { window_id });
+        self.current_drag_target_window_id = self.on_drag_enter_or_move(data_device, x, y, Some(wl_surface));
     }
 
     fn motion(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice, x: f64, y: f64) {
-        self.on_drag_enter_or_move(data_device, x, y);
+        debug!("DataDeviceHandler::motion: {x}x{y}");
+        self.current_drag_target_window_id = self.on_drag_enter_or_move(data_device, x, y, None);
+    }
+
+    fn leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice) {
+        debug!("DataDeviceHandler::leave");
+        // DataDeviceData::drag_offer is always None here
+
+        if let Some(window_id) = self.current_drag_target_window_id.take() {
+            self.send_event(DragAndDropLeaveEvent { window_id });
+        }
     }
 
     fn selection(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice) {
@@ -144,23 +194,29 @@ impl DataDeviceHandler for ApplicationState {
     }
 
     fn drop_performed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice) {
+        self.current_drag_target_window_id = None;
+
         let Some(drag_offer) = data_device.data::<DataDeviceData>().and_then(DataDeviceData::drag_offer) else {
             debug!("DataDeviceHandler::drop_performed: no drag offer");
             return;
         };
-
+        let x = drag_offer.x;
+        let y = drag_offer.y;
         let surface = &drag_offer.surface;
+        let action = drag_offer.selected_action;
 
         let Some(window_id) = self.get_window_id(surface) else {
             warn!("DataDeviceHandler::drop_performed: couldn't find window for {surface:?}");
             return;
         };
 
-        let Some(mime_type) = self.drag_destination_mime_type.take() else {
+        let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, x, y, window_id);
+        let Some(mime_type) = mime_type_and_actions.mime_type else {
             debug!("DataDeviceHandler::drop_performed: no matching MIME type");
             self.send_event(DropPerformedEvent {
                 window_id,
                 content: DataTransferContent::null(),
+                action: DragAndDropAction::None,
             });
             return;
         };
@@ -172,6 +228,7 @@ impl DataDeviceHandler for ApplicationState {
                 self.send_event(DropPerformedEvent {
                     window_id,
                     content: DataTransferContent::null(),
+                    action: DragAndDropAction::None,
                 });
                 return;
             }
@@ -185,12 +242,17 @@ impl DataDeviceHandler for ApplicationState {
             move |state, content| {
                 drag_offer.finish();
                 drag_offer.destroy();
-                state.send_event(DropPerformedEvent { window_id, content });
+                state.send_event(DropPerformedEvent {
+                    window_id,
+                    content,
+                    action: action.into(),
+                });
             },
         ) {
             self.send_event(DropPerformedEvent {
                 window_id,
                 content: DataTransferContent::null(),
+                action: DragAndDropAction::None,
             });
         }
     }
@@ -225,7 +287,6 @@ impl DataSourceHandler for ApplicationState {
         match data.as_slice() {
             Ok(slice) => {
                 fd.write_all(slice).expect("Write to data source failed");
-                data.deinit();
             }
             Err(e) => error!("Error sending clipboard data: {e}"),
         }
@@ -238,6 +299,8 @@ impl DataSourceHandler for ApplicationState {
             Some(DataSource::Clipboard)
         } else if self.drag_source.as_ref().map(DragSource::inner) == Some(source) {
             self.drag_source = None;
+            self.current_drag_source_window_id = None;
+            self.current_drag_source_action = None;
             Some(DataSource::DragAndDrop)
         } else {
             None
@@ -249,16 +312,22 @@ impl DataSourceHandler for ApplicationState {
 
     fn dnd_dropped(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {
         debug!("DataSourceHandler::dnd_dropped");
-        self.drag_destination_mime_type = None;
     }
 
     fn dnd_finished(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {
         debug!("DataSourceHandler::dnd_finished");
-        self.drag_destination_mime_type = None;
+        self.drag_source = None;
+        let window_id = self.current_drag_source_window_id.take().unwrap();
+        let action = self.current_drag_source_action.take().unwrap();
+        self.send_event(DragAndDropFinishedEvent {
+            window_id,
+            action: action.into(),
+        });
     }
 
     fn action(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource, action: DndAction) {
         debug!("DataSourceHandler::action: {action:?}");
+        self.current_drag_source_action = Some(action);
     }
 }
 
@@ -303,7 +372,6 @@ impl PrimarySelectionSourceHandler for ApplicationState {
         match data.as_slice() {
             Ok(slice) => {
                 write_pipe.write_all(slice).expect("Write to data source failed");
-                data.deinit();
             }
             Err(e) => error!("Error sending clipboard data: {e}"),
         }

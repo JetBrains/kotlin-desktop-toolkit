@@ -363,14 +363,19 @@ impl Application {
             self.state.drag_source = None;
             return Ok(());
         }
-        let w = self
+
+        let origin = self
             .get_window(window_id)
-            .with_context(|| format!("No window found {window_id:?}"))?;
+            .with_context(|| format!("No window found {window_id:?}"))?
+            .window
+            .wl_surface();
+
         let drag_source = self
             .state
             .data_device_manager_state
             .create_drag_and_drop_source(&self.qh, mime_types.val, action);
-        let d = self.state.data_device.as_ref().context("No data device found")?;
+
+        let device = self.state.data_device.as_ref().context("No data device found")?;
 
         // Required to have a mouse button pressed serial, e.g.
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-data-device.c#L894
@@ -379,7 +384,8 @@ impl Application {
             .get_latest_pointer_button_seat_and_serial()
             .context("Called start_drag without an implicit grab")?;
 
-        d.inner().start_drag(Some(drag_source.inner()), w.window.wl_surface(), None, serial);
+        drag_source.start_drag(device, origin, None, serial);
+        self.state.current_drag_source_window_id = Some(window_id);
         self.state.drag_source = Some(drag_source);
 
         Ok(())

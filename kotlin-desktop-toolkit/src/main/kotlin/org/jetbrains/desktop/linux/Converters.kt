@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.linux
 
+import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_SupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
@@ -8,8 +9,10 @@ import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailableEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferCancelledEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferEvent
+import org.jetbrains.desktop.linux.generated.NativeDragAndDropFinishedEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
+import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryResponse
 import org.jetbrains.desktop.linux.generated.NativeDropPerformedEvent
 import org.jetbrains.desktop.linux.generated.NativeEvent
 import org.jetbrains.desktop.linux.generated.NativeFileChooserResponse
@@ -30,6 +33,7 @@ import org.jetbrains.desktop.linux.generated.NativeSaveFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeScrollData
 import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.linux.generated.NativeSoftwareDrawData
+import org.jetbrains.desktop.linux.generated.NativeSupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeTextInputAvailabilityEvent
 import org.jetbrains.desktop.linux.generated.NativeTextInputContext
 import org.jetbrains.desktop.linux.generated.NativeTextInputDeleteSurroundingTextData
@@ -49,6 +53,7 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemoryLayout
 import java.lang.foreign.MemorySegment
 import kotlin.experimental.and
+import kotlin.experimental.or
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
@@ -425,7 +430,8 @@ internal fun mimeTypesToNative(arena: Arena, mimeTypes: List<String>): MemorySeg
     return arena.allocateUtf8String(mimeTypes.joinToString(","))
 }
 
-internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
+internal fun ByteArray?.toNative(): MemorySegment {
+    val arena = Arena.ofConfined()
     val nativeDataArray = NativeBorrowedArray_u8.allocate(arena)
     if (this == null) {
         NativeBorrowedArray_u8.len(nativeDataArray, 0)
@@ -453,14 +459,60 @@ internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
 internal fun DragAndDropQueryData.Companion.fromNative(s: MemorySegment): DragAndDropQueryData {
     return DragAndDropQueryData(
         windowId = NativeDragAndDropQueryData.window_id(s),
-        point = LogicalPoint.fromNative(NativeDragAndDropQueryData.point(s)),
+        locationInWindow = LogicalPoint.fromNative(NativeDragAndDropQueryData.location_in_window(s)),
     )
 }
 
-internal fun DragAction.toNative(): Int = when (this) {
-    DragAction.Copy -> desktop_linux_h.NativeDragAction_Copy()
-    DragAction.Move -> desktop_linux_h.NativeDragAction_Move()
-    DragAction.Ask -> desktop_linux_h.NativeDragAction_Ask()
+internal fun DragAndDropAction?.toNative(): Byte = when (this) {
+    null -> desktop_linux_h.NativeDragAndDropAction_None()
+    DragAndDropAction.Copy -> desktop_linux_h.NativeDragAndDropAction_Copy()
+    DragAndDropAction.Move -> desktop_linux_h.NativeDragAndDropAction_Move()
+}.toByte()
+
+internal fun DragAndDropAction.Companion.fromNative(nativeVal: Int): DragAndDropAction? = when (nativeVal) {
+    desktop_linux_h.NativeDragAndDropAction_None() -> null
+    desktop_linux_h.NativeDragAndDropAction_Copy() -> DragAndDropAction.Copy
+    desktop_linux_h.NativeDragAndDropAction_Move() -> DragAndDropAction.Move
+    else -> null
+}
+
+internal fun Set<DragAndDropAction>.toNative(): Byte {
+    var result = desktop_linux_h.NativeDragAndDropAction_None().toByte()
+    for (e in this) {
+        result = result or e.toNative()
+    }
+    return result
+}
+
+internal fun SupportedActionsForMime.toNative(result: MemorySegment, arena: Arena) {
+    NativeSupportedActionsForMime.supported_mime_type(result, arena.allocateUtf8String(supportedMimeType))
+    NativeSupportedActionsForMime.supported_actions(result, supportedActions.toNative())
+    NativeSupportedActionsForMime.preferred_action(result, preferredAction.toNative())
+}
+
+internal fun DragAndDropQueryResponse.toNative(): MemorySegment {
+    val arena = Arena.ofConfined()
+    val result = NativeDragAndDropQueryResponse.allocate(arena)
+
+    val nativeDataArray = NativeBorrowedArray_SupportedActionsForMime.allocate(arena)
+    NativeBorrowedArray_SupportedActionsForMime.len(nativeDataArray, supportedActionsPerMime.size.toLong())
+    val nativeArray = NativeSupportedActionsForMime.allocateArray(supportedActionsPerMime.size.toLong(), arena)
+    supportedActionsPerMime.forEachIndexed { i, element ->
+        element.toNative(NativeSupportedActionsForMime.asSlice(nativeArray, i.toLong()), arena)
+    }
+
+    NativeBorrowedArray_SupportedActionsForMime.ptr(nativeDataArray, nativeArray)
+
+    NativeBorrowedArray_SupportedActionsForMime.deinit(
+        nativeDataArray,
+        NativeBorrowedArray_SupportedActionsForMime.deinit.allocate({ _, _ ->
+            arena.close()
+        }, arena),
+    )
+
+    NativeDragAndDropQueryResponse.supported_actions_per_mime(result, nativeDataArray)
+
+    return result
 }
 
 internal fun ScrollData.Companion.fromNative(s: MemorySegment): ScrollData {
@@ -536,6 +588,14 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.DropPerformed(
                 windowId = NativeDropPerformedEvent.window_id(nativeEvent),
                 content = DataTransferContent.fromNative(NativeDropPerformedEvent.content(nativeEvent)),
+                action = DragAndDropAction.fromNative(NativeDropPerformedEvent.action(nativeEvent).toInt()),
+            )
+        }
+        desktop_linux_h.NativeEvent_DragAndDropFinished() -> {
+            val nativeEvent = NativeEvent.drag_and_drop_finished(s)
+            Event.DragAndDropFinished(
+                windowId = NativeDragAndDropFinishedEvent.window_id(nativeEvent),
+                action = DragAndDropAction.fromNative(NativeDragAndDropFinishedEvent.action(nativeEvent).toInt()),
             )
         }
         desktop_linux_h.NativeEvent_FileChooserResponse() -> {
