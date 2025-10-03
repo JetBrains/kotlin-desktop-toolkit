@@ -21,13 +21,19 @@ public typealias EventHandler = (Event) -> EventHandlerResult
 
 public class CustomTitlebarParams
 
+public enum class RenderingMode {
+    Auto,
+    Software,
+    EGL,
+}
+
 public data class WindowParams(
     val windowId: WindowId,
     val appId: String,
     val title: String,
     val size: LogicalSize? = null,
     val preferClientSideDecoration: Boolean = false,
-    val forceSoftwareRendering: Boolean = false,
+    val renderingMode: RenderingMode = RenderingMode.Auto,
 ) {
     internal fun toNative(arena: Arena): MemorySegment {
         val nativeWindowParams = NativeWindowParams.allocate(arena)
@@ -35,7 +41,7 @@ public data class WindowParams(
         NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
         NativeWindowParams.app_id(nativeWindowParams, arena.allocateUtf8String(appId))
         NativeWindowParams.prefer_client_side_decoration(nativeWindowParams, preferClientSideDecoration)
-        NativeWindowParams.force_software_rendering(nativeWindowParams, forceSoftwareRendering)
+        NativeWindowParams.rendering_mode(nativeWindowParams, renderingMode.toNative())
         NativeWindowParams.window_id(nativeWindowParams, windowId)
         return nativeWindowParams
     }

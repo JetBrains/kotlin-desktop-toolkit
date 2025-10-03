@@ -10,7 +10,7 @@ use smithay_client_toolkit::shell::xdg::window::DecorationMode;
 use super::window::SimpleWindow;
 use crate::linux::{
     application::Application,
-    application_api::AppPtr,
+    application_api::{AppPtr, RenderingMode},
     async_event_result::AsyncEventResult,
     events::{RequestId, WindowDecorationMode, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
@@ -62,7 +62,7 @@ pub struct WindowParams<'a> {
 
     pub prefer_client_side_decoration: bool,
 
-    pub force_software_rendering: bool,
+    pub rendering_mode: RenderingMode,
 }
 
 #[unsafe(no_mangle)]

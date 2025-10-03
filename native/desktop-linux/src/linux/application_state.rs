@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 
 use desktop_common::logger::catch_panic;
 use khronos_egl;
@@ -22,6 +22,7 @@ use smithay_client_toolkit::{
             delegate_noop,
             globals::GlobalList,
             protocol::{
+                wl_display::WlDisplay,
                 wl_keyboard::WlKeyboard,
                 wl_output::{self, WlOutput},
                 wl_seat::WlSeat,
@@ -55,7 +56,7 @@ use smithay_client_toolkit::{
 };
 
 use crate::linux::{
-    application_api::ApplicationCallbacks,
+    application_api::{ApplicationCallbacks, RenderingMode},
     events::{
         Event, ScreenId, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDrawEvent, WindowId,
         WindowScaleChangedEvent, WindowScreenChangeEvent,
@@ -68,6 +69,28 @@ use crate::linux::{
 /// cbindgen:ignore
 pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
 
+/// cbindgen:ignore
+static EGL: LazyLock<Option<EglInstance>> = LazyLock::new(|| match unsafe { libloading::Library::new("libEGL.so.1") } {
+    Ok(egl_lib) => match unsafe { EglInstance::load_required_from(egl_lib) } {
+        Ok(egl) => Some(egl),
+        Err(e) => {
+            warn!("Failed to load the required symbols from the EGL library: {e}");
+            None
+        }
+    },
+    Err(e) => {
+        warn!("Failed to load EGL: {e}");
+        None
+    }
+});
+
+pub fn get_egl() -> Option<&'static EglInstance> {
+    match &*EGL {
+        Some(v) => Some(v),
+        None => None,
+    }
+}
+
 pub struct ApplicationState {
     pub callbacks: ApplicationCallbacks,
 
@@ -78,6 +101,7 @@ pub struct ApplicationState {
     pub compositor_state: CompositorState,
     pub shm_state: Shm,
     pub xdg_shell_state: XdgShell,
+    pub wl_display: WlDisplay,
     pub keyboard: Option<WlKeyboard>,
     cursor_theme: Option<(String, u32)>,
     pub themed_pointer: Option<ThemedPointer>,
@@ -98,7 +122,6 @@ pub struct ApplicationState {
     pub last_keyboard_event_serial: Option<u32>,
     pub active_text_input: Option<ZwpTextInputV3>,
     pub pending_text_input_event: PendingTextInputEvent,
-    pub egl: Option<EglInstance>,
 }
 
 impl ApplicationState {
@@ -108,6 +131,7 @@ impl ApplicationState {
         qh: &QueueHandle<Self>,
         callbacks: ApplicationCallbacks,
         loop_handle: LoopHandle<'static, Self>,
+        display: WlDisplay,
     ) -> Self {
         let registry_state = RegistryState::new(globals);
         let seat_state = SeatState::new(globals, qh);
@@ -115,10 +139,6 @@ impl ApplicationState {
         let compositor_state = CompositorState::bind(globals, qh).expect("wl_compositor not available");
         let shm_state = Shm::bind(globals, qh).expect("wl_shm not available");
         let xdg_shell_state = XdgShell::bind(globals, qh).expect("xdg shell not available");
-        let egl = unsafe { libloading::Library::new("libEGL.so.1") }
-            .map_err(|e| warn!("{e}"))
-            .and_then(|lib| unsafe { EglInstance::load_required_from(lib) }.map_err(|e| warn!("{e}")))
-            .ok();
         let data_device_manager_state = DataDeviceManagerState::bind(globals, qh).expect("wl_data_device not available");
 
         Self {
@@ -130,6 +150,7 @@ impl ApplicationState {
             compositor_state,
             shm_state,
             xdg_shell_state,
+            wl_display: display,
             keyboard: None,
             cursor_theme: None,
             themed_pointer: None,
@@ -149,7 +170,6 @@ impl ApplicationState {
             last_keyboard_event_serial: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
-            egl,
         }
     }
 
@@ -354,11 +374,12 @@ impl CompositorHandler for ApplicationState {
 
     fn transform_changed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, surface: &WlSurface, new_transform: wl_output::Transform) {
         debug!("transform_changed for {}: {new_transform:?}", surface.id());
+        // TODO?
     }
 
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, _time: u32) {
         if let Some(window) = self.windows.get_mut(&surface.id()) {
-            window.draw(conn, qh, self.themed_pointer.as_mut(), self.egl.as_ref(), &|e: WindowDrawEvent| {
+            window.draw(conn, qh, self.themed_pointer.as_mut(), &|e: WindowDrawEvent| {
                 self.callbacks.send_event(e.into())
             });
         }
@@ -392,8 +413,11 @@ impl WindowHandler for ApplicationState {
 
     fn configure(&mut self, conn: &Connection, qh: &QueueHandle<Self>, window: &Window, configure: WindowConfigure, _serial: u32) {
         if let Some(w) = self.windows.get_mut(&window.wl_surface().id()) {
-            let egl = self.egl.as_ref();
-            let is_first_configure = w.configure(conn, &self.shm_state, window, &configure, egl);
+            let egl = match w.rendering_mode {
+                RenderingMode::Auto | RenderingMode::EGL => get_egl(),
+                RenderingMode::Software => None,
+            };
+            let is_first_configure = w.configure(&self.wl_display, &self.shm_state, window, &configure, egl);
 
             self.callbacks.send_event(
                 WindowConfigureEvent {
@@ -415,7 +439,7 @@ impl WindowHandler for ApplicationState {
 
             if is_first_configure {
                 // Initiate the first draw.
-                w.draw(conn, qh, self.themed_pointer.as_mut(), egl, &|e: WindowDrawEvent| {
+                w.draw(conn, qh, self.themed_pointer.as_mut(), &|e: WindowDrawEvent| {
                     self.callbacks.send_event(e.into())
                 });
             }
@@ -436,7 +460,7 @@ delegate_noop!(ApplicationState: ignore WpViewport);
 
 impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
     fn event(
-        this: &mut Self,
+        state: &mut Self,
         _: &WpFractionalScaleV1,
         event: <WpFractionalScaleV1 as Proxy>::Event,
         surface_id: &ObjectId,
@@ -444,12 +468,12 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
         _: &QueueHandle<Self>,
     ) {
         if let wp_fractional_scale_v1::Event::PreferredScale { scale } = event {
-            debug!("wp_fractional_scale_v1::Event::PreferredScale: {scale}");
-            if let Some(window) = this.windows.get_mut(surface_id) {
-                let new_scale = f64::from(scale) / 120.0;
-                window.scale_changed(new_scale, &this.shm_state);
+            let new_scale = f64::from(scale) / 120.0;
+            debug!("wp_fractional_scale_v1::Event::PreferredScale: {scale}/120 ({new_scale})");
+            if let Some(window) = state.windows.get_mut(surface_id) {
+                window.scale_changed(new_scale, &state.shm_state);
 
-                this.callbacks.send_event(
+                state.callbacks.send_event(
                     WindowScaleChangedEvent {
                         window_id: window.window_id,
                         new_scale,

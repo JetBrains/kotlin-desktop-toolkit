@@ -9,13 +9,21 @@ use smithay_client_toolkit::reexports::client::protocol::wl_data_device_manager:
 
 use crate::linux::{
     application::Application,
-    application_state::EglInstance,
+    application_state::{EglInstance, get_egl},
     async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
     events::{EventHandler, WindowId},
     geometry::LogicalPoint,
     text_input_api::TextInputContext,
 };
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RenderingMode {
+    Auto,
+    Software,
+    EGL,
+}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -94,12 +102,11 @@ extern "C" fn egl_get_proc_address(ctx_ptr: BorrowedOpaquePtr<'_>, name_ptr: Bor
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_get_egl_proc_func(app_ptr: AppPtr<'_>) -> GetEglProcFuncData<'_> {
+pub extern "C" fn application_get_egl_proc_func(_app_ptr: AppPtr<'_>) -> GetEglProcFuncData<'_> {
     debug!("application_get_egl_proc_func");
-    let app = unsafe { app_ptr.borrow::<Application>() };
     GetEglProcFuncData {
         f: egl_get_proc_address,
-        ctx: BorrowedOpaquePtr::new(app.state.egl.as_ref()),
+        ctx: BorrowedOpaquePtr::new(get_egl()),
     }
 }
 

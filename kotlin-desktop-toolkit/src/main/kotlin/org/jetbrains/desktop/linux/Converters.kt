@@ -185,6 +185,12 @@ internal fun PointerShape.toNative(): Int {
     }
 }
 
+internal fun RenderingMode.toNative() = when (this) {
+    RenderingMode.Auto -> desktop_linux_h.NativeRenderingMode_Auto()
+    RenderingMode.Software -> desktop_linux_h.NativeRenderingMode_Software()
+    RenderingMode.EGL -> desktop_linux_h.NativeRenderingMode_EGL()
+}
+
 internal fun WindowCapabilities.Companion.fromNative(s: MemorySegment) = WindowCapabilities(
     windowMenu = NativeWindowCapabilities.window_menu(s),
     maximize = NativeWindowCapabilities.maximize(s),

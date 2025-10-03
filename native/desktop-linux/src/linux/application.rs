@@ -66,12 +66,13 @@ impl Application {
 
         let event_loop = EventLoop::<ApplicationState>::try_new()?;
         let loop_handle = event_loop.handle();
+        let wl_display = conn.display();
 
         WaylandSource::new(conn, event_queue)
             .insert(loop_handle)
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        let state = ApplicationState::new(&globals, &qh, callbacks, event_loop.handle());
+        let state = ApplicationState::new(&globals, &qh, callbacks, event_loop.handle(), wl_display);
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_io()
             .worker_threads(1)
@@ -380,6 +381,7 @@ impl Application {
 
         d.inner().start_drag(Some(drag_source.inner()), w.window.wl_surface(), None, serial);
         self.state.drag_source = Some(drag_source);
+
         Ok(())
     }
 }

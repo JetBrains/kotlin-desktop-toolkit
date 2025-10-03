@@ -12,10 +12,11 @@ use desktop_common::{
 };
 use desktop_linux::linux::{
     application_api::{
-        AppPtr, ApplicationCallbacks, DataSource, DragAction, DragAndDropQueryData, application_clipboard_paste, application_clipboard_put,
-        application_get_egl_proc_func, application_init, application_is_event_loop_thread, application_primary_selection_paste,
-        application_run_event_loop, application_set_cursor_theme, application_shutdown, application_start_drag_and_drop,
-        application_stop_event_loop, application_text_input_disable, application_text_input_enable, application_text_input_update,
+        AppPtr, ApplicationCallbacks, DataSource, DragAction, DragAndDropQueryData, RenderingMode, application_clipboard_paste,
+        application_clipboard_put, application_get_egl_proc_func, application_init, application_is_event_loop_thread,
+        application_primary_selection_paste, application_run_event_loop, application_set_cursor_theme, application_shutdown,
+        application_start_drag_and_drop, application_stop_event_loop, application_text_input_disable, application_text_input_enable,
+        application_text_input_update,
     },
     events::{
         DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, SoftwareDrawData, TextInputEvent, WindowDrawEvent,
@@ -407,7 +408,7 @@ fn on_application_started(state: &mut State) {
             title: BorrowedStrPtr::new(c"Window 1"),
             app_id: BorrowedStrPtr::new(APP_ID),
             prefer_client_side_decoration: false,
-            force_software_rendering: true,
+            rendering_mode: RenderingMode::Software,
         },
     );
     state.windows.insert(window_1_id, WindowState::default());
@@ -424,7 +425,7 @@ fn on_application_started(state: &mut State) {
             title: BorrowedStrPtr::new(c"Window 2"),
             app_id: BorrowedStrPtr::new(APP_ID),
             prefer_client_side_decoration: true,
-            force_software_rendering: false,
+            rendering_mode: RenderingMode::Auto,
         },
     );
     state.windows.insert(window_2_id, WindowState::default());
