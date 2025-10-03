@@ -51,6 +51,8 @@ pub enum InternalXdgDesktopSetting {
     OverlayScrolling(bool),
 
     AudibleBell(bool),
+
+    MiddleClickPaste(bool),
 }
 
 impl FontAntialiasing {
@@ -133,6 +135,7 @@ impl XdgDesktopSetting<'_> {
                 let cs = CString::new(v).unwrap();
                 f(XdgDesktopSetting::CursorTheme(BorrowedStrPtr::new(&cs)));
             }
+            InternalXdgDesktopSetting::MiddleClickPaste(v) => f(Self::MiddleClickPaste(v)),
         }
     }
 }
@@ -214,6 +217,7 @@ impl InternalXdgDesktopSetting {
                 "font-antialiasing" => Some(Self::FontAntialiasing(FontAntialiasing::parse(&read_string(value)?)?)),
                 "font-hinting" => Some(Self::FontHinting(FontHinting::parse(&read_string(value)?)?)),
                 "font-rgba-order" => Some(Self::FontRgbaOrder(FontRgbaOrder::parse(&read_string(value)?)?)),
+                "gtk-enable-primary-paste" => Some(Self::MiddleClickPaste(read_bool(value)?)),
                 _ => None,
             },
             GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE => match key {

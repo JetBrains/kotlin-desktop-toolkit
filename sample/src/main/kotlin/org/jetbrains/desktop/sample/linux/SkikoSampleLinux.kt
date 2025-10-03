@@ -163,6 +163,7 @@ internal data class XdgDesktopSettings(
     var actionDoubleClickTitlebar: DesktopTitlebarAction = DesktopTitlebarAction.ToggleMaximize,
     var actionMiddleClickTitlebar: DesktopTitlebarAction = DesktopTitlebarAction.None,
     var actionRightClickTitlebar: DesktopTitlebarAction = DesktopTitlebarAction.Menu,
+    var middleClickPaste: Boolean = true,
 ) {
     private fun colorDoubleToInt(v: Double): Int = (v * 255).roundToInt()
 
@@ -190,6 +191,7 @@ internal data class XdgDesktopSettings(
             is XdgDesktopSetting.ActionDoubleClickTitlebar -> actionDoubleClickTitlebar = s.value
             is XdgDesktopSetting.ActionMiddleClickTitlebar -> actionMiddleClickTitlebar = s.value
             is XdgDesktopSetting.ActionRightClickTitlebar -> actionRightClickTitlebar = s.value
+            is XdgDesktopSetting.MiddleClickPaste -> middleClickPaste = s.value
         }
     }
 }
@@ -970,6 +972,7 @@ private class WindowContainer(
         window: Window,
         editorState: EditorState,
         clipboardHandler: ClipboardHandler,
+        xdgDesktopSettings: XdgDesktopSettings,
     ): EventHandlerResult {
         if (customBorders?.onMouseDown(event, window) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
@@ -991,8 +994,12 @@ private class WindowContainer(
                 }
 
                 setOf(KeyModifiers.Shift) -> {
-                    clipboardHandler.pasteFromPrimarySelection(listOf(PNG_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
-                    EventHandlerResult.Stop
+                    if (xdgDesktopSettings.middleClickPaste) {
+                        clipboardHandler.pasteFromPrimarySelection(listOf(PNG_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                        EventHandlerResult.Stop
+                    } else {
+                        EventHandlerResult.Continue
+                    }
                 }
 
                 emptySet<KeyModifiers>() -> {
@@ -1136,8 +1143,12 @@ private class RotatingBallWindow(
         return windowContainer.onMouseExited()
     }
 
-    fun onMouseDown(event: Event.MouseDown, clipboardHandler: ClipboardHandler): EventHandlerResult {
-        return windowContainer.onMouseDown(event, window, editorState, clipboardHandler)
+    fun onMouseDown(
+        event: Event.MouseDown,
+        clipboardHandler: ClipboardHandler,
+        xdgDesktopSettings: XdgDesktopSettings,
+    ): EventHandlerResult {
+        return windowContainer.onMouseDown(event, window, editorState, clipboardHandler, xdgDesktopSettings)
     }
 
     fun onMouseUp(event: Event.MouseUp, xdgDesktopSettings: XdgDesktopSettings): EventHandlerResult {
@@ -1266,7 +1277,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 ?: EventHandlerResult.Continue
             is Event.KeyUp -> EventHandlerResult.Continue
             is Event.ModifiersChanged -> windows[keyWindowId]?.onModifiersChanged(event) ?: EventHandlerResult.Continue
-            is Event.MouseDown -> windows[event.windowId]?.onMouseDown(event, windowClipboardHandlers[event.windowId]!!)
+            is Event.MouseDown -> windows[event.windowId]?.onMouseDown(event, windowClipboardHandlers[event.windowId]!!, xdgDesktopSettings)
                 ?: EventHandlerResult.Continue
             is Event.MouseEntered -> windows[event.windowId]?.onMouseEntered() ?: EventHandlerResult.Continue
             is Event.MouseExited -> windows[event.windowId]?.onMouseExited() ?: EventHandlerResult.Continue

@@ -106,5 +106,7 @@ public sealed class XdgDesktopSetting {
 
     public data class AudibleBell(val value: Boolean) : XdgDesktopSetting()
 
+    public data class MiddleClickPaste(val value: Boolean) : XdgDesktopSetting()
+
     internal companion object;
 }

@@ -229,24 +229,29 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
         desktop_linux_h.NativeXdgDesktopSetting_TitlebarLayout() -> {
             XdgDesktopSetting.TitlebarLayout(NativeXdgDesktopSetting.titlebar_layout(s).getUtf8String(0))
         }
+
         desktop_linux_h.NativeXdgDesktopSetting_ActionDoubleClickTitlebar() -> {
             XdgDesktopSetting.ActionDoubleClickTitlebar(
                 DesktopTitlebarAction.fromNative(NativeXdgDesktopSetting.action_double_click_titlebar(s)),
             )
         }
+
         desktop_linux_h.NativeXdgDesktopSetting_ActionRightClickTitlebar() -> {
             XdgDesktopSetting.ActionRightClickTitlebar(
                 DesktopTitlebarAction.fromNative(NativeXdgDesktopSetting.action_right_click_titlebar(s)),
             )
         }
+
         desktop_linux_h.NativeXdgDesktopSetting_ActionMiddleClickTitlebar() -> {
             XdgDesktopSetting.ActionMiddleClickTitlebar(
                 DesktopTitlebarAction.fromNative(NativeXdgDesktopSetting.action_middle_click_titlebar(s)),
             )
         }
+
         desktop_linux_h.NativeXdgDesktopSetting_DoubleClickIntervalMs() -> XdgDesktopSetting.DoubleClickInterval(
             value = NativeXdgDesktopSetting.double_click_interval_ms(s).milliseconds,
         )
+
         desktop_linux_h.NativeXdgDesktopSetting_ColorScheme() -> XdgDesktopSetting.ColorScheme(
             when (NativeXdgDesktopSetting.color_scheme(s)) {
                 desktop_linux_h.NativeXdgDesktopColorScheme_NoPreference() -> ColorSchemeValue.NoPreference
@@ -255,9 +260,11 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
                 else -> error("Unexpected color scheme ${NativeXdgDesktopSetting.color_scheme(s)}")
             },
         )
+
         desktop_linux_h.NativeXdgDesktopSetting_AccentColor() -> XdgDesktopSetting.AccentColor(
             Color.fromNative(NativeXdgDesktopSetting.accent_color(s)),
         )
+
         desktop_linux_h.NativeXdgDesktopSetting_FontAntialiasing() -> XdgDesktopSetting.FontAntialiasing(
             when (NativeXdgDesktopSetting.font_antialiasing(s)) {
                 desktop_linux_h.NativeFontAntialiasing_None() -> FontAntialiasingValue.None
@@ -266,6 +273,7 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
                 else -> error("Unexpected font aliasing ${NativeXdgDesktopSetting.font_antialiasing(s)}")
             },
         )
+
         desktop_linux_h.NativeXdgDesktopSetting_FontHinting() -> XdgDesktopSetting.FontHinting(
             when (NativeXdgDesktopSetting.font_hinting(s)) {
                 desktop_linux_h.NativeFontHinting_None() -> FontHintingValue.None
@@ -275,6 +283,7 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
                 else -> error("Unexpected font hinting ${NativeXdgDesktopSetting.font_hinting(s)}")
             },
         )
+
         desktop_linux_h.NativeXdgDesktopSetting_FontRgbaOrder() -> XdgDesktopSetting.FontRgbaOrder(
             when (NativeXdgDesktopSetting.font_rgba_order(s)) {
                 desktop_linux_h.NativeFontRgbaOrder_Rgb() -> FontRgbaOrderValue.Rgb
@@ -284,21 +293,30 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
                 else -> error("Unexpected font rgba order ${NativeXdgDesktopSetting.font_rgba_order(s)}")
             },
         )
+
         desktop_linux_h.NativeXdgDesktopSetting_CursorBlink() -> XdgDesktopSetting.CursorBlink(NativeXdgDesktopSetting.cursor_blink(s))
         desktop_linux_h.NativeXdgDesktopSetting_CursorSize() -> XdgDesktopSetting.CursorSize(NativeXdgDesktopSetting.cursor_size(s))
         desktop_linux_h.NativeXdgDesktopSetting_CursorTheme() -> XdgDesktopSetting.CursorTheme(
             NativeXdgDesktopSetting.cursor_theme(s).getUtf8String(0),
         )
+
         desktop_linux_h.NativeXdgDesktopSetting_CursorBlinkTimeMs() -> XdgDesktopSetting.CursorBlinkTime(
             NativeXdgDesktopSetting.cursor_blink_time_ms(s).toDuration(DurationUnit.MILLISECONDS),
         )
+
         desktop_linux_h.NativeXdgDesktopSetting_CursorBlinkTimeoutMs() -> XdgDesktopSetting.CursorBlinkTimeout(
             NativeXdgDesktopSetting.cursor_blink_timeout_ms(s).toDuration(DurationUnit.MILLISECONDS),
         )
+
         desktop_linux_h.NativeXdgDesktopSetting_OverlayScrolling() -> XdgDesktopSetting.OverlayScrolling(
             NativeXdgDesktopSetting.overlay_scrolling(s),
         )
+
         desktop_linux_h.NativeXdgDesktopSetting_AudibleBell() -> XdgDesktopSetting.AudibleBell(NativeXdgDesktopSetting.audible_bell(s))
+        desktop_linux_h.NativeXdgDesktopSetting_MiddleClickPaste() -> XdgDesktopSetting.MiddleClickPaste(
+            NativeXdgDesktopSetting.middle_click_paste(s),
+        )
+
         else -> error("Unexpected setting $nativeTag")
     }
 }
