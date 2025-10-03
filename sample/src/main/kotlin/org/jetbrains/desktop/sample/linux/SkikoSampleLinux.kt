@@ -27,6 +27,7 @@ import org.jetbrains.desktop.linux.MouseButton
 import org.jetbrains.desktop.linux.PhysicalPoint
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.PointerShape
+import org.jetbrains.desktop.linux.RenderingMode
 import org.jetbrains.desktop.linux.TextInputContentPurpose
 import org.jetbrains.desktop.linux.TextInputContext
 import org.jetbrains.desktop.linux.Window
@@ -1168,7 +1169,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
     private var currentDragContent: DataTransferContentType? = null
     private var currentPrimarySelectionContent: DataTransferContentType? = null
 
-    fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
+    fun createWindow(useCustomTitlebar: Boolean, renderingMode: RenderingMode) {
         val windowId = nextWindowId
         nextWindowId += 1
         val windowParams = WindowParams(
@@ -1177,7 +1178,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             title = "Window $windowId",
             appId = "org.jetbrains.desktop.linux.skikoSample1",
             preferClientSideDecoration = useCustomTitlebar,
-            forceSoftwareRendering = forceSoftwareRendering,
+            renderingMode = renderingMode,
         )
 
         val window = RotatingBallWindow.createWindow(
@@ -1224,7 +1225,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
 
         return when (event) {
             Event.ApplicationStarted -> {
-                createWindow(useCustomTitlebar = true, forceSoftwareRendering = false)
+                createWindow(useCustomTitlebar = true, renderingMode = RenderingMode.Auto)
                 EventHandlerResult.Stop
             }
             Event.ApplicationWantsToTerminate -> EventHandlerResult.Continue

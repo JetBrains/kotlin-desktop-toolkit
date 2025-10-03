@@ -1,10 +1,10 @@
 use ashpd::desktop::file_chooser;
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use smithay_client_toolkit::{
     reexports::{
         client::{
             Connection, Proxy, QueueHandle,
-            protocol::{wl_seat::WlSeat, wl_surface::WlSurface},
+            protocol::{wl_display::WlDisplay, wl_seat::WlSeat, wl_surface::WlSurface},
         },
         protocols::wp::viewporter::client::wp_viewport::WpViewport,
     },
@@ -20,6 +20,7 @@ use smithay_client_toolkit::{
 };
 
 use crate::linux::{
+    application_api::RenderingMode,
     application_state::{ApplicationState, EglInstance},
     events::{SoftwareDrawData, WindowDecorationMode, WindowDrawEvent, WindowId},
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
@@ -30,9 +31,21 @@ use crate::linux::{
 };
 
 #[derive(Debug)]
-enum RenderingData {
-    Egl(EglRendering),
+pub enum RenderingData {
+    Egl(EglRendering<'static>),
     Software(SoftwareRendering),
+}
+
+impl RenderingData {
+    pub fn draw<F>(&mut self, surface: &WlSurface, size: PhysicalSize, do_draw: F)
+    where
+        F: FnOnce(SoftwareDrawData) -> bool,
+    {
+        match self {
+            Self::Egl(r) => r.draw(surface, do_draw),
+            Self::Software(r) => r.draw(surface, size, do_draw),
+        }
+    }
 }
 
 impl From<DecorationMode> for WindowDecorationMode {
@@ -55,7 +68,7 @@ pub struct SimpleWindow {
     pub current_scale: f64,
     decoration_mode: DecorationMode,
     rendering_data: Option<RenderingData>,
-    force_software_rendering: bool,
+    pub rendering_mode: RenderingMode,
 }
 
 impl SimpleWindow {
@@ -103,7 +116,7 @@ impl SimpleWindow {
             current_scale: 1.0,
             decoration_mode: DecorationMode::Client,
             rendering_data: None,
-            force_software_rendering: params.force_software_rendering,
+            rendering_mode: params.rendering_mode,
         }
     }
 
@@ -113,11 +126,11 @@ impl SimpleWindow {
 
     pub fn configure(
         &mut self,
-        conn: &Connection,
+        wl_display: &WlDisplay,
         shm: &Shm,
         window: &Window,
         configure: &WindowConfigure,
-        egl: Option<&EglInstance>,
+        egl: Option<&'static EglInstance>,
     ) -> bool {
         const DEFAULT_WIDTH: LogicalPixels = LogicalPixels(640.);
         const DEFAULT_HEIGHT: LogicalPixels = LogicalPixels(480.);
@@ -150,12 +163,10 @@ impl SimpleWindow {
 
         self.on_resize(&size, physical_size, shm);
 
-        if self.rendering_data.is_none() {
-            self.rendering_data = if self.force_software_rendering {
-                info!("Forcing software rendering");
-                Some(RenderingData::Software(SoftwareRendering::new(shm, physical_size)))
-            } else if let Some(egl) = egl {
-                match EglRendering::new(conn, egl, window.wl_surface(), physical_size) {
+        let is_first_configure = self.rendering_data.is_none();
+        if is_first_configure {
+            self.rendering_data = if let Some(egl) = egl {
+                match EglRendering::new(egl, wl_display, window.wl_surface(), physical_size) {
                     Ok(egl_rendering_data) => Some(RenderingData::Egl(egl_rendering_data)),
                     Err(e) => {
                         warn!("Failed to create EGL rendering, falling back to software rendering. Error: {e:?}");
@@ -163,13 +174,10 @@ impl SimpleWindow {
                     }
                 }
             } else {
-                warn!("Couldn't load EGL library, falling back to software rendering");
                 Some(RenderingData::Software(SoftwareRendering::new(shm, physical_size)))
             };
-            true
-        } else {
-            false
         }
+        is_first_configure
     }
 
     pub fn draw(
@@ -177,7 +185,6 @@ impl SimpleWindow {
         conn: &Connection,
         qh: &QueueHandle<ApplicationState>,
         themed_pointer: Option<&mut ThemedPointer>,
-        egl: Option<&EglInstance>,
         callback: &dyn Fn(WindowDrawEvent) -> bool,
     ) {
         let surface = self.window.wl_surface();
@@ -203,13 +210,10 @@ impl SimpleWindow {
 
         let physical_size = self.size.unwrap().to_physical(self.current_scale);
 
-        let do_draw = |software_draw_data: Option<SoftwareDrawData>| {
+        let do_draw = |software_draw_data: SoftwareDrawData| {
             let did_draw = callback(WindowDrawEvent {
                 window_id: self.window_id,
-                software_draw_data: software_draw_data.unwrap_or(SoftwareDrawData {
-                    canvas: std::ptr::null_mut(),
-                    stride: 0,
-                }),
+                software_draw_data,
                 physical_size,
                 scale: self.current_scale,
             });
@@ -224,10 +228,10 @@ impl SimpleWindow {
             did_draw
         };
 
-        match &mut self.rendering_data {
-            Some(RenderingData::Egl(r)) => r.draw(surface, egl.unwrap(), &do_draw),
-            Some(RenderingData::Software(r)) => r.draw(surface, physical_size, &do_draw),
-            None => warn!("Rendering data not initialized in draw"),
+        if let Some(r) = &mut self.rendering_data {
+            r.draw(surface, physical_size, do_draw);
+        } else {
+            warn!("Rendering data not initialized in draw");
         }
 
         surface.commit();

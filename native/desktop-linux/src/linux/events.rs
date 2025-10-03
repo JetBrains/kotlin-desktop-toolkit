@@ -465,8 +465,9 @@ impl From<WindowConfigureEvent> for Event<'_> {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SoftwareDrawData {
+    /// Can be null, to indicate that the software drawing is not being used
     pub canvas: *mut u8,
     pub stride: i32,
 }

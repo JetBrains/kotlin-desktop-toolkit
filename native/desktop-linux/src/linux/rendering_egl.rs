@@ -1,27 +1,31 @@
 use anyhow::Context;
 use khronos_egl as egl;
 use log::info;
-use smithay_client_toolkit::reexports::client::{Connection, Proxy as _, protocol::wl_surface::WlSurface};
+use smithay_client_toolkit::reexports::client::{
+    Proxy as _,
+    protocol::{wl_display::WlDisplay, wl_surface::WlSurface},
+};
 use wayland_egl::WlEglSurface;
 
 use crate::linux::{application_state::EglInstance, events::SoftwareDrawData, geometry::PhysicalSize};
 
 #[derive(Debug)]
-pub struct EglRendering {
+pub struct EglRendering<'a> {
+    egl: &'a EglInstance,
     wl_egl_surface: WlEglSurface,
     egl_display: egl::Display,
     egl_window_surface: khronos_egl::Surface,
     egl_context: egl::Context,
 }
 
-impl EglRendering {
-    pub fn new(conn: &Connection, egl: &EglInstance, surface: &WlSurface, size: PhysicalSize) -> anyhow::Result<Self> {
+impl<'a> EglRendering<'a> {
+    pub fn new(egl: &'a EglInstance, display: &WlDisplay, surface: &WlSurface, size: PhysicalSize) -> anyhow::Result<Self> {
         info!("Trying to use EGL rendering");
 
         let wl_egl_surface = WlEglSurface::new(surface.id(), size.width.0, size.height.0)
             .with_context(|| format!("WlEglSurface::new (surface.id() = {})", surface.id()))?;
 
-        let wayland_display_ptr = conn.display().id().as_ptr();
+        let wayland_display_ptr = display.id().as_ptr();
         let egl_display = unsafe { egl.get_display(wayland_display_ptr.cast()) }.context("egl.get_display")?;
         egl.initialize(egl_display).context("egl.initialize")?;
 
@@ -54,6 +58,7 @@ impl EglRendering {
             .context("egl.make_current")?;
 
         Ok(Self {
+            egl,
             wl_egl_surface,
             egl_display,
             egl_window_surface,
@@ -65,18 +70,23 @@ impl EglRendering {
         self.wl_egl_surface.resize(size.width.0, size.height.0, 0, 0);
     }
 
-    pub fn draw(&self, surface: &WlSurface, egl: &EglInstance, do_draw: &dyn Fn(Option<SoftwareDrawData>) -> bool) {
-        egl.make_current(
-            self.egl_display,
-            Some(self.egl_window_surface),
-            Some(self.egl_window_surface),
-            Some(self.egl_context),
-        )
-        .context("egl.make_current")
-        .unwrap();
+    pub fn draw<F>(&self, surface: &WlSurface, do_draw: F)
+    where
+        F: FnOnce(SoftwareDrawData) -> bool,
+    {
+        self.egl
+            .make_current(
+                self.egl_display,
+                Some(self.egl_window_surface),
+                Some(self.egl_window_surface),
+                Some(self.egl_context),
+            )
+            .context("egl.make_current")
+            .unwrap();
 
-        if do_draw(None) {
-            egl.swap_buffers(self.egl_display, self.egl_window_surface)
+        if do_draw(SoftwareDrawData::default()) {
+            self.egl
+                .swap_buffers(self.egl_display, self.egl_window_surface)
                 .context(surface.id())
                 .unwrap();
         }

@@ -3,6 +3,7 @@ package org.jetbrains.desktop.linux.tests
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogicalSize
+import org.jetbrains.desktop.linux.RenderingMode
 import org.jetbrains.desktop.linux.WindowParams
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
@@ -24,7 +25,7 @@ class WindowTests {
                 title = "Hello2",
                 size = LogicalSize(200.0f, 300.0f),
                 preferClientSideDecoration = true,
-                forceSoftwareRendering = true,
+                renderingMode = RenderingMode.Auto,
             ),
         )
         window1.close()
