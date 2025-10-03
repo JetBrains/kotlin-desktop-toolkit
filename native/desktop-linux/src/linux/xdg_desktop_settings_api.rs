@@ -82,4 +82,6 @@ pub enum XdgDesktopSetting<'a> {
     OverlayScrolling(bool),
 
     AudibleBell(bool),
+
+    MiddleClickPaste(bool),
 }
