@@ -98,6 +98,11 @@ fun KeyCode.isModifierKey(): Boolean {
     }
 }
 
+fun Set<KeyModifiers>.shortcutModifiers(): Set<KeyModifiers> = toMutableSet().also {
+    it.remove(KeyModifiers.CapsLock)
+    it.remove(KeyModifiers.NumLock)
+}
+
 enum class WindowButtonType {
     AppMenu,
     Icon,
@@ -216,7 +221,6 @@ private class EditorState {
     private var cursorRectangle = LogicalRect(LogicalPoint(0f, 0f), LogicalSize(0f, 0f))
     private var selectionStartOffset: Int? = null
     private var selectionEndOffset: Int? = null
-    private var modifiers = setOf<KeyModifiers>()
     private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
     private var statsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
     private var pastedImage: Image? = null
@@ -344,11 +348,6 @@ private class EditorState {
         }
     }
 
-    fun shortcutModifiers(): Set<KeyModifiers> = modifiers.toMutableSet().also {
-        it.remove(KeyModifiers.CapsLock)
-        it.remove(KeyModifiers.NumLock)
-    }
-
     private fun getSelectionRange(): Pair<Int, Int>? {
         val selectionStartOffset = selectionStartOffset
         val selectionEndOffset = selectionEndOffset
@@ -381,19 +380,15 @@ private class EditorState {
         cursorOffset += characters.length
     }
 
-    fun onModifiersChanged(event: Event.ModifiersChanged): EventHandlerResult {
-        modifiers = event.modifiers
-        return EventHandlerResult.Stop
-    }
-
     fun onKeyDown(
         event: Event.KeyDown,
         app: Application,
         window: Window,
         windowState: WindowState,
+        modifiers: Set<KeyModifiers>,
         clipboardHandler: ClipboardHandler,
     ): EventHandlerResult {
-        val shortcutModifiers = shortcutModifiers()
+        val shortcutModifiers = modifiers.shortcutModifiers()
         when (shortcutModifiers) {
             setOf(KeyModifiers.Logo) -> EventHandlerResult.Continue
             setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
@@ -679,9 +674,14 @@ private class ContentArea(
         return EventHandlerResult.Continue
     }
 
-    fun onMouseDown(event: Event.MouseDown, clipboardHandler: ClipboardHandler, editorState: EditorState): EventHandlerResult {
+    fun onMouseDown(
+        event: Event.MouseDown,
+        clipboardHandler: ClipboardHandler,
+        modifiers: Set<KeyModifiers>,
+        editorState: EditorState,
+    ): EventHandlerResult {
         return when (event.button) {
-            MouseButton.LEFT -> when (editorState.shortcutModifiers()) {
+            MouseButton.LEFT -> when (modifiers.shortcutModifiers()) {
                 setOf(KeyModifiers.Shift) -> {
                     clipboardHandler.startDrag(DataTransferContentType.UriList(EXAMPLE_FILES), DragAction.Move)
                     EventHandlerResult.Stop
@@ -972,6 +972,7 @@ private class WindowContainer(
         event: Event.MouseDown,
         window: Window,
         editorState: EditorState,
+        modifiers: Set<KeyModifiers>,
         clipboardHandler: ClipboardHandler,
         xdgDesktopSettings: XdgDesktopSettings,
     ): EventHandlerResult {
@@ -981,12 +982,12 @@ private class WindowContainer(
         if (customTitlebar?.onMouseDown(event) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
-        if (contentArea.onMouseDown(event, clipboardHandler, editorState) == EventHandlerResult.Stop) {
+        if (contentArea.onMouseDown(event, clipboardHandler, modifiers, editorState) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
 
         return if (event.button == MouseButton.MIDDLE) {
-            when (editorState.shortcutModifiers()) {
+            when (modifiers.shortcutModifiers()) {
                 setOf(KeyModifiers.Control) -> {
                     editorState.getCurrentSelection()?.let { selection ->
                         clipboardHandler.copyToPrimarySelection(DataTransferContentType.Text(selection))
@@ -1116,16 +1117,17 @@ private class RotatingBallWindow(
         }
     }
 
-    fun onKeyDown(event: Event.KeyDown, app: Application, clipboardHandler: ClipboardHandler): EventHandlerResult {
-        if (editorState.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.H) {
+    fun onKeyDown(
+        event: Event.KeyDown,
+        app: Application,
+        modifiers: Set<KeyModifiers>,
+        clipboardHandler: ClipboardHandler,
+    ): EventHandlerResult {
+        if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.H) {
             changePointerShape(PointerShape.Hidden)
             return EventHandlerResult.Stop
         }
-        return editorState.onKeyDown(event, app, window, windowState, clipboardHandler)
-    }
-
-    fun onModifiersChanged(event: Event.ModifiersChanged): EventHandlerResult {
-        return editorState.onModifiersChanged(event)
+        return editorState.onKeyDown(event, app, window, windowState, modifiers, clipboardHandler)
     }
 
     fun onTextInputAvailability(event: Event.TextInputAvailability, app: Application): EventHandlerResult {
@@ -1146,10 +1148,11 @@ private class RotatingBallWindow(
 
     fun onMouseDown(
         event: Event.MouseDown,
+        modifiers: Set<KeyModifiers>,
         clipboardHandler: ClipboardHandler,
         xdgDesktopSettings: XdgDesktopSettings,
     ): EventHandlerResult {
-        return windowContainer.onMouseDown(event, window, editorState, clipboardHandler, xdgDesktopSettings)
+        return windowContainer.onMouseDown(event, window, editorState, modifiers, clipboardHandler, xdgDesktopSettings)
     }
 
     fun onMouseUp(event: Event.MouseUp, xdgDesktopSettings: XdgDesktopSettings): EventHandlerResult {
@@ -1161,6 +1164,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
     private var nextWindowId = 0L
     private val windows = mutableMapOf<WindowId, RotatingBallWindow>()
     private var keyWindowId: WindowId? = null
+    private var modifiers = setOf<KeyModifiers>()
     private val xdgDesktopSettings = XdgDesktopSettings()
     private val windowClipboardHandlers = mutableMapOf<WindowId, ClipboardHandler>()
     private var currentClipboard: DataTransferContentType? = null
@@ -1276,11 +1280,26 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 Logger.info { "File chooser response: $event" }
                 EventHandlerResult.Stop
             }
-            is Event.KeyDown -> windows[keyWindowId]?.onKeyDown(event, app, windowClipboardHandlers[keyWindowId]!!)
-                ?: EventHandlerResult.Continue
+            is Event.KeyDown -> {
+                if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.N) {
+                    createWindow(useCustomTitlebar = true, renderingMode = RenderingMode.Auto)
+                    EventHandlerResult.Stop
+                } else {
+                    windows[keyWindowId]?.onKeyDown(event, app, modifiers, windowClipboardHandlers[keyWindowId]!!)
+                        ?: EventHandlerResult.Continue
+                }
+            }
             is Event.KeyUp -> EventHandlerResult.Continue
-            is Event.ModifiersChanged -> windows[keyWindowId]?.onModifiersChanged(event) ?: EventHandlerResult.Continue
-            is Event.MouseDown -> windows[event.windowId]?.onMouseDown(event, windowClipboardHandlers[event.windowId]!!, xdgDesktopSettings)
+            is Event.ModifiersChanged -> {
+                modifiers = event.modifiers
+                EventHandlerResult.Stop
+            }
+            is Event.MouseDown -> windows[event.windowId]?.onMouseDown(
+                event,
+                modifiers,
+                windowClipboardHandlers[event.windowId]!!,
+                xdgDesktopSettings,
+            )
                 ?: EventHandlerResult.Continue
             is Event.MouseEntered -> windows[event.windowId]?.onMouseEntered() ?: EventHandlerResult.Continue
             is Event.MouseExited -> windows[event.windowId]?.onMouseExited() ?: EventHandlerResult.Continue
