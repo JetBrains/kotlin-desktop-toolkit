@@ -1,6 +1,6 @@
 use anyhow::Context;
 use khronos_egl as egl;
-use log::info;
+use log::{debug, info};
 use smithay_client_toolkit::reexports::client::{
     Proxy as _,
     protocol::{wl_display::WlDisplay, wl_surface::WlSurface},
@@ -18,9 +18,17 @@ pub struct EglRendering<'a> {
     egl_context: egl::Context,
 }
 
+impl Drop for EglRendering<'_> {
+    fn drop(&mut self) {
+        debug!("EglRendering::drop");
+        self.egl.destroy_context(self.egl_display, self.egl_context).unwrap();
+        self.egl.destroy_surface(self.egl_display, self.egl_window_surface).unwrap();
+    }
+}
+
 impl<'a> EglRendering<'a> {
     pub fn new(egl: &'a EglInstance, display: &WlDisplay, surface: &WlSurface, size: PhysicalSize) -> anyhow::Result<Self> {
-        info!("Trying to use EGL rendering");
+        info!("Trying to use EGL rendering for {surface:?}");
 
         let wl_egl_surface = WlEglSurface::new(surface.id(), size.width.0, size.height.0)
             .with_context(|| format!("WlEglSurface::new (surface.id() = {})", surface.id()))?;
