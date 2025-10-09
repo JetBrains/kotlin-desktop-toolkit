@@ -393,7 +393,7 @@ pub struct WindowCapabilities {
     pub window_menu: bool,
 
     /// Window can be maximized and unmaximized.
-    pub maximixe: bool,
+    pub maximize: bool,
 
     /// Window can be fullscreened and unfullscreened.
     pub fullscreen: bool,
