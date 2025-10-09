@@ -383,7 +383,7 @@ impl WindowHandler for ApplicationState {
                     decoration_mode: configure.decoration_mode.into(),
                     capabilities: WindowCapabilities {
                         window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
-                        maximixe: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
+                        maximize: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),
                         fullscreen: configure.capabilities.contains(WindowManagerCapabilities::FULLSCREEN),
                         minimize: configure.capabilities.contains(WindowManagerCapabilities::MINIMIZE),
                     },

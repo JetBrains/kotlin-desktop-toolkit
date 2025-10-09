@@ -183,7 +183,7 @@ internal fun PointerShape.toNative(): Int {
 
 internal fun WindowCapabilities.Companion.fromNative(s: MemorySegment) = WindowCapabilities(
     windowMenu = NativeWindowCapabilities.window_menu(s),
-    maximize = NativeWindowCapabilities.maximixe(s),
+    maximize = NativeWindowCapabilities.maximize(s),
     fullscreen = NativeWindowCapabilities.fullscreen(s),
     minimize = NativeWindowCapabilities.minimize(s),
 )
