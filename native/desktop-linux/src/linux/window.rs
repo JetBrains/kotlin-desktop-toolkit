@@ -59,6 +59,7 @@ impl From<DecorationMode> for WindowDecorationMode {
 
 pub struct SimpleWindow {
     pub window_id: WindowId,
+    pub app_id: String,
     pub close: bool,
     pub size: Option<LogicalSize>,
     viewport: Option<WpViewport>,
@@ -92,8 +93,9 @@ impl SimpleWindow {
             WindowDecorations::ServerDefault
         };
         let window = state.xdg_shell_state.create_window(window_surface, decorations, qh);
+        let app_id = params.app_id.as_str().unwrap().to_owned();
         window.set_title(params.title.as_str().unwrap());
-        window.set_app_id(params.app_id.as_str().unwrap());
+        window.set_app_id(app_id.clone());
 
         let size = if params.size.width.0 == 0.0 { None } else { Some(params.size) };
 
@@ -107,6 +109,7 @@ impl SimpleWindow {
         debug!("Creating new window with id={:?} and surface_id={surface_id}", params.window_id);
         Self {
             window_id,
+            app_id,
             close: false,
             size,
             viewport,

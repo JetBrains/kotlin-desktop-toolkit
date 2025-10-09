@@ -1,17 +1,18 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::{collections::HashMap, ffi::CString, sync::LazyLock};
 
 use desktop_common::logger::catch_panic;
 use khronos_egl;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use smithay_client_toolkit::{
+    activation::{ActivationHandler, ActivationState, RequestData},
     compositor::{CompositorHandler, CompositorState},
     data_device_manager::{
         DataDeviceManagerState,
         data_device::DataDevice,
         data_source::{CopyPasteSource, DragSource},
     },
-    delegate_compositor, delegate_output, delegate_registry, delegate_seat, delegate_shm, delegate_subcompositor, delegate_xdg_shell,
-    delegate_xdg_window,
+    delegate_activation, delegate_compositor, delegate_output, delegate_registry, delegate_seat, delegate_shm, delegate_subcompositor,
+    delegate_xdg_shell, delegate_xdg_window,
     output::{OutputHandler, OutputState},
     primary_selection::{PrimarySelectionManagerState, device::PrimarySelectionDevice, selection::PrimarySelectionSource},
     reexports::{
@@ -60,8 +61,8 @@ use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
     drag_icon::DragIcon,
     events::{
-        Event, ScreenId, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDrawEvent, WindowId,
-        WindowScaleChangedEvent, WindowScreenChangeEvent,
+        ActivationTokenResponse, Event, ScreenId, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDrawEvent,
+        WindowId, WindowScaleChangedEvent, WindowScreenChangeEvent,
     },
     keyboard::send_key_down_event,
     text_input::PendingTextInputEvent,
@@ -103,6 +104,7 @@ pub struct ApplicationState {
     pub compositor_state: CompositorState,
     pub shm_state: Shm,
     pub xdg_shell_state: XdgShell,
+    pub xdg_activation: Option<ActivationState>,
     pub wl_display: WlDisplay,
     pub keyboard: Option<WlKeyboard>,
     cursor_theme: Option<(String, u32)>,
@@ -124,6 +126,7 @@ pub struct ApplicationState {
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
+    pub last_keyboard_focus_serial: Option<u32>,
     pub last_keyboard_event_serial: Option<u32>,
     pub active_text_input: Option<ZwpTextInputV3>,
     pub pending_text_input_event: PendingTextInputEvent,
@@ -145,6 +148,7 @@ impl ApplicationState {
         let shm_state = Shm::bind(globals, qh).expect("wl_shm not available");
         let xdg_shell_state = XdgShell::bind(globals, qh).expect("xdg shell not available");
         let data_device_manager_state = DataDeviceManagerState::bind(globals, qh).expect("wl_data_device not available");
+        let xdg_activation = ActivationState::bind(globals, qh).ok();
 
         Self {
             callbacks,
@@ -155,6 +159,7 @@ impl ApplicationState {
             compositor_state,
             shm_state,
             xdg_shell_state,
+            xdg_activation,
             wl_display: display,
             keyboard: None,
             cursor_theme: None,
@@ -175,6 +180,7 @@ impl ApplicationState {
             primary_selection_source: None,
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
+            last_keyboard_focus_serial: None,
             last_keyboard_event_serial: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
@@ -238,6 +244,7 @@ impl ApplicationState {
         [
             self.get_latest_pointer_button_seat_and_serial().map(|e| e.1),
             self.last_keyboard_event_serial,
+            self.last_keyboard_focus_serial,
         ]
         .into_iter()
         .max()
@@ -503,3 +510,20 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
         }
     }
 }
+
+impl ActivationHandler for ApplicationState {
+    type RequestData = RequestData;
+
+    fn new_token(&mut self, token: String, data: &Self::RequestData) {
+        info!("ActivationHandler::new_token for {data:?}: {token}");
+        let Some(seat_and_serial) = data.seat_and_serial.as_ref() else {
+            warn!("ActivationHandler::new_token: missing seat and serial data, ignoring request {data:?}");
+            return;
+        };
+        let request_id = seat_and_serial.1 + 1;
+        let token_cstring = CString::new(token).unwrap();
+        self.send_event(ActivationTokenResponse::new(request_id, &token_cstring));
+    }
+}
+
+delegate_activation!(ApplicationState);

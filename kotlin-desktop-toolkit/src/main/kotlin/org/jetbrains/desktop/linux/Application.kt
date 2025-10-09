@@ -304,4 +304,15 @@ public class Application : AutoCloseable {
             ffiDownCall { desktop_linux_h.string_drop(csvMimetypes) }
         }
     }
+
+    public fun requestInternalActivationToken(sourceWindowId: WindowId): RequestId? {
+        return ffiDownCall {
+            val rawRequestId = desktop_linux_h.application_request_internal_activation_token(appPtr, sourceWindowId)
+            if (rawRequestId == 0) {
+                null
+            } else {
+                RequestId(rawRequestId)
+            }
+        }
+    }
 }

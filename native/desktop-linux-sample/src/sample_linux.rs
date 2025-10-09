@@ -14,16 +14,17 @@ use desktop_linux::linux::{
     application_api::{
         AppPtr, ApplicationCallbacks, DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData, DragAndDropQueryResponse,
         RenderingMode, SupportedActionsForMime, application_clipboard_paste, application_clipboard_put, application_get_egl_proc_func,
-        application_init, application_is_event_loop_thread, application_primary_selection_paste, application_run_event_loop,
-        application_set_cursor_theme, application_shutdown, application_stop_event_loop, application_text_input_disable,
-        application_text_input_enable, application_text_input_update,
+        application_init, application_is_event_loop_thread, application_primary_selection_paste,
+        application_request_internal_activation_token, application_run_event_loop, application_set_cursor_theme, application_shutdown,
+        application_stop_event_loop, application_text_input_disable, application_text_input_enable, application_text_input_update,
     },
     events::{DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, SoftwareDrawData, TextInputEvent, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
     window_api::{
-        WindowParams, window_close, window_create, window_show_open_file_dialog, window_show_save_file_dialog, window_start_drag_and_drop,
+        WindowParams, window_activate, window_close, window_create, window_show_open_file_dialog, window_show_save_file_dialog,
+        window_start_drag_and_drop,
     },
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
@@ -333,6 +334,7 @@ const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBit
 
 fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> bool {
     const KEYCODE_BACKSPACE: u32 = 14;
+    const KEYCODE_TAB: u32 = 15;
     const KEYCODE_C: u32 = 46;
     const KEYCODE_N: u32 = 49;
     const KEYCODE_O: u32 = 24;
@@ -352,6 +354,10 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
                 update_text_input_context(app_ptr, &window_state.text, false);
             }
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
+            true
+        }
+        (KEY_MODIFIER_CTRL, KEYCODE_TAB) => {
+            application_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
             true
         }
         (KEY_MODIFIER_CTRL, KEYCODE_V) => {
@@ -673,6 +679,12 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 } else {
                     false
                 }
+            }
+            Event::ActivationTokenResponse(data) => {
+                let token = data.token.as_optional_cstr().unwrap();
+                let window_id = *state.windows.keys().find(|&&w| Some(w) != state.key_window_id).unwrap();
+                window_activate(app_ptr, window_id, BorrowedStrPtr::new(token));
+                true
             }
             _ => false,
         }

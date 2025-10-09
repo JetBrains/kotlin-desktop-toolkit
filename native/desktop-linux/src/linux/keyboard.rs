@@ -34,6 +34,7 @@ impl KeyboardHandler for ApplicationState {
         raw: &[u32],
         keysyms: &[Keysym],
     ) {
+        self.last_keyboard_focus_serial = Some(serial);
         self.last_keyboard_event_serial = Some(serial);
         if let Some(window_id) = self.get_window_id(surface) {
             debug!("Keyboard focus on window with pressed syms: {keysyms:?}");

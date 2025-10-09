@@ -605,6 +605,29 @@ impl<'a> From<FileChooserResponse<'a>> for Event<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct ActivationTokenResponse<'a> {
+    pub request_id: u32,
+    pub token: BorrowedStrPtr<'a>,
+}
+
+impl<'a> ActivationTokenResponse<'a> {
+    #[must_use]
+    pub const fn new(request_id: u32, token: &'a CStr) -> Self {
+        Self {
+            request_id,
+            token: BorrowedStrPtr::new(token),
+        }
+    }
+}
+
+impl<'a> From<ActivationTokenResponse<'a>> for Event<'a> {
+    fn from(value: ActivationTokenResponse<'a>) -> Self {
+        Self::ActivationTokenResponse(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub enum Event<'a> {
     ApplicationStarted,
 
@@ -638,6 +661,8 @@ pub enum Event<'a> {
     DataTransferCancelled(DataTransferCancelledEvent),
 
     FileChooserResponse(FileChooserResponse<'a>),
+
+    ActivationTokenResponse(ActivationTokenResponse<'a>),
 
     /// Modifier keys (e.g Ctrl, Shift, etc) are never reported. Use `ModifiersChanged` for them.
     KeyDown(KeyDownEvent<'a>),

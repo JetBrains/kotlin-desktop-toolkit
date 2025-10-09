@@ -15,6 +15,7 @@ use smithay_client_toolkit::{
             protocol::{wl_data_device_manager::DndAction, wl_surface::WlSurface},
         },
     },
+    seat::keyboard::KeyboardData,
     shell::WaylandSurface,
 };
 
@@ -420,6 +421,50 @@ impl Application {
         self.state.current_drag_source_window_id = Some(window_id);
         self.state.drag_source = Some(drag_source);
 
+        Ok(())
+    }
+
+    pub fn request_internal_activation_token(&self, source_window_id: WindowId) -> anyhow::Result<u32> {
+        let source_w: &SimpleWindow = self
+            .get_window(source_window_id)
+            .with_context(|| format!("No window found {source_window_id:?}"))?;
+        let Some(xdg_activation) = &self.state.xdg_activation else {
+            warn!("xdg_activation not found");
+            return Ok(0);
+        };
+        // Serial should be from a keyboard or mouse button event, ideally the keyboard focus serial.
+        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-activation.c#L302
+        let (seat, serial) = if let Some(keyboard) = &self.state.keyboard
+            && let Some(serial) = self.state.last_keyboard_focus_serial
+        {
+            let d = keyboard.data::<KeyboardData<ApplicationState>>().unwrap();
+            (d.seat(), serial)
+        } else if let Some(seat_and_serial) = self.state.get_latest_pointer_button_seat_and_serial() {
+            seat_and_serial
+        } else {
+            return Ok(0);
+        };
+        let request_id = serial + 1;
+        xdg_activation.request_token(
+            &self.qh,
+            smithay_client_toolkit::activation::RequestData {
+                app_id: Some(source_w.app_id.clone()),
+                seat_and_serial: Some((seat.clone(), serial)),
+                surface: Some(source_w.window.wl_surface().clone()),
+            },
+        );
+        Ok(request_id)
+    }
+
+    pub fn window_activate(&self, window_id: WindowId, token: String) -> anyhow::Result<()> {
+        let w = self
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
+        let Some(xdg_activation) = &self.state.xdg_activation else {
+            warn!("xdg_activation not found");
+            return Ok(());
+        };
+        xdg_activation.activate::<ApplicationState>(w.window.wl_surface(), token);
         Ok(())
     }
 }
