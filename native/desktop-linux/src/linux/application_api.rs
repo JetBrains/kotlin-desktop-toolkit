@@ -285,3 +285,11 @@ pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: Borrowed
         Ok(())
     });
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_request_internal_activation_token(app_ptr: AppPtr, source_window_id: WindowId) -> u32 {
+    ffi_boundary("application_request_activation_token", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        app.request_internal_activation_token(source_window_id)
+    })
+}

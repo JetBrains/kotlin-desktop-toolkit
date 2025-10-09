@@ -194,6 +194,15 @@ public class Window internal constructor(
         }
     }
 
+    public fun activate(token: String) {
+        Arena.ofConfined().use { arena ->
+            val nativeToken = arena.allocateUtf8String(token)
+            ffiDownCall {
+                desktop_linux_h.window_activate(appPtr, windowId, nativeToken)
+            }
+        }
+    }
+
     override fun close() {
         Logger.trace { "Window: closing window with id $windowId" }
         ffiDownCall {

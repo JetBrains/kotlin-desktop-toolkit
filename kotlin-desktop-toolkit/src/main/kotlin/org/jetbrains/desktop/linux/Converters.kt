@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.linux
 
+import org.jetbrains.desktop.linux.generated.NativeActivationTokenResponse
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_SupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
@@ -613,6 +614,13 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.FileChooserResponse(
                 requestId = RequestId(NativeFileChooserResponse.request_id(nativeEvent)),
                 files = filesString?.trimEnd()?.split("\r\n") ?: emptyList(),
+            )
+        }
+        desktop_linux_h.NativeEvent_ActivationTokenResponse() -> {
+            val nativeEvent = NativeEvent.activation_token_response(s)
+            Event.ActivationTokenResponse(
+                requestId = RequestId(NativeActivationTokenResponse.request_id(nativeEvent)),
+                token = NativeActivationTokenResponse.token(nativeEvent).getUtf8String(0),
             )
         }
         desktop_linux_h.NativeEvent_KeyDown() -> {

@@ -150,6 +150,11 @@ public sealed class Event {
         val files: List<String>,
     ) : Event()
 
+    public data class ActivationTokenResponse(
+        val requestId: RequestId,
+        val token: String,
+    ) : Event()
+
     public data class KeyDown(
         val keyCode: KeyCode,
         val characters: String?,

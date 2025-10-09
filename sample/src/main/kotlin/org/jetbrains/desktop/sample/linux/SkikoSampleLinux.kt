@@ -463,6 +463,11 @@ private class EditorState {
                     EventHandlerResult.Stop
                 }
 
+                KeyCode.Tab -> {
+                    app.requestInternalActivationToken(window.windowId)
+                    EventHandlerResult.Stop
+                }
+
                 else -> EventHandlerResult.Continue
             }
             setOf(KeyModifiers.Shift) -> when (event.keyCode.value) {
@@ -1393,6 +1398,13 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             is Event.DataTransferAvailable -> EventHandlerResult.Continue
             is Event.FileChooserResponse -> {
                 Logger.info { "File chooser response: $event" }
+                EventHandlerResult.Stop
+            }
+            is Event.ActivationTokenResponse -> {
+                windows.keys.firstOrNull { it != keyWindowId }?.let { windowIdToActivate ->
+                    val w = windows[windowIdToActivate]!!
+                    w.window.activate(event.token)
+                }
                 EventHandlerResult.Stop
             }
             is Event.KeyDown -> {
