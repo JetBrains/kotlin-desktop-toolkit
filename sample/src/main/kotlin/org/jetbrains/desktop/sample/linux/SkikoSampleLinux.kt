@@ -1030,8 +1030,10 @@ private class RotatingBallWindow(
         }
     }
 
-    fun onDataTransfer(content: DataTransferContent, app: Application): EventHandlerResult {
-        return editorState.onDataTransfer(content, app)
+    fun onDataTransfer(content: DataTransferContent?, app: Application): EventHandlerResult {
+        return content?.let {
+            editorState.onDataTransfer(it, app)
+        } ?: EventHandlerResult.Stop
     }
 
     fun onMouseMoved(event: Event.MouseMoved): EventHandlerResult {

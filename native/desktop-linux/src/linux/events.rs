@@ -135,6 +135,14 @@ impl<'a> DataTransferContent<'a> {
             mime_types: BorrowedStrPtr::new(mime_types),
         }
     }
+
+    #[must_use]
+    pub fn null() -> Self {
+        Self {
+            data: BorrowedArray::null(),
+            mime_types: BorrowedStrPtr::null(),
+        }
+    }
 }
 
 #[repr(C)]

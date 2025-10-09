@@ -1,11 +1,11 @@
-use std::{ffi::CString, io::Read, str::FromStr, thread::ThreadId, time::Duration};
+use std::{thread::ThreadId, time::Duration};
 
 use anyhow::{Context, anyhow};
 use log::{debug, warn};
 use smithay_client_toolkit::{
     reexports::{
         calloop::{
-            EventLoop, PostAction,
+            EventLoop,
             channel::{self, Sender},
         },
         calloop_wayland_source::WaylandSource,
@@ -22,8 +22,8 @@ use crate::linux::{
     application_api::ApplicationCallbacks,
     application_state::ApplicationState,
     async_event_result::AsyncEventResult,
-    data_transfer::MimeTypes,
-    events::{DataTransferContent, DataTransferEvent, Event, RequestId, WindowId},
+    data_transfer::{MimeTypes, read_from_pipe},
+    events::{DataTransferEvent, Event, RequestId, WindowId},
     window::SimpleWindow,
     window_api::WindowParams,
     xdg_desktop_settings::xdg_desktop_settings_notifier,
@@ -213,11 +213,11 @@ impl Application {
     pub fn clipboard_put(&mut self, mime_types: MimeTypes) {
         if mime_types.val.is_empty() {
             self.state.copy_paste_source = None;
-            warn!("Application::clipboard_put: None");
+            warn!("application_clipboard_put: Passed mime_types are empty");
             return;
         }
-        let Some(data_device) = self.state.data_device.as_ref() else {
-            warn!("Application::clipboard_put: No data device");
+        let Some(device) = self.state.data_device.as_ref() else {
+            warn!("application_clipboard_put: No data device");
             return;
         };
         if let Some(serial) = self.state.last_key_down_serial {
@@ -225,60 +225,62 @@ impl Application {
                 .state
                 .data_device_manager_state
                 .create_copy_paste_source(&self.qh, mime_types.val);
-            copy_paste_source.set_selection(data_device, serial);
+            copy_paste_source.set_selection(device, serial);
             self.state.copy_paste_source = Some(copy_paste_source);
         } else {
-            warn!("Application::clipboard_put: No last key down serial");
+            warn!("application_clipboard_put: No last key down serial");
         }
     }
 
     pub fn clipboard_get_available_mimetypes(&self) -> Option<String> {
         let Some(data_device) = self.state.data_device.as_ref() else {
-            warn!("Application::clipboard_paste: No data device available");
+            warn!("application_clipboard_get_available_mimetypes: No data device available");
             return None;
         };
         let Some(selection_offer) = data_device.data().selection_offer() else {
-            debug!("Application::clipboard_paste: No selection offer found");
+            debug!("application_clipboard_get_available_mimetypes: No selection offer found");
             return None;
         };
         selection_offer.with_mime_types(|mime_types| Some(mime_types.join(",")))
     }
 
-    pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> anyhow::Result<bool> {
-        let Some(data_device) = self.state.data_device.as_ref() else {
-            warn!("Application::clipboard_paste: No data device available");
-            return Ok(false);
+    pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
+        let Some(device) = self.state.data_device.as_ref() else {
+            warn!("application_clipboard_paste: No data device available");
+            return false;
         };
-        let Some(selection_offer) = data_device.data().selection_offer() else {
-            debug!("Application::clipboard_paste: No selection offer found");
-            return Ok(false);
+        let Some(offer) = device.data().selection_offer() else {
+            debug!("application_clipboard_paste: No selection offer found");
+            return false;
         };
-        let Some(mime_type) = selection_offer.with_mime_types(|mime_types| {
-            debug!("Application::clipboard_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
+        let Some(mime_type) = offer.with_mime_types(|mime_types| {
+            debug!("application_clipboard_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
             supported_mime_types
                 .split(',')
                 .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
                 .map(str::to_owned)
         }) else {
-            debug!("Application::clipboard_paste: clipboard content not supported");
-            return Ok(false);
+            debug!("application_clipboard_paste: clipboard content not supported");
+            return false;
         };
 
-        debug!("Application::clipboard_paste reading {mime_type}");
-        let read_pipe = selection_offer.receive(mime_type.clone())?;
-        self.event_loop.handle().insert_source(read_pipe, move |(), res, state| {
-            let f = unsafe { res.get_mut() };
-            let mut buf = Vec::new();
-            let size = f.read_to_end(&mut buf).unwrap();
-
-            debug!("Application::clipboard_paste read {size} bytes");
-            let mime_type_cstr = CString::from_str(&mime_type).unwrap();
-            let content = DataTransferContent::new(&buf, &mime_type_cstr);
-            state.send_event(DataTransferEvent { serial, content });
-
-            PostAction::Remove
-        })?;
-        Ok(true)
+        debug!("application_clipboard_paste: reading {mime_type}");
+        let read_pipe = match offer.receive(mime_type.clone()) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("application_clipboard_paste: failed receive the data offer: {e}");
+                return false;
+            }
+        };
+        read_from_pipe(
+            "application_clipboard_paste",
+            read_pipe,
+            mime_type,
+            &self.state.loop_handle,
+            move |state, content| {
+                state.send_event(DataTransferEvent { serial, content });
+            },
+        )
     }
 
     pub fn start_drag(&mut self, window_id: WindowId, mime_types: MimeTypes, action: DndAction) -> anyhow::Result<()> {

@@ -369,9 +369,12 @@ internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
     return result
 }
 
-internal fun DataTransferContent.Companion.fromNative(s: MemorySegment): DataTransferContent {
-    val mimeTypesString = NativeDataTransferContent.mime_types(s).getUtf8String(0)
+internal fun DataTransferContent.Companion.fromNative(s: MemorySegment): DataTransferContent? {
     val nativeU8Array = NativeDataTransferContent.data(s)
+    if (nativeU8Array == MemorySegment.NULL) {
+        return null
+    }
+    val mimeTypesString = NativeDataTransferContent.mime_types(s).getUtf8String(0)
     val len = NativeBorrowedArray_u8.len(nativeU8Array)
     val buf = ByteArray(len.toInt())
     val dataPtr = NativeBorrowedArray_u8.ptr(nativeU8Array)
@@ -490,7 +493,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val content = DataTransferContent.fromNative(NativeDataTransferEvent.content(nativeEvent))
             Event.DataTransfer(
                 serial = NativeDataTransferEvent.serial(nativeEvent),
-                data = content,
                 content = content,
             )
         }
