@@ -185,7 +185,7 @@ pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, 
     debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
     ffi_boundary("application_clipboard_paste", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.clipboard_paste(serial, supported_mime_types.as_str()?)
+        Ok(app.clipboard_paste(serial, supported_mime_types.as_str()?))
     })
 }
 

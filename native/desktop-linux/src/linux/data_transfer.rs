@@ -1,13 +1,13 @@
 use std::{
     ffi::CString,
     io::{Read, Write},
-    str::FromStr,
 };
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
-use log::{debug, error};
+use log::{debug, error, warn};
 use smithay_client_toolkit::{
     data_device_manager::{
+        self,
         WritePipe,
         data_device::DataDeviceHandler,
         data_offer::{DataOfferHandler, DragOffer},
@@ -15,7 +15,7 @@ use smithay_client_toolkit::{
     },
     delegate_data_device,
     reexports::{
-        calloop::PostAction,
+        calloop::{LoopHandle, PostAction},
         client::{
             Connection, Proxy, QueueHandle,
             protocol::{
@@ -32,6 +32,42 @@ use crate::linux::{
 };
 
 delegate_data_device!(ApplicationState);
+
+#[must_use]
+pub fn read_from_pipe<'l, F>(
+    f_name: &'static str,
+    read_pipe: data_device_manager::ReadPipe,
+    mime_type: String,
+    loop_handle: &LoopHandle<'l, ApplicationState>,
+    mut callback: F,
+) -> bool
+where
+    for<'a> F: FnMut(&mut ApplicationState, DataTransferContent<'a>) + 'l,
+{
+    let mime_type_cstr = CString::new(mime_type).unwrap();
+    if let Err(e) = loop_handle.insert_source(read_pipe, move |(), res, state| {
+        let f = unsafe { res.get_mut() };
+        let mut buf = Vec::new();
+        let content = match f.read_to_end(&mut buf) {
+            Ok(size) => {
+                debug!("{f_name}: read {size} bytes");
+                DataTransferContent::new(&buf, &mime_type_cstr)
+            }
+            Err(e) => {
+                warn!("{f_name}: error receiving data: {e}");
+                DataTransferContent::null()
+            }
+        };
+
+        callback(state, content);
+        PostAction::Remove
+    }) {
+        warn!("{f_name}: failed to start reading: {e}");
+        false
+    } else {
+        true
+    }
+}
 
 impl DataDeviceHandler for ApplicationState {
     fn enter(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice, x: f64, y: f64, wl_surface: &WlSurface) {
@@ -102,25 +138,33 @@ impl DataDeviceHandler for ApplicationState {
         };
 
         let Some(mime_type) = self.drag_destination_mime_type.take() else {
-            debug!("DataDeviceHandler::drop_performed: destination MIME type not set");
+            debug!("DataDeviceHandler::drop_performed: no matching MIME type");
+            self.send_event(DataTransferEvent { serial: -1, content: DataTransferContent::null() });
             return;
         };
-        let read_pipe = drag_offer.receive(mime_type.clone()).unwrap();
-        self.loop_handle
-            .insert_source(read_pipe, move |(), res, state| {
-                let f = unsafe { res.get_mut() };
-                let mut buf = Vec::new();
-                let size = f.read_to_end(&mut buf).unwrap();
 
-                debug!("DataDeviceHandler::drop_performed read {size} bytes for {mime_type}");
-                debug!("DataDeviceHandler::drop_performed value: {buf:?}");
-                let mime_type_cstr = CString::from_str(&mime_type).unwrap();
-                let content = DataTransferContent::new(&buf, &mime_type_cstr);
+        let read_pipe = match drag_offer.receive(mime_type.clone()) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("DataDeviceHandler::drop_performed: failed receiving data offer: {e}");
+                self.send_event(DataTransferEvent { serial: -1, content: DataTransferContent::null() });
+                return;
+            }
+        };
+
+        if !read_from_pipe(
+            "DataDeviceHandler::drop_performed",
+            read_pipe,
+            mime_type,
+            &self.loop_handle,
+            move |state, content| {
+                drag_offer.finish();
+                drag_offer.destroy();
                 state.send_event(DataTransferEvent { serial: -1, content });
-
-                PostAction::Remove
-            })
-            .unwrap();
+            },
+        ) {
+            self.send_event(DataTransferEvent { serial: -1, content: DataTransferContent::null() });
+        }
     }
 }
 
