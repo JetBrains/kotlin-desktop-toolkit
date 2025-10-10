@@ -19,7 +19,7 @@ class WindowTests {
         val window1 = app.createWindow(WindowParams(windowId = 0, appId = "org.jetbrains.desktop.linux.tests", title = "Test Hello1"))
         val window2 = app.createWindow(
             WindowParams(
-                windowId = 0,
+                windowId = 1,
                 appId = "org.jetbrains.desktop.linux.tests",
                 title = "Hello2",
                 size = LogicalSize(200.0f, 300.0f),
