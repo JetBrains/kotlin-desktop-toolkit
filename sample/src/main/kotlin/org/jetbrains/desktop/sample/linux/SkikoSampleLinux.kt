@@ -1157,6 +1157,7 @@ private class RotatingBallWindow(
 }
 
 private class ApplicationState(private val app: Application) : AutoCloseable {
+    private var nextWindowId = 0L
     private val windows = mutableMapOf<WindowId, RotatingBallWindow>()
     private var keyWindowId: WindowId? = null
     private val xdgDesktopSettings = XdgDesktopSettings()
@@ -1168,11 +1169,12 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
     private var currentPrimarySelectionContent: DataTransferContentType? = null
 
     fun createWindow(useCustomTitlebar: Boolean, forceSoftwareRendering: Boolean = false) {
-        val windowId = windows.count().toLong()
+        val windowId = nextWindowId
+        nextWindowId += 1
         val windowParams = WindowParams(
             windowId = windowId,
             size = LogicalSize(width = 640f, height = 480f),
-            title = "Window ${windows.count()}",
+            title = "Window $windowId",
             appId = "org.jetbrains.desktop.linux.skikoSample1",
             preferClientSideDecoration = useCustomTitlebar,
             forceSoftwareRendering = forceSoftwareRendering,

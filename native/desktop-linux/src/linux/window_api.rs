@@ -71,8 +71,7 @@ pub extern "C" fn window_create(mut app_ptr: AppPtr, params: WindowParams) {
         debug!("window_create");
 
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.new_window(&params);
-        Ok(())
+        app.new_window(&params)
     });
 }
 
