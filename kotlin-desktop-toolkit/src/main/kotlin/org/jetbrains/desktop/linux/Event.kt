@@ -69,6 +69,7 @@ public sealed class Event {
 
     public data object ApplicationStarted : Event()
 
+    /** Return `true` from the event handler if the application should _not_ terminate. */
     public data object ApplicationWantsToTerminate : Event()
 
     public data object ApplicationWillTerminate : Event()
@@ -82,6 +83,7 @@ public sealed class Event {
         val data: DataTransferContent,
     ) : Event()
 
+    /** Data transfer for data from our application was canceled */
     public data class DataTransferCancelled(val dataSource: DataSource) : Event()
 
     public data class DisplayConfigurationChange(val screens: AllScreens) : Event()
