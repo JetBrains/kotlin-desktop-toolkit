@@ -534,14 +534,21 @@ impl<'a> From<FileChooserResponse<'a>> for Event<'a> {
 #[derive(Debug)]
 pub enum Event<'a> {
     ApplicationStarted,
-    // Return `true` from the event handler if the application should _not_ terminate.
+
+    /// Return `true` from the event handler if the application should _not_ terminate.
     ApplicationWantsToTerminate,
+
     ApplicationWillTerminate,
+
     DisplayConfigurationChange,
+
     XdgDesktopSettingChange(XdgDesktopSetting<'a>),
     DataTransfer(DataTransferContent<'a>),
     DataTransferAvailable(DataTransferAvailableEvent<'a>),
+
+    /// Data transfer for data from our application was canceled
     DataTransferCancelled(DataTransferCancelledEvent),
+
     FileChooserResponse(FileChooserResponse<'a>),
 
     /// Modifier keys (e.g Ctrl, Shift, etc) are never reported. Use `ModifiersChanged` for them.
