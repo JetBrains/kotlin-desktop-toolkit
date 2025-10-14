@@ -3,6 +3,7 @@ pub mod application_api;
 mod application_state;
 mod async_event_result;
 mod data_transfer;
+mod drag_icon;
 pub mod events;
 pub mod file_dialog_api;
 pub mod geometry;

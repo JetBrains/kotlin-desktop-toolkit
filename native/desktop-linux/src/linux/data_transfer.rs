@@ -299,6 +299,7 @@ impl DataSourceHandler for ApplicationState {
             Some(DataSource::Clipboard)
         } else if self.drag_source.as_ref().map(DragSource::inner) == Some(source) {
             self.drag_source = None;
+            self.drag_icon = None;
             self.current_drag_source_window_id = None;
             self.current_drag_source_action = None;
             Some(DataSource::DragAndDrop)
@@ -317,6 +318,7 @@ impl DataSourceHandler for ApplicationState {
     fn dnd_finished(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {
         debug!("DataSourceHandler::dnd_finished");
         self.drag_source = None;
+        self.drag_icon = None;
         let window_id = self.current_drag_source_window_id.take().unwrap();
         let action = self.current_drag_source_action.take().unwrap();
         self.send_event(DragAndDropFinishedEvent {

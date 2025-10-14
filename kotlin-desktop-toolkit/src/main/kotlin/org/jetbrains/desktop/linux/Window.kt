@@ -6,9 +6,21 @@ import java.lang.foreign.MemorySegment
 
 public typealias WindowId = Long
 
+public class DragIconParams(
+    public val renderingMode: RenderingMode,
+    public val size: LogicalSize,
+) {
+    init {
+        check(size.width > 0 && size.height > 0) {
+            "Invalid size (both width and height must be greater than zero)"
+        }
+    }
+}
+
 public class StartDragAndDropParams(
     public val mimeTypes: List<String>,
     public val actions: Set<DragAndDropAction>,
+    public val dragIconParams: DragIconParams?,
 )
 
 public class Window internal constructor(
@@ -139,6 +151,8 @@ public class Window internal constructor(
                     windowId,
                     mimeTypesToNative(arena, params.mimeTypes),
                     params.actions.toNative(),
+                    (params.dragIconParams?.renderingMode ?: RenderingMode.Auto).toNative(),
+                    (params.dragIconParams?.size ?: LogicalSize(0f, 0f)).toNative(arena),
                 )
             }
         }

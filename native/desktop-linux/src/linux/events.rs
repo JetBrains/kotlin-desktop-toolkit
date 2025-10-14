@@ -515,6 +515,20 @@ impl From<WindowDrawEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct DragIconDrawEvent {
+    pub software_draw_data: SoftwareDrawData,
+    pub physical_size: PhysicalSize,
+    pub scale: f64,
+}
+
+impl From<DragIconDrawEvent> for Event<'_> {
+    fn from(value: DragIconDrawEvent) -> Self {
+        Self::DragIconDraw(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct WindowKeyboardEnterEvent<'a> {
     pub window_id: WindowId,
     pub raw: BorrowedArray<'a, u32>,
@@ -611,6 +625,8 @@ pub enum Event<'a> {
 
     /// Drag&drop that was initiated from our window has finished.
     DragAndDropFinished(DragAndDropFinishedEvent),
+
+    DragIconDraw(DragIconDrawEvent),
 
     /// Drag&drop targeting our window is finished, and we received data from it.
     DropPerformed(DropPerformedEvent<'a>),

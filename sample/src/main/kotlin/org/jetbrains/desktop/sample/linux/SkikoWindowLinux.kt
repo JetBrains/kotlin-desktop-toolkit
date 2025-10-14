@@ -21,14 +21,49 @@ import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
 import kotlin.time.TimeSource
 
+internal fun performSoftwareDrawing(size: PhysicalSize, softwareDrawData: SoftwareDrawData, draw: (Surface) -> Boolean): Boolean {
+    return Surface.makeRasterDirect(
+        imageInfo = ImageInfo(
+            width = size.width,
+            height = size.height,
+            colorType = ColorType.BGRA_8888,
+            alphaType = ColorAlphaType.OPAQUE,
+            colorSpace = ColorSpace.sRGB,
+        ),
+        pixelsPtr = softwareDrawData.canvas,
+        rowBytes = softwareDrawData.stride,
+        surfaceProps = null,
+    ).use(draw)
+}
+
+internal fun performOpenGlDrawing(size: PhysicalSize, context: DirectContext, draw: (Surface) -> Boolean): Boolean {
+    return BackendRenderTarget.makeGL(
+        width = size.width,
+        height = size.height,
+        sampleCnt = 1,
+        stencilBits = 8,
+        fbId = 0,
+        fbFormat = FramebufferFormat.GR_GL_RGBA8,
+    ).use { renderTarget ->
+        Surface.makeFromBackendRenderTarget(
+            context = context,
+            rt = renderTarget,
+            origin = SurfaceOrigin.BOTTOM_LEFT,
+            colorFormat = SurfaceColorFormat.RGBA_8888,
+            colorSpace = ColorSpace.sRGB,
+            surfaceProps = null,
+        )!!.use(draw)
+    }
+}
+
 abstract class SkikoWindowLinux(
     app: Application,
     params: WindowParams,
 ) : AutoCloseable {
     private val directContext: DirectContext by lazy {
         val eglFunc = app.getEglProcFunc()!!
-        val openGlInterace = GLAssembledInterface.createFromNativePointers(ctxPtr = eglFunc.ctxPtr, fPtr = eglFunc.fPtr)
-        DirectContext.makeGLWithInterface(openGlInterace)
+        val openGlInterface = GLAssembledInterface.createFromNativePointers(ctxPtr = eglFunc.ctxPtr, fPtr = eglFunc.fPtr)
+        DirectContext.makeGLWithInterface(openGlInterface)
     }
     val window = app.createWindow(params)
     private val creationTime = TimeSource.Monotonic.markNow()
@@ -37,55 +72,16 @@ abstract class SkikoWindowLinux(
         window.setMinSize(LogicalSize(320.0f, 240.0f))
     }
 
-    private fun performSoftwareDrawing(event: Event.WindowDraw, softwareDrawData: SoftwareDrawData): Boolean {
-        return Surface.makeRasterDirect(
-            imageInfo = ImageInfo(
-                width = event.size.width,
-                height = event.size.height,
-                colorType = ColorType.BGRA_8888,
-                alphaType = ColorAlphaType.OPAQUE,
-                colorSpace = ColorSpace.sRGB,
-            ),
-            pixelsPtr = softwareDrawData.canvas,
-            rowBytes = softwareDrawData.stride,
-            surfaceProps = null,
-        ).use { surface ->
+    fun performDrawing(event: Event.WindowDraw): Boolean {
+        val draw = { surface: Surface ->
             val time = creationTime.elapsedNow().inWholeMilliseconds
-            surface.canvas.draw(PhysicalSize(surface.width, surface.height), event.scale, time)
+            surface.canvas.draw(event.size, event.scale, time)
             surface.flushAndSubmit()
             true
         }
-    }
-
-    private fun performOpenGlDrawing(event: Event.WindowDraw): Boolean {
-        return BackendRenderTarget.makeGL(
-            width = event.size.width,
-            height = event.size.height,
-            sampleCnt = 1,
-            stencilBits = 8,
-            fbId = 0,
-            fbFormat = FramebufferFormat.GR_GL_RGBA8,
-        ).use { renderTarget ->
-            Surface.makeFromBackendRenderTarget(
-                context = directContext,
-                rt = renderTarget,
-                origin = SurfaceOrigin.BOTTOM_LEFT,
-                colorFormat = SurfaceColorFormat.RGBA_8888,
-                colorSpace = ColorSpace.sRGB,
-                surfaceProps = null,
-            )!!.use { surface ->
-                val time = creationTime.elapsedNow().inWholeMilliseconds
-                surface.canvas.draw(event.size, event.scale, time)
-                surface.flushAndSubmit()
-                true
-            }
-        }
-    }
-
-    fun performDrawing(event: Event.WindowDraw): Boolean {
         return event.softwareDrawData?.let { softwareDrawData ->
-            performSoftwareDrawing(event, softwareDrawData)
-        } ?: performOpenGlDrawing(event)
+            performSoftwareDrawing(event.size, softwareDrawData, draw)
+        } ?: performOpenGlDrawing(event.size, directContext, draw)
     }
 
     abstract fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long)

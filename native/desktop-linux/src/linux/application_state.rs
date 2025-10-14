@@ -58,6 +58,7 @@ use smithay_client_toolkit::{
 
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
+    drag_icon::DragIcon,
     events::{
         Event, ScreenId, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDrawEvent, WindowId,
         WindowScaleChangedEvent, WindowScreenChangeEvent,
@@ -115,6 +116,7 @@ pub struct ApplicationState {
     pub current_drag_target_window_id: Option<WindowId>,
     pub current_drag_source_window_id: Option<WindowId>,
     pub current_drag_source_action: Option<DndAction>,
+    pub drag_icon: Option<DragIcon>,
     pub data_device: Option<DataDevice>,
     pub primary_selection_manager: Option<PrimarySelectionManagerState>,
     pub primary_selection_device: Option<PrimarySelectionDevice>,
@@ -166,6 +168,7 @@ impl ApplicationState {
             current_drag_target_window_id: None,
             current_drag_source_window_id: None,
             current_drag_source_action: None,
+            drag_icon: None,
             data_device: None,
             primary_selection_manager: PrimarySelectionManagerState::bind(globals, qh).ok(),
             primary_selection_device: None,
@@ -244,9 +247,10 @@ impl ApplicationState {
 
 impl ApplicationCallbacks {
     #[allow(clippy::needless_pass_by_value)]
-    fn send_event(&self, event: Event) -> bool {
+    #[must_use]
+    pub fn send_event(&self, event: Event) -> bool {
         match event {
-            Event::MouseMoved(_) | Event::WindowDraw(_) => {}
+            Event::MouseMoved(_) | Event::WindowDraw(_) | Event::DragIconDraw(_) => {}
             _ => debug!("Sending event: {event:?}"),
         }
         catch_panic(|| Ok((self.event_handler)(&event))).unwrap_or(false)
@@ -367,7 +371,7 @@ impl CompositorHandler for ApplicationState {
             let new_scale: f64 = new_factor.into();
             window.scale_changed(new_scale, &self.shm_state);
 
-            self.callbacks.send_event(
+            _ = self.callbacks.send_event(
                 WindowScaleChangedEvent {
                     window_id: window.window_id,
                     new_scale,
@@ -387,6 +391,12 @@ impl CompositorHandler for ApplicationState {
             window.draw(conn, qh, self.themed_pointer.as_mut(), &|e: WindowDrawEvent| {
                 self.callbacks.send_event(e.into())
             });
+        } else if let Some(drag_icon) = &mut self.drag_icon
+            && drag_icon.surface.wl_surface() == surface
+        {
+            drag_icon.draw(qh, &|e| self.callbacks.send_event(e.into()));
+        } else {
+            warn!("Couldn't find draw surface {surface:?}");
         }
     }
 
@@ -424,7 +434,7 @@ impl WindowHandler for ApplicationState {
             };
             let is_first_configure = w.configure(&self.wl_display, &self.shm_state, window, &configure, egl);
 
-            self.callbacks.send_event(
+            _ = self.callbacks.send_event(
                 WindowConfigureEvent {
                     window_id: w.window_id,
                     size: w.size.unwrap(),
@@ -478,13 +488,17 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
             if let Some(window) = state.windows.get_mut(surface_id) {
                 window.scale_changed(new_scale, &state.shm_state);
 
-                state.callbacks.send_event(
+                _ = state.callbacks.send_event(
                     WindowScaleChangedEvent {
                         window_id: window.window_id,
                         new_scale,
                     }
                     .into(),
                 );
+            } else if let Some(drag_icon) = &mut state.drag_icon
+                && drag_icon.surface.wl_surface().id() == *surface_id
+            {
+                drag_icon.scale_changed(new_scale, &state.shm_state);
             }
         }
     }

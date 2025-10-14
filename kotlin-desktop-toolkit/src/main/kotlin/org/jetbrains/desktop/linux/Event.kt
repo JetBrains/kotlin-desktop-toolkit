@@ -137,6 +137,12 @@ public sealed class Event {
         val action: DragAndDropAction?,
     ) : Event()
 
+    public data class DragIconDraw(
+        val softwareDrawData: SoftwareDrawData?,
+        val size: PhysicalSize,
+        val scale: Double,
+    ) : Event()
+
     public data class FileChooserResponse(
         val requestId: RequestId,
 
