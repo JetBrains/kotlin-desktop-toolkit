@@ -5,10 +5,12 @@ import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitNativeProfile
 import org.jetbrains.desktop.buildscripts.hostArch
 import org.jetbrains.desktop.buildscripts.hostOs
 import org.jetbrains.desktop.buildscripts.targetArch
+import org.panteleyev.jpackage.ImageType
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.jpackage)
 }
 
 repositories {
@@ -167,4 +169,58 @@ tasks.register("lint") {
 
 tasks.register("autofix") {
     dependsOn(tasks.named("ktlintFormat"))
+}
+
+tasks.register<Exec>("runPackaged") {
+    group = "application"
+    description = "Package and run the macOS app bundle"
+    dependsOn(tasks.jpackage)
+    val appPath = layout.buildDirectory.dir("dist/SkikoSample.app").get().asFile.absolutePath
+    commandLine("$appPath/Contents/MacOS/SkikoSample")
+}
+
+val prepareJPackageInput by tasks.registering(Copy::class) {
+    dependsOn(tasks.jar)
+    from(configurations.runtimeClasspath)
+    from(tasks.jar)
+    into(layout.buildDirectory.dir("jpackage-input"))
+}
+
+// Copy native libraries for jpackage
+val prepareJPackageNativeLibs by tasks.registering(Copy::class) {
+    dependsOn(
+        ":kotlin-desktop-toolkit:collectWindowsArtifacts-aarch64-apple-darwin-dev",
+        ":kotlin-desktop-toolkit:collectWindowsArtifacts-aarch64-apple-darwin-release",
+    )
+    from(nativeLib)
+    into(layout.buildDirectory.dir("jpackage-input/native"))
+}
+
+// Configure jpackage task
+tasks.jpackage {
+    dependsOn(prepareJPackageInput, prepareJPackageNativeLibs)
+
+    appName = "SkikoSample"
+    appVersion = "1.0.0"
+    vendor = "JetBrains"
+    mainClass = "org.jetbrains.desktop.sample.macos.SkikoSampleMacKt"
+    mainJar = tasks.jar.get().archiveFileName.get()
+    type.set(ImageType.APP_IMAGE) // Create .app bundle instead of DMG
+
+    input.set(layout.buildDirectory.dir("jpackage-input"))
+    destination.set(layout.buildDirectory.dir("dist"))
+
+    javaOptions = listOf(
+        "--enable-preview",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+        "-Dkdt.library.folder.path=\$APPDIR/native",
+        "-Dkdt.debug=true",
+        "-Dkdt.native.log.path=\$APPDIR/logs/skiko_sample.log",
+    )
+
+    mac {
+        macPackageIdentifier = "org.jetbrains.desktop.sample.skiko"
+        macAppCategory = "public.app-category.developer-tools"
+    }
 }
