@@ -22,7 +22,9 @@ public data class PhysicalPoint(
 public data class LogicalSize(
     val width: LogicalPixels,
     val height: LogicalPixels,
-)
+) {
+    public companion object;
+}
 
 public data class LogicalPoint(
     val x: LogicalPixels,
