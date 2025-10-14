@@ -1,6 +1,6 @@
-use objc2::runtime::NSObject;
-use objc2::{exception, extern_class, msg_send, ClassType};
 use objc2::rc::Retained;
+use objc2::runtime::NSObject;
+use objc2::{ClassType, exception, extern_class, msg_send};
 
 extern_class!(
     #[unsafe(super(NSObject))]
@@ -10,10 +10,13 @@ extern_class!(
 
 impl LSBundleProxy {
     // https://notprivateapis.com/documentation/notprivateapis/bundleproxyforcurrentprocess
+    #[allow(non_snake_case)]
     pub(crate) fn bundleProxyForCurrentProcess() -> Option<Retained<Self>> {
         exception::catch(|| {
-            let bundle: Option<Retained<LSBundleProxy>> = unsafe { msg_send![LSBundleProxy::class(), bundleProxyForCurrentProcess] };
+            let bundle: Option<Retained<Self>> = unsafe { msg_send![Self::class(), bundleProxyForCurrentProcess] };
             bundle
-        }).ok().flatten()
+        })
+        .ok()
+        .flatten()
     }
 }

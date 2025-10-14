@@ -2,6 +2,7 @@ use super::notifications_api::{
     AuthorizationRequestId, AuthorizationStatus, NotificationAction, NotificationActionCallback, NotificationActionOptionsFlags,
     NotificationCallbacks, NotificationCategory, NotificationDeliveryCallback, NotificationRequest, NotificationSoundType, StatusRequestId,
 };
+use crate::macos::bundle_proxy::LSBundleProxy;
 use crate::macos::string::{copy_to_c_string, copy_to_ns_string};
 use anyhow::{Context, ensure};
 use block2::RcBlock;
@@ -9,8 +10,8 @@ use desktop_common::ffi_utils::{BorrowedArray, RustAllocatedStrPtr};
 use desktop_common::logger::catch_panic;
 use dispatch2::DispatchQueue;
 use objc2::__framework_prelude::{Bool, Retained};
-use objc2::{DeclaredClass, MainThreadMarker, MainThreadOnly, define_class, extern_class, msg_send, ClassType, sel, msg_send_id};
-use objc2_foundation::{NSArray, NSBundle, NSError, NSException, NSObject, NSObjectProtocol, NSSet, NSString};
+use objc2::{DeclaredClass, MainThreadMarker, MainThreadOnly, define_class};
+use objc2_foundation::{NSArray, NSError, NSObject, NSObjectProtocol, NSSet, NSString};
 use objc2_user_notifications::{
     UNAuthorizationOptions, UNAuthorizationStatus, UNMutableNotificationContent, UNNotificationAction, UNNotificationActionOptions,
     UNNotificationCategory, UNNotificationCategoryOptions, UNNotificationRequest, UNNotificationResponse, UNNotificationSettings,
@@ -18,7 +19,6 @@ use objc2_user_notifications::{
 };
 use std::cell::RefCell;
 use std::ptr::NonNull;
-use crate::macos::bundle_proxy::LSBundleProxy;
 
 thread_local! {
     static NOTIFICATION_CENTER_STATE: RefCell<Option<NotificationCenterState>> = const { RefCell::new(None) };
@@ -186,8 +186,6 @@ impl NotificationCenterState {
         })
     }
 }
-
-
 
 #[must_use]
 pub fn get_notification_center(_mtm: MainThreadMarker) -> Option<Retained<UNUserNotificationCenter>> {
