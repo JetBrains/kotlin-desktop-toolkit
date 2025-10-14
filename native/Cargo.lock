@@ -392,6 +392,7 @@ dependencies = [
  "objc2-metal",
  "objc2-quartz-core",
  "objc2-uniform-type-identifiers",
+ "objc2-user-notifications",
  "quickcheck",
  "quickcheck_macros",
  "test-log",
@@ -1185,6 +1186,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-core-location"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac0f75792558aa9d618443bbb5db7426a7a0b6fddf96903f86ef9ad02e135740"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
+]
+
+[[package]]
 name = "objc2-core-video"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1275,6 +1286,19 @@ checksum = "d964a85778b5899a7963c5d4a5c62cec6792cf41dfdfc5dadae2d427f2681c85"
 dependencies = [
  "block2",
  "objc2",
+ "objc2-foundation",
+]
+
+[[package]]
+name = "objc2-user-notifications"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a3f5ec77a81d9e0c5a0b32159b0cb143d7086165e79708351e02bf37dfc65cd"
+dependencies = [
+ "bitflags",
+ "block2",
+ "objc2",
+ "objc2-core-location",
  "objc2-foundation",
 ]
 
