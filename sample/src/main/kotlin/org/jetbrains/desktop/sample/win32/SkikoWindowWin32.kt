@@ -70,6 +70,8 @@ abstract class SkikoWindowWin32(
                     for (screen in screens) {
                         Logger.debug { "Screen: $screen" }
                     }
+                    val currentScreen = window.getScreen()
+                    Logger.debug { "Current screen: $currentScreen" }
                 }
                 EventHandlerResult.Continue
             }

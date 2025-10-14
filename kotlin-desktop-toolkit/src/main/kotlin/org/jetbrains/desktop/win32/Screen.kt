@@ -15,7 +15,7 @@ public data class Screen(
     val maximumFramesPerSecond: Int,
 ) {
     public companion object {
-        private fun fromNative(s: MemorySegment): Screen {
+        internal fun fromNative(s: MemorySegment): Screen {
             return Screen(
                 isPrimary = NativeScreenInfo.is_primary(s),
                 name = NativeScreenInfo.name(s).getUtf8String(0),

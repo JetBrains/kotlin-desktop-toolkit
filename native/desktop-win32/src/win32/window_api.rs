@@ -13,6 +13,7 @@ use super::{
     application::Application,
     application_api::AppPtr,
     geometry::{LogicalPoint, LogicalSize},
+    screen::ScreenInfo,
     window::Window,
 };
 
@@ -126,6 +127,11 @@ pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_scale_factor(window_ptr: WindowPtr) -> f32 {
     with_window(&window_ptr, "window_get_scale_factor", |window| Ok(window.get_scale()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_get_screen_info(window_ptr: WindowPtr) -> ScreenInfo {
+    with_window(&window_ptr, "window_get_screen_info", Window::get_screen_info)
 }
 
 #[unsafe(no_mangle)]

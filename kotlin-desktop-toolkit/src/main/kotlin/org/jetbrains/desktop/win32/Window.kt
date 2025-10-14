@@ -83,6 +83,17 @@ public class Window internal constructor(private val ptr: MemorySegment) : AutoC
         return ffiDownCall { desktop_win32_h.window_get_scale_factor(ptr) }
     }
 
+    public fun getScreen(): Screen {
+        return Arena.ofConfined().use { arena ->
+            val screenInfo = ffiDownCall { desktop_win32_h.window_get_screen_info(arena, ptr) }
+            try {
+                Screen.fromNative(screenInfo)
+            } finally {
+                ffiDownCall { desktop_win32_h.screen_info_drop(screenInfo) }
+            }
+        }
+    }
+
     public fun setMinSize(size: LogicalSize) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
