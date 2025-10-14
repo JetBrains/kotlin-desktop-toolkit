@@ -252,8 +252,9 @@ impl std::fmt::Debug for RustAllocatedStrPtr {
 }
 
 #[repr(transparent)]
-#[derive(Clone)]
 pub struct AutoDropStrPtr(RustAllocatedStrPtr);
+
+unsafe impl Send for AutoDropStrPtr {}
 
 impl AutoDropStrPtr {
     #[must_use]
