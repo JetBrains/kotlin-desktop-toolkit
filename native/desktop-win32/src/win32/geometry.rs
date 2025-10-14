@@ -51,7 +51,7 @@ impl PhysicalSize {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct LogicalPoint {
     pub x: LogicalPixels,
     pub y: LogicalPixels,

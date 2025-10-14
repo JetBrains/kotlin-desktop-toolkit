@@ -15,7 +15,7 @@ use windows::{
                 DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
                 DwmSetWindowAttribute,
             },
-            Gdi::{RDW_INVALIDATE, RDW_NOERASE, RDW_NOFRAME, RedrawWindow},
+            Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow, RDW_INVALIDATE, RDW_NOERASE, RDW_NOFRAME, RedrawWindow},
         },
         System::WinRT::Composition::ICompositorDesktopInterop,
         UI::{
@@ -35,6 +35,7 @@ use windows::{
 use super::{
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalSize},
+    screen::{self, ScreenInfo},
     utils,
     window_api::{WindowId, WindowParams, WindowStyle, WindowTitleBarKind},
 };
@@ -130,6 +131,11 @@ impl Window {
     pub fn get_scale(&self) -> f32 {
         let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
         (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
+    }
+
+    pub fn get_screen_info(&self) -> anyhow::Result<ScreenInfo> {
+        let hmonitor = unsafe { MonitorFromWindow(self.hwnd(), MONITOR_DEFAULTTONEAREST) };
+        screen::get_screen_info(hmonitor)
     }
 
     #[must_use]
