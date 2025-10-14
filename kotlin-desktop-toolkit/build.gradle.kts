@@ -207,7 +207,7 @@ val downloadJExtractTask = tasks.register<DownloadJExtractTask>("downloadJExtrac
 }
 
 val downloadAngleTaskByPlatform = enabledPlatforms.filter { it.os == Os.WINDOWS }.associateWith { platform ->
-    tasks.register<DownloadAngleTask>("downloadAngle-${buildPlatformRustTarget(platform)}") {
+    tasks.register<DownloadAngleTask>("downloadAngleFor${platform.name()}") {
         this.platform = platform
         version = providers.gradleProperty("kdt.win32.angle-version")
         outputDirectory = layout.buildDirectory.dir("angle-${angleArch(platform.arch)}")
@@ -217,7 +217,7 @@ val downloadAngleTaskByPlatform = enabledPlatforms.filter { it.os == Os.WINDOWS 
 val collectNativeArtifactsTaskByTarget = compileNativeTaskByTarget.mapValues { (target, buildNativeTask) ->
     val downloadAngleTask = downloadAngleTaskByPlatform[target.platform]
     tasks.register<CollectWindowsArtifactsTask>(
-        "collectWindowsArtifacts-${buildPlatformRustTarget(target.platform)}-${target.profile}",
+        "collectWindowsArtifactsFor${target.platform.name()}-${target.profile}",
     ) {
         dependsOn(buildNativeTask)
         downloadAngleTask?.let {
