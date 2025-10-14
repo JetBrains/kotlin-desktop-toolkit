@@ -19,11 +19,13 @@ use smithay_client_toolkit::{
 };
 
 use crate::linux::{
-    application_api::ApplicationCallbacks,
-    application_state::ApplicationState,
+    application_api::{ApplicationCallbacks, RenderingMode},
+    application_state::{ApplicationState, get_egl},
     async_event_result::AsyncEventResult,
     data_transfer::{MimeTypes, read_from_pipe},
+    drag_icon::DragIcon,
     events::{DataTransferEvent, Event, RequestId, WindowId},
+    geometry::LogicalSize,
     window::SimpleWindow,
     window_api::WindowParams,
     xdg_desktop_settings::xdg_desktop_settings_notifier,
@@ -358,11 +360,37 @@ impl Application {
         )
     }
 
-    pub fn start_drag(&mut self, window_id: WindowId, mime_types: MimeTypes, action: DndAction) -> anyhow::Result<()> {
+    pub fn start_drag(
+        &mut self,
+        window_id: WindowId,
+        mime_types: MimeTypes,
+        action: DndAction,
+        drag_icon_rendering_mode: RenderingMode,
+        drag_icon_size: LogicalSize,
+    ) -> anyhow::Result<()> {
         if mime_types.val.is_empty() {
             self.state.drag_source = None;
             return Ok(());
         }
+
+        if drag_icon_size.width.0 > 0.0 && drag_icon_size.height.0 > 0.0 {
+            let egl = match drag_icon_rendering_mode {
+                RenderingMode::Auto | RenderingMode::EGL => get_egl(),
+                RenderingMode::Software => None,
+            };
+
+            let drag_icon = DragIcon::new(
+                &self.state,
+                &self.qh,
+                &self.state.shm_state,
+                &self.state.wl_display,
+                drag_icon_size,
+                egl,
+            )?;
+
+            self.state.drag_icon = Some(drag_icon);
+        }
+        let wl_surface = self.state.drag_icon.as_ref().map(|drag_icon| drag_icon.surface.wl_surface());
 
         let origin = self
             .get_window(window_id)
@@ -384,7 +412,11 @@ impl Application {
             .get_latest_pointer_button_seat_and_serial()
             .context("Called start_drag without an implicit grab")?;
 
-        drag_source.start_drag(device, origin, None, serial);
+        drag_source.start_drag(device, origin, wl_surface, serial);
+        if let Some(s) = wl_surface {
+            s.frame(&self.qh, s.clone());
+            s.commit();
+        }
         self.state.current_drag_source_window_id = Some(window_id);
         self.state.drag_source = Some(drag_source);
 

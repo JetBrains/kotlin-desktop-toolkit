@@ -263,6 +263,40 @@ fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f6
     }
 }
 
+#[allow(clippy::many_single_char_names)]
+fn draw_software_drag_icon(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f64) {
+    const BYTES_PER_PIXEL: u8 = 4;
+    let canvas = {
+        let len = usize::try_from(physical_size.height.0 * data.stride).unwrap();
+        unsafe { std::slice::from_raw_parts_mut(data.canvas, len) }
+    };
+    let w = f64::from(physical_size.width.0);
+    let h = f64::from(physical_size.height.0);
+    let line_thickness = 5.0 * scale;
+
+    // Order of bytes in `pixel` is [b, g, r, a] (for the Argb8888 format)
+    for (pixel, i) in canvas.chunks_exact_mut(BYTES_PER_PIXEL.into()).zip(1u32..) {
+        let i = f64::from(i);
+        let x = i % w;
+        let y = (i / f64::from(data.stride)) * f64::from(BYTES_PER_PIXEL);
+
+        if between(x, line_thickness,  line_thickness * 2.0)  // left border
+           || between(y, line_thickness,  line_thickness * 2.0)  // top border
+           || between(x, line_thickness.mul_add(-2.0, w), w - line_thickness)  // right border
+           || between(y, line_thickness.mul_add(-2.0, h), h - line_thickness)  // bottom border
+           || between(x, (i / h) - (line_thickness / 2.0), (i / h) + (line_thickness / 2.0))
+        {
+            pixel[0] = 0;
+            pixel[1] = 0;
+        } else {
+            pixel[0] = 128;
+            pixel[1] = 128;
+        }
+        pixel[2] = 128;
+        pixel[3] = 128;
+    }
+}
+
 fn create_text_input_context<'a>(text: &str, text_cstring: &'a CString, change_caused_by_input_method: bool) -> TextInputContext<'a> {
     let codepoints_count = u16::try_from(text.chars().count()).unwrap();
     TextInputContext {
@@ -504,6 +538,16 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 }
                 true
             }
+            Event::DragIconDraw(data) => {
+                let window_id = DRAG_ICON_WINDOW_ID;
+                let window_state = state.windows.entry(window_id).or_insert_with(WindowState::default);
+                if data.software_draw_data.canvas.is_null() {
+                    draw_opengl_triangle_with_init(data.physical_size, app_ptr, window_id, window_state);
+                } else {
+                    draw_software_drag_icon(&data.software_draw_data, data.physical_size, data.scale);
+                }
+                true
+            }
             Event::WindowCloseRequest(data) => {
                 window_close(app_ptr.clone(), data.window_id);
                 state.windows.retain(|&k, _v| k != data.window_id);
@@ -521,7 +565,18 @@ extern "C" fn event_handler(event: &Event) -> bool {
                             TEXT_MIME_TYPE
                         };
                         let actions = DragAndDropActions(DragAndDropAction::Copy as u8 | DragAndDropAction::Move as u8);
-                        window_start_drag_and_drop(app_ptr, data.window_id, BorrowedStrPtr::new(mime_types), actions);
+                        let drag_icon_size = LogicalSize {
+                            width: LogicalPixels(300.),
+                            height: LogicalPixels(300.),
+                        };
+                        window_start_drag_and_drop(
+                            app_ptr,
+                            data.window_id,
+                            BorrowedStrPtr::new(mime_types),
+                            actions,
+                            RenderingMode::Auto,
+                            drag_icon_size,
+                        );
                         let window_state = state.windows.get_mut(&data.window_id).unwrap();
                         window_state.drag_and_drop_source = true;
                     }

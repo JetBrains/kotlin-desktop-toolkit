@@ -9,6 +9,7 @@ import org.jetbrains.desktop.linux.DesktopTitlebarAction
 import org.jetbrains.desktop.linux.DragAndDropAction
 import org.jetbrains.desktop.linux.DragAndDropQueryData
 import org.jetbrains.desktop.linux.DragAndDropQueryResponse
+import org.jetbrains.desktop.linux.DragIconParams
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.FileDialog
@@ -44,13 +45,17 @@ import org.jetbrains.desktop.linux.utf8OffsetToUtf16Offset
 import org.jetbrains.desktop.sample.common.runtimeInfo
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
+import org.jetbrains.skia.DirectContext
 import org.jetbrains.skia.Font
 import org.jetbrains.skia.FontMgr
 import org.jetbrains.skia.FontStyle
+import org.jetbrains.skia.GLAssembledInterface
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
+import org.jetbrains.skia.Surface
 import org.jetbrains.skia.TextLine
+import org.jetbrains.skia.makeGLWithInterface
 import java.lang.AutoCloseable
 import java.net.URI
 import java.text.BreakIterator
@@ -210,7 +215,7 @@ private interface ClipboardHandler {
     fun copyToPrimarySelection(content: DataTransferContentType)
     fun paste(supportedMimeTypes: List<String>)
     fun pasteFromPrimarySelection(supportedMimeTypes: List<String>)
-    fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams)
+    fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams, draw: (Canvas, Double) -> Unit)
 }
 
 private class EditorState {
@@ -677,6 +682,7 @@ private class ContentArea(
     var size: LogicalSize,
 ) {
     private var markerPosition: LogicalPoint? = null
+    private var dragIconTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
 
     fun onMouseMoved(event: Event.MouseMoved): EventHandlerResult {
         markerPosition = LogicalPoint(
@@ -695,23 +701,47 @@ private class ContentArea(
         return when (event.button) {
             MouseButton.LEFT -> when (modifiers.shortcutModifiers()) {
                 setOf(KeyModifiers.Alt) -> {
+                    val skikoTextLine = dragIconTextLineCreator.makeTextLine(EXAMPLE_FILES.joinToString("\n"), 10f)
+                    val dragIconParams = DragIconParams(
+                        renderingMode = RenderingMode.Auto,
+                        size = LogicalSize(width = skikoTextLine.width, height = skikoTextLine.height),
+                    )
                     val content = DataTransferContentType.UriList(EXAMPLE_FILES)
                     val startDragAndDropParams = StartDragAndDropParams(
                         mimeTypes = content.mimeTypes(),
                         actions = setOf(DragAndDropAction.Copy),
+                        dragIconParams,
                     )
-                    clipboardHandler.startDrag(content, startDragAndDropParams)
+                    clipboardHandler.startDrag(content, startDragAndDropParams) { canvas, scale ->
+                        val skikoTextLine = dragIconTextLineCreator.makeTextLine(EXAMPLE_FILES.joinToString("\n"), (10.0 * scale).toFloat())
+                        Paint().use { paint ->
+                            paint.color = Color.BLACK
+                            canvas.drawTextLine(skikoTextLine, x = skikoTextLine.leading, y = -skikoTextLine.ascent, paint)
+                        }
+                    }
                     EventHandlerResult.Stop
                 }
 
                 else -> {
                     editorState.getCurrentSelection()?.let {
+                        val skikoTextLine = dragIconTextLineCreator.makeTextLine(it, 30f)
+                        val dragIconParams = DragIconParams(
+                            renderingMode = RenderingMode.Auto,
+                            size = LogicalSize(width = skikoTextLine.width, height = skikoTextLine.height),
+                        )
                         val content = DataTransferContentType.Text(it)
                         val startDragAndDropParams = StartDragAndDropParams(
                             mimeTypes = content.mimeTypes(),
                             actions = setOf(DragAndDropAction.Copy, DragAndDropAction.Move),
+                            dragIconParams,
                         )
-                        clipboardHandler.startDrag(content, startDragAndDropParams)
+                        clipboardHandler.startDrag(content, startDragAndDropParams) { canvas, scale ->
+                            val skikoTextLine = dragIconTextLineCreator.makeTextLine(it, (30.0 * scale).toFloat())
+                            Paint().use { paint ->
+                                paint.color = Color.BLACK
+                                canvas.drawTextLine(skikoTextLine, x = skikoTextLine.leading, y = -skikoTextLine.ascent, paint)
+                            }
+                        }
                         EventHandlerResult.Stop
                     } ?: EventHandlerResult.Continue
                 }
@@ -1221,6 +1251,8 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
     private val clipboardPasteSerialToWindow = mutableMapOf<Int, WindowId>()
     private var currentDragContent: DataTransferContentType? = null
     private var currentPrimarySelectionContent: DataTransferContentType? = null
+    private var currentDragIconDraw: ((Canvas, Double) -> Unit)? = null
+    private var dragIconDirectContext: DirectContext? = null
 
     fun createWindow(useCustomTitlebar: Boolean, renderingMode: RenderingMode) {
         val windowId = nextWindowId
@@ -1264,8 +1296,9 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 app.primarySelectionPaste(currentClipboardPasteSerial, supportedMimeTypes)
             }
 
-            override fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams) {
+            override fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams, draw: (Canvas, Double) -> Unit) {
                 currentDragContent = content
+                currentDragIconDraw = draw
                 window.window.startDragAndDrop(params)
             }
         }
@@ -1321,7 +1354,38 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 windows[event.windowId]?.onDataTransfer(event.content, app) ?: EventHandlerResult.Continue
             }
             is Event.DragAndDropLeave -> EventHandlerResult.Stop
-            is Event.DragAndDropFinished -> windows[event.windowId]?.onDragAndDropFinished(event.action) ?: EventHandlerResult.Continue
+            is Event.DragIconDraw -> {
+                currentDragIconDraw?.let { draw ->
+                    val drawImpl = { surface: Surface ->
+                        draw(surface.canvas, event.scale)
+                        surface.flushAndSubmit()
+                        true
+                    }
+                    event.softwareDrawData?.let { softwareDrawData ->
+                        performSoftwareDrawing(event.size, softwareDrawData, drawImpl)
+                    } ?: run {
+                        dragIconDirectContext?.let {
+                            performOpenGlDrawing(event.size, it, drawImpl)
+                        } ?: run {
+                            val eglFunc = app.getEglProcFunc()!!
+                            val openGlInterface = GLAssembledInterface.createFromNativePointers(
+                                ctxPtr = eglFunc.ctxPtr,
+                                fPtr = eglFunc.fPtr,
+                            )
+                            val directContext = DirectContext.makeGLWithInterface(openGlInterface)
+                            dragIconDirectContext = directContext
+                            performOpenGlDrawing(event.size, directContext, drawImpl)
+                        }
+                    }
+                    EventHandlerResult.Stop
+                } ?: EventHandlerResult.Continue
+            }
+            is Event.DragAndDropFinished -> {
+                windows[event.windowId]?.onDragAndDropFinished(event.action) ?: EventHandlerResult.Continue
+                currentDragIconDraw = null
+                dragIconDirectContext = null
+                EventHandlerResult.Stop
+            }
             is Event.DataTransferCancelled -> {
                 onDataTransferCancelled(event.dataSource)
                 EventHandlerResult.Stop

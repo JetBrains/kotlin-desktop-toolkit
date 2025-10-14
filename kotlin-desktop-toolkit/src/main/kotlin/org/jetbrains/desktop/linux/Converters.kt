@@ -13,6 +13,7 @@ import org.jetbrains.desktop.linux.generated.NativeDragAndDropFinishedEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryResponse
+import org.jetbrains.desktop.linux.generated.NativeDragIconDrawEvent
 import org.jetbrains.desktop.linux.generated.NativeDropPerformedEvent
 import org.jetbrains.desktop.linux.generated.NativeEvent
 import org.jetbrains.desktop.linux.generated.NativeFileChooserResponse
@@ -589,6 +590,14 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 windowId = NativeDropPerformedEvent.window_id(nativeEvent),
                 content = DataTransferContent.fromNative(NativeDropPerformedEvent.content(nativeEvent)),
                 action = DragAndDropAction.fromNative(NativeDropPerformedEvent.action(nativeEvent).toInt()),
+            )
+        }
+        desktop_linux_h.NativeEvent_DragIconDraw() -> {
+            val nativeEvent = NativeEvent.drag_icon_draw(s)
+            Event.DragIconDraw(
+                softwareDrawData = SoftwareDrawData.fromNative(NativeDragIconDrawEvent.software_draw_data(nativeEvent)),
+                size = PhysicalSize.fromNative(NativeDragIconDrawEvent.physical_size(nativeEvent)),
+                scale = NativeDragIconDrawEvent.scale(nativeEvent),
             )
         }
         desktop_linux_h.NativeEvent_DragAndDropFinished() -> {
