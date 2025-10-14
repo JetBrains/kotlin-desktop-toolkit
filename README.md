@@ -28,7 +28,7 @@
 | --------------------- | ----- | ------- | ------- | --- |
 | Run event loop        | ✅    | ✅      | ✅      |     |
 | Invoke on Main thread | ✅    | ✅      | ✅      |     |
-| List screens          | ✅    | ✅      | 🚧      |     |
+| List screens          | ✅    | ✅      | ✅      |     |
 | Terminate application | ✅    | ✅      | ✅      |     |
 | Show notification     | ❌    | ❌      | ❌      |     |
 | System tray           | ❌    | ❌      | ❌      |     |
@@ -45,7 +45,7 @@
 | Size               | ✅    | ➖ (`startResize`) | ✅      |     |
 | Max/Min size       | ✅    | ✅                 | ✅      |     |
 | Content size       | ✅    | ➖                 | 🚧      |     |
-| Current screen     | ✅    | ✅                 | 🚧      |     |
+| Current screen     | ✅    | ✅                 | ✅      |     |
 | Full screen        | ✅    | ✅                 | ❌      |     |
 | Maximize/Minimize  | ✅    | ✅                 | 🚧      |     |
 | Request focus      | ✅    | ✅                 | 🚧      |     |
@@ -121,15 +121,15 @@
 
 |                     | MacOS | Wayland | Windows | X11 |
 | ------------------- | ----- | ------- | ------- | --- |
-| ScreenId            | ✅    | ✅      | 🚧      |     |
-| IsPrimary           | ✅    | ❌      | 🚧      |     |
-| Name                | ✅    | ✅      | 🚧      |     |
-| Origin              | ✅    | ✅      | 🚧      |     |
-| Size                | ✅    | ✅      | 🚧      |     |
-| Scale               | ✅    | ✅      | 🚧      |     |
-| FPS                 | ✅    | ✅      | 🚧      |     |
-| Color space         | ❌    | ❌      | 🚧      |     |
-| Persistent identity | ❌    | 🚧      | 🚧      |     |
+| ScreenId            | ✅    | ✅      | ➖      |     |
+| IsPrimary           | ✅    | ❌      | ✅      |     |
+| Name                | ✅    | ✅      | ✅      |     |
+| Origin              | ✅    | ✅      | ✅      |     |
+| Size                | ✅    | ✅      | ✅      |     |
+| Scale               | ✅    | ✅      | ✅      |     |
+| FPS                 | ✅    | ✅      | ✅      |     |
+| Color space         | ❌    | ❌      | ❌      |     |
+| Persistent identity | ❌    | 🚧      | ❌      |     |
 
 
 
