@@ -32,27 +32,27 @@
 | Terminate application | ✅    | ✅      | ✅      |     |
 | Show notification     | ❌    | ❌      | ❌      |     |
 | System tray           | ❌    | ❌      | ❌      |     |
-| Application icon      | ✅    | ❌      | 🚧      |     |
+| Application icon      | ✅    | ✅      | 🚧      |     |
 | Application menu      | ✅    | ❌      | ➖      |     |
 | Accessibility         | ❌    | ❌      | ❌      |     |
-| File choose dialog    | ✅    | ❌      | 🚧      |     |
+| File choose dialog    | ✅    | ✅      | 🚧      |     |
 
 #### Window
 
-|                    | MacOS | Wayland | Windows | X11 |
-| ------------------ | ----- | ------- | ------- | --- |
+|                    | MacOS | Wayland            | Windows | X11 |
+| ------------------ | ----- | ------------------ | ------- | --- |
 | Position           | ✅    | ➖ (`startMove`)   | ✅      |     |
 | Size               | ✅    | ➖ (`startResize`) | ✅      |     |
-| Max/Min size       | ✅    | ✅      | ✅      |     |
-| Content size       | ✅    | ➖      | 🚧      |     |
-| Current screen     | ✅    | ✅      | 🚧      |     |
-| Full screen        | ✅    | ✅      | ❌      |     |
-| Maximize/Minimize  | ✅    | ✅      | 🚧      |     |
-| Request focus      | ✅    | ❌      | 🚧      |     |
-| Set cursor icon    | ✅    | ✅      | 🚧      |     |
-| Transparency       | ✅    | ✅      | ✅      |     |
-| Background effects | ✅    | ❌      | ✅      |     |
-| Close window       | ✅    |         | 🚧      |     |
+| Max/Min size       | ✅    | ✅                 | ✅      |     |
+| Content size       | ✅    | ➖                 | 🚧      |     |
+| Current screen     | ✅    | ✅                 | 🚧      |     |
+| Full screen        | ✅    | ✅                 | ❌      |     |
+| Maximize/Minimize  | ✅    | ✅                 | 🚧      |     |
+| Request focus      | ✅    | ✅                 | 🚧      |     |
+| Set cursor icon    | ✅    | ✅                 | 🚧      |     |
+| Transparency       | ✅    | ✅                 | ✅      |     |
+| Background effects | ✅    | ❌                 | ✅      |     |
+| Close window       | ✅    | ✅                 | 🚧      |     |
 
 #### Rendering
 
@@ -140,6 +140,6 @@
 | Window as drag target | ✅    | ✅      | ❌      |     |
 | Drag entered          | ✅    | ✅      | ❌      |     |
 | Drag updated          | ✅    | ✅      | ❌      |     |
-| Drag exited           | ✅    | ❌      | ❌      |     |
-| Drag performed        | ✅    | 🚧      | ❌      |     |
+| Drag exited           | ✅    | ✅      | ❌      |     |
+| Drag performed        | ✅    | ✅      | ❌      |     |
 | Drag source           | ❌    | ✅      | ❌      |     |
