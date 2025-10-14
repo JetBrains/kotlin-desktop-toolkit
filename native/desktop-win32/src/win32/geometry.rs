@@ -21,6 +21,11 @@ impl PhysicalPoint {
             y: PhysicalPixels(y),
         }
     }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub(crate) fn to_logical(self, scale: f32) -> LogicalPoint {
+        LogicalPoint::new((self.x.0 as f32) / scale, (self.y.0 as f32) / scale)
+    }
 }
 
 #[repr(C)]
@@ -37,6 +42,11 @@ impl PhysicalSize {
             width: PhysicalPixels(width),
             height: PhysicalPixels(height),
         }
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub(crate) fn to_logical(self, scale: f32) -> LogicalSize {
+        LogicalSize::new((self.width.0 as f32) / scale, (self.height.0 as f32) / scale)
     }
 }
 
@@ -73,6 +83,14 @@ pub struct LogicalSize {
 }
 
 impl LogicalSize {
+    #[must_use]
+    pub const fn new(width: f32, height: f32) -> Self {
+        Self {
+            width: LogicalPixels(width),
+            height: LogicalPixels(height),
+        }
+    }
+
     #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn to_physical(self, scale: f32) -> PhysicalSize {
         PhysicalSize::new(

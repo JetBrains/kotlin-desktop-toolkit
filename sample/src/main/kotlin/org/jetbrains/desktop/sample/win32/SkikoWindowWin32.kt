@@ -4,9 +4,12 @@ import org.jetbrains.desktop.win32.AngleRenderer
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
+import org.jetbrains.desktop.win32.Logger
 import org.jetbrains.desktop.win32.LogicalSize
 import org.jetbrains.desktop.win32.PhysicalSize
+import org.jetbrains.desktop.win32.Screen
 import org.jetbrains.desktop.win32.SurfaceParams
+import org.jetbrains.desktop.win32.VirtualKey
 import org.jetbrains.desktop.win32.WindowParams
 import org.jetbrains.skia.BackendRenderTarget
 import org.jetbrains.skia.Canvas
@@ -59,6 +62,16 @@ abstract class SkikoWindowWin32(
             is Event.NCCalcSize -> with(event) {
                 performDrawing(size, scale)
                 EventHandlerResult.Stop
+            }
+
+            is Event.KeyDown -> {
+                if (event.keyCode == VirtualKey.S) {
+                    val screens = Screen.allScreens()
+                    for (screen in screens) {
+                        Logger.debug { "Screen: $screen" }
+                    }
+                }
+                EventHandlerResult.Continue
             }
 
             else -> EventHandlerResult.Continue
