@@ -85,7 +85,10 @@ public sealed class Event {
 
     public data class XdgDesktopSettingChange(val setting: XdgDesktopSetting) : Event()
 
-    public data class DataTransferAvailable(val mimeTypes: List<String>) : Event()
+    public data class DataTransferAvailable(
+        val dataSource: DataSource,
+        val mimeTypes: List<String>,
+    ) : Event()
 
     /** Data received from clipboard or primary selection. For drag&drop, see [DropPerformed]. */
     public data class DataTransfer(

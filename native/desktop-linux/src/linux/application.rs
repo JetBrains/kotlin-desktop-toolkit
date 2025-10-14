@@ -241,6 +241,79 @@ impl Application {
         selection_offer.with_mime_types(|mime_types| Some(mime_types.join(",")))
     }
 
+    pub fn primary_selection_get_available_mimetypes(&self) -> Option<String> {
+        let Some(device) = self.state.primary_selection_device.as_ref() else {
+            warn!("application_primary_selection_get_available_mimetypes: No primary selection device");
+            return None;
+        };
+        let Some(selection_offer) = device.data().selection_offer() else {
+            debug!("application_primary_selection_get_available_mimetypes: No selection offer found");
+            return None;
+        };
+        selection_offer.with_mime_types(|mime_types| Some(mime_types.join(",")))
+    }
+
+    pub fn primary_selection_put(&mut self, mime_types: MimeTypes) {
+        if mime_types.val.is_empty() {
+            self.state.primary_selection_source = None;
+            warn!("application_primary_selection_put: None");
+            return;
+        }
+        let Some(device) = self.state.primary_selection_device.as_ref() else {
+            warn!("application_primary_selection_put: No primary selection device");
+            return;
+        };
+        let Some(manager) = self.state.primary_selection_manager.as_ref() else {
+            warn!("application_primary_selection_put: No primary selection manager");
+            return;
+        };
+        if let Some(serial) = self.state.get_latest_event_serial() {
+            let source = manager.create_selection_source(&self.qh, mime_types.val);
+            source.set_selection(device, serial);
+            self.state.primary_selection_source = Some(source);
+        } else {
+            warn!("application_primary_selection_put: No last event serial");
+        }
+    }
+
+    pub fn primary_selection_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
+        let Some(device) = self.state.primary_selection_device.as_ref() else {
+            return false;
+        };
+
+        let Some(offer) = device.data().selection_offer() else {
+            debug!("application_primary_selection_paste: No selection offer found");
+            return false;
+        };
+        let Some(mime_type) = offer.with_mime_types(|mime_types| {
+            debug!("application_primary_selection_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
+            supported_mime_types
+                .split(',')
+                .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
+                .map(str::to_owned)
+        }) else {
+            debug!("application_primary_selection_paste: clipboard content not supported");
+            return false;
+        };
+        debug!("application_primary_selection_paste: reading {mime_type}");
+        let read_pipe = match offer.receive(mime_type.clone()) {
+            Ok(v) => v,
+            Err(e) => {
+                warn!("application_primary_selection_paste: failed receive the data offer: {e}");
+                return false;
+            }
+        };
+        read_from_pipe(
+            "application_primary_selection_paste",
+            read_pipe,
+            mime_type,
+            &self.state.loop_handle,
+            move |state, content| {
+                state.send_event(DataTransferEvent { serial, content });
+            },
+        )
+    }
+
     pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
         let Some(device) = self.state.data_device.as_ref() else {
             warn!("application_clipboard_paste: No data device available");

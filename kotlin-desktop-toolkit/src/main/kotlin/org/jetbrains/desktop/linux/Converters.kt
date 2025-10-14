@@ -392,6 +392,7 @@ internal fun DataTransferContent.Companion.fromNative(s: MemorySegment): DataTra
 internal fun DataSource.Companion.fromNative(nativeDataSource: Int): DataSource = when (nativeDataSource) {
     desktop_linux_h.NativeDataSource_Clipboard() -> DataSource.Clipboard
     desktop_linux_h.NativeDataSource_DragAndDrop() -> DataSource.DragAndDrop
+    desktop_linux_h.NativeDataSource_PrimarySelection() -> DataSource.PrimarySelection
     else -> error("Unexpected data source type $nativeDataSource")
 }
 
@@ -482,7 +483,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_DataTransferAvailable() -> {
             val nativeEvent = NativeEvent.data_transfer_available(s)
             val mimeTypesString = NativeDataTransferAvailableEvent.mime_types(nativeEvent).getUtf8String(0)
-            Event.DataTransferAvailable(mimeTypes = mimeTypesString.split(","))
+            Event.DataTransferAvailable(
+                dataSource = DataSource.fromNative(NativeDataTransferAvailableEvent.data_source(nativeEvent)),
+                mimeTypes = mimeTypesString.split(","),
+            )
         }
         desktop_linux_h.NativeEvent_DataTransferCancelled() -> {
             val nativeEvent = NativeEvent.data_transfer_cancelled(s)

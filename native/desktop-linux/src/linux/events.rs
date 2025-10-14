@@ -174,6 +174,7 @@ impl<'a> From<DropPerformedEvent<'a>> for Event<'a> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct DataTransferAvailableEvent<'a> {
+    pub data_source: DataSource,
     pub mime_types: BorrowedStrPtr<'a>,
 }
 
@@ -185,8 +186,9 @@ impl<'a> From<DataTransferAvailableEvent<'a>> for Event<'a> {
 
 impl<'a> DataTransferAvailableEvent<'a> {
     #[must_use]
-    pub const fn new(mime_types: &'a CStr) -> Self {
+    pub const fn new(data_source: DataSource, mime_types: &'a CStr) -> Self {
         Self {
+            data_source,
             mime_types: BorrowedStrPtr::new(mime_types),
         }
     }
@@ -580,6 +582,7 @@ pub enum Event<'a> {
     /// Drag&drop targeting our window is finished, and we received data from it.
     DropPerformed(DropPerformedEvent<'a>),
 
+    /// Reported for clipboard and primary selection.
     DataTransferAvailable(DataTransferAvailableEvent<'a>),
 
     /// Data transfer for data from our application was canceled
