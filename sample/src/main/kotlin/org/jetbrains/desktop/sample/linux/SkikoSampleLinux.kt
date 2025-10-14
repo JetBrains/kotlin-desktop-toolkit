@@ -47,7 +47,9 @@ import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import org.jetbrains.skia.TextLine
 import java.lang.AutoCloseable
+import java.net.URI
 import java.text.BreakIterator
+import kotlin.io.path.Path
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -531,7 +533,8 @@ private class EditorState {
             val files = content.data.decodeToString().trimEnd().split("\r\n")
             Logger.info { "Pasted ${files.size} files:" }
             for (file in files) {
-                Logger.info { file }
+                val path = URI(file).path
+                Logger.info { path }
             }
         } else if (content.mimeTypes.contains(TEXT_MIME_TYPE)) {
             deleteSelection()
@@ -1174,6 +1177,9 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                     windows[windowId]?.onDataTransfer(event.content, app)
                 } ?: EventHandlerResult.Continue
             }
+            is Event.DropPerformed -> {
+                windows[event.windowId]?.onDataTransfer(event.content, app) ?: EventHandlerResult.Continue
+            }
             is Event.DataTransferCancelled -> {
                 onDataTransferCancelled(event.dataSource)
                 EventHandlerResult.Stop
@@ -1243,7 +1249,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                         content.files.joinToString("\n").encodeToByteArray()
                     }
                     URI_LIST_MIME_TYPE -> {
-                        content.files.joinToString("\r\n", postfix = "\r\n") { "file://$it" }.encodeToByteArray()
+                        content.files.joinToString("\r\n", postfix = "\r\n") { Path(it).toUri().toString() }.encodeToByteArray()
                     }
                     else -> {
                         error("Unsupported mime type: $mimeType")

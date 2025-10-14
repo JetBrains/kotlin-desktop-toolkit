@@ -151,6 +151,10 @@ impl ApplicationState {
         self.windows.get(surface_id)
     }
 
+    pub fn get_window_id(&self, surface: &WlSurface) -> Option<WindowId> {
+        self.get_window(surface).map(|w| w.window_id)
+    }
+
     pub fn get_window_by_id(&self, window_id: WindowId) -> Option<&SimpleWindow> {
         self.window_id_to_surface_id
             .get(&window_id)

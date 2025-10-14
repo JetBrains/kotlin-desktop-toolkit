@@ -98,6 +98,12 @@ public sealed class Event {
 
     public data class DisplayConfigurationChange(val screens: AllScreens) : Event()
 
+    /** Drag&drop targeting our window is finished, and we received data from it. */
+    public data class DropPerformed(
+        val windowId: WindowId,
+        val content: DataTransferContent?,
+    ) : Event()
+
     public data class FileChooserResponse(
         val requestId: RequestId,
 
