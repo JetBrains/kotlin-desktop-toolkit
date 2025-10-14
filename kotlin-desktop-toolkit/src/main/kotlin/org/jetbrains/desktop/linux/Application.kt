@@ -44,6 +44,7 @@ public data class WindowParams(
 public enum class DataSource {
     Clipboard,
     DragAndDrop,
+    PrimarySelection,
     ;
 
     internal companion object
@@ -264,6 +265,37 @@ public class Application : AutoCloseable {
 
     public fun clipboardGetAvailableMimeTypes(): List<String> {
         val csvMimetypes = ffiDownCall { desktop_linux_h.application_clipboard_get_available_mimetypes(appPtr) }
+        return try {
+            csvMimetypes.getUtf8String(0).split(",")
+        } finally {
+            ffiDownCall { desktop_linux_h.string_drop(csvMimetypes) }
+        }
+    }
+
+    /** Will produce [Event.DataTransfer] event if there is primary selection content. */
+    public fun primarySelectionPaste(serial: Int, supportedMimeTypes: List<String>): Boolean {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_linux_h.application_primary_selection_paste(appPtr, serial, mimeTypesToNative(arena, supportedMimeTypes))
+            }
+        }
+    }
+
+    /**
+     * Indicate that there is data that other applications can fetch from primary selection, in any of the provided MIME type formats.
+     * Later, [ApplicationConfig.getDataTransferData] may be called, with [DataSource.PrimarySelection] argument,
+     * to actually get the data with the specified MIME type.
+     */
+    public fun primarySelectionPut(mimeTypes: List<String>) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_linux_h.application_primary_selection_put(appPtr, mimeTypesToNative(arena, mimeTypes))
+            }
+        }
+    }
+
+    public fun primarySelectionGetAvailableMimeTypes(): List<String> {
+        val csvMimetypes = ffiDownCall { desktop_linux_h.application_primary_selection_get_available_mimetypes(appPtr) }
         return try {
             csvMimetypes.getUtf8String(0).split(",")
         } finally {

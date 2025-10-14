@@ -13,9 +13,9 @@ use desktop_common::{
 use desktop_linux::linux::{
     application_api::{
         AppPtr, ApplicationCallbacks, DataSource, DragAction, DragAndDropQueryData, application_clipboard_paste, application_clipboard_put,
-        application_get_egl_proc_func, application_init, application_is_event_loop_thread, application_run_event_loop,
-        application_set_cursor_theme, application_shutdown, application_start_drag_and_drop, application_stop_event_loop,
-        application_text_input_disable, application_text_input_enable, application_text_input_update,
+        application_get_egl_proc_func, application_init, application_is_event_loop_thread, application_primary_selection_paste,
+        application_run_event_loop, application_set_cursor_theme, application_shutdown, application_start_drag_and_drop,
+        application_stop_event_loop, application_text_input_disable, application_text_input_enable, application_text_input_update,
     },
     events::{
         DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, SoftwareDrawData, TextInputEvent, WindowDrawEvent,
@@ -42,12 +42,12 @@ const fn cstr_to_str(cstr: &CStr) -> &str {
     unsafe { str::from_utf8_unchecked(cstr.to_bytes()) }
 }
 
-pub const TEXT_MIME_TYPE: &CStr = c"text/plain;charset=utf-8";
-pub const TEXT_MIME_TYPE_STR: &str = cstr_to_str(TEXT_MIME_TYPE);
-pub const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
-pub const URI_LIST_MIME_TYPE_STR: &str = cstr_to_str(URI_LIST_MIME_TYPE);
+const TEXT_MIME_TYPE: &CStr = c"text/plain;charset=utf-8";
+const TEXT_MIME_TYPE_STR: &str = cstr_to_str(TEXT_MIME_TYPE);
+const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
+const URI_LIST_MIME_TYPE_STR: &str = cstr_to_str(URI_LIST_MIME_TYPE);
 
-pub const ALL_MIMES: &CStr = c"text/uri-list,text/plain;charset=utf-8";
+const ALL_MIMES: &CStr = c"text/uri-list,text/plain;charset=utf-8";
 
 #[derive(Debug, Default)]
 struct OptionalAppPtr(Option<AppPtr<'static>>);
@@ -430,7 +430,11 @@ fn on_application_started(state: &mut State) {
     state.windows.insert(window_2_id, WindowState::default());
 }
 
+#[allow(clippy::too_many_lines)]
 extern "C" fn event_handler(event: &Event) -> bool {
+    const MOUSE_BUTTON_LEFT: u32 = 0x110;
+    const MOUSE_BUTTON_MIDDLE: u32 = 0x112;
+
     match event {
         Event::WindowDraw(_) | Event::MouseMoved(_) => {}
         _ => {
@@ -469,10 +473,17 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 }
                 true
             }
-            Event::MouseDown(data) => {
-                application_start_drag_and_drop(app_ptr, data.window_id, BorrowedStrPtr::new(ALL_MIMES), DragAction::Copy);
-                true
-            }
+            Event::MouseDown(data) => match data.button.0 {
+                MOUSE_BUTTON_LEFT => {
+                    application_start_drag_and_drop(app_ptr, data.window_id, BorrowedStrPtr::new(ALL_MIMES), DragAction::Copy);
+                    true
+                }
+                MOUSE_BUTTON_MIDDLE => {
+                    application_primary_selection_paste(app_ptr, 1, BorrowedStrPtr::new(TEXT_MIME_TYPE));
+                    true
+                }
+                _ => false,
+            },
             Event::ModifiersChanged(data) => {
                 state.key_modifiers = data.modifiers;
                 true
@@ -580,11 +591,13 @@ extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedStrP
         match source {
             DataSource::Clipboard => "file:///etc/hosts",
             DataSource::DragAndDrop => "file:///boot/efi/",
+            DataSource::PrimarySelection => "file:///etc/environment",
         }
     } else if mime_type_cstr == TEXT_MIME_TYPE {
         match source {
             DataSource::Clipboard => "/etc/hosts (from clipboard)",
             DataSource::DragAndDrop => "/boot/efi/ (from d&d)",
+            DataSource::PrimarySelection => "/etc/hosts (from primary selection)",
         }
     } else {
         mime_type_cstr.to_str().unwrap()

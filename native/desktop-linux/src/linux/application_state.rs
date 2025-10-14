@@ -13,6 +13,7 @@ use smithay_client_toolkit::{
     delegate_compositor, delegate_output, delegate_registry, delegate_seat, delegate_shm, delegate_subcompositor, delegate_xdg_shell,
     delegate_xdg_window,
     output::{OutputHandler, OutputState},
+    primary_selection::{PrimarySelectionManagerState, device::PrimarySelectionDevice, selection::PrimarySelectionSource},
     reexports::{
         calloop::LoopHandle,
         client::{
@@ -88,6 +89,9 @@ pub struct ApplicationState {
     pub drag_source: Option<DragSource>,
     pub drag_destination_mime_type: Option<String>,
     pub data_device: Option<DataDevice>,
+    pub primary_selection_manager: Option<PrimarySelectionManagerState>,
+    pub primary_selection_device: Option<PrimarySelectionDevice>,
+    pub primary_selection_source: Option<PrimarySelectionSource>,
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
@@ -137,6 +141,9 @@ impl ApplicationState {
             drag_source: None,
             drag_destination_mime_type: None,
             data_device: None,
+            primary_selection_manager: PrimarySelectionManagerState::bind(globals, qh).ok(),
+            primary_selection_device: None,
+            primary_selection_source: None,
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
             last_keyboard_event_serial: None,
@@ -233,6 +240,8 @@ impl SeatHandler for ApplicationState {
     fn new_capability(&mut self, _conn: &Connection, qh: &QueueHandle<Self>, seat: WlSeat, capability: Capability) {
         if self.data_device.is_none() {
             self.data_device = Some(self.data_device_manager_state.get_data_device(qh, &seat));
+
+            self.primary_selection_device = self.primary_selection_manager.as_ref().map(|m| m.get_selection_device(qh, &seat));
         }
 
         if capability == Capability::Keyboard && self.keyboard.is_none() {
