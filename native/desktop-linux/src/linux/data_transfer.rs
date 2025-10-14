@@ -7,8 +7,7 @@ use desktop_common::ffi_utils::BorrowedStrPtr;
 use log::{debug, error, warn};
 use smithay_client_toolkit::{
     data_device_manager::{
-        self,
-        WritePipe,
+        self, WritePipe,
         data_device::DataDeviceHandler,
         data_offer::{DataOfferHandler, DragOffer},
         data_source::{CopyPasteSource, DataSourceHandler, DragSource},
@@ -28,7 +27,7 @@ use smithay_client_toolkit::{
 use crate::linux::{
     application_api::{DataSource, DragAndDropQueryData},
     application_state::ApplicationState,
-    events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent, DataTransferEvent},
+    events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent, DropPerformedEvent},
 };
 
 delegate_data_device!(ApplicationState);
@@ -88,10 +87,14 @@ impl DataDeviceHandler for ApplicationState {
         let Some(drag_offer) = data_device.data().drag_offer() else {
             return;
         };
+        let Some(window_id) = self.get_window_id(&drag_offer.surface) else {
+            warn!("DataDeviceHandler::motion: couldn't find window for {:?}", drag_offer.surface);
+            return;
+        };
 
         self.drag_destination_mime_type = drag_offer.with_mime_types(|mime_types| {
             let drag_and_drop_query_data = DragAndDropQueryData {
-                window_id: self.get_window(&drag_offer.surface).unwrap().window_id,
+                window_id,
                 point: (x, y).into(),
             };
             let supported_mime_types = (self.callbacks.get_drag_and_drop_supported_mime_types)(&drag_and_drop_query_data);
@@ -137,9 +140,19 @@ impl DataDeviceHandler for ApplicationState {
             return;
         };
 
+        let surface = &drag_offer.surface;
+
+        let Some(window_id) = self.get_window_id(surface) else {
+            warn!("DataDeviceHandler::drop_performed: couldn't find window for {surface:?}");
+            return;
+        };
+
         let Some(mime_type) = self.drag_destination_mime_type.take() else {
             debug!("DataDeviceHandler::drop_performed: no matching MIME type");
-            self.send_event(DataTransferEvent { serial: -1, content: DataTransferContent::null() });
+            self.send_event(DropPerformedEvent {
+                window_id,
+                content: DataTransferContent::null(),
+            });
             return;
         };
 
@@ -147,7 +160,10 @@ impl DataDeviceHandler for ApplicationState {
             Ok(v) => v,
             Err(e) => {
                 warn!("DataDeviceHandler::drop_performed: failed receiving data offer: {e}");
-                self.send_event(DataTransferEvent { serial: -1, content: DataTransferContent::null() });
+                self.send_event(DropPerformedEvent {
+                    window_id,
+                    content: DataTransferContent::null(),
+                });
                 return;
             }
         };
@@ -160,10 +176,13 @@ impl DataDeviceHandler for ApplicationState {
             move |state, content| {
                 drag_offer.finish();
                 drag_offer.destroy();
-                state.send_event(DataTransferEvent { serial: -1, content });
+                state.send_event(DropPerformedEvent { window_id, content });
             },
         ) {
-            self.send_event(DataTransferEvent { serial: -1, content: DataTransferContent::null() });
+            self.send_event(DropPerformedEvent {
+                window_id,
+                content: DataTransferContent::null(),
+            });
         }
     }
 }

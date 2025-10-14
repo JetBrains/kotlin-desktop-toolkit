@@ -160,6 +160,19 @@ impl<'a> From<DataTransferEvent<'a>> for Event<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct DropPerformedEvent<'a> {
+    pub window_id: WindowId,
+    pub content: DataTransferContent<'a>,
+}
+
+impl<'a> From<DropPerformedEvent<'a>> for Event<'a> {
+    fn from(value: DropPerformedEvent<'a>) -> Self {
+        Self::DropPerformed(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct DataTransferAvailableEvent<'a> {
     pub mime_types: BorrowedStrPtr<'a>,
 }
@@ -563,6 +576,9 @@ pub enum Event<'a> {
 
     /// Data received from clipboard or primary selection. For drag&drop, see `DropPerformed`.
     DataTransfer(DataTransferEvent<'a>),
+
+    /// Drag&drop targeting our window is finished, and we received data from it.
+    DropPerformed(DropPerformedEvent<'a>),
 
     DataTransferAvailable(DataTransferAvailableEvent<'a>),
 
