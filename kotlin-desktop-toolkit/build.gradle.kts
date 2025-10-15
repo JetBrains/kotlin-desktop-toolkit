@@ -2,7 +2,7 @@ import org.gradle.internal.impldep.kotlinx.serialization.Serializable
 import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.CargoFmtTask
 import org.jetbrains.desktop.buildscripts.ClippyTask
-import org.jetbrains.desktop.buildscripts.CollectWindowsArtifactsTask
+import org.jetbrains.desktop.buildscripts.CollecNativeArtifactsTask
 import org.jetbrains.desktop.buildscripts.CompileRustTask
 import org.jetbrains.desktop.buildscripts.CrossCompilationSettings
 import org.jetbrains.desktop.buildscripts.DownloadAngleTask
@@ -216,8 +216,8 @@ val downloadAngleTaskByPlatform = enabledPlatforms.filter { it.os == Os.WINDOWS 
 
 val collectNativeArtifactsTaskByTarget = compileNativeTaskByTarget.mapValues { (target, buildNativeTask) ->
     val downloadAngleTask = downloadAngleTaskByPlatform[target.platform]
-    tasks.register<CollectWindowsArtifactsTask>(
-        "collectWindowsArtifactsFor${target.platform.name()}-${target.profile}",
+    tasks.register<CollecNativeArtifactsTask>(
+        "collectNativeArtifactsFor${target.platform.name()}-${target.profile}",
     ) {
         dependsOn(buildNativeTask)
         downloadAngleTask?.let {
@@ -225,7 +225,7 @@ val collectNativeArtifactsTaskByTarget = compileNativeTaskByTarget.mapValues { (
             angleBinaries.setFrom(downloadAngleTask.map { it.binaries })
         }
         nativeLibrary = buildNativeTask.flatMap { it.libraryFile }
-        targetDirectory = layout.buildDirectory.dir("native-${buildPlatformRustTarget(target.platform)}")
+        targetDirectory = layout.buildDirectory.dir("native-${buildPlatformRustTarget(target.platform)}-${target.profile}")
     }
 }
 
@@ -290,6 +290,9 @@ fun jarSuffixForPlatform(platform: Platform): String {
 val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
     val jarSuffix = jarSuffixForPlatform(platform)
     tasks.register<Jar>("package-jar-$jarSuffix") {
+        // every profile like dev and debug contains an identical copy of angle
+        // so we take only one of them
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         archiveBaseName = "kotlin-desktop-toolkit-$jarSuffix"
         for (profile in profiles) {
             val collectArtifactsTasks = collectNativeArtifactsTaskByTarget[RustTarget(platform, profile)]!!

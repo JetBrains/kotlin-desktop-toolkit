@@ -2,13 +2,16 @@ import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitNativeProfile
+import org.jetbrains.desktop.buildscripts.Os
 import org.jetbrains.desktop.buildscripts.hostArch
 import org.jetbrains.desktop.buildscripts.hostOs
 import org.jetbrains.desktop.buildscripts.targetArch
+import org.panteleyev.jpackage.ImageType
 
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktlint)
+    alias(libs.plugins.jpackage)
 }
 
 repositories {
@@ -167,4 +170,60 @@ tasks.register("lint") {
 
 tasks.register("autofix") {
     dependsOn(tasks.named("ktlintFormat"))
+}
+
+tasks.register<Exec>("runPackagedMac") {
+    group = "application"
+    description = "Package and run the macOS app bundle"
+    dependsOn(tasks.jpackage)
+    val appPath = layout.buildDirectory.dir("dist/SkikoSample.app").get().asFile.absolutePath
+    commandLine("$appPath/Contents/MacOS/SkikoSample")
+}
+
+val prepareJPackageInput by tasks.registering(Copy::class) {
+    dependsOn(tasks.jar)
+    from(configurations.runtimeClasspath)
+    from(tasks.jar)
+    into(layout.buildDirectory.dir("jpackage-input"))
+}
+
+val prepareJPackageNativeLibs by tasks.registering(Copy::class) {
+    from(nativeLib)
+    into(layout.buildDirectory.dir("jpackage-input/native"))
+}
+
+fun sampleMainClass(): String {
+    return when (hostOs()) {
+        Os.LINUX -> "org.jetbrains.desktop.sample.linux.SkikoSampleLinuxKt"
+        Os.MACOS -> "org.jetbrains.desktop.sample.macos.SkikoSampleMacKt"
+        Os.WINDOWS -> "org.jetbrains.desktop.sample.win32.SkikoSampleWin32Kt"
+    }
+}
+
+tasks.jpackage {
+    dependsOn(prepareJPackageInput, prepareJPackageNativeLibs)
+
+    appName = "SkikoSample"
+    appVersion = "1.0.0"
+    vendor = "JetBrains"
+    mainClass = sampleMainClass()
+    mainJar = tasks.jar.get().archiveFileName.get()
+    type.set(ImageType.APP_IMAGE) // todo replace with something else for other platforms?
+
+    input.set(layout.buildDirectory.dir("jpackage-input"))
+    destination.set(layout.buildDirectory.dir("dist"))
+
+    javaOptions = listOf(
+        "--enable-preview",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+        "-Dkdt.library.folder.path=\$APPDIR/native",
+        "-Dkdt.debug=true",
+        "-Dkdt.native.log.path=\$APPDIR/logs/skiko_sample.log",
+    )
+
+    mac {
+        macPackageIdentifier = "org.jetbrains.desktop.sample.skiko"
+        macAppCategory = "public.app-category.developer-tools"
+    }
 }
