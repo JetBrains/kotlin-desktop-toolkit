@@ -290,6 +290,9 @@ fun jarSuffixForPlatform(platform: Platform): String {
 val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
     val jarSuffix = jarSuffixForPlatform(platform)
     tasks.register<Jar>("package-jar-$jarSuffix") {
+        // every profile like dev and debug contains an identical copy of angle
+        // so we take only one of them
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         archiveBaseName = "kotlin-desktop-toolkit-$jarSuffix"
         for (profile in profiles) {
             val collectArtifactsTasks = collectNativeArtifactsTaskByTarget[RustTarget(platform, profile)]!!
