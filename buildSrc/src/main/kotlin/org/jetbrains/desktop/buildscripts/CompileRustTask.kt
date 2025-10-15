@@ -1,62 +1,66 @@
 package org.jetbrains.desktop.buildscripts
 
 import org.gradle.api.DefaultTask
-import org.gradle.api.file.Directory
+import org.gradle.api.file.DuplicatesStrategy
+import org.gradle.api.file.FileSystemOperations
 import org.gradle.api.file.FileTree
 import org.gradle.api.file.ProjectLayout
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.provider.Provider
 import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
-import org.gradle.api.tasks.Nested
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.TaskAction
 import org.gradle.kotlin.dsl.property
 import org.gradle.process.ExecOperations
-import java.io.ByteArrayOutputStream
 import java.nio.file.Path
 import javax.inject.Inject
-import kotlin.io.path.absolutePathString
-import kotlin.io.path.copyTo
 
 abstract class CompileRustTask @Inject constructor(
     objectFactory: ObjectFactory,
     providerFactory: ProviderFactory,
     projectLayout: ProjectLayout,
     private val execOperations: ExecOperations,
+    private val fileSystemOperations: FileSystemOperations,
 ) : DefaultTask() {
-    @Internal
-    val workspaceRoot = objectFactory.directoryProperty()
+    @get:Input
+    val workspaceRoot = objectFactory.property<String>()
 
-    @Suppress("unused")
     @get:InputFiles
     @get:PathSensitive(org.gradle.api.tasks.PathSensitivity.RELATIVE)
-    val workspaceFiles = objectFactory.rustWorkspaceFiles(workspaceRoot)
+    val workspaceFiles = objectFactory.property<FileTree>()
+
+    @get:Input
+    val cargoCommand = objectFactory.property<String>()
 
     @get:Input
     val crateName = objectFactory.property<String>()
 
-    @get:Nested
-    val rustTarget = objectFactory.property<Platform>()
+    @get:Input
+    val targetPlatform = objectFactory.property<Platform>()
+
+    @get:Input
+    val rustTarget = objectFactory.property<String>()
 
     @get:Input
     val rustProfile = objectFactory.property<String>()
 
     @Internal
     val outputDirectory =
-        projectLayout.buildDirectory.dir(providerFactory.provider {
-            inCrateArtifactsPath(rustTarget.get(), rustProfile.get())
-        })
+        projectLayout.buildDirectory.dir(
+            rustTarget.map { rustTarget ->
+                inCrateArtifactsPath(rustTarget, rustProfile.get())
+            },
+        )
 
     @Internal
     val rustOutputLibraryFile = providerFactory.provider {
-        val dir = workspaceRoot.get().asFile.resolve(inCrateArtifactsPath(rustTarget.get(), rustProfile.get()))
-        val target = rustTarget.get()
+        val dir = Path.of(workspaceRoot.get()).resolve(inCrateArtifactsPath(rustTarget.get(), rustProfile.get()))
+        val targetPlatform = targetPlatform.get()
         val name = crateName.get().replace('-', '_')
-        when (target.os) {
+        when (targetPlatform.os) {
             Os.LINUX -> dir.resolve("lib$name.so")
             Os.MACOS -> dir.resolve("lib$name.dylib")
             Os.WINDOWS -> dir.resolve("$name.dll")
@@ -66,10 +70,10 @@ abstract class CompileRustTask @Inject constructor(
     @get:OutputFile
     val libraryFile = providerFactory.provider {
         val dir = outputDirectory.get().asFile
-        val target = rustTarget.get()
+        val targetPlatform = targetPlatform.get()
         val rustProfile = rustProfile.get()
 
-        val targetSuffix = when (target.arch) {
+        val targetSuffix = when (targetPlatform.arch) {
             Arch.aarch64 -> "arm64"
             Arch.x86_64 -> "x64"
         }
@@ -77,14 +81,13 @@ abstract class CompileRustTask @Inject constructor(
         val debugSuffix = if (rustProfile == "debug" || rustProfile == "dev") "+debug" else ""
 
         val crateName = crateName.get().replace('-', '_')
-        val libName = "${crateName}_${targetSuffix}${debugSuffix}"
-
+        val libName = "${crateName}_${targetSuffix}$debugSuffix"
 
         /**
-        * See `KotlinDesktopToolkit.kt` if you would like to change this logic.
-        */
+         * See `KotlinDesktopToolkit.kt` if you would like to change this logic.
+         */
         // todo macOS change libname with otool
-        when (target.os) {
+        when (targetPlatform.os) {
             Os.LINUX -> dir.resolve("lib$libName.so")
             Os.MACOS -> dir.resolve("lib$libName.dylib")
             Os.WINDOWS -> dir.resolve("$libName.dll")
@@ -94,13 +97,21 @@ abstract class CompileRustTask @Inject constructor(
     @TaskAction
     fun compile() {
         execOperations.compileRust(
-            workspaceRoot.get().asFile.toPath(),
-            crateName.get(),
-            rustTarget.get(),
-            rustProfile.get(),
-            rustOutputLibraryFile.get().toPath(),
-            libraryFile.get().toPath(),
+            cargoCommand = cargoCommand.get(),
+            nativeDirectory = Path.of(workspaceRoot.get()),
+            crateName = crateName.get(),
+            rustTarget = rustTarget.get(),
+            targetPlatform = targetPlatform.get(),
+            rustProfile = rustProfile.get(),
         )
+
+        val libraryFile = libraryFile.get()
+        fileSystemOperations.copy {
+            from(rustOutputLibraryFile)
+            into(libraryFile.parent)
+            rename { libraryFile.name }
+            duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        }
     }
 }
 
@@ -109,79 +120,30 @@ internal fun profileFolderName(rustProfile: String) = when (rustProfile) {
     else -> rustProfile
 }
 
-internal fun inCrateArtifactsPath(rustTarget: Platform, rustProfile: String): String {
-    return "target/${buildPlatformRustTarget(rustTarget)}/${profileFolderName(rustProfile)}/"
-}
-
-/**
- * Finds the absolute path to [command]
- */
-internal fun ExecOperations.findCommand(command: String, os: Os): Path? {
-    val output = ByteArrayOutputStream()
-    val result = exec {
-        val cmd = when (os) {
-            Os.MACOS, Os.LINUX -> listOf("/bin/sh", "-c", "command -v $command")
-            Os.WINDOWS -> listOf("cmd.exe", "/c", "where", command)
-        }
-
-        commandLine(*cmd.toTypedArray())
-        standardOutput = output
-        isIgnoreExitValue = true
-    }
-    val out = output.toString().trim().takeIf { it.isNotBlank() }
-    return when {
-        result.exitValue != 0 -> null
-        out == null -> error("failed to resolve absolute path of command '$command'")
-        else -> Path.of(out)
-    }
+internal fun inCrateArtifactsPath(rustTarget: String, rustProfile: String): String {
+    return "target/$rustTarget/${profileFolderName(rustProfile)}/"
 }
 
 private fun ExecOperations.compileRust(
+    cargoCommand: String,
     nativeDirectory: Path,
     crateName: String,
-    rustTarget: Platform,
+    rustTarget: String,
+    targetPlatform: Platform,
     rustProfile: String,
-    rustOutputLibraryFile: Path,
-    libraryFile: Path,
 ) {
     exec {
         workingDir = nativeDirectory.toFile()
-        if (rustTarget.os == Os.MACOS) {
+        if (targetPlatform.os == Os.MACOS) {
             environment("MACOSX_DEPLOYMENT_TARGET", "10.12")
         }
-        executable = findCommand("cargo", hostOs())?.absolutePathString() ?: error("cannot find cargo path")
+        executable = cargoCommand
         args = listOf(
             "build",
             "--package=$crateName",
             "--profile=$rustProfile",
-            "--target=${buildPlatformRustTarget(rustTarget)}",
+            "--target=$rustTarget",
             "--color=always",
         )
     }
-
-    nativeDirectory
-        .resolve(rustOutputLibraryFile)
-        .copyTo(libraryFile, overwrite = true)
-}
-
-fun buildPlatformRustTarget(platform: Platform): String {
-    val osPart = when (platform.os) {
-        Os.WINDOWS -> "pc-windows-msvc"
-        Os.MACOS -> "apple-darwin"
-        Os.LINUX -> "unknown-linux-gnu"
-    }
-    val archPart = when (platform.arch) {
-        Arch.aarch64 -> "aarch64"
-        Arch.x86_64 -> "x86_64"
-    }
-    return "$archPart-$osPart"
-}
-
-/**
- * All workspace files under [workspaceRoot] excluding compilation outputs and caches
- */
-internal fun ObjectFactory.rustWorkspaceFiles(workspaceRoot: Provider<Directory>): FileTree = fileTree().apply {
-  setDir(workspaceRoot)
-}.matching {
-  exclude("target/**/*")
 }
