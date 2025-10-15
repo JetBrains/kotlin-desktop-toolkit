@@ -124,13 +124,6 @@ public data class NotificationAction(
  * Provides access to the native notification system on macOS 10.14+.
  */
 public object NotificationCenter : AutoCloseable {
-    private lateinit var globalArena: Arena
-
-    private lateinit var authorizationCallbackStub: MemorySegment
-    private lateinit var statusCallbackStub: MemorySegment
-    private lateinit var deliveryCallbackStub: MemorySegment
-    private lateinit var actionCallbackStub: MemorySegment
-
     @JvmInline
     public value class NotificationId public constructor(public val value: String)
 
@@ -153,19 +146,16 @@ public object NotificationCenter : AutoCloseable {
     // Triggered when the user clicked on notification
     public val DefaultAction: ActionId = ActionId("com.apple.UNNotificationDefaultActionIdentifier")
 
-    private val requestAuthorizationCallbacks = mutableMapOf<Long, (granted: Boolean) -> Unit>()
-    private val getAuthorizationStatusCallbacks = mutableMapOf<Long, (AuthorizationStatus) -> Unit>()
-    private val showNotificationCallbacks = mutableMapOf<NotificationId, (error: String?) -> Unit>()
-
-    private var actionResponseCallback: (NotificationId, ActionId) -> Unit = { notificationId, actionId -> }
-
-    private var idCounter: Long = 0
-
-    private fun nextId(): Long = idCounter++
-
     init {
         initializeCallbacks()
     }
+
+    /**
+     * It might be inaccessible on Mac OS 10.13 and lower.
+     * Also, the application should be packaged in an application image with valid Info.plist.
+     */
+    public var isSupportedByApplication: Boolean = false
+        private set
 
     private fun initializeCallbacks() {
         globalArena = Arena.ofConfined()
@@ -174,17 +164,14 @@ public object NotificationCenter : AutoCloseable {
         deliveryCallbackStub = NativeNotificationDeliveryCallback.allocate(::onNotificationDeliveryComplete, globalArena)
         actionCallbackStub = NativeNotificationActionCallback.allocate(::onActionResponse, globalArena)
 
-        ffiDownCall {
+        isSupportedByApplication = ffiDownCall {
             val callbacksSegment = globalArena.allocate(NativeNotificationCallbacks.layout())
             NativeNotificationCallbacks.on_authorization_request(callbacksSegment, authorizationCallbackStub)
             NativeNotificationCallbacks.on_authorization_status_request(callbacksSegment, statusCallbackStub)
             NativeNotificationCallbacks.on_delivery(callbacksSegment, deliveryCallbackStub)
             NativeNotificationCallbacks.on_action(callbacksSegment, actionCallbackStub)
 
-            val success = desktop_macos_h.notifications_init(callbacksSegment)
-            if (!success) {
-                throw IllegalStateException("Failed to initialize notification center")
-            }
+            desktop_macos_h.notifications_init(callbacksSegment)
         }
     }
 
@@ -343,7 +330,41 @@ public object NotificationCenter : AutoCloseable {
         }
     }
 
+    /**
+     * Closes the NotificationCenter and releases native callback resources.
+     *
+     * After calling close(), the NotificationCenter cannot be used anymore.
+     * This is typically called during application shutdown.
+     */
+    override fun close() {
+        assert(::globalArena.isInitialized)
+        // Clean up native notification resources (delegate and categories)
+        ffiDownCall {
+            desktop_macos_h.notifications_deinit()
+        }
+        requestAuthorizationCallbacks.clear()
+        getAuthorizationStatusCallbacks.clear()
+        showNotificationCallbacks.clear()
+        globalArena.close()
+    }
+
     // private
+    private lateinit var globalArena: Arena
+
+    private lateinit var authorizationCallbackStub: MemorySegment
+    private lateinit var statusCallbackStub: MemorySegment
+    private lateinit var deliveryCallbackStub: MemorySegment
+    private lateinit var actionCallbackStub: MemorySegment
+
+    private val requestAuthorizationCallbacks = mutableMapOf<Long, (granted: Boolean) -> Unit>()
+    private val getAuthorizationStatusCallbacks = mutableMapOf<Long, (AuthorizationStatus) -> Unit>()
+    private val showNotificationCallbacks = mutableMapOf<NotificationId, (error: String?) -> Unit>()
+
+    private var actionResponseCallback: (NotificationId, ActionId) -> Unit = { notificationId, actionId -> }
+
+    private var idCounter: Long = 0
+
+    private fun nextId(): Long = idCounter++
 
     // Called from native when authorization request completes
     private fun onRequestAuthorizationResult(requestId: Long, granted: Boolean) {
@@ -382,23 +403,5 @@ public object NotificationCenter : AutoCloseable {
             val notificationId = NotificationId(notificationIdPtr.getUtf8String(0))
             actionResponseCallback.invoke(notificationId, actionId)
         }
-    }
-
-    /**
-     * Closes the NotificationCenter and releases native callback resources.
-     *
-     * After calling close(), the NotificationCenter cannot be used anymore.
-     * This is typically called during application shutdown.
-     */
-    override fun close() {
-        assert(::globalArena.isInitialized)
-        // Clean up native notification resources (delegate and categories)
-        ffiDownCall {
-            desktop_macos_h.notifications_deinit()
-        }
-        requestAuthorizationCallbacks.clear()
-        getAuthorizationStatusCallbacks.clear()
-        showNotificationCallbacks.clear()
-        globalArena.close()
     }
 }
