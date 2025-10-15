@@ -1095,6 +1095,51 @@ fun jbIconBytes(): ByteArray {
     return object {}.javaClass.getResource("/jb-logo.png")!!.readBytes()
 }
 
+fun setupNotificationCategories() {
+    if (NotificationCenter.isSupportedByApplication) {
+        NotificationCenter.registerNotificationCategories(
+            listOf(
+                NotificationCenter.NotificationCategory(
+                    categoryId = NotificationCenter.CategoryId("action_category"),
+                    actions = listOf(
+                        org.jetbrains.desktop.macos.NotificationAction(
+                            identifier = "approve",
+                            title = "Approve",
+                        ),
+                        org.jetbrains.desktop.macos.NotificationAction(
+                            identifier = "deny",
+                            title = "Deny",
+                        ),
+                        org.jetbrains.desktop.macos.NotificationAction(
+                            identifier = "later",
+                            title = "Remind Me Later",
+                        ),
+                    ),
+                ),
+                NotificationCenter.NotificationCategory(
+                    categoryId = NotificationCenter.CategoryId("evil_action_category"),
+                    actions = listOf(
+                        org.jetbrains.desktop.macos.NotificationAction(
+                            identifier = "approve",
+                            title = "Not Approve",
+                        ),
+                        org.jetbrains.desktop.macos.NotificationAction(
+                            identifier = "deny",
+                            title = "Not Deny",
+                        ),
+                        org.jetbrains.desktop.macos.NotificationAction(
+                            identifier = "later",
+                            title = "NotRemind Me Later",
+                        ),
+                    ),
+                ),
+            ),
+        ) { notificationId, actionId ->
+            Logger.info { "Notification action: $notificationId, actionId: $actionId" }
+        }
+    }
+}
+
 fun main() {
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
     Logger.info { runtimeInfo() }
@@ -1105,46 +1150,7 @@ fun main() {
             state.createWindow(useCustomTitlebar = true)
             Application.runEventLoop { event ->
                 if (event is Event.ApplicationDidFinishLaunching) {
-                    NotificationCenter.registerNotificationCategories(
-                        listOf(
-                            NotificationCenter.NotificationCategory(
-                                categoryId = NotificationCenter.CategoryId("action_category"),
-                                actions = listOf(
-                                    org.jetbrains.desktop.macos.NotificationAction(
-                                        identifier = "approve",
-                                        title = "Approve",
-                                    ),
-                                    org.jetbrains.desktop.macos.NotificationAction(
-                                        identifier = "deny",
-                                        title = "Deny",
-                                    ),
-                                    org.jetbrains.desktop.macos.NotificationAction(
-                                        identifier = "later",
-                                        title = "Remind Me Later",
-                                    ),
-                                ),
-                            ),
-                            NotificationCenter.NotificationCategory(
-                                categoryId = NotificationCenter.CategoryId("evil_action_category"),
-                                actions = listOf(
-                                    org.jetbrains.desktop.macos.NotificationAction(
-                                        identifier = "approve",
-                                        title = "Not Approve",
-                                    ),
-                                    org.jetbrains.desktop.macos.NotificationAction(
-                                        identifier = "deny",
-                                        title = "Not Deny",
-                                    ),
-                                    org.jetbrains.desktop.macos.NotificationAction(
-                                        identifier = "later",
-                                        title = "NotRemind Me Later",
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ) { notificationId, actionId ->
-                        Logger.info { "Notification action: $notificationId, actionId: $actionId" }
-                    }
+                    setupNotificationCategories()
                     Application.setDockIcon(jbIconBytes())
                     AppMenuManager.setMainMenu(state.buildMenu())
                 }
