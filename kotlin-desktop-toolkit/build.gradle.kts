@@ -2,7 +2,7 @@ import org.gradle.internal.impldep.kotlinx.serialization.Serializable
 import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.CargoFmtTask
 import org.jetbrains.desktop.buildscripts.ClippyTask
-import org.jetbrains.desktop.buildscripts.CollectWindowsArtifactsTask
+import org.jetbrains.desktop.buildscripts.CollecNativeArtifactsTask
 import org.jetbrains.desktop.buildscripts.CompileRustTask
 import org.jetbrains.desktop.buildscripts.CrossCompilationSettings
 import org.jetbrains.desktop.buildscripts.DownloadAngleTask
@@ -216,8 +216,8 @@ val downloadAngleTaskByPlatform = enabledPlatforms.filter { it.os == Os.WINDOWS 
 
 val collectNativeArtifactsTaskByTarget = compileNativeTaskByTarget.mapValues { (target, buildNativeTask) ->
     val downloadAngleTask = downloadAngleTaskByPlatform[target.platform]
-    tasks.register<CollectWindowsArtifactsTask>(
-        "collectWindowsArtifactsFor${target.platform.name()}-${target.profile}",
+    tasks.register<CollecNativeArtifactsTask>(
+        "collectNativeArtifactsFor${target.platform.name()}-${target.profile}",
     ) {
         dependsOn(buildNativeTask)
         downloadAngleTask?.let {

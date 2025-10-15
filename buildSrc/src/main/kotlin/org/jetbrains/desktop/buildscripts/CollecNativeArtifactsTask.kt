@@ -9,7 +9,7 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import javax.inject.Inject
 
-abstract class CollectWindowsArtifactsTask @Inject constructor(
+abstract class CollecNativeArtifactsTask @Inject constructor(
     objectFactory: ObjectFactory,
     private val fs: FileSystemOperations,
 ) : DefaultTask() {
