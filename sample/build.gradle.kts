@@ -2,6 +2,7 @@ import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitArtifactType
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitAttributes
 import org.jetbrains.desktop.buildscripts.KotlinDesktopToolkitNativeProfile
+import org.jetbrains.desktop.buildscripts.Os
 import org.jetbrains.desktop.buildscripts.hostArch
 import org.jetbrains.desktop.buildscripts.hostOs
 import org.jetbrains.desktop.buildscripts.targetArch
@@ -171,7 +172,7 @@ tasks.register("autofix") {
     dependsOn(tasks.named("ktlintFormat"))
 }
 
-tasks.register<Exec>("runPackaged") {
+tasks.register<Exec>("runPackagedMac") {
     group = "application"
     description = "Package and run the macOS app bundle"
     dependsOn(tasks.jpackage)
@@ -186,26 +187,28 @@ val prepareJPackageInput by tasks.registering(Copy::class) {
     into(layout.buildDirectory.dir("jpackage-input"))
 }
 
-// Copy native libraries for jpackage
 val prepareJPackageNativeLibs by tasks.registering(Copy::class) {
-    dependsOn(
-        ":kotlin-desktop-toolkit:collectWindowsArtifacts-aarch64-apple-darwin-dev",
-        ":kotlin-desktop-toolkit:collectWindowsArtifacts-aarch64-apple-darwin-release",
-    )
     from(nativeLib)
     into(layout.buildDirectory.dir("jpackage-input/native"))
 }
 
-// Configure jpackage task
+fun sampleMainClass(): String {
+    return when (hostOs()) {
+        Os.LINUX -> "org.jetbrains.desktop.sample.linux.SkikoSampleLinuxKt"
+        Os.MACOS -> "org.jetbrains.desktop.sample.macos.SkikoSampleMacKt"
+        Os.WINDOWS -> "org.jetbrains.desktop.sample.win32.SkikoSampleWin32Kt"
+    }
+}
+
 tasks.jpackage {
     dependsOn(prepareJPackageInput, prepareJPackageNativeLibs)
 
     appName = "SkikoSample"
     appVersion = "1.0.0"
     vendor = "JetBrains"
-    mainClass = "org.jetbrains.desktop.sample.macos.SkikoSampleMacKt"
+    mainClass = sampleMainClass()
     mainJar = tasks.jar.get().archiveFileName.get()
-    type.set(ImageType.APP_IMAGE) // Create .app bundle instead of DMG
+    type.set(ImageType.APP_IMAGE) // todo replace with something else for other platforms?
 
     input.set(layout.buildDirectory.dir("jpackage-input"))
     destination.set(layout.buildDirectory.dir("dist"))
