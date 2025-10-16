@@ -46,7 +46,7 @@ use desktop_linux::linux::{
         DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, RequestId, SoftwareDrawData, TextInputEvent, WindowId,
     },
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
-    geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
+    geometry::{LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
     window_api::{
         WindowParams,
@@ -340,14 +340,10 @@ fn create_text_input_context<'a>(text: &str, text_cstring: &'a CString, change_c
         is_multiline: true,
         content_purpose: TextInputContentPurpose::Normal,
         cursor_rectangle: LogicalRect {
-            origin: LogicalPoint {
-                x: LogicalPixels(f64::from(codepoints_count) * 10.0),
-                y: LogicalPixels(100.0),
-            },
-            size: LogicalSize {
-                width: LogicalPixels(5.0),
-                height: LogicalPixels(10.0),
-            },
+            x: (codepoints_count * 10).into(),
+            y: 100,
+            width: 5,
+            height: 10,
         },
         change_caused_by_input_method,
     }
@@ -455,10 +451,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
                 state.app_ptr.get(),
                 WindowParams {
                     window_id: new_window_id,
-                    size: LogicalSize {
-                        width: LogicalPixels(300.),
-                        height: LogicalPixels(200.),
-                    },
+                    size: LogicalSize { width: 300, height: 200 },
                     title: BorrowedStrPtr::new(c"Window N"),
                     app_id: BorrowedStrPtr::new(APP_ID),
                     prefer_client_side_decoration: true,
@@ -551,10 +544,7 @@ fn on_application_started(state: &mut State) {
         state.app_ptr.get(),
         WindowParams {
             window_id: window_1_id,
-            size: LogicalSize {
-                width: LogicalPixels(200.),
-                height: LogicalPixels(300.),
-            },
+            size: LogicalSize { width: 200, height: 300 },
             title: BorrowedStrPtr::new(c"Window 1"),
             app_id: BorrowedStrPtr::new(APP_ID),
             prefer_client_side_decoration: false,
@@ -568,10 +558,7 @@ fn on_application_started(state: &mut State) {
         state.app_ptr.get(),
         WindowParams {
             window_id: window_2_id,
-            size: LogicalSize {
-                width: LogicalPixels(300.),
-                height: LogicalPixels(200.),
-            },
+            size: LogicalSize { width: 300, height: 200 },
             title: BorrowedStrPtr::new(c"Window 2"),
             app_id: BorrowedStrPtr::new(APP_ID),
             prefer_client_side_decoration: true,
@@ -660,10 +647,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                             TEXT_MIME_TYPE
                         };
                         let actions = DragAndDropActions(DragAndDropAction::Copy as u8 | DragAndDropAction::Move as u8);
-                        let drag_icon_size = LogicalSize {
-                            width: LogicalPixels(300.),
-                            height: LogicalPixels(300.),
-                        };
+                        let drag_icon_size = LogicalSize { width: 300, height: 300 };
                         window_start_drag_and_drop(
                             app_ptr,
                             data.window_id,

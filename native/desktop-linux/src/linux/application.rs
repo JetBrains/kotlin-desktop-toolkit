@@ -373,7 +373,7 @@ impl Application {
             return Ok(());
         }
 
-        let mut drag_icon = if drag_icon_size.width.0 > 0.0 && drag_icon_size.height.0 > 0.0 {
+        let mut drag_icon = if drag_icon_size.width > 0 && drag_icon_size.height > 0 {
             let egl = match drag_icon_rendering_mode {
                 RenderingMode::Auto | RenderingMode::EGL => get_egl(),
                 RenderingMode::Software => None,

@@ -21,7 +21,6 @@ import org.jetbrains.desktop.linux.KeyModifiers
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogLevel
 import org.jetbrains.desktop.linux.Logger
-import org.jetbrains.desktop.linux.LogicalPixels
 import org.jetbrains.desktop.linux.LogicalPoint
 import org.jetbrains.desktop.linux.LogicalRect
 import org.jetbrains.desktop.linux.LogicalSize
@@ -63,6 +62,7 @@ import java.net.URI
 import java.text.BreakIterator
 import kotlin.io.path.Path
 import kotlin.math.PI
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -228,7 +228,7 @@ private class EditorState {
     private var text: StringBuilder = StringBuilder()
     private var cursorVisible = true
     private var cursorOffset: Int = 0
-    private var cursorRectangle = LogicalRect(LogicalPoint(0f, 0f), LogicalSize(0f, 0f))
+    private var cursorRectangle = LogicalRect(0, 0, 0, 0)
     private var selectionStartOffset: Int? = null
     private var selectionEndOffset: Int? = null
     private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
@@ -338,22 +338,20 @@ private class EditorState {
         }
         if (cursorVisible) {
             Paint().use { paint ->
-                val coord = textLine.getCoordAtOffset(cursorOffset + (composedTextStartOffset ?: 0))
+                val x = textLine.getCoordAtOffset(cursorOffset + (composedTextStartOffset ?: 0))
+                val y0 = y + textLine.ascent
+                val y1 = y + textLine.descent
 
                 cursorRectangle = LogicalRect(
-                    LogicalPoint(x = coord / scale, y = (y + textLine.ascent) / scale),
-                    LogicalSize(width = 5f, height = (textLine.descent - textLine.ascent) / scale),
+                    x = (x / scale).roundToInt(),
+                    y = (y0 / scale).roundToInt(),
+                    width = 5,
+                    height = ((textLine.descent - textLine.ascent) / scale).roundToInt(),
                 )
                 paint.color = Color.GREEN
-                paint.strokeWidth = cursorRectangle.size.width
+                paint.strokeWidth = cursorRectangle.width * scale
 
-                canvas.drawLine(
-                    x0 = cursorRectangle.point.x * scale,
-                    y0 = cursorRectangle.point.y * scale,
-                    x1 = cursorRectangle.point.x * scale,
-                    y1 = (cursorRectangle.point.y + cursorRectangle.size.height) * scale,
-                    paint = paint,
-                )
+                canvas.drawLine(x0 = x, y0 = y0, x1 = x, y1 = y1, paint = paint)
             }
         }
     }
@@ -690,6 +688,10 @@ internal class WindowState {
     }
 }
 
+fun TextLine.toLogicalSize(): LogicalSize {
+    return LogicalSize(width = ceil(width).roundToInt(), height = ceil(height).roundToInt())
+}
+
 private class ContentArea(
     var origin: LogicalPoint,
     var size: LogicalSize,
@@ -717,7 +719,7 @@ private class ContentArea(
                     val skikoTextLine = dragIconTextLineCreator.makeTextLine(EXAMPLE_FILES.joinToString("\n"), 10f)
                     val dragIconParams = DragIconParams(
                         renderingMode = RenderingMode.Auto,
-                        size = LogicalSize(width = skikoTextLine.width, height = skikoTextLine.height),
+                        size = skikoTextLine.toLogicalSize(),
                     )
                     val content = DataTransferContentType.UriList(EXAMPLE_FILES)
                     val startDragAndDropParams = StartDragAndDropParams(
@@ -740,7 +742,7 @@ private class ContentArea(
                         val skikoTextLine = dragIconTextLineCreator.makeTextLine(it, 30f)
                         val dragIconParams = DragIconParams(
                             renderingMode = RenderingMode.Auto,
-                            size = LogicalSize(width = skikoTextLine.width, height = skikoTextLine.height),
+                            size = skikoTextLine.toLogicalSize(),
                         )
                         val content = DataTransferContentType.Text(it)
                         val startDragAndDropParams = StartDragAndDropParams(
@@ -866,7 +868,7 @@ private class ContentArea(
 
 private class CustomBorders {
     companion object {
-        const val BORDER_SIZE: LogicalPixels = 5f
+        const val BORDER_SIZE = 5
 
         fun edgeToPointerShape(edge: WindowResizeEdge): PointerShape {
             return when (edge) {
@@ -886,28 +888,42 @@ private class CustomBorders {
 
     fun configure(event: Event.WindowConfigure) {
         rectangles.clear()
-        val edgeSize = LogicalSize(BORDER_SIZE, BORDER_SIZE)
-        rectangles.add(Pair(LogicalRect(LogicalPoint.Zero, edgeSize), WindowResizeEdge.TopLeft))
-        rectangles.add(Pair(LogicalRect(LogicalPoint(event.size.width - BORDER_SIZE, 0f), edgeSize), WindowResizeEdge.TopRight))
-        rectangles.add(Pair(LogicalRect(LogicalPoint(0f, event.size.height - BORDER_SIZE), edgeSize), WindowResizeEdge.BottomLeft))
+        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = BORDER_SIZE, height = BORDER_SIZE), WindowResizeEdge.TopLeft))
         rectangles.add(
             Pair(
-                LogicalRect(LogicalPoint(event.size.width - BORDER_SIZE, event.size.height - BORDER_SIZE), edgeSize),
+                LogicalRect(x = event.size.width - BORDER_SIZE, y = 0, width = BORDER_SIZE, height = BORDER_SIZE),
+                WindowResizeEdge.TopRight,
+            ),
+        )
+        rectangles.add(
+            Pair(
+                LogicalRect(x = 0, y = event.size.height - BORDER_SIZE, width = BORDER_SIZE, height = BORDER_SIZE),
+                WindowResizeEdge.BottomLeft,
+            ),
+        )
+        rectangles.add(
+            Pair(
+                LogicalRect(
+                    x = event.size.width - BORDER_SIZE,
+                    y = event.size.height - BORDER_SIZE,
+                    width = BORDER_SIZE,
+                    height = BORDER_SIZE,
+                ),
                 WindowResizeEdge.BottomRight,
             ),
         )
 
-        rectangles.add(Pair(LogicalRect(LogicalPoint.Zero, LogicalSize(BORDER_SIZE, event.size.height)), WindowResizeEdge.Left))
+        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = BORDER_SIZE, height = event.size.height), WindowResizeEdge.Left))
         rectangles.add(
             Pair(
-                LogicalRect(LogicalPoint(event.size.width - BORDER_SIZE, 0f), LogicalSize(BORDER_SIZE, event.size.height)),
+                LogicalRect(x = event.size.width - BORDER_SIZE, y = 0, width = BORDER_SIZE, height = event.size.height),
                 WindowResizeEdge.Right,
             ),
         )
-        rectangles.add(Pair(LogicalRect(LogicalPoint.Zero, LogicalSize(event.size.width, BORDER_SIZE)), WindowResizeEdge.Top))
+        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = event.size.width, height = BORDER_SIZE), WindowResizeEdge.Top))
         rectangles.add(
             Pair(
-                LogicalRect(LogicalPoint(0f, event.size.height - BORDER_SIZE), LogicalSize(event.size.width, BORDER_SIZE)),
+                LogicalRect(x = 0, y = event.size.height - BORDER_SIZE, width = event.size.width, height = BORDER_SIZE),
                 WindowResizeEdge.Bottom,
             ),
         )
@@ -987,7 +1003,6 @@ private class WindowContainer(
             )
             val titlebarSize = LogicalSize(width = event.size.width, height = SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT)
             val titlebar = customTitlebar ?: SkikoCustomTitlebarLinux(
-                origin = LogicalPoint.Zero,
                 size = titlebarSize,
                 titlebarLayout,
                 requestClose,
@@ -997,7 +1012,7 @@ private class WindowContainer(
             titlebar.configure(event, titlebarLayout)
             val customBorders = customBorders ?: CustomBorders().also { customBorders = it }
             customBorders.configure(event)
-            contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height)
+            contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height.toFloat())
             contentArea.size =
                 LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
         } else {
@@ -1121,7 +1136,7 @@ private class RotatingBallWindow(
             xdgDesktopSettings: XdgDesktopSettings,
             requestClose: () -> Unit,
         ): RotatingBallWindow {
-            val windowSize = LogicalSize(640f, 480f)
+            val windowSize = LogicalSize(640, 480)
             val windowContentSize = windowSize // todo it's incorrect
             val container = WindowContainer.create(windowContentSize, xdgDesktopSettings, requestClose)
 
@@ -1280,7 +1295,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         nextWindowId += 1
         val windowParams = WindowParams(
             windowId = windowId,
-            size = LogicalSize(width = 640f, height = 480f),
+            size = LogicalSize(width = 640, height = 480),
             title = "Window $windowId",
             appId = "org.jetbrains.desktop.linux.skikoSample1",
             preferClientSideDecoration = useCustomTitlebar,

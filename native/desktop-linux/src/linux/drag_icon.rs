@@ -112,8 +112,8 @@ impl DragIcon {
     fn on_resize(&mut self, physical_size: PhysicalSize, shm: &Shm) {
         let size = self.size;
         if let Some(viewport) = &self.viewport {
-            debug!("viewport.set_destination({}, {})", size.width.round(), size.height.round());
-            viewport.set_destination(size.width.round(), size.height.round());
+            debug!("viewport.set_destination({}, {})", size.width, size.height);
+            viewport.set_destination(size.width, size.height);
         } else {
             let surface = self.surface.wl_surface();
             assert!(self.current_scale % 1.0 < 0.0001);
