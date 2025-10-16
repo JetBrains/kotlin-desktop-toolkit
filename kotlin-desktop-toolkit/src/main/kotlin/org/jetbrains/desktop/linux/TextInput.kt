@@ -13,8 +13,8 @@ public data class TextInputCommitStringData(public val text: String?) {
 }
 
 public data class TextInputDeleteSurroundingTextData(
-    public val beforeLengthInBytes: Int,
-    public val afterLengthInBytes: Int,
+    public val beforeLengthInBytes: UInt,
+    public val afterLengthInBytes: UInt,
 ) {
     internal companion object
 }
@@ -62,8 +62,8 @@ public enum class TextInputContentPurpose {
 
 public class TextInputContext(
     public val surroundingText: String,
-    public val cursorCodepointOffset: Short,
-    public val selectionStartCodepointOffset: Short,
+    public val cursorCodepointOffset: UShort,
+    public val selectionStartCodepointOffset: UShort,
     public val isMultiline: Boolean,
     public val contentPurpose: TextInputContentPurpose,
     public val cursorRectangle: LogicalRect,
