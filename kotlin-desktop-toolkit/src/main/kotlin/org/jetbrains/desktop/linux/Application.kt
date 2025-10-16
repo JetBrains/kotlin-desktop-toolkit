@@ -38,6 +38,14 @@ public data class WindowParams(
     val preferClientSideDecoration: Boolean = false,
     val renderingMode: RenderingMode = RenderingMode.Auto,
 ) {
+    init {
+        size?.let {
+            check(it.width > 0 && it.height > 0) {
+                "Invalid size (both width and height must be greater than zero)"
+            }
+        }
+    }
+
     internal fun toNative(arena: Arena): MemorySegment {
         val nativeWindowParams = NativeWindowParams.allocate(arena)
         NativeWindowParams.size(nativeWindowParams, (size ?: LogicalSize(0, 0)).toNative(arena))
@@ -93,7 +101,6 @@ public class Application : AutoCloseable {
         }
     }, Arena.global())
 
-    private val mimeTypeReturnCache: HashMap<List<String>, MemorySegment> = hashMapOf()
     private var appPtr: MemorySegment? = null
 
     init {
@@ -128,12 +135,6 @@ public class Application : AutoCloseable {
                 EventHandlerResult.Stop -> true
                 null -> false
             }
-        }
-    }
-
-    private fun mimeTypesToNative(mimeTypes: List<String>): MemorySegment {
-        return mimeTypeReturnCache.getOrPut(mimeTypes) {
-            Arena.global().allocateUtf8String(mimeTypes.joinToString(","))
         }
     }
 
@@ -203,9 +204,9 @@ public class Application : AutoCloseable {
         return Window(appPtr!!, params)
     }
 
-    public fun setCursorTheme(name: String, size: Int) {
+    public fun setCursorTheme(name: String, size: UInt) {
         Arena.ofConfined().use { arena ->
-            desktop_linux_h.application_set_cursor_theme(appPtr, arena.allocateUtf8String(name), size)
+            desktop_linux_h.application_set_cursor_theme(appPtr, arena.allocateUtf8String(name), size.toInt())
         }
     }
 

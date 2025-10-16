@@ -6,8 +6,10 @@ import kotlin.time.Duration.Companion.milliseconds
 @JvmInline
 public value class Timestamp(
     /** Count of milliseconds since some fixed but arbitrary moment in the past */
-    private val value: Int,
+    private val value: Long,
 ) {
+    internal companion object;
+
     public fun toDuration(): Duration {
         return value.milliseconds
     }
