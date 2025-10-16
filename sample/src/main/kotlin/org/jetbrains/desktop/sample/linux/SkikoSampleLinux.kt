@@ -171,7 +171,7 @@ internal data class XdgDesktopSettings(
     var fontAntialiasing: FontAntialiasingValue = FontAntialiasingValue.Grayscale,
     var fontHinting: FontHintingValue = FontHintingValue.Medium,
     var fontRgbaOrder: FontRgbaOrderValue = FontRgbaOrderValue.Rgb,
-    var cursorSize: Int? = null,
+    var cursorSize: UInt? = null,
     var cursorTheme: String? = null,
     var cursorBlink: Boolean = true,
     var cursorBlinkTime: Duration = 1200.toDuration(DurationUnit.MILLISECONDS),
@@ -225,8 +225,7 @@ private interface ClipboardHandler {
 private class EditorState {
     private var textInputEnabled: Boolean = false
     private var composedText: String = ""
-    private var composedTextStartOffset: Int? = null
-    private var composedTextEndOffset: Int? = null
+    private var composedTextRange: Pair<Int, Int>? = null
     private var text: StringBuilder = StringBuilder()
     private var cursorVisible = true
     private var cursorOffset: Int = 0
@@ -238,11 +237,11 @@ private class EditorState {
     private var pastedImage: Image? = null
 
     companion object {
-        private fun codepointFromOffset(sb: StringBuilder, offset: Int): Short {
+        private fun codepointFromOffset(sb: StringBuilder, offset: Int): UShort {
             if (offset == 0) {
-                return 0
+                return 0U
             }
-            return sb.codePointCount(0, offset).toShort()
+            return sb.codePointCount(0, offset).toUShort()
         }
 
         private fun getPreviousGlyphOffset(text: String, offset: Int): Int {
@@ -287,7 +286,7 @@ private class EditorState {
         if (selectionStartOffset != null && selectionEndOffset != null) {
             s.append(", selection: $selectionStartOffset - $selectionEndOffset")
         }
-        if (composedTextStartOffset != null && composedTextEndOffset != null) {
+        composedTextRange?.let { (composedTextStartOffset, composedTextEndOffset) ->
             s.append(", compose: $composedTextStartOffset - $composedTextEndOffset")
         }
         return s.toString()
@@ -306,7 +305,6 @@ private class EditorState {
                 )
             }
         }
-        val composedTextStartOffset = this.composedTextStartOffset
         val cursorOffset = cursorOffset
         val stringLine = if (composedText.isEmpty()) {
             text
@@ -320,7 +318,9 @@ private class EditorState {
                 paint.strokeWidth = 5 * scale
                 val x0 = textLine.getCoordAtOffset(cursorOffset)
                 val x1 = textLine.getCoordAtOffset(cursorOffset + composedText.length)
-                canvas.drawLine(x0 = x0, y0 = y + (5 * scale), x1 = x1, y1 = y + (5 * scale), paint = paint)
+                val y0 = y + textLine.descent
+                val y1 = y0
+                canvas.drawLine(x0 = x0, y0 = y0, x1 = x1, y1 = y1, paint = paint)
             }
         }
         val selectionStartOffset = selectionStartOffset
@@ -340,7 +340,7 @@ private class EditorState {
         }
         if (cursorVisible) {
             Paint().use { paint ->
-                val x = textLine.getCoordAtOffset(cursorOffset + (composedTextStartOffset ?: 0))
+                val x = textLine.getCoordAtOffset(cursorOffset + (composedTextRange?.first ?: 0))
                 val y0 = y + textLine.ascent
                 val y1 = y + textLine.descent
 
@@ -615,8 +615,8 @@ private class EditorState {
     fun onTextInput(event: Event.TextInput, app: Application): EventHandlerResult {
         composedText = ""
         event.deleteSurroundingTextData?.let { deleteSurroundingTextData ->
-            val deleteStart = cursorOffset - utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.beforeLengthInBytes)
-            val deleteEnd = cursorOffset + utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.afterLengthInBytes)
+            val deleteStart = cursorOffset - utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.beforeLengthInBytes.toLong())
+            val deleteEnd = cursorOffset + utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.afterLengthInBytes.toLong())
             this.text.delete(deleteStart, deleteEnd)
         }
         event.commitStringData?.let { commitStringData ->
@@ -627,16 +627,21 @@ private class EditorState {
         }
         event.preeditStringData?.let { preeditStringData ->
             deleteSelection()
-            cursorVisible = !(preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1)
-            preeditStringData.text?.let { preeditString ->
-                composedText = preeditString
-                composedTextStartOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBeginBytePos)
-                composedTextEndOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorEndBytePos)
+            composedText = preeditStringData.text ?: ""
+            if (preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1) {
+                composedTextRange = null
+            } else {
+                check(preeditStringData.cursorBeginBytePos >= 0)
+                check(preeditStringData.cursorEndBytePos >= 0)
+
+                preeditStringData.text?.let { preeditString ->
+                    val startOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBeginBytePos.toLong())
+                    val endOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorEndBytePos.toLong())
+                    composedTextRange = Pair(startOffset, endOffset)
+                }
             }
         } ?: run {
-            composedTextStartOffset = null
-            composedTextEndOffset = null
-            cursorVisible = true
+            composedTextRange = null
         }
         if (event.deleteSurroundingTextData != null || event.commitStringData != null) {
             app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = true))
