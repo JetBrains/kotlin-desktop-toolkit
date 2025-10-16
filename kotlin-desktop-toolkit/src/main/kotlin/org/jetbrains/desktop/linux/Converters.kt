@@ -95,14 +95,14 @@ public fun utf8OffsetToUtf16Offset(string: CharSequence, offset: Int): Int {
 }
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
-    width = NativeLogicalSize.width(s).toFloat(),
-    height = NativeLogicalSize.height(s).toFloat(),
+    width = NativeLogicalSize.width(s),
+    height = NativeLogicalSize.height(s),
 )
 
 internal fun LogicalSize.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalSize.allocate(arena)
-    NativeLogicalSize.width(result, width.toDouble())
-    NativeLogicalSize.height(result, height.toDouble())
+    NativeLogicalSize.width(result, width)
+    NativeLogicalSize.height(result, height)
     return result
 }
 
@@ -120,8 +120,10 @@ internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
 
 internal fun LogicalRect.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalRect.allocate(arena)
-    NativeLogicalRect.origin(result, point.toNative(arena))
-    NativeLogicalRect.size(result, size.toNative(arena))
+    NativeLogicalRect.x(result, x)
+    NativeLogicalRect.y(result, y)
+    NativeLogicalRect.width(result, width)
+    NativeLogicalRect.height(result, height)
     return result
 }
 
@@ -525,14 +527,14 @@ internal fun ScrollData.Companion.fromNative(s: MemorySegment): ScrollData {
     )
 }
 
-private fun readNativeU32Array(nativeU32Array: MemorySegment): List<Int> {
+private fun readNativeU32Array(nativeU32Array: MemorySegment): List<UInt> {
     val len = NativeBorrowedArray_u32.len(nativeU32Array)
     val dataPtr = NativeBorrowedArray_u32.ptr(nativeU32Array)
-    val values = mutableListOf<Int>()
+    val values = mutableListOf<UInt>()
     for (i in 0 until len) {
         val raw = dataPtr.getAtIndex(desktop_linux_h.C_INT, i)
         Logger.debug { "readNativeU32ArrayFor: len=$len : dataPtr=$dataPtr, value of index $i : $raw" }
-        values.add(raw)
+        values.add(raw.toUInt())
     }
     return values
 }
@@ -625,17 +627,17 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
             Event.KeyDown(
-                keyCode = KeyCode(NativeKeyDownEvent.code(nativeEvent)),
+                keyCode = KeyCode(NativeKeyDownEvent.code(nativeEvent).toUInt()),
                 characters = fromOptionalNativeString(NativeKeyDownEvent.characters(nativeEvent)),
-                key = KeySym(NativeKeyDownEvent.key(nativeEvent)),
+                key = KeySym(NativeKeyDownEvent.key(nativeEvent).toUInt()),
                 isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
             )
         }
         desktop_linux_h.NativeEvent_KeyUp() -> {
             val nativeEvent = NativeEvent.key_up(s)
             Event.KeyUp(
-                key = KeySym(NativeKeyUpEvent.key(nativeEvent)),
-                keyCode = KeyCode(NativeKeyUpEvent.code(nativeEvent)),
+                key = KeySym(NativeKeyUpEvent.key(nativeEvent).toUInt()),
+                keyCode = KeyCode(NativeKeyUpEvent.code(nativeEvent).toUInt()),
             )
         }
         desktop_linux_h.NativeEvent_TextInputAvailability() -> {

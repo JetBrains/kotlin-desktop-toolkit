@@ -57,10 +57,10 @@ impl TextInputContext<'_> {
             zwp_text_input_v3::ChangeCause::Other
         });
         text_input.set_cursor_rectangle(
-            self.cursor_rectangle.origin.x.round(),
-            self.cursor_rectangle.origin.y.round(),
-            self.cursor_rectangle.size.width.round(),
-            self.cursor_rectangle.size.height.round(),
+            self.cursor_rectangle.x,
+            self.cursor_rectangle.y,
+            self.cursor_rectangle.width,
+            self.cursor_rectangle.height,
         );
         text_input.commit();
         Ok(())

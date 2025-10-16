@@ -152,7 +152,7 @@ public class Window internal constructor(
                     mimeTypesToNative(arena, params.mimeTypes),
                     params.actions.toNative(),
                     (params.dragIconParams?.renderingMode ?: RenderingMode.Auto).toNative(),
-                    (params.dragIconParams?.size ?: LogicalSize(0f, 0f)).toNative(arena),
+                    (params.dragIconParams?.size ?: LogicalSize(0, 0)).toNative(arena),
                 )
             }
         }

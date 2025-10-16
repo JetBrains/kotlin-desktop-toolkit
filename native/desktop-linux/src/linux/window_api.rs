@@ -154,8 +154,9 @@ pub extern "C" fn window_minimize(app_ptr: AppPtr, window_id: WindowId) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_max_size(app_ptr: AppPtr, window_id: WindowId, size: LogicalSize) {
     with_window(&app_ptr, window_id, "window_set_max_size", |w| {
-        #[allow(clippy::cast_sign_loss)]
-        w.window.set_max_size(Some((size.width.round() as u32, size.height.round() as u32)));
+        let width = u32::try_from(size.width)?;
+        let height = u32::try_from(size.height)?;
+        w.window.set_max_size(Some((width, height)));
         Ok(())
     });
 }
@@ -163,8 +164,9 @@ pub extern "C" fn window_set_max_size(app_ptr: AppPtr, window_id: WindowId, size
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_min_size(app_ptr: AppPtr, window_id: WindowId, size: LogicalSize) {
     with_window(&app_ptr, window_id, "window_set_min_size", |w| {
-        #[allow(clippy::cast_sign_loss)]
-        w.window.set_min_size(Some((size.width.round() as u32, size.height.round() as u32)));
+        let width = u32::try_from(size.width)?;
+        let height = u32::try_from(size.height)?;
+        w.window.set_min_size(Some((width, height)));
         Ok(())
     });
 }

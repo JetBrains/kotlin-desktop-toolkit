@@ -7,7 +7,7 @@ use smithay_client_toolkit::output::{Mode, OutputInfo};
 use crate::linux::{
     application::Application,
     application_api::AppPtr,
-    geometry::{LogicalPixels, LogicalPoint, LogicalSize},
+    geometry::{LogicalPoint, LogicalSize},
 };
 
 pub type ScreenId = u32;
@@ -43,8 +43,8 @@ impl ScreenInfo {
             size: info
                 .logical_size
                 .map(|size| LogicalSize {
-                    width: LogicalPixels(size.0.into()),
-                    height: LogicalPixels(size.1.into()),
+                    width: size.0,
+                    height: size.1,
                 })
                 .unwrap_or_default(),
             scale: info.scale_factor.into(),
