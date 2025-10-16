@@ -104,14 +104,14 @@ public sealed class NotificationSound {
 /**
  * Represents an action button on a notification.
  *
- * @param identifier Unique identifier for this action
+ * @param actionId Unique identifier for this action
  * @param title The text displayed on the action button
  * @param isForeground If true, brings app to foreground when clicked
  * @param isDestructive If true, displays the action in a destructive style (red)
  * @param requiresAuthentication If true, requires device unlock before executing
  */
 public data class NotificationAction(
-    val identifier: String,
+    val actionId: NotificationCenter.ActionId,
     val title: String,
     val isForeground: Boolean = true,
     val isDestructive: Boolean = false,
@@ -247,7 +247,7 @@ public object NotificationCenter : AutoCloseable {
                             NativeNotificationAction.layout(),
                         )
 
-                        val actionIdPtr = arena.allocateUtf8String(action.identifier)
+                        val actionIdPtr = arena.allocateUtf8String(action.actionId.value)
                         val actionTitlePtr = arena.allocateUtf8String(action.title)
 
                         NativeNotificationAction.identifier(actionSegment, actionIdPtr)

@@ -1103,15 +1103,15 @@ fun setupNotificationCategories() {
                     categoryId = NotificationCenter.CategoryId("action_category"),
                     actions = listOf(
                         org.jetbrains.desktop.macos.NotificationAction(
-                            identifier = "approve",
+                            actionId = NotificationCenter.ActionId("approve"),
                             title = "Approve",
                         ),
                         org.jetbrains.desktop.macos.NotificationAction(
-                            identifier = "deny",
+                            actionId = NotificationCenter.ActionId("deny"),
                             title = "Deny",
                         ),
                         org.jetbrains.desktop.macos.NotificationAction(
-                            identifier = "later",
+                            actionId = NotificationCenter.ActionId("later"),
                             title = "Remind Me Later",
                         ),
                     ),
@@ -1120,15 +1120,15 @@ fun setupNotificationCategories() {
                     categoryId = NotificationCenter.CategoryId("evil_action_category"),
                     actions = listOf(
                         org.jetbrains.desktop.macos.NotificationAction(
-                            identifier = "approve",
+                            actionId = NotificationCenter.ActionId("not approve"),
                             title = "Not Approve",
                         ),
                         org.jetbrains.desktop.macos.NotificationAction(
-                            identifier = "deny",
+                            actionId = NotificationCenter.ActionId("not deny"),
                             title = "Not Deny",
                         ),
                         org.jetbrains.desktop.macos.NotificationAction(
-                            identifier = "later",
+                            actionId = NotificationCenter.ActionId("not later"),
                             title = "NotRemind Me Later",
                         ),
                     ),
