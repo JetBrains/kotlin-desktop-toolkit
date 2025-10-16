@@ -90,7 +90,7 @@ public sealed class XdgDesktopSetting {
 
     public data class FontRgbaOrder(val value: FontRgbaOrderValue) : XdgDesktopSetting()
 
-    public data class CursorSize(val value: Int) : XdgDesktopSetting()
+    public data class CursorSize(val value: UInt) : XdgDesktopSetting()
 
     public data class CursorTheme(val value: String) : XdgDesktopSetting()
 

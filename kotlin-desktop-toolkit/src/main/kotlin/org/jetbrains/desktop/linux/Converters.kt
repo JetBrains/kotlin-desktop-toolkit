@@ -69,8 +69,8 @@ internal fun fromOptionalNativeString(s: MemorySegment): String? {
 /**
  * Converts UTF-8 offset to UTF-16 offset.
  */
-public fun utf8OffsetToUtf16Offset(string: CharSequence, offset: Int): Int {
-    if (offset == 0) {
+public fun utf8OffsetToUtf16Offset(string: CharSequence, offset: Long): Int {
+    if (offset == 0L) {
         return 0
     }
     var utf8Offset = offset
@@ -313,7 +313,9 @@ internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDeskto
         )
 
         desktop_linux_h.NativeXdgDesktopSetting_CursorBlink() -> XdgDesktopSetting.CursorBlink(NativeXdgDesktopSetting.cursor_blink(s))
-        desktop_linux_h.NativeXdgDesktopSetting_CursorSize() -> XdgDesktopSetting.CursorSize(NativeXdgDesktopSetting.cursor_size(s))
+        desktop_linux_h.NativeXdgDesktopSetting_CursorSize() -> XdgDesktopSetting.CursorSize(
+            NativeXdgDesktopSetting.cursor_size(s).toUInt(),
+        )
         desktop_linux_h.NativeXdgDesktopSetting_CursorTheme() -> XdgDesktopSetting.CursorTheme(
             NativeXdgDesktopSetting.cursor_theme(s).getUtf8String(0),
         )
@@ -390,16 +392,16 @@ internal fun TextInputPreeditStringData.Companion.fromNative(s: MemorySegment): 
 
 internal fun TextInputDeleteSurroundingTextData.Companion.fromNative(s: MemorySegment): TextInputDeleteSurroundingTextData {
     return TextInputDeleteSurroundingTextData(
-        beforeLengthInBytes = NativeTextInputDeleteSurroundingTextData.before_length_in_bytes(s),
-        afterLengthInBytes = NativeTextInputDeleteSurroundingTextData.after_length_in_bytes(s),
+        beforeLengthInBytes = NativeTextInputDeleteSurroundingTextData.before_length_in_bytes(s).toUInt(),
+        afterLengthInBytes = NativeTextInputDeleteSurroundingTextData.after_length_in_bytes(s).toUInt(),
     )
 }
 
 internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
     val result = NativeTextInputContext.allocate(arena)
     NativeTextInputContext.surrounding_text(result, arena.allocateUtf8String(surroundingText))
-    NativeTextInputContext.cursor_codepoint_offset(result, cursorCodepointOffset)
-    NativeTextInputContext.selection_start_codepoint_offset(result, selectionStartCodepointOffset)
+    NativeTextInputContext.cursor_codepoint_offset(result, cursorCodepointOffset.toShort())
+    NativeTextInputContext.selection_start_codepoint_offset(result, selectionStartCodepointOffset.toShort())
     NativeTextInputContext.is_multiline(result, isMultiline)
     NativeTextInputContext.content_purpose(result, contentPurpose.toNative())
     NativeTextInputContext.cursor_rectangle(result, cursorRectangle.toNative(arena))
@@ -537,6 +539,10 @@ private fun readNativeU32Array(nativeU32Array: MemorySegment): List<UInt> {
         values.add(raw.toUInt())
     }
     return values
+}
+
+private fun Timestamp.Companion.fromNative(value: Int): Timestamp {
+    return Timestamp(value.toUInt().toLong())
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Event {
@@ -679,7 +685,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.MouseMoved(
                 windowId = NativeMouseMovedEvent.window_id(nativeEvent),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseMovedEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(NativeMouseMovedEvent.timestamp(nativeEvent)),
+                timestamp = Timestamp.fromNative(NativeMouseMovedEvent.timestamp(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_MouseEntered() -> {
@@ -702,7 +708,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 windowId = NativeMouseUpEvent.window_id(nativeEvent),
                 button = MouseButton(NativeMouseUpEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseUpEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(NativeMouseUpEvent.timestamp(nativeEvent)),
+                timestamp = Timestamp.fromNative(NativeMouseUpEvent.timestamp(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_MouseDown() -> {
@@ -711,7 +717,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 windowId = NativeMouseDownEvent.window_id(nativeEvent),
                 button = MouseButton(NativeMouseDownEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseDownEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(NativeMouseDownEvent.timestamp(nativeEvent)),
+                timestamp = Timestamp.fromNative(NativeMouseDownEvent.timestamp(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_NotificationClosed() -> {
@@ -738,7 +744,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 scrollingDeltaX = horizontalScroll.delta,
                 scrollingDeltaY = verticalScroll.delta,
                 locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
+                timestamp = Timestamp.fromNative(NativeScrollWheelEvent.timestamp(nativeEvent)),
                 horizontalScroll = horizontalScroll,
                 verticalScroll = verticalScroll,
             )
