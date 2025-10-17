@@ -13,7 +13,7 @@ pub type DragOperation = usize;
 pub type DragOperationsBitSet = usize;
 
 #[repr(C)]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DragInfo {
     destination_window_id: WindowId,
     location_in_window: LogicalPoint,

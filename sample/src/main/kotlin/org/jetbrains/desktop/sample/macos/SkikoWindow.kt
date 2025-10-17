@@ -51,49 +51,49 @@ abstract class SkikoWindow(
     init {
         window.setTextInputClient(object : TextInputClient {
             override fun hasMarkedText(): Boolean {
-                Logger.info { "hasMarkedText" }
+                Logger.debug { "hasMarkedText" }
                 return false
             }
 
             override fun markedRange(): TextRange? {
-                Logger.info { "markedRange" }
+                Logger.debug { "markedRange" }
                 return null
             }
 
             override fun selectedRange(): TextRange? {
-                Logger.info { "selectedRange" }
+                Logger.debug { "selectedRange" }
                 return null
             }
 
             override fun insertText(text: String, replacementRange: TextRange?) {
-                Logger.info { "insertText: $text, $replacementRange" }
+                Logger.debug { "insertText: $text, $replacementRange" }
             }
 
             override fun doCommand(command: String): Boolean {
-                Logger.info { "doCommand: $command" }
+                Logger.debug { "doCommand: $command" }
                 return false
             }
 
             override fun unmarkText() {
-                Logger.info { "unmarkText" }
+                Logger.debug { "unmarkText" }
             }
 
             override fun setMarkedText(text: String, selectedRange: TextRange?, replacementRange: TextRange?) {
-                Logger.info { "setMarkedText: $text, $selectedRange, $replacementRange" }
+                Logger.debug { "setMarkedText: $text, $selectedRange, $replacementRange" }
             }
 
             override fun attributedStringForRange(range: TextRange): TextInputClient.StringAndRange {
-                Logger.info { "attributedStringForRange: $range" }
+                Logger.debug { "attributedStringForRange: $range" }
                 return TextInputClient.StringAndRange("", TextRange(0, 0))
             }
 
             override fun firstRectForCharacterRange(range: TextRange): TextInputClient.RectAndRange {
-                Logger.info { "firstRectForCharacterRange: $range" }
+                Logger.debug { "firstRectForCharacterRange: $range" }
                 return TextInputClient.RectAndRange(LogicalRect.Zero, TextRange(0, 0))
             }
 
             override fun characterIndexForPoint(point: LogicalPoint): Long {
-                Logger.info { "characterIndexForPoint: $point" }
+                Logger.debug { "characterIndexForPoint: $point" }
                 return 0L
             }
         })
