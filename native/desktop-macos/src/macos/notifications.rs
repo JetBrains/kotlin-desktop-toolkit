@@ -6,7 +6,7 @@ use crate::macos::bundle_proxy::LSBundleProxy;
 use crate::macos::string::{copy_to_c_string, copy_to_ns_string};
 use anyhow::{Context, ensure};
 use block2::RcBlock;
-use desktop_common::ffi_utils::{BorrowedArray, RustAllocatedStrPtr};
+use desktop_common::ffi_utils::{BorrowedArray, BorrowedStrPtr, RustAllocatedStrPtr};
 use desktop_common::logger::catch_panic;
 use dispatch2::DispatchQueue;
 use objc2::__framework_prelude::{Bool, Retained};
@@ -183,6 +183,18 @@ impl NotificationCenterState {
                 });
                 Ok(())
             });
+        })
+    }
+
+    pub fn remove_notification(identifier: &BorrowedStrPtr) -> anyhow::Result<()> {
+        Self::with_state(|state| {
+            let notification_id = copy_to_ns_string(identifier)?;
+            unsafe {
+                let notifications_array = &*NSArray::from_slice(&[&*notification_id]);
+                state.center.removePendingNotificationRequestsWithIdentifiers(notifications_array);
+                state.center.removeDeliveredNotificationsWithIdentifiers(notifications_array);
+            }
+            Ok(())
         })
     }
 }

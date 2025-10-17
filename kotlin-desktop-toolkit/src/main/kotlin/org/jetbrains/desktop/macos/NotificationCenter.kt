@@ -331,6 +331,20 @@ public object NotificationCenter : AutoCloseable {
     }
 
     /**
+     * Removes a previously delivered notification from the notification center.
+     *
+     * @param notificationId The unique identifier of the notification to remove
+     */
+    public fun removeNotification(notificationId: NotificationId) {
+        ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                val identifierPtr = arena.allocateUtf8String(notificationId.value)
+                desktop_macos_h.notification_remove(identifierPtr)
+            }
+        }
+    }
+
+    /**
      * Closes the NotificationCenter and releases native callback resources.
      *
      * After calling close(), the NotificationCenter cannot be used anymore.

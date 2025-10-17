@@ -86,6 +86,14 @@ pub extern "C" fn notification_show(request: &NotificationRequest) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn notification_remove(notification_id: BorrowedStrPtr) {
+    ffi_boundary("notification_remove", || {
+        NotificationCenterState::remove_notification(&notification_id)?;
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn notifications_init(callbacks: NotificationCallbacks) -> bool {
     ffi_boundary("notifications_init", || {
         let mtm = MainThreadMarker::new().unwrap();
