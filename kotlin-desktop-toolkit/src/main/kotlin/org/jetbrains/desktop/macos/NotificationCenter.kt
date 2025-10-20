@@ -118,6 +118,11 @@ public data class NotificationAction(
     val requiresAuthentication: Boolean = false,
 )
 
+public data class NotificationCategory(
+    val categoryId: NotificationCenter.CategoryId,
+    val actions: List<NotificationAction>,
+)
+
 /**
  * macOS System Notification Center API.
  *
@@ -213,11 +218,6 @@ public object NotificationCenter : AutoCloseable {
             throw e
         }
     }
-
-    public data class NotificationCategory(
-        val categoryId: CategoryId,
-        val actions: List<NotificationAction>,
-    )
 
     public fun registerNotificationCategories(
         categories: List<NotificationCategory>,
