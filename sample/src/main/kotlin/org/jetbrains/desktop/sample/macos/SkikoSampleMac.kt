@@ -23,6 +23,8 @@ import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
+import org.jetbrains.desktop.macos.NotificationAction
+import org.jetbrains.desktop.macos.NotificationCategory
 import org.jetbrains.desktop.macos.NotificationCenter
 import org.jetbrains.desktop.macos.NotificationSound
 import org.jetbrains.desktop.macos.Pasteboard
@@ -1099,42 +1101,48 @@ fun setupNotificationCategories() {
     if (NotificationCenter.isSupportedByApplication) {
         NotificationCenter.registerNotificationCategories(
             listOf(
-                NotificationCenter.NotificationCategory(
+                NotificationCategory(
                     categoryId = NotificationCenter.CategoryId("action_category"),
                     actions = listOf(
-                        org.jetbrains.desktop.macos.NotificationAction(
+                        NotificationAction(
                             actionId = NotificationCenter.ActionId("approve"),
                             title = "Approve",
                         ),
-                        org.jetbrains.desktop.macos.NotificationAction(
+                        NotificationAction(
                             actionId = NotificationCenter.ActionId("deny"),
                             title = "Deny",
                         ),
-                        org.jetbrains.desktop.macos.NotificationAction(
+                        NotificationAction(
                             actionId = NotificationCenter.ActionId("later"),
                             title = "Remind Me Later",
                         ),
                     ),
                 ),
-                NotificationCenter.NotificationCategory(
+                NotificationCategory(
                     categoryId = NotificationCenter.CategoryId("evil_action_category"),
                     actions = listOf(
-                        org.jetbrains.desktop.macos.NotificationAction(
+                        NotificationAction(
                             actionId = NotificationCenter.ActionId("not approve"),
                             title = "Not Approve",
+                            isForeground = false,
+                            requiresAuthentication = true,
+
                         ),
-                        org.jetbrains.desktop.macos.NotificationAction(
+                        NotificationAction(
                             actionId = NotificationCenter.ActionId("not deny"),
                             title = "Not Deny",
+                            isDestructive = true,
                         ),
-                        org.jetbrains.desktop.macos.NotificationAction(
+                        NotificationAction(
                             actionId = NotificationCenter.ActionId("not later"),
                             title = "NotRemind Me Later",
+                            isDestructive = true,
                         ),
                     ),
                 ),
             ),
-        ) { notificationId, actionId ->
+        )
+        NotificationCenter.setActionResponseCallback { notificationId, actionId ->
             Logger.info { "Notification action: $notificationId, actionId: $actionId" }
         }
     }
