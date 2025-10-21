@@ -2,7 +2,6 @@ use super::notifications_api::{
     AuthorizationRequestId, AuthorizationStatus, NotificationAction, NotificationActionCallback, NotificationActionOptionsFlags,
     NotificationCallbacks, NotificationCategory, NotificationDeliveryCallback, NotificationRequest, NotificationSoundType, StatusRequestId,
 };
-use crate::macos::application_api::MyNSApplication;
 use crate::macos::bundle_proxy::LSBundleProxy;
 use crate::macos::string::{copy_to_c_string, copy_to_ns_string};
 use anyhow::{Context, ensure};
@@ -248,7 +247,7 @@ define_class!(
                 let notification_id = copy_to_c_string(ns_notification_id).unwrap().to_auto_drop();
                 let callback = self.ivars().on_action;
 
-                if (MainThreadMarker::new().is_some()) {
+                if MainThreadMarker::new().is_some() {
                     callback(action_id, notification_id);
                     completion_handler.call(());
                 } else {

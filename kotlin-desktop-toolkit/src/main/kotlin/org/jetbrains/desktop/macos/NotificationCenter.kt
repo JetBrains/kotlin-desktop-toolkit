@@ -202,9 +202,7 @@ public object NotificationCenter : AutoCloseable {
         }
     }
 
-    public fun registerNotificationCategories(
-        categories: List<NotificationCategory>
-    ) {
+    public fun registerNotificationCategories(categories: List<NotificationCategory>) {
         ffiDownCall {
             Arena.ofConfined().use { arena ->
                 // Allocate array of NativeNotificationCategory structs
