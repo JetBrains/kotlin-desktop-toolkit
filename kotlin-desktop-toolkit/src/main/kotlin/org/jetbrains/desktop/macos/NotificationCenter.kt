@@ -103,6 +103,7 @@ public sealed class NotificationSound {
 
 /**
  * Represents an action button on a notification.
+ * Sic: according to my observations, on MacOs 26.1 only isForeground has an effect.
  *
  * @param actionId Unique identifier for this action
  * @param title The text displayed on the action button
@@ -162,24 +163,6 @@ public object NotificationCenter : AutoCloseable {
     public var isSupportedByApplication: Boolean = false
         private set
 
-    private fun initializeCallbacks() {
-        globalArena = Arena.ofConfined()
-        authorizationCallbackStub = NativeNotificationAuthorizationCallback.allocate(::onRequestAuthorizationResult, globalArena)
-        statusCallbackStub = NativeNotificationStatusCallback.allocate(::onAuthorizationStatus, globalArena)
-        deliveryCallbackStub = NativeNotificationDeliveryCallback.allocate(::onNotificationDeliveryComplete, globalArena)
-        actionCallbackStub = NativeNotificationActionCallback.allocate(::onActionResponse, globalArena)
-
-        isSupportedByApplication = ffiDownCall {
-            val callbacksSegment = globalArena.allocate(NativeNotificationCallbacks.layout())
-            NativeNotificationCallbacks.on_authorization_request(callbacksSegment, authorizationCallbackStub)
-            NativeNotificationCallbacks.on_authorization_status_request(callbacksSegment, statusCallbackStub)
-            NativeNotificationCallbacks.on_delivery(callbacksSegment, deliveryCallbackStub)
-            NativeNotificationCallbacks.on_action(callbacksSegment, actionCallbackStub)
-
-            desktop_macos_h.notifications_init(callbacksSegment)
-        }
-    }
-
     /**
      * Requests authorization to display notifications.
      *
@@ -220,10 +203,8 @@ public object NotificationCenter : AutoCloseable {
     }
 
     public fun registerNotificationCategories(
-        categories: List<NotificationCategory>,
-        onNotificationAction: (NotificationId, ActionId) -> Unit,
+        categories: List<NotificationCategory>
     ) {
-        actionResponseCallback = onNotificationAction
         ffiDownCall {
             Arena.ofConfined().use { arena ->
                 // Allocate array of NativeNotificationCategory structs
@@ -280,6 +261,15 @@ public object NotificationCenter : AutoCloseable {
                 desktop_macos_h.register_notification_categories(borrowedCategoriesArray)
             }
         }
+    }
+
+    /**
+     * Sets a callback invoked when an action button is clicked on a notification.
+     * This callback is also called when you click on the cross-button to dismiss a notification.
+     * Or when you clicked on the notification itself.
+     */
+    public fun setActionResponseCallback(callback: (NotificationId, ActionId) -> Unit) {
+        actionResponseCallback = callback
     }
 
     /**
@@ -379,6 +369,24 @@ public object NotificationCenter : AutoCloseable {
     private var idCounter: Long = 0
 
     private fun nextId(): Long = idCounter++
+
+    private fun initializeCallbacks() {
+        globalArena = Arena.ofConfined()
+        authorizationCallbackStub = NativeNotificationAuthorizationCallback.allocate(::onRequestAuthorizationResult, globalArena)
+        statusCallbackStub = NativeNotificationStatusCallback.allocate(::onAuthorizationStatus, globalArena)
+        deliveryCallbackStub = NativeNotificationDeliveryCallback.allocate(::onNotificationDeliveryComplete, globalArena)
+        actionCallbackStub = NativeNotificationActionCallback.allocate(::onActionResponse, globalArena)
+
+        isSupportedByApplication = ffiDownCall {
+            val callbacksSegment = globalArena.allocate(NativeNotificationCallbacks.layout())
+            NativeNotificationCallbacks.on_authorization_request(callbacksSegment, authorizationCallbackStub)
+            NativeNotificationCallbacks.on_authorization_status_request(callbacksSegment, statusCallbackStub)
+            NativeNotificationCallbacks.on_delivery(callbacksSegment, deliveryCallbackStub)
+            NativeNotificationCallbacks.on_action(callbacksSegment, actionCallbackStub)
+
+            desktop_macos_h.notifications_init(callbacksSegment)
+        }
+    }
 
     // Called from native when authorization request completes
     private fun onRequestAuthorizationResult(requestId: Long, granted: Boolean) {
