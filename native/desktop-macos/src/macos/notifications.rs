@@ -2,6 +2,7 @@ use super::notifications_api::{
     AuthorizationRequestId, AuthorizationStatus, NotificationAction, NotificationActionCallback, NotificationActionOptionsFlags,
     NotificationCallbacks, NotificationCategory, NotificationDeliveryCallback, NotificationRequest, NotificationSoundType, StatusRequestId,
 };
+use crate::macos::application_api::MyNSApplication;
 use crate::macos::bundle_proxy::LSBundleProxy;
 use crate::macos::string::{copy_to_c_string, copy_to_ns_string};
 use anyhow::{Context, ensure};
@@ -95,7 +96,10 @@ impl NotificationCenterState {
                 let settings = unsafe { settings.as_ref() };
                 let status: AuthorizationStatus = unsafe { settings.authorizationStatus().into() };
                 DispatchQueue::main().exec_async(move || {
-                    callback(request_id, status);
+                    catch_panic(|| {
+                        callback(request_id, status);
+                        Ok(())
+                    });
                 });
             });
 
@@ -243,12 +247,19 @@ define_class!(
                 let action_id = copy_to_c_string(ns_action_id).unwrap().to_auto_drop();
                 let notification_id = copy_to_c_string(ns_notification_id).unwrap().to_auto_drop();
                 let callback = self.ivars().on_action;
-                DispatchQueue::main().exec_async(move || {
-                    callback(action_id, notification_id);
-                });
 
-                // todo[ps] should we call it after executing the callback?
-                completion_handler.call(());
+                if (MainThreadMarker::new().is_some()) {
+                    callback(action_id, notification_id);
+                    completion_handler.call(());
+                } else {
+                    DispatchQueue::main().exec_sync(move || {
+                        catch_panic(|| {
+                            callback(action_id, notification_id);
+                            Ok(())
+                        });
+                    });
+                    completion_handler.call(());
+                }
                 Ok(())
             });
         }
