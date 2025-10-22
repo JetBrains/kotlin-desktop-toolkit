@@ -76,7 +76,7 @@ impl NotificationCenterState {
             let options = UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound | UNAuthorizationOptions::Badge;
             let handler = RcBlock::new(move |granted: Bool, _error: *mut NSError| {
                 let granted = granted.as_bool();
-                DispatchQueue::main().exec_async(move || {
+                dispatch_to_main_if_needed(move || {
                     callback(request_id, granted);
                 });
             });
@@ -94,11 +94,8 @@ impl NotificationCenterState {
             let handler = RcBlock::new(move |settings: NonNull<UNNotificationSettings>| {
                 let settings = unsafe { settings.as_ref() };
                 let status: AuthorizationStatus = unsafe { settings.authorizationStatus().into() };
-                DispatchQueue::main().exec_async(move || {
-                    catch_panic(|| {
-                        callback(request_id, status);
-                        Ok(())
-                    });
+                dispatch_to_main_if_needed(move || {
+                    callback(request_id, status);
                 });
             });
 
@@ -178,11 +175,8 @@ impl NotificationCenterState {
                 let identifier = copy_to_c_string(&notification_identifier)
                     .expect("Error converting to c string")
                     .to_auto_drop();
-                DispatchQueue::main().exec_async(move || {
-                    catch_panic(|| {
-                        callback(identifier, error_msg);
-                        Ok(())
-                    });
+                dispatch_to_main_if_needed(move || {
+                    callback(identifier, error_msg);
                 });
                 Ok(())
             });
@@ -199,6 +193,23 @@ impl NotificationCenterState {
             }
             Ok(())
         })
+    }
+}
+
+fn dispatch_to_main_if_needed<F>(f: F)
+where
+    F: FnOnce(),
+    F: Send + 'static,
+{
+    if MainThreadMarker::new().is_some() {
+        f();
+    } else {
+        DispatchQueue::main().exec_async(move || {
+            catch_panic(move || {
+                f();
+                Ok(())
+            });
+        });
     }
 }
 
