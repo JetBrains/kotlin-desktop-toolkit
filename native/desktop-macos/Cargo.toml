@@ -63,5 +63,16 @@ objc2-quartz-core = { version = "0.3.1" }
 objc2-core-graphics = { version = "0.3.1" }
 objc2-metal = { version = "0.3.1" }
 objc2-uniform-type-identifiers = { version = "0.3.1" }
+objc2-user-notifications = { version = "0.3.1", features = [
+  "UNUserNotificationCenter",
+  "UNNotificationSettings",
+  "UNNotificationContent",
+  "UNNotificationRequest",
+  "UNNotificationAction",
+  "UNNotificationCategory",
+  "UNNotificationSound",
+  "UNNotificationResponse",
+  "UNNotification",
+] }
 num-traits = "0.2"
 num-derive = "0.4"

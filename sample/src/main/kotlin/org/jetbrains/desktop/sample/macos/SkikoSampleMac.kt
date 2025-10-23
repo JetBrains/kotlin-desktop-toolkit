@@ -23,6 +23,10 @@ import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.MetalCommandQueue
 import org.jetbrains.desktop.macos.MetalDevice
+import org.jetbrains.desktop.macos.NotificationAction
+import org.jetbrains.desktop.macos.NotificationCategory
+import org.jetbrains.desktop.macos.NotificationCenter
+import org.jetbrains.desktop.macos.NotificationSound
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.PhysicalPoint
 import org.jetbrains.desktop.macos.PhysicalSize
@@ -39,7 +43,9 @@ import org.jetbrains.skia.Color
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import java.lang.AutoCloseable
+import java.lang.Thread.sleep
 import kotlin.concurrent.Volatile
+import kotlin.concurrent.thread
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -574,6 +580,8 @@ class ApplicationState : AutoCloseable {
         }
     }
 
+    var nextNotificationId = 0
+
     fun buildMenu(): AppMenuStructure {
         return AppMenuStructure(
             AppMenuItem.SubMenu(
@@ -822,6 +830,229 @@ class ApplicationState : AutoCloseable {
                     },
                 ),
             ),
+            AppMenuItem.SubMenu(
+                title = "Notifications",
+                AppMenuItem.Action(
+                    title = "Request Permission",
+                    perform = {
+                        NotificationCenter.requestAuthorization { granted ->
+                            Logger.info { "Notification permission ${if (granted) "granted" else "denied"}" }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Log Notification Capabilities",
+                    perform = {
+                        NotificationCenter.getAuthorizationStatus { status ->
+                            Logger.info { "Notification authorization status: $status" }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Show Test Notification",
+                    keystroke = Keystroke(key = "n", modifiers = KeyModifiersSet.create(command = true, option = true)),
+                    perform = {
+                        thread {
+                            sleep(5000)
+                            GrandCentralDispatch.dispatchOnMain {
+                                NotificationCenter.showNotification(
+                                    title = "Test Notification",
+                                    body = "This is a test notification from Kotlin Desktop Toolkit!",
+                                    notificationId = NotificationCenter.NotificationId("TestNotification${nextNotificationId++}"),
+                                ) { error ->
+                                    if (error != null) {
+                                        Logger.error { "Failed to show notification: $error" }
+                                    } else {
+                                        Logger.info { "Notification delivered successfully" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Show Notification with Default Sound",
+                    perform = {
+                        thread {
+                            sleep(5000)
+                            GrandCentralDispatch.dispatchOnMain {
+                                NotificationCenter.showNotification(
+                                    title = "Default Sound Notification",
+                                    body = "This notification uses the default system sound.",
+                                    sound = NotificationSound.Default,
+                                    notificationId = NotificationCenter.NotificationId("DefaultSoundNotification${nextNotificationId++}"),
+                                ) { error ->
+                                    if (error != null) {
+                                        Logger.error { "Failed to show notification with default sound: $error" }
+                                    } else {
+                                        Logger.info { "Default sound notification delivered successfully" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Show Silent Notification",
+                    perform = {
+                        thread {
+                            sleep(5000)
+                            GrandCentralDispatch.dispatchOnMain {
+                                NotificationCenter.showNotification(
+                                    title = "Silent Notification",
+                                    body = "This notification has no sound.",
+                                    sound = NotificationSound.None,
+                                    notificationId = NotificationCenter.NotificationId("SilentNotification${nextNotificationId++}"),
+                                ) { error ->
+                                    if (error != null) {
+                                        Logger.error { "Failed to show silent notification: $error" }
+                                    } else {
+                                        Logger.info { "Silent notification delivered successfully" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Show Critical Alert Notification",
+                    perform = {
+                        thread {
+                            sleep(5000)
+                            GrandCentralDispatch.dispatchOnMain {
+                                NotificationCenter.showNotification(
+                                    title = "Critical Alert",
+                                    body = "This is a critical alert that bypasses Do Not Disturb and mute switch.",
+                                    sound = NotificationSound.Critical,
+                                    notificationId = NotificationCenter.NotificationId("CriticalAlertNotification${nextNotificationId++}"),
+                                ) { error ->
+                                    if (error != null) {
+                                        Logger.error { "Failed to show critical notification: $error" }
+                                    } else {
+                                        Logger.info { "Critical notification delivered successfully" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Show Ringtone Notification",
+                    perform = {
+                        thread {
+                            sleep(5000)
+                            GrandCentralDispatch.dispatchOnMain {
+                                NotificationCenter.showNotification(
+                                    title = "Ringtone Notification",
+                                    body = "This notification uses the default ringtone sound.",
+                                    sound = NotificationSound.Ringtone,
+                                    notificationId = NotificationCenter.NotificationId("RingtoneNotification${nextNotificationId++}"),
+                                ) { error ->
+                                    if (error != null) {
+                                        Logger.error { "Failed to show ringtone notification: $error" }
+                                    } else {
+                                        Logger.info { "Ringtone notification delivered successfully" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Show Named Sound Notification (Basso)",
+                    perform = {
+                        thread {
+                            sleep(5000)
+                            GrandCentralDispatch.dispatchOnMain {
+                                NotificationCenter.showNotification(
+                                    title = "Named Sound Notification",
+                                    body = "This notification uses the Basso system sound.",
+                                    sound = NotificationSound.Named("Basso.aiff"),
+                                    notificationId = NotificationCenter.NotificationId("NamedSoundNotification${nextNotificationId++}"),
+                                ) { error ->
+                                    if (error != null) {
+                                        Logger.error { "Failed to show named sound notification: $error" }
+                                    } else {
+                                        Logger.info { "Named sound notification delivered successfully" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Show Critical Named Sound Notification (Funk)",
+                    perform = {
+                        thread {
+                            sleep(5000)
+                            GrandCentralDispatch.dispatchOnMain {
+                                NotificationCenter.showNotification(
+                                    title = "Critical Named Sound",
+                                    body = "This notification uses the Funk system sound as a critical alert.",
+                                    sound = NotificationSound.CriticalNamed("Funk.aiff"),
+                                    notificationId = NotificationCenter.NotificationId(
+                                        "CriticalNamedSoundNotification${nextNotificationId++}",
+                                    ),
+                                ) { error ->
+                                    if (error != null) {
+                                        Logger.error { "Failed to show critical named sound notification: $error" }
+                                    } else {
+                                        Logger.info { "Critical named sound notification delivered successfully" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ),
+                AppMenuItem.Separator,
+                AppMenuItem.Action(
+                    title = "Show Notification with Action Buttons",
+                    keystroke = Keystroke(key = "a", modifiers = KeyModifiersSet.create(command = true, option = true)),
+                    perform = {
+                        thread {
+                            sleep(5000)
+                            GrandCentralDispatch.dispatchOnMain {
+                                NotificationCenter.showNotification(
+                                    title = "Action Required",
+                                    body = "Please choose an action:",
+                                    sound = NotificationSound.Default,
+                                    categoryId = NotificationCenter.CategoryId("action_category"),
+                                    notificationId = NotificationCenter.NotificationId("TestNotification${nextNotificationId++}"),
+                                ) { error ->
+                                    if (error != null) {
+                                        Logger.error { "Failed to show action notification: $error" }
+                                    } else {
+                                        Logger.info { "Action notification delivered successfully" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Show Evil Notification with Action Buttons",
+                    perform = {
+                        thread {
+                            sleep(5000)
+                            GrandCentralDispatch.dispatchOnMain {
+                                NotificationCenter.showNotification(
+                                    title = "Evil Action Required",
+                                    body = "Please choose an action:",
+                                    sound = NotificationSound.Default,
+                                    notificationId = NotificationCenter.NotificationId("EvilTestNotification${nextNotificationId++}"),
+                                    categoryId = NotificationCenter.CategoryId("evil_action_category"),
+                                ) { error ->
+                                    if (error != null) {
+                                        Logger.error { "Failed to show action notification: $error" }
+                                    } else {
+                                        Logger.info { "Action notification delivered successfully" }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ),
+            ),
             AppMenuItem.SubMenu(title = "Help"),
         )
     }
@@ -866,6 +1097,57 @@ fun jbIconBytes(): ByteArray {
     return object {}.javaClass.getResource("/jb-logo.png")!!.readBytes()
 }
 
+fun setupNotificationCategories() {
+    if (NotificationCenter.isSupportedByApplication) {
+        NotificationCenter.registerNotificationCategories(
+            listOf(
+                NotificationCategory(
+                    categoryId = NotificationCenter.CategoryId("action_category"),
+                    actions = listOf(
+                        NotificationAction(
+                            actionId = NotificationCenter.ActionId("approve"),
+                            title = "Approve",
+                        ),
+                        NotificationAction(
+                            actionId = NotificationCenter.ActionId("deny"),
+                            title = "Deny",
+                        ),
+                        NotificationAction(
+                            actionId = NotificationCenter.ActionId("later"),
+                            title = "Remind Me Later",
+                        ),
+                    ),
+                ),
+                NotificationCategory(
+                    categoryId = NotificationCenter.CategoryId("evil_action_category"),
+                    actions = listOf(
+                        NotificationAction(
+                            actionId = NotificationCenter.ActionId("not approve"),
+                            title = "Not Approve",
+                            isForeground = false,
+                            requiresAuthentication = true,
+
+                        ),
+                        NotificationAction(
+                            actionId = NotificationCenter.ActionId("not deny"),
+                            title = "Not Deny",
+                            isDestructive = true,
+                        ),
+                        NotificationAction(
+                            actionId = NotificationCenter.ActionId("not later"),
+                            title = "NotRemind Me Later",
+                            isDestructive = true,
+                        ),
+                    ),
+                ),
+            ),
+        )
+        NotificationCenter.setActionResponseCallback { notificationId, actionId ->
+            Logger.info { "Notification action: $notificationId, actionId: $actionId" }
+        }
+    }
+}
+
 fun main() {
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
     Logger.info { runtimeInfo() }
@@ -876,6 +1158,7 @@ fun main() {
             state.createWindow(useCustomTitlebar = true)
             Application.runEventLoop { event ->
                 if (event is Event.ApplicationDidFinishLaunching) {
+                    setupNotificationCategories()
                     Application.setDockIcon(jbIconBytes())
                     AppMenuManager.setMainMenu(state.buildMenu())
                 }
@@ -883,6 +1166,7 @@ fun main() {
             }
         }
         DragAndDropHandler.close()
+        NotificationCenter.close()
         GrandCentralDispatch.close()
     }
 }
