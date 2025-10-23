@@ -198,8 +198,7 @@ impl NotificationCenterState {
 
 fn dispatch_to_main_if_needed<F>(f: F)
 where
-    F: FnOnce(),
-    F: Send + 'static,
+    F: FnOnce() + Send + 'static,
 {
     if MainThreadMarker::new().is_some() {
         f();
@@ -260,7 +259,6 @@ define_class!(
 
                 if MainThreadMarker::new().is_some() {
                     callback(action_id, notification_id);
-                    completion_handler.call(());
                 } else {
                     DispatchQueue::main().exec_sync(move || {
                         catch_panic(|| {
@@ -268,8 +266,8 @@ define_class!(
                             Ok(())
                         });
                     });
-                    completion_handler.call(());
                 }
+                completion_handler.call(());
                 Ok(())
             });
         }
