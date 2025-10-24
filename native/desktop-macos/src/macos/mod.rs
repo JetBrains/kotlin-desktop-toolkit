@@ -17,6 +17,7 @@ pub mod notifications;
 pub mod notifications_api;
 pub mod pasteboard;
 pub mod screen;
+pub mod sound_api;
 pub mod string;
 pub mod text_direction;
 pub mod text_input_client;
