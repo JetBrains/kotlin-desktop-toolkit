@@ -10,6 +10,7 @@ pub mod file_dialog_api;
 pub mod geometry;
 mod keyboard;
 mod mouse;
+mod notifications;
 mod pointer_shapes;
 pub mod pointer_shapes_api;
 mod rendering_egl;

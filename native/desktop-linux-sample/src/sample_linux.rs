@@ -15,10 +15,13 @@ use desktop_linux::linux::{
         AppPtr, ApplicationCallbacks, DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData, DragAndDropQueryResponse,
         RenderingMode, SupportedActionsForMime, application_clipboard_paste, application_clipboard_put, application_get_egl_proc_func,
         application_init, application_is_event_loop_thread, application_primary_selection_paste,
-        application_request_internal_activation_token, application_run_event_loop, application_set_cursor_theme, application_shutdown,
-        application_stop_event_loop, application_text_input_disable, application_text_input_enable, application_text_input_update,
+        application_request_internal_activation_token, application_request_show_notification, application_run_event_loop,
+        application_set_cursor_theme, application_shutdown, application_stop_event_loop, application_text_input_disable,
+        application_text_input_enable, application_text_input_update,
     },
-    events::{DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, SoftwareDrawData, TextInputEvent, WindowId},
+    events::{
+        DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, RequestId, SoftwareDrawData, TextInputEvent, WindowId,
+    },
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
@@ -91,6 +94,8 @@ struct State {
     key_modifiers: KeyModifierBitflag,
     windows: HashMap<WindowId, WindowState>,
     settings: Settings,
+    request_sources: HashMap<RequestId, WindowId>,
+    notification_sources: HashMap<u32, WindowId>,
 }
 
 thread_local! {
@@ -332,12 +337,14 @@ const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBit
     KeyModifierBitflag(all_modifiers.0 & !(KeyModifier::CapsLock as u8) & !(KeyModifier::NumLock as u8))
 }
 
+#[allow(clippy::too_many_lines)]
 fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> bool {
     const KEYCODE_BACKSPACE: u32 = 14;
     const KEYCODE_TAB: u32 = 15;
     const KEYCODE_C: u32 = 46;
     const KEYCODE_N: u32 = 49;
     const KEYCODE_O: u32 = 24;
+    const KEYCODE_P: u32 = 25;
     const KEYCODE_S: u32 = 31;
     const KEYCODE_V: u32 = 47;
     const KEY_MODIFIER_CTRL: u8 = KeyModifier::Ctrl as u8;
@@ -366,6 +373,22 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
         }
         (KEY_MODIFIER_CTRL, KEYCODE_C) => {
             application_clipboard_put(app_ptr, BorrowedStrPtr::new(ALL_MIMES));
+            true
+        }
+        (KEY_MODIFIER_CTRL, KEYCODE_P) => {
+            let title = format!("Notification from window {}", window_id.0);
+            let body = format!("Clicking this notification will activate window {}", window_id.0);
+            let title_cstr = CString::new(title).unwrap();
+            let body_cstr = CString::new(body).unwrap();
+            let request_id = application_request_show_notification(
+                app_ptr,
+                BorrowedStrPtr::new(&title_cstr),
+                BorrowedStrPtr::new(&body_cstr),
+                BorrowedStrPtr::null(),
+            );
+            if request_id.0 != 0 {
+                state.request_sources.insert(request_id, window_id);
+            }
             true
         }
         (KEY_MODIFIER_CTRL, KEYCODE_O) => {
@@ -417,7 +440,13 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             state.windows.insert(new_window_id, WindowState::default());
             true
         }
-        (_, _) => false,
+        (_, _) => {
+            if let Some(s) = event.characters.as_optional_str().unwrap() {
+                let window_state = state.windows.get_mut(&window_id).unwrap();
+                window_state.text += s;
+            }
+            false
+        }
     }
 }
 
@@ -509,7 +538,7 @@ fn on_application_started(state: &mut State) {
     state.windows.insert(window_2_id, WindowState::default());
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 extern "C" fn event_handler(event: &Event) -> bool {
     const MOUSE_BUTTON_LEFT: u32 = 0x110;
     const MOUSE_BUTTON_MIDDLE: u32 = 0x112;
@@ -583,8 +612,9 @@ extern "C" fn event_handler(event: &Event) -> bool {
                             RenderingMode::Auto,
                             drag_icon_size,
                         );
-                        let window_state = state.windows.get_mut(&data.window_id).unwrap();
-                        window_state.drag_and_drop_source = true;
+                        if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                            window_state.drag_and_drop_source = true;
+                        }
                     }
                     true
                 }
@@ -621,8 +651,9 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 true
             }
             Event::DataTransfer(data) => {
-                if let Some(key_window_id) = state.key_window_id {
-                    let window_state = state.windows.get_mut(&key_window_id).unwrap();
+                if let Some(key_window_id) = state.key_window_id
+                    && let Some(window_state) = state.windows.get_mut(&key_window_id)
+                {
                     on_data_transfer_received(&data.content, window_state);
                     true
                 } else {
@@ -667,13 +698,17 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 }
             }
             Event::TextInputAvailability(data) => {
-                let window_state = state.windows.get_mut(&data.window_id).unwrap();
-                on_text_input_availability_changed(data.available, app_ptr, window_state);
-                true
+                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                    on_text_input_availability_changed(data.available, app_ptr, window_state);
+                    true
+                } else {
+                    false
+                }
             }
             Event::TextInput(event) => {
-                if let Some(key_window_id) = state.key_window_id {
-                    let window_state = state.windows.get_mut(&key_window_id).unwrap();
+                if let Some(key_window_id) = state.key_window_id
+                    && let Some(window_state) = state.windows.get_mut(&key_window_id)
+                {
                     on_text_input(event, app_ptr, key_window_id, window_state);
                     true
                 } else {
@@ -682,8 +717,23 @@ extern "C" fn event_handler(event: &Event) -> bool {
             }
             Event::ActivationTokenResponse(data) => {
                 let token = data.token.as_optional_cstr().unwrap();
-                let window_id = *state.windows.keys().find(|&&w| Some(w) != state.key_window_id).unwrap();
-                window_activate(app_ptr, window_id, BorrowedStrPtr::new(token));
+                if let Some(window_id) = state.windows.keys().find(|&&w| Some(w) != state.key_window_id) {
+                    window_activate(app_ptr, *window_id, BorrowedStrPtr::new(token));
+                }
+                true
+            }
+            Event::NotificationShown(data) => {
+                if data.notification_id > 0 {
+                    let requester = state.request_sources.remove(&data.request_id).unwrap();
+                    state.notification_sources.insert(data.notification_id, requester);
+                }
+                true
+            }
+            Event::NotificationClosed(data) => {
+                if let Some(activation_token) = data.activation_token.as_optional_cstr() {
+                    let window_id_to_activate = state.notification_sources.remove(&data.notification_id).unwrap();
+                    window_activate(app_ptr, window_id_to_activate, BorrowedStrPtr::new(activation_token));
+                }
                 true
             }
             _ => false,

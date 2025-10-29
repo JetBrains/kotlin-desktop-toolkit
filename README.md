@@ -30,7 +30,7 @@
 | Invoke on Main thread | ✅    | ✅      | ✅      |     |
 | List screens          | ✅    | ✅      | ✅      |     |
 | Terminate application | ✅    | ✅      | ✅      |     |
-| Show notification     | ✅    | ❌      | ❌      |     |
+| Show notification     | ✅    | ✅      | ❌      |     |
 | System tray           | ❌    | ❌      | ❌      |     |
 | Application icon      | ✅    | ✅      | 🚧      |     |
 | Application menu      | ✅    | ❌      | ➖      |     |

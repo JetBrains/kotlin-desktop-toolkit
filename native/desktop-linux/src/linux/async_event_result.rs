@@ -3,8 +3,9 @@ use std::ffi::CString;
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use log::error;
 
-use crate::linux::events::{EventHandler, FileChooserResponse, RequestId};
+use crate::linux::events::{EventHandler, FileChooserResponse, NotificationShownEvent, RequestId};
 
+#[allow(clippy::enum_variant_names)]
 pub enum AsyncEventResult {
     UrlOpenResponse {
         request_id: RequestId,
@@ -13,6 +14,10 @@ pub enum AsyncEventResult {
     FileChooserResponse {
         request_id: RequestId,
         result: anyhow::Result<CString>,
+    },
+    NotificationShown {
+        request_id: RequestId,
+        result: anyhow::Result<u32>,
     },
 }
 
@@ -41,6 +46,20 @@ impl AsyncEventResult {
                         send(BorrowedStrPtr::null());
                     }
                 }
+            }
+            Self::NotificationShown { request_id, result } => {
+                let notification_id = match result {
+                    Ok(notification_id) => notification_id,
+                    Err(e) => {
+                        error!("{e}");
+                        0
+                    }
+                };
+                let event = NotificationShownEvent {
+                    request_id,
+                    notification_id,
+                };
+                event_handler(&event.into());
             }
         }
     }

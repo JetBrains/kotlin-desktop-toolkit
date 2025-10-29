@@ -62,6 +62,23 @@ public data class ApplicationConfig(
     val getDataTransferData: (DataSource, String) -> ByteArray?,
 )
 
+public class ShowNotificationParams(
+    /** User-visible string to display as the title.
+     * This should be a short string, if it doesn’t fit the UI, it may be truncated to fit on a single line.
+     */
+    public val title: String,
+
+    /** User-visible string to display as the body.
+     * This can be a long string, but if it doesn’t fit the UI, it may be wrapped or/and truncated.
+     */
+    public val body: String,
+
+    /** The path to a sound file to play when the notification pops up.
+     * The mandatory supported sound file formats are WAV/PCM 8-48kHz, 8/16bits, and OGG/Vorbis I.
+     */
+    public val soundFilePath: String?,
+)
+
 public class Application : AutoCloseable {
     private var applicationConfig: ApplicationConfig? = null
 
@@ -312,6 +329,22 @@ public class Application : AutoCloseable {
                 null
             } else {
                 RequestId(rawRequestId)
+            }
+        }
+    }
+
+    public fun requestShowNotification(params: ShowNotificationParams): RequestId? {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                val title = arena.allocateUtf8String(params.title)
+                val body = arena.allocateUtf8String(params.body)
+                val soundFilePath = params.soundFilePath?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+                val rawRequestId = desktop_linux_h.application_request_show_notification(appPtr, title, body, soundFilePath)
+                if (rawRequestId == 0) {
+                    null
+                } else {
+                    RequestId(rawRequestId)
+                }
             }
         }
     }
