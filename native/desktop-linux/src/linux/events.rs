@@ -592,7 +592,6 @@ impl From<WindowScreenChangeEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct FileChooserResponse<'a> {
-    pub window_id: WindowId,
     pub request_id: RequestId,
     pub newline_separated_files: BorrowedStrPtr<'a>,
 }

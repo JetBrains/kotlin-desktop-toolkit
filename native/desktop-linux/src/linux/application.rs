@@ -532,11 +532,7 @@ impl Application {
         Ok(self.run_async(|request_id| async move {
             let identifier = ashpd::WindowIdentifier::from_wayland(&wl_surface).await;
             let result = show_open_file_dialog_impl(identifier, request).await;
-            AsyncEventResult::FileChooserResponse {
-                request_id,
-                window_id,
-                result,
-            }
+            AsyncEventResult::FileChooserResponse { request_id, result }
         }))
     }
 
@@ -551,11 +547,7 @@ impl Application {
         Ok(self.run_async(|request_id| async move {
             let identifier: Option<ashpd::WindowIdentifier> = ashpd::WindowIdentifier::from_wayland(&wl_surface).await;
             let result = show_save_file_dialog_impl(identifier, request).await;
-            AsyncEventResult::FileChooserResponse {
-                request_id,
-                window_id,
-                result,
-            }
+            AsyncEventResult::FileChooserResponse { request_id, result }
         }))
     }
 }
