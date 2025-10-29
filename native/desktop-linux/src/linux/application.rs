@@ -9,11 +9,7 @@ use smithay_client_toolkit::{
             channel::{self, Sender},
         },
         calloop_wayland_source::WaylandSource,
-        client::{
-            Connection, Proxy as _, QueueHandle,
-            globals::registry_queue_init,
-            protocol::{wl_data_device_manager::DndAction, wl_surface::WlSurface},
-        },
+        client::{Connection, Proxy as _, QueueHandle, globals::registry_queue_init, protocol::wl_data_device_manager::DndAction},
     },
     seat::keyboard::KeyboardData,
     shell::WaylandSurface,
@@ -26,9 +22,10 @@ use crate::linux::{
     data_transfer::{MimeTypes, read_from_pipe},
     drag_icon::DragIcon,
     events::{DataTransferEvent, Event, RequestId, WindowId},
-    geometry::LogicalSize,
+    geometry::{LogicalPoint, LogicalSize},
     window::SimpleWindow,
     window_api::WindowParams,
+    window_resize_edge_api::WindowResizeEdge,
     xdg_desktop_settings::xdg_desktop_settings_notifier,
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
@@ -197,10 +194,6 @@ impl Application {
             .get(&window_id)
             .and_then(|surface_id| self.state.windows.get(surface_id))
             .with_context(|| format!("Couldn't find window for {window_id:?}"))
-    }
-
-    pub fn get_wl_surface(&self, window_id: WindowId) -> anyhow::Result<WlSurface> {
-        Ok(self.get_window(window_id)?.window.wl_surface().clone())
     }
 
     pub fn get_window_mut(&mut self, window_id: WindowId) -> anyhow::Result<&mut SimpleWindow> {
@@ -465,6 +458,54 @@ impl Application {
             return Ok(());
         };
         xdg_activation.activate::<ApplicationState>(w.window.wl_surface(), token);
+        Ok(())
+    }
+
+    pub fn window_start_move(&self, window_id: WindowId) -> anyhow::Result<()> {
+        let w = self
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
+        // Required to have a mouse button pressed serial, e.g.
+        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L335
+        if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
+            w.start_move(seat, serial);
+        }
+        Ok(())
+    }
+
+    pub fn window_start_resize(&self, window_id: WindowId, edge: WindowResizeEdge) -> anyhow::Result<()> {
+        let w = self
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
+        // Required to have a mouse button pressed serial, e.g.
+        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L387
+        if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
+            w.start_resize(edge, seat, serial);
+        }
+        Ok(())
+    }
+
+    pub fn window_show_menu(&self, window_id: WindowId, position: LogicalPoint) -> anyhow::Result<()> {
+        let w = self
+            .get_window(window_id)
+            .with_context(|| format!("No window found {window_id:?}"))?;
+        // Required to have a mouse button pressed or released serial, e.g.
+        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L309
+        if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
+            w.show_menu(position, seat, serial);
+        }
+        Ok(())
+    }
+
+    pub fn open_url(&mut self, url_string: &str) -> anyhow::Result<()> {
+        debug!("application_open_url");
+        let uri = ashpd::url::Url::parse(url_string)?;
+
+        self.run_async(|request_id| async move {
+            let request = ashpd::desktop::open_uri::OpenFileRequest::default().ask(false);
+            let error = request.send_uri(&uri).await.err().map(Into::into);
+            AsyncEventResult::UrlOpenResponse { request_id, error }
+        });
         Ok(())
     }
 }

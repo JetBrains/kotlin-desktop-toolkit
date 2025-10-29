@@ -1,5 +1,4 @@
 use anyhow::Context;
-use ashpd::desktop::file_chooser;
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger::{PanicDefault, ffi_boundary},
@@ -11,13 +10,12 @@ use super::window::SimpleWindow;
 use crate::linux::{
     application::Application,
     application_api::{AppPtr, DragAndDropActions, RenderingMode},
-    async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
     events::{RequestId, WindowDecorationMode, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
-    pointer_shapes::PointerShape,
-    window_resize_edge::WindowResizeEdge,
+    pointer_shapes_api::PointerShape,
+    window_resize_edge_api::WindowResizeEdge,
 };
 
 fn with_window<R: PanicDefault>(
@@ -87,7 +85,7 @@ pub extern "C" fn window_close(mut app_ptr: AppPtr, window_id: WindowId) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_pointer_shape(mut app_ptr: AppPtr, window_id: WindowId, pointer_shape: PointerShape) {
     with_window_mut(&mut app_ptr, window_id, "window_set_pointer_shape", |w| {
-        w.set_cursor_icon(pointer_shape.into());
+        w.set_cursor_icon(pointer_shape);
         Ok(())
     });
 }
@@ -109,15 +107,7 @@ pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_tit
 pub extern "C" fn window_start_move(app_ptr: AppPtr, window_id: WindowId) {
     ffi_boundary("window_start_move", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        let w = app
-            .get_window(window_id)
-            .with_context(|| format!("No window found {window_id:?}"))?;
-        // Required to have a mouse button pressed serial, e.g.
-        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L335
-        if let Some((seat, serial)) = app.state.get_latest_pointer_button_seat_and_serial() {
-            w.start_move(seat, serial);
-        }
-        Ok(())
+        app.window_start_move(window_id)
     });
 }
 
@@ -125,15 +115,7 @@ pub extern "C" fn window_start_move(app_ptr: AppPtr, window_id: WindowId) {
 pub extern "C" fn window_start_resize(app_ptr: AppPtr, window_id: WindowId, edge: WindowResizeEdge) {
     ffi_boundary("window_start_resize", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        let w = app
-            .get_window(window_id)
-            .with_context(|| format!("No window found {window_id:?}"))?;
-        // Required to have a mouse button pressed serial, e.g.
-        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L387
-        if let Some((seat, serial)) = app.state.get_latest_pointer_button_seat_and_serial() {
-            w.start_resize(edge, seat, serial);
-        }
-        Ok(())
+        app.window_start_resize(window_id, edge)
     });
 }
 
@@ -141,15 +123,7 @@ pub extern "C" fn window_start_resize(app_ptr: AppPtr, window_id: WindowId, edge
 pub extern "C" fn window_show_menu(app_ptr: AppPtr, window_id: WindowId, position: LogicalPoint) {
     ffi_boundary("window_show_menu", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        let w = app
-            .get_window(window_id)
-            .with_context(|| format!("No window found {window_id:?}"))?;
-        // Required to have a mouse button pressed or released serial, e.g.
-        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L309
-        if let Some((seat, serial)) = app.state.get_latest_pointer_button_seat_and_serial() {
-            w.show_menu(position, seat, serial);
-        }
-        Ok(())
+        app.window_show_menu(window_id, position)
     });
 }
 
@@ -267,51 +241,6 @@ pub extern "C" fn window_unset_decoration_mode(app_ptr: AppPtr, window_id: Windo
     });
 }
 
-impl OpenFileDialogParams {
-    fn apply(&self, request: file_chooser::OpenFileRequest) -> file_chooser::OpenFileRequest {
-        request.directory(self.select_directories).multiple(self.allows_multiple_selection)
-    }
-}
-
-impl SaveFileDialogParams<'_> {
-    fn apply(&self, mut request: file_chooser::SaveFileRequest) -> anyhow::Result<file_chooser::SaveFileRequest> {
-        if let Some(name_field_string_value) = self.name_field_string_value.as_optional_str()? {
-            request = request.current_name(name_field_string_value);
-        }
-        Ok(request)
-    }
-}
-
-impl CommonFileDialogParams<'_> {
-    fn create_open_request(&self, open_params: &OpenFileDialogParams) -> anyhow::Result<file_chooser::OpenFileRequest> {
-        let mut request = file_chooser::SelectedFiles::open_file().modal(self.modal);
-        if let Some(title) = self.title.as_optional_str()? {
-            request = request.title(title);
-        }
-        if let Some(accept_label) = self.accept_label.as_optional_str()? {
-            request = request.accept_label(accept_label);
-        }
-        if let Some(current_folder) = self.current_folder.as_optional_str()? {
-            request = request.current_folder(current_folder)?;
-        }
-        Ok(open_params.apply(request))
-    }
-
-    fn create_save_request(&self, save_params: &SaveFileDialogParams) -> anyhow::Result<file_chooser::SaveFileRequest> {
-        let mut request = file_chooser::SelectedFiles::save_file().modal(self.modal);
-        if let Some(title) = self.title.as_optional_str()? {
-            request = request.title(title);
-        }
-        if let Some(accept_label) = self.accept_label.as_optional_str()? {
-            request = request.accept_label(accept_label);
-        }
-        if let Some(current_folder) = self.current_folder.as_optional_str()? {
-            request = request.current_folder(current_folder)?;
-        }
-        save_params.apply(request)
-    }
-}
-
 #[unsafe(no_mangle)]
 pub extern "C" fn window_show_open_file_dialog(
     mut app_ptr: AppPtr,
@@ -322,16 +251,7 @@ pub extern "C" fn window_show_open_file_dialog(
     debug!("window_show_open_file_dialog");
     ffi_boundary("window_show_open_file_dialog", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        let wl_surface = app.get_wl_surface(window_id)?;
-        let request = common_params.create_open_request(open_params)?;
-        Ok(app.run_async(|request_id| async move {
-            let result = SimpleWindow::show_open_file_dialog(&wl_surface, request).await;
-            AsyncEventResult::FileChooserResponse {
-                request_id,
-                window_id,
-                result,
-            }
-        }))
+        app.show_open_file_dialog(window_id, common_params, open_params)
     })
 }
 
@@ -345,16 +265,7 @@ pub extern "C" fn window_show_save_file_dialog(
     debug!("window_show_save_file_dialog");
     ffi_boundary("window_show_save_file_dialog", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        let wl_surface = app.get_wl_surface(window_id)?;
-        let request = common_params.create_save_request(save_params)?;
-        Ok(app.run_async(|request_id| async move {
-            let result = SimpleWindow::show_save_file_dialog(&wl_surface, request).await;
-            AsyncEventResult::FileChooserResponse {
-                request_id,
-                window_id,
-                result,
-            }
-        }))
+        app.show_save_file_dialog(window_id, common_params, save_params)
     })
 }
 
