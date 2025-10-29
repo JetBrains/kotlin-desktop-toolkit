@@ -8,7 +8,6 @@ use ashpd::{
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use futures_lite::StreamExt;
 use log::{debug, error};
-use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::linux::xdg_desktop_settings_api::{
     Color, DesktopTitlebarAction, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme, XdgDesktopSetting,
@@ -241,15 +240,18 @@ impl InternalXdgDesktopSetting {
     }
 }
 
-fn send(v: Option<InternalXdgDesktopSetting>, tx: &Sender<InternalXdgDesktopSetting>) -> anyhow::Result<()> {
+fn send(v: Option<InternalXdgDesktopSetting>, sender: &dyn Fn(InternalXdgDesktopSetting) -> anyhow::Result<()>) -> anyhow::Result<()> {
     if let Some(s) = v {
         debug!("Notifying about XDG setting: {s:?}");
-        tx.send(s)?;
+        sender(s)?;
     }
     Ok(())
 }
 
-async fn read_initial_xdg_desktop_settings(settings: &Settings<'_>, tx: &Sender<InternalXdgDesktopSetting>) -> anyhow::Result<()> {
+async fn read_initial_xdg_desktop_settings(
+    settings: &Settings<'_>,
+    sender: &(dyn Fn(InternalXdgDesktopSetting) -> anyhow::Result<()> + Send + Sync),
+) -> anyhow::Result<()> {
     let proxy = settings;
 
     let reply = proxy
@@ -274,21 +276,23 @@ async fn read_initial_xdg_desktop_settings(settings: &Settings<'_>, tx: &Sender<
     for (namespace, kv) in all {
         for (key, value) in kv {
             //debug!("Reading initial XDG settings from {namespace} : {key} = {value:?}");
-            send(InternalXdgDesktopSetting::new(&namespace, &key, &value), tx)?;
+            send(InternalXdgDesktopSetting::new(&namespace, &key, &value), sender)?;
         }
     }
     Ok(())
 }
 
-pub async fn xdg_desktop_settings_notifier(tx: Sender<InternalXdgDesktopSetting>) -> anyhow::Result<()> {
+pub async fn xdg_desktop_settings_notifier(
+    sender: impl Fn(InternalXdgDesktopSetting) -> anyhow::Result<()> + Send + Sync,
+) -> anyhow::Result<()> {
     let xdg_desktop_settings = Settings::new().await?;
-    read_initial_xdg_desktop_settings(&xdg_desktop_settings, &tx).await?;
+    read_initial_xdg_desktop_settings(&xdg_desktop_settings, &sender).await?;
 
     debug!("Listening to XDG settings changes");
     let mut xdg_desktop_settings_signals = xdg_desktop_settings.receive_setting_changed().await?;
     while let Some(s) = xdg_desktop_settings_signals.next().await {
         debug!("XDG setting changed: {s:?}");
-        send(InternalXdgDesktopSetting::new(s.namespace(), s.key(), s.value()), &tx)?;
+        send(InternalXdgDesktopSetting::new(s.namespace(), s.key(), s.value()), &sender)?;
     }
     debug!("Stopped listening to XDG settings changes");
     Ok(())
