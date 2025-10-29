@@ -63,7 +63,7 @@ pub async fn show_open_file_dialog_impl(
     request: file_chooser::OpenFileRequest,
 ) -> anyhow::Result<CString> {
     let open_file_request = request.identifier(identifier);
-    let response = open_file_request.send().await.unwrap().response();
+    let response = open_file_request.send().await?.response();
     convert_file_chooser_response(response)
 }
 
@@ -72,6 +72,6 @@ pub async fn show_save_file_dialog_impl(
     request: file_chooser::SaveFileRequest,
 ) -> anyhow::Result<CString> {
     let open_file_request = request.identifier(identifier);
-    let response = open_file_request.send().await.unwrap().response();
+    let response = open_file_request.send().await?.response();
     convert_file_chooser_response(response)
 }

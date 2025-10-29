@@ -48,13 +48,10 @@ impl AsyncEventResult {
                 }
             }
             Self::NotificationShown { request_id, result } => {
-                let notification_id = match result {
-                    Ok(notification_id) => notification_id,
-                    Err(e) => {
-                        error!("{e}");
-                        0
-                    }
-                };
+                let notification_id = result.unwrap_or_else(|e| {
+                    error!("{e}");
+                    0
+                });
                 let event = NotificationShownEvent {
                     request_id,
                     notification_id,

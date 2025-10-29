@@ -58,6 +58,10 @@ impl KeyboardHandler for ApplicationState {
         send_key_down_event(self, event, false);
     }
 
+    fn repeat_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, _serial: u32, event: KeyEvent) {
+        send_key_down_event(self, event, true);
+    }
+
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, serial: u32, event: KeyEvent) {
         self.last_keyboard_event_serial = Some(serial);
         debug!("KeyboardHandler::release_key");
@@ -91,10 +95,6 @@ impl KeyboardHandler for ApplicationState {
             }
         };
         self.send_event(event);
-    }
-
-    fn repeat_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, _serial: u32, event: KeyEvent) {
-        send_key_down_event(self, event, true);
     }
 }
 

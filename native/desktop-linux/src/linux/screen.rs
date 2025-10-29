@@ -73,7 +73,7 @@ pub extern "C" fn screen_list(app_ptr: AppPtr) -> ScreenInfoArray {
 #[unsafe(no_mangle)]
 pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
     ffi_boundary("screen_list_drop", || {
-        std::mem::drop(arr);
+        drop(arr);
         Ok(())
     });
 }

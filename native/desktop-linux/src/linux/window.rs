@@ -246,7 +246,7 @@ impl SimpleWindow {
             viewport.set_destination(size.width.round(), size.height.round());
         } else {
             let surface = self.window.wl_surface();
-            assert!(self.current_scale % 1.0 == 0.0);
+            assert!(self.current_scale % 1.0 < 0.0001);
             debug!("surface.set_buffer_scale({})", self.current_scale);
             #[allow(clippy::cast_possible_truncation)]
             surface.set_buffer_scale(self.current_scale as i32);
