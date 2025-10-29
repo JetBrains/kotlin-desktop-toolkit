@@ -165,7 +165,7 @@ fn read_i32(value: &OwnedValue) -> anyhow::Result<i32> {
 fn read_color(value: &OwnedValue) -> anyhow::Result<Color> {
     //    let c : ashpd::desktop::Color = value.clone().try_into()?;
     //    Ok(Color{red: c.red(), green: c.green(), blue: c.blue(), alpha: 1.0})
-    let s = value.downcast_ref::<Structure>().map_err(anyhow::Error::new).unwrap();
+    let s = value.downcast_ref::<Structure>().map_err(anyhow::Error::new)?;
     let f = s.fields();
     let f1 = f.first().context("Missing first field")?;
     let f2 = f.get(1).context("Missing second field")?;
@@ -265,8 +265,7 @@ async fn read_initial_xdg_desktop_settings(
             ]
             .as_slice(),
         )
-        .await
-        .unwrap();
+        .await?;
 
     // On some systems the namespace keys are duplicated, but they have different content
     // (i.e., contain some keys that are missing in other dict entries for the same namespace).

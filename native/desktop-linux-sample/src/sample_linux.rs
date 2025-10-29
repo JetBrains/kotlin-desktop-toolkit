@@ -6,18 +6,41 @@ use std::{
     str::FromStr,
 };
 
+use crate::gl_sys::{
+    GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
+    GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
+};
 use desktop_common::{
     ffi_utils::{ArraySize, BorrowedArray, BorrowedStrPtr},
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::{
     application_api::{
-        AppPtr, ApplicationCallbacks, DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData, DragAndDropQueryResponse,
-        RenderingMode, SupportedActionsForMime, application_clipboard_paste, application_clipboard_put, application_get_egl_proc_func,
-        application_init, application_is_event_loop_thread, application_primary_selection_paste,
-        application_request_internal_activation_token, application_request_show_notification, application_run_event_loop,
-        application_set_cursor_theme, application_shutdown, application_stop_event_loop, application_text_input_disable,
-        application_text_input_enable, application_text_input_update,
+        AppPtr,
+        ApplicationCallbacks,
+        DataSource,
+        DragAndDropAction,
+        DragAndDropActions,
+        DragAndDropQueryData,
+        DragAndDropQueryResponse,
+        RenderingMode,
+        SupportedActionsForMime,
+        application_clipboard_paste,
+        application_clipboard_put,
+        application_get_egl_proc_func,
+        application_init,
+        application_is_event_loop_thread,
+        application_primary_selection_paste,
+        application_request_internal_activation_token,
+        application_request_show_notification,
+        application_run_event_loop,
+        application_set_cursor_theme,
+        application_shutdown,
+        application_stop_event_loop,
+        application_text_input_disable,
+        application_text_input_enable,
+        application_text_input_update,
+        //
     },
     events::{
         DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, RequestId, SoftwareDrawData, TextInputEvent, WindowId,
@@ -26,17 +49,18 @@ use desktop_linux::linux::{
     geometry::{LogicalPixels, LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
     text_input_api::{TextInputContentPurpose, TextInputContext},
     window_api::{
-        WindowParams, window_activate, window_close, window_create, window_show_open_file_dialog, window_show_save_file_dialog,
+        WindowParams,
+        window_activate,
+        window_close,
+        window_create,
+        window_show_open_file_dialog,
+        window_show_save_file_dialog,
         window_start_drag_and_drop,
+        //
     },
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use log::{debug, error, info};
-
-use crate::gl_sys::{
-    GL_COLOR_BUFFER_BIT, GL_COMPILE_STATUS, GL_DEPTH_BUFFER_BIT, GL_FALSE, GL_FLOAT, GL_FRAGMENT_SHADER, GL_LINK_STATUS, GL_TRIANGLES,
-    GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
-};
 
 fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
@@ -633,7 +657,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 true
             }
             Event::WindowKeyboardLeave(event) => {
-                assert!(state.key_window_id == Some(event.window_id));
+                assert_eq!(state.key_window_id, Some(event.window_id));
                 state.key_window_id = None;
                 true
             }

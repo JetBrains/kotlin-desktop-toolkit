@@ -11,8 +11,15 @@ use smithay_client_toolkit::{
         data_device::DataDevice,
         data_source::{CopyPasteSource, DragSource},
     },
-    delegate_activation, delegate_compositor, delegate_output, delegate_registry, delegate_seat, delegate_shm, delegate_subcompositor,
-    delegate_xdg_shell, delegate_xdg_window,
+    delegate_activation,
+    delegate_compositor,
+    delegate_output,
+    delegate_registry,
+    delegate_seat,
+    delegate_shm,
+    delegate_subcompositor,
+    delegate_xdg_shell,
+    delegate_xdg_window,
     output::{OutputHandler, OutputState},
     primary_selection::{PrimarySelectionManagerState, device::PrimarySelectionDevice, selection::PrimarySelectionSource},
     reexports::{
@@ -55,14 +62,24 @@ use smithay_client_toolkit::{
         },
     },
     shm::{Shm, ShmHandler},
+    //
 };
 
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
     drag_icon::DragIcon,
     events::{
-        ActivationTokenResponse, Event, ScreenId, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDrawEvent,
-        WindowId, WindowScaleChangedEvent, WindowScreenChangeEvent,
+        ActivationTokenResponse,
+        Event,
+        ScreenId,
+        WindowCapabilities,
+        WindowCloseRequestEvent,
+        WindowConfigureEvent,
+        WindowDrawEvent,
+        WindowId,
+        WindowScaleChangedEvent,
+        WindowScreenChangeEvent,
+        //
     },
     keyboard::send_key_down_event,
     text_input::PendingTextInputEvent,

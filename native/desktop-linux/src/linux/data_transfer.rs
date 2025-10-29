@@ -32,8 +32,14 @@ use crate::linux::{
     application_api::{DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData},
     application_state::ApplicationState,
     events::{
-        DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent, DragAndDropFinishedEvent, DragAndDropLeaveEvent,
-        DropPerformedEvent, WindowId,
+        DataTransferAvailableEvent,
+        DataTransferCancelledEvent,
+        DataTransferContent,
+        DragAndDropFinishedEvent,
+        DragAndDropLeaveEvent,
+        DropPerformedEvent,
+        WindowId,
+        //
     },
 };
 
@@ -168,11 +174,6 @@ impl DataDeviceHandler for ApplicationState {
         self.current_drag_target_window_id = self.on_drag_enter_or_move(data_device, x, y, Some(wl_surface));
     }
 
-    fn motion(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice, x: f64, y: f64) {
-        debug!("DataDeviceHandler::motion: {x}x{y}");
-        self.current_drag_target_window_id = self.on_drag_enter_or_move(data_device, x, y, None);
-    }
-
     fn leave(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _data_device: &WlDataDevice) {
         debug!("DataDeviceHandler::leave");
         // DataDeviceData::drag_offer is always None here
@@ -180,6 +181,11 @@ impl DataDeviceHandler for ApplicationState {
         if let Some(window_id) = self.current_drag_target_window_id.take() {
             self.send_event(DragAndDropLeaveEvent { window_id });
         }
+    }
+
+    fn motion(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice, x: f64, y: f64) {
+        debug!("DataDeviceHandler::motion: {x}x{y}");
+        self.current_drag_target_window_id = self.on_drag_enter_or_move(data_device, x, y, None);
     }
 
     fn selection(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice) {
@@ -366,7 +372,7 @@ impl PrimarySelectionSourceHandler for ApplicationState {
         _qh: &QueueHandle<Self>,
         _source: &ZwpPrimarySelectionSourceV1,
         mime: String,
-        mut write_pipe: data_device_manager::WritePipe,
+        mut write_pipe: WritePipe,
     ) {
         debug!("PrimarySelectionSourceHandler::send_request: mime={mime}");
         let mime_cstr = CString::new(mime).unwrap();

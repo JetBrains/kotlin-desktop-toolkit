@@ -81,11 +81,7 @@ impl Application {
             .map_err(|e| anyhow!(e.to_string()))?;
 
         let state = ApplicationState::new(&globals, &qh, callbacks, event_loop.handle(), wl_display);
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_io()
-            .worker_threads(1)
-            .build()
-            .unwrap();
+        let rt = tokio::runtime::Builder::new_multi_thread().enable_io().worker_threads(1).build()?;
         let run_async_sender = create_run_async_sender(&event_loop);
 
         Ok(Self {
