@@ -1,11 +1,11 @@
-use std::{thread::ThreadId, time::Duration};
+use std::{ffi::CString, thread::ThreadId, time::Duration};
 
 use anyhow::{Context, anyhow};
 use log::{debug, warn};
 use smithay_client_toolkit::{
     reexports::{
         calloop::{
-            EventLoop,
+            Dispatcher, EventLoop,
             channel::{self, Sender},
         },
         calloop_wayland_source::WaylandSource,
@@ -18,6 +18,7 @@ use smithay_client_toolkit::{
     seat::keyboard::KeyboardData,
     shell::WaylandSurface,
 };
+use tokio::spawn;
 
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
@@ -25,10 +26,11 @@ use crate::linux::{
     async_event_result::AsyncEventResult,
     data_transfer::{MimeTypes, read_from_pipe},
     drag_icon::DragIcon,
-    events::{DataTransferEvent, Event, RequestId, WindowId},
+    events::{DataTransferEvent, Event, NotificationClosedEvent, RequestId, WindowId},
     file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
+    notifications::{NotificationData, notifications_receiver, show_notification_async},
     window::SimpleWindow,
     window_api::WindowParams,
     window_resize_edge_api::WindowResizeEdge,
@@ -171,6 +173,7 @@ impl Application {
     pub fn run(&mut self) -> Result<(), anyhow::Error> {
         debug!("Application event loop: starting");
 
+        self.init_notifications();
         self.init_xdg_desktop_settings_notifier();
         self.init_run_on_event_loop();
 
@@ -548,6 +551,58 @@ impl Application {
             let identifier: Option<ashpd::WindowIdentifier> = ashpd::WindowIdentifier::from_wayland(&wl_surface).await;
             let result = show_save_file_dialog_impl(identifier, request).await;
             AsyncEventResult::FileChooserResponse { request_id, result }
+        }))
+    }
+
+    pub fn init_notifications(&self) {
+        let (sender, c) = channel::channel();
+
+        let dispatcher = Dispatcher::new(
+            c,
+            move |event: channel::Event<zbus::Connection>, (), state: &mut ApplicationState| {
+                if let channel::Event::Msg(c) = event {
+                    state.notifications_connection = Some(c);
+                }
+            },
+        );
+        self.event_loop.handle().register_dispatcher(dispatcher).unwrap();
+
+        let (event_sender, event_c) = channel::channel();
+        self.event_loop
+            .handle()
+            .insert_source(event_c, move |event: channel::Event<NotificationData>, (), state| {
+                if let channel::Event::Msg(notification_data) = event {
+                    let activation_token_cstring = notification_data.activation_token.map(|v| CString::new(v).unwrap());
+                    let e = NotificationClosedEvent::new(notification_data.id, activation_token_cstring.as_ref());
+                    state.send_event(e);
+                }
+            })
+            .unwrap();
+        self.rt.spawn(async move {
+            match zbus::Connection::session().await {
+                Ok(c) => {
+                    sender.send(c.clone()).unwrap();
+                    spawn(notifications_receiver(c, move |s| event_sender.send(s).map_err(Into::into)));
+                }
+                Err(e) => warn!("Error initializing notifications: {e}"),
+            }
+        });
+    }
+
+    pub fn request_show_notification(
+        &mut self,
+        summary: String,
+        body: String,
+        sound_file_path: Option<String>,
+    ) -> anyhow::Result<RequestId> {
+        let Some(conn) = &self.state.notifications_connection else {
+            return Err(anyhow!("Cannot send notification"));
+        };
+        let conn = conn.clone();
+
+        Ok(self.run_async(|request_id| async move {
+            let result = show_notification_async(&conn, &summary, &body, sound_file_path).await;
+            AsyncEventResult::NotificationShown { request_id, result }
         }))
     }
 }

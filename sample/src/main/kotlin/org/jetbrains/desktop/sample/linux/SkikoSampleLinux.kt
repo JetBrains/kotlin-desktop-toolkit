@@ -30,6 +30,8 @@ import org.jetbrains.desktop.linux.PhysicalPoint
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.PointerShape
 import org.jetbrains.desktop.linux.RenderingMode
+import org.jetbrains.desktop.linux.RequestId
+import org.jetbrains.desktop.linux.ShowNotificationParams
 import org.jetbrains.desktop.linux.StartDragAndDropParams
 import org.jetbrains.desktop.linux.SupportedActionsForMime
 import org.jetbrains.desktop.linux.TextInputContentPurpose
@@ -1258,6 +1260,8 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
     private var currentPrimarySelectionContent: DataTransferContentType? = null
     private var currentDragIconDraw: ((Canvas, Double) -> Unit)? = null
     private var dragIconDirectContext: DirectContext? = null
+    private val requestSources = mutableMapOf<RequestId, WindowId>()
+    private val notificationSources = mutableMapOf<UInt, WindowId>()
 
     fun createWindow(useCustomTitlebar: Boolean, renderingMode: RenderingMode) {
         val windowId = nextWindowId
@@ -1411,6 +1415,17 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.N) {
                     createWindow(useCustomTitlebar = true, renderingMode = RenderingMode.Auto)
                     EventHandlerResult.Stop
+                } else if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.P) {
+                    val windowId = keyWindowId!!
+                    val params = ShowNotificationParams(
+                        title = "Notification from window $windowId",
+                        body = "Clicking this notification will activate window $windowId",
+                        soundFilePath = null,
+                    )
+                    app.requestShowNotification(params)?.let { requestId ->
+                        requestSources[requestId] = windowId
+                    }
+                    EventHandlerResult.Stop
                 } else {
                     windows[keyWindowId]?.onKeyDown(event, app, modifiers, windowClipboardHandlers[keyWindowId]!!)
                         ?: EventHandlerResult.Continue
@@ -1449,6 +1464,21 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 EventHandlerResult.Continue
             }
             is Event.WindowScaleChanged, is Event.WindowScreenChange -> EventHandlerResult.Continue
+            is Event.NotificationShown -> {
+                event.notificationId?.let { notificationId ->
+                    val requester = requestSources.remove(event.requestId)!!
+                    notificationSources[notificationId] = requester
+                }
+                EventHandlerResult.Stop
+            }
+            is Event.NotificationClosed -> {
+                event.activationToken?.let { activationToken ->
+                    val windowIdToActivate = notificationSources.remove(event.notificationId)!!
+                    val w = windows[windowIdToActivate]!!
+                    w.window.activate(activationToken)
+                }
+                EventHandlerResult.Stop
+            }
         }
     }
 

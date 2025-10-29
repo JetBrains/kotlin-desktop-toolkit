@@ -9,7 +9,7 @@ use crate::linux::{
     application::Application,
     application_state::{EglInstance, get_egl},
     data_transfer::MimeTypes,
-    events::{EventHandler, WindowId},
+    events::{EventHandler, RequestId, WindowId},
     geometry::LogicalPoint,
     text_input_api::TextInputContext,
 };
@@ -283,5 +283,28 @@ pub extern "C" fn application_request_internal_activation_token(app_ptr: AppPtr,
     ffi_boundary("application_request_activation_token", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
         app.request_internal_activation_token(source_window_id)
+    })
+}
+
+/// * `title`: User-visible string to display as the title.
+///   This should be a short string, if it doesn’t fit the UI, it may be truncated to fit on a single line.
+/// * `body`: User-visible string to display as the body.
+///   This can be a long string, but if it doesn’t fit the UI, it may be wrapped or/and truncated.
+/// * `sound_file_path`: The path to a sound file to play when the notification pops up.
+///   The mandatory supported sound file formats are WAV/PCM 8-48kHz, 8/16bits, and OGG/Vorbis I.
+#[unsafe(no_mangle)]
+pub extern "C" fn application_request_show_notification(
+    mut app_ptr: AppPtr,
+    title: BorrowedStrPtr,
+    body: BorrowedStrPtr,
+    sound_file_path: BorrowedStrPtr,
+) -> RequestId {
+    debug!("application_show_notification");
+    ffi_boundary("application_show_notification", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        let summary = title.as_str()?.to_owned();
+        let body = body.as_str()?.to_owned();
+        let sound_file_path = sound_file_path.as_optional_str()?.map(ToOwned::to_owned);
+        app.request_show_notification(summary, body, sound_file_path)
     })
 }

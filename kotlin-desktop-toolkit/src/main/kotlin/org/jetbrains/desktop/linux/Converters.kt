@@ -29,6 +29,8 @@ import org.jetbrains.desktop.linux.generated.NativeMouseEnteredEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseExitedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseUpEvent
+import org.jetbrains.desktop.linux.generated.NativeNotificationClosedEvent
+import org.jetbrains.desktop.linux.generated.NativeNotificationShownEvent
 import org.jetbrains.desktop.linux.generated.NativeOpenFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativePhysicalSize
 import org.jetbrains.desktop.linux.generated.NativeSaveFileDialogParams
@@ -711,6 +713,21 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 button = MouseButton(NativeMouseDownEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseDownEvent.location_in_window(nativeEvent)),
                 timestamp = Timestamp(NativeMouseDownEvent.timestamp(nativeEvent)),
+            )
+        }
+        desktop_linux_h.NativeEvent_NotificationClosed() -> {
+            val nativeEvent = NativeEvent.notification_closed(s)
+            Event.NotificationClosed(
+                notificationId = NativeNotificationClosedEvent.notification_id(nativeEvent).toUInt(),
+                activationToken = fromOptionalNativeString(NativeNotificationClosedEvent.activation_token(nativeEvent)),
+            )
+        }
+        desktop_linux_h.NativeEvent_NotificationShown() -> {
+            val nativeEvent = NativeEvent.notification_shown(s)
+            val nativeNotificationId = NativeNotificationShownEvent.notification_id(nativeEvent)
+            Event.NotificationShown(
+                requestId = RequestId(NativeNotificationShownEvent.request_id(nativeEvent)),
+                notificationId = if (nativeNotificationId == 0) null else nativeNotificationId.toUInt(),
             )
         }
         desktop_linux_h.NativeEvent_ScrollWheel() -> {

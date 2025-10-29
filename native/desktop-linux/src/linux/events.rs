@@ -627,6 +627,46 @@ impl<'a> From<ActivationTokenResponse<'a>> for Event<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct NotificationShownEvent {
+    pub request_id: RequestId,
+
+    /// Value `0` indicates an error.
+    pub notification_id: u32,
+}
+
+impl From<NotificationShownEvent> for Event<'_> {
+    fn from(value: NotificationShownEvent) -> Self {
+        Self::NotificationShown(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct NotificationClosedEvent<'a> {
+    pub notification_id: u32,
+
+    /// Optional. Present only if notification was activated, and the application has an associated `.desktop` file.
+    pub activation_token: BorrowedStrPtr<'a>,
+}
+
+impl<'a> NotificationClosedEvent<'a> {
+    #[must_use]
+    pub fn new(notification_id: u32, activation_token: Option<&'a CString>) -> Self {
+        Self {
+            notification_id,
+            activation_token: BorrowedStrPtr::new_optional(activation_token),
+        }
+    }
+}
+
+impl<'a> From<NotificationClosedEvent<'a>> for Event<'a> {
+    fn from(value: NotificationClosedEvent<'a>) -> Self {
+        Self::NotificationClosed(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub enum Event<'a> {
     ApplicationStarted,
 
@@ -662,6 +702,9 @@ pub enum Event<'a> {
     FileChooserResponse(FileChooserResponse<'a>),
 
     ActivationTokenResponse(ActivationTokenResponse<'a>),
+
+    NotificationShown(NotificationShownEvent),
+    NotificationClosed(NotificationClosedEvent<'a>),
 
     /// Modifier keys (e.g Ctrl, Shift, etc) are never reported. Use `ModifiersChanged` for them.
     KeyDown(KeyDownEvent<'a>),

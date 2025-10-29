@@ -130,6 +130,7 @@ pub struct ApplicationState {
     pub last_keyboard_event_serial: Option<u32>,
     pub active_text_input: Option<ZwpTextInputV3>,
     pub pending_text_input_event: PendingTextInputEvent,
+    pub notifications_connection: Option<zbus::Connection>,
 }
 
 impl ApplicationState {
@@ -184,6 +185,7 @@ impl ApplicationState {
             last_keyboard_event_serial: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
+            notifications_connection: None,
         }
     }
 

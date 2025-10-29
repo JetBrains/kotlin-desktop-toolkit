@@ -199,6 +199,20 @@ public sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
+    public data class NotificationClosed(
+        val notificationId: UInt,
+
+        /** Present only if notification was activated, and the application has an associated `.desktop` file. */
+        val activationToken: String?,
+    ) : Event()
+
+    public data class NotificationShown(
+        val requestId: RequestId,
+
+        /** Null if the request failed */
+        val notificationId: UInt?,
+    ) : Event()
+
     public data class ScrollWheel(
         val windowId: WindowId,
         @Deprecated("Use `horizontalScroll` instead")
