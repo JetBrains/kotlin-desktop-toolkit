@@ -1,4 +1,3 @@
-use ashpd::desktop::file_chooser;
 use log::{debug, error, warn};
 use smithay_client_toolkit::{
     reexports::{
@@ -24,10 +23,11 @@ use crate::linux::{
     application_state::{ApplicationState, EglInstance},
     events::{SoftwareDrawData, WindowDecorationMode, WindowDrawEvent, WindowId},
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
+    pointer_shapes_api::PointerShape,
     rendering_egl::EglRendering,
     rendering_software::SoftwareRendering,
     window_api::WindowParams,
-    window_resize_edge::WindowResizeEdge,
+    window_resize_edge_api::WindowResizeEdge,
 };
 
 #[derive(Debug)]
@@ -273,7 +273,8 @@ impl SimpleWindow {
         }
     }
 
-    pub fn set_cursor_icon(&mut self, cursor_icon: Option<CursorIcon>) {
+    pub fn set_cursor_icon(&mut self, pointer_shape: PointerShape) {
+        let cursor_icon = pointer_shape.into();
         if self.decorations_cursor != cursor_icon {
             self.set_cursor = true;
             self.decorations_cursor = cursor_icon;
@@ -290,23 +291,5 @@ impl SimpleWindow {
 
     pub fn show_menu(&self, position: LogicalPoint, seat: &WlSeat, serial: u32) {
         self.window.show_window_menu(seat, serial, (position.x.round(), position.y.round()));
-    }
-
-    pub async fn show_open_file_dialog(
-        wl_surface: &WlSurface,
-        request: file_chooser::OpenFileRequest,
-    ) -> Result<file_chooser::SelectedFiles, ashpd::Error> {
-        let identifier = ashpd::WindowIdentifier::from_wayland(wl_surface).await;
-        let open_file_request = request.identifier(identifier);
-        open_file_request.send().await.unwrap().response()
-    }
-
-    pub async fn show_save_file_dialog(
-        wl_surface: &WlSurface,
-        request: file_chooser::SaveFileRequest,
-    ) -> Result<file_chooser::SelectedFiles, ashpd::Error> {
-        let identifier = ashpd::WindowIdentifier::from_wayland(wl_surface).await;
-        let open_file_request = request.identifier(identifier);
-        open_file_request.send().await.unwrap().response()
     }
 }

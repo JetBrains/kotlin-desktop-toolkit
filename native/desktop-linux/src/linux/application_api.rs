@@ -1,5 +1,4 @@
 use anyhow::{Context, bail};
-use ashpd::url::Url;
 use desktop_common::{
     ffi_utils::{BorrowedArray, BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr, RustAllocatedStrPtr},
     logger::ffi_boundary,
@@ -9,7 +8,6 @@ use log::debug;
 use crate::linux::{
     application::Application,
     application_state::{EglInstance, get_egl},
-    async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
     events::{EventHandler, WindowId},
     geometry::LogicalPoint,
@@ -270,19 +268,13 @@ pub extern "C" fn application_primary_selection_get_available_mimetypes(mut app_
         }
     })
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: BorrowedStrPtr) {
     debug!("application_open_url");
     ffi_boundary("application_open_url", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        let uri = Url::parse(url_string.as_str()?)?;
-
-        app.run_async(|request_id| async move {
-            let request = ashpd::desktop::open_uri::OpenFileRequest::default().ask(false);
-            let error = request.send_uri(&uri).await.err();
-            AsyncEventResult::UrlOpenResponse { request_id, error }
-        });
-        Ok(())
+        app.open_url(url_string.as_str()?)
     });
 }
 
