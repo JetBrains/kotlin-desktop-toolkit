@@ -9,7 +9,11 @@ use smithay_client_toolkit::{
             channel::{self, Sender},
         },
         calloop_wayland_source::WaylandSource,
-        client::{Connection, Proxy as _, QueueHandle, globals::registry_queue_init, protocol::wl_data_device_manager::DndAction},
+        client::{
+            Connection, Proxy as _, QueueHandle,
+            globals::registry_queue_init,
+            protocol::{wl_data_device_manager::DndAction, wl_surface::WlSurface},
+        },
     },
     seat::keyboard::KeyboardData,
     shell::WaylandSurface,
@@ -22,6 +26,8 @@ use crate::linux::{
     data_transfer::{MimeTypes, read_from_pipe},
     drag_icon::DragIcon,
     events::{DataTransferEvent, Event, RequestId, WindowId},
+    file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl},
+    file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
     window::SimpleWindow,
     window_api::WindowParams,
@@ -114,7 +120,9 @@ impl Application {
 
     fn init_xdg_desktop_settings_notifier(&self) {
         let (xdg_settings_sender, xdg_settings_channel) = channel::channel();
-        self.rt.spawn(xdg_desktop_settings_notifier(xdg_settings_sender));
+        self.rt.spawn(xdg_desktop_settings_notifier(move |s| {
+            xdg_settings_sender.send(s).map_err(Into::into)
+        }));
 
         self.event_loop
             .handle()
@@ -507,5 +515,47 @@ impl Application {
             AsyncEventResult::UrlOpenResponse { request_id, error }
         });
         Ok(())
+    }
+
+    fn get_wl_surface(&self, window_id: WindowId) -> anyhow::Result<WlSurface> {
+        Ok(self.get_window(window_id)?.window.wl_surface().clone())
+    }
+
+    pub fn show_open_file_dialog(
+        &mut self,
+        window_id: WindowId,
+        common_params: &CommonFileDialogParams,
+        open_params: &OpenFileDialogParams,
+    ) -> anyhow::Result<RequestId> {
+        let wl_surface = self.get_wl_surface(window_id)?;
+        let request = common_params.create_open_request(open_params)?;
+        Ok(self.run_async(|request_id| async move {
+            let identifier = ashpd::WindowIdentifier::from_wayland(&wl_surface).await;
+            let result = show_open_file_dialog_impl(identifier, request).await;
+            AsyncEventResult::FileChooserResponse {
+                request_id,
+                window_id,
+                result,
+            }
+        }))
+    }
+
+    pub fn show_save_file_dialog(
+        &mut self,
+        window_id: WindowId,
+        common_params: &CommonFileDialogParams,
+        save_params: &SaveFileDialogParams,
+    ) -> anyhow::Result<RequestId> {
+        let wl_surface = self.get_wl_surface(window_id)?;
+        let request = common_params.create_save_request(save_params)?;
+        Ok(self.run_async(|request_id| async move {
+            let identifier: Option<ashpd::WindowIdentifier> = ashpd::WindowIdentifier::from_wayland(&wl_surface).await;
+            let result = show_save_file_dialog_impl(identifier, request).await;
+            AsyncEventResult::FileChooserResponse {
+                request_id,
+                window_id,
+                result,
+            }
+        }))
     }
 }
