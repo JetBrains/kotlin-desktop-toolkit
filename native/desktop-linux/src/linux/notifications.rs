@@ -143,6 +143,12 @@ pub async fn show_notification_async(
     Ok(notification_id)
 }
 
+pub async fn close_notification_async(conn: &zbus::Connection, notification_id: u32) -> anyhow::Result<()> {
+    let proxy = NotificationsProxy::new(conn).await?;
+    proxy.close_notification(notification_id).await?;
+    Ok(())
+}
+
 pub struct NotificationData {
     pub id: u32,
     pub activation_token: Option<String>,

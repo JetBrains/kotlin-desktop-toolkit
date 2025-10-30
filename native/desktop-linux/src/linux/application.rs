@@ -30,7 +30,7 @@ use crate::linux::{
     file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
-    notifications::{NotificationData, notifications_receiver, show_notification_async},
+    notifications::{NotificationData, close_notification_async, notifications_receiver, show_notification_async},
     window::SimpleWindow,
     window_api::WindowParams,
     window_resize_edge_api::WindowResizeEdge,
@@ -592,7 +592,7 @@ impl Application {
         sound_file_path: Option<String>,
     ) -> anyhow::Result<RequestId> {
         let Some(conn) = &self.state.notifications_connection else {
-            return Err(anyhow!("Cannot send notification"));
+            return Err(anyhow!("Cannot interact with notifications"));
         };
         let conn = conn.clone();
 
@@ -600,5 +600,20 @@ impl Application {
             let result = show_notification_async(&conn, &summary, &body, sound_file_path).await;
             AsyncEventResult::NotificationShown { request_id, result }
         }))
+    }
+
+    pub fn request_close_notification(&mut self, notification_id: u32) -> anyhow::Result<()> {
+        let Some(conn) = &self.state.notifications_connection else {
+            return Err(anyhow!("Cannot interact with notifications"));
+        };
+        let conn = conn.clone();
+
+        self.run_async(|_request_id| async move {
+            if let Err(e) = close_notification_async(&conn, notification_id).await {
+                warn!("Error closing notification {notification_id}: {e}");
+            }
+            AsyncEventResult::NotificationClosed {}
+        });
+        Ok(())
     }
 }

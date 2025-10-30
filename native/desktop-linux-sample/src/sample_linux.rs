@@ -27,6 +27,7 @@ use desktop_linux::linux::{
         SupportedActionsForMime,
         application_clipboard_paste,
         application_clipboard_put,
+        application_close_notification,
         application_get_egl_proc_func,
         application_init,
         application_is_event_loop_thread,
@@ -610,6 +611,10 @@ extern "C" fn event_handler(event: &Event) -> bool {
             Event::WindowCloseRequest(data) => {
                 window_close(app_ptr.clone(), data.window_id);
                 state.windows.retain(|&k, _v| k != data.window_id);
+                state.request_sources.retain(|_k, &mut v| v != data.window_id);
+                for (notification_id, _window_id) in state.notification_sources.extract_if(|_k, &mut v| v != data.window_id) {
+                    application_close_notification(app_ptr.clone(), notification_id);
+                }
                 if state.windows.is_empty() {
                     application_stop_event_loop(app_ptr);
                 }
@@ -748,14 +753,18 @@ extern "C" fn event_handler(event: &Event) -> bool {
             }
             Event::NotificationShown(data) => {
                 if data.notification_id > 0 {
-                    let requester = state.request_sources.remove(&data.request_id).unwrap();
-                    state.notification_sources.insert(data.notification_id, requester);
+                    if let Some(requester) = state.request_sources.remove(&data.request_id) {
+                        state.notification_sources.insert(data.notification_id, requester);
+                    } else {
+                        application_close_notification(app_ptr, data.notification_id);
+                    }
                 }
                 true
             }
             Event::NotificationClosed(data) => {
-                if let Some(activation_token) = data.activation_token.as_optional_cstr() {
-                    let window_id_to_activate = state.notification_sources.remove(&data.notification_id).unwrap();
+                if let Some(window_id_to_activate) = state.notification_sources.remove(&data.notification_id)
+                    && let Some(activation_token) = data.activation_token.as_optional_cstr()
+                {
                     window_activate(app_ptr, window_id_to_activate, BorrowedStrPtr::new(activation_token));
                 }
                 true

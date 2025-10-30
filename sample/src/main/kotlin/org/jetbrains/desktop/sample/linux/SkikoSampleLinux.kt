@@ -1336,6 +1336,16 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 window.close()
                 windows.remove(windowId)
                 windowClipboardHandlers.remove(windowId)
+
+                requestSources.entries.removeIf { it.value == windowId }
+                notificationSources.entries.removeIf { entry ->
+                    (entry.value == windowId).also { shouldRemove ->
+                        if (shouldRemove) {
+                            app.closeNotification(entry.key)
+                        }
+                    }
+                }
+
                 if (windows.isEmpty()) {
                     app.stopEventLoop()
                 }
@@ -1466,16 +1476,20 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             is Event.WindowScaleChanged, is Event.WindowScreenChange -> EventHandlerResult.Continue
             is Event.NotificationShown -> {
                 event.notificationId?.let { notificationId ->
-                    val requester = requestSources.remove(event.requestId)!!
-                    notificationSources[notificationId] = requester
+                    requestSources.remove(event.requestId)?.let { requester ->
+                        notificationSources[notificationId] = requester
+                    } ?: run {
+                        app.closeNotification(notificationId)
+                    }
                 }
                 EventHandlerResult.Stop
             }
             is Event.NotificationClosed -> {
-                event.activationToken?.let { activationToken ->
-                    val windowIdToActivate = notificationSources.remove(event.notificationId)!!
-                    val w = windows[windowIdToActivate]!!
-                    w.window.activate(activationToken)
+                notificationSources.remove(event.notificationId)?.let { windowIdToActivate ->
+                    event.activationToken?.let { activationToken ->
+                        val w = windows[windowIdToActivate]!!
+                        w.window.activate(activationToken)
+                    }
                 }
                 EventHandlerResult.Stop
             }
