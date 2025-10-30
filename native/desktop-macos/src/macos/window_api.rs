@@ -1,5 +1,5 @@
 use objc2::__framework_prelude::Retained;
-use objc2_app_kit::{NSAppearanceCustomization, NSWindowOcclusionState};
+use objc2_app_kit::{NSAppearanceCustomization, NSWindowOcclusionState, NSWindowStyleMask};
 use objc2_foundation::{MainThreadMarker, NSArray, NSString};
 
 use crate::geometry::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize};
@@ -490,4 +490,29 @@ pub extern "C" fn window_get_text_direction(window_ptr: WindowPtr) -> TextDirect
         let layout_direction = unsafe { window.root_view.userInterfaceLayoutDirection() };
         Ok(TextDirection::from_ns_layout_direction(layout_direction))
     })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_get_resizable(window_ptr: WindowPtr) -> bool {
+    ffi_boundary("window_get_resizable", || {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let style_mask = window.ns_window.styleMask();
+        Ok(style_mask.contains(NSWindowStyleMask::Resizable))
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_resizable(window_ptr: WindowPtr, resizable: bool) {
+    ffi_boundary("window_set_resizable", || {
+        let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let mut style_mask = window.ns_window.styleMask();
+        if resizable {
+            style_mask.insert(NSWindowStyleMask::Resizable);
+        } else {
+            style_mask.remove(NSWindowStyleMask::Resizable);
+        }
+        window.ns_window.setStyleMask(style_mask);
+        Ok(())
+    });
 }

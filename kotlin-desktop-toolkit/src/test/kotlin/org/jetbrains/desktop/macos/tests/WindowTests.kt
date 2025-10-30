@@ -5,6 +5,8 @@ import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 @EnabledOnOs(OS.MAC)
 class WindowTests : KDTApplicationTestBase() {
@@ -19,6 +21,27 @@ class WindowTests : KDTApplicationTestBase() {
         ui {
             window1.close()
             window2.close()
+        }
+    }
+
+    @Test
+    fun isResizableTest() {
+        val window = ui {
+            Window.create(title = "ResizableTest", isResizable = true)
+        }
+
+        ui {
+            assertTrue(window.isResizable, "Window should be resizable by default")
+
+            window.isResizable = false
+            assertFalse(window.isResizable, "Window should not be resizable after setting to false")
+
+            window.isResizable = true
+            assertTrue(window.isResizable, "Window should be resizable after setting back to true")
+        }
+
+        ui {
+            window.close()
         }
     }
 }

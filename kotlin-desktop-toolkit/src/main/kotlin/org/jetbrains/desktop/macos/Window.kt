@@ -161,6 +161,14 @@ public class Window internal constructor(
             }
         }
 
+    public var isResizable: Boolean
+        get() {
+            return ffiDownCall { desktop_macos_h.window_get_resizable(pointer) }
+        }
+        set(value) {
+            ffiDownCall { desktop_macos_h.window_set_resizable(pointer, value) }
+        }
+
     public val isFullScreen: Boolean
         get() {
             return ffiDownCall { desktop_macos_h.window_is_full_screen(pointer) }
