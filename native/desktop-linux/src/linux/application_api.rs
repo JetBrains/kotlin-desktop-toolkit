@@ -308,3 +308,12 @@ pub extern "C" fn application_request_show_notification(
         app.request_show_notification(summary, body, sound_file_path)
     })
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_close_notification(mut app_ptr: AppPtr, notification_id: u32) {
+    debug!("application_show_notification");
+    ffi_boundary("application_show_notification", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        app.request_close_notification(notification_id)
+    });
+}

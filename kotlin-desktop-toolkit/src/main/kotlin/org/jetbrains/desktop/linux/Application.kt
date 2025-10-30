@@ -348,4 +348,10 @@ public class Application : AutoCloseable {
             }
         }
     }
+
+    public fun closeNotification(notificationId: UInt) {
+        ffiDownCall {
+            desktop_linux_h.application_close_notification(appPtr, notificationId.toInt())
+        }
+    }
 }

@@ -15,6 +15,7 @@ pub enum AsyncEventResult {
         request_id: RequestId,
         result: anyhow::Result<CString>,
     },
+    NotificationClosed {},
     NotificationShown {
         request_id: RequestId,
         result: anyhow::Result<u32>,
@@ -47,6 +48,7 @@ impl AsyncEventResult {
                     }
                 }
             }
+            Self::NotificationClosed {} => {}
             Self::NotificationShown { request_id, result } => {
                 let notification_id = result.unwrap_or_else(|e| {
                     error!("{e}");
