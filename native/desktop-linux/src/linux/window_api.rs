@@ -271,7 +271,7 @@ pub extern "C" fn window_show_save_file_dialog(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_activate(app_ptr: AppPtr, window_id: WindowId, token: BorrowedStrPtr) {
-    ffi_boundary("application_request_activation_token", || {
+    ffi_boundary("window_activate", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
         let token_str = token.as_str()?.to_owned();
         app.window_activate(window_id, token_str)

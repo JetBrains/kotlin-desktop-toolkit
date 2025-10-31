@@ -15,7 +15,6 @@ use smithay_client_toolkit::{
             protocol::{wl_data_device_manager::DndAction, wl_surface::WlSurface},
         },
     },
-    seat::keyboard::KeyboardData,
     shell::WaylandSurface,
 };
 use tokio::spawn;
@@ -225,7 +224,7 @@ impl Application {
             warn!("application_clipboard_put: No data device");
             return;
         };
-        if let Some(serial) = self.state.get_latest_event_serial() {
+        if let Some((_seat, serial)) = self.state.get_latest_event_seat_and_serial() {
             let copy_paste_source = self
                 .state
                 .data_device_manager_state
@@ -275,7 +274,7 @@ impl Application {
             warn!("application_primary_selection_put: No primary selection manager");
             return;
         };
-        if let Some(serial) = self.state.get_latest_event_serial() {
+        if let Some((_seat, serial)) = self.state.get_latest_event_seat_and_serial() {
             let source = manager.create_selection_source(&self.qh, mime_types.val);
             source.set_selection(device, serial);
             self.state.primary_selection_source = Some(source);
@@ -406,7 +405,7 @@ impl Application {
 
         let device = self.state.data_device.as_ref().context("No data device found")?;
 
-        // Required to have a mouse button pressed serial, e.g.
+        // Required to have a mouse button pressed serial, e.g.:
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-data-device.c#L894
         let (_seat, serial) = self
             .state
@@ -432,19 +431,13 @@ impl Application {
             warn!("xdg_activation not found");
             return Ok(0);
         };
-        // Serial should be from a keyboard or mouse button event, ideally the keyboard focus serial.
+        // Serial should be from the latest keyboard or mouse button event, e.g.:
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-activation.c#L302
-        let (seat, serial) = if let Some(keyboard) = &self.state.keyboard
-            && let Some(serial) = self.state.last_keyboard_focus_serial
-        {
-            let d = keyboard.data::<KeyboardData<ApplicationState>>().unwrap();
-            (d.seat(), serial)
-        } else if let Some(seat_and_serial) = self.state.get_latest_pointer_button_seat_and_serial() {
-            seat_and_serial
-        } else {
+        // https://invent.kde.org/plasma/kwin/-/blob/271eae7f21326b48e67de1ed218caf3bdf96a9c5/src/activation.cpp#L640
+        let Some((seat, serial)) = self.state.get_latest_event_seat_and_serial() else {
             return Ok(0);
         };
-        let request_id = serial + 1;
+        let request_id = serial + 1; // aligned with `impl ActivationHandler for ApplicationState`
         xdg_activation.request_token(
             &self.qh,
             smithay_client_toolkit::activation::RequestData {
@@ -457,6 +450,7 @@ impl Application {
     }
 
     pub fn window_activate(&self, window_id: WindowId, token: String) -> anyhow::Result<()> {
+        debug!("window_activate: {window_id:?}, token={token}");
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
@@ -472,7 +466,7 @@ impl Application {
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
-        // Required to have a mouse button pressed serial, e.g.
+        // Required to have a mouse button pressed serial, e.g.:
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L335
         if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
             w.start_move(seat, serial);
@@ -484,7 +478,7 @@ impl Application {
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
-        // Required to have a mouse button pressed serial, e.g.
+        // Required to have a mouse button pressed serial, e.g.:
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L387
         if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
             w.start_resize(edge, seat, serial);
@@ -496,7 +490,7 @@ impl Application {
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
-        // Required to have a mouse button pressed or released serial, e.g.
+        // Required to have a mouse button pressed or released serial, e.g.:
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L309
         if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
             w.show_menu(position, seat, serial);

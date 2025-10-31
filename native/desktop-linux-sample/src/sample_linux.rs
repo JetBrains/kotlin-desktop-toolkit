@@ -97,10 +97,11 @@ struct Settings {
 
 #[derive(Debug, Default)]
 struct WindowState {
+    active: bool,
     text_input_available: bool,
     composed_text: String,
     text: String,
-    animation_progress: u16,
+    animation_progress: f32,
     drag_and_drop_target: bool,
     drag_and_drop_source: bool,
     opengl: Option<OpenglState>,
@@ -219,16 +220,10 @@ fn draw_opengl_triangle_with_init(physical_size: PhysicalSize, app_ptr: AppPtr<'
         .programs
         .entry(window_id)
         .or_insert_with(|| create_opengl_program(&opengl_state.funcs).unwrap());
-    if window_state.animation_progress == 200 {
-        window_state.animation_progress = 0;
+    let animation_progress = if window_state.animation_progress < 100. {
+        -1.0 + (window_state.animation_progress / 50.)
     } else {
-        window_state.animation_progress += 1;
-    }
-
-    let animation_progress = if window_state.animation_progress < 100 {
-        -1.0 + (f32::from(window_state.animation_progress) / 50.)
-    } else {
-        1.0 - (f32::from(window_state.animation_progress - 100) / 50.)
+        1.0 - ((window_state.animation_progress - 100.) / 50.)
     };
 
     draw_opengl_triangle(&opengl_state.funcs, *program, physical_size, animation_progress);
@@ -279,10 +274,14 @@ fn draw_software(data: &SoftwareDrawData, physical_size: PhysicalSize, scale: f6
             pixel[0] = 128;
             pixel[1] = 0;
             pixel[2] = 0;
-        } else {
+        } else if window_state.active {
             pixel[0] = 255;
             pixel[1] = 255;
             pixel[2] = 255;
+        } else {
+            pixel[0] = 128;
+            pixel[1] = 128;
+            pixel[2] = 128;
         }
         pixel[3] = 255;
     }
@@ -598,14 +597,29 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 on_xdg_desktop_settings_change(data, state);
                 true
             }
-            Event::WindowDraw(data) => {
-                let window_state = state.windows.get_mut(&data.window_id).unwrap();
-                if data.software_draw_data.canvas.is_null() {
-                    draw_opengl_triangle_with_init(data.physical_size, app_ptr, data.window_id, window_state);
-                } else {
-                    draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
+            Event::WindowConfigure(data) => {
+                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                    window_state.active = data.active;
                 }
                 true
+            }
+            Event::WindowDraw(data) => {
+                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                    if window_state.animation_progress >= 200. {
+                        window_state.animation_progress = 0.;
+                    } else {
+                        window_state.animation_progress += if window_state.active { 1. } else { 0.2 };
+                    }
+
+                    if data.software_draw_data.canvas.is_null() {
+                        draw_opengl_triangle_with_init(data.physical_size, app_ptr, data.window_id, window_state);
+                    } else {
+                        draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
+                    }
+                    true
+                } else {
+                    false
+                }
             }
             Event::DragIconDraw(data) => {
                 let window_id = DRAG_ICON_WINDOW_ID;
