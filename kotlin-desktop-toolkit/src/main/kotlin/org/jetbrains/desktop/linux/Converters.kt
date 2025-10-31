@@ -410,17 +410,14 @@ internal fun DataTransferContent.Companion.fromNative(s: MemorySegment): DataTra
     if (nativeU8Array == MemorySegment.NULL) {
         return null
     }
-    val mimeTypesString = NativeDataTransferContent.mime_types(s).getUtf8String(0)
+    val mimeType = NativeDataTransferContent.mime_type(s).getUtf8String(0)
     val len = NativeBorrowedArray_u8.len(nativeU8Array)
     val buf = ByteArray(len.toInt())
     val dataPtr = NativeBorrowedArray_u8.ptr(nativeU8Array)
     for (i in 0 until len) {
         buf[i.toInt()] = dataPtr.getAtIndex(desktop_linux_h.C_CHAR, i)
     }
-    return DataTransferContent(
-        data = buf,
-        mimeTypes = mimeTypesString.split(','),
-    )
+    return DataTransferContent(mimeType = mimeType, data = buf)
 }
 
 internal fun DataSource.Companion.fromNative(nativeDataSource: Int): DataSource = when (nativeDataSource) {

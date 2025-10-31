@@ -12,6 +12,5 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 log.workspace = true
-log4rs.workspace = true
 desktop-common = { path = "../desktop-common" }
 desktop-linux = { path = "../desktop-linux" }

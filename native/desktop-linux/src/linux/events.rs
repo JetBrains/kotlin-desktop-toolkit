@@ -122,25 +122,29 @@ pub enum WindowDecorationMode {
 
 #[repr(C)]
 #[derive(Debug)]
+/// Some examples:
+///
+/// * `{ mime_type: "text/uri-list", data: "file:///data/some-file\r\nfile:///data/Some%20File%20With%20Spaces.txt\r\n" }`
+/// * `{ mime_type: "text/plain;charset=utf-8", data: "some text\r\nhere" }`
 pub struct DataTransferContent<'a> {
+    pub mime_type: BorrowedStrPtr<'a>,
     pub data: BorrowedArray<'a, u8>,
-    pub mime_types: BorrowedStrPtr<'a>,
 }
 
 impl<'a> DataTransferContent<'a> {
     #[must_use]
-    pub fn new(data: &'a [u8], mime_types: &'a CStr) -> Self {
+    pub fn new(mime_type: &'a CStr, data: &'a [u8]) -> Self {
         Self {
+            mime_type: BorrowedStrPtr::new(mime_type),
             data: BorrowedArray::from_slice(data),
-            mime_types: BorrowedStrPtr::new(mime_types),
         }
     }
 
     #[must_use]
     pub fn null() -> Self {
         Self {
+            mime_type: BorrowedStrPtr::null(),
             data: BorrowedArray::null(),
-            mime_types: BorrowedStrPtr::null(),
         }
     }
 }

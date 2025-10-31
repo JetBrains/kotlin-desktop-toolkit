@@ -98,7 +98,7 @@ where
         let content = match f.read_to_end(&mut buf) {
             Ok(size) => {
                 debug!("{f_name}: read {size} bytes");
-                DataTransferContent::new(&buf, &mime_type_cstr)
+                DataTransferContent::new(&mime_type_cstr, &buf)
             }
             Err(e) => {
                 warn!("{f_name}: error receiving data: {e}");

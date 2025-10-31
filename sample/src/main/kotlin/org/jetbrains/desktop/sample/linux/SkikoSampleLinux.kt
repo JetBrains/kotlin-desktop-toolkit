@@ -563,25 +563,31 @@ private class EditorState {
     }
 
     fun onDataTransfer(content: DataTransferContent, app: Application): EventHandlerResult {
-        if (content.mimeTypes.contains(URI_LIST_MIME_TYPE)) {
-            val files = content.data.decodeToString().trimEnd().split("\r\n")
-            Logger.info { "Pasted ${files.size} files:" }
-            for (file in files) {
-                val path = URI(file).path
-                Logger.info { path }
+        when (content.mimeType) {
+            URI_LIST_MIME_TYPE -> {
+                val files = content.data.decodeToString().trimEnd().split("\r\n")
+                Logger.info { "Pasted ${files.size} files:" }
+                for (file in files) {
+                    val path = URI(file).path
+                    Logger.info { path }
+                }
             }
-        } else if (content.mimeTypes.contains(TEXT_MIME_TYPE)) {
-            deleteSelection()
-            val pastedText = content.data.decodeToString()
-            text.insert(cursorOffset, pastedText)
-            cursorOffset += pastedText.length
-            selectionStartOffset = null
-            selectionEndOffset = null
-            if (textInputEnabled) {
-                app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+
+            TEXT_MIME_TYPE -> {
+                deleteSelection()
+                val pastedText = content.data.decodeToString()
+                text.insert(cursorOffset, pastedText)
+                cursorOffset += pastedText.length
+                selectionStartOffset = null
+                selectionEndOffset = null
+                if (textInputEnabled) {
+                    app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+                }
             }
-        } else if (content.mimeTypes.contains(PNG_MIME_TYPE)) {
-            pastedImage = Image.makeFromEncoded(content.data)
+
+            PNG_MIME_TYPE -> {
+                pastedImage = Image.makeFromEncoded(content.data)
+            }
         }
         return EventHandlerResult.Stop
     }
