@@ -170,7 +170,8 @@ pub async fn notifications_receiver(
     let proxy = NotificationsProxy::new(&conn).await?;
     let mut stream = proxy.inner().receive_all_signals().await?;
 
-    let mut last_notification_data: Option<NotificationData> = None;
+    let mut last_sent_notification = 0;
+    let mut current_notification_data: Option<NotificationData> = None;
     while let Some(msg) = stream.next().await {
         match msg.header().member().map(zbus::names::MemberName::as_str) {
             // Optional, called before "ActionInvoked"
@@ -180,7 +181,7 @@ pub async fn notifications_receiver(
                 let activation_token = args.activation_token;
                 debug!("Notification activation token: {activation_token}");
 
-                last_notification_data = Some(NotificationData {
+                current_notification_data = Some(NotificationData {
                     id: args.id,
                     activation_token: Some(activation_token),
                 });
@@ -192,8 +193,9 @@ pub async fn notifications_receiver(
                 let id = args.id;
                 let action_key = args.action_key;
                 debug!("Notification action invoked: id={id}, action_key={action_key}");
-                let data = last_notification_data.take().unwrap_or_else(|| NotificationData::new(args.id));
+                let data = current_notification_data.take().unwrap_or_else(|| NotificationData::new(args.id));
                 assert_eq!(data.id, args.id);
+                last_sent_notification = args.id;
                 sender(data)?;
             }
             Some("NotificationClosed") => {
@@ -202,9 +204,12 @@ pub async fn notifications_receiver(
                 let id = args.id;
                 let reason = args.reason;
                 debug!("Notification closed: id={id}, reason={reason}");
-                let data = last_notification_data.take().unwrap_or_else(|| NotificationData::new(args.id));
-                assert_eq!(data.id, args.id);
-                sender(data)?;
+                if last_sent_notification != args.id {
+                    let data = current_notification_data.take().unwrap_or_else(|| NotificationData::new(args.id));
+                    assert_eq!(data.id, args.id);
+                    last_sent_notification = args.id;
+                    sender(data)?;
+                }
             }
             _ => {
                 debug!("Received unknown signal: {msg:?}");
