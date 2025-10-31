@@ -1,5 +1,25 @@
 use std::{collections::HashMap, ffi::CString, sync::LazyLock};
 
+use crate::linux::{
+    application_api::{ApplicationCallbacks, RenderingMode},
+    drag_icon::DragIcon,
+    events::{
+        ActivationTokenResponse,
+        Event,
+        ScreenId,
+        WindowCapabilities,
+        WindowCloseRequestEvent,
+        WindowConfigureEvent,
+        WindowDrawEvent,
+        WindowId,
+        WindowScaleChangedEvent,
+        WindowScreenChangeEvent,
+        //
+    },
+    keyboard::send_key_down_event,
+    text_input::PendingTextInputEvent,
+    window::SimpleWindow,
+};
 use desktop_common::logger::catch_panic;
 use khronos_egl;
 use log::{debug, info, warn};
@@ -52,6 +72,7 @@ use smithay_client_toolkit::{
     registry_handlers,
     seat::{
         Capability, SeatHandler, SeatState,
+        keyboard::KeyboardData,
         pointer::{PointerData, ThemeSpec, ThemedPointer},
     },
     shell::{
@@ -63,27 +84,6 @@ use smithay_client_toolkit::{
     },
     shm::{Shm, ShmHandler},
     //
-};
-
-use crate::linux::{
-    application_api::{ApplicationCallbacks, RenderingMode},
-    drag_icon::DragIcon,
-    events::{
-        ActivationTokenResponse,
-        Event,
-        ScreenId,
-        WindowCapabilities,
-        WindowCloseRequestEvent,
-        WindowConfigureEvent,
-        WindowDrawEvent,
-        WindowId,
-        WindowScaleChangedEvent,
-        WindowScreenChangeEvent,
-        //
-    },
-    keyboard::send_key_down_event,
-    text_input::PendingTextInputEvent,
-    window::SimpleWindow,
 };
 
 /// cbindgen:ignore
@@ -143,7 +143,6 @@ pub struct ApplicationState {
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
-    pub last_keyboard_focus_serial: Option<u32>,
     pub last_keyboard_event_serial: Option<u32>,
     pub active_text_input: Option<ZwpTextInputV3>,
     pub pending_text_input_event: PendingTextInputEvent,
@@ -198,7 +197,6 @@ impl ApplicationState {
             primary_selection_source: None,
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
-            last_keyboard_focus_serial: None,
             last_keyboard_event_serial: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
@@ -249,25 +247,27 @@ impl ApplicationState {
     }
 
     pub fn get_latest_pointer_button_seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
-        if let Some(p) = self.themed_pointer.as_ref()
-            && let Some(d) = p.pointer().data::<PointerData>()
-            && let Some(s) = d.latest_button_serial()
+        if let Some(p) = &self.themed_pointer
+            && let Some(pointer_data) = p.pointer().data::<PointerData>()
+            && let Some(pointer_event_serial) = pointer_data.latest_button_serial()
         {
-            Some((d.seat(), s))
+            Some((pointer_data.seat(), pointer_event_serial))
         } else {
             None
         }
     }
 
-    pub fn get_latest_event_serial(&self) -> Option<u32> {
-        [
-            self.get_latest_pointer_button_seat_and_serial().map(|e| e.1),
-            self.last_keyboard_event_serial,
-            self.last_keyboard_focus_serial,
-        ]
-        .into_iter()
-        .max()
-        .flatten()
+    pub fn get_latest_event_seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
+        let pointer_event_seat_and_serial = self.get_latest_pointer_button_seat_and_serial();
+        if let Some(keyboard_event_serial) = self.last_keyboard_event_serial
+            && Some(keyboard_event_serial) > pointer_event_seat_and_serial.map(|e| e.1)
+            && let Some(keyboard) = &self.keyboard
+            && let Some(keyboard_data) = keyboard.data::<KeyboardData<Self>>()
+        {
+            Some((keyboard_data.seat(), keyboard_event_serial))
+        } else {
+            pointer_event_seat_and_serial
+        }
     }
 }
 
@@ -535,11 +535,11 @@ impl ActivationHandler for ApplicationState {
 
     fn new_token(&mut self, token: String, data: &Self::RequestData) {
         info!("ActivationHandler::new_token for {data:?}: {token}");
-        let Some(seat_and_serial) = data.seat_and_serial.as_ref() else {
+        let Some((_seat, serial)) = &data.seat_and_serial else {
             warn!("ActivationHandler::new_token: missing seat and serial data, ignoring request {data:?}");
             return;
         };
-        let request_id = seat_and_serial.1 + 1;
+        let request_id = serial + 1; // aligned with `Application::request_internal_activation_token`
         let token_cstring = CString::new(token).unwrap();
         self.send_event(ActivationTokenResponse::new(request_id, &token_cstring));
     }
