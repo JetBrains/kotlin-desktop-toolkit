@@ -37,10 +37,14 @@ public data class SoftwareDrawData(
 }
 
 public class DataTransferContent(
+    public val mimeType: String,
     public val data: ByteArray,
-    public val mimeTypes: List<String>,
 ) {
     internal companion object;
+
+    override fun toString(): String {
+        return "DataTransferContent(mimeType=$mimeType, data len = ${data.size} bytes)"
+    }
 }
 
 public data class DragAndDropQueryData(

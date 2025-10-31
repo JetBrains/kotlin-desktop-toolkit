@@ -61,21 +61,15 @@ use desktop_linux::linux::{
     },
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 
 fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
 }
 
-const fn cstr_to_str(cstr: &CStr) -> &str {
-    unsafe { str::from_utf8_unchecked(cstr.to_bytes()) }
-}
-
 const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
 const TEXT_MIME_TYPE: &CStr = c"text/plain;charset=utf-8";
-const TEXT_MIME_TYPE_STR: &str = cstr_to_str(TEXT_MIME_TYPE);
 const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
-const URI_LIST_MIME_TYPE_STR: &str = cstr_to_str(URI_LIST_MIME_TYPE);
 
 const ALL_MIMES: &CStr = c"text/uri-list,text/plain;charset=utf-8";
 const DRAG_ICON_WINDOW_ID: WindowId = WindowId(-1);
@@ -516,13 +510,28 @@ fn on_text_input(event: &TextInputEvent, app_ptr: AppPtr<'_>, window_id: WindowI
 }
 
 fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut WindowState) {
-    if content.mime_types.as_str().unwrap().split(',').any(|s| s == URI_LIST_MIME_TYPE_STR) {
-        let list_str = str::from_utf8(content.data.as_slice().unwrap()).unwrap();
-        let list = list_str.trim_ascii_end().split("\r\n").collect::<Vec<_>>();
-        info!("Pasted file list: {list:?}");
-    } else if content.mime_types.as_str().unwrap().split(',').any(|s| s == TEXT_MIME_TYPE_STR) {
-        let data_str = str::from_utf8(content.data.as_slice().unwrap()).unwrap();
-        window_state.text += data_str;
+    if let Some(mime_type) = content.mime_type.as_optional_cstr() {
+        let data = content.data.as_slice().unwrap();
+        if mime_type == URI_LIST_MIME_TYPE {
+            let list_str = str::from_utf8(data).unwrap();
+            assert!(list_str.ends_with("\r\n"), "{list_str} doesn't end with CRLF");
+            let list = {
+                let mut v = list_str.split("\r\n").collect::<Vec<_>>();
+                let last = v.pop();
+                assert_eq!(last, Some(""));
+                v
+            };
+            info!("Pasted file list: {list:?}");
+            for e in list {
+                assert!(e.starts_with("file:///"), "\"{e}\" doesn't start with \"file:///\"");
+                assert_eq!(e, e.trim_ascii_end());
+            }
+        } else if mime_type == TEXT_MIME_TYPE {
+            let data_str = str::from_utf8(data).unwrap();
+            window_state.text += data_str;
+        } else {
+            warn!("Mime type {mime_type:?} is not supported");
+        }
     }
     window_state.drag_and_drop_target = false;
 }
