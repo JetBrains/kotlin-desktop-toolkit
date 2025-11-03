@@ -9,30 +9,47 @@ import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
 
 public class Application : AutoCloseable {
-    private val arena: Arena = Arena.ofShared()
+    private val arena: Arena
 
-    private val appPtr: MemorySegment
-    private var eventHandler: EventHandler? = null
-
-    private val callbacksQueue = ConcurrentLinkedQueue<() -> Unit>()
+    private val callbacksQueue: ConcurrentLinkedQueue<() -> Unit>
     private val callback: MemorySegment
 
+    private var ptr: MemorySegment? = null
+    private var eventHandler: EventHandler? = null
+
     init {
+        arena = Arena.ofShared()
+        callbacksQueue = ConcurrentLinkedQueue()
         callback = `application_dispatcher_invoke$callback`.allocate(::pollCallbacks, arena)
-        appPtr = ffiDownCall {
+    }
+
+    private val appPtr: MemorySegment get() = ptr ?: error("App has not been initialized yet")
+
+    public fun invokeOnDispatcher(body: () -> Unit): Unit = when (ptr) {
+        null -> error("App has not been initialized yet; use the [onStartup] method instead.")
+        else -> {
+            assert(callbacksQueue.offer(body))
+            ffiDownCall {
+                desktop_win32_h.application_dispatcher_invoke(ptr, callback)
+            }
+        }
+    }
+
+    public fun onStartup(handler: () -> Unit): Unit = when (ptr) {
+        null -> assert(callbacksQueue.offer(handler))
+        else -> error("App has already been initialized; use the [invokeOnDispatcher] method instead.")
+    }
+
+    public fun runEventLoop(eventHandler: EventHandler) {
+        this.eventHandler = eventHandler
+        ptr = ffiDownCall {
             desktop_win32_h.application_init(applicationCallbacks())
         }
-    }
-
-    public fun invokeOnDispatcher(body: () -> Unit) {
-        if (callbacksQueue.offer(body)) {
-            desktop_win32_h.application_dispatcher_invoke(appPtr, callback)
+        if (callbacksQueue.isNotEmpty()) {
+            ffiDownCall {
+                desktop_win32_h.application_dispatcher_invoke(appPtr, callback)
+            }
         }
-    }
-
-    public fun runEventLoop(onStartup: () -> Unit, eventHandler: EventHandler) {
-        this.eventHandler = eventHandler
-        invokeOnDispatcher(onStartup)
         ffiDownCall {
             desktop_win32_h.application_run_event_loop(appPtr)
         }
@@ -86,6 +103,12 @@ public class Application : AutoCloseable {
     }
 
     override fun close() {
+        ptr?.let { appPtr ->
+            ffiDownCall {
+                desktop_win32_h.application_drop(appPtr)
+            }
+        }
+        ptr = null
         arena.close()
     }
 }

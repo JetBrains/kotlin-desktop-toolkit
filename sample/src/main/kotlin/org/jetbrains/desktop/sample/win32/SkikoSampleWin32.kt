@@ -123,14 +123,12 @@ fun main(args: Array<String>) {
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)
     Application().use { app ->
         ApplicationState(app).use { state ->
-            app.runEventLoop(
-                onStartup = {
-                    state.createWindow()
-                },
-                eventHandler = { windowId, event ->
-                    state.handleEvent(event, windowId)
-                },
-            )
+            app.onStartup {
+                state.createWindow()
+            }
+            app.runEventLoop { windowId, event ->
+                state.handleEvent(event, windowId)
+            }
         }
     }
 }

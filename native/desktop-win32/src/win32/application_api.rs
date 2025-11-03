@@ -51,3 +51,11 @@ pub extern "C" fn application_stop_event_loop(app_ptr: AppPtr) {
         Ok(())
     });
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_drop(app_ptr: AppPtr) {
+    ffi_boundary("application_drop", || {
+        let _application = unsafe { app_ptr.to_owned::<Application>() };
+        Ok(())
+    });
+}
