@@ -25,6 +25,12 @@ public class Application : AutoCloseable {
 
     private val appPtr: MemorySegment get() = ptr ?: error("App has not been initialized yet")
 
+    public fun isDispatcherThread(): Boolean {
+        return ffiDownCall {
+            desktop_win32_h.application_is_dispatcher_thread(appPtr)
+        }
+    }
+
     public fun invokeOnDispatcher(body: () -> Unit): Unit = when (ptr) {
         null -> error("App has not been initialized yet; use the [onStartup] method instead.")
         else -> {

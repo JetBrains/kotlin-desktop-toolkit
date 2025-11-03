@@ -20,6 +20,14 @@ pub extern "C" fn application_init(callbacks: ApplicationCallbacks) -> AppPtr<'s
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn application_is_dispatcher_thread(app_ptr: AppPtr) -> bool {
+    ffi_boundary("application_is_dispatcher_thread", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        Ok(app.is_dispatcher_thread()?)
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn application_dispatcher_invoke(app_ptr: AppPtr, callback: extern "C" fn()) -> bool {
     ffi_boundary("application_dispatcher_invoke", || {
         log::debug!("Application dispatcher invoke");
