@@ -40,6 +40,10 @@ impl Application {
             }))
     }
 
+    pub fn is_dispatcher_thread(&self) -> WinResult<bool> {
+        self.dispatcher_queue_controller.DispatcherQueue()?.HasThreadAccess()
+    }
+
     pub fn run_event_loop(&self) {
         self.event_loop.run();
     }
