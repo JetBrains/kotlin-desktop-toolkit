@@ -406,7 +406,6 @@ dependencies = [
  "desktop-common",
  "khronos-egl",
  "log",
- "log4rs",
  "windows",
  "windows-numerics",
 ]

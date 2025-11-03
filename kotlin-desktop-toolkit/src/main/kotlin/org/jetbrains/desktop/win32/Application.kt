@@ -48,6 +48,9 @@ public class Application : AutoCloseable {
 
     public fun runEventLoop(eventHandler: EventHandler) {
         this.eventHandler = eventHandler
+        ffiDownCall {
+            desktop_win32_h.application_init_apartment()
+        }
         ptr = ffiDownCall {
             desktop_win32_h.application_init(applicationCallbacks())
         }

@@ -5,7 +5,10 @@ use windows::{
     System::{DispatcherQueueController, DispatcherQueueHandler},
     UI::Composition::Compositor,
     Win32::{
-        System::WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
+        System::{
+            Com::{COINIT_APARTMENTTHREADED, CoInitializeEx},
+            WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
+        },
         UI::WindowsAndMessaging::PostQuitMessage,
     },
     core::Result as WinResult,
@@ -20,6 +23,12 @@ pub struct Application {
 }
 
 impl Application {
+    pub fn init_apartment() -> WinResult<()> {
+        unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
+            .ok()
+            .inspect_err(|err| log::error!("failed to initialize COM apartment: {err:?}"))
+    }
+
     pub fn new(event_handler: EventHandler) -> WinResult<Self> {
         let dispatcher_queue_controller = create_dispatcher_queue()?;
         let event_loop = EventLoop::new(event_handler)?;

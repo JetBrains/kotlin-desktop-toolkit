@@ -11,6 +11,14 @@ pub struct ApplicationCallbacks {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn application_init_apartment() {
+    ffi_boundary("application_init_apartment", || {
+        Application::init_apartment()?;
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn application_init(callbacks: ApplicationCallbacks) -> AppPtr<'static> {
     let app = ffi_boundary("application_init", || {
         log::debug!("Application init");
