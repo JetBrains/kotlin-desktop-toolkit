@@ -23,16 +23,14 @@ pub fn main_menu_update_impl(menu: &AppMenuStructure) {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let app = MyNSApplication::sharedApplication(mtm);
 
-    let menu_root = if let Some(menu) = unsafe { app.mainMenu() } {
+    let menu_root = if let Some(menu) = app.mainMenu() {
         menu
     } else {
         let new_menu_root = NSMenu::new(mtm);
         app.setMainMenu(Some(&new_menu_root));
         new_menu_root
     };
-    unsafe {
-        menu_root.setAutoenablesItems(false);
-    }
+    menu_root.setAutoenablesItems(false);
     reconcile_ns_menu_items(mtm, &menu_root, true, &updated_menu.items);
 }
 
@@ -173,12 +171,10 @@ impl AppMenuItemSafe {
         special_tag: SubMenuItemSpecialTag,
         items: &[Self],
     ) {
-        let submenu = unsafe { item.submenu() }.unwrap();
+        let submenu = item.submenu().unwrap();
         if special_tag != SubMenuItemSpecialTag::AppNameMenu {
-            unsafe {
-                item.setTitle(title);
-                submenu.setTitle(title);
-            }
+            item.setTitle(title);
+            submenu.setTitle(title);
         }
         reconcile_ns_menu_items(mtm, &submenu, false, items);
     }
@@ -196,7 +192,7 @@ impl AppMenuItemSafe {
                 Self::reconcile_action(item, *enabled, *state, title, *special_tag, keystroke.as_ref(), *perform, mtm);
             }
             Self::Separator => {
-                assert!(unsafe { item.isSeparatorItem() });
+                assert!(item.isSeparatorItem());
             }
             Self::SubMenu { title, special_tag, items } => {
                 Self::reconcile_ns_submenu(mtm, item, title, *special_tag, items);
@@ -235,18 +231,16 @@ impl AppMenuItemSafe {
                     item.setRepresentedObject(Some(&representer));
                 };
                 let submenu = NSMenu::new(mtm);
-                unsafe {
-                    submenu.setAutoenablesItems(false);
-                }
+                submenu.setAutoenablesItems(false);
                 item.setSubmenu(Some(&submenu));
                 match special_tag {
                     SubMenuItemSpecialTag::Window => {
                         let app = MyNSApplication::sharedApplication(mtm);
-                        unsafe { app.setWindowsMenu(Some(&submenu)) };
+                        app.setWindowsMenu(Some(&submenu));
                     }
                     SubMenuItemSpecialTag::Services => {
                         let app = MyNSApplication::sharedApplication(mtm);
-                        unsafe { app.setServicesMenu(Some(&submenu)) };
+                        app.setServicesMenu(Some(&submenu));
                     }
                     _ => {}
                 }
@@ -292,7 +286,7 @@ impl MenuItemRepresenter {
         let mtm = self.mtm();
         let app = MyNSApplication::sharedApplication(mtm);
         match app.currentEvent() {
-            Some(ns_event) if unsafe { ns_event.r#type() } == NSEventType::KeyDown => AppMenuTrigger::Keystroke,
+            Some(ns_event) if ns_event.r#type() == NSEventType::KeyDown => AppMenuTrigger::Keystroke,
             _ => AppMenuTrigger::Other,
         }
     }
@@ -323,10 +317,10 @@ impl<'a> ItemIdentity<'a> {
 
 #[allow(clippy::cast_possible_wrap)]
 fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_top_level: bool, new_items: &[AppMenuItemSafe]) {
-    let items_array = unsafe { menu.itemArray() };
-    let menu_titles: Vec<_> = items_array.iter().map(|submenu| unsafe { submenu.title() }).collect();
+    let items_array = menu.itemArray();
+    let menu_titles: Vec<_> = items_array.iter().map(|submenu| submenu.title()).collect();
 
-    // sometimes macos can surround our items with new ones
+    // sometimes macOS can surround our items with new ones,
     // but usually it just add items to the end
     let old_item_ids: Vec<ItemIdentity> = items_array
         .iter()
@@ -337,12 +331,12 @@ fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_top_level: b
                 // the first item in top level menu is always item wiht the app name
                 ItemIdentity::AppNameSubMenu
             } else {
-                unsafe { item.representedObject() }
+                item.representedObject()
                     .map(Retained::downcast::<MenuItemRepresenter>)
                     .map_or(ItemIdentity::MacOSProvided, |_rep_obj| {
-                        if unsafe { item.isSeparatorItem() } {
+                        if item.isSeparatorItem() {
                             ItemIdentity::Separator
-                        } else if unsafe { item.hasSubmenu() } {
+                        } else if item.hasSubmenu() {
                             ItemIdentity::SubMenu { title }
                         } else {
                             ItemIdentity::Action { title }
@@ -369,23 +363,19 @@ fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_top_level: b
         match op {
             Operation::Insert { position, item_idx } => {
                 let new_ns_menu_item = new_items[item_idx].create_ns_menu_item(mtm);
-                unsafe {
-                    menu.insertItem_atIndex(&new_ns_menu_item, position as isize + position_shift);
-                }
+                menu.insertItem_atIndex(&new_ns_menu_item, position as isize + position_shift);
                 position_shift += 1;
             }
             Operation::Reconcile { position, item_idx } => {
-                let ns_menu_item = unsafe { menu.itemAtIndex(position as isize + position_shift).unwrap() };
+                let ns_menu_item = menu.itemAtIndex(position as isize + position_shift).unwrap();
                 new_items[item_idx].reconcile_ns_menu_item(mtm, &ns_menu_item);
             }
             Operation::Remove { position } => {
-                let ns_menu_item = unsafe { menu.itemAtIndex(position as isize + position_shift).unwrap() };
-                let rep_obj = unsafe { ns_menu_item.representedObject() }.map(Retained::downcast::<MenuItemRepresenter>);
+                let ns_menu_item = menu.itemAtIndex(position as isize + position_shift).unwrap();
+                let rep_obj = ns_menu_item.representedObject().map(Retained::downcast::<MenuItemRepresenter>);
                 // Just skip remove commands for macOS provided items
                 if rep_obj.is_some() {
-                    unsafe {
-                        menu.removeItemAtIndex(position as isize + position_shift);
-                    };
+                    menu.removeItemAtIndex(position as isize + position_shift);
                     position_shift -= 1;
                 }
             }

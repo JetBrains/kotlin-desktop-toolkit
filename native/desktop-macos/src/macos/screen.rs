@@ -38,7 +38,7 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
             .iter()
             .enumerate()
             .map(|(num, screen)| {
-                let name = unsafe { screen.localizedName() };
+                let name = screen.localizedName();
                 let rect = screen.rect(mtm).unwrap();
                 ScreenInfo {
                     screen_id: screen.screen_id(),
@@ -48,7 +48,7 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
                     origin: rect.origin,
                     size: rect.size,
                     scale: screen.backingScaleFactor(),
-                    maximum_frames_per_second: unsafe { screen.maximumFramesPerSecond() }.try_into().unwrap(),
+                    maximum_frames_per_second: screen.maximumFramesPerSecond().try_into().unwrap(),
                 }
             })
             .collect();
@@ -59,7 +59,7 @@ pub extern "C" fn screen_list() -> ScreenInfoArray {
 #[unsafe(no_mangle)]
 pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
     ffi_boundary("screen_list_drop", || {
-        std::mem::drop(arr);
+        drop(arr);
         Ok(())
     });
 }

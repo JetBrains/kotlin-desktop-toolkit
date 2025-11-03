@@ -26,15 +26,13 @@ pub struct DragInfo {
 
 impl DragInfo {
     pub fn new(info: &ProtocolObject<dyn NSDraggingInfo>) -> Self {
-        let destination_window = unsafe { info.draggingDestinationWindow() }.expect("No window in drag event");
+        let destination_window = info.draggingDestinationWindow().expect("No window in drag event");
         let destination_window_id = destination_window.window_id();
         let window_height = destination_window.contentView().unwrap().frame().size.height;
-        let location_in_window = LogicalPoint::from_macos_coords(unsafe { info.draggingLocation() }, window_height);
-        let allowed_operations = unsafe { info.draggingSourceOperationMask() }.0;
-        let sequence_number = unsafe { info.draggingSequenceNumber() };
-        let pasteboard_name = copy_to_c_string(unsafe { info.draggingPasteboard().name() }.as_ref())
-            .unwrap()
-            .to_auto_drop();
+        let location_in_window = LogicalPoint::from_macos_coords(info.draggingLocation(), window_height);
+        let allowed_operations = info.draggingSourceOperationMask().0;
+        let sequence_number = info.draggingSequenceNumber();
+        let pasteboard_name = copy_to_c_string(info.draggingPasteboard().name().as_ref()).unwrap().to_auto_drop();
         Self {
             destination_window_id,
             location_in_window,
@@ -114,7 +112,7 @@ pub fn handle_drag_exited(info: Option<&ProtocolObject<dyn NSDraggingInfo>>) {
         let drag_info = RustAllocatedRawPtr::from_value(info.map(DragInfo::new));
         (callbacks.drag_exited_callback)(drag_info.clone()); // cloning pointer here
         if !drag_info.is_null() {
-            std::mem::drop(unsafe { drag_info.to_owned::<DragInfo>() });
+            drop(unsafe { drag_info.to_owned::<DragInfo>() });
         }
     });
 }

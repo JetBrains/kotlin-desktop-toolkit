@@ -123,7 +123,7 @@ impl CustomTitlebarState {
         unsafe { titlebar_views.setTranslatesAutoresizingMaskIntoConstraints(false) };
         let constraints = unsafe { titlebar_views.build_constraints(self.height) };
 
-        unsafe { NSLayoutConstraint::activateConstraints(&constraints) };
+        NSLayoutConstraint::activateConstraints(&constraints);
 
         self.constraints = Some(constraints);
 
@@ -135,7 +135,7 @@ impl CustomTitlebarState {
 
         unsafe { title_bar_views.setTranslatesAutoresizingMaskIntoConstraints(true) };
         if let Some(constraints) = self.constraints.take() {
-            unsafe { NSLayoutConstraint::deactivateConstraints(&constraints) };
+            NSLayoutConstraint::deactivateConstraints(&constraints);
         }
         Ok(())
     }
@@ -203,21 +203,19 @@ impl TitlebarViews {
 
     #[allow(non_snake_case)]
     unsafe fn setTranslatesAutoresizingMaskIntoConstraints(&self, value: bool) {
-        unsafe {
-            self.title_bar_container.setTranslatesAutoresizingMaskIntoConstraints(value);
-            self.title_bar.setTranslatesAutoresizingMaskIntoConstraints(value);
+        self.title_bar_container.setTranslatesAutoresizingMaskIntoConstraints(value);
+        self.title_bar.setTranslatesAutoresizingMaskIntoConstraints(value);
 
-            self.close_button.setTranslatesAutoresizingMaskIntoConstraints(value);
-            self.miniaturize_button.setTranslatesAutoresizingMaskIntoConstraints(value);
-            self.zoom_button.setTranslatesAutoresizingMaskIntoConstraints(value);
+        self.close_button.setTranslatesAutoresizingMaskIntoConstraints(value);
+        self.miniaturize_button.setTranslatesAutoresizingMaskIntoConstraints(value);
+        self.zoom_button.setTranslatesAutoresizingMaskIntoConstraints(value);
 
-            // theme frame should keep folow autoresizing mask to match window constraints
-            // self.theme_frame.setTranslatesAutoresizingMaskIntoConstraints(value);
-        }
+        // theme frame should keep follow autoresizing mask to match window constraints
+        // self.theme_frame.setTranslatesAutoresizingMaskIntoConstraints(value);
     }
 
     fn horizontal_button_offset(titlebar_height: LogicalPixels) -> LogicalPixels {
-        let minimum_height_without_shrinking = 28.0; // This is the smallest macOS title bar availabe with public APIs as of Monterey
+        let minimum_height_without_shrinking = 28.0; // This is the smallest macOS title bar available with public APIs as of Monterey
         let shrinking_factor = f64::min(titlebar_height / minimum_height_without_shrinking, 1.0);
 
         let default_horizontal_buttons_offset = 20.0;
@@ -227,33 +225,33 @@ impl TitlebarViews {
     unsafe fn build_constraints(&self, titlebar_height: LogicalPixels) -> Retained<NSArray<NSLayoutConstraint>> {
         let mut constraints_array = Vec::new();
 
-        constraints_array.push(unsafe {
+        constraints_array.push(
             self.title_bar_container
                 .leftAnchor()
-                .constraintEqualToAnchor(&self.theme_frame.leftAnchor())
-        });
-        constraints_array.push(unsafe {
+                .constraintEqualToAnchor(&self.theme_frame.leftAnchor()),
+        );
+        constraints_array.push(
             self.title_bar_container
                 .widthAnchor()
-                .constraintEqualToAnchor(&self.theme_frame.widthAnchor())
-        });
-        constraints_array.push(unsafe {
+                .constraintEqualToAnchor(&self.theme_frame.widthAnchor()),
+        );
+        constraints_array.push(
             self.title_bar_container
                 .topAnchor()
-                .constraintEqualToAnchor(&self.theme_frame.topAnchor())
-        });
-        let height_constraint = unsafe { self.title_bar_container.heightAnchor().constraintEqualToConstant(titlebar_height) };
+                .constraintEqualToAnchor(&self.theme_frame.topAnchor()),
+        );
+        let height_constraint = self.title_bar_container.heightAnchor().constraintEqualToConstant(titlebar_height);
         constraints_array.push(height_constraint);
 
         {
             let view = &self.title_bar;
-            constraints_array.push(unsafe { view.leftAnchor().constraintEqualToAnchor(&self.title_bar_container.leftAnchor()) });
-            constraints_array.push(unsafe { view.rightAnchor().constraintEqualToAnchor(&self.title_bar_container.rightAnchor()) });
-            constraints_array.push(unsafe { view.topAnchor().constraintEqualToAnchor(&self.title_bar_container.topAnchor()) });
-            constraints_array.push(unsafe {
+            constraints_array.push(view.leftAnchor().constraintEqualToAnchor(&self.title_bar_container.leftAnchor()));
+            constraints_array.push(view.rightAnchor().constraintEqualToAnchor(&self.title_bar_container.rightAnchor()));
+            constraints_array.push(view.topAnchor().constraintEqualToAnchor(&self.title_bar_container.topAnchor()));
+            constraints_array.push(
                 view.bottomAnchor()
-                    .constraintEqualToAnchor(&self.title_bar_container.bottomAnchor())
-            });
+                    .constraintEqualToAnchor(&self.title_bar_container.bottomAnchor()),
+            );
         }
 
         let horizontal_button_offset = Self::horizontal_button_offset(titlebar_height);
@@ -261,27 +259,27 @@ impl TitlebarViews {
         for (index, button) in (0u16..).zip([&self.close_button, &self.miniaturize_button, &self.zoom_button]) {
             let button_center_horizontal_shift = f64::from(index).mul_add(horizontal_button_offset, titlebar_height / 2f64);
 
-            constraints_array.push(unsafe {
+            constraints_array.push(
                 button
                     .widthAnchor()
-                    .constraintLessThanOrEqualToAnchor_multiplier(&self.title_bar_container.heightAnchor(), 0.5)
-            });
+                    .constraintLessThanOrEqualToAnchor_multiplier(&self.title_bar_container.heightAnchor(), 0.5),
+            );
             // Those corrections are required to keep the icons perfectly round because macOS adds a constant 2 px in resulting height to their frame
-            constraints_array.push(unsafe {
-                button
-                    .heightAnchor()
-                    .constraintEqualToAnchor_multiplier_constant(&button.widthAnchor(), 14.0 / 12.0, -2.0)
-            });
-            constraints_array.push(unsafe {
+            constraints_array.push(button.heightAnchor().constraintEqualToAnchor_multiplier_constant(
+                &button.widthAnchor(),
+                14.0 / 12.0,
+                -2.0,
+            ));
+            constraints_array.push(
                 button
                     .centerXAnchor()
-                    .constraintEqualToAnchor_constant(&self.title_bar_container.leftAnchor(), button_center_horizontal_shift)
-            });
-            constraints_array.push(unsafe {
+                    .constraintEqualToAnchor_constant(&self.title_bar_container.leftAnchor(), button_center_horizontal_shift),
+            );
+            constraints_array.push(
                 button
                     .centerYAnchor()
-                    .constraintEqualToAnchor(&self.title_bar_container.centerYAnchor())
-            });
+                    .constraintEqualToAnchor(&self.title_bar_container.centerYAnchor()),
+            );
         }
 
         NSArray::from_retained_slice(&constraints_array)

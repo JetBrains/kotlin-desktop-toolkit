@@ -57,7 +57,7 @@ mod tests {
     use super::{borrow_ns_string, copy_to_ns_string};
 
     #[test]
-    fn test_string_conversion_is_reversable() {
+    fn test_string_conversion_is_reversible() {
         let ns_string = ns_string!("Hello😃World\nOne More Line");
         let borrowed_c_str = borrow_ns_string(ns_string);
         let new_ns_string = copy_to_ns_string(&borrowed_c_str).unwrap();
@@ -65,7 +65,7 @@ mod tests {
     }
 
     #[test]
-    fn test_string_conversion_with_copy_is_reversable() {
+    fn test_string_conversion_with_copy_is_reversible() {
         let ns_string = ns_string!("Hello😃World\nOne More Line");
         let c_str = copy_to_c_string(ns_string).unwrap();
         let str = c_str.as_str().unwrap();

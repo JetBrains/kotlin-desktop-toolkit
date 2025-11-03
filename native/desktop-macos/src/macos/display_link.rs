@@ -282,7 +282,7 @@ mod dispatch_sys {
 
     pub const DISPATCH_TIME_NOW: u32 = 0;
     pub const DISPATCH_QUEUE_PRIORITY_HIGH: u32 = 2;
-    pub type dispatch_function_t = ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>;
+    pub type dispatch_function_t = Option<unsafe extern "C" fn(arg1: *mut std::os::raw::c_void)>;
     pub type dispatch_time_t = u64;
     unsafe extern "C" {
         pub fn dispatch_time(when: dispatch_time_t, delta: i64) -> dispatch_time_t;
@@ -304,7 +304,7 @@ mod dispatch_sys {
         pub _dchannel: *mut dispatch_io_s,
     }
     unsafe extern "C" {
-        pub fn dispatch_set_context(object: dispatch_object_t, context: *mut ::std::os::raw::c_void);
+        pub fn dispatch_set_context(object: dispatch_object_t, context: *mut std::os::raw::c_void);
     }
     unsafe extern "C" {
         pub fn dispatch_suspend(object: dispatch_object_t);
@@ -315,7 +315,7 @@ mod dispatch_sys {
     pub type dispatch_queue_t = *mut dispatch_queue_s;
     pub type dispatch_queue_global_t = dispatch_queue_t;
     unsafe extern "C" {
-        pub fn dispatch_async_f(queue: dispatch_queue_t, context: *mut ::std::os::raw::c_void, work: dispatch_function_t);
+        pub fn dispatch_async_f(queue: dispatch_queue_t, context: *mut std::os::raw::c_void, work: dispatch_function_t);
     }
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
@@ -337,7 +337,7 @@ mod dispatch_sys {
         pub fn dispatch_after_f(
             when: dispatch_time_t,
             queue: dispatch_queue_t,
-            context: *mut ::std::os::raw::c_void,
+            context: *mut std::os::raw::c_void,
             work: dispatch_function_t,
         );
     }

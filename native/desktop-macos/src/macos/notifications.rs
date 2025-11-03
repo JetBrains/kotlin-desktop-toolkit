@@ -33,15 +33,13 @@ pub struct NotificationCenterState {
 impl NotificationCenterState {
     pub fn init(mtm: MainThreadMarker, callbacks: NotificationCallbacks) -> anyhow::Result<bool> {
         ensure!(
-            NOTIFICATION_CENTER_STATE.with_borrow(std::option::Option::is_none),
+            NOTIFICATION_CENTER_STATE.with_borrow(Option::is_none),
             "Can't initialize a second time"
         );
         match get_notification_center(mtm) {
             Some(center) => {
                 let delegate = NotificationCenterDelegate::new(mtm, callbacks.on_action);
-                unsafe {
-                    center.setDelegate(Some(objc2::runtime::ProtocolObject::from_ref(&*delegate)));
-                }
+                center.setDelegate(Some(objc2::runtime::ProtocolObject::from_ref(&*delegate)));
                 NOTIFICATION_CENTER_STATE.set(Some(Self {
                     center,
                     _delegate: delegate,
@@ -55,10 +53,8 @@ impl NotificationCenterState {
 
     pub fn deinit(_mtm: MainThreadMarker) -> anyhow::Result<()> {
         let state = NOTIFICATION_CENTER_STATE.replace(None).context("Already deinitialized")?;
-        unsafe { state.center.setDelegate(None) };
-        unsafe {
-            state.center.setNotificationCategories(&NSSet::new());
-        }
+        state.center.setDelegate(None);
+        state.center.setNotificationCategories(&NSSet::new());
         Ok(())
     }
 
@@ -80,9 +76,7 @@ impl NotificationCenterState {
                     callback(request_id, granted);
                 });
             });
-            unsafe {
-                center.requestAuthorizationWithOptions_completionHandler(options, &handler);
-            }
+            center.requestAuthorizationWithOptions_completionHandler(options, &handler);
             Ok(())
         })
     }
@@ -93,15 +87,13 @@ impl NotificationCenterState {
             let callback = state.callbacks.on_authorization_status_request;
             let handler = RcBlock::new(move |settings: NonNull<UNNotificationSettings>| {
                 let settings = unsafe { settings.as_ref() };
-                let status: AuthorizationStatus = unsafe { settings.authorizationStatus().into() };
+                let status: AuthorizationStatus = settings.authorizationStatus().into();
                 dispatch_to_main_if_needed(move || {
                     callback(request_id, status);
                 });
             });
 
-            unsafe {
-                center.getNotificationSettingsWithCompletionHandler(&handler);
-            }
+            center.getNotificationSettingsWithCompletionHandler(&handler);
             Ok(())
         })
     }
@@ -111,49 +103,39 @@ impl NotificationCenterState {
             let categories: anyhow::Result<Vec<Retained<UNNotificationCategory>>> =
                 categories.as_slice()?.iter().map(NotificationCategory::unpack_category).collect();
             let mut categories = categories?;
-            let default_category = unsafe {
-                UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
-                    &NSString::from_str("com.jetbrains.kdt.DefaultCategory"),
-                    &NSArray::new(),
-                    &NSArray::new(), // Empty intent identifiers
-                    UNNotificationCategoryOptions::CustomDismissAction,
-                )
-            };
+            let default_category = UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
+                &NSString::from_str("com.jetbrains.kdt.DefaultCategory"),
+                &NSArray::new(),
+                &NSArray::new(), // Empty intent identifiers
+                UNNotificationCategoryOptions::CustomDismissAction,
+            );
             categories.push(default_category);
-            unsafe {
-                state.center.setNotificationCategories(&NSSet::from_retained_slice(&categories));
-            }
+            state.center.setNotificationCategories(&NSSet::from_retained_slice(&categories));
             Ok(())
         })
     }
 
     pub fn show_notification(_mtm: MainThreadMarker, request: &NotificationRequest) -> anyhow::Result<()> {
         Self::with_state(|state| {
-            let content = unsafe { UNMutableNotificationContent::new() };
+            let content = UNMutableNotificationContent::new();
             let title = request.unpack_title()?;
             let body = request.unpack_body()?;
             let sound = request.unpack_sound()?;
             let action_identifier = request.unpack_action_identifier()?;
             let category_identifier = request.unpack_category_identifier()?;
-            unsafe {
-                content.setTitle(&title);
-                content.setBody(&body);
-                content.setSound(sound.as_ref().map(std::convert::AsRef::as_ref));
-                content.setCategoryIdentifier(&category_identifier);
-            }
-            let request = unsafe {
-                UNNotificationRequest::requestWithIdentifier_content_trigger(
-                    &action_identifier,
-                    &content,
-                    None, // nil trigger means deliver immediately
-                )
-            };
+            content.setTitle(&title);
+            content.setBody(&body);
+            content.setSound(sound.as_ref().map(std::convert::AsRef::as_ref));
+            content.setCategoryIdentifier(&category_identifier);
+            let request = UNNotificationRequest::requestWithIdentifier_content_trigger(
+                &action_identifier,
+                &content,
+                None, // nil trigger means deliver immediately
+            );
             let delivery_handler = Self::create_notification_delivery_handler(action_identifier, state.callbacks.on_delivery);
-            unsafe {
-                state
-                    .center
-                    .addNotificationRequest_withCompletionHandler(&request, Some(&delivery_handler));
-            }
+            state
+                .center
+                .addNotificationRequest_withCompletionHandler(&request, Some(&delivery_handler));
             Ok(())
         })
     }
@@ -186,11 +168,9 @@ impl NotificationCenterState {
     pub fn remove_notification(identifier: &BorrowedStrPtr) -> anyhow::Result<()> {
         Self::with_state(|state| {
             let notification_id = copy_to_ns_string(identifier)?;
-            unsafe {
-                let notifications_array = &*NSArray::from_slice(&[&*notification_id]);
-                state.center.removePendingNotificationRequestsWithIdentifiers(notifications_array);
-                state.center.removeDeliveredNotificationsWithIdentifiers(notifications_array);
-            }
+            let notifications_array = &*NSArray::from_slice(&[&*notification_id]);
+            state.center.removePendingNotificationRequestsWithIdentifiers(notifications_array);
+            state.center.removeDeliveredNotificationsWithIdentifiers(notifications_array);
             Ok(())
         })
     }
@@ -219,7 +199,7 @@ pub fn get_notification_center(_mtm: MainThreadMarker) -> Option<Retained<UNUser
     use objc2::exception;
     let result = exception::catch(|| {
         if LSBundleProxy::bundleProxyForCurrentProcess().is_some() {
-            Some(unsafe { UNUserNotificationCenter::currentNotificationCenter() })
+            Some(UNUserNotificationCenter::currentNotificationCenter())
         } else {
             None
         }
@@ -251,8 +231,8 @@ define_class!(
             completion_handler: &block2::Block<dyn Fn()>,
         ) {
             catch_panic(|| {
-                let ns_action_id = unsafe { &response.actionIdentifier() };
-                let ns_notification_id = unsafe { &response.notification().request().identifier() };
+                let ns_action_id = &response.actionIdentifier();
+                let ns_notification_id = &response.notification().request().identifier();
                 let action_id = copy_to_c_string(ns_action_id).unwrap().to_auto_drop();
                 let notification_id = copy_to_c_string(ns_notification_id).unwrap().to_auto_drop();
                 let callback = self.ivars().on_action;
@@ -331,17 +311,17 @@ impl NotificationRequest<'_> {
 
     fn unpack_sound(&self) -> anyhow::Result<Option<Retained<UNNotificationSound>>> {
         let sound = match self.sound_type {
-            NotificationSoundType::Default => Some(unsafe { UNNotificationSound::defaultSound() }),
+            NotificationSoundType::Default => Some(UNNotificationSound::defaultSound()),
             NotificationSoundType::None => None,
-            NotificationSoundType::Critical => Some(unsafe { UNNotificationSound::defaultCriticalSound() }),
-            NotificationSoundType::Ringtone => Some(unsafe { UNNotificationSound::defaultRingtoneSound() }),
+            NotificationSoundType::Critical => Some(UNNotificationSound::defaultCriticalSound()),
+            NotificationSoundType::Ringtone => Some(UNNotificationSound::defaultRingtoneSound()),
             NotificationSoundType::Named => {
                 let sound_name = copy_to_ns_string(&self.sound_name)?;
-                Some(unsafe { UNNotificationSound::soundNamed(&sound_name) })
+                Some(UNNotificationSound::soundNamed(&sound_name))
             }
             NotificationSoundType::CriticalNamed => {
                 let sound_name = copy_to_ns_string(&self.sound_name)?;
-                Some(unsafe { UNNotificationSound::criticalSoundNamed(&sound_name) })
+                Some(UNNotificationSound::criticalSoundNamed(&sound_name))
             }
         };
         Ok(sound)
@@ -375,7 +355,7 @@ impl NotificationAction<'_> {
         let action_title = copy_to_ns_string(&self.title)?;
         let action_options = convert_action_options(self.options);
 
-        let un_action = unsafe { UNNotificationAction::actionWithIdentifier_title_options(&action_id, &action_title, action_options) };
+        let un_action = UNNotificationAction::actionWithIdentifier_title_options(&action_id, &action_title, action_options);
         Ok(un_action)
     }
 }
@@ -395,14 +375,12 @@ impl NotificationCategory<'_> {
     fn unpack_category(&self) -> anyhow::Result<Retained<UNNotificationCategory>> {
         let category_id = self.unpack_category_id()?;
         let actions = self.unpack_actions()?;
-        let result = unsafe {
-            UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
-                &category_id,
-                &actions,
-                &NSArray::new(), // Empty intent identifiers
-                UNNotificationCategoryOptions::CustomDismissAction,
-            )
-        };
+        let result = UNNotificationCategory::categoryWithIdentifier_actions_intentIdentifiers_options(
+            &category_id,
+            &actions,
+            &NSArray::new(), // Empty intent identifiers
+            UNNotificationCategoryOptions::CustomDismissAction,
+        );
         Ok(result)
     }
 }

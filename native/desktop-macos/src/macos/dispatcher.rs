@@ -55,7 +55,7 @@ pub extern "C" fn pop_autorelease_pool(pool_ptr: isize) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn set_qos_for_current_thread(qos: isize) {
-    ffi_boundary("set_qos_for_current_thread", || unsafe {
+    ffi_boundary("set_qos_for_current_thread", || {
         let qos = NSQualityOfService(qos);
         if qos != NSQualityOfService::UserInteractive
             && qos != NSQualityOfService::UserInitiated

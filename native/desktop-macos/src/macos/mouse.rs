@@ -7,7 +7,7 @@ pub(crate) trait NSMouseEventExt {
     fn mouse_button(&self) -> Option<MouseButton> {
         let me = self.me();
 
-        match unsafe { me.r#type() } {
+        match me.r#type() {
             NSEventType::LeftMouseDown
             | NSEventType::RightMouseDown
             | NSEventType::OtherMouseDown
@@ -17,7 +17,7 @@ pub(crate) trait NSMouseEventExt {
             | NSEventType::LeftMouseDragged
             | NSEventType::RightMouseDragged
             | NSEventType::OtherMouseDragged => {
-                let button_number = unsafe { me.buttonNumber() };
+                let button_number = me.buttonNumber();
                 let button = button_number.try_into().map(MouseButton).ok();
                 if button.is_none() {
                     warn!("Ignored mouse button: {me:?}");
@@ -30,7 +30,7 @@ pub(crate) trait NSMouseEventExt {
     }
 
     fn pressed_mouse_buttons() -> MouseButtonsSet {
-        let pressed_buttons = unsafe { NSEvent::pressedMouseButtons() };
+        let pressed_buttons = NSEvent::pressedMouseButtons();
         MouseButtonsSet(pressed_buttons.try_into().unwrap())
     }
 }

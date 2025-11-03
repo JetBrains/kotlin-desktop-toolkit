@@ -84,7 +84,7 @@ pub(crate) trait NSWindowExts {
     fn me(&self) -> &NSWindow;
 
     fn window_id(&self) -> WindowId {
-        unsafe { self.me().windowNumber() }
+        self.me().windowNumber()
     }
 
     fn get_size(&self) -> LogicalSize {
@@ -107,10 +107,8 @@ pub(crate) trait NSWindowExts {
 
     fn set_rect(&self, rect: &LogicalRect, animate: bool, mtm: MainThreadMarker) -> anyhow::Result<()> {
         let screen_height = NSScreen::primary(mtm)?.height();
-        unsafe {
-            let frame = rect.as_macos_coords(screen_height);
-            self.me().setFrame_display_animate(frame, true, animate);
-        }
+        let frame = rect.as_macos_coords(screen_height);
+        self.me().setFrame_display_animate(frame, true, animate);
         Ok(())
     }
 
@@ -118,10 +116,8 @@ pub(crate) trait NSWindowExts {
         let ns_window = self.me();
         let screen_height = NSScreen::primary(mtm)?.height();
         let content_frame = rect.as_macos_coords(screen_height);
-        let window_frame = unsafe { ns_window.frameRectForContentRect(content_frame) };
-        unsafe {
-            self.me().setFrame_display_animate(window_frame, true, animate);
-        }
+        let window_frame = ns_window.frameRectForContentRect(content_frame);
+        self.me().setFrame_display_animate(window_frame, true, animate);
         Ok(())
     }
 
@@ -134,11 +130,11 @@ pub(crate) trait NSWindowExts {
     }
 
     fn get_max_size(&self) -> LogicalSize {
-        unsafe { self.me().maxSize().into() }
+        self.me().maxSize().into()
     }
 
     fn get_min_size(&self) -> LogicalSize {
-        unsafe { self.me().minSize().into() }
+        self.me().minSize().into()
     }
 
     fn is_full_screen(&self) -> bool {
@@ -188,25 +184,21 @@ impl Window {
 
         // Window rect is relative to the primary screen
         let frame = LogicalRect::new(params.origin, params.size).as_macos_coords(screen_height);
-        let content_rect = unsafe { NSWindow::contentRectForFrameRect_styleMask(frame, style, mtm) };
+        let content_rect = NSWindow::contentRectForFrameRect_styleMask(frame, style, mtm);
         let ns_window = MyNSWindow::new(mtm, content_rect, style);
 
         NSWindow::setAllowsAutomaticWindowTabbing(false, mtm);
-        let mut collection_behaviour: NSWindowCollectionBehavior = unsafe { ns_window.collectionBehavior() };
+        let mut collection_behaviour: NSWindowCollectionBehavior = ns_window.collectionBehavior();
         if params.is_full_screen_allowed {
             collection_behaviour |= NSWindowCollectionBehavior::FullScreenPrimary;
         } else {
             collection_behaviour |= NSWindowCollectionBehavior::FullScreenNone;
         }
-        unsafe {
-            // allow full screen for this window
-            // https://developer.apple.com/library/archive/documentation/General/Conceptual/MOSXAppProgrammingGuide/FullScreenApp/FullScreenApp.html#:~:text=Full%2Dscreen%20support%20in%20NSApplication,is%20also%20key%2Dvalue%20observable.
-            ns_window.setCollectionBehavior(collection_behaviour);
-        }
+        // allow full screen for this window
+        // https://developer.apple.com/library/archive/documentation/General/Conceptual/MOSXAppProgrammingGuide/FullScreenApp/FullScreenApp.html#:~:text=Full%2Dscreen%20support%20in%20NSApplication,is%20also%20key%2Dvalue%20observable.
+        ns_window.setCollectionBehavior(collection_behaviour);
         ns_window.setTitle(&copy_to_ns_string(&params.title).unwrap());
-        unsafe {
-            ns_window.setReleasedWhenClosed(false);
-        }
+        unsafe { ns_window.setReleasedWhenClosed(false) };
         ns_window.makeKeyAndOrderFront(None);
 
         // todo we should use  NSApplication.activate();
@@ -214,9 +206,7 @@ impl Window {
         MyNSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
 
         ns_window.setLevel(NSNormalWindowLevel);
-        unsafe {
-            ns_window.setRestorable(false);
-        }
+        ns_window.setRestorable(false);
         let titlebar = Rc::new(RefCell::new(Titlebar::new(&ns_window, &params.titlebar_configuration)));
         let delegate = WindowDelegate::new(mtm, ns_window.clone(), titlebar.clone());
         ns_window.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
@@ -224,11 +214,9 @@ impl Window {
         let root_view = RootView::new(mtm, text_input_client);
         ns_window.setAcceptsMouseMovedEvents(true);
 
-        let container = unsafe { NSView::new(mtm) };
-        unsafe {
-            container.setAutoresizesSubviews(true);
-            container.addSubview_positioned_relativeTo(&root_view, NSWindowOrderingMode::Above, None);
-        }
+        let container = NSView::new(mtm);
+        container.setAutoresizesSubviews(true);
+        container.addSubview_positioned_relativeTo(&root_view, NSWindowOrderingMode::Above, None);
 
         ns_window.setContentView(Some(&container));
         assert!(ns_window.makeFirstResponder(Some(&root_view))); // todo remove assert
@@ -252,20 +240,16 @@ impl Window {
         match background {
             WindowBackground::Transparent => {
                 if let Some(substrate) = background_state.substrate.take() {
-                    unsafe {
-                        substrate.removeFromSuperview();
-                    }
+                    substrate.removeFromSuperview();
                 }
                 self.ns_window.setOpaque(false);
-                let ns_color = unsafe { NSColor::clearColor() };
+                let ns_color = NSColor::clearColor();
                 self.ns_window.setBackgroundColor(Some(&ns_color));
                 background_state.is_transparent = true;
             }
             WindowBackground::SolidColor(color) => {
                 if let Some(substrate) = background_state.substrate.take() {
-                    unsafe {
-                        substrate.removeFromSuperview();
-                    }
+                    substrate.removeFromSuperview();
                 }
                 self.ns_window.setOpaque(true);
                 let ns_color: Retained<NSColor> = color.into();
@@ -276,25 +260,18 @@ impl Window {
                 let substrate = if let Some(substrate) = background_state.substrate.take() {
                     substrate
                 } else {
-                    let substrate = unsafe { NSVisualEffectView::new(mtm) };
-                    unsafe {
-                        substrate.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-                        substrate.setState(NSVisualEffectState::Active);
-                        substrate.setFrameSize(self.ns_window.frame().size);
-                        substrate.setAutoresizingMask(
-                            NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable,
-                        );
-                    }
+                    let substrate = NSVisualEffectView::new(mtm);
+                    substrate.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
+                    substrate.setState(NSVisualEffectState::Active);
+                    substrate.setFrameSize(self.ns_window.frame().size);
+                    substrate
+                        .setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
                     let container = self.ns_window.contentView().context("No container")?;
-                    unsafe {
-                        container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::Below, None);
-                        // None means below all views
-                    }
+                    container.addSubview_positioned_relativeTo(&substrate, NSWindowOrderingMode::Below, None);
+                    // None means below all views
                     substrate
                 };
-                unsafe {
-                    substrate.setMaterial(window_visual_effect.into());
-                }
+                substrate.setMaterial(window_visual_effect.into());
                 self.ns_window.setOpaque(true);
                 background_state.is_transparent = false;
                 background_state.substrate = Some(substrate);
@@ -306,10 +283,8 @@ impl Window {
     pub(crate) fn attach_layer(&self, layer: &MetalView) {
         let content_view = self.ns_window.contentView().unwrap();
 
-        unsafe {
-            layer.layer_view.setFrameSize(content_view.frame().size);
-            content_view.addSubview_positioned_relativeTo(&layer.layer_view, NSWindowOrderingMode::Below, Some(&self.root_view));
-        }
+        layer.layer_view.setFrameSize(content_view.frame().size);
+        content_view.addSubview_positioned_relativeTo(&layer.layer_view, NSWindowOrderingMode::Below, Some(&self.root_view));
     }
 }
 
@@ -406,7 +381,7 @@ define_class!(
             _window: &NSWindow,
             proposed_options: NSApplicationPresentationOptions,
         ) -> NSApplicationPresentationOptions {
-            // here we can override fulscreen options for window
+            // here we can override fullscreen options for window
             // e.g. disable dock or app menu on hover
             proposed_options
         }
@@ -791,14 +766,14 @@ define_class!(
 
         /// `NSKeyDown` is passed to `performKeyEquivalent` first if
         /// * it has Cmd or Ctrl modifier pressed
-        /// * it's functional key e.g. F1, F2
+        /// * it's a functional key e.g., F1, F2
         /// * it's an arrow key, del key, maybe some other keys, but not enter or backspace
         /// * basically it's set of keys which is plosable for a keystroke in terms of apple guidelines
         ///
-        /// The path of KeyDownEvent is the following:
-        /// * If it meet conditions above it will be passed to `performKeyEquivalent`
-        /// * If the function retruned true then that's it
-        /// * If the function returned false and it meet conditions above it will be passed to application menu to handle
+        /// The path of `KeyDownEvent` is the following:
+        /// * If it meets the conditions above, it will be passed to `performKeyEquivalent`
+        /// * If the function returned true then that's it
+        /// * If the function returned false, and it meets the conditions above, it will be passed to application menu to handle
         /// * If it triggered any action in application menu then that's it
         /// * Otherwise it will be passed to `keyDown`
         #[unsafe(method(performKeyEquivalent:))]
@@ -869,10 +844,8 @@ impl RootView {
             last_key_equiv_ns_event: Cell::new(None),
         });
         let root_view: Retained<Self> = unsafe { msg_send![super(this), init] };
-        unsafe {
-            root_view.setAutoresizesSubviews(true);
-            root_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
-        }
+        root_view.setAutoresizesSubviews(true);
+        root_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
         root_view.update_tracking_area_impl(mtm);
         root_view
     }
@@ -913,13 +886,9 @@ impl RootView {
             | NSTrackingAreaOptions::AssumeInside;
         let tracking_area = unsafe { NSTrackingArea::initWithRect_options_owner_userInfo(mtm.alloc(), rect, options, Some(self), None) };
         if let Some(old_tracking_area) = self.ivars().tracking_area.take() {
-            unsafe {
-                self.removeTrackingArea(&old_tracking_area);
-            }
+            self.removeTrackingArea(&old_tracking_area);
         }
-        unsafe {
-            self.addTrackingArea(&tracking_area);
-        }
+        self.addTrackingArea(&tracking_area);
         self.ivars().tracking_area.set(Some(tracking_area));
     }
 }

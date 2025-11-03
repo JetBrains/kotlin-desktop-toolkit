@@ -26,7 +26,7 @@ pub(crate) struct KeyEventInfo {
     // Depends on keyboard layout but ignores modifiers
     // For keys that depend on keyboard layout it will be the symbol typed for default layer
     // For functional keys it will try to produce some meaningful codepoint, but not the same as for `characters`
-    // For dead keys it will produce text from deafult layer
+    // For dead keys it will produce text from default layer
     pub(crate) key: Retained<NSString>,
 
     // The same as key but also takes pressed modifiers into account
@@ -36,24 +36,28 @@ pub(crate) struct KeyEventInfo {
 }
 
 pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInfo> {
-    let is_repeat = unsafe { ns_event.isARepeat() };
-    let code = unsafe { ns_event.keyCode() };
+    let is_repeat = ns_event.isARepeat();
+    let code = ns_event.keyCode();
 
-    let typed_chars = unsafe { ns_event.characters() }.with_context(|| format!("No characters field in {ns_event:?}"))?;
+    let typed_chars = ns_event
+        .characters()
+        .with_context(|| format!("No characters field in {ns_event:?}"))?;
 
-    let key = unsafe { ns_event.charactersByApplyingModifiers(NSEventModifierFlags::empty()) }
+    let key = ns_event
+        .charactersByApplyingModifiers(NSEventModifierFlags::empty())
         .with_context(|| format!("Event contains invalid data: {ns_event:?}"))?;
 
     // though we apply the same modifiers, it's not the same as characters
     // there are number of differences:
     // * for dead keys `characters` will be empty, but this string will contain symbol representing the key
-    // * for for keys like F1..F12 characters will contain codepoints from private use area defined in `KeyCodePoints`,
-    // but this function will try to return some meaniingful code points
+    // * for keys like F1..F12 characters will contain codepoints from private use area defined in `KeyCodePoints`,
+    // but this function will try to return some meaningful code points
     // * for all F1..F16 keys this function will return the same codepoint: \u{10} for F17 it will be empty line
-    let key_with_modifiers = unsafe { ns_event.charactersByApplyingModifiers(ns_event.modifierFlags()) }
+    let key_with_modifiers = ns_event
+        .charactersByApplyingModifiers(ns_event.modifierFlags())
         .with_context(|| format!("Event contains invalid data: {ns_event:?}"))?;
 
-    let modifiers = unsafe { ns_event.modifierFlags() }.into();
+    let modifiers = ns_event.modifierFlags().into();
 
     let key_info = KeyEventInfo {
         is_repeat,
@@ -73,11 +77,11 @@ pub(crate) struct FlagsChangedInfo {
 }
 
 pub(crate) fn unpack_flags_changed_event(ns_event: &NSEvent) -> anyhow::Result<FlagsChangedInfo> {
-    if unsafe { ns_event.r#type() } != NSEventType::FlagsChanged {
+    if ns_event.r#type() != NSEventType::FlagsChanged {
         bail!("Unexpected type of event {ns_event:?}");
     }
-    let modifiers = unsafe { ns_event.modifierFlags() }.into();
-    let code = unsafe { ns_event.keyCode() };
+    let modifiers = ns_event.modifierFlags().into();
+    let code = ns_event.keyCode();
 
     Ok(FlagsChangedInfo {
         modifiers,
@@ -109,7 +113,7 @@ impl From<NSEventModifierFlags> for KeyModifiersSet {
     fn from(value: NSEventModifierFlags) -> Self {
         // We filter out device dependant part of modifier flags
         // It contains e.g. flags that allow to distinct between left and right modifier keys
-        // But I'm not sure that it has the same meaning for Intel, or for different keyboars
+        // But I'm not sure that it has the same meaning for Intel, or for different keyboards
         Self(value.bits() & NSEventModifierFlags::DeviceIndependentFlagsMask.bits())
     }
 }
