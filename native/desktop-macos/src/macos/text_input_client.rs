@@ -260,7 +260,7 @@ pub extern "C" fn text_input_context_handle_current_event(window_ptr: WindowPtr)
                 if prev_value.is_some() {
                     warn!("Overwrite some doCommand result: {prev_value:?}");
                 }
-                let was_event_handled = unsafe { input_context.handleEvent(&current_event) };
+                let was_event_handled = input_context.handleEvent(&current_event);
                 if was_event_handled {
                     command_result_cell.replace(None).unwrap_or(true)
                 } else {
@@ -302,9 +302,7 @@ pub extern "C" fn text_input_context_not_found_offset() -> isize {
 #[unsafe(no_mangle)]
 pub extern "C" fn text_input_context_beep() {
     ffi_boundary("text_input_context_beep", || {
-        unsafe {
-            NSBeep();
-        }
+        NSBeep();
         Ok(())
     });
 }

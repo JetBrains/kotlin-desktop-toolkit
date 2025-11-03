@@ -82,15 +82,13 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
     ffi_boundary("application_init", || {
         info!("Application Init");
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        //    unsafe { NSUserDefaults::resetStandardUserDefaults() };
-        let user_defaults = unsafe { NSUserDefaults::standardUserDefaults() };
-        unsafe {
-            user_defaults.setBool_forKey(config.disable_dictation_menu_item, ns_string!("NSDisabledDictationMenuItem"));
-            user_defaults.setBool_forKey(
-                config.disable_character_palette_menu_item,
-                ns_string!("NSDisabledCharacterPaletteMenuItem"),
-            );
-        };
+        // NSUserDefaults::resetStandardUserDefaults();
+        let user_defaults = NSUserDefaults::standardUserDefaults();
+        user_defaults.setBool_forKey(config.disable_dictation_menu_item, ns_string!("NSDisabledDictationMenuItem"));
+        user_defaults.setBool_forKey(
+            config.disable_character_palette_menu_item,
+            ns_string!("NSDisabledCharacterPaletteMenuItem"),
+        );
         let app = MyNSApplication::sharedApplication(mtm);
         //    let default_presentation_options = app.presentationOptions();
         //    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
@@ -129,7 +127,7 @@ pub extern "C" fn application_get_text_direction() -> TextDirection {
     ffi_boundary("application_get_text_direction", || -> Result<TextDirection, anyhow::Error> {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
-        let layout_direction = unsafe { app.userInterfaceLayoutDirection() };
+        let layout_direction = app.userInterfaceLayoutDirection();
         Ok(TextDirection::from_ns_layout_direction(layout_direction))
     })
 }
@@ -162,19 +160,17 @@ pub extern "C" fn application_stop_event_loop() {
         app.stop(None);
         // In case application_stop_event_loop is not called in response to a UI event, we need to trigger
         // a dummy event so the UI processing loop picks up the stop request.
-        let dummy_event = unsafe {
-            NSEvent::otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2(
-                NSEventType::ApplicationDefined,
-                NSPoint::ZERO,
-                NSEventModifierFlags::empty(),
-                0f64,
-                0,
-                None,
-                0,
-                0,
-                0,
-            )
-        }
+        let dummy_event = NSEvent::otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2(
+            NSEventType::ApplicationDefined,
+            NSPoint::ZERO,
+            NSEventModifierFlags::empty(),
+            0f64,
+            0,
+            None,
+            0,
+            0,
+            0,
+        )
         .unwrap();
         app.postEvent_atStart(&dummy_event, true);
         Ok(())
@@ -186,9 +182,7 @@ pub extern "C" fn application_request_termination() {
     ffi_boundary("application_request_termination", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
-        unsafe {
-            app.terminate(None);
-        }
+        app.terminate(None);
         Ok(())
     });
 }
@@ -196,7 +190,7 @@ pub extern "C" fn application_request_termination() {
 #[unsafe(no_mangle)]
 pub extern "C" fn application_get_name() -> RustAllocatedStrPtr {
     ffi_boundary("application_name", || {
-        match unsafe { NSRunningApplication::currentApplication().localizedName() } {
+        match NSRunningApplication::currentApplication().localizedName() {
             Some(name) => copy_to_c_string(&name),
             None => Ok(RustAllocatedStrPtr::null()),
         }
@@ -228,9 +222,7 @@ pub extern "C" fn application_unhide_all_applications() {
     ffi_boundary("application_unhide_all_applications", || {
         let mtm = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
-        unsafe {
-            app.unhideAllApplications(None);
-        }
+        app.unhideAllApplications(None);
         Ok(())
     });
 }
@@ -240,7 +232,7 @@ pub extern "C" fn application_is_active() -> bool {
     ffi_boundary("application_is_active", || {
         let mtm = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
-        let is_active = unsafe { app.isActive() };
+        let is_active = app.isActive();
         Ok(is_active)
     })
 }
@@ -289,8 +281,8 @@ pub extern "C" fn application_order_front_character_palete() {
 pub extern "C" fn application_open_url(url: BorrowedStrPtr) -> bool {
     ffi_boundary("application_open_url", || {
         let url_string = copy_to_ns_string(&url)?;
-        let url = unsafe { NSURL::URLWithString(&url_string).context("Can't create NSURL from string")? };
-        let was_openned = unsafe { NSWorkspace::sharedWorkspace().openURL(&url) };
+        let url = NSURL::URLWithString(&url_string).context("Can't create NSURL from string")?;
+        let was_openned = NSWorkspace::sharedWorkspace().openURL(&url);
         Ok(was_openned)
     })
 }
@@ -326,9 +318,9 @@ impl MyNSApplication {
     // modifiers are down, but swallows the key up if the modifiers include
     // command.  This one makes all modifiers consistent by always sending key ups.
     fn send_event_impl(&self, event: &NSEvent) {
-        if unsafe { event.r#type() } == NSEventType::KeyUp {
+        if event.r#type() == NSEventType::KeyUp {
             let mtm: MainThreadMarker = self.mtm();
-            if let Some(window) = unsafe { event.window(mtm) } {
+            if let Some(window) = event.window(mtm) {
                 window.sendEvent(event);
                 return;
             }

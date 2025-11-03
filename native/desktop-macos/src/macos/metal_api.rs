@@ -62,7 +62,7 @@ pub extern "C" fn metal_create_device() -> MetalDeviceRef {
 #[unsafe(no_mangle)]
 pub extern "C" fn metal_deref_device(device: MetalDeviceRef) {
     ffi_boundary("metal_deref_device", || {
-        std::mem::drop(unsafe { device.consume() });
+        drop(unsafe { device.consume() });
         Ok(())
     });
 }
@@ -91,7 +91,7 @@ pub extern "C" fn metal_create_command_queue(device: MetalDeviceRef) -> MetalCom
 #[unsafe(no_mangle)]
 pub extern "C" fn metal_deref_command_queue(queue: MetalCommandQueueRef) {
     ffi_boundary("metal_deref_command_queue", || {
-        std::mem::drop(unsafe { queue.consume() });
+        drop(unsafe { queue.consume() });
         Ok(())
     });
 }
@@ -145,16 +145,14 @@ impl MetalLayerView {
     }
 
     fn update_layer_size_and_scale(&self) {
-        let layer = unsafe { self.layer().unwrap() };
+        let layer = self.layer().unwrap();
         let metal_layer: &CAMetalLayer = layer.downcast_ref().unwrap();
 
         let view_size = self.bounds().size;
-        let new_drawable_size = unsafe { self.convertSizeToBacking(view_size) };
+        let new_drawable_size = self.convertSizeToBacking(view_size);
         let scale = new_drawable_size.width / view_size.width;
-        unsafe {
-            metal_layer.setDrawableSize(new_drawable_size);
-            metal_layer.setContentsScale(scale);
-        };
+        metal_layer.setDrawableSize(new_drawable_size);
+        metal_layer.setContentsScale(scale);
     }
 }
 
@@ -195,41 +193,39 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef, on_display_layer: On
     let metal_view = ffi_boundary("metal_create_view", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let device = unsafe { device.retain() };
-        let layer = unsafe { CAMetalLayer::new() };
+        let layer = CAMetalLayer::new();
         let layer_delegate = LayerDelegate::new(on_display_layer);
+        layer.setDevice(Some(ProtocolObject::from_ref(&*device)));
+        layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
+        // For Fleet use case we need to sample the texture
+        // e.g. to implement frost glass effect for tabs
+        layer.setFramebufferOnly(false);
+
+        // layer.setFramebufferOnly(false); // missing in zed
+
+        layer.setMaximumDrawableCount(2);
+        layer.setAllowsNextDrawableTimeout(false);
+        // layer.setDisplaySyncEnabled(false); //JWM but why ignore vsync?
+
+        // this are marked crucial for correct resize
+        layer.setAutoresizingMask(CAAutoresizingMask::LayerHeightSizable | CAAutoresizingMask::LayerWidthSizable);
+        layer.setNeedsDisplayOnBoundsChange(true); // we rely on displayLayer callback to redraw when size changed
+        layer.setPresentsWithTransaction(true);
+
         unsafe {
-            layer.setDevice(Some(ProtocolObject::from_ref(&*device)));
-            layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
-            // For Fleet use case we need to sample the texture
-            // e.g. to implment frost glass effect for tabs
-            layer.setFramebufferOnly(false);
-
-            // layer.setFramebufferOnly(false); // missing in zed
-
-            layer.setMaximumDrawableCount(2);
-            layer.setAllowsNextDrawableTimeout(false);
-            // layer.setDisplaySyncEnabled(false); //JWM but why ignore vsync?
-
-            // this are marked crucial for correct resize
-            layer.setAutoresizingMask(CAAutoresizingMask::LayerHeightSizable | CAAutoresizingMask::LayerWidthSizable);
-            layer.setNeedsDisplayOnBoundsChange(true); // we rely on displayLayer callback to redraw when size changed
-            layer.setPresentsWithTransaction(true);
-
             layer.setContentsGravity(kCAGravityResize);
-            // fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
-
-            layer.setDelegate(Some(ProtocolObject::from_ref(&*layer_delegate)));
         }
+        // fMetalLayer.magnificationFilter = kCAFilterNearest;  // from JWM
+
+        layer.setDelegate(Some(ProtocolObject::from_ref(&*layer_delegate)));
 
         let layer_view = MetalLayerView::new(mtm);
-        unsafe {
-            layer_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
+        layer_view.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable | NSAutoresizingMaskOptions::ViewHeightSizable);
 
-            layer_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::DuringViewResize);
-            layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
-            // layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
-            layer_view.setLayer(Some(&layer));
-        }
+        layer_view.setLayerContentsRedrawPolicy(NSViewLayerContentsRedrawPolicy::DuringViewResize);
+        layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::ScaleAxesIndependently); // better to demonstrate glitches
+        // layer_view.setLayerContentsPlacement(NSViewLayerContentsPlacement::TopLeft); // better if you have glitches
+        layer_view.setLayer(Some(&layer));
 
         layer_view.setWantsLayer(true);
 
@@ -247,7 +243,7 @@ pub extern "C" fn metal_create_view(device: MetalDeviceRef, on_display_layer: On
 pub extern "C" fn metal_drop_view(view_ptr: MetalViewPtr) {
     ffi_boundary("metal_drop_view", || {
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        std::mem::drop(unsafe { view_ptr.to_owned::<MetalView>() });
+        drop(unsafe { view_ptr.to_owned::<MetalView>() });
         Ok(())
     });
 }
@@ -289,16 +285,12 @@ pub extern "C" fn metal_view_present(view_ptr: MetalViewPtr, queue: MetalCommand
                 let command_buffer = queue.commandBuffer().unwrap();
                 command_buffer.setLabel(Some(ns_string!("Present")));
                 if wait_for_ca_transaction {
-                    unsafe {
-                        view.layer.setPresentsWithTransaction(true);
-                    }
+                    view.layer.setPresentsWithTransaction(true);
                     command_buffer.commit();
                     command_buffer.waitUntilScheduled();
                     drawable.present();
                 } else {
-                    unsafe {
-                        view.layer.setPresentsWithTransaction(false);
-                    }
+                    view.layer.setPresentsWithTransaction(false);
                     let drawable = ProtocolObject::from_retained(drawable);
                     command_buffer.presentDrawable(&drawable);
                     command_buffer.commit();
@@ -319,7 +311,7 @@ impl PanicDefault for PhysicalSize {
 pub extern "C" fn metal_view_get_texture_size(view_ptr: MetalViewPtr) -> PhysicalSize {
     ffi_boundary("metal_view_get_texture_size", || {
         let view = unsafe { view_ptr.borrow::<MetalView>() };
-        let view_size = unsafe { view.layer.drawableSize() };
+        let view_size = view.layer.drawableSize();
         Ok(view_size.into())
     })
 }
@@ -341,8 +333,8 @@ pub extern "C" fn metal_view_next_texture(view_ptr: MetalViewPtr) -> MetalTextur
     ffi_boundary("metal_view_next_texture", || {
         autoreleasepool(|_| {
             let view = unsafe { view_ptr.borrow::<MetalView>() };
-            let drawable = unsafe { view.layer.nextDrawable().expect("No drawable") };
-            let texture = unsafe { drawable.texture() };
+            let drawable = view.layer.nextDrawable().expect("No drawable");
+            let texture = drawable.texture();
             view.drawable.set(Some(drawable));
             Ok(MetalTextureRef::new(texture))
         })
@@ -352,7 +344,7 @@ pub extern "C" fn metal_view_next_texture(view_ptr: MetalViewPtr) -> MetalTextur
 #[unsafe(no_mangle)]
 pub extern "C" fn metal_deref_texture(texture: MetalTextureRef) {
     ffi_boundary("metal_deref_texture", || {
-        std::mem::drop(unsafe { texture.consume() });
+        drop(unsafe { texture.consume() });
         Ok(())
     });
 }

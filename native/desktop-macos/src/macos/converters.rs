@@ -95,6 +95,6 @@ impl LogicalRect {
 
 impl From<Color> for Retained<NSColor> {
     fn from(value: Color) -> Self {
-        unsafe { NSColor::colorWithSRGBRed_green_blue_alpha(value.red, value.green, value.blue, value.alpha) }
+        NSColor::colorWithSRGBRed_green_blue_alpha(value.red, value.green, value.blue, value.alpha)
     }
 }

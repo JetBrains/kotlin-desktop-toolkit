@@ -218,7 +218,7 @@ pub enum Event<'a> {
 }
 
 pub(crate) fn handle_key_down_event(ns_event: &NSEvent, might_have_key_equivalent: bool) -> anyhow::Result<bool> {
-    let handled = AppState::with(|state| match unsafe { ns_event.r#type() } {
+    let handled = AppState::with(|state| match ns_event.r#type() {
         NSEventType::KeyDown => {
             let key_info = unpack_key_event(ns_event)?;
             let event = Event::KeyDown(KeyDownEvent {
@@ -229,7 +229,7 @@ pub(crate) fn handle_key_down_event(ns_event: &NSEvent, might_have_key_equivalen
                 key: borrow_ns_string(&key_info.key),
                 key_with_modifiers: borrow_ns_string(&key_info.key_with_modifiers),
                 modifiers: key_info.modifiers,
-                timestamp: unsafe { ns_event.timestamp() },
+                timestamp: ns_event.timestamp(),
                 might_have_key_equivalent,
             });
             Ok((state.event_handler)(&event))
@@ -240,7 +240,7 @@ pub(crate) fn handle_key_down_event(ns_event: &NSEvent, might_have_key_equivalen
 }
 
 pub(crate) fn handle_key_up_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
-    let handled = AppState::with(|state| match unsafe { ns_event.r#type() } {
+    let handled = AppState::with(|state| match ns_event.r#type() {
         NSEventType::KeyUp => {
             let key_info = unpack_key_event(ns_event)?;
             let event = Event::KeyUp(KeyUpEvent {
@@ -250,7 +250,7 @@ pub(crate) fn handle_key_up_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                 key: borrow_ns_string(&key_info.key),
                 key_with_modifiers: borrow_ns_string(&key_info.key_with_modifiers),
                 modifiers: key_info.modifiers,
-                timestamp: unsafe { ns_event.timestamp() },
+                timestamp: ns_event.timestamp(),
             });
             Ok((state.event_handler)(&event))
         }
@@ -266,7 +266,7 @@ pub(crate) fn handle_flags_change(ns_event: &NSEvent) -> anyhow::Result<bool> {
             window_id: ns_event.window_id(),
             modifiers: flags_changed_info.modifiers,
             code: flags_changed_info.code,
-            timestamp: unsafe { ns_event.timestamp() },
+            timestamp: ns_event.timestamp(),
         });
         Ok((state.event_handler)(&event))
     });
@@ -278,7 +278,7 @@ pub(crate) fn handle_mouse_move(ns_event: &NSEvent) -> bool {
         let event = Event::MouseMoved(MouseMovedEvent {
             window_id: ns_event.window_id(),
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            timestamp: unsafe { ns_event.timestamp() },
+            timestamp: ns_event.timestamp(),
         });
         (state.event_handler)(&event)
     });
@@ -291,7 +291,7 @@ pub(crate) fn handle_mouse_drag(ns_event: &NSEvent) -> bool {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            timestamp: unsafe { ns_event.timestamp() },
+            timestamp: ns_event.timestamp(),
         });
         (state.event_handler)(&event)
     });
@@ -303,7 +303,7 @@ pub(crate) fn handle_mouse_enter(ns_event: &NSEvent) -> bool {
         let event = Event::MouseEntered(MouseEnteredEvent {
             window_id: ns_event.window_id(),
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            timestamp: unsafe { ns_event.timestamp() },
+            timestamp: ns_event.timestamp(),
         });
         (state.event_handler)(&event)
     });
@@ -315,7 +315,7 @@ pub(crate) fn handle_mouse_exit(ns_event: &NSEvent) -> bool {
         let event = Event::MouseExited(MouseExitedEvent {
             window_id: ns_event.window_id(),
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            timestamp: unsafe { ns_event.timestamp() },
+            timestamp: ns_event.timestamp(),
         });
         (state.event_handler)(&event)
     });
@@ -328,8 +328,8 @@ pub(crate) fn handle_mouse_down(ns_event: &NSEvent) -> bool {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            click_count: unsafe { ns_event.clickCount() },
-            timestamp: unsafe { ns_event.timestamp() },
+            click_count: ns_event.clickCount(),
+            timestamp: ns_event.timestamp(),
         });
         (state.event_handler)(&event)
     });
@@ -342,8 +342,8 @@ pub(crate) fn handle_mouse_up(ns_event: &NSEvent) -> bool {
             window_id: ns_event.window_id(),
             button: ns_event.mouse_button().unwrap(),
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            click_count: unsafe { ns_event.clickCount() },
-            timestamp: unsafe { ns_event.timestamp() },
+            click_count: ns_event.clickCount(),
+            timestamp: ns_event.timestamp(),
         });
         (state.event_handler)(&event)
     });
@@ -354,12 +354,12 @@ pub(crate) fn handle_scroll_wheel(ns_event: &NSEvent) -> bool {
     let handled = AppState::with(|state| {
         let event = Event::ScrollWheel(ScrollWheelEvent {
             window_id: ns_event.window_id(),
-            scrolling_delta_x: unsafe { ns_event.scrollingDeltaX() },
-            scrolling_delta_y: unsafe { ns_event.scrollingDeltaY() },
-            has_precise_scrolling_deltas: unsafe { ns_event.hasPreciseScrollingDeltas() },
-            is_direction_inverted: unsafe { ns_event.isDirectionInvertedFromDevice() },
+            scrolling_delta_x: ns_event.scrollingDeltaX(),
+            scrolling_delta_y: ns_event.scrollingDeltaY(),
+            has_precise_scrolling_deltas: ns_event.hasPreciseScrollingDeltas(),
+            is_direction_inverted: ns_event.isDirectionInvertedFromDevice(),
             location_in_window: ns_event.cursor_location_in_window(state.mtm),
-            timestamp: unsafe { ns_event.timestamp() },
+            timestamp: ns_event.timestamp(),
         });
         (state.event_handler)(&event)
     });
@@ -411,7 +411,7 @@ pub(crate) fn handle_window_focus_change(window: &NSWindow) {
         let event = Event::WindowFocusChange(WindowFocusChangeEvent {
             window_id: window.window_id(),
             is_key: window.isKeyWindow(),
-            is_main: unsafe { window.isMainWindow() },
+            is_main: window.isMainWindow(),
         });
         (state.event_handler)(&event)
     });
@@ -515,28 +515,26 @@ trait NSEventExt {
 
     fn window_id(&self) -> WindowId {
         let me = self.me();
-        unsafe { me.windowNumber() }
+        me.windowNumber()
     }
 
     fn cursor_location_in_window(&self, mtm: MainThreadMarker) -> LogicalPoint {
         let me = self.me();
-        let point = unsafe {
-            // position is relative to bottom left corner of the root view
-            me.locationInWindow()
-        };
-        let window = unsafe { me.window(mtm).expect("No window for event") };
+        // position is relative to bottom left corner of the root view
+        let point = me.locationInWindow();
+        let window = me.window(mtm).expect("No window for event");
         let frame = window.contentView().unwrap().frame();
         LogicalPoint::from_macos_coords(point, frame.size.height)
     }
 
     fn cursor_location_in_screen(mtm: MainThreadMarker) -> LogicalPoint {
-        let point = unsafe { NSEvent::mouseLocation() };
+        let point = NSEvent::mouseLocation();
         let screen = NSScreen::primary(mtm).unwrap();
         LogicalPoint::from_macos_coords(point, screen.height())
     }
 
     fn pressed_modifiers() -> KeyModifiersSet {
-        unsafe { NSEvent::modifierFlags_class() }.into()
+        NSEvent::modifierFlags_class().into()
     }
 }
 

@@ -204,7 +204,7 @@ pub extern "C" fn window_is_key(window_ptr: WindowPtr) -> bool {
 pub extern "C" fn window_is_main(window_ptr: WindowPtr) -> bool {
     ffi_boundary("window_is_main", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
-        let result = unsafe { window.ns_window.isMainWindow() };
+        let result = window.ns_window.isMainWindow();
         Ok(result)
     })
 }
@@ -224,9 +224,7 @@ pub extern "C" fn window_order_back(window_ptr: WindowPtr) {
     ffi_boundary("window_order_back", || {
         let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
-        unsafe {
-            window.ns_window.orderBack(None);
-        }
+        window.ns_window.orderBack(None);
         Ok(())
     });
 }
@@ -295,7 +293,7 @@ pub extern "C" fn window_is_full_screen(window_ptr: WindowPtr) -> bool {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_maximize(window_ptr: WindowPtr) {
     ffi_boundary("window_maximize", || {
-        // according to apple docs it shoudl be accessed only from main thread
+        // according to apple docs, it should be accessed only from the main thread
         let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.zoom(None);
@@ -306,7 +304,7 @@ pub extern "C" fn window_maximize(window_ptr: WindowPtr) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_is_maximized(window_ptr: WindowPtr) -> bool {
     ffi_boundary("window_is_maximized", || {
-        // according to apple docs it shoudl be accessed only from main thread
+        // according to apple docs, it should be accessed only from the main thread
         let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.isZoomed())
@@ -316,7 +314,7 @@ pub extern "C" fn window_is_maximized(window_ptr: WindowPtr) -> bool {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_miniaturize(window_ptr: WindowPtr) {
     ffi_boundary("window_miniaturize", || {
-        // according to apple docs it shoudl be accessed only from main thread
+        // according to apple docs, it should be accessed only from the main thread
         let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.miniaturize(None);
@@ -327,12 +325,10 @@ pub extern "C" fn window_miniaturize(window_ptr: WindowPtr) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_deminiaturize(window_ptr: WindowPtr) {
     ffi_boundary("window_deminiaturize", || {
-        // according to apple docs it shoudl be accessed only from main thread
+        // according to apple docs, it should be accessed only from the main thread
         let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
-        unsafe {
-            window.ns_window.deminiaturize(None);
-        }
+        window.ns_window.deminiaturize(None);
         Ok(())
     });
 }
@@ -340,7 +336,7 @@ pub extern "C" fn window_deminiaturize(window_ptr: WindowPtr) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_is_miniaturized(window_ptr: WindowPtr) -> bool {
     ffi_boundary("window_is_miniaturized", || {
-        // according to apple docs it shoudl be accessed only from main thread
+        // according to apple docs, it should be accessed only from the main thread
         let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.isMiniaturized())
@@ -388,9 +384,7 @@ pub extern "C" fn window_appearance_override(window_ptr: WindowPtr, appearance: 
     ffi_boundary("window_appearance_override", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
         let ns_appearance = appearance.to_ns_appearance();
-        unsafe {
-            window.ns_window.setAppearance(Some(&ns_appearance));
-        }
+        window.ns_window.setAppearance(Some(&ns_appearance));
         Ok(())
     });
 }
@@ -399,7 +393,7 @@ pub extern "C" fn window_appearance_override(window_ptr: WindowPtr, appearance: 
 pub extern "C" fn window_appearance_is_overridden(window_ptr: WindowPtr) -> bool {
     ffi_boundary("window_appearance_is_overridden", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
-        let result = unsafe { window.ns_window.appearance() }.is_some();
+        let result = window.ns_window.appearance().is_some();
         Ok(result)
     })
 }
@@ -408,9 +402,7 @@ pub extern "C" fn window_appearance_is_overridden(window_ptr: WindowPtr) -> bool
 pub extern "C" fn window_appearance_set_follow_application(window_ptr: WindowPtr) {
     ffi_boundary("window_appearance_set_follow_application", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
-        unsafe {
-            window.ns_window.setAppearance(None);
-        }
+        window.ns_window.setAppearance(None);
         Ok(())
     });
 }
@@ -419,7 +411,7 @@ pub extern "C" fn window_appearance_set_follow_application(window_ptr: WindowPtr
 pub extern "C" fn window_get_appearance(window_ptr: WindowPtr) -> Appearance {
     ffi_boundary("window_get_appearance", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
-        let ns_appearance = unsafe { window.ns_window.effectiveAppearance() };
+        let ns_appearance = window.ns_window.effectiveAppearance();
         let appearance = Appearance::from_ns_appearance(&ns_appearance);
         Ok(appearance)
     })
@@ -430,9 +422,7 @@ pub extern "C" fn window_register_for_dragged_types(window_ptr: WindowPtr, types
     ffi_boundary("window_register_for_dragged_types", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
         let types: anyhow::Result<Vec<Retained<NSString>>> = types.as_slice()?.iter().map(|str_ptr| copy_to_ns_string(str_ptr)).collect();
-        unsafe {
-            window.root_view.registerForDraggedTypes(&NSArray::from_retained_slice(&types?));
-        }
+        window.root_view.registerForDraggedTypes(&NSArray::from_retained_slice(&types?));
         Ok(())
     });
 }
@@ -441,7 +431,7 @@ pub extern "C" fn window_register_for_dragged_types(window_ptr: WindowPtr, types
 pub extern "C" fn window_unregister_dragged_types(window_ptr: WindowPtr) {
     ffi_boundary("window_unregister_dragged_types", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
-        unsafe { window.root_view.unregisterDraggedTypes() }
+        window.root_view.unregisterDraggedTypes();
         Ok(())
     });
 }
@@ -487,7 +477,7 @@ pub extern "C" fn window_get_text_direction(window_ptr: WindowPtr) -> TextDirect
     ffi_boundary("window_get_text_direction", || -> Result<TextDirection, anyhow::Error> {
         let window = unsafe { window_ptr.borrow::<Window>() };
         let _mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
-        let layout_direction = unsafe { window.root_view.userInterfaceLayoutDirection() };
+        let layout_direction = window.root_view.userInterfaceLayoutDirection();
         Ok(TextDirection::from_ns_layout_direction(layout_direction))
     })
 }

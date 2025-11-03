@@ -9,8 +9,8 @@ pub extern "C" fn sound_play_named(sound_name: BorrowedStrPtr) -> bool {
     ffi_boundary("sound_play_named", || {
         let _mtm = MainThreadMarker::new().unwrap();
         let ns_sound_name = copy_to_ns_string(&sound_name)?;
-        if let Some(sound) = unsafe { NSSound::soundNamed(&ns_sound_name) } {
-            Ok(unsafe { sound.play() })
+        if let Some(sound) = NSSound::soundNamed(&ns_sound_name) {
+            Ok(sound.play())
         } else {
             Err(anyhow::format_err!(format!("Sound '{ns_sound_name}' not found")))
         }

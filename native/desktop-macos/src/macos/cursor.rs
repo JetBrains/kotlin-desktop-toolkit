@@ -10,9 +10,7 @@ use objc2_app_kit::{NSCursor, NSCursorFrameResizeDirections, NSCursorFrameResize
 #[unsafe(no_mangle)]
 pub extern "C" fn cursor_push_hide() {
     ffi_boundary("cursor_push_hide", || {
-        unsafe {
-            NSCursor::hide();
-        }
+        NSCursor::hide();
         Ok(())
     });
 }
@@ -20,9 +18,7 @@ pub extern "C" fn cursor_push_hide() {
 #[unsafe(no_mangle)]
 pub extern "C" fn cursor_pop_hide() {
     ffi_boundary("cursor_pop_hide", || {
-        unsafe {
-            NSCursor::unhide();
-        }
+        NSCursor::unhide();
         Ok(())
     });
 }
@@ -32,9 +28,7 @@ pub extern "C" fn cursor_set_icon(icon: CursorIcon) {
     ffi_boundary("cursor_set_icon", || {
         CURSOR_ICONS_CACHE.with(|cache| {
             let ns_cursor = cache.borrow_mut().ns_cursor_from_icon(icon);
-            unsafe {
-                ns_cursor.set();
-            }
+            ns_cursor.set();
         });
         Ok(())
     });
@@ -50,7 +44,7 @@ impl PanicDefault for CursorIcon {
 pub extern "C" fn cursor_get_icon() -> CursorIcon {
     ffi_boundary("cursor_get_icon", || {
         CURSOR_ICONS_CACHE.with(|cache| {
-            let current = unsafe { NSCursor::currentCursor() };
+            let current = NSCursor::currentCursor();
             let icon = cache.borrow_mut().icon_from_ns_cursor(&current)?;
             Ok(icon)
         })
@@ -73,7 +67,7 @@ impl CursorIconsCache {
             cache: HashMap::new(),
             inverted: HashMap::new(),
         };
-        // Add this cursor to cache because it used by app at the beggining
+        // Add this cursor to cache because it used by app at the beginning
         cache.ns_cursor_from_icon(CursorIcon::ArrowCursor);
         cache
     }
@@ -103,7 +97,7 @@ impl CursorIconsCache {
 
             CursorIcon::ColumnResizeLeftCursor => {
                 if available!(macos = 15.0) {
-                    unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::Left) }
+                    NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::Left)
                 } else {
                     #[allow(deprecated)]
                     NSCursor::resizeLeftCursor()
@@ -111,7 +105,7 @@ impl CursorIconsCache {
             }
             CursorIcon::ColumnResizeRightCursor => {
                 if available!(macos = 15.0) {
-                    unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::Right) }
+                    NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::Right)
                 } else {
                     #[allow(deprecated)]
                     NSCursor::resizeRightCursor()
@@ -119,7 +113,7 @@ impl CursorIconsCache {
             }
             CursorIcon::ColumnResizeLeftRightCursor => {
                 if available!(macos = 15.0) {
-                    unsafe { NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::All) }
+                    NSCursor::columnResizeCursorInDirections(NSHorizontalDirections::All)
                 } else {
                     #[allow(deprecated)]
                     NSCursor::resizeLeftRightCursor()
@@ -127,7 +121,7 @@ impl CursorIconsCache {
             }
             CursorIcon::RowResizeUpCursor => {
                 if available!(macos = 15.0) {
-                    unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::Up) }
+                    NSCursor::rowResizeCursorInDirections(NSVerticalDirections::Up)
                 } else {
                     #[allow(deprecated)]
                     NSCursor::resizeUpCursor()
@@ -135,7 +129,7 @@ impl CursorIconsCache {
             }
             CursorIcon::RowResizeDownCursor => {
                 if available!(macos = 15.0) {
-                    unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::Down) }
+                    NSCursor::rowResizeCursorInDirections(NSVerticalDirections::Down)
                 } else {
                     #[allow(deprecated)]
                     NSCursor::resizeDownCursor()
@@ -143,7 +137,7 @@ impl CursorIconsCache {
             }
             CursorIcon::RowResizeUpDownCursor => {
                 if available!(macos = 15.0) {
-                    unsafe { NSCursor::rowResizeCursorInDirections(NSVerticalDirections::All) }
+                    NSCursor::rowResizeCursorInDirections(NSVerticalDirections::All)
                 } else {
                     #[allow(deprecated)]
                     NSCursor::resizeUpDownCursor()
@@ -153,24 +147,20 @@ impl CursorIconsCache {
             //todo see: https://github.com/rust-windowing/winit/issues/3724
             CursorIcon::FrameResizeUpLeftDownRight => {
                 if available!(macos = 15.0) {
-                    unsafe {
-                        NSCursor::frameResizeCursorFromPosition_inDirections(
-                            NSCursorFrameResizePosition::TopLeft,
-                            NSCursorFrameResizeDirections::All,
-                        )
-                    }
+                    NSCursor::frameResizeCursorFromPosition_inDirections(
+                        NSCursorFrameResizePosition::TopLeft,
+                        NSCursorFrameResizeDirections::All,
+                    )
                 } else {
                     unsafe { msg_send![NSCursor::class(), _windowResizeNorthWestSouthEastCursor] }
                 }
             }
             CursorIcon::FrameResizeUpRightDownLeft => {
                 if available!(macos = 15.0) {
-                    unsafe {
-                        NSCursor::frameResizeCursorFromPosition_inDirections(
-                            NSCursorFrameResizePosition::TopRight,
-                            NSCursorFrameResizeDirections::All,
-                        )
-                    }
+                    NSCursor::frameResizeCursorFromPosition_inDirections(
+                        NSCursorFrameResizePosition::TopRight,
+                        NSCursorFrameResizeDirections::All,
+                    )
                 } else {
                     unsafe { msg_send![NSCursor::class(), _windowResizeNorthEastSouthWestCursor] }
                 }
@@ -185,14 +175,14 @@ impl CursorIconsCache {
 
             CursorIcon::ZoomInCursor => {
                 if available!(macos = 15.0) {
-                    unsafe { NSCursor::zoomInCursor() }
+                    NSCursor::zoomInCursor()
                 } else {
                     unsafe { msg_send![NSCursor::class(), _zoomInCursor] }
                 }
             }
             CursorIcon::ZoomOutCursor => {
                 if available!(macos = 15.0) {
-                    unsafe { NSCursor::zoomOutCursor() }
+                    NSCursor::zoomOutCursor()
                 } else {
                     unsafe { msg_send![NSCursor::class(), _zoomOutCursor] }
                 }
