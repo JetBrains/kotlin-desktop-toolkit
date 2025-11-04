@@ -30,6 +30,7 @@ use desktop_linux::linux::{
         application_get_egl_proc_func,
         application_init,
         application_is_event_loop_thread,
+        application_open_url,
         application_primary_selection_paste,
         application_request_show_notification,
         application_run_event_loop,
@@ -116,6 +117,12 @@ impl WindowState {
     }
 }
 
+#[derive(Debug)]
+enum ActivationTokenAction {
+    ActivateWindow,
+    OpenUrl(CString),
+}
+
 #[derive(Debug, Default)]
 struct State {
     app_ptr: OptionalAppPtr,
@@ -125,6 +132,7 @@ struct State {
     settings: Settings,
     request_sources: HashMap<RequestId, WindowId>,
     notification_sources: HashMap<u32, WindowId>,
+    activation_token_action: HashMap<u32, ActivationTokenAction>,
 }
 
 thread_local! {
@@ -366,6 +374,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
     const KEYCODE_BACKSPACE: u32 = 22;
     const KEYCODE_TAB: u32 = 23;
     const KEYCODE_C: u32 = 54;
+    const KEYCODE_L: u32 = 46;
     const KEYCODE_N: u32 = 57;
     const KEYCODE_O: u32 = 32;
     const KEYCODE_P: u32 = 33;
@@ -388,7 +397,12 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             true
         }
         (KEY_MODIFIER_CTRL, KEYCODE_TAB) => {
-            window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
+            let request_id = window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
+            if request_id > 0 {
+                state
+                    .activation_token_action
+                    .insert(request_id, ActivationTokenAction::ActivateWindow);
+            }
             true
         }
         (KEY_MODIFIER_CTRL, KEYCODE_V) => {
@@ -459,6 +473,15 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
                 },
             );
             state.windows.insert(new_window_id, WindowState::default());
+            true
+        }
+        (KEY_MODIFIER_CTRL, KEYCODE_L) => {
+            let request_id = window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
+            if request_id > 0 {
+                state
+                    .activation_token_action
+                    .insert(request_id, ActivationTokenAction::OpenUrl(c"https://jetbrains.com".to_owned()));
+            }
             true
         }
         (_, _) => {
@@ -760,9 +783,16 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 }
             }
             Event::ActivationTokenResponse(data) => {
-                let token = data.token.as_optional_cstr().unwrap();
-                if let Some(window_id) = state.windows.keys().find(|&&w| Some(w) != state.key_window_id) {
-                    window_activate(app_ptr, *window_id, BorrowedStrPtr::new(token));
+                let token = BorrowedStrPtr::new(data.token.as_optional_cstr().unwrap());
+                match state.activation_token_action.remove(&data.request_id).unwrap() {
+                    ActivationTokenAction::ActivateWindow => {
+                        if let Some(window_id) = state.windows.keys().find(|&&w| Some(w) != state.key_window_id) {
+                            window_activate(app_ptr, *window_id, token);
+                        }
+                    }
+                    ActivationTokenAction::OpenUrl(url) => {
+                        application_open_url(app_ptr, BorrowedStrPtr::new(&url), token);
+                    }
                 }
                 true
             }
