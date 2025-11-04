@@ -4,11 +4,15 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 @JvmInline
-public value class Timestamp(
+public value class Timestamp private constructor(
     /** Count of milliseconds since some fixed but arbitrary moment in the past */
     private val value: Long,
 ) {
-    internal companion object;
+    internal companion object {
+        internal fun fromNative(value: Int): Timestamp {
+            return Timestamp(value.toUInt().toLong())
+        }
+    }
 
     public fun toDuration(): Duration {
         return value.milliseconds
@@ -64,7 +68,7 @@ public enum class DragAndDropAction {
     internal companion object;
 }
 
-public class SupportedActionsForMime(
+public data class SupportedActionsForMime(
     public val supportedMimeType: String,
     public val supportedActions: Set<DragAndDropAction>,
     public val preferredAction: DragAndDropAction?,
@@ -72,7 +76,7 @@ public class SupportedActionsForMime(
     internal companion object;
 }
 
-public class DragAndDropQueryResponse(public val supportedActionsPerMime: List<SupportedActionsForMime>) {
+public data class DragAndDropQueryResponse(public val supportedActionsPerMime: List<SupportedActionsForMime>) {
     internal companion object;
 }
 
@@ -88,7 +92,20 @@ public enum class WindowDecorationMode {
     internal companion object;
 }
 
-public data class RequestId(val id: Int)
+@JvmInline
+public value class RequestId private constructor(private val id: Int) {
+    internal companion object {
+        internal fun fromNativeResponse(value: Int): RequestId? {
+            return if (value == 0) {
+                null
+            } else {
+                RequestId(value)
+            }
+        }
+
+        internal fun fromNativeField(value: Int) = RequestId(value)
+    }
+}
 
 public data class ScrollData(
     val delta: LogicalPixels,
@@ -157,7 +174,7 @@ public sealed class Event {
     ) : Event()
 
     public data class ActivationTokenResponse(
-        val requestId: RequestId,
+        val requestId: UInt,
         val token: String,
     ) : Event()
 

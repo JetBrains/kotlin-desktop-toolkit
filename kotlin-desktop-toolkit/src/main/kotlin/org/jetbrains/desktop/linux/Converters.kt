@@ -541,10 +541,6 @@ private fun readNativeU32Array(nativeU32Array: MemorySegment): List<UInt> {
     return values
 }
 
-private fun Timestamp.Companion.fromNative(value: Int): Timestamp {
-    return Timestamp(value.toUInt().toLong())
-}
-
 internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Event {
     return when (NativeEvent.tag(s)) {
         desktop_linux_h.NativeEvent_ApplicationStarted() -> {
@@ -619,14 +615,14 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.file_chooser_response(s)
             val filesString = fromOptionalNativeString(NativeFileChooserResponse.newline_separated_files(nativeEvent))
             Event.FileChooserResponse(
-                requestId = RequestId(NativeFileChooserResponse.request_id(nativeEvent)),
+                requestId = RequestId.fromNativeField(NativeFileChooserResponse.request_id(nativeEvent)),
                 files = filesString?.trimEnd()?.split("\r\n") ?: emptyList(),
             )
         }
         desktop_linux_h.NativeEvent_ActivationTokenResponse() -> {
             val nativeEvent = NativeEvent.activation_token_response(s)
             Event.ActivationTokenResponse(
-                requestId = RequestId(NativeActivationTokenResponse.request_id(nativeEvent)),
+                requestId = NativeActivationTokenResponse.request_id(nativeEvent).toUInt(),
                 token = NativeActivationTokenResponse.token(nativeEvent).getUtf8String(0),
             )
         }
@@ -731,7 +727,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.notification_shown(s)
             val nativeNotificationId = NativeNotificationShownEvent.notification_id(nativeEvent)
             Event.NotificationShown(
-                requestId = RequestId(NativeNotificationShownEvent.request_id(nativeEvent)),
+                requestId = RequestId.fromNativeField(NativeNotificationShownEvent.request_id(nativeEvent)),
                 notificationId = if (nativeNotificationId == 0) null else nativeNotificationId.toUInt(),
             )
         }

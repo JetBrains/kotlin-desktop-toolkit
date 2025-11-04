@@ -502,16 +502,17 @@ impl Application {
         Ok(())
     }
 
-    pub fn open_url(&mut self, url_string: &str) -> anyhow::Result<()> {
-        debug!("application_open_url");
+    pub fn open_url(&mut self, url_string: &str, activation_token: Option<&str>) -> anyhow::Result<RequestId> {
+        debug!("application_open_url: {url_string}, activation_token={activation_token:?}");
         let uri = ashpd::url::Url::parse(url_string)?;
+        let request = ashpd::desktop::open_uri::OpenFileRequest::default()
+            .ask(false)
+            .activation_token(activation_token.map(Into::into));
 
-        self.run_async(|request_id| async move {
-            let request = ashpd::desktop::open_uri::OpenFileRequest::default().ask(false);
+        Ok(self.run_async(|request_id| async move {
             let error = request.send_uri(&uri).await.err().map(Into::into);
             AsyncEventResult::UrlOpenResponse { request_id, error }
-        });
-        Ok(())
+        }))
     }
 
     fn get_wl_surface(&self, window_id: WindowId) -> anyhow::Result<WlSurface> {
