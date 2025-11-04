@@ -194,8 +194,8 @@ pub extern "C" fn window_start_drag_and_drop(
     drag_icon_rendering_mode: RenderingMode,
     drag_icon_size: LogicalSize,
 ) {
-    debug!("application_start_drag_and_drop");
-    ffi_boundary("application_start_drag_and_drop", || {
+    debug!("window_start_drag_and_drop");
+    ffi_boundary("window_start_drag_and_drop", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         app.start_drag(
             window_id,

@@ -27,7 +27,7 @@ pub struct DragIcon {
 
 impl Drop for DragIcon {
     fn drop(&mut self) {
-        warn!("DragIcon::drop: {:?}", self.surface);
+        warn!("DragIcon::drop: {}", self.surface.wl_surface().id());
     }
 }
 

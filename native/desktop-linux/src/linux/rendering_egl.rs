@@ -28,7 +28,7 @@ impl Drop for EglRendering<'_> {
 
 impl<'a> EglRendering<'a> {
     pub fn new(egl: &'a EglInstance, display: &WlDisplay, surface: &WlSurface, size: PhysicalSize) -> anyhow::Result<Self> {
-        info!("Trying to use EGL rendering for {surface:?}");
+        info!("Trying to use EGL rendering for {}", surface.id());
 
         let wl_egl_surface = WlEglSurface::new(surface.id(), size.width.0, size.height.0)
             .with_context(|| format!("WlEglSurface::new (surface.id() = {})", surface.id()))?;
