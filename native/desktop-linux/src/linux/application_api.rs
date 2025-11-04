@@ -128,7 +128,7 @@ extern "C" fn egl_get_proc_address(ctx_ptr: BorrowedOpaquePtr<'_>, name_ptr: Bor
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_get_egl_proc_func(_app_ptr: AppPtr<'_>) -> GetEglProcFuncData<'_> {
+pub extern "C" fn application_get_egl_proc_func() -> GetEglProcFuncData<'static> {
     debug!("application_get_egl_proc_func");
     GetEglProcFuncData {
         f: egl_get_proc_address,
