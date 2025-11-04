@@ -278,6 +278,14 @@ pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: Borrowed
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn application_open_file_manager(mut app_ptr: AppPtr, path: BorrowedStrPtr, activation_token: BorrowedStrPtr) -> RequestId {
+    ffi_boundary("application_open_file_manager", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        Ok(app.open_file_manager(path.as_str()?.to_owned(), activation_token.as_optional_str().unwrap()))
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn application_request_internal_activation_token(app_ptr: AppPtr, source_window_id: WindowId) -> u32 {
     ffi_boundary("application_request_activation_token", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
