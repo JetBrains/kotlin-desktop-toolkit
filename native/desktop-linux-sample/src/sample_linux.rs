@@ -107,6 +107,16 @@ struct WindowState {
     opengl: Option<OpenglState>,
 }
 
+impl WindowState {
+    fn animation_tick(&mut self) {
+        if self.animation_progress >= 200. {
+            self.animation_progress = 0.;
+        } else {
+            self.animation_progress += if self.active { 1. } else { 0.2 };
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 struct State {
     app_ptr: OptionalAppPtr,
@@ -605,11 +615,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
             }
             Event::WindowDraw(data) => {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                    if window_state.animation_progress >= 200. {
-                        window_state.animation_progress = 0.;
-                    } else {
-                        window_state.animation_progress += if window_state.active { 1. } else { 0.2 };
-                    }
+                    window_state.animation_tick();
 
                     if data.software_draw_data.canvas.is_null() {
                         draw_opengl_triangle_with_init(data.physical_size, data.window_id, window_state);
@@ -624,6 +630,8 @@ extern "C" fn event_handler(event: &Event) -> bool {
             Event::DragIconDraw(data) => {
                 let window_id = DRAG_ICON_WINDOW_ID;
                 let window_state = state.windows.entry(window_id).or_insert_with(WindowState::default);
+                window_state.animation_tick();
+
                 if data.software_draw_data.canvas.is_null() {
                     draw_opengl_triangle_with_init(data.physical_size, window_id, window_state);
                 } else {

@@ -373,24 +373,23 @@ impl Application {
             return Ok(());
         }
 
-        if drag_icon_size.width.0 > 0.0 && drag_icon_size.height.0 > 0.0 {
+        let mut drag_icon = if drag_icon_size.width.0 > 0.0 && drag_icon_size.height.0 > 0.0 {
             let egl = match drag_icon_rendering_mode {
                 RenderingMode::Auto | RenderingMode::EGL => get_egl(),
                 RenderingMode::Software => None,
             };
 
-            let drag_icon = DragIcon::new(
+            Some(DragIcon::new(
                 &self.state,
                 &self.qh,
                 &self.state.shm_state,
                 &self.state.wl_display,
                 drag_icon_size,
                 egl,
-            )?;
-
-            self.state.drag_icon = Some(drag_icon);
-        }
-        let wl_surface = self.state.drag_icon.as_ref().map(|drag_icon| drag_icon.surface.wl_surface());
+            )?)
+        } else {
+            None
+        };
 
         let origin = self
             .get_window(window_id)
@@ -412,11 +411,13 @@ impl Application {
             .get_latest_pointer_button_seat_and_serial()
             .context("Called start_drag without an implicit grab")?;
 
+        let wl_surface = drag_icon.as_ref().map(|drag_icon| drag_icon.surface.wl_surface());
         drag_source.start_drag(device, origin, wl_surface, serial);
-        if let Some(s) = wl_surface {
-            s.frame(&self.qh, s.clone());
-            s.commit();
+        if let Some(drag_icon) = &mut drag_icon {
+            drag_icon.draw(&self.qh, &|_e| true);
         }
+
+        self.state.drag_icon = drag_icon;
         self.state.current_drag_source_window_id = Some(window_id);
         self.state.drag_source = Some(drag_source);
 

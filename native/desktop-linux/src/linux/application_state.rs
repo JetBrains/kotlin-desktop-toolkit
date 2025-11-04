@@ -422,7 +422,7 @@ impl CompositorHandler for ApplicationState {
         {
             drag_icon.draw(qh, &|e| self.callbacks.send_event(e.into()));
         } else {
-            warn!("Couldn't find draw surface {surface:?}");
+            warn!("Draw surface {} is neither a window nor a drag icon", surface.id());
         }
     }
 
