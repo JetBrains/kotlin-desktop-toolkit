@@ -158,10 +158,12 @@ public class Application : AutoCloseable {
         }
     }
 
-    public fun openURL(url: String) {
-        ffiDownCall {
+    public fun openURL(url: String, activationToken: String?): RequestId? {
+        return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                desktop_linux_h.application_open_url(appPtr!!, arena.allocateUtf8String(url))
+                val nativeUrl = arena.allocateUtf8String(url)
+                val nativeActivationToken = activationToken?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+                RequestId.fromNativeResponse(desktop_linux_h.application_open_url(appPtr!!, nativeUrl, nativeActivationToken))
             }
         }
     }
@@ -323,13 +325,13 @@ public class Application : AutoCloseable {
         }
     }
 
-    public fun requestInternalActivationToken(sourceWindowId: WindowId): RequestId? {
+    public fun requestInternalActivationToken(sourceWindowId: WindowId): UInt? {
         return ffiDownCall {
             val rawRequestId = desktop_linux_h.application_request_internal_activation_token(appPtr, sourceWindowId)
             if (rawRequestId == 0) {
                 null
             } else {
-                RequestId(rawRequestId)
+                rawRequestId.toUInt()
             }
         }
     }
@@ -340,12 +342,7 @@ public class Application : AutoCloseable {
                 val title = arena.allocateUtf8String(params.title)
                 val body = arena.allocateUtf8String(params.body)
                 val soundFilePath = params.soundFilePath?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
-                val rawRequestId = desktop_linux_h.application_request_show_notification(appPtr, title, body, soundFilePath)
-                if (rawRequestId == 0) {
-                    null
-                } else {
-                    RequestId(rawRequestId)
-                }
+                RequestId.fromNativeResponse(desktop_linux_h.application_request_show_notification(appPtr, title, body, soundFilePath))
             }
         }
     }
