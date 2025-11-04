@@ -162,7 +162,7 @@ public class Window internal constructor(
      * Will produce [Event.FileChooserResponse] event if there is clipboard content,
      * with the [Event.FileChooserResponse.requestId] field same as this function's return value.
      */
-    public fun showOpenFileDialog(commonParams: FileDialog.CommonDialogParams, openParams: FileDialog.OpenDialogParams): RequestId {
+    public fun showOpenFileDialog(commonParams: FileDialog.CommonDialogParams, openParams: FileDialog.OpenDialogParams): RequestId? {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 val requestIdVal = desktop_linux_h.window_show_open_file_dialog(
@@ -171,7 +171,7 @@ public class Window internal constructor(
                     commonParams.toNative(arena),
                     openParams.toNative(arena),
                 )
-                RequestId(requestIdVal)
+                RequestId.fromNativeResponse(requestIdVal)
             }
         }
     }
@@ -180,7 +180,7 @@ public class Window internal constructor(
      * Will produce [Event.FileChooserResponse] event if there is clipboard content,
      * with the [Event.FileChooserResponse.requestId] field same as this function's return value.
      */
-    public fun showSaveFileDialog(commonParams: FileDialog.CommonDialogParams, saveParams: FileDialog.SaveDialogParams): RequestId {
+    public fun showSaveFileDialog(commonParams: FileDialog.CommonDialogParams, saveParams: FileDialog.SaveDialogParams): RequestId? {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 val requestIdVal = desktop_linux_h.window_show_save_file_dialog(
@@ -189,19 +189,15 @@ public class Window internal constructor(
                     commonParams.toNative(arena),
                     saveParams.toNative(arena),
                 )
-                RequestId(requestIdVal)
+                RequestId.fromNativeResponse(requestIdVal)
             }
         }
     }
 
     public fun requestInternalActivationToken(): RequestId? {
         return ffiDownCall {
-            val rawRequestId = desktop_linux_h.window_request_internal_activation_token(appPtr, windowId)
-            if (rawRequestId == 0) {
-                null
-            } else {
-                RequestId(rawRequestId)
-            }
+            val requestIdVal = desktop_linux_h.window_request_internal_activation_token(appPtr, windowId)
+            RequestId.fromNativeResponse(requestIdVal)
         }
     }
 
