@@ -270,12 +270,11 @@ pub extern "C" fn application_primary_selection_get_available_mimetypes(mut app_
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: BorrowedStrPtr) {
-    debug!("application_open_url");
+pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: BorrowedStrPtr, activation_token: BorrowedStrPtr) -> RequestId {
     ffi_boundary("application_open_url", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.open_url(url_string.as_str()?)
-    });
+        app.open_url(url_string.as_str()?, activation_token.as_optional_str().unwrap())
+    })
 }
 
 /// * `title`: User-visible string to display as the title.
