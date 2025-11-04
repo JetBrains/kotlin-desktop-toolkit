@@ -206,9 +206,9 @@ fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, physical_size: Physic
     }
 }
 
-fn draw_opengl_triangle_with_init(physical_size: PhysicalSize, app_ptr: AppPtr<'_>, window_id: WindowId, window_state: &mut WindowState) {
+fn draw_opengl_triangle_with_init(physical_size: PhysicalSize, window_id: WindowId, window_state: &mut WindowState) {
     let opengl_state = window_state.opengl.get_or_insert_with(|| {
-        let egl_lib = application_get_egl_proc_func(app_ptr);
+        let egl_lib = application_get_egl_proc_func();
         let funcs = OpenGlFuncs::new(&egl_lib).unwrap();
         let program = create_opengl_program(&funcs).unwrap();
         debug!("draw_opengl_triangle_with_init, program = {program}");
@@ -612,7 +612,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     }
 
                     if data.software_draw_data.canvas.is_null() {
-                        draw_opengl_triangle_with_init(data.physical_size, app_ptr, data.window_id, window_state);
+                        draw_opengl_triangle_with_init(data.physical_size, data.window_id, window_state);
                     } else {
                         draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
                     }
@@ -625,7 +625,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 let window_id = DRAG_ICON_WINDOW_ID;
                 let window_state = state.windows.entry(window_id).or_insert_with(WindowState::default);
                 if data.software_draw_data.canvas.is_null() {
-                    draw_opengl_triangle_with_init(data.physical_size, app_ptr, window_id, window_state);
+                    draw_opengl_triangle_with_init(data.physical_size, window_id, window_state);
                 } else {
                     draw_software_drag_icon(&data.software_draw_data, data.physical_size, data.scale);
                 }
