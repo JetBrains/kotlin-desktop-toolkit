@@ -1,0 +1,17 @@
+[package]
+name = "desktop-linux-sample-x11"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "desktop-linux-sample-x11"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+desktop-common = { path = "../desktop-common" }
+desktop-linux-x11 = { path = "../desktop-linux-x11" }
+url = "2.5.7"
