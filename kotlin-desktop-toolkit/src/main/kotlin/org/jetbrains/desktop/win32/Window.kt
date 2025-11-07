@@ -122,6 +122,10 @@ public class Window internal constructor(private val ptr: MemorySegment) : AutoC
         ffiDownCall { desktop_win32_h.window_request_redraw(ptr) }
     }
 
+    public fun requestClose() {
+        ffiDownCall { desktop_win32_h.window_request_close(ptr) }
+    }
+
     override fun close() {
         ffiDownCall {
             desktop_win32_h.window_drop(ptr)
