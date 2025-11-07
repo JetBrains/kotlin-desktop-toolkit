@@ -98,10 +98,9 @@ public class Application : AutoCloseable {
     // called from native
     private fun pollCallbacks() {
         ffiUpCall {
-            do {
-                val callback = callbacksQueue.poll()
-                callback?.invoke()
-            } while (callback != null)
+            while (callbacksQueue.isNotEmpty()) {
+                callbacksQueue.poll()?.invoke() ?: error("Callback queue contains a null callback.")
+            }
         }
     }
 
