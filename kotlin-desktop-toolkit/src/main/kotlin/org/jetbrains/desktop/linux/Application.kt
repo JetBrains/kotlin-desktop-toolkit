@@ -3,11 +3,11 @@ package org.jetbrains.desktop.linux
 import org.jetbrains.desktop.linux.generated.NativeApplicationCallbacks
 import org.jetbrains.desktop.linux.generated.NativeEventHandler
 import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
-import org.jetbrains.desktop.linux.generated.NativeScreenInfo
-import org.jetbrains.desktop.linux.generated.NativeScreenInfoArray
+// import org.jetbrains.desktop.linux.generated.NativeScreenInfo
+// import org.jetbrains.desktop.linux.generated.NativeScreenInfoArray
 import org.jetbrains.desktop.linux.generated.NativeWindowParams
 import org.jetbrains.desktop.linux.generated.`application_run_on_event_loop_async$f`
-import org.jetbrains.desktop.linux.generated.desktop_linux_h
+import org.jetbrains.desktop.linux.generated.desktop_linux_x11_h as desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -31,21 +31,19 @@ public data class WindowParams(
     val windowId: WindowId,
     val appId: String,
     val title: String,
-    val size: LogicalSize? = null,
+    val size: LogicalSize,
     val preferClientSideDecoration: Boolean = false,
     val renderingMode: RenderingMode = RenderingMode.Auto,
 ) {
     init {
-        size?.let {
-            check(it.width > 0 && it.height > 0) {
-                "Invalid size (both width and height must be greater than zero)"
-            }
+        check(size.width > 0 && size.height > 0) {
+            "Invalid size (both width and height must be greater than zero)"
         }
     }
 
     internal fun toNative(arena: Arena): MemorySegment {
         val nativeWindowParams = NativeWindowParams.allocate(arena)
-        NativeWindowParams.size(nativeWindowParams, (size ?: LogicalSize(0, 0)).toNative(arena))
+        NativeWindowParams.rect(nativeWindowParams, (LogicalRect(0, 0, size.width, size.height)).toNative(arena))
         NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
         NativeWindowParams.app_id(nativeWindowParams, arena.allocateUtf8String(appId))
         NativeWindowParams.prefer_client_side_decoration(nativeWindowParams, preferClientSideDecoration)
@@ -157,26 +155,26 @@ public class Application : AutoCloseable {
             desktop_linux_h.application_shutdown(appPtr!!)
         }
     }
-
-    public fun openURL(url: String, activationToken: String?): RequestId? {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                val nativeUrl = arena.allocateUtf8String(url)
-                val nativeActivationToken = activationToken?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
-                RequestId.fromNativeResponse(desktop_linux_h.application_open_url(appPtr!!, nativeUrl, nativeActivationToken))
-            }
-        }
-    }
-
-    public fun openFileManager(path: String, activationToken: String?): RequestId? {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                val nativePath = arena.allocateUtf8String(path)
-                val nativeActivationToken = activationToken?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
-                RequestId.fromNativeResponse(desktop_linux_h.application_open_file_manager(appPtr!!, nativePath, nativeActivationToken))
-            }
-        }
-    }
+//
+//    public fun openURL(url: String, activationToken: String?): RequestId? {
+//        return ffiDownCall {
+//            Arena.ofConfined().use { arena ->
+//                val nativeUrl = arena.allocateUtf8String(url)
+//                val nativeActivationToken = activationToken?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+//                RequestId.fromNativeResponse(desktop_linux_h.application_open_url(appPtr!!, nativeUrl, nativeActivationToken))
+//            }
+//        }
+//    }
+//
+//    public fun openFileManager(path: String, activationToken: String?): RequestId? {
+//        return ffiDownCall {
+//            Arena.ofConfined().use { arena ->
+//                val nativePath = arena.allocateUtf8String(path)
+//                val nativeActivationToken = activationToken?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+//                RequestId.fromNativeResponse(desktop_linux_h.application_open_file_manager(appPtr!!, nativePath, nativeActivationToken))
+//            }
+//        }
+//    }
 
     private fun applicationCallbacks(): MemorySegment {
         val arena = Arena.global()
@@ -196,12 +194,12 @@ public class Application : AutoCloseable {
     public fun createWindow(params: WindowParams): Window {
         return Window(appPtr!!, params)
     }
-
-    public fun setCursorTheme(name: String, size: UInt) {
-        Arena.ofConfined().use { arena ->
-            desktop_linux_h.application_set_cursor_theme(appPtr, arena.allocateUtf8String(name), size.toInt())
-        }
-    }
+//
+//    public fun setCursorTheme(name: String, size: UInt) {
+//        Arena.ofConfined().use { arena ->
+//            desktop_linux_h.application_set_cursor_theme(appPtr, arena.allocateUtf8String(name), size.toInt())
+//        }
+//    }
 
     public fun isEventLoopThread(): Boolean {
         return ffiDownCall {
@@ -215,24 +213,24 @@ public class Application : AutoCloseable {
             desktop_linux_h.application_run_on_event_loop_async(appPtr, runOnEventLoopAsyncFunc)
         }
     }
-
-    public fun allScreens(): AllScreens {
-        return Arena.ofConfined().use { arena ->
-            val screenInfoArray = ffiDownCall { desktop_linux_h.screen_list(arena, appPtr!!) }
-            val screens = mutableListOf<Screen>()
-            try {
-                val ptr = NativeScreenInfoArray.ptr(screenInfoArray)
-                val len = NativeScreenInfoArray.len(screenInfoArray)
-
-                for (i in 0 until len) {
-                    screens.add(Screen.fromNative(NativeScreenInfo.asSlice(ptr, i)))
-                }
-            } finally {
-                ffiDownCall { desktop_linux_h.screen_list_drop(screenInfoArray) }
-            }
-            AllScreens(screens)
-        }
-    }
+//
+//    public fun allScreens(): AllScreens {
+//        return Arena.ofConfined().use { arena ->
+//            val screenInfoArray = ffiDownCall { desktop_linux_h.screen_list(arena, appPtr!!) }
+//            val screens = mutableListOf<Screen>()
+//            try {
+//                val ptr = NativeScreenInfoArray.ptr(screenInfoArray)
+//                val len = NativeScreenInfoArray.len(screenInfoArray)
+//
+//                for (i in 0 until len) {
+//                    screens.add(Screen.fromNative(NativeScreenInfo.asSlice(ptr, i)))
+//                }
+//            } finally {
+//                ffiDownCall { desktop_linux_h.screen_list_drop(screenInfoArray) }
+//            }
+//            AllScreens(screens)
+//        }
+//    }
 
     public data class EglProcFunc(
         val fPtr: Long,
@@ -257,14 +255,14 @@ public class Application : AutoCloseable {
         }
     }
 
-    /** Should be called after any data in [TextInputContext] is changed, but only if [textInputEnable] was called beforehand. */
-    public fun textInputUpdate(context: TextInputContext) {
-        ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                desktop_linux_h.application_text_input_update(appPtr, context.toNative(arena))
-            }
-        }
-    }
+//    /** Should be called after any data in [TextInputContext] is changed, but only if [textInputEnable] was called beforehand. */
+//    public fun textInputUpdate(context: TextInputContext) {
+//        ffiDownCall {
+//            Arena.ofConfined().use { arena ->
+//                desktop_linux_h.application_text_input_update(appPtr, context.toNative(arena))
+//            }
+//        }
+//    }
 
     /** Disable Text Input support, if [textInputEnable] was called beforehand. */
     public fun textInputDisable() {
@@ -273,94 +271,94 @@ public class Application : AutoCloseable {
         }
     }
 
-    /** Will produce [Event.DataTransfer] event if there is clipboard content. */
-    public fun clipboardPaste(serial: Int, supportedMimeTypes: List<String>): Boolean {
-        return Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                desktop_linux_h.application_clipboard_paste(appPtr, serial, mimeTypesToNative(arena, supportedMimeTypes))
-            }
-        }
-    }
-
-    /**
-     * Indicate that there is data that other applications can fetch from clipboard, in any of the provided MIME type formats.
-     * Later, [ApplicationConfig.getDataTransferData] may be called, with [DataSource.Clipboard] argument,
-     * to actually get the data with the specified MIME type.
-     */
-    public fun clipboardPut(mimeTypes: List<String>) {
-        Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                desktop_linux_h.application_clipboard_put(appPtr, mimeTypesToNative(arena, mimeTypes))
-            }
-        }
-    }
-
-    public fun clipboardGetAvailableMimeTypes(): List<String> {
-        val csvMimetypes = ffiDownCall { desktop_linux_h.application_clipboard_get_available_mimetypes(appPtr) }
-        return try {
-            csvMimetypes.getUtf8String(0).split(",")
-        } finally {
-            ffiDownCall { desktop_linux_h.string_drop(csvMimetypes) }
-        }
-    }
-
-    /** Will produce [Event.DataTransfer] event if there is primary selection content. */
-    public fun primarySelectionPaste(serial: Int, supportedMimeTypes: List<String>): Boolean {
-        return Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                desktop_linux_h.application_primary_selection_paste(appPtr, serial, mimeTypesToNative(arena, supportedMimeTypes))
-            }
-        }
-    }
-
-    /**
-     * Indicate that there is data that other applications can fetch from primary selection, in any of the provided MIME type formats.
-     * Later, [ApplicationConfig.getDataTransferData] may be called, with [DataSource.PrimarySelection] argument,
-     * to actually get the data with the specified MIME type.
-     */
-    public fun primarySelectionPut(mimeTypes: List<String>) {
-        Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                desktop_linux_h.application_primary_selection_put(appPtr, mimeTypesToNative(arena, mimeTypes))
-            }
-        }
-    }
-
-    public fun primarySelectionGetAvailableMimeTypes(): List<String> {
-        val csvMimetypes = ffiDownCall { desktop_linux_h.application_primary_selection_get_available_mimetypes(appPtr) }
-        return try {
-            csvMimetypes.getUtf8String(0).split(",")
-        } finally {
-            ffiDownCall { desktop_linux_h.string_drop(csvMimetypes) }
-        }
-    }
-
-    @Deprecated("Use `Window.requestInternalActivationToken` instead")
-    public fun requestInternalActivationToken(sourceWindowId: WindowId): UInt? {
-        return ffiDownCall {
-            val rawRequestId = desktop_linux_h.window_request_internal_activation_token(appPtr, sourceWindowId)
-            if (rawRequestId == 0) {
-                null
-            } else {
-                rawRequestId.toUInt()
-            }
-        }
-    }
-
-    public fun requestShowNotification(params: ShowNotificationParams): RequestId? {
-        return Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                val title = arena.allocateUtf8String(params.title)
-                val body = arena.allocateUtf8String(params.body)
-                val soundFilePath = params.soundFilePath?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
-                RequestId.fromNativeResponse(desktop_linux_h.application_request_show_notification(appPtr, title, body, soundFilePath))
-            }
-        }
-    }
-
-    public fun closeNotification(notificationId: UInt) {
-        ffiDownCall {
-            desktop_linux_h.application_close_notification(appPtr, notificationId.toInt())
-        }
-    }
+//    /** Will produce [Event.DataTransfer] event if there is clipboard content. */
+//    public fun clipboardPaste(serial: Int, supportedMimeTypes: List<String>): Boolean {
+//        return Arena.ofConfined().use { arena ->
+//            ffiDownCall {
+//                desktop_linux_h.application_clipboard_paste(appPtr, serial, mimeTypesToNative(arena, supportedMimeTypes))
+//            }
+//        }
+//    }
+//
+//    /**
+//     * Indicate that there is data that other applications can fetch from clipboard, in any of the provided MIME type formats.
+//     * Later, [ApplicationConfig.getDataTransferData] may be called, with [DataSource.Clipboard] argument,
+//     * to actually get the data with the specified MIME type.
+//     */
+//    public fun clipboardPut(mimeTypes: List<String>) {
+//        Arena.ofConfined().use { arena ->
+//            ffiDownCall {
+//                desktop_linux_h.application_clipboard_put(appPtr, mimeTypesToNative(arena, mimeTypes))
+//            }
+//        }
+//    }
+//
+//    public fun clipboardGetAvailableMimeTypes(): List<String> {
+//        val csvMimetypes = ffiDownCall { desktop_linux_h.application_clipboard_get_available_mimetypes(appPtr) }
+//        return try {
+//            csvMimetypes.getUtf8String(0).split(",")
+//        } finally {
+//            ffiDownCall { desktop_linux_h.string_drop(csvMimetypes) }
+//        }
+//    }
+//
+//    /** Will produce [Event.DataTransfer] event if there is primary selection content. */
+//    public fun primarySelectionPaste(serial: Int, supportedMimeTypes: List<String>): Boolean {
+//        return Arena.ofConfined().use { arena ->
+//            ffiDownCall {
+//                desktop_linux_h.application_primary_selection_paste(appPtr, serial, mimeTypesToNative(arena, supportedMimeTypes))
+//            }
+//        }
+//    }
+//
+//    /**
+//     * Indicate that there is data that other applications can fetch from primary selection, in any of the provided MIME type formats.
+//     * Later, [ApplicationConfig.getDataTransferData] may be called, with [DataSource.PrimarySelection] argument,
+//     * to actually get the data with the specified MIME type.
+//     */
+//    public fun primarySelectionPut(mimeTypes: List<String>) {
+//        Arena.ofConfined().use { arena ->
+//            ffiDownCall {
+//                desktop_linux_h.application_primary_selection_put(appPtr, mimeTypesToNative(arena, mimeTypes))
+//            }
+//        }
+//    }
+//
+//    public fun primarySelectionGetAvailableMimeTypes(): List<String> {
+//        val csvMimetypes = ffiDownCall { desktop_linux_h.application_primary_selection_get_available_mimetypes(appPtr) }
+//        return try {
+//            csvMimetypes.getUtf8String(0).split(",")
+//        } finally {
+//            ffiDownCall { desktop_linux_h.string_drop(csvMimetypes) }
+//        }
+//    }
+//
+//    @Deprecated("Use `Window.requestInternalActivationToken` instead")
+//    public fun requestInternalActivationToken(sourceWindowId: WindowId): UInt? {
+//        return ffiDownCall {
+//            val rawRequestId = desktop_linux_h.window_request_internal_activation_token(appPtr, sourceWindowId)
+//            if (rawRequestId == 0) {
+//                null
+//            } else {
+//                rawRequestId.toUInt()
+//            }
+//        }
+//    }
+//
+//    public fun requestShowNotification(params: ShowNotificationParams): RequestId? {
+//        return Arena.ofConfined().use { arena ->
+//            ffiDownCall {
+//                val title = arena.allocateUtf8String(params.title)
+//                val body = arena.allocateUtf8String(params.body)
+//                val soundFilePath = params.soundFilePath?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+//                RequestId.fromNativeResponse(desktop_linux_h.application_request_show_notification(appPtr, title, body, soundFilePath))
+//            }
+//        }
+//    }
+//
+//    public fun closeNotification(notificationId: UInt) {
+//        ffiDownCall {
+//            desktop_linux_h.application_close_notification(appPtr, notificationId.toInt())
+//        }
+//    }
 }

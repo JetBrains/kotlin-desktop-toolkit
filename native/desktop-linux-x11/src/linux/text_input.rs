@@ -1,0 +1,209 @@
+use std::ffi::CString;
+
+use desktop_common::ffi_utils::BorrowedStrPtr;
+use log::{debug, warn};
+use smithay_client_toolkit::reexports::{
+    client::{Connection, Dispatch, Proxy, QueueHandle, delegate_noop},
+    protocols::wp::text_input::zv3::client::{
+        zwp_text_input_manager_v3::ZwpTextInputManagerV3,
+        zwp_text_input_v3::{self, ZwpTextInputV3},
+    },
+};
+
+use crate::linux::{
+    application_state::ApplicationState,
+    events::{TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData},
+};
+
+delegate_noop!(ApplicationState: ignore ZwpTextInputManagerV3);
+
+#[derive(Default)]
+pub struct PendingTextInputEvent {
+    pub preedit_string: Option<zwp_text_input_v3::Event>,
+    pub commit_string: Option<zwp_text_input_v3::Event>,
+    pub delete_surrounding_text: Option<zwp_text_input_v3::Event>,
+}
+
+impl TextInputContext<'_> {
+    fn get_byte_offset(text: &str, offset: u16) -> usize {
+        let mut it = text.char_indices();
+        for _ in 0..offset {
+            it.next();
+        }
+        it.offset()
+    }
+
+    pub(crate) fn apply(&self, text_input: &zwp_text_input_v3::ZwpTextInputV3) -> anyhow::Result<()> {
+        let surrounding_text = self.surrounding_text.as_str()?;
+        let content_hint = if self.is_multiline {
+            zwp_text_input_v3::ContentHint::Multiline
+        } else {
+            zwp_text_input_v3::ContentHint::None
+        };
+
+        let cursor_pos_bytes = Self::get_byte_offset(surrounding_text, self.cursor_codepoint_offset);
+
+        let selection_start_pos_bytes = if self.selection_start_codepoint_offset == self.cursor_codepoint_offset {
+            cursor_pos_bytes
+        } else {
+            Self::get_byte_offset(surrounding_text, self.selection_start_codepoint_offset)
+        };
+
+        debug!(
+            "Calling set_surrounding_text with cursor_pos_bytes={cursor_pos_bytes}, selection_start_pos_bytes={selection_start_pos_bytes}, surrounding_text={surrounding_text}"
+        );
+        #[allow(clippy::cast_possible_truncation)]
+        text_input.set_surrounding_text(
+            surrounding_text.to_owned(),
+            cursor_pos_bytes as i32,
+            selection_start_pos_bytes as i32,
+        );
+        text_input.set_content_type(content_hint, self.content_purpose.to_system());
+        text_input.set_text_change_cause(if self.change_caused_by_input_method {
+            zwp_text_input_v3::ChangeCause::InputMethod
+        } else {
+            zwp_text_input_v3::ChangeCause::Other
+        });
+        text_input.set_cursor_rectangle(
+            self.cursor_rectangle.x,
+            self.cursor_rectangle.y,
+            self.cursor_rectangle.width,
+            self.cursor_rectangle.height,
+        );
+        text_input.commit();
+        Ok(())
+    }
+}
+
+impl TextInputContentPurpose {
+    const fn to_system(&self) -> zwp_text_input_v3::ContentPurpose {
+        match self {
+            Self::Normal => zwp_text_input_v3::ContentPurpose::Normal,
+            Self::Alpha => zwp_text_input_v3::ContentPurpose::Alpha,
+            Self::Digits => zwp_text_input_v3::ContentPurpose::Digits,
+            Self::Number => zwp_text_input_v3::ContentPurpose::Number,
+            Self::Phone => zwp_text_input_v3::ContentPurpose::Phone,
+            Self::Url => zwp_text_input_v3::ContentPurpose::Url,
+            Self::Email => zwp_text_input_v3::ContentPurpose::Email,
+            Self::Name => zwp_text_input_v3::ContentPurpose::Name,
+            Self::Password => zwp_text_input_v3::ContentPurpose::Password,
+            Self::Pin => zwp_text_input_v3::ContentPurpose::Pin,
+            Self::Date => zwp_text_input_v3::ContentPurpose::Date,
+            Self::Time => zwp_text_input_v3::ContentPurpose::Time,
+            Self::Datetime => zwp_text_input_v3::ContentPurpose::Datetime,
+            Self::Terminal => zwp_text_input_v3::ContentPurpose::Terminal,
+        }
+    }
+}
+
+impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
+    #[allow(clippy::too_many_lines)]
+    fn event(
+        this: &mut Self,
+        text_input: &ZwpTextInputV3,
+        event: <ZwpTextInputV3 as Proxy>::Event,
+        _: &i32,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        match &event {
+            zwp_text_input_v3::Event::Enter { surface } => {
+                debug!("zwp_text_input_v3::Event::Enter: {}", surface.id());
+                this.active_text_input = Some(text_input.clone());
+                let Some(window_id) = this.get_window_id(surface) else {
+                    warn!("Couldn't find window for: {event:?}");
+                    return;
+                };
+                this.send_event(TextInputAvailabilityEvent {
+                    window_id,
+                    available: true,
+                });
+            }
+            zwp_text_input_v3::Event::Leave { surface } => {
+                debug!("zwp_text_input_v3::Event::Leave: {}", surface.id());
+                let Some(window_id) = this.get_window_id(surface) else {
+                    warn!("Couldn't find window for: {event:?}");
+                    return;
+                };
+                this.send_event(TextInputAvailabilityEvent {
+                    window_id,
+                    available: false,
+                });
+                this.active_text_input = None;
+            }
+            zwp_text_input_v3::Event::PreeditString {
+                text,
+                cursor_begin,
+                cursor_end,
+            } => {
+                debug!("zwp_text_input_v3::Event::PreeditString: cursor_begin={cursor_begin}, cursor_end={cursor_end}, text={text:?}");
+                this.pending_text_input_event.preedit_string = Some(event);
+            }
+            zwp_text_input_v3::Event::CommitString { text } => {
+                debug!("zwp_text_input_v3::Event::CommitString: {text:?}");
+                this.pending_text_input_event.commit_string = Some(event);
+            }
+            zwp_text_input_v3::Event::DeleteSurroundingText {
+                before_length,
+                after_length,
+            } => {
+                debug!("zwp_text_input_v3::Event::DeleteSurroundingText: before_length={before_length}, after_length={after_length}");
+                this.pending_text_input_event.delete_surrounding_text = Some(event);
+            }
+            zwp_text_input_v3::Event::Done { serial } => {
+                debug!("zwp_text_input_v3::Event::Done: serial={serial}");
+                if this.pending_text_input_event.commit_string.is_none()
+                    && this.pending_text_input_event.delete_surrounding_text.is_none()
+                    && this.pending_text_input_event.preedit_string.is_none()
+                {
+                    return;
+                }
+
+                let v = std::mem::take(&mut this.pending_text_input_event);
+
+                let (has_commit_string, commit_string) = match v.commit_string {
+                    Some(zwp_text_input_v3::Event::CommitString { text }) => (true, text.map(|t| CString::new(t).unwrap())),
+                    _ => (false, None),
+                };
+                let delete_surrounding_text = match v.delete_surrounding_text {
+                    Some(zwp_text_input_v3::Event::DeleteSurroundingText {
+                        before_length,
+                        after_length,
+                    }) => Some(TextInputDeleteSurroundingTextData {
+                        before_length_in_bytes: before_length,
+                        after_length_in_bytes: after_length,
+                    }),
+                    _ => None,
+                };
+                let preedit_data = match v.preedit_string {
+                    Some(zwp_text_input_v3::Event::PreeditString {
+                        text,
+                        cursor_begin,
+                        cursor_end,
+                    }) => Some((text.map(|t| CString::new(t).unwrap()), cursor_begin, cursor_end)),
+                    _ => None,
+                };
+                let e = TextInputEvent {
+                    has_preedit_string: preedit_data.is_some(),
+                    preedit_string: if let Some((preedit_text, preedit_begin, preedit_end)) = &preedit_data {
+                        TextInputPreeditStringData {
+                            text: BorrowedStrPtr::new_optional(preedit_text.as_ref()),
+                            cursor_begin_byte_pos: *preedit_begin,
+                            cursor_end_byte_pos: *preedit_end,
+                        }
+                    } else {
+                        TextInputPreeditStringData::default()
+                    },
+                    has_commit_string,
+                    commit_string: BorrowedStrPtr::new_optional(commit_string.as_ref()),
+                    has_delete_surrounding_text: delete_surrounding_text.is_some(),
+                    delete_surrounding_text: delete_surrounding_text.unwrap_or_default(),
+                };
+                this.send_event(e);
+            }
+            _ => {
+                warn!("Unknown event: {event:?}");
+            }
+        }
+    }
+}

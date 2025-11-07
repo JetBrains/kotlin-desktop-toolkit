@@ -12,7 +12,6 @@ import org.jetbrains.desktop.linux.DragAndDropQueryResponse
 import org.jetbrains.desktop.linux.DragIconParams
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
-import org.jetbrains.desktop.linux.FileDialog
 import org.jetbrains.desktop.linux.FontAntialiasingValue
 import org.jetbrains.desktop.linux.FontHintingValue
 import org.jetbrains.desktop.linux.FontRgbaOrderValue
@@ -30,7 +29,6 @@ import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.PointerShape
 import org.jetbrains.desktop.linux.RenderingMode
 import org.jetbrains.desktop.linux.RequestId
-import org.jetbrains.desktop.linux.ShowNotificationParams
 import org.jetbrains.desktop.linux.StartDragAndDropParams
 import org.jetbrains.desktop.linux.SupportedActionsForMime
 import org.jetbrains.desktop.linux.TextInputContentPurpose
@@ -413,21 +411,21 @@ private class EditorState {
                     EventHandlerResult.Stop
                 }
 
-                KeyCode.O -> {
-                    window.showOpenFileDialog(
-                        commonParams = FileDialog.CommonDialogParams(
-                            modal = false,
-                            title = "Open Directory",
-                            acceptLabel = null,
-                            currentFolder = null,
-                        ),
-                        openParams = FileDialog.OpenDialogParams(
-                            allowsMultipleSelections = false,
-                            selectDirectories = true,
-                        ),
-                    )
-                    EventHandlerResult.Stop
-                }
+//                KeyCode.O -> {
+//                    window.showOpenFileDialog(
+//                        commonParams = FileDialog.CommonDialogParams(
+//                            modal = false,
+//                            title = "Open Directory",
+//                            acceptLabel = null,
+//                            currentFolder = null,
+//                        ),
+//                        openParams = FileDialog.OpenDialogParams(
+//                            allowsMultipleSelections = false,
+//                            selectDirectories = true,
+//                        ),
+//                    )
+//                    EventHandlerResult.Stop
+//                }
 
                 else -> EventHandlerResult.Continue
             }
@@ -445,31 +443,31 @@ private class EditorState {
                     } ?: EventHandlerResult.Continue
                 }
 
-                KeyCode.O -> {
-                    window.showOpenFileDialog(
-                        commonParams = FileDialog.CommonDialogParams(
-                            modal = true,
-                            title = "Open Files",
-                            acceptLabel = null,
-                            currentFolder = null,
-                        ),
-                        openParams = FileDialog.OpenDialogParams(
-                            allowsMultipleSelections = true,
-                            selectDirectories = false,
-                        ),
-                    )
-                    EventHandlerResult.Stop
-                }
+//                KeyCode.O -> {
+//                    window.showOpenFileDialog(
+//                        commonParams = FileDialog.CommonDialogParams(
+//                            modal = true,
+//                            title = "Open Files",
+//                            acceptLabel = null,
+//                            currentFolder = null,
+//                        ),
+//                        openParams = FileDialog.OpenDialogParams(
+//                            allowsMultipleSelections = true,
+//                            selectDirectories = false,
+//                        ),
+//                    )
+//                    EventHandlerResult.Stop
+//                }
 
                 KeyCode.M -> {
                     window.startMove()
                     EventHandlerResult.Stop
                 }
 
-                KeyCode.Tab -> {
-                    window.requestInternalActivationToken()
-                    EventHandlerResult.Stop
-                }
+//                KeyCode.Tab -> {
+//                    window.requestInternalActivationToken()
+//                    EventHandlerResult.Stop
+//                }
 
                 else -> EventHandlerResult.Continue
             }
@@ -557,9 +555,9 @@ private class EditorState {
             selectionEndOffset = null
         }
 
-        if (textInputEnabled) {
-            app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
-        }
+//        if (textInputEnabled) {
+//            app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+//        }
         return EventHandlerResult.Stop
     }
 
@@ -581,9 +579,9 @@ private class EditorState {
                 cursorOffset += pastedText.length
                 selectionStartOffset = null
                 selectionEndOffset = null
-                if (textInputEnabled) {
-                    app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
-                }
+//                if (textInputEnabled) {
+//                    app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+//                }
             }
 
             PNG_MIME_TYPE -> {
@@ -644,9 +642,9 @@ private class EditorState {
         } ?: run {
             composedTextRange = null
         }
-        if (event.deleteSurroundingTextData != null || event.commitStringData != null) {
-            app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = true))
-        }
+//        if (event.deleteSurroundingTextData != null || event.commitStringData != null) {
+//            app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = true))
+//        }
         return EventHandlerResult.Stop
     }
 }
@@ -1207,7 +1205,7 @@ private class RotatingBallWindow(
     private fun changePointerShape(newPointerShape: PointerShape) {
         if (windowState.pointerShape != newPointerShape) {
             windowState.pointerShape = newPointerShape
-            window.setPointerShape(newPointerShape)
+//            window.setPointerShape(newPointerShape)
         }
     }
 
@@ -1284,7 +1282,6 @@ private class RotatingBallWindow(
 private class ApplicationState(private val app: Application) : AutoCloseable {
     private var nextWindowId = 0L
     private val windows = mutableMapOf<WindowId, RotatingBallWindow>()
-    private var keyWindowId: WindowId? = null
     private var modifiers = setOf<KeyModifiers>()
     private val xdgDesktopSettings = XdgDesktopSettings()
     private val windowClipboardHandlers = mutableMapOf<WindowId, ClipboardHandler>()
@@ -1321,29 +1318,29 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         windowClipboardHandlers[windowId] = object : ClipboardHandler {
             override fun copy(content: DataTransferContentType) {
                 currentClipboard = content
-                app.clipboardPut(content.mimeTypes())
+//                app.clipboardPut(content.mimeTypes())
             }
             override fun copyToPrimarySelection(content: DataTransferContentType) {
                 currentPrimarySelectionContent = content
-                app.primarySelectionPut(content.mimeTypes())
+//                app.primarySelectionPut(content.mimeTypes())
             }
 
             override fun paste(supportedMimeTypes: List<String>) {
-                currentClipboardPasteSerial += 1
-                clipboardPasteSerialToWindow[currentClipboardPasteSerial] = keyWindowId!!
-                app.clipboardPaste(currentClipboardPasteSerial, supportedMimeTypes)
+//                currentClipboardPasteSerial += 1
+//                clipboardPasteSerialToWindow[currentClipboardPasteSerial] = keyWindowId!!
+//                app.clipboardPaste(currentClipboardPasteSerial, supportedMimeTypes)
             }
 
             override fun pasteFromPrimarySelection(supportedMimeTypes: List<String>) {
-                currentClipboardPasteSerial += 1
-                clipboardPasteSerialToWindow[currentClipboardPasteSerial] = keyWindowId!!
-                app.primarySelectionPaste(currentClipboardPasteSerial, supportedMimeTypes)
+//                currentClipboardPasteSerial += 1
+//                clipboardPasteSerialToWindow[currentClipboardPasteSerial] = keyWindowId!!
+//                app.primarySelectionPaste(currentClipboardPasteSerial, supportedMimeTypes)
             }
 
             override fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams, draw: (Canvas, Double) -> Unit) {
                 currentDragContent = content
                 currentDragIconDraw = draw
-                window.window.startDragAndDrop(params)
+//                window.window.startDragAndDrop(params)
             }
         }
     }
@@ -1376,7 +1373,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 notificationSources.entries.removeIf { entry ->
                     (entry.value == windowId).also { shouldRemove ->
                         if (shouldRemove) {
-                            app.closeNotification(entry.key)
+//                            app.closeNotification(entry.key)
                         }
                     }
                 }
@@ -1450,29 +1447,29 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 EventHandlerResult.Stop
             }
             is Event.ActivationTokenResponse -> {
-                windows.keys.firstOrNull { it != keyWindowId }?.let { windowIdToActivate ->
-                    val w = windows[windowIdToActivate]!!
-                    w.window.activate(event.token)
-                }
+//                windows.keys.firstOrNull { it != keyWindowId }?.let { windowIdToActivate ->
+//                    val w = windows[windowIdToActivate]!!
+//                    w.window.activate(event.token)
+//                }
                 EventHandlerResult.Stop
             }
             is Event.KeyDown -> {
                 if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.N) {
                     createWindow(useCustomTitlebar = true, renderingMode = RenderingMode.Auto)
                     EventHandlerResult.Stop
-                } else if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.P) {
-                    val windowId = keyWindowId!!
-                    val params = ShowNotificationParams(
-                        title = "Notification from window $windowId",
-                        body = "Clicking this notification will activate window $windowId",
-                        soundFilePath = null,
-                    )
-                    app.requestShowNotification(params)?.let { requestId ->
-                        requestSources[requestId] = windowId
-                    }
-                    EventHandlerResult.Stop
+//                } else if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.P) {
+//                    val windowId = keyWindowId!!
+//                    val params = ShowNotificationParams(
+//                        title = "Notification from window $windowId",
+//                        body = "Clicking this notification will activate window $windowId",
+//                        soundFilePath = null,
+//                    )
+//                    app.requestShowNotification(params)?.let { requestId ->
+//                        requestSources[requestId] = windowId
+//                    }
+//                    EventHandlerResult.Stop
                 } else {
-                    windows[keyWindowId]?.onKeyDown(event, app, modifiers, windowClipboardHandlers[keyWindowId]!!)
+                    windows[event.windowId]?.onKeyDown(event, app, modifiers, windowClipboardHandlers[event.windowId]!!)
                         ?: EventHandlerResult.Continue
                 }
             }
@@ -1497,15 +1494,12 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 windows[event.windowId]?.onMouseUp(event, xdgDesktopSettings) ?: EventHandlerResult.Continue
             }
             is Event.ScrollWheel -> EventHandlerResult.Continue
-            is Event.TextInput -> windows[keyWindowId]?.onTextInput(event, app) ?: EventHandlerResult.Continue
+            is Event.TextInput -> windows[event.windowId]?.onTextInput(event, app) ?: EventHandlerResult.Continue
             is Event.TextInputAvailability -> windows[event.windowId]?.onTextInputAvailability(event, app) ?: EventHandlerResult.Continue
             is Event.WindowKeyboardEnter -> {
-                keyWindowId = event.windowId
                 EventHandlerResult.Continue
             }
             is Event.WindowKeyboardLeave -> {
-                check(keyWindowId == event.windowId)
-                keyWindowId = null
                 EventHandlerResult.Continue
             }
             is Event.WindowScaleChanged, is Event.WindowScreenChange -> EventHandlerResult.Continue
@@ -1514,7 +1508,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                     requestSources.remove(event.requestId)?.let { requester ->
                         notificationSources[notificationId] = requester
                     } ?: run {
-                        app.closeNotification(notificationId)
+//                        app.closeNotification(notificationId)
                     }
                 }
                 EventHandlerResult.Stop
@@ -1535,7 +1529,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         this.xdgDesktopSettings.update(s)
         xdgDesktopSettings.cursorTheme?.let { cursorTheme ->
             xdgDesktopSettings.cursorSize?.let { cursorSize ->
-                app.setCursorTheme(cursorTheme, cursorSize)
+//                app.setCursorTheme(cursorTheme, cursorSize)
             }
         }
         windows.values.forEach { it.settingsChanged(xdgDesktopSettings) }

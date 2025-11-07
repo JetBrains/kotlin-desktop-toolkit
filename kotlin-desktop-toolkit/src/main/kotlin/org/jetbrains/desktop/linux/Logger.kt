@@ -2,9 +2,9 @@ package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeExceptionsArray
 import org.jetbrains.desktop.linux.generated.NativeLoggerConfiguration
-import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.nio.file.Path
+import org.jetbrains.desktop.linux.generated.desktop_linux_x11_h as desktop_linux_h
 
 public enum class LogLevel {
     Off,

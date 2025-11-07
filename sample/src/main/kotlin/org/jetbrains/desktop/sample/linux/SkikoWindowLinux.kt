@@ -2,7 +2,6 @@ package org.jetbrains.desktop.sample.linux
 
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.Event
-import org.jetbrains.desktop.linux.LogicalSize
 import org.jetbrains.desktop.linux.PhysicalSize
 import org.jetbrains.desktop.linux.SoftwareDrawData
 import org.jetbrains.desktop.linux.WindowParams
@@ -68,9 +67,9 @@ abstract class SkikoWindowLinux(
     val window = app.createWindow(params)
     private val creationTime = TimeSource.Monotonic.markNow()
 
-    init {
-        window.setMinSize(LogicalSize(320, 240))
-    }
+//    init {
+//        window.setMinSize(LogicalSize(320, 240))
+//    }
 
     fun performDrawing(event: Event.WindowDraw): Boolean {
         val draw = { surface: Surface ->

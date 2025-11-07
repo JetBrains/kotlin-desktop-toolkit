@@ -1,8 +1,8 @@
 package org.jetbrains.desktop.linux
 
-import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import org.jetbrains.desktop.linux.generated.desktop_linux_x11_h as desktop_linux_h
 
 public typealias WindowId = Long
 
@@ -119,91 +119,91 @@ public class Window internal constructor(
             }
         }
     }
-
-    public fun setPointerShape(shape: PointerShape) {
-        ffiDownCall {
-            desktop_linux_h.window_set_pointer_shape(appPtr, windowId, shape.toNative())
-        }
-    }
-
-    public fun requestDecorationMode(decorationMode: WindowDecorationMode) {
-        ffiDownCall {
-            desktop_linux_h.window_request_decoration_mode(appPtr, windowId, decorationMode.toNative())
-        }
-    }
-
-    public fun unsetDecorationMode() {
-        ffiDownCall {
-            desktop_linux_h.window_unset_decoration_mode(appPtr, windowId)
-        }
-    }
-
-    /**
-     * Start a drag&drop action with the data that can be interpreted in any of the provided MIME type formats.
-     * Later, [ApplicationConfig.getDataTransferData] may be called, with [DataSource.DragAndDrop] argument,
-     * to actually get the data with the specified MIME type.
-     */
-    public fun startDragAndDrop(params: StartDragAndDropParams) {
-        Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                desktop_linux_h.window_start_drag_and_drop(
-                    appPtr,
-                    windowId,
-                    mimeTypesToNative(arena, params.mimeTypes),
-                    params.actions.toNative(),
-                    (params.dragIconParams?.renderingMode ?: RenderingMode.Auto).toNative(),
-                    (params.dragIconParams?.size ?: LogicalSize(0, 0)).toNative(arena),
-                )
-            }
-        }
-    }
-
-    /**
-     * Will produce [Event.FileChooserResponse] event if there is clipboard content,
-     * with the [Event.FileChooserResponse.requestId] field same as this function's return value.
-     */
-    public fun showOpenFileDialog(commonParams: FileDialog.CommonDialogParams, openParams: FileDialog.OpenDialogParams): RequestId? {
-        return Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                val requestIdVal = desktop_linux_h.window_show_open_file_dialog(
-                    appPtr,
-                    windowId,
-                    commonParams.toNative(arena),
-                    openParams.toNative(arena),
-                )
-                RequestId.fromNativeResponse(requestIdVal)
-            }
-        }
-    }
-
-    /**
-     * Will produce [Event.FileChooserResponse] event if there is clipboard content,
-     * with the [Event.FileChooserResponse.requestId] field same as this function's return value.
-     */
-    public fun showSaveFileDialog(commonParams: FileDialog.CommonDialogParams, saveParams: FileDialog.SaveDialogParams): RequestId? {
-        return Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                val requestIdVal = desktop_linux_h.window_show_save_file_dialog(
-                    appPtr,
-                    windowId,
-                    commonParams.toNative(arena),
-                    saveParams.toNative(arena),
-                )
-                RequestId.fromNativeResponse(requestIdVal)
-            }
-        }
-    }
-
-    public fun requestInternalActivationToken(): RequestId? {
-        return ffiDownCall {
-            val rawRequestId = desktop_linux_h.window_request_internal_activation_token(appPtr, windowId)
-            if (rawRequestId == 0) {
-                null
-            } else {
-                RequestId(rawRequestId)
-            }
-        }
-    }
+//
+//    public fun setPointerShape(shape: PointerShape) {
+//        ffiDownCall {
+//            desktop_linux_h.window_set_pointer_shape(appPtr, windowId, shape.toNative())
+//        }
+//    }
+//
+//    public fun requestDecorationMode(decorationMode: WindowDecorationMode) {
+//        ffiDownCall {
+//            desktop_linux_h.window_request_decoration_mode(appPtr, windowId, decorationMode.toNative())
+//        }
+//    }
+//
+//    public fun unsetDecorationMode() {
+//        ffiDownCall {
+//            desktop_linux_h.window_unset_decoration_mode(appPtr, windowId)
+//        }
+//    }
+//
+//    /**
+//     * Start a drag&drop action with the data that can be interpreted in any of the provided MIME type formats.
+//     * Later, [ApplicationConfig.getDataTransferData] may be called, with [DataSource.DragAndDrop] argument,
+//     * to actually get the data with the specified MIME type.
+//     */
+//    public fun startDragAndDrop(params: StartDragAndDropParams) {
+//        Arena.ofConfined().use { arena ->
+//            ffiDownCall {
+//                desktop_linux_h.window_start_drag_and_drop(
+//                    appPtr,
+//                    windowId,
+//                    mimeTypesToNative(arena, params.mimeTypes),
+//                    params.actions.toNative(),
+//                    (params.dragIconParams?.renderingMode ?: RenderingMode.Auto).toNative(),
+//                    (params.dragIconParams?.size ?: LogicalSize(0, 0)).toNative(arena),
+//                )
+//            }
+//        }
+//    }
+//
+//    /**
+//     * Will produce [Event.FileChooserResponse] event if there is clipboard content,
+//     * with the [Event.FileChooserResponse.requestId] field same as this function's return value.
+//     */
+//    public fun showOpenFileDialog(commonParams: FileDialog.CommonDialogParams, openParams: FileDialog.OpenDialogParams): RequestId? {
+//        return Arena.ofConfined().use { arena ->
+//            ffiDownCall {
+//                val requestIdVal = desktop_linux_h.window_show_open_file_dialog(
+//                    appPtr,
+//                    windowId,
+//                    commonParams.toNative(arena),
+//                    openParams.toNative(arena),
+//                )
+//                RequestId.fromNativeResponse(requestIdVal)
+//            }
+//        }
+//    }
+//
+//    /**
+//     * Will produce [Event.FileChooserResponse] event if there is clipboard content,
+//     * with the [Event.FileChooserResponse.requestId] field same as this function's return value.
+//     */
+//    public fun showSaveFileDialog(commonParams: FileDialog.CommonDialogParams, saveParams: FileDialog.SaveDialogParams): RequestId? {
+//        return Arena.ofConfined().use { arena ->
+//            ffiDownCall {
+//                val requestIdVal = desktop_linux_h.window_show_save_file_dialog(
+//                    appPtr,
+//                    windowId,
+//                    commonParams.toNative(arena),
+//                    saveParams.toNative(arena),
+//                )
+//                RequestId.fromNativeResponse(requestIdVal)
+//            }
+//        }
+//    }
+//
+//    public fun requestInternalActivationToken(): RequestId? {
+//        return ffiDownCall {
+//            val rawRequestId = desktop_linux_h.window_request_internal_activation_token(appPtr, windowId)
+//            if (rawRequestId == 0) {
+//                null
+//            } else {
+//                RequestId(rawRequestId)
+//            }
+//        }
+//    }
 
     public fun activate(token: String) {
         Arena.ofConfined().use { arena ->

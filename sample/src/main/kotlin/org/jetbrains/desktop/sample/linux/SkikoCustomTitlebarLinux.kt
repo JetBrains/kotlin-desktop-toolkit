@@ -197,20 +197,20 @@ internal class SkikoCustomTitlebarLinux(
             rectangles.firstOrNull { it.first.contains(event.locationInWindow) }?.second?.let { windowButton ->
                 if (event.button == MouseButton.LEFT && leftClickStartWindowButton != windowButton) {
                     EventHandlerResult.Continue
-                } else if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
-                    event.button == MouseButton.LEFT &&
-                    handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
-                ) {
-                    executeTitlebarAction(
-                        xdgDesktopSettings.actionDoubleClickTitlebar,
-                        window,
-                        event.locationInWindow,
-                        windowState,
-                    )
-                    EventHandlerResult.Stop
-                } else if (windowButton == WindowButtonType.Minimize && event.button == MouseButton.RIGHT) {
-                    window.requestInternalActivationToken()
-                    EventHandlerResult.Stop
+//                } else if ((windowButton == WindowButtonType.Title || windowButton == WindowButtonType.Spacer) &&
+//                    event.button == MouseButton.LEFT &&
+//                    handlePotentialDoubleClick(event.timestamp, xdgDesktopSettings.doubleClickInterval)
+//                ) {
+//                    executeTitlebarAction(
+//                        xdgDesktopSettings.actionDoubleClickTitlebar,
+//                        window,
+//                        event.locationInWindow,
+//                        windowState,
+//                    )
+//                    EventHandlerResult.Stop
+//                } else if (windowButton == WindowButtonType.Minimize && event.button == MouseButton.RIGHT) {
+//                    window.requestInternalActivationToken()
+//                    EventHandlerResult.Stop
                 } else {
                     executeWindowAction(
                         windowButton,
