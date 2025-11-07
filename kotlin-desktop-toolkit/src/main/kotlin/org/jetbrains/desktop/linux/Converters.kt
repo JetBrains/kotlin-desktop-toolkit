@@ -2,10 +2,10 @@ package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeActivationTokenResponse
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_SupportedActionsForMime
-import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
+// import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
-import org.jetbrains.desktop.linux.generated.NativeCommonFileDialogParams
+// import org.jetbrains.desktop.linux.generated.NativeCommonFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailableEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferCancelledEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
@@ -31,9 +31,9 @@ import org.jetbrains.desktop.linux.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseUpEvent
 import org.jetbrains.desktop.linux.generated.NativeNotificationClosedEvent
 import org.jetbrains.desktop.linux.generated.NativeNotificationShownEvent
-import org.jetbrains.desktop.linux.generated.NativeOpenFileDialogParams
+// import org.jetbrains.desktop.linux.generated.NativeOpenFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativePhysicalSize
-import org.jetbrains.desktop.linux.generated.NativeSaveFileDialogParams
+// import org.jetbrains.desktop.linux.generated.NativeSaveFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeScrollData
 import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.linux.generated.NativeSoftwareDrawData
@@ -52,12 +52,13 @@ import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
 import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
-import org.jetbrains.desktop.linux.generated.desktop_linux_h
+import org.jetbrains.desktop.linux.generated.desktop_linux_x11_h as desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemoryLayout
 import java.lang.foreign.MemorySegment
 import kotlin.experimental.and
 import kotlin.experimental.or
+import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
@@ -95,14 +96,14 @@ public fun utf8OffsetToUtf16Offset(string: CharSequence, offset: Long): Int {
 }
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
-    width = NativeLogicalSize.width(s),
-    height = NativeLogicalSize.height(s),
+    width = NativeLogicalSize.width(s).roundToInt(),
+    height = NativeLogicalSize.height(s).roundToInt(),
 )
 
 internal fun LogicalSize.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalSize.allocate(arena)
-    NativeLogicalSize.width(result, width)
-    NativeLogicalSize.height(result, height)
+    NativeLogicalSize.width(result, width.toDouble())
+    NativeLogicalSize.height(result, height.toDouble())
     return result
 }
 
@@ -120,10 +121,10 @@ internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
 
 internal fun LogicalRect.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalRect.allocate(arena)
-    NativeLogicalRect.x(result, x)
-    NativeLogicalRect.y(result, y)
-    NativeLogicalRect.width(result, width)
-    NativeLogicalRect.height(result, height)
+    NativeLogicalRect.x(result, x.toDouble())
+    NativeLogicalRect.y(result, y.toDouble())
+    NativeLogicalRect.width(result, width.toDouble())
+    NativeLogicalRect.height(result, height.toDouble())
     return result
 }
 
@@ -156,46 +157,46 @@ private fun keyModifiersFromNative(nativeModifiers: Byte): Set<KeyModifiers> {
 
     return modifiers
 }
-
-internal fun PointerShape.toNative(): Int {
-    return when (this) {
-        PointerShape.Hidden -> desktop_linux_h.NativePointerShape_Hidden()
-        PointerShape.Default -> desktop_linux_h.NativePointerShape_Default()
-        PointerShape.ContextMenu -> desktop_linux_h.NativePointerShape_ContextMenu()
-        PointerShape.Help -> desktop_linux_h.NativePointerShape_Help()
-        PointerShape.Pointer -> desktop_linux_h.NativePointerShape_Pointer()
-        PointerShape.Progress -> desktop_linux_h.NativePointerShape_Progress()
-        PointerShape.Wait -> desktop_linux_h.NativePointerShape_Wait()
-        PointerShape.Cell -> desktop_linux_h.NativePointerShape_Cell()
-        PointerShape.Crosshair -> desktop_linux_h.NativePointerShape_Crosshair()
-        PointerShape.Text -> desktop_linux_h.NativePointerShape_Text()
-        PointerShape.VerticalText -> desktop_linux_h.NativePointerShape_VerticalText()
-        PointerShape.Alias -> desktop_linux_h.NativePointerShape_Alias()
-        PointerShape.Copy -> desktop_linux_h.NativePointerShape_Copy()
-        PointerShape.Move -> desktop_linux_h.NativePointerShape_Move()
-        PointerShape.NoDrop -> desktop_linux_h.NativePointerShape_NoDrop()
-        PointerShape.NotAllowed -> desktop_linux_h.NativePointerShape_NotAllowed()
-        PointerShape.Grab -> desktop_linux_h.NativePointerShape_Grab()
-        PointerShape.Grabbing -> desktop_linux_h.NativePointerShape_Grabbing()
-        PointerShape.EResize -> desktop_linux_h.NativePointerShape_EResize()
-        PointerShape.NResize -> desktop_linux_h.NativePointerShape_NResize()
-        PointerShape.NeResize -> desktop_linux_h.NativePointerShape_NeResize()
-        PointerShape.NwResize -> desktop_linux_h.NativePointerShape_NwResize()
-        PointerShape.SResize -> desktop_linux_h.NativePointerShape_SResize()
-        PointerShape.SeResize -> desktop_linux_h.NativePointerShape_SeResize()
-        PointerShape.SwResize -> desktop_linux_h.NativePointerShape_SwResize()
-        PointerShape.WResize -> desktop_linux_h.NativePointerShape_WResize()
-        PointerShape.EwResize -> desktop_linux_h.NativePointerShape_EwResize()
-        PointerShape.NsResize -> desktop_linux_h.NativePointerShape_NsResize()
-        PointerShape.NeswResize -> desktop_linux_h.NativePointerShape_NeswResize()
-        PointerShape.NwseResize -> desktop_linux_h.NativePointerShape_NwseResize()
-        PointerShape.ColResize -> desktop_linux_h.NativePointerShape_ColResize()
-        PointerShape.RowResize -> desktop_linux_h.NativePointerShape_RowResize()
-        PointerShape.AllScroll -> desktop_linux_h.NativePointerShape_AllScroll()
-        PointerShape.ZoomIn -> desktop_linux_h.NativePointerShape_ZoomIn()
-        PointerShape.ZoomOut -> desktop_linux_h.NativePointerShape_ZoomOut()
-    }
-}
+//
+// internal fun PointerShape.toNative(): Int {
+//    return when (this) {
+//        PointerShape.Hidden -> desktop_linux_h.NativePointerShape_Hidden()
+//        PointerShape.Default -> desktop_linux_h.NativePointerShape_Default()
+//        PointerShape.ContextMenu -> desktop_linux_h.NativePointerShape_ContextMenu()
+//        PointerShape.Help -> desktop_linux_h.NativePointerShape_Help()
+//        PointerShape.Pointer -> desktop_linux_h.NativePointerShape_Pointer()
+//        PointerShape.Progress -> desktop_linux_h.NativePointerShape_Progress()
+//        PointerShape.Wait -> desktop_linux_h.NativePointerShape_Wait()
+//        PointerShape.Cell -> desktop_linux_h.NativePointerShape_Cell()
+//        PointerShape.Crosshair -> desktop_linux_h.NativePointerShape_Crosshair()
+//        PointerShape.Text -> desktop_linux_h.NativePointerShape_Text()
+//        PointerShape.VerticalText -> desktop_linux_h.NativePointerShape_VerticalText()
+//        PointerShape.Alias -> desktop_linux_h.NativePointerShape_Alias()
+//        PointerShape.Copy -> desktop_linux_h.NativePointerShape_Copy()
+//        PointerShape.Move -> desktop_linux_h.NativePointerShape_Move()
+//        PointerShape.NoDrop -> desktop_linux_h.NativePointerShape_NoDrop()
+//        PointerShape.NotAllowed -> desktop_linux_h.NativePointerShape_NotAllowed()
+//        PointerShape.Grab -> desktop_linux_h.NativePointerShape_Grab()
+//        PointerShape.Grabbing -> desktop_linux_h.NativePointerShape_Grabbing()
+//        PointerShape.EResize -> desktop_linux_h.NativePointerShape_EResize()
+//        PointerShape.NResize -> desktop_linux_h.NativePointerShape_NResize()
+//        PointerShape.NeResize -> desktop_linux_h.NativePointerShape_NeResize()
+//        PointerShape.NwResize -> desktop_linux_h.NativePointerShape_NwResize()
+//        PointerShape.SResize -> desktop_linux_h.NativePointerShape_SResize()
+//        PointerShape.SeResize -> desktop_linux_h.NativePointerShape_SeResize()
+//        PointerShape.SwResize -> desktop_linux_h.NativePointerShape_SwResize()
+//        PointerShape.WResize -> desktop_linux_h.NativePointerShape_WResize()
+//        PointerShape.EwResize -> desktop_linux_h.NativePointerShape_EwResize()
+//        PointerShape.NsResize -> desktop_linux_h.NativePointerShape_NsResize()
+//        PointerShape.NeswResize -> desktop_linux_h.NativePointerShape_NeswResize()
+//        PointerShape.NwseResize -> desktop_linux_h.NativePointerShape_NwseResize()
+//        PointerShape.ColResize -> desktop_linux_h.NativePointerShape_ColResize()
+//        PointerShape.RowResize -> desktop_linux_h.NativePointerShape_RowResize()
+//        PointerShape.AllScroll -> desktop_linux_h.NativePointerShape_AllScroll()
+//        PointerShape.ZoomIn -> desktop_linux_h.NativePointerShape_ZoomIn()
+//        PointerShape.ZoomOut -> desktop_linux_h.NativePointerShape_ZoomOut()
+//    }
+// }
 
 internal fun RenderingMode.toNative() = when (this) {
     RenderingMode.Auto -> desktop_linux_h.NativeRenderingMode_Auto()
@@ -524,22 +525,22 @@ internal fun ScrollData.Companion.fromNative(s: MemorySegment): ScrollData {
     return ScrollData(
         delta = NativeScrollData.delta(s).toFloat(),
         wheelValue120 = NativeScrollData.wheel_value120(s),
-        isInverted = NativeScrollData.is_inverted(s),
+        isInverted = false, // NativeScrollData.is_inverted(s),
         isStop = NativeScrollData.is_stop(s),
     )
 }
-
-private fun readNativeU32Array(nativeU32Array: MemorySegment): List<UInt> {
-    val len = NativeBorrowedArray_u32.len(nativeU32Array)
-    val dataPtr = NativeBorrowedArray_u32.ptr(nativeU32Array)
-    val values = mutableListOf<UInt>()
-    for (i in 0 until len) {
-        val raw = dataPtr.getAtIndex(desktop_linux_h.C_INT, i)
-        Logger.debug { "readNativeU32ArrayFor: len=$len : dataPtr=$dataPtr, value of index $i : $raw" }
-        values.add(raw.toUInt())
-    }
-    return values
-}
+//
+// private fun readNativeU32Array(nativeU32Array: MemorySegment): List<UInt> {
+//    val len = NativeBorrowedArray_u32.len(nativeU32Array)
+//    val dataPtr = NativeBorrowedArray_u32.ptr(nativeU32Array)
+//    val values = mutableListOf<UInt>()
+//    for (i in 0 until len) {
+//        val raw = dataPtr.getAtIndex(desktop_linux_h.C_INT, i)
+//        Logger.debug { "readNativeU32ArrayFor: len=$len : dataPtr=$dataPtr, value of index $i : $raw" }
+//        values.add(raw.toUInt())
+//    }
+//    return values
+// }
 
 internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Event {
     return when (NativeEvent.tag(s)) {
@@ -553,7 +554,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.ApplicationWillTerminate
         }
         desktop_linux_h.NativeEvent_DisplayConfigurationChange() -> {
-            Event.DisplayConfigurationChange(screens = app.allScreens())
+            Event.DisplayConfigurationChange(screens = AllScreens(emptyList())) // app.allScreens())
         }
         desktop_linux_h.NativeEvent_XdgDesktopSettingChange() -> {
             val nativeEvent = NativeEvent.xdg_desktop_setting_change(s)
@@ -629,6 +630,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
             Event.KeyDown(
+                windowId = NativeKeyDownEvent.window_id(nativeEvent),
                 keyCode = KeyCode(NativeKeyDownEvent.code(nativeEvent).toUInt()),
                 characters = fromOptionalNativeString(NativeKeyDownEvent.characters(nativeEvent)),
                 key = KeySym(NativeKeyDownEvent.key(nativeEvent).toUInt()),
@@ -638,6 +640,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_KeyUp() -> {
             val nativeEvent = NativeEvent.key_up(s)
             Event.KeyUp(
+                windowId = NativeKeyUpEvent.window_id(nativeEvent),
                 key = KeySym(NativeKeyUpEvent.key(nativeEvent).toUInt()),
                 keyCode = KeyCode(NativeKeyUpEvent.code(nativeEvent).toUInt()),
             )
@@ -652,6 +655,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_TextInput() -> {
             val nativeEvent = NativeEvent.text_input(s)
             Event.TextInput(
+                windowId = NativeTextInputEvent.window_id(nativeEvent),
                 preeditStringData = if (NativeTextInputEvent.has_preedit_string(nativeEvent)) {
                     TextInputPreeditStringData.fromNative(NativeTextInputEvent.preedit_string(nativeEvent))
                 } else {
@@ -681,7 +685,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.MouseMoved(
                 windowId = NativeMouseMovedEvent.window_id(nativeEvent),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseMovedEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp.fromNative(NativeMouseMovedEvent.timestamp(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_MouseEntered() -> {
@@ -695,7 +698,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.mouse_exited(s)
             Event.MouseExited(
                 windowId = NativeMouseExitedEvent.window_id(nativeEvent),
-                locationInWindow = LogicalPoint.fromNative(NativeMouseExitedEvent.location_in_window(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_MouseUp() -> {
@@ -704,7 +706,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 windowId = NativeMouseUpEvent.window_id(nativeEvent),
                 button = MouseButton(NativeMouseUpEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseUpEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp.fromNative(NativeMouseUpEvent.timestamp(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_MouseDown() -> {
@@ -713,7 +714,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 windowId = NativeMouseDownEvent.window_id(nativeEvent),
                 button = MouseButton(NativeMouseDownEvent.button(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeMouseDownEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp.fromNative(NativeMouseDownEvent.timestamp(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_NotificationClosed() -> {
@@ -739,8 +739,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 windowId = NativeScrollWheelEvent.window_id(nativeEvent),
                 scrollingDeltaX = horizontalScroll.delta,
                 scrollingDeltaY = verticalScroll.delta,
-                locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
-                timestamp = Timestamp.fromNative(NativeScrollWheelEvent.timestamp(nativeEvent)),
                 horizontalScroll = horizontalScroll,
                 verticalScroll = verticalScroll,
             )
@@ -765,14 +763,8 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         }
         desktop_linux_h.NativeEvent_WindowKeyboardEnter() -> {
             val nativeEvent = NativeEvent.window_keyboard_enter(s)
-
-            val keyCodes = readNativeU32Array(NativeWindowKeyboardEnterEvent.raw(nativeEvent)).map { KeyCode(it) }
-            val keySyms = readNativeU32Array(NativeWindowKeyboardEnterEvent.keysyms(nativeEvent)).map { KeySym(it) }
-
             Event.WindowKeyboardEnter(
                 windowId = NativeWindowKeyboardEnterEvent.window_id(nativeEvent),
-                keyCodes,
-                keySyms,
             )
         }
         desktop_linux_h.NativeEvent_WindowKeyboardLeave() -> {
@@ -804,28 +796,28 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         }
     }
 }
-
-internal fun FileDialog.CommonDialogParams.toNative(arena: Arena): MemorySegment {
-    val result = NativeCommonFileDialogParams.allocate(arena)
-    NativeCommonFileDialogParams.modal(result, modal)
-    NativeCommonFileDialogParams.title(result, title?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
-    NativeCommonFileDialogParams.accept_label(result, acceptLabel?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
-    NativeCommonFileDialogParams.current_folder(result, currentFolder?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
-    return result
-}
-
-internal fun FileDialog.OpenDialogParams.toNative(arena: Arena): MemorySegment {
-    val result = NativeOpenFileDialogParams.allocate(arena)
-    NativeOpenFileDialogParams.select_directories(result, selectDirectories)
-    NativeOpenFileDialogParams.allows_multiple_selection(result, allowsMultipleSelections)
-    return result
-}
-
-internal fun FileDialog.SaveDialogParams.toNative(arena: Arena): MemorySegment {
-    val result = NativeSaveFileDialogParams.allocate(arena)
-    NativeSaveFileDialogParams.name_field_string_value(
-        result,
-        nameFieldStringValue?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
-    )
-    return result
-}
+//
+// internal fun FileDialog.CommonDialogParams.toNative(arena: Arena): MemorySegment {
+//    val result = NativeCommonFileDialogParams.allocate(arena)
+//    NativeCommonFileDialogParams.modal(result, modal)
+//    NativeCommonFileDialogParams.title(result, title?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+//    NativeCommonFileDialogParams.accept_label(result, acceptLabel?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+//    NativeCommonFileDialogParams.current_folder(result, currentFolder?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+//    return result
+// }
+//
+// internal fun FileDialog.OpenDialogParams.toNative(arena: Arena): MemorySegment {
+//    val result = NativeOpenFileDialogParams.allocate(arena)
+//    NativeOpenFileDialogParams.select_directories(result, selectDirectories)
+//    NativeOpenFileDialogParams.allows_multiple_selection(result, allowsMultipleSelections)
+//    return result
+// }
+//
+// internal fun FileDialog.SaveDialogParams.toNative(arena: Arena): MemorySegment {
+//    val result = NativeSaveFileDialogParams.allocate(arena)
+//    NativeSaveFileDialogParams.name_field_string_value(
+//        result,
+//        nameFieldStringValue?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+//    )
+//    return result
+// }

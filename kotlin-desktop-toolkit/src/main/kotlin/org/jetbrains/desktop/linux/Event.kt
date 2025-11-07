@@ -179,6 +179,7 @@ public sealed class Event {
     ) : Event()
 
     public data class KeyDown(
+        val windowId: WindowId,
         val keyCode: KeyCode,
         val characters: String?,
         val key: KeySym,
@@ -186,6 +187,7 @@ public sealed class Event {
     ) : Event()
 
     public data class KeyUp(
+        val windowId: WindowId,
         val keyCode: KeyCode,
         val key: KeySym,
     ) : Event()
@@ -195,7 +197,6 @@ public sealed class Event {
     public data class MouseMoved(
         val windowId: WindowId,
         val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
     ) : Event()
 
     public data class MouseEntered(
@@ -203,23 +204,18 @@ public sealed class Event {
         val locationInWindow: LogicalPoint,
     ) : Event()
 
-    public data class MouseExited(
-        val windowId: WindowId,
-        val locationInWindow: LogicalPoint,
-    ) : Event()
+    public data class MouseExited(val windowId: WindowId) : Event()
 
     public data class MouseUp(
         val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
     ) : Event()
 
     public data class MouseDown(
         val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
     ) : Event()
 
     public data class NotificationClosed(
@@ -242,8 +238,6 @@ public sealed class Event {
         val scrollingDeltaX: LogicalPixels,
         @Deprecated("Use `verticalScroll` instead")
         val scrollingDeltaY: LogicalPixels,
-        val locationInWindow: LogicalPoint,
-        val timestamp: Timestamp,
         val horizontalScroll: ScrollData,
         val verticalScroll: ScrollData,
     ) : Event()
@@ -265,6 +259,7 @@ public sealed class Event {
      * 6. Place the cursor inside the preedit text.
      */
     public data class TextInput(
+        val windowId: WindowId,
         val preeditStringData: TextInputPreeditStringData?,
         val commitStringData: TextInputCommitStringData?,
         val deleteSurroundingTextData: TextInputDeleteSurroundingTextData?,
@@ -282,11 +277,7 @@ public sealed class Event {
         val capabilities: WindowCapabilities,
     ) : Event()
 
-    public data class WindowKeyboardEnter(
-        val windowId: WindowId,
-        val keyCodes: List<KeyCode>,
-        val keySyms: List<KeySym>,
-    ) : Event()
+    public data class WindowKeyboardEnter(val windowId: WindowId) : Event()
 
     public data class WindowKeyboardLeave(val windowId: WindowId) : Event()
 

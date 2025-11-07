@@ -1,0 +1,155 @@
+use crate::linux::{
+    application_state::EglInstance,
+    events::{SoftwareDrawData, WindowDrawEvent, WindowId},
+    geometry::{LogicalPoint, LogicalSize, PhysicalSize},
+    rendering_egl::EglRendering,
+    rendering_software::SoftwareRendering,
+    window_resize_edge_api::WindowResizeEdge,
+};
+use log::{debug, warn};
+use std::rc::Rc;
+use winit_core::window::Window as WinitWindow;
+
+pub enum RenderingData {
+    Egl(EglRendering<'static>),
+    Software(SoftwareRendering),
+}
+
+impl RenderingData {
+    pub fn new(window: Rc<Box<dyn WinitWindow>>, egl: Option<&'static EglInstance>) -> anyhow::Result<Self> {
+        let rendering_data = if let Some(egl) = egl {
+            match EglRendering::new(egl, window.clone()) {
+                Ok(egl_rendering_data) => Self::Egl(egl_rendering_data),
+                Err(e) => {
+                    warn!("Failed to create EGL rendering, falling back to software rendering. Error: {e:?}");
+                    Self::Software(SoftwareRendering::new(window)?)
+                }
+            }
+        } else {
+            Self::Software(SoftwareRendering::new(window)?)
+        };
+        Ok(rendering_data)
+    }
+
+    pub fn draw<F>(&mut self, size: PhysicalSize, do_draw: F)
+    where
+        F: FnOnce(SoftwareDrawData) -> bool,
+    {
+        match self {
+            Self::Egl(r) => r.draw(do_draw),
+            Self::Software(r) => r.draw(size, do_draw),
+        }
+    }
+}
+
+pub struct SimpleWindow {
+    pub window_id: WindowId,
+    // pub app_id: String,
+    pub window: Rc<Box<dyn WinitWindow>>,
+    // pub set_cursor: bool,
+    // decorations_cursor: Option<CursorIcon>,
+    pub current_scale: f64,
+    // decoration_mode: DecorationMode,
+    pub rendering_data: RenderingData,
+}
+
+impl SimpleWindow {
+    pub fn draw(
+        &mut self,
+        // themed_pointer: Option<&mut ThemedPointer>,
+        callback: &dyn Fn(WindowDrawEvent) -> bool,
+    ) {
+        // let surface = self.window.wl_surface();
+        // if self.set_cursor
+        //     && let Some(themed_pointer) = themed_pointer
+        // {
+        //     debug!("Updating cursor to {:?} for {}", self.decorations_cursor, surface.id());
+        //     if let Some(decorations_cursor) = self.decorations_cursor {
+        //         match themed_pointer.set_cursor(conn, decorations_cursor) {
+        //             Ok(()) => {
+        //                 self.set_cursor = false;
+        //             }
+        //             Err(e) => {
+        //                 error!("Failed to set cursor, error: {e:?}");
+        //             }
+        //         }
+        //     } else if let Err(e) = themed_pointer.hide_cursor() {
+        //         warn!("Failed to hide cursor: {e}");
+        //     } else {
+        //         self.set_cursor = false;
+        //     }
+        // }
+
+        let physical_size = self.get_physical_size();
+
+        let do_draw = |software_draw_data: SoftwareDrawData| {
+            let did_draw = callback(WindowDrawEvent {
+                window_id: self.window_id,
+                software_draw_data,
+                physical_size,
+                scale: self.current_scale,
+            });
+
+            // Request our next frame
+            self.window.request_redraw();
+            did_draw
+        };
+
+        self.rendering_data.draw(physical_size, do_draw);
+    }
+
+    fn on_physical_size_changed(&mut self, physical_size: PhysicalSize) {
+        match &mut self.rendering_data {
+            RenderingData::Egl(egl_data) => {
+                egl_data.resize(physical_size);
+            }
+            RenderingData::Software(data) => {
+                data.resize(physical_size);
+            }
+        }
+    }
+
+    pub fn on_resize(&mut self, physical_size: PhysicalSize) {
+        self.on_physical_size_changed(physical_size);
+    }
+
+    pub fn scale_changed(&mut self, new_scale: f64) {
+        debug!("scale_changed: {new_scale}");
+        self.current_scale = new_scale;
+        let physical_size = self.get_physical_size();
+
+        self.on_physical_size_changed(physical_size);
+    }
+
+    pub fn get_physical_size(&self) -> PhysicalSize {
+        self.window.surface_size().into()
+    }
+
+    pub fn get_logical_size(&self) -> LogicalSize {
+        self.get_physical_size().to_logical(self.current_scale)
+    }
+
+    // pub fn set_cursor_icon(&mut self, pointer_shape: PointerShape) {
+    //     let cursor_icon = pointer_shape.into();
+    //     if self.decorations_cursor != cursor_icon {
+    //         self.set_cursor = true;
+    //         self.decorations_cursor = cursor_icon;
+    //     }
+    // }
+
+    pub fn start_move(&self) -> anyhow::Result<()> {
+        self.window.drag_window()?;
+        Ok(())
+    }
+
+    pub fn start_resize(&self, edge: WindowResizeEdge) -> anyhow::Result<()> {
+        if let Some(direction) = edge.into() {
+            self.window.drag_resize_window(direction)?;
+        }
+        Ok(())
+    }
+
+    pub fn show_menu(&self, position: LogicalPoint) {
+        self.window.show_window_menu(position.as_winit_position());
+    }
+}

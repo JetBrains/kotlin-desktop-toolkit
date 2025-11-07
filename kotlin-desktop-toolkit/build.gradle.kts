@@ -88,7 +88,7 @@ fun mainCrateForOS(os: Os): String {
     return when (os) {
         Os.MACOS -> "desktop-macos"
         Os.WINDOWS -> "desktop-win32"
-        Os.LINUX -> "desktop-linux"
+        Os.LINUX -> "desktop-linux-x11"
     }
 }
 
