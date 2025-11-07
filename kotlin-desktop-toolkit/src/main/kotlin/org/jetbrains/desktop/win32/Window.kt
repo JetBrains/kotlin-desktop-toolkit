@@ -11,13 +11,13 @@ public typealias WindowId = Long
 public data class WindowParams(
     val origin: LogicalPoint = LogicalPoint(0f, 0f),
     val size: LogicalSize = LogicalSize(640f, 480f),
-    val title: String? = null,
+    val title: String = "",
     val style: WindowStyle = WindowStyle(),
 ) {
     internal fun toNative(arena: Arena): MemorySegment = NativeWindowParams.allocate(arena).also { nativeWindowParams ->
         NativeWindowParams.origin(nativeWindowParams, origin.toNative(arena))
         NativeWindowParams.size(nativeWindowParams, size.toNative(arena))
-        NativeWindowParams.title(nativeWindowParams, title?.let(arena::allocateUtf8String) ?: MemorySegment.NULL)
+        NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
         NativeWindowParams.style(nativeWindowParams, style.toNative(arena))
     }
 }
