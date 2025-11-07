@@ -9,7 +9,7 @@ use anyhow::Context;
 use windows::{
     UI::Composition::{Compositor, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
-        Foundation::{COLORREF, ERROR_NO_UNICODE_TRANSLATION, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
+        Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
         Graphics::{
             Dwm::{
                 DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
@@ -29,13 +29,14 @@ use windows::{
             },
         },
     },
-    core::{Error as WinError, HSTRING, Interface, PCWSTR, Result as WinResult, w},
+    core::{Interface, PCWSTR, Result as WinResult, w},
 };
 
 use super::{
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalSize},
     screen::{self, ScreenInfo},
+    strings::copy_from_utf8_string,
     utils,
     window_api::{WindowId, WindowParams, WindowStyle, WindowTitleBarKind},
 };
@@ -70,11 +71,7 @@ impl Window {
             style: CS_HREDRAW | CS_VREDRAW,
             ..Default::default()
         };
-        let title = params
-            .title
-            .as_optional_str()
-            .map_err(|_| WinError::from(ERROR_NO_UNICODE_TRANSLATION))?
-            .map_or_else(HSTRING::new, HSTRING::from);
+        let title = copy_from_utf8_string(&params.title)?;
         let window = Rc::new(Self {
             hwnd: AtomicPtr::default(),
             compositor,
