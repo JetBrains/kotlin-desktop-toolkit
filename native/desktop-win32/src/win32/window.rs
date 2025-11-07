@@ -23,9 +23,9 @@ use windows::{
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, GWL_STYLE, GetPropW, IDC_ARROW, LoadCursorW,
-                RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW, SetWindowLongPtrW,
-                SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW,
-                WS_EX_NOREDIRECTIONBITMAP,
+                PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW,
+                SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY,
+                WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
@@ -155,7 +155,7 @@ impl Window {
                     self.hwnd(),
                     DWMWA_CAPTION_COLOR,
                     (&raw const colorref).cast(),
-                    core::mem::size_of::<COLORREF>() as _,
+                    size_of::<COLORREF>() as _,
                 )?;
             }
         }
@@ -177,7 +177,7 @@ impl Window {
                     self.hwnd(),
                     DWMWA_SYSTEMBACKDROP_TYPE,
                     (&raw const backdrop).cast(),
-                    core::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as _,
+                    size_of::<DWM_SYSTEMBACKDROP_TYPE>() as _,
                 )?;
             }
         }
@@ -226,6 +226,10 @@ impl Window {
 
     pub fn request_redraw(&self) -> WinResult<()> {
         unsafe { RedrawWindow(Some(self.hwnd()), None, None, RDW_INVALIDATE | RDW_NOFRAME | RDW_NOERASE) }.ok()
+    }
+
+    pub fn request_close(&self) -> WinResult<()> {
+        unsafe { PostMessageW(Some(self.hwnd()), WM_CLOSE, WPARAM::default(), LPARAM::default()) }
     }
 }
 
