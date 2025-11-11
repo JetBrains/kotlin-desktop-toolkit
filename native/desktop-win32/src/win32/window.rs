@@ -2,7 +2,10 @@ use std::{
     cell::RefCell,
     mem::ManuallyDrop,
     rc::{Rc, Weak},
-    sync::atomic::{AtomicBool, AtomicPtr, Ordering},
+    sync::{
+        OnceLock,
+        atomic::{AtomicBool, AtomicPtr, Ordering},
+    },
 };
 
 use anyhow::Context;
@@ -38,54 +41,72 @@ use super::{
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
     utils,
-    window_api::{WindowId, WindowParams, WindowStyle, WindowTitleBarKind},
+    window_api::{WindowParams, WindowStyle, WindowTitleBarKind},
 };
 
 /// cbindgen:ignore
 const WINDOW_PTR_PROP_NAME: PCWSTR = w!("KDT_WINDOW_PTR");
+/// cbindgen:ignore
+const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct WindowId(pub isize);
 
 pub struct Window {
+    id: WindowId,
     hwnd: AtomicPtr<core::ffi::c_void>,
     compositor: Weak<Compositor>,
     composition_target: RefCell<Option<DesktopWindowTarget>>,
     sprite_visual: RefCell<Option<SpriteVisual>>,
     min_size: RefCell<Option<LogicalSize>>,
-    origin: LogicalPoint,
-    size: LogicalSize,
-    style: WindowStyle,
+    origin: RefCell<LogicalPoint>,
+    size: RefCell<LogicalSize>,
+    style: RefCell<WindowStyle>,
     pointer_in_client: AtomicBool,
     event_loop: Weak<EventLoop>,
 }
 
 impl Window {
     #[allow(clippy::cast_possible_truncation)]
-    pub fn new(params: &WindowParams, event_loop: Weak<EventLoop>, compositor: Weak<Compositor>) -> WinResult<Rc<Self>> {
-        const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
-        let instance = crate::get_dll_instance();
-        let wndclass = WNDCLASSEXW {
-            cbSize: size_of::<WNDCLASSEXW>() as _,
-            hInstance: instance,
-            lpszClassName: WNDCLASS_NAME,
-            lpfnWndProc: Some(wndproc),
-            hCursor: unsafe { LoadCursorW(None, IDC_ARROW) }?,
-            style: CS_HREDRAW | CS_VREDRAW,
-            ..Default::default()
-        };
-        let title = copy_from_utf8_string(&params.title)?;
-        let window = Rc::new(Self {
+    pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor: Weak<Compositor>) -> WinResult<Self> {
+        static WNDCLASS_INIT: OnceLock<u16> = OnceLock::new();
+        if WNDCLASS_INIT.get().is_none() {
+            let wndclass = WNDCLASSEXW {
+                cbSize: size_of::<WNDCLASSEXW>() as _,
+                hInstance: crate::get_dll_instance(),
+                lpszClassName: WNDCLASS_NAME,
+                lpfnWndProc: Some(wndproc),
+                hCursor: unsafe { LoadCursorW(None, IDC_ARROW) }?,
+                style: CS_HREDRAW | CS_VREDRAW,
+                ..Default::default()
+            };
+            let atom = unsafe { RegisterClassExW(&raw const wndclass) };
+            WNDCLASS_INIT.get_or_init(|| atom);
+        }
+        let window = Self {
+            id: window_id,
             hwnd: AtomicPtr::default(),
             compositor,
             composition_target: RefCell::new(None),
             sprite_visual: RefCell::new(None),
             min_size: RefCell::new(None),
-            origin: params.origin,
-            size: params.size,
-            style: params.style,
+            origin: RefCell::default(),
+            size: RefCell::default(),
+            style: RefCell::default(),
             pointer_in_client: AtomicBool::new(false),
             event_loop,
-        });
+        };
+        Ok(window)
+    }
+
+    pub fn create(window: &Rc<Self>, creation_params: &WindowParams) -> WinResult<()> {
+        let instance = crate::get_dll_instance();
+        window.origin.replace(creation_params.origin);
+        window.size.replace(creation_params.size);
+        window.style.replace(creation_params.style);
+        let title = copy_from_utf8_string(&creation_params.title)?;
         unsafe {
-            let _atom = RegisterClassExW(&raw const wndclass);
             CreateWindowExW(
                 WS_EX_NOREDIRECTIONBITMAP,
                 WNDCLASS_NAME,
@@ -98,15 +119,15 @@ impl Window {
                 None,
                 None,
                 Some(instance),
-                Some(Rc::downgrade(&window).into_raw().cast()),
+                Some(Rc::downgrade(window).into_raw().cast()),
             )?;
         }
-        Ok(window)
+        Ok(())
     }
 
     #[must_use]
-    pub fn id(&self) -> WindowId {
-        WindowId(self.hwnd().0 as isize)
+    pub const fn id(&self) -> WindowId {
+        self.id
     }
 
     #[inline]
@@ -136,13 +157,13 @@ impl Window {
     }
 
     #[must_use]
-    pub const fn has_custom_title_bar(&self) -> bool {
-        matches!(self.style.title_bar_kind, WindowTitleBarKind::Custom)
+    pub fn has_custom_title_bar(&self) -> bool {
+        matches!(self.style.borrow().title_bar_kind, WindowTitleBarKind::Custom)
     }
 
     #[must_use]
-    pub const fn is_resizable(&self) -> bool {
-        self.style.is_resizable
+    pub fn is_resizable(&self) -> bool {
+        self.style.borrow().is_resizable
     }
 
     #[allow(clippy::cast_possible_truncation)]
@@ -171,7 +192,7 @@ impl Window {
     #[allow(clippy::cast_possible_truncation)]
     pub fn apply_system_backdrop(&self) -> WinResult<()> {
         if utils::is_windows_11_build_22621_or_higher() {
-            let backdrop: DWM_SYSTEMBACKDROP_TYPE = self.style.system_backdrop_type.to_system();
+            let backdrop: DWM_SYSTEMBACKDROP_TYPE = self.style.borrow().system_backdrop_type.to_system();
             unsafe {
                 DwmSetWindowAttribute(
                     self.hwnd(),
@@ -294,8 +315,8 @@ fn on_nccreate(hwnd: HWND, lparam: LPARAM) -> anyhow::Result<()> {
 
 fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.hwnd.store(hwnd.0, Ordering::Release);
-    unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.to_system().0 as _) };
-    window.set_position(window.origin, window.size)?;
+    unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.borrow().to_system().0 as _) };
+    window.set_position(*window.origin.borrow(), *window.size.borrow())?;
     initialize_composition(window, hwnd).context("failed to initialize composition")
 }
 

@@ -5,6 +5,9 @@ import org.jetbrains.desktop.win32.generated.NativeWindowStyle
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.concurrent.atomics.fetchAndIncrement
 
 public typealias WindowId = Long
 
@@ -42,41 +45,50 @@ public data class WindowStyle(
     }
 }
 
-public class Window internal constructor(private val ptr: MemorySegment) : AutoCloseable {
+public class Window internal constructor(
+    private val windowId: WindowId,
+    private val ptr: MemorySegment,
+) : AutoCloseable {
     public companion object {
-        public fun create(appPtr: MemorySegment, params: WindowParams): Window {
-            return Arena.ofConfined().use { arena ->
-                Window(
-                    ffiDownCall {
-                        desktop_win32_h.window_create(appPtr, params.toNative(arena))
-                    },
-                )
-            }
-        }
+        @OptIn(ExperimentalAtomicApi::class)
+        private val nextWindowId: AtomicLong = AtomicLong(1)
 
-        public fun create(
-            appPtr: MemorySegment,
-            origin: LogicalPoint = LogicalPoint(0f, 0f),
-            size: LogicalSize = LogicalSize(640f, 480f),
-            title: String = "Window",
-            style: WindowStyle = WindowStyle(),
-        ): Window {
-            return create(
-                appPtr,
-                WindowParams(
-                    origin,
-                    size,
-                    title,
-                    style,
-                ),
-            )
+        @OptIn(ExperimentalAtomicApi::class)
+        public fun new(appPtr: MemorySegment): Window {
+            val windowId = nextWindowId.fetchAndIncrement()
+            val ptr = Arena.ofConfined().use { arena ->
+                ffiDownCall {
+                    desktop_win32_h.window_new(appPtr, windowId)
+                }
+            }
+            return Window(windowId, ptr)
         }
     }
 
     internal inline fun <T> withPointer(block: (MemorySegment) -> T): T = block(this.ptr)
 
-    public fun windowId(): WindowId {
-        return ffiDownCall { desktop_win32_h.window_get_window_id(ptr) }
+    public val id: WindowId get() = this.windowId
+
+    public fun create(params: WindowParams): Unit = Arena.ofConfined().use { arena ->
+        ffiDownCall {
+            desktop_win32_h.window_create(ptr, params.toNative(arena))
+        }
+    }
+
+    public fun create(
+        origin: LogicalPoint = LogicalPoint(0f, 0f),
+        size: LogicalSize = LogicalSize(640f, 480f),
+        title: String = "Window",
+        style: WindowStyle = WindowStyle(),
+    ) {
+        create(
+            WindowParams(
+                origin,
+                size,
+                title,
+                style,
+            ),
+        )
     }
 
     public fun getScaleFactor(): Float {

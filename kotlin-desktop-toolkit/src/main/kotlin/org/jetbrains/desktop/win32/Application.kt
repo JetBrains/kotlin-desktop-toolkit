@@ -70,9 +70,7 @@ public class Application : AutoCloseable {
         }
     }
 
-    public fun createWindow(params: WindowParams): Window {
-        return Window.create(appPtr, params)
-    }
+    public fun newWindow(): Window = Window.new(appPtr)
 
     private fun runEventHandler(windowId: WindowId, event: Event): EventHandlerResult {
         return eventHandler?.let { eventHandler ->

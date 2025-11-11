@@ -31,15 +31,8 @@ fun legoAnimation(): String {
     return object {}.javaClass.getResource("/lego_loader.json")!!.readText()
 }
 
-class SkottieWindow(
-    app: Application,
-    windowParams: WindowParams,
-) : SkikoWindowWin32(app, windowParams) {
+class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
     companion object {
-        fun createWindow(app: Application, windowParams: WindowParams): SkottieWindow {
-            return SkottieWindow(app, windowParams)
-        }
-
         private const val ANIMATION_FRAME_COUNT: Int = 151
     }
 
@@ -88,9 +81,11 @@ class ApplicationState(private val app: Application) : AutoCloseable {
             ),
         )
 
-        val window = SkottieWindow.createWindow(app, windowParams)
+        val window = SkottieWindow(app)
+        windows[window.window.id] = window
 
-        windows[window.window.windowId()] = window
+        window.window.create(windowParams)
+        window.window.setMinSize(LogicalSize(320.0f, 240.0f))
         window.window.show()
     }
 
