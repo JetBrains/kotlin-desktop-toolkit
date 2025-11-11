@@ -14,7 +14,11 @@ use windows::{
     core::Result as WinResult,
 };
 
-use super::{event_loop::EventLoop, events::EventHandler, window::Window, window_api::WindowParams};
+use super::{
+    event_loop::EventLoop,
+    events::EventHandler,
+    window::{Window, WindowId},
+};
 
 pub struct Application {
     dispatcher_queue_controller: DispatcherQueueController,
@@ -64,8 +68,8 @@ impl Application {
             .inspect_err(|err| log::error!("Failed to shut down the dispatcher queue: {err:?}"))
     }
 
-    pub(crate) fn create_window(&self, params: &WindowParams) -> WinResult<Rc<Window>> {
-        Window::new(params, Rc::downgrade(&self.event_loop), Rc::downgrade(&self.compositor))
+    pub(crate) fn new_window(&self, window_id: WindowId) -> WinResult<Window> {
+        Window::new(window_id, Rc::downgrade(&self.event_loop), Rc::downgrade(&self.compositor))
     }
 }
 

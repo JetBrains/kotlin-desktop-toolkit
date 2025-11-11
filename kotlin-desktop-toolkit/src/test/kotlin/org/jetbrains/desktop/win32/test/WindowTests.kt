@@ -20,15 +20,17 @@ class WindowTests {
         Application().use { app ->
             val windows = mutableMapOf<WindowId, Window>()
             app.onStartup {
-                val window1 = app.createWindow(WindowParams(title = "Test Hello1"))
-                val window2 = app.createWindow(
+                val window1 = app.newWindow()
+                val window2 = app.newWindow()
+                windows[window1.id] = window1
+                windows[window2.id] = window2
+                window1.create(WindowParams(title = "Test Hello1"))
+                window2.create(
                     WindowParams(
                         title = "Hello2",
                         size = LogicalSize(200f, 300f),
                     ),
                 )
-                windows[window1.windowId()] = window1
-                windows[window2.windowId()] = window2
                 window1.show()
                 window2.show()
             }
@@ -41,6 +43,7 @@ class WindowTests {
                                 app.stopEventLoop()
                             }
                         }
+
                         else -> window.requestClose()
                     }
                 }

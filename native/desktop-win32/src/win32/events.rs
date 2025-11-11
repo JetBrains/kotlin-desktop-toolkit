@@ -4,7 +4,7 @@ use super::{
     geometry::{LogicalPoint, PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
     pointer::{PointerButtons, PointerState},
-    window_api::WindowId,
+    window::WindowId,
 };
 
 #[repr(C)]

@@ -1,10 +1,10 @@
+use std::{mem::ManuallyDrop, rc::Rc};
+
 use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedRcPtr},
     logger::{PanicDefault, ffi_boundary},
 };
-
 use windows::Win32::{
-    Foundation::INVALID_HANDLE_VALUE,
     Graphics::Dwm::{DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW},
     UI::WindowsAndMessaging::{WINDOW_STYLE, WS_CAPTION, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME},
 };
@@ -14,18 +14,8 @@ use super::{
     application_api::AppPtr,
     geometry::{LogicalPoint, LogicalSize},
     screen::ScreenInfo,
-    window::Window,
+    window::{Window, WindowId},
 };
-
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct WindowId(pub isize);
-
-impl PanicDefault for WindowId {
-    fn default() -> Self {
-        Self(INVALID_HANDLE_VALUE.0 as isize)
-    }
-}
 
 pub type WindowPtr<'a> = RustAllocatedRcPtr<'a>;
 
@@ -66,6 +56,18 @@ impl WindowStyle {
             style &= !WS_MAXIMIZEBOX.0;
         }
         WINDOW_STYLE(style)
+    }
+}
+
+impl Default for WindowStyle {
+    fn default() -> Self {
+        Self {
+            title_bar_kind: WindowTitleBarKind::System,
+            is_resizable: true,
+            is_minimizable: true,
+            is_maximizable: true,
+            system_backdrop_type: WindowSystemBackdropType::Auto,
+        }
     }
 }
 
@@ -110,18 +112,22 @@ pub(crate) fn with_window<R: PanicDefault>(window_ptr: &WindowPtr, name: &str, f
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_create(app_ptr: AppPtr, params: WindowParams) -> WindowPtr<'static> {
-    let window = ffi_boundary("window_create", || {
+pub extern "C" fn window_new(app_ptr: AppPtr, window_id: WindowId) -> WindowPtr<'static> {
+    let window = ffi_boundary("window_new", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        let window = app.create_window(&params)?;
-        Ok(Some(window))
+        let window = app.new_window(window_id)?;
+        Ok(Some(Rc::new(window)))
     });
     WindowPtr::from_rc(window)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_get_window_id(window_ptr: WindowPtr) -> WindowId {
-    with_window(&window_ptr, "window_get_window_id", |window| Ok(window.id()))
+pub extern "C" fn window_create(window_ptr: WindowPtr, params: WindowParams) {
+    ffi_boundary("window_create", || {
+        let window = ManuallyDrop::new(unsafe { window_ptr.to_rc::<Window>() });
+        Window::create(&window, &params)?;
+        Ok(())
+    });
 }
 
 #[unsafe(no_mangle)]

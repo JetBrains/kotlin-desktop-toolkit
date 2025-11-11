@@ -5,12 +5,10 @@ import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.Logger
-import org.jetbrains.desktop.win32.LogicalSize
 import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.Screen
 import org.jetbrains.desktop.win32.SurfaceParams
 import org.jetbrains.desktop.win32.VirtualKey
-import org.jetbrains.desktop.win32.WindowParams
 import org.jetbrains.skia.BackendRenderTarget
 import org.jetbrains.skia.Canvas
 import org.jetbrains.skia.Color
@@ -24,10 +22,7 @@ import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
 import kotlin.time.TimeSource
 
-abstract class SkikoWindowWin32(
-    app: Application,
-    params: WindowParams,
-) : AutoCloseable {
+abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
     private val angleRenderer: AngleRenderer by lazy {
         AngleRenderer.create(window)
     }
@@ -38,15 +33,11 @@ abstract class SkikoWindowWin32(
         DirectContext.makeGLWithInterface(glInterface)
     }
 
-    val window = app.createWindow(params)
+    val window = app.newWindow()
     private val creationTime = TimeSource.Monotonic.markNow()
 
     private var currentSize = PhysicalSize(0, 0)
     private var surfaceParams: SurfaceParams? = null
-
-    init {
-        window.setMinSize(LogicalSize(320.0f, 240.0f))
-    }
 
     private fun isSizeChanged(size: PhysicalSize): Boolean {
         return (size.width != currentSize.width || size.height != currentSize.height)
