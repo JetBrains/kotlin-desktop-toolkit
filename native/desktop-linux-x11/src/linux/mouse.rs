@@ -24,7 +24,6 @@ impl TryFrom<winit_core::event::ButtonSource> for MouseButton {
         match value {
             ButtonSource::Mouse(mouse_button) => mouse_button.try_into(),
             ButtonSource::Touch { .. } => Err(()),
-            ButtonSource::TabletTool { .. } => Err(()),
             ButtonSource::Unknown(raw_button) => Ok(Self(raw_button.into())),
         }
     }

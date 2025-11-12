@@ -1,10 +1,9 @@
-use anyhow::{Context, bail};
+use anyhow::bail;
 use desktop_common::{
     ffi_utils::{BorrowedArray, BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr},
     logger::ffi_boundary,
 };
 use log::debug;
-use winit_core::window::{ImeCapabilities, ImeEnableRequest, ImeRequest, ImeRequestData};
 // use crate::linux::mime_types::MimeTypes;
 use crate::linux::text_input_api::TextInputContext;
 use crate::linux::user_events::UserEvents;
@@ -174,15 +173,7 @@ pub extern "C" fn application_text_input_enable(mut app_ptr: AppPtr, context: Te
     ffi_boundary("application_text_input_enable", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         for w in app.state.windows.values_mut() {
-            let ime_caps = ImeCapabilities::new();
-            // let surrounding_text = ImeSurroundingText::new(
-            //     context.surrounding_text.as_str()?.to_owned(),
-            //     context.cursor_codepoint_offset.into(),
-            //     context.selection_start_codepoint_offset.into(),
-            // ).map_err(|e| anyhow!("{e:?}"))?;
-            let request_data = ImeRequestData::default(); //.with_surrounding_text(surrounding_text);
-            let request = ImeRequest::Enable(ImeEnableRequest::new(ime_caps, request_data).context("Failed to create ImeEnableRequest")?);
-            w.window.request_ime_update(request)?;
+            w.window.set_ime_allowed(true);
         }
         Ok(())
     });
@@ -204,7 +195,7 @@ pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr) {
     ffi_boundary("application_text_input_disable", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         for w in app.state.windows.values_mut() {
-            w.window.request_ime_update(ImeRequest::Disable)?;
+            w.window.set_ime_allowed(false);
         }
         Ok(())
     });
