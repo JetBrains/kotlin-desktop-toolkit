@@ -248,6 +248,20 @@ checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
 name = "calloop"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b99da2f8558ca23c71f4fd15dc57c906239752dd27ff3c00a1d56b685b7cbfec"
+dependencies = [
+ "bitflags",
+ "log",
+ "polling",
+ "rustix 0.38.44",
+ "slab",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "calloop"
 version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb9f6e1368bd4621d2c86baa7e37de77a938adf5221e5dd3d6133340101b309e"
@@ -265,7 +279,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "138efcf0940a02ebf0cc8d1eff41a1682a46b431630f4c52450d6265876021fa"
 dependencies = [
- "calloop",
+ "calloop 0.14.3",
  "rustix 1.1.2",
  "wayland-backend",
  "wayland-client",
@@ -557,7 +571,7 @@ checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
 [[package]]
 name = "dpi"
 version = "0.1.2"
-source = "git+https://github.com/nikola-kocic-jetbrains/winit.git?rev=91a7152a50dc68f750fb2643f405d11ea3896ae4#91a7152a50dc68f750fb2643f405d11ea3896ae4"
+source = "git+https://github.com/rust-windowing/winit.git?rev=fa0795a50cd4cd40c46dfeff60c872064017914c#fa0795a50cd4cd40c46dfeff60c872064017914c"
 
 [[package]]
 name = "endi"
@@ -1100,7 +1114,7 @@ dependencies = [
  "serde-value",
  "serde_json",
  "serde_yaml",
- "thiserror",
+ "thiserror 2.0.17",
  "thread-id",
  "typemap-ors",
  "unicode-segmentation",
@@ -1939,7 +1953,7 @@ checksum = "0512da38f5e2b31201a93524adb8d3136276fa4fe4aafab4e1f727a82b534cc0"
 dependencies = [
  "bitflags",
  "bytemuck",
- "calloop",
+ "calloop 0.14.3",
  "calloop-wayland-source",
  "cursor-icon",
  "libc",
@@ -1947,7 +1961,7 @@ dependencies = [
  "memmap2",
  "pkg-config",
  "rustix 1.1.2",
- "thiserror",
+ "thiserror 2.0.17",
  "wayland-backend",
  "wayland-client",
  "wayland-csd-frame",
@@ -2079,11 +2093,31 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+dependencies = [
+ "thiserror-impl 1.0.69",
+]
+
+[[package]]
+name = "thiserror"
 version = "2.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f63587ca0f12b72a0600bcba1d40081f830876000bb46dd2337a3051618f4fc8"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 2.0.17",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "1.0.69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -2841,8 +2875,8 @@ checksum = "d6bbff5f0aada427a1e5a6da5f1f98158182f26556f345ac9e04d36d0ebed650"
 
 [[package]]
 name = "winit-common"
-version = "0.30.12"
-source = "git+https://github.com/nikola-kocic-jetbrains/winit.git?rev=91a7152a50dc68f750fb2643f405d11ea3896ae4#91a7152a50dc68f750fb2643f405d11ea3896ae4"
+version = "0.30.11"
+source = "git+https://github.com/rust-windowing/winit.git?rev=fa0795a50cd4cd40c46dfeff60c872064017914c#fa0795a50cd4cd40c46dfeff60c872064017914c"
 dependencies = [
  "smol_str",
  "tracing",
@@ -2853,8 +2887,8 @@ dependencies = [
 
 [[package]]
 name = "winit-core"
-version = "0.30.12"
-source = "git+https://github.com/nikola-kocic-jetbrains/winit.git?rev=91a7152a50dc68f750fb2643f405d11ea3896ae4#91a7152a50dc68f750fb2643f405d11ea3896ae4"
+version = "0.30.11"
+source = "git+https://github.com/rust-windowing/winit.git?rev=fa0795a50cd4cd40c46dfeff60c872064017914c#fa0795a50cd4cd40c46dfeff60c872064017914c"
 dependencies = [
  "bitflags",
  "cursor-icon",
@@ -2867,12 +2901,12 @@ dependencies = [
 
 [[package]]
 name = "winit-x11"
-version = "0.30.12"
-source = "git+https://github.com/nikola-kocic-jetbrains/winit.git?rev=91a7152a50dc68f750fb2643f405d11ea3896ae4#91a7152a50dc68f750fb2643f405d11ea3896ae4"
+version = "0.30.11"
+source = "git+https://github.com/rust-windowing/winit.git?rev=fa0795a50cd4cd40c46dfeff60c872064017914c#fa0795a50cd4cd40c46dfeff60c872064017914c"
 dependencies = [
  "bitflags",
  "bytemuck",
- "calloop",
+ "calloop 0.13.0",
  "cursor-icon",
  "dpi",
  "libc",

@@ -25,7 +25,7 @@ use winit_core::event_loop::ActiveEventLoop;
 // use winit::platform::scancode::PhysicalKeyExtScancode;
 use crate::linux::events::Event::XdgDesktopSettingChange;
 use crate::linux::xdg_desktop_settings_api::XdgDesktopSetting;
-use winit_core::window::{Window, WindowAttributes};
+use winit_core::window::WindowAttributes;
 
 /// cbindgen:ignore
 pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
@@ -296,23 +296,6 @@ impl ApplicationHandler for ApplicationState {
                             commit_string: BorrowedStrPtr::new(&commit_string_cstr),
                             has_delete_surrounding_text: false,
                             delete_surrounding_text: TextInputDeleteSurroundingTextData::default(),
-                        };
-                        self.send_event(event);
-                    }
-                    Ime::DeleteSurrounding { before_bytes, after_bytes } => {
-                        #[allow(clippy::cast_possible_truncation)]
-                        let delete_surrounding_text = TextInputDeleteSurroundingTextData {
-                            before_length_in_bytes: before_bytes as u32,
-                            after_length_in_bytes: after_bytes as u32,
-                        };
-                        let event = TextInputEvent {
-                            window_id: w.window_id,
-                            has_preedit_string: false,
-                            preedit_string: TextInputPreeditStringData::default(),
-                            has_commit_string: false,
-                            commit_string: BorrowedStrPtr::null(),
-                            has_delete_surrounding_text: true,
-                            delete_surrounding_text,
                         };
                         self.send_event(event);
                     }
