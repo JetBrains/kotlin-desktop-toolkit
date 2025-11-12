@@ -413,7 +413,7 @@ impl RustAllocatedRcPtr<'_> {
     #[must_use]
     pub unsafe fn to_rc<R>(&self) -> Rc<R> {
         assert!(!self.0.ptr.is_null());
-        let ptr = self.0.ptr.cast_mut().cast::<R>();
+        let ptr = self.0.ptr.cast::<R>();
         unsafe { Rc::from_raw(ptr) }
     }
 

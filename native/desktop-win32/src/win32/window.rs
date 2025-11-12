@@ -279,7 +279,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
     if msg == WM_NCDESTROY {
         if let Ok(raw) = unsafe { RemovePropW(hwnd, WINDOW_PTR_PROP_NAME) } {
-            let _ = unsafe { Rc::from_raw(raw.0.cast::<Window>()) };
+            let _ = unsafe { Weak::from_raw(raw.0.cast::<Window>()) };
         }
         return LRESULT(0);
     }
@@ -290,13 +290,16 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     }
 
     // we reuse the weak reference on every iteration of the event loop, so we don't drop it here (see above)
-    let window = ManuallyDrop::new(unsafe { Rc::from_raw(raw) });
-    if hwnd == window.hwnd() {
-        let event_loop = window.event_loop.upgrade().expect("event loop has been dropped");
-        event_loop.window_proc(Rc::as_ref(&window), msg, wparam, lparam)
-    } else {
-        log::error!("the window pointer was incorrect");
-        unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+    let this = ManuallyDrop::new(unsafe { Weak::from_raw(raw) });
+    match this.upgrade() {
+        Some(window) if hwnd == window.hwnd() => {
+            let event_loop = window.event_loop.upgrade().expect("event loop has been dropped");
+            event_loop.window_proc(&window, msg, wparam, lparam)
+        }
+        _ => {
+            log::error!("the window pointer was incorrect");
+            unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+        }
     }
 }
 
@@ -304,13 +307,19 @@ fn on_nccreate(hwnd: HWND, lparam: LPARAM) -> anyhow::Result<()> {
     let create_struct = unsafe { (lparam.0 as *mut CREATESTRUCTW).as_mut() }.context("CREATESTRUCTW is null")?;
 
     let window_ptr = create_struct.lpCreateParams.cast_const().cast::<Window>();
-    let john_weak = ManuallyDrop::new(unsafe { Weak::from_raw(window_ptr) });
+    let john_weak = unsafe { Weak::from_raw(window_ptr) };
 
     let window = john_weak.upgrade().context("failed to upgrade the window weak reference")?;
     initialize_window(&window, hwnd).context("failed to initialize the window")?;
 
-    unsafe { SetPropW(hwnd, WINDOW_PTR_PROP_NAME, Some(HANDLE(Rc::into_raw(window).cast_mut().cast()))) }
-        .context("failed to set the window property")
+    unsafe {
+        SetPropW(
+            hwnd,
+            WINDOW_PTR_PROP_NAME,
+            Some(HANDLE(Weak::into_raw(john_weak).cast_mut().cast())),
+        )
+    }
+    .context("failed to set the window property")
 }
 
 fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
