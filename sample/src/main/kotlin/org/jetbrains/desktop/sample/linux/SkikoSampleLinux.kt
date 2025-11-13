@@ -315,7 +315,9 @@ private class EditorState {
                 paint.strokeWidth = 5 * scale
                 val x0 = textLine.getCoordAtOffset(cursorOffset)
                 val x1 = textLine.getCoordAtOffset(cursorOffset + composedText.length)
-                canvas.drawLine(x0 = x0, y0 = y + (5 * scale), x1 = x1, y1 = y + (5 * scale), paint = paint)
+                val y0 = y + textLine.descent
+                val y1 = y0
+                canvas.drawLine(x0 = x0, y0 = y0, x1 = x1, y1 = y1, paint = paint)
             }
         }
         val selectionStartOffset = selectionStartOffset
@@ -334,22 +336,25 @@ private class EditorState {
             canvas.drawTextLine(textLine, 0f, y, paint)
         }
         composedTextRange?.let { (composedTextStartOffset, composedTextEndOffset) ->
+            check(composedTextStartOffset == composedTextEndOffset) {
+                "composedTextStartOffset ($composedTextStartOffset) != composedTextEndOffset ($composedTextEndOffset)"
+            }
             Paint().use { paint ->
                 val x0 = textLine.getCoordAtOffset(cursorOffset + composedTextStartOffset)
-                val x1 = textLine.getCoordAtOffset(cursorOffset + composedTextEndOffset + 1)
+                val x1 = x0
                 val y0 = y + textLine.ascent
                 val y1 = y + textLine.descent
 
                 cursorRectangle = LogicalRect(
                     x = (x0 / scale).roundToInt(),
                     y = (y0 / scale).roundToInt(),
-                    width = ((x1 - x0) / scale).roundToInt(),
+                    width = scale.roundToInt(),
                     height = ((textLine.descent - textLine.ascent) / scale).roundToInt(),
                 )
                 paint.color = Color.GREEN
                 paint.strokeWidth = cursorRectangle.width * scale
 
-                canvas.drawLine(x0 = x0, y0 = y0, x1 = x1, y1 = y1, paint = paint)
+                canvas.drawLine(x0 = x0, y0 = y0, x1 = x0, y1 = y1, paint = paint)
             }
         }
     }
