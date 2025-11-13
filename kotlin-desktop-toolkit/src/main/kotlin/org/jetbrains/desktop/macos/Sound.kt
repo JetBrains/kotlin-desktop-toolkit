@@ -17,7 +17,7 @@ public object Sound {
      *
      * The sound files are typically located in `/System/Library/Sounds/`.
      *
-     * @param soundName The name of the system sound to play (without the .aiff extension)
+     * @param soundName The name of the system sound to play
      * @return true if the sound was found and played successfully, false otherwise
      *
      * @see [Apple Developer Documentation](https://developer.apple.com/documentation/appkit/nssound)
