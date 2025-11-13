@@ -66,6 +66,11 @@ class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
         animation.render(canvas, (size.width.toFloat() / 2) - (animation.width / 2), (size.height.toFloat() / 2) - (animation.height / 2))
         window.requestRedraw()
     }
+
+    override fun close() {
+        window.destroy()
+        super.close()
+    }
 }
 
 class ApplicationState(private val app: Application) : AutoCloseable {

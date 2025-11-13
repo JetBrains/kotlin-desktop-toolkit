@@ -181,6 +181,14 @@ pub extern "C" fn window_request_close(window_ptr: WindowPtr) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_destroy(window_ptr: WindowPtr) {
+    with_window(&window_ptr, "window_destroy", |window| {
+        window.destroy()?;
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_drop(window_ptr: WindowPtr) {
     ffi_boundary("window_drop", || {
         let _window = unsafe { window_ptr.to_rc::<Window>() };

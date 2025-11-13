@@ -10,13 +10,13 @@ use windows::Win32::{
         HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
         Input::Pointer::EnableMouseInPointer,
         WindowsAndMessaging::{
-            DefWindowProcW, DestroyWindow, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect,
-            HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED,
-            SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
-            TranslateMessage, USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED,
-            WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_POINTERDOWN,
-            WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETFOCUS, WM_SIZE, WM_SYSCHAR,
-            WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
+            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
+            HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SM_CXPADDEDBORDER,
+            SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
+            USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN,
+            WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
+            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR,
+            WM_SYSKEYDOWN, WM_SYSKEYUP,
         },
     },
 };
@@ -103,7 +103,7 @@ impl EventLoop {
             // see https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmdefwindowproc
             WM_NCMOUSELEAVE => on_ncmouseleave(window, wparam, lparam),
 
-            WM_CLOSE => on_close(self, window),
+            WM_CLOSE => self.handle_event(window, Event::WindowCloseRequest),
 
             _ => None,
         };
@@ -135,12 +135,6 @@ fn on_create(window: &Window) -> Option<LRESULT> {
         )
     };
     Some(LRESULT(0))
-}
-
-fn on_close(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
-    let result = event_loop.handle_event(window, Event::WindowCloseRequest);
-    let _ = unsafe { DestroyWindow(window.hwnd()) };
-    result
 }
 
 fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {

@@ -138,6 +138,10 @@ public class Window internal constructor(
         ffiDownCall { desktop_win32_h.window_request_close(ptr) }
     }
 
+    public fun destroy() {
+        ffiDownCall { desktop_win32_h.window_destroy(ptr) }
+    }
+
     override fun close() {
         ffiDownCall {
             desktop_win32_h.window_drop(ptr)

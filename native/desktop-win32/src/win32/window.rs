@@ -25,10 +25,10 @@ use windows::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
-                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, GWL_STYLE, GetPropW, IDC_ARROW, LoadCursorW,
-                PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetPropW,
-                SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY,
-                WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
+                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW, IDC_ARROW,
+                LoadCursorW, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
+                SetPropW, SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE,
+                WM_NCDESTROY, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
@@ -251,6 +251,10 @@ impl Window {
 
     pub fn request_close(&self) -> WinResult<()> {
         unsafe { PostMessageW(Some(self.hwnd()), WM_CLOSE, WPARAM::default(), LPARAM::default()) }
+    }
+
+    pub fn destroy(&self) -> WinResult<()> {
+        unsafe { DestroyWindow(self.hwnd()) }
     }
 }
 
