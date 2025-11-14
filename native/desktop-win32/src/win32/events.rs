@@ -29,7 +29,7 @@ pub enum Event {
     //WindowFullScreenToggle(WindowFullScreenToggleEvent),
     WindowKeyboardEnter,
     WindowKeyboardLeave,
-    //WindowMove(WindowMoveEvent),
+    WindowMove(WindowMoveEvent),
     WindowResize(WindowResizeEvent),
     WindowScaleChanged(WindowScaleChangedEvent),
 }
@@ -161,6 +161,19 @@ pub struct WindowDrawEvent {
 impl From<WindowDrawEvent> for Event {
     fn from(value: WindowDrawEvent) -> Self {
         Self::WindowDraw(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowMoveEvent {
+    pub origin: PhysicalPoint,
+    pub scale: f32,
+}
+
+impl From<WindowMoveEvent> for Event {
+    fn from(value: WindowMoveEvent) -> Self {
+        Self::WindowMove(value)
     }
 }
 
