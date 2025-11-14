@@ -4,8 +4,9 @@ use desktop_common::{
 };
 
 use super::{
-    geometry::{LogicalPoint, LogicalSize},
-    screen::{ScreenInfo, enumerate_screens},
+    geometry::{LogicalPoint, LogicalSize, PhysicalPoint},
+    screen::{self, ScreenInfo},
+    window_api::{WindowPtr, with_window},
 };
 
 type ScreenInfoArray = AutoDropArray<ScreenInfo>;
@@ -26,15 +27,22 @@ impl PanicDefault for ScreenInfo {
 #[unsafe(no_mangle)]
 pub extern "C" fn screen_list() -> ScreenInfoArray {
     ffi_boundary("screen_list", || {
-        let screen_infos = enumerate_screens()?;
+        let screen_infos = screen::enumerate_screens()?;
         Ok(ScreenInfoArray::new(screen_infos))
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn screen_map_to_client(window_ptr: WindowPtr, point: PhysicalPoint) -> PhysicalPoint {
+    with_window(&window_ptr, "screen_map_to_client", |window| {
+        screen::screen_to_client(window, point)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
     ffi_boundary("screen_list_drop", || {
-        core::mem::drop(arr);
+        drop(arr);
         Ok(())
     });
 }
@@ -42,7 +50,7 @@ pub extern "C" fn screen_list_drop(arr: ScreenInfoArray) {
 #[unsafe(no_mangle)]
 pub extern "C" fn screen_info_drop(screen_info: ScreenInfo) {
     ffi_boundary("screen_info_drop", || {
-        core::mem::drop(screen_info);
+        drop(screen_info);
         Ok(())
     });
 }
