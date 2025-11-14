@@ -11,6 +11,7 @@ import org.jetbrains.desktop.win32.generated.NativePointerExitedEvent
 import org.jetbrains.desktop.win32.generated.NativePointerUpdatedEvent
 import org.jetbrains.desktop.win32.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
+import org.jetbrains.desktop.win32.generated.NativeWindowMoveEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeKind
 import org.jetbrains.desktop.win32.generated.NativeWindowScaleChangedEvent
@@ -125,6 +126,11 @@ public sealed class Event {
 
     public data object WindowKeyboardLeave : Event()
 
+    public data class WindowMove(
+        val origin: PhysicalPoint,
+        val scale: Float,
+    ) : Event()
+
     public data class WindowResize(
         val size: PhysicalSize,
         val scale: Float,
@@ -175,6 +181,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_WindowDraw() -> windowDraw(s)
     desktop_win32_h.NativeEvent_WindowKeyboardEnter() -> Event.WindowKeyboardEnter
     desktop_win32_h.NativeEvent_WindowKeyboardLeave() -> Event.WindowKeyboardLeave
+    desktop_win32_h.NativeEvent_WindowMove() -> windowMove(s)
     desktop_win32_h.NativeEvent_WindowResize() -> windowResize(s)
     desktop_win32_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
     else -> error("Unexpected Event tag")
@@ -298,6 +305,14 @@ private fun windowDraw(s: MemorySegment): Event {
     return Event.WindowDraw(
         size = PhysicalSize.fromNative(NativeWindowDrawEvent.size(nativeEvent)),
         scale = NativeWindowDrawEvent.scale(nativeEvent),
+    )
+}
+
+private fun windowMove(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.window_move(s)
+    return Event.WindowMove(
+        origin = PhysicalPoint.fromNative(NativeWindowMoveEvent.origin(nativeEvent)),
+        scale = NativeWindowMoveEvent.scale(nativeEvent),
     )
 }
 

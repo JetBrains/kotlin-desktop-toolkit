@@ -14,7 +14,7 @@ use windows::Win32::{
             HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SM_CXPADDEDBORDER,
             SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
             USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN,
-            WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
+            WM_KEYUP, WM_KILLFOCUS, WM_MOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
             WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR,
             WM_SYSKEYDOWN, WM_SYSKEYUP,
         },
@@ -24,8 +24,8 @@ use windows::Win32::{
 use super::{
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerButtonEvent, PointerEnteredEvent,
-        PointerExitedEvent, PointerUpdatedEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowResizeEvent, WindowResizeKind,
-        WindowScaleChangedEvent,
+        PointerExitedEvent, PointerUpdatedEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
+        WindowResizeKind, WindowScaleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
@@ -70,6 +70,8 @@ impl EventLoop {
             WM_DPICHANGED => on_dpichanged(self, window, wparam, lparam),
 
             WM_SIZE => on_size(self, window, wparam, lparam),
+
+            WM_MOVE => on_move(self, window, lparam),
 
             WM_GETMINMAXINFO => on_getminmaxinfo(window, lparam),
 
@@ -190,6 +192,18 @@ fn on_size(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPAR
         size: PhysicalSize::new(width.into(), height.into()),
         scale: window.get_scale(),
         kind,
+    };
+    event_loop.handle_event(window, event.into())
+}
+
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
+fn on_move(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
+    let x = LOWORD!(lparam.0);
+    let y = HIWORD!(lparam.0);
+    let event = WindowMoveEvent {
+        origin: PhysicalPoint::new(x.into(), y.into()),
+        scale: window.get_scale(),
     };
     event_loop.handle_event(window, event.into())
 }
