@@ -247,6 +247,7 @@ impl ApplicationHandler for ApplicationState {
                     }
                 }
                 WindowEvent::ModifiersChanged(modifiers) => {
+                    debug!("WindowEvent::ModifiersChanged for {:?}: {modifiers:?}", w.window_id);
                     let event = ModifiersChangedEvent {
                         modifiers: KeyModifierBitflag::from_winit(modifiers),
                     };
