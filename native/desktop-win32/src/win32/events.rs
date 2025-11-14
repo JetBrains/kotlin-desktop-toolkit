@@ -1,4 +1,4 @@
-use desktop_common::ffi_utils::RustAllocatedStrPtr;
+use desktop_common::ffi_utils::AutoDropStrPtr;
 
 use super::{
     geometry::{LogicalPoint, PhysicalPoint, PhysicalSize},
@@ -46,7 +46,7 @@ pub struct Timestamp(pub u64);
 #[derive(Debug)]
 pub struct CharacterReceivedEvent {
     pub key_code: u16,
-    pub characters: RustAllocatedStrPtr,
+    pub characters: AutoDropStrPtr,
     pub key_status: PhysicalKeyStatus,
     pub is_dead_char: bool,
     pub is_system_key: bool,
@@ -219,7 +219,7 @@ impl From<WindowScaleChangedEvent> for Event {
 #[repr(C)]
 #[derive(Debug)]
 pub struct WindowTitleChangedEvent {
-    pub title: RustAllocatedStrPtr,
+    pub title: AutoDropStrPtr,
 }
 
 impl From<WindowTitleChangedEvent> for Event {

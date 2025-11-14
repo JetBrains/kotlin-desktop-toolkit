@@ -229,7 +229,7 @@ fn on_settext(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: L
     if result.0 == windows::Win32::Foundation::TRUE.0 as isize {
         let pwstr = windows::core::PWSTR(lparam.0 as *mut u16);
         let title = match copy_from_wide_string(unsafe { pwstr.as_wide() }) {
-            Ok(text) => RustAllocatedStrPtr::from_c_string(text),
+            Ok(text) => RustAllocatedStrPtr::from_c_string(text).to_auto_drop(),
             Err(err) => {
                 log::error!("Failed to get a C-string from the slice {}: {:?}", unsafe { pwstr.display() }, err);
                 return Some(result);
@@ -377,7 +377,7 @@ fn on_keyup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, l
 fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let char = LOWORD!(wparam.0);
     let characters = match copy_from_wide_string(&[char]) {
-        Ok(chars) => chars,
+        Ok(chars) => RustAllocatedStrPtr::from_c_string(chars).to_auto_drop(),
         Err(err) => {
             log::error!("Failed to get a C-string from the char {char}: {err:?}");
             return Some(LRESULT(1));
@@ -385,7 +385,7 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
     };
     let event = CharacterReceivedEvent {
         key_code: char,
-        characters: RustAllocatedStrPtr::from_c_string(characters),
+        characters,
         key_status: PhysicalKeyStatus::parse(lparam),
         is_dead_char: matches!(msg, WM_DEADCHAR | WM_SYSDEADCHAR),
         is_system_key: matches!(msg, WM_SYSCHAR | WM_SYSDEADCHAR),
