@@ -26,22 +26,29 @@ public data class Screen(
             )
         }
 
-        public fun allScreens(): List<Screen> {
-            return Arena.ofConfined().use { arena ->
-                val screenInfoArray = ffiDownCall { desktop_win32_h.screen_list(arena) }
-                val screens = mutableListOf<Screen>()
-                try {
-                    val ptr = NativeScreenInfoArray.ptr(screenInfoArray)
-                    val len = NativeScreenInfoArray.len(screenInfoArray)
+        public fun allScreens(): List<Screen> = Arena.ofConfined().use { arena ->
+            val screenInfoArray = ffiDownCall { desktop_win32_h.screen_list(arena) }
+            val screens = mutableListOf<Screen>()
+            try {
+                val ptr = NativeScreenInfoArray.ptr(screenInfoArray)
+                val len = NativeScreenInfoArray.len(screenInfoArray)
 
-                    for (i in 0 until len) {
-                        screens.add(fromNative(NativeScreenInfo.asSlice(ptr, i)))
-                    }
-                } finally {
-                    ffiDownCall { desktop_win32_h.screen_list_drop(screenInfoArray) }
+                for (i in 0 until len) {
+                    screens.add(fromNative(NativeScreenInfo.asSlice(ptr, i)))
                 }
-                screens.toList()
+            } finally {
+                ffiDownCall { desktop_win32_h.screen_list_drop(screenInfoArray) }
             }
+            screens.toList()
+        }
+
+        public fun mapToClient(window: Window, point: PhysicalPoint): PhysicalPoint = Arena.ofConfined().use { arena ->
+            val nativeWindowPoint = window.withPointer { windowPtr ->
+                ffiDownCall {
+                    desktop_win32_h.screen_map_to_client(arena, windowPtr, point.toNative(arena))
+                }
+            }
+            PhysicalPoint.fromNative(nativeWindowPoint)
         }
     }
 }

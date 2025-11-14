@@ -1,5 +1,7 @@
+use desktop_common::logger::PanicDefault;
+
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct PhysicalPixels(pub i32);
 
 #[repr(transparent)]
@@ -21,10 +23,14 @@ impl PhysicalPoint {
             y: PhysicalPixels(y),
         }
     }
+}
 
-    #[allow(clippy::cast_precision_loss)]
-    pub(crate) fn to_logical(self, scale: f32) -> LogicalPoint {
-        LogicalPoint::new((self.x.0 as f32) / scale, (self.y.0 as f32) / scale)
+impl PanicDefault for PhysicalPoint {
+    fn default() -> Self {
+        Self {
+            x: PhysicalPixels::default(),
+            y: PhysicalPixels::default(),
+        }
     }
 }
 
@@ -43,11 +49,6 @@ impl PhysicalSize {
             height: PhysicalPixels(height),
         }
     }
-
-    #[allow(clippy::cast_precision_loss)]
-    pub(crate) fn to_logical(self, scale: f32) -> LogicalSize {
-        LogicalSize::new((self.width.0 as f32) / scale, (self.height.0 as f32) / scale)
-    }
 }
 
 #[repr(C)]
@@ -63,6 +64,14 @@ impl LogicalPoint {
         Self {
             x: LogicalPixels(x),
             y: LogicalPixels(y),
+        }
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub(crate) const fn from_physical(x: i32, y: i32, scale: f32) -> Self {
+        Self {
+            x: LogicalPixels((x as f32) / scale),
+            y: LogicalPixels((y as f32) / scale),
         }
     }
 
@@ -88,6 +97,14 @@ impl LogicalSize {
         Self {
             width: LogicalPixels(width),
             height: LogicalPixels(height),
+        }
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub(crate) const fn from_physical(width: i32, height: i32, scale: f32) -> Self {
+        Self {
+            width: LogicalPixels((width as f32) / scale),
+            height: LogicalPixels((height as f32) / scale),
         }
     }
 
