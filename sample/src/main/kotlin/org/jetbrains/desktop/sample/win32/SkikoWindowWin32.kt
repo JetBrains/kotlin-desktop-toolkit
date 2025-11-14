@@ -56,14 +56,24 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
             }
 
             is Event.KeyDown -> {
-                if (event.keyCode == VirtualKey.S) {
-                    val screens = Screen.allScreens()
-                    for (screen in screens) {
-                        Logger.debug { "Screen: $screen" }
+                when (event.keyCode) {
+                    VirtualKey.S -> {
+                        val screens = Screen.allScreens()
+                        for (screen in screens) {
+                            Logger.debug { "Screen: $screen" }
+                        }
+                        val currentScreen = window.getScreen()
+                        Logger.debug { "Current screen: $currentScreen" }
                     }
-                    val currentScreen = window.getScreen()
-                    Logger.debug { "Current screen: $currentScreen" }
+                    VirtualKey.T -> {
+                        window.setTitle("New Title")
+                    }
                 }
+                EventHandlerResult.Continue
+            }
+
+            is Event.WindowTitleChanged -> with(event) {
+                Logger.debug { "New window title: $title" }
                 EventHandlerResult.Continue
             }
 

@@ -32,6 +32,7 @@ pub enum Event {
     WindowMove(WindowMoveEvent),
     WindowResize(WindowResizeEvent),
     WindowScaleChanged(WindowScaleChangedEvent),
+    WindowTitleChanged(WindowTitleChangedEvent),
 }
 
 // return true if event was handled
@@ -212,5 +213,17 @@ pub struct WindowScaleChangedEvent {
 impl From<WindowScaleChangedEvent> for Event {
     fn from(value: WindowScaleChangedEvent) -> Self {
         Self::WindowScaleChanged(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowTitleChangedEvent {
+    pub title: RustAllocatedStrPtr,
+}
+
+impl From<WindowTitleChangedEvent> for Event {
+    fn from(value: WindowTitleChangedEvent) -> Self {
+        Self::WindowTitleChanged(value)
     }
 }

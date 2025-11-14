@@ -120,6 +120,13 @@ public class Window internal constructor(
         }
     }
 
+    public fun setTitle(title: String) {
+        Arena.ofConfined().use { arena ->
+            val nativeTitle = arena.allocateUtf8String(title)
+            ffiDownCall { desktop_win32_h.window_set_title(ptr, nativeTitle) }
+        }
+    }
+
     public fun show() {
         return ffiDownCall { desktop_win32_h.window_show(ptr) }
     }
