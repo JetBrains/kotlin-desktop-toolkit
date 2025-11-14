@@ -116,3 +116,19 @@ impl LogicalSize {
         )
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct LogicalRect {
+    pub origin: LogicalPoint,
+    pub size: LogicalSize,
+}
+
+impl PanicDefault for LogicalRect {
+    fn default() -> Self {
+        Self {
+            origin: LogicalPoint::default(),
+            size: LogicalSize::default(),
+        }
+    }
+}

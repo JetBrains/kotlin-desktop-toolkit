@@ -34,3 +34,10 @@ public data class LogicalPoint(
         public val Zero: LogicalPoint = LogicalPoint(0f, 0f)
     }
 }
+
+public data class LogicalRect(
+    val origin: LogicalPoint,
+    val size: LogicalSize,
+) {
+    public companion object;
+}
