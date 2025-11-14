@@ -328,32 +328,36 @@ private class EditorState {
                 canvas.drawRect(r = Rect(left = x0, top = y + textLine.ascent, right = x1, bottom = y + textLine.descent), paint = paint)
             }
         }
+
+        val composedTextStartOffset = composedTextRange?.let { (composedTextStartOffset, composedTextEndOffset) ->
+            check(composedTextStartOffset == composedTextEndOffset) {
+                "composedTextStartOffset ($composedTextStartOffset) != composedTextEndOffset ($composedTextEndOffset)"
+            }
+            composedTextStartOffset
+        } ?: 0
+
+        Paint().use { paint ->
+            val x0 = textLine.getCoordAtOffset(cursorOffset + composedTextStartOffset)
+            val x1 = x0
+            val y0 = y + textLine.ascent
+            val y1 = y + textLine.descent
+
+            cursorRectangle = LogicalRect(
+                x = (x0 / scale).roundToInt(),
+                y = (y0 / scale).roundToInt(),
+                width = scale.roundToInt(),
+                height = ((textLine.descent - textLine.ascent) / scale).roundToInt(),
+            )
+            paint.color = Color.GREEN
+            paint.strokeWidth = cursorRectangle.width * scale
+
+            canvas.drawLine(x0 = x0, y0 = y0, x1 = x0, y1 = y1, paint = paint)
+        }
+
         Paint().use { paint ->
             paint.color = Color.WHITE
             canvas.drawTextLine(textLineStats, 0f, (SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT * scale) + textLineStats.height, paint)
             canvas.drawTextLine(textLine, 0f, y, paint)
-        }
-        composedTextRange?.let { (composedTextStartOffset, composedTextEndOffset) ->
-            check(composedTextStartOffset == composedTextEndOffset) {
-                "composedTextStartOffset ($composedTextStartOffset) != composedTextEndOffset ($composedTextEndOffset)"
-            }
-            Paint().use { paint ->
-                val x0 = textLine.getCoordAtOffset(cursorOffset + composedTextStartOffset)
-                val x1 = x0
-                val y0 = y + textLine.ascent
-                val y1 = y + textLine.descent
-
-                cursorRectangle = LogicalRect(
-                    x = (x0 / scale).roundToInt(),
-                    y = (y0 / scale).roundToInt(),
-                    width = scale.roundToInt(),
-                    height = ((textLine.descent - textLine.ascent) / scale).roundToInt(),
-                )
-                paint.color = Color.GREEN
-                paint.strokeWidth = cursorRectangle.width * scale
-
-                canvas.drawLine(x0 = x0, y0 = y0, x1 = x0, y1 = y1, paint = paint)
-            }
         }
     }
 
