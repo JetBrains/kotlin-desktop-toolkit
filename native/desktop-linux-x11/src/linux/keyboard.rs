@@ -2,28 +2,15 @@ use crate::linux::events::{KeyModifier, KeyModifierBitflag};
 use enumflags2::BitFlags;
 use winit_core::keyboard::NativeKey;
 
-fn either_is_pressed(a: winit_core::keyboard::ModifiersKeyState, b: winit_core::keyboard::ModifiersKeyState) -> bool {
-    a == winit_core::keyboard::ModifiersKeyState::Pressed || b == winit_core::keyboard::ModifiersKeyState::Pressed
-}
-
 impl KeyModifierBitflag {
     #[must_use]
     pub fn from_winit(modifiers: winit_core::event::Modifiers) -> Self {
         let mut key_modifiers = BitFlags::<KeyModifier>::EMPTY;
-        key_modifiers.set(
-            KeyModifier::Ctrl,
-            either_is_pressed(modifiers.lcontrol_state(), modifiers.rcontrol_state()),
-        );
-        key_modifiers.set(KeyModifier::Alt, either_is_pressed(modifiers.lalt_state(), modifiers.ralt_state()));
-        key_modifiers.set(
-            KeyModifier::Shift,
-            either_is_pressed(modifiers.lshift_state(), modifiers.rshift_state()),
-        );
+        key_modifiers.set(KeyModifier::Ctrl, modifiers.state().control_key());
+        key_modifiers.set(KeyModifier::Alt, modifiers.state().alt_key());
+        key_modifiers.set(KeyModifier::Shift, modifiers.state().shift_key());
         // key_modifiers.set(KeyModifier::CapsLock, modifiers.);
-        key_modifiers.set(
-            KeyModifier::Logo,
-            either_is_pressed(modifiers.lsuper_state(), modifiers.rsuper_state()),
-        );
+        key_modifiers.set(KeyModifier::Logo, modifiers.state().meta_key());
         // key_modifiers.set(KeyModifier::NumLock, modifiers.num_lock);
 
         Self(key_modifiers.bits_c())
