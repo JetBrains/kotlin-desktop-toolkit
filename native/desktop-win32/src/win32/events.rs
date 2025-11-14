@@ -120,6 +120,8 @@ impl From<PointerEnteredEvent> for Event {
 #[repr(C)]
 #[derive(Debug)]
 pub struct PointerExitedEvent {
+    pub location_in_window: LogicalPoint,
+    pub state: PointerState,
     pub timestamp: Timestamp,
 }
 

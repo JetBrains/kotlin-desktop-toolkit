@@ -87,7 +87,11 @@ public sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class PointerExited(val timestamp: Timestamp) : Event()
+    public data class PointerExited(
+        val locationInWindow: LogicalPoint,
+        val state: PointerState,
+        val timestamp: Timestamp,
+    ) : Event()
 
     public data class PointerUpdated(
         val locationInWindow: LogicalPoint,
@@ -243,8 +247,8 @@ private fun pointerDown(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_down(s)
     return Event.PointerDown(
         button = PointerButtons(NativePointerButtonEvent.button(nativeEvent)),
-        state = PointerState.fromNative(NativePointerButtonEvent.state(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativePointerButtonEvent.location_in_window(nativeEvent)),
+        state = PointerState.fromNative(NativePointerButtonEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerButtonEvent.timestamp(nativeEvent)),
     )
 }
@@ -252,8 +256,8 @@ private fun pointerDown(s: MemorySegment): Event {
 private fun pointerEntered(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_entered(s)
     return Event.PointerEntered(
-        state = PointerState.fromNative(NativePointerEnteredEvent.state(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativePointerEnteredEvent.location_in_window(nativeEvent)),
+        state = PointerState.fromNative(NativePointerEnteredEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerEnteredEvent.timestamp(nativeEvent)),
     )
 }
@@ -261,6 +265,8 @@ private fun pointerEntered(s: MemorySegment): Event {
 private fun pointerExited(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_exited(s)
     return Event.PointerExited(
+        locationInWindow = LogicalPoint.fromNative(NativePointerExitedEvent.location_in_window(nativeEvent)),
+        state = PointerState.fromNative(NativePointerExitedEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerExitedEvent.timestamp(nativeEvent)),
     )
 }
@@ -268,8 +274,8 @@ private fun pointerExited(s: MemorySegment): Event {
 private fun pointerUpdated(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_updated(s)
     return Event.PointerUpdated(
-        state = PointerState.fromNative(NativePointerUpdatedEvent.state(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativePointerUpdatedEvent.location_in_window(nativeEvent)),
+        state = PointerState.fromNative(NativePointerUpdatedEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerUpdatedEvent.timestamp(nativeEvent)),
     )
 }
@@ -278,8 +284,8 @@ private fun pointerUp(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_up(s)
     return Event.PointerUp(
         button = PointerButtons(NativePointerButtonEvent.button(nativeEvent)),
-        state = PointerState.fromNative(NativePointerButtonEvent.state(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativePointerButtonEvent.location_in_window(nativeEvent)),
+        state = PointerState.fromNative(NativePointerButtonEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerButtonEvent.timestamp(nativeEvent)),
     )
 }
