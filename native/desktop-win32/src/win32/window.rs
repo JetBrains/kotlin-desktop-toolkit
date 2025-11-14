@@ -12,11 +12,11 @@ use anyhow::Context;
 use windows::{
     UI::Composition::{Compositor, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
-        Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, WPARAM},
+        Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, RECT, WPARAM},
         Graphics::{
             Dwm::{
-                DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_SYSTEMBACKDROP_TYPE, DwmExtendFrameIntoClientArea,
-                DwmSetWindowAttribute,
+                DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_EXTENDED_FRAME_BOUNDS, DWMWA_SYSTEMBACKDROP_TYPE,
+                DwmExtendFrameIntoClientArea, DwmGetWindowAttribute, DwmSetWindowAttribute,
             },
             Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow, RDW_INVALIDATE, RDW_NOERASE, RDW_NOFRAME, RedrawWindow},
         },
@@ -37,7 +37,7 @@ use windows::{
 
 use super::{
     event_loop::EventLoop,
-    geometry::{LogicalPoint, LogicalSize},
+    geometry::{LogicalPoint, LogicalRect, LogicalSize},
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
     utils,
@@ -149,6 +149,23 @@ impl Window {
     pub fn get_scale(&self) -> f32 {
         let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
         (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn get_rect(&self) -> anyhow::Result<LogicalRect> {
+        let mut rect = RECT::default();
+        unsafe {
+            DwmGetWindowAttribute(
+                self.hwnd(),
+                DWMWA_EXTENDED_FRAME_BOUNDS,
+                (&raw mut rect).cast(),
+                size_of::<RECT>() as _,
+            )?;
+        };
+        let scale = self.get_scale();
+        let origin = LogicalPoint::from_physical(rect.left, rect.top, scale);
+        let size = LogicalSize::from_physical(rect.right - rect.left, rect.bottom - rect.top, scale);
+        Ok(LogicalRect { origin, size })
     }
 
     pub fn get_screen_info(&self) -> anyhow::Result<ScreenInfo> {

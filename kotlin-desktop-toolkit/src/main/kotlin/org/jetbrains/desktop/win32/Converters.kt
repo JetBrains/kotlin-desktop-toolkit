@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeLogicalPoint
+import org.jetbrains.desktop.win32.generated.NativeLogicalRect
 import org.jetbrains.desktop.win32.generated.NativeLogicalSize
 import org.jetbrains.desktop.win32.generated.NativePhysicalPoint
 import org.jetbrains.desktop.win32.generated.NativePhysicalSize
@@ -15,6 +16,11 @@ internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
 internal fun LogicalPoint.Companion.fromNative(s: MemorySegment) = LogicalPoint(
     x = NativeLogicalPoint.x(s),
     y = NativeLogicalPoint.y(s),
+)
+
+internal fun LogicalRect.Companion.fromNative(s: MemorySegment) = LogicalRect(
+    origin = LogicalPoint.fromNative(NativeLogicalRect.origin(s)),
+    size = LogicalSize.fromNative(NativeLogicalRect.size(s)),
 )
 
 internal fun LogicalSize.toNative(arena: Arena): MemorySegment = NativeLogicalSize.allocate(arena).also { result ->

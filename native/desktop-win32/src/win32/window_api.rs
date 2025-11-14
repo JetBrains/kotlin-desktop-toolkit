@@ -12,7 +12,7 @@ use windows::Win32::{
 use super::{
     application::Application,
     application_api::AppPtr,
-    geometry::{LogicalPoint, LogicalSize},
+    geometry::{LogicalPoint, LogicalRect, LogicalSize},
     screen::ScreenInfo,
     window::{Window, WindowId},
 };
@@ -133,6 +133,11 @@ pub extern "C" fn window_create(window_ptr: WindowPtr, params: WindowParams) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_scale_factor(window_ptr: WindowPtr) -> f32 {
     with_window(&window_ptr, "window_get_scale_factor", |window| Ok(window.get_scale()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_get_rect(window_ptr: WindowPtr) -> LogicalRect {
+    with_window(&window_ptr, "window_get_rect", Window::get_rect)
 }
 
 #[unsafe(no_mangle)]
