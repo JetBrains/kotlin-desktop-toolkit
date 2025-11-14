@@ -14,6 +14,7 @@ use super::{
     application_api::AppPtr,
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     screen::ScreenInfo,
+    strings::copy_from_utf8_string,
     window::{Window, WindowId},
 };
 
@@ -149,6 +150,15 @@ pub extern "C" fn window_get_screen_info(window_ptr: WindowPtr) -> ScreenInfo {
 pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) {
     with_window(&window_ptr, "window_set_min_size", |window| {
         window.set_min_size(size);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_title(window_ptr: WindowPtr, title: BorrowedStrPtr) {
+    with_window(&window_ptr, "window_set_title", |window| {
+        let new_title = copy_from_utf8_string(&title)?;
+        window.set_title(&new_title)?;
         Ok(())
     });
 }

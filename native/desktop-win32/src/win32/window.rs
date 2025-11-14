@@ -27,12 +27,12 @@ use windows::{
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW, IDC_ARROW,
                 LoadCursorW, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
-                SetPropW, SetWindowLongPtrW, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE,
-                WM_NCDESTROY, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
+                SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE,
+                WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
-    core::{Interface, PCWSTR, Result as WinResult, w},
+    core::{HSTRING, Interface, PCWSTR, Result as WinResult, w},
 };
 
 use super::{
@@ -241,6 +241,10 @@ impl Window {
                 SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER,
             )
         }
+    }
+
+    pub fn set_title(&self, title: &HSTRING) -> WinResult<()> {
+        unsafe { SetWindowTextW(self.hwnd(), title) }
     }
 
     #[must_use]

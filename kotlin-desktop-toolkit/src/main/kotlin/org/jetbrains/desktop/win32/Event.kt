@@ -15,6 +15,7 @@ import org.jetbrains.desktop.win32.generated.NativeWindowMoveEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeKind
 import org.jetbrains.desktop.win32.generated.NativeWindowScaleChangedEvent
+import org.jetbrains.desktop.win32.generated.NativeWindowTitleChangedEvent
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.MemorySegment
 import kotlin.time.Duration
@@ -142,6 +143,8 @@ public sealed class Event {
         val size: PhysicalSize,
         val scale: Float,
     ) : Event()
+
+    public data class WindowTitleChanged(val title: String) : Event()
 }
 
 public sealed class WindowResizeKind {
@@ -184,6 +187,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_WindowMove() -> windowMove(s)
     desktop_win32_h.NativeEvent_WindowResize() -> windowResize(s)
     desktop_win32_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
+    desktop_win32_h.NativeEvent_WindowTitleChanged() -> windowTitleChanged(s)
     else -> error("Unexpected Event tag")
 }
 
@@ -331,5 +335,12 @@ private fun windowScaleChanged(s: MemorySegment): Event {
         origin = PhysicalPoint.fromNative(NativeWindowScaleChangedEvent.origin(nativeEvent)),
         size = PhysicalSize.fromNative(NativeWindowScaleChangedEvent.size(nativeEvent)),
         scale = NativeWindowScaleChangedEvent.scale(nativeEvent),
+    )
+}
+
+private fun windowTitleChanged(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.window_title_changed(s)
+    return Event.WindowTitleChanged(
+        title = NativeWindowTitleChangedEvent.title(nativeEvent).getUtf8String(0),
     )
 }

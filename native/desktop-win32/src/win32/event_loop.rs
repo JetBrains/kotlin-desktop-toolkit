@@ -15,7 +15,7 @@ use windows::Win32::{
             SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
             USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN,
             WM_KEYUP, WM_KILLFOCUS, WM_MOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
-            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR,
+            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETFOCUS, WM_SETTEXT, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR,
             WM_SYSKEYDOWN, WM_SYSKEYUP,
         },
     },
@@ -25,7 +25,7 @@ use super::{
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerButtonEvent, PointerEnteredEvent,
         PointerExitedEvent, PointerUpdatedEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
-        WindowResizeKind, WindowScaleChangedEvent,
+        WindowResizeKind, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
@@ -104,6 +104,8 @@ impl EventLoop {
             // we still have to handle this message because we manually hit-test the non-client area
             // see https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmdefwindowproc
             WM_NCMOUSELEAVE => on_ncmouseleave(window, wparam, lparam),
+
+            WM_SETTEXT => on_settext(self, window, wparam, lparam),
 
             WM_CLOSE => self.handle_event(window, Event::WindowCloseRequest),
 
@@ -219,6 +221,24 @@ fn on_getminmaxinfo(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
         return Some(LRESULT(0));
     }
     None
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn on_settext(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    let result = unsafe { DefWindowProcW(window.hwnd(), WM_SETTEXT, wparam, lparam) };
+    if result.0 == windows::Win32::Foundation::TRUE.0 as isize {
+        let pwstr = windows::core::PWSTR(lparam.0 as *mut u16);
+        let title = match copy_from_wide_string(unsafe { pwstr.as_wide() }) {
+            Ok(text) => RustAllocatedStrPtr::from_c_string(text),
+            Err(err) => {
+                log::error!("Failed to get a C-string from the slice {}: {:?}", unsafe { pwstr.display() }, err);
+                return Some(result);
+            }
+        };
+        let event = WindowTitleChangedEvent { title };
+        event_loop.handle_event(window, event.into());
+    }
+    Some(result)
 }
 
 #[allow(clippy::unnecessary_wraps)]
