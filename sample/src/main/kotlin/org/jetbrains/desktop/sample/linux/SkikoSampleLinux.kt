@@ -231,9 +231,9 @@ private class EditorState {
     private var cursorRectangle = LogicalRect(LogicalPoint(0f, 0f), LogicalSize(0f, 0f))
     private var selectionStartOffset: Int? = null
     private var selectionEndOffset: Int? = null
-    private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
-    private var statsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    private var textLineCreator = TextLineCreator()
     private var pastedImage: Image? = null
+    private var scrollValue: Float = 0f
 
     companion object {
         private fun codepointFromOffset(sb: StringBuilder, offset: Int): Short {
@@ -291,8 +291,36 @@ private class EditorState {
         return s.toString()
     }
 
-    fun draw(canvas: Canvas, y: Float, scale: Float) {
-        val textLineStats = statsTextLineCreator.makeTextLine(getTextLineStatsString(), 20 * scale)
+    fun drawLines(canvas: Canvas, contentOrigin: PhysicalPoint, contentSize: PhysicalSize, scale: Float) {
+        val step = 30 * scale
+        var y = (contentOrigin.y.toFloat() - (scrollValue * scale)) + step
+        var lineNum = 1
+        while (y < contentOrigin.y + contentSize.height) {
+            if (y > contentOrigin.y + step - 1) {
+                Paint().use { paint ->
+                    paint.color = Color.WHITE
+                    val textLine = textLineCreator.makeTextLine(lineNum.toString(), step)
+                    canvas.drawLine(
+                        x0 = contentOrigin.x.toFloat(),
+                        y0 = y,
+                        x1 = contentOrigin.x.toFloat() + contentSize.width,
+                        y1 = y,
+                        paint,
+                    )
+                    canvas.drawTextLine(textLine, contentOrigin.x.toFloat(), y, paint)
+                }
+            }
+            y += step
+            lineNum += 1
+        }
+    }
+
+    fun draw(canvas: Canvas, origin: PhysicalPoint, contentSize: PhysicalSize, scale: Float) {
+        val lineHeight = 30 * scale
+        val x = 40f * scale
+        drawLines(canvas, origin, contentSize, scale)
+        val y = origin.y + (lineHeight * 4)
+        val textLineStats = textLineCreator.makeTextLine(getTextLineStatsString(), 20 * scale)
         pastedImage?.let {
             Paint().use { paint ->
                 val imageRect = it.imageInfo.bounds
@@ -311,14 +339,14 @@ private class EditorState {
         } else {
             text.substring(0, cursorOffset) + composedText + text.substring(cursorOffset, text.length)
         }
-        val textLine = textLineCreator.makeTextLine(stringLine.toString(), SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT * scale)
+        val textLine = textLineCreator.makeTextLine(stringLine.toString(), lineHeight)
         if (composedText.isNotEmpty()) {
             Paint().use { paint ->
                 paint.color = Color.YELLOW
                 paint.strokeWidth = 5 * scale
                 val x0 = textLine.getCoordAtOffset(cursorOffset)
                 val x1 = textLine.getCoordAtOffset(cursorOffset + composedText.length)
-                canvas.drawLine(x0 = x0, y0 = y + (5 * scale), x1 = x1, y1 = y + (5 * scale), paint = paint)
+                canvas.drawLine(x0 = x + x0, y0 = y + (5 * scale), x1 = x + x1, y1 = y + (5 * scale), paint = paint)
             }
         }
         val selectionStartOffset = selectionStartOffset
@@ -328,31 +356,33 @@ private class EditorState {
                 paint.color = Color.BLUE
                 val x0 = textLine.getCoordAtOffset(selectionStartOffset)
                 val x1 = textLine.getCoordAtOffset(selectionEndOffset)
-                canvas.drawRect(r = Rect(left = x0, top = y + textLine.ascent, right = x1, bottom = y + textLine.descent), paint = paint)
+                canvas.drawRect(
+                    r = Rect(left = x + x0, top = y + textLine.ascent, right = x + x1, bottom = y + textLine.descent),
+                    paint = paint,
+                )
             }
         }
         Paint().use { paint ->
             paint.color = Color.WHITE
-            canvas.drawTextLine(textLineStats, 0f, (SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT * scale) + textLineStats.height, paint)
-            canvas.drawTextLine(textLine, 0f, y, paint)
+            canvas.drawTextLine(textLineStats, x, y + textLineStats.height, paint)
+            canvas.drawTextLine(textLine, x, y.toFloat(), paint)
         }
         if (cursorVisible) {
             Paint().use { paint ->
                 val coord = textLine.getCoordAtOffset(cursorOffset + (composedTextStartOffset ?: 0))
 
-                cursorRectangle = LogicalRect(
-                    LogicalPoint(x = coord / scale, y = (y + textLine.ascent) / scale),
-                    LogicalSize(width = 5f, height = (textLine.descent - textLine.ascent) / scale),
-                )
+                val cursorWidth = 2f * scale
+                val cursorHeight = textLine.descent - textLine.ascent
+                val cursorX = x + coord
+                val cursorY = y + textLine.ascent
                 paint.color = Color.GREEN
-                paint.strokeWidth = cursorRectangle.size.width
+                paint.strokeWidth = cursorWidth
 
-                canvas.drawLine(
-                    x0 = cursorRectangle.point.x * scale,
-                    y0 = cursorRectangle.point.y * scale,
-                    x1 = cursorRectangle.point.x * scale,
-                    y1 = (cursorRectangle.point.y + cursorRectangle.size.height) * scale,
-                    paint = paint,
+                canvas.drawLine(x0 = cursorX, y0 = cursorY, x1 = cursorX, y1 = cursorY + cursorHeight, paint = paint)
+
+                cursorRectangle = LogicalRect(
+                    LogicalPoint(x = cursorX / scale, y = cursorY / scale),
+                    LogicalSize(width = cursorWidth / scale, height = cursorHeight / scale),
                 )
             }
         }
@@ -643,31 +673,33 @@ private class EditorState {
         }
         return EventHandlerResult.Stop
     }
+
+    fun onScroll(event: Event.ScrollWheel): EventHandlerResult {
+        scrollValue += event.scrollingDeltaY
+        return EventHandlerResult.Stop
+    }
 }
 
-internal data class TextLineCreator(
-    private var cachedFontSize: Float,
-    private var cachedText: String,
-) {
-    private var textLine: TextLine? = null
-
-    init {
-        Logger.info { "makeTextLine init: $cachedText" }
-    }
+internal class TextLineCreator {
+    private data class CacheKey(
+        val text: String,
+        val fontSize: Float,
+    )
+    private var cache: HashMap<CacheKey, TextLine> = hashMapOf()
 
     fun makeTextLine(text: String, fontSize: Float): TextLine {
-        if (textLine == null || this.cachedText != text || this.cachedFontSize != fontSize) {
-            Logger.info { "makeTextLine update: $text" }
-            this.cachedText = text
-            this.cachedFontSize = fontSize
-            val font = FontMgr.default.matchFamilyStyle("sans-serif", FontStyle.BOLD)?.let { typeface ->
-                Font(typeface, fontSize)
-            }
-            textLine = TextLine.make(text, font)
-        } else {
-//            Logger.info { "makeTextLine: $text == ${this.text}" }
+        val cacheKey = CacheKey(text, fontSize)
+        val cachedEntry = cache.get(cacheKey)
+        if (cachedEntry != null) {
+            return cachedEntry
         }
-        return textLine!!
+        Logger.info { "makeTextLine update: $text" }
+        val font = FontMgr.default.matchFamilyStyle("sans-serif", FontStyle.BOLD)?.let { typeface ->
+            Font(typeface, fontSize)
+        }
+        val textLine = TextLine.make(text, font)
+        cache[cacheKey] = textLine
+        return textLine
     }
 }
 
@@ -695,7 +727,7 @@ private class ContentArea(
     var size: LogicalSize,
 ) {
     private var markerPosition: LogicalPoint? = null
-    private var dragIconTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    private var dragIconTextLineCreator = TextLineCreator()
 
     fun onMouseMoved(event: Event.MouseMoved): EventHandlerResult {
         markerPosition = LogicalPoint(
@@ -793,7 +825,7 @@ private class ContentArea(
             }
         }
         canvas.drawSpinningCircle(contentOrigin, contentSize, time)
-        editorState.draw(canvas, contentSize.height / 2f, scale)
+        editorState.draw(canvas, contentOrigin, contentSize, scale)
         canvas.drawWindowBorders(contentOrigin, contentSize, scale)
         canvas.drawCursor(contentOrigin, contentSize, scale)
     }
@@ -1250,6 +1282,10 @@ private class RotatingBallWindow(
     fun onMouseUp(event: Event.MouseUp, xdgDesktopSettings: XdgDesktopSettings): EventHandlerResult {
         return windowContainer.onMouseUp(event, xdgDesktopSettings, window, windowState)
     }
+
+    fun onScroll(event: Event.ScrollWheel): EventHandlerResult {
+        return editorState.onScroll(event)
+    }
 }
 
 private class ApplicationState(private val app: Application) : AutoCloseable {
@@ -1467,7 +1503,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 }
                 windows[event.windowId]?.onMouseUp(event, xdgDesktopSettings) ?: EventHandlerResult.Continue
             }
-            is Event.ScrollWheel -> EventHandlerResult.Continue
+            is Event.ScrollWheel -> windows[keyWindowId]?.onScroll(event) ?: EventHandlerResult.Continue
             is Event.TextInput -> windows[keyWindowId]?.onTextInput(event, app) ?: EventHandlerResult.Continue
             is Event.TextInputAvailability -> windows[event.windowId]?.onTextInputAvailability(event, app) ?: EventHandlerResult.Continue
             is Event.WindowKeyboardEnter -> {
