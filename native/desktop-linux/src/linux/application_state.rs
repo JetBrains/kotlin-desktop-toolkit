@@ -143,6 +143,7 @@ pub struct ApplicationState {
 
     pub window_id_to_surface_id: HashMap<WindowId, ObjectId>,
     pub windows: HashMap<ObjectId, SimpleWindow>,
+    pub last_pointer_down_event_serial: Option<u32>,
     pub last_keyboard_event_serial: Option<u32>,
     pub active_text_input: Option<ZwpTextInputV3>,
     pub pending_text_input_event: PendingTextInputEvent,
@@ -197,6 +198,7 @@ impl ApplicationState {
             primary_selection_source: None,
             window_id_to_surface_id: HashMap::new(),
             windows: HashMap::new(),
+            last_pointer_down_event_serial: None,
             last_keyboard_event_serial: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
@@ -249,7 +251,7 @@ impl ApplicationState {
     pub fn get_latest_pointer_button_seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
         if let Some(p) = &self.themed_pointer
             && let Some(pointer_data) = p.pointer().data::<PointerData>()
-            && let Some(pointer_event_serial) = pointer_data.latest_button_serial()
+            && let Some(pointer_event_serial) = self.last_pointer_down_event_serial
         {
             Some((pointer_data.seat(), pointer_event_serial))
         } else {
@@ -264,8 +266,10 @@ impl ApplicationState {
             && let Some(keyboard) = &self.keyboard
             && let Some(keyboard_data) = keyboard.data::<KeyboardData<Self>>()
         {
+            debug!("Using keyboard event serial");
             Some((keyboard_data.seat(), keyboard_event_serial))
         } else {
+            debug!("Using pointer event serial");
             pointer_event_seat_and_serial
         }
     }

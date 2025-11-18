@@ -278,14 +278,6 @@ pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: Borrowed
     });
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn application_request_internal_activation_token(app_ptr: AppPtr, source_window_id: WindowId) -> u32 {
-    ffi_boundary("application_request_activation_token", || {
-        let app = unsafe { app_ptr.borrow::<Application>() };
-        app.request_internal_activation_token(source_window_id)
-    })
-}
-
 /// * `title`: User-visible string to display as the title.
 ///   This should be a short string, if it doesn’t fit the UI, it may be truncated to fit on a single line.
 /// * `body`: User-visible string to display as the body.

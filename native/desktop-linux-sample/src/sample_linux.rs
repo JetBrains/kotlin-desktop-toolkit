@@ -32,7 +32,6 @@ use desktop_linux::linux::{
         application_init,
         application_is_event_loop_thread,
         application_primary_selection_paste,
-        application_request_internal_activation_token,
         application_request_show_notification,
         application_run_event_loop,
         application_set_cursor_theme,
@@ -54,6 +53,7 @@ use desktop_linux::linux::{
         window_activate,
         window_close,
         window_create,
+        window_request_internal_activation_token,
         window_show_open_file_dialog,
         window_show_save_file_dialog,
         window_start_drag_and_drop,
@@ -392,7 +392,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             true
         }
         (KEY_MODIFIER_CTRL, KEYCODE_TAB) => {
-            application_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
+            window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
             true
         }
         (KEY_MODIFIER_CTRL, KEYCODE_V) => {

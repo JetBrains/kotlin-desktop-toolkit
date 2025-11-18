@@ -194,6 +194,17 @@ public class Window internal constructor(
         }
     }
 
+    public fun requestInternalActivationToken(): RequestId? {
+        return ffiDownCall {
+            val rawRequestId = desktop_linux_h.window_request_internal_activation_token(appPtr, windowId)
+            if (rawRequestId == 0) {
+                null
+            } else {
+                RequestId(rawRequestId)
+            }
+        }
+    }
+
     public fun activate(token: String) {
         Arena.ofConfined().use { arena ->
             val nativeToken = arena.allocateUtf8String(token)

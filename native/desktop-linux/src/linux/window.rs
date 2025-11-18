@@ -70,6 +70,7 @@ pub struct SimpleWindow {
     decoration_mode: DecorationMode,
     rendering_data: Option<RenderingData>,
     pub rendering_mode: RenderingMode,
+    pub num_pointer_buttons_down: u32,
 }
 
 impl SimpleWindow {
@@ -120,6 +121,7 @@ impl SimpleWindow {
             decoration_mode: DecorationMode::Client,
             rendering_data: None,
             rendering_mode: params.rendering_mode,
+            num_pointer_buttons_down: 0,
         }
     }
 

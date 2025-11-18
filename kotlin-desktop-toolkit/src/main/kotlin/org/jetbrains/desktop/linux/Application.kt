@@ -322,9 +322,10 @@ public class Application : AutoCloseable {
         }
     }
 
+    @Deprecated("Use `Window.requestInternalActivationToken` instead")
     public fun requestInternalActivationToken(sourceWindowId: WindowId): RequestId? {
         return ffiDownCall {
-            val rawRequestId = desktop_linux_h.application_request_internal_activation_token(appPtr, sourceWindowId)
+            val rawRequestId = desktop_linux_h.window_request_internal_activation_token(appPtr, sourceWindowId)
             if (rawRequestId == 0) {
                 null
             } else {
