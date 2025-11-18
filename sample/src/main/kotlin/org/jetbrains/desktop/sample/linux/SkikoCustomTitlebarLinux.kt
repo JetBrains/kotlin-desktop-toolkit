@@ -205,6 +205,9 @@ internal class SkikoCustomTitlebarLinux(
                         windowState,
                     )
                     EventHandlerResult.Stop
+                } else if (windowButton == WindowButtonType.Minimize && event.button == MouseButton.RIGHT) {
+                    window.requestInternalActivationToken()
+                    EventHandlerResult.Stop
                 } else {
                     executeWindowAction(
                         windowButton,
@@ -221,12 +224,12 @@ internal class SkikoCustomTitlebarLinux(
         }
     }
 
-    fun onMouseMoved(event: Event.MouseMoved, window: Window): EventHandlerResult {
+    fun onMouseMoved(locationInWindow: LogicalPoint, window: Window): EventHandlerResult {
         val headerRect = LogicalRect(origin, size)
-        lastMouseLocation = event.locationInWindow
-        return if (headerRect.contains(event.locationInWindow) &&
+        lastMouseLocation = locationInWindow
+        return if (headerRect.contains(locationInWindow) &&
             !isDragging &&
-            (leftClickStartLocation?.isInsideCircle(event.locationInWindow, MOVE_RADIUS) == false)
+            (leftClickStartLocation?.isInsideCircle(locationInWindow, MOVE_RADIUS) == false)
         ) {
             isDragging = true
             leftClickStartLocation = null
@@ -243,6 +246,7 @@ internal class SkikoCustomTitlebarLinux(
     }
 
     fun onMouseExited(): EventHandlerResult {
+        lastMouseLocation = null
         leftClickStartLocation = null
         return EventHandlerResult.Continue
     }

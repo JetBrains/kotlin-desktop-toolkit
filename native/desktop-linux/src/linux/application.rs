@@ -425,6 +425,7 @@ impl Application {
     }
 
     pub fn request_internal_activation_token(&self, source_window_id: WindowId) -> anyhow::Result<u32> {
+        debug!("request_internal_activation_token: source_window_id={source_window_id:?}");
         let source_w: &SimpleWindow = self
             .get_window(source_window_id)
             .with_context(|| format!("No window found {source_window_id:?}"))?;
@@ -432,8 +433,9 @@ impl Application {
             warn!("xdg_activation not found");
             return Ok(0);
         };
-        // Serial should be from the latest keyboard or mouse button event, e.g.:
+        // Serial should be from the latest keyboard focus or mouse button down event, e.g.:
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-activation.c#L302
+        // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-pointer.c#L760
         // https://invent.kde.org/plasma/kwin/-/blob/271eae7f21326b48e67de1ed218caf3bdf96a9c5/src/activation.cpp#L640
         let Some((seat, serial)) = self.state.get_latest_event_seat_and_serial() else {
             return Ok(0);
@@ -491,9 +493,10 @@ impl Application {
         let w = self
             .get_window(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
-        // Required to have a mouse button pressed or released serial, e.g.:
+        // Required to have a mouse button pressed serial, e.g.:
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L309
         if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
+            debug!("window_show_menu: seat: {seat:?}, serial: {serial:?}");
             w.show_menu(position, seat, serial);
         }
         Ok(())

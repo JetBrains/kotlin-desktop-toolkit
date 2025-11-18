@@ -48,83 +48,93 @@ impl From<AxisScroll> for ScrollData {
 impl PointerHandler for ApplicationState {
     fn pointer_frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, _pointer: &WlPointer, events: &[PointerEvent]) {
         for event in events {
-            let (window_id, scale) = if let Some(window) = self.windows.get_mut(&event.surface.id()) {
-                if let PointerEventKind::Enter { .. } = event.kind {
-                    window.set_cursor = true;
-                }
-                let scale = window.current_scale;
-                (Some(window.window_id), scale)
-            } else {
-                (None, 1.0)
+            let Some(window) = self.windows.get_mut(&event.surface.id()) else {
+                continue;
             };
+            let scale = window.current_scale;
+            let window_id = window.window_id;
 
-            if let Some(window_id) = window_id {
-                _ = match event.kind {
-                    PointerEventKind::Enter { .. } => self.send_event(MouseEnteredEvent {
+            _ = match event.kind {
+                PointerEventKind::Enter { .. } => {
+                    window.num_pointer_buttons_down = 0;
+                    window.set_cursor = true;
+                    let res = self.send_event(MouseEnteredEvent {
                         window_id,
                         location_in_window: event.position.into(),
-                    }),
-                    PointerEventKind::Leave { .. } => self.send_event(MouseExitedEvent {
+                    });
+                    if let Some(themed_pointer) = self.themed_pointer.take() {
+                        let pointer_surface = themed_pointer.surface();
+                        if let Some(pointer_surface_data) = pointer_surface.data() {
+                            #[allow(clippy::cast_possible_truncation)]
+                            let pointer_surface_event = wl_surface::Event::PreferredBufferScale {
+                                factor: scale.round() as i32,
+                            };
+                            debug!("Setting cursor scale to {scale:?}");
+                            Dispatch::<WlSurface, SurfaceData>::event(
+                                self,
+                                pointer_surface,
+                                pointer_surface_event,
+                                pointer_surface_data,
+                                conn,
+                                qh,
+                            );
+                        }
+                        self.themed_pointer = Some(themed_pointer);
+                    }
+                    res
+                }
+                PointerEventKind::Leave { .. } => {
+                    window.num_pointer_buttons_down = 0;
+                    self.send_event(MouseExitedEvent {
                         window_id,
                         location_in_window: event.position.into(),
-                    }),
-                    PointerEventKind::Motion { time } => self.send_event(MouseMovedEvent {
-                        window_id,
-                        location_in_window: event.position.into(),
-                        timestamp: Timestamp(time),
-                    }),
-                    PointerEventKind::Press { button, serial: _, time } => self.send_event(MouseDownEvent {
+                    })
+                }
+                PointerEventKind::Motion { time } => self.send_event(MouseMovedEvent {
+                    window_id,
+                    location_in_window: event.position.into(),
+                    timestamp: Timestamp(time),
+                }),
+                PointerEventKind::Press { button, serial, time } => {
+                    if window.num_pointer_buttons_down == 0 {
+                        self.last_pointer_down_event_serial = Some(serial);
+                    }
+                    window.num_pointer_buttons_down += 1;
+                    self.send_event(MouseDownEvent {
                         window_id,
                         button: MouseButton(button),
                         location_in_window: event.position.into(),
                         timestamp: Timestamp(time),
-                    }),
-                    PointerEventKind::Release { button, serial: _, time } => self.send_event(MouseUpEvent {
+                    })
+                }
+                PointerEventKind::Release { button, serial: _, time } => {
+                    // Sometimes the Release event can occur without the Press event beforehand. E.g., when dismissing the window menu.
+                    if window.num_pointer_buttons_down > 0 {
+                        window.num_pointer_buttons_down -= 1;
+                    }
+                    self.send_event(MouseUpEvent {
                         window_id,
                         button: MouseButton(button),
                         location_in_window: event.position.into(),
                         timestamp: Timestamp(time),
-                    }),
-                    PointerEventKind::Axis {
-                        time,
-                        horizontal,
-                        vertical,
-                        ..
-                    } => {
-                        debug!("wl_pointer vertical={vertical:?}");
-                        self.send_event(ScrollWheelEvent {
-                            window_id,
-                            location_in_window: event.position.into(),
-                            timestamp: Timestamp(time),
-                            horizontal_scroll: horizontal.into(),
-                            vertical_scroll: vertical.into(),
-                        })
-                    }
+                    })
                 }
-            }
-
-            #[allow(clippy::collapsible_if)]
-            if let PointerEventKind::Enter { .. } = event.kind {
-                if let Some(themed_pointer) = self.themed_pointer.take() {
-                    let pointer_surface = themed_pointer.surface();
-                    if let Some(pointer_surface_data) = pointer_surface.data() {
-                        #[allow(clippy::cast_possible_truncation)]
-                        let pointer_surface_event = wl_surface::Event::PreferredBufferScale {
-                            factor: scale.round() as i32,
-                        };
-                        debug!("Setting cursor scale to {scale:?}");
-                        Dispatch::<WlSurface, SurfaceData>::event(
-                            self,
-                            pointer_surface,
-                            pointer_surface_event,
-                            pointer_surface_data,
-                            conn,
-                            qh,
-                        );
-                    }
-                    self.themed_pointer = Some(themed_pointer);
+                PointerEventKind::Axis {
+                    time,
+                    horizontal,
+                    vertical,
+                    ..
+                } => {
+                    debug!("wl_pointer vertical={vertical:?}");
+                    self.send_event(ScrollWheelEvent {
+                        window_id,
+                        location_in_window: event.position.into(),
+                        timestamp: Timestamp(time),
+                        horizontal_scroll: horizontal.into(),
+                        vertical_scroll: vertical.into(),
+                    })
                 }
-            }
+            };
         }
     }
 }

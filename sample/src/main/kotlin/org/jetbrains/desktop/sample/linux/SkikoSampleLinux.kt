@@ -466,7 +466,7 @@ private class EditorState {
                 }
 
                 KeyCode.Tab -> {
-                    app.requestInternalActivationToken(window.windowId)
+                    window.requestInternalActivationToken()
                     EventHandlerResult.Stop
                 }
 
@@ -697,10 +697,10 @@ private class ContentArea(
     private var markerPosition: LogicalPoint? = null
     private var dragIconTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
 
-    fun onMouseMoved(event: Event.MouseMoved): EventHandlerResult {
+    fun onMouseMoved(locationInWindow: LogicalPoint): EventHandlerResult {
         markerPosition = LogicalPoint(
-            event.locationInWindow.x - origin.x,
-            event.locationInWindow.y - origin.y,
+            locationInWindow.x - origin.x,
+            locationInWindow.y - origin.y,
         )
         return EventHandlerResult.Continue
     }
@@ -1021,11 +1021,11 @@ private class WindowContainer(
         return EventHandlerResult.Continue
     }
 
-    fun onMouseMoved(event: Event.MouseMoved, window: Window): EventHandlerResult {
-        if (customTitlebar?.onMouseMoved(event, window) == EventHandlerResult.Stop) {
+    fun onMouseMoved(locationInWindow: LogicalPoint, window: Window): EventHandlerResult {
+        if (customTitlebar?.onMouseMoved(locationInWindow, window) == EventHandlerResult.Stop) {
             return EventHandlerResult.Stop
         }
-        return contentArea.onMouseMoved(event)
+        return contentArea.onMouseMoved(locationInWindow)
     }
 
     fun onMouseDown(
@@ -1198,14 +1198,14 @@ private class RotatingBallWindow(
         return editorState.onDragAndDropFinished(action)
     }
 
-    fun onMouseMoved(event: Event.MouseMoved): EventHandlerResult {
-        val borderEdge = windowContainer.customBorders?.toEdge(event.locationInWindow)
+    fun onMouseMoved(locationInWindow: LogicalPoint): EventHandlerResult {
+        val borderEdge = windowContainer.customBorders?.toEdge(locationInWindow)
         return if (borderEdge != null) {
             changePointerShape(CustomBorders.edgeToPointerShape(borderEdge))
             EventHandlerResult.Stop
         } else {
             changePointerShape(PointerShape.Default)
-            windowContainer.onMouseMoved(event, window)
+            windowContainer.onMouseMoved(locationInWindow, window)
         }
     }
 
@@ -1230,8 +1230,14 @@ private class RotatingBallWindow(
         return editorState.onTextInput(event, app)
     }
 
-    fun onMouseEntered(): EventHandlerResult {
-        return windowContainer.onMouseEntered()
+    fun onMouseEntered(locationInWindow: LogicalPoint): EventHandlerResult {
+        if (onMouseMoved(locationInWindow) == EventHandlerResult.Stop) {
+            return EventHandlerResult.Stop
+        }
+        if (windowContainer.onMouseEntered() == EventHandlerResult.Stop) {
+            return EventHandlerResult.Stop
+        }
+        return windowContainer.onMouseMoved(locationInWindow, window)
     }
 
     fun onMouseExited(): EventHandlerResult {
@@ -1368,7 +1374,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 windows[event.windowId]?.configure(event) ?: EventHandlerResult.Continue
             }
             is Event.MouseMoved -> {
-                windows[event.windowId]?.onMouseMoved(event) ?: EventHandlerResult.Continue
+                windows[event.windowId]?.onMouseMoved(event.locationInWindow) ?: EventHandlerResult.Continue
             }
             is Event.DataTransfer -> {
                 clipboardPasteSerialToWindow.remove(event.serial)?.let { windowId ->
@@ -1459,7 +1465,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 xdgDesktopSettings,
             )
                 ?: EventHandlerResult.Continue
-            is Event.MouseEntered -> windows[event.windowId]?.onMouseEntered() ?: EventHandlerResult.Continue
+            is Event.MouseEntered -> windows[event.windowId]?.onMouseEntered(event.locationInWindow) ?: EventHandlerResult.Continue
             is Event.MouseExited -> windows[event.windowId]?.onMouseExited() ?: EventHandlerResult.Continue
             is Event.MouseUp -> {
                 if (event.button == MouseButton.LEFT) {
