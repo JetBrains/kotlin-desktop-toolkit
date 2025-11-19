@@ -515,6 +515,21 @@ impl Application {
         }))
     }
 
+    async fn open_file_manager_impl(path: &str, request: ashpd::desktop::open_uri::OpenDirectoryRequest) -> anyhow::Result<()> {
+        let f = tokio::fs::File::open(path).await?;
+        request.send(&f).await?;
+        Ok(())
+    }
+
+    pub fn open_file_manager(&mut self, path: String, activation_token: Option<&str>) -> RequestId {
+        debug!("application_open_file_manager: {path}, activation_token={activation_token:?}");
+        let request = ashpd::desktop::open_uri::OpenDirectoryRequest::default().activation_token(activation_token.map(Into::into));
+        self.run_async(|request_id| async move {
+            let error = Self::open_file_manager_impl(&path, request).await.err();
+            AsyncEventResult::UrlOpenResponse { request_id, error }
+        })
+    }
+
     fn get_wl_surface(&self, window_id: WindowId) -> anyhow::Result<WlSurface> {
         Ok(self.get_window(window_id)?.window.wl_surface().clone())
     }

@@ -168,6 +168,16 @@ public class Application : AutoCloseable {
         }
     }
 
+    public fun openFileManager(path: String, activationToken: String?): RequestId? {
+        return ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                val nativePath = arena.allocateUtf8String(path)
+                val nativeActivationToken = activationToken?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+                RequestId.fromNativeResponse(desktop_linux_h.application_open_file_manager(appPtr!!, nativePath, nativeActivationToken))
+            }
+        }
+    }
+
     private fun applicationCallbacks(): MemorySegment {
         val arena = Arena.global()
         val callbacks = NativeApplicationCallbacks.allocate(arena)

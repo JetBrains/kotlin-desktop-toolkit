@@ -277,6 +277,14 @@ pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: Borrowed
     })
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn application_open_file_manager(mut app_ptr: AppPtr, path: BorrowedStrPtr, activation_token: BorrowedStrPtr) -> RequestId {
+    ffi_boundary("application_open_file_manager", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        Ok(app.open_file_manager(path.as_str()?.to_owned(), activation_token.as_optional_str().unwrap()))
+    })
+}
+
 /// * `title`: User-visible string to display as the title.
 ///   This should be a short string, if it doesn’t fit the UI, it may be truncated to fit on a single line.
 /// * `body`: User-visible string to display as the body.

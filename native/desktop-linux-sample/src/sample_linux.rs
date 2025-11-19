@@ -24,6 +24,7 @@ use desktop_linux::linux::{
         application_get_egl_proc_func,
         application_init,
         application_is_event_loop_thread,
+        application_open_file_manager,
         application_open_url,
         application_primary_selection_paste,
         application_request_show_notification,
@@ -62,6 +63,7 @@ use std::{
     ffi::{CStr, CString},
     str::FromStr,
 };
+use url::Url;
 
 fn between(val: f64, min: f64, max: f64) -> bool {
     val > min && val < max
@@ -105,6 +107,7 @@ struct WindowState {
     drag_and_drop_target: bool,
     drag_and_drop_source: bool,
     opengl: Option<OpenglState>,
+    last_received_path: Option<CString>,
 }
 
 impl WindowState {
@@ -121,6 +124,7 @@ impl WindowState {
 enum ActivationTokenAction {
     ActivateWindow,
     OpenUrl(CString),
+    OpenFileManager(CString),
 }
 
 #[derive(Debug, Default)]
@@ -378,6 +382,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
     const KEYCODE_O: u32 = 24;
     const KEYCODE_P: u32 = 25;
     const KEYCODE_S: u32 = 31;
+    const KEYCODE_U: u32 = 22;
     const KEYCODE_V: u32 = 47;
     const KEY_MODIFIER_CTRL: u8 = KeyModifier::Ctrl as u8;
 
@@ -483,6 +488,18 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             }
             true
         }
+        (KEY_MODIFIER_CTRL, KEYCODE_U) => {
+            let window_state = state.windows.get_mut(&window_id).unwrap();
+            if let Some(path) = window_state.last_received_path.clone() {
+                let request_id = window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
+                if request_id > 0 {
+                    state
+                        .activation_token_action
+                        .insert(request_id, ActivationTokenAction::OpenFileManager(path));
+                }
+            }
+            true
+        }
         (_, _) => {
             if let Some(s) = event.characters.as_optional_str().unwrap() {
                 let window_state = state.windows.get_mut(&window_id).unwrap();
@@ -546,6 +563,14 @@ fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut W
                 v
             };
             info!("Pasted file list: {list:?}");
+            let first_path = {
+                let first_uri_str = *list.first().unwrap();
+                let first_uri = Url::from_str(first_uri_str).unwrap();
+                let path_buf = first_uri.to_file_path().unwrap();
+                let path_bytes = path_buf.into_os_string().into_encoded_bytes();
+                CString::new(path_bytes).unwrap()
+            };
+            window_state.last_received_path = Some(first_path);
             for e in list {
                 assert!(e.starts_with("file:///"), "\"{e}\" doesn't start with \"file:///\"");
                 assert_eq!(e, e.trim_ascii_end());
@@ -553,8 +578,10 @@ fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut W
         } else if mime_type == TEXT_MIME_TYPE {
             let data_str = str::from_utf8(data).unwrap();
             window_state.text += data_str;
+            window_state.last_received_path = None;
         } else {
             warn!("Mime type {mime_type:?} is not supported");
+            window_state.last_received_path = None;
         }
     }
     window_state.drag_and_drop_target = false;
@@ -788,6 +815,9 @@ extern "C" fn event_handler(event: &Event) -> bool {
                         if let Some(window_id) = state.windows.keys().find(|&&w| Some(w) != state.key_window_id) {
                             window_activate(app_ptr, *window_id, token);
                         }
+                    }
+                    ActivationTokenAction::OpenFileManager(path) => {
+                        application_open_file_manager(app_ptr, BorrowedStrPtr::new(&path), token);
                     }
                     ActivationTokenAction::OpenUrl(url) => {
                         application_open_url(app_ptr, BorrowedStrPtr::new(&url), token);
