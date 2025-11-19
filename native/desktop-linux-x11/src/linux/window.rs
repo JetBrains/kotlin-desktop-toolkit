@@ -61,16 +61,12 @@ impl SimpleWindow {
         let physical_size = self.get_physical_size();
 
         let do_draw = |software_draw_data: SoftwareDrawData| {
-            let did_draw = callback(WindowDrawEvent {
+            callback(WindowDrawEvent {
                 window_id: self.window_id,
                 software_draw_data,
                 physical_size,
                 scale: self.current_scale,
-            });
-
-            // Request our next frame
-            self.window.request_redraw();
-            did_draw
+            })
         };
 
         let now = Instant::now();
@@ -104,6 +100,10 @@ impl SimpleWindow {
         let physical_size = self.get_physical_size();
 
         self.on_physical_size_changed(physical_size);
+    }
+
+    pub fn request_redraw(&self) {
+        self.window.request_redraw();
     }
 
     pub fn get_physical_size(&self) -> PhysicalSize {

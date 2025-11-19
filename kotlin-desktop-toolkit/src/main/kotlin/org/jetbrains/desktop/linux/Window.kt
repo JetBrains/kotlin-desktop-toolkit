@@ -41,6 +41,10 @@ public class Window internal constructor(
         return "${javaClass.typeName}(windowId=$windowId, appPtr=0x${appPtr.address().toString(16)})"
     }
 
+    public fun requestRedraw() {
+        ffiDownCall { desktop_linux_h.window_request_redraw(appPtr, windowId) }
+    }
+
     public fun getSize(): LogicalSize {
         return Arena.ofConfined().use { arena ->
             LogicalSize.fromNative(ffiDownCall { desktop_linux_h.window_get_size(arena, appPtr, windowId) })

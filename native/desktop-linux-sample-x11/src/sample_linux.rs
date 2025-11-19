@@ -39,6 +39,7 @@ use desktop_linux_x11::linux::{
         window_activate,
         window_close,
         window_create,
+        window_request_redraw,
         //
     },
 };
@@ -115,6 +116,18 @@ struct State {
     request_sources: HashMap<RequestId, WindowId>,
     notification_sources: HashMap<u32, WindowId>,
     // activation_token_action: HashMap<u32, ActivationTokenAction>,
+}
+
+impl State {
+    fn with_mut_window_state(&mut self, window_id: WindowId, f: impl FnOnce(&mut WindowState)) -> bool {
+        if let Some(window) = self.windows.get_mut(&window_id) {
+            f(window);
+            window_request_redraw(self.app_ptr.get(), window_id);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 thread_local! {
@@ -370,8 +383,9 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
         }
         (_, _) => {
             if let Some(s) = event.characters.as_optional_str().unwrap() {
-                let window_state = state.windows.get_mut(&event.window_id).unwrap();
-                window_state.text += s;
+                state.with_mut_window_state(event.window_id, |window_state| {
+                    window_state.text += s;
+                });
             }
             false
         }
@@ -495,6 +509,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
 
                     if data.software_draw_data.canvas.is_null() {
                         draw_opengl_triangle_with_init(data.physical_size, data.window_id, window_state);
+                        window_request_redraw(app_ptr, data.window_id);
                     } else {
                         draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
                     }
@@ -562,15 +577,15 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 true
             }
             Event::WindowKeyboardEnter(data) => {
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                state.with_mut_window_state(data.window_id, |window_state| {
                     window_state.active = true;
-                }
+                });
                 true
             }
             Event::WindowKeyboardLeave(data) => {
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                state.with_mut_window_state(data.window_id, |window_state| {
                     window_state.active = false;
-                }
+                });
 
                 true
             }
@@ -597,31 +612,18 @@ extern "C" fn event_handler(event: &Event) -> bool {
             //         false
             //     }
             // }
-            Event::DropPerformed(data) => {
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                    on_data_transfer_received(&data.content, window_state);
-                    true
-                } else {
-                    false
-                }
-            }
-            Event::DragAndDropLeave(data) => {
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
-                    window_state.drag_and_drop_target = false;
-                    true
-                } else {
-                    false
-                }
-            }
+            Event::DropPerformed(data) => state.with_mut_window_state(data.window_id, |window_state| {
+                on_data_transfer_received(&data.content, window_state);
+            }),
+            Event::DragAndDropLeave(data) => state.with_mut_window_state(data.window_id, |window_state| {
+                window_state.drag_and_drop_target = false;
+            }),
             Event::DragAndDropFinished(data) => {
                 state.windows.remove(&DRAG_ICON_WINDOW_ID);
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                state.with_mut_window_state(data.window_id, |window_state| {
                     window_state.drag_and_drop_source = false;
                     info!("Finished initiated drag and drop with action {:?}", data.action);
-                    true
-                } else {
-                    false
-                }
+                })
             }
             Event::DataTransferCancelled(data) => {
                 if data.data_source == DataSource::DragAndDrop {
@@ -635,20 +637,14 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 }
             }
             Event::TextInputAvailability(data) => {
-                if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                state.with_mut_window_state(data.window_id, |window_state| {
                     // on_text_input_availability_changed(data.available, app_ptr, window_state);
-                    true
-                } else {
-                    false
-                }
+                })
             }
-            Event::TextInput(event) => {
-                if let Some(window_state) = state.windows.get_mut(&event.window_id) {
+            Event::TextInput(data) => {
+                state.with_mut_window_state(data.window_id, |window_state| {
                     // on_text_input(event, app_ptr, key_window_id, window_state);
-                    true
-                } else {
-                    false
-                }
+                })
             }
             Event::ActivationTokenResponse(data) => {
                 let _token = BorrowedStrPtr::new(data.token.as_optional_cstr().unwrap());
@@ -699,8 +695,9 @@ extern "C" fn event_handler(event: &Event) -> bool {
 
 extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> DragAndDropQueryResponse<'_> {
     STATE.with_borrow_mut(|state| {
-        let window_state = state.windows.get_mut(&data.window_id).unwrap();
-        window_state.drag_and_drop_target = true;
+        state.with_mut_window_state(data.window_id, |window_state| {
+            window_state.drag_and_drop_target = true;
+        });
     });
     if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF {
         const SUPPORTED_ACTIONS_PER_MIME: [SupportedActionsForMime; 2] = [

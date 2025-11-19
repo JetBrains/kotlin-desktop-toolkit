@@ -18,6 +18,8 @@ import org.jetbrains.skia.Surface
 import org.jetbrains.skia.SurfaceColorFormat
 import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
+import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.time.TimeSource
 
 internal fun performSoftwareDrawing(size: PhysicalSize, softwareDrawData: SoftwareDrawData, draw: (Surface) -> Boolean): Boolean {
@@ -55,6 +57,7 @@ internal fun performOpenGlDrawing(size: PhysicalSize, context: DirectContext, dr
     }
 }
 
+@OptIn(ExperimentalAtomicApi::class)
 abstract class SkikoWindowLinux(
     app: Application,
     params: WindowParams,
@@ -66,6 +69,17 @@ abstract class SkikoWindowLinux(
     }
     val window = app.createWindow(params)
     private val creationTime = TimeSource.Monotonic.markNow()
+    private val softwareDrawFrameRequesterActive = AtomicBoolean(false)
+    private var softwareDrawFrameRequester = Thread({
+        while (softwareDrawFrameRequesterActive.load()) {
+            app.runOnEventLoopAsync {
+                if (softwareDrawFrameRequesterActive.load()) {
+                    window.requestRedraw()
+                }
+            }
+            Thread.sleep(16)
+        }
+    })
 
     fun performDrawing(event: Event.WindowDraw): Boolean {
         val draw = { surface: Surface ->
@@ -75,13 +89,22 @@ abstract class SkikoWindowLinux(
             true
         }
         return event.softwareDrawData?.let { softwareDrawData ->
-            performSoftwareDrawing(event.size, softwareDrawData, draw)
-        } ?: performOpenGlDrawing(event.size, directContext, draw)
+            performSoftwareDrawing(event.size, softwareDrawData, draw).also {
+                if (softwareDrawFrameRequesterActive.compareAndSet(expectedValue = false, newValue = true)) {
+                    softwareDrawFrameRequester.start()
+                }
+            }
+        } ?: run {
+            performOpenGlDrawing(event.size, directContext, draw).also {
+                window.requestRedraw()
+            }
+        }
     }
 
     abstract fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long)
 
     override fun close() {
+        softwareDrawFrameRequesterActive.store(false)
         window.close()
     }
 }
