@@ -1209,7 +1209,7 @@ private class RotatingBallWindow(
     private fun changePointerShape(newPointerShape: PointerShape) {
         if (windowState.pointerShape != newPointerShape) {
             windowState.pointerShape = newPointerShape
-//            window.setPointerShape(newPointerShape)
+            window.setPointerShape(newPointerShape)
         }
     }
 

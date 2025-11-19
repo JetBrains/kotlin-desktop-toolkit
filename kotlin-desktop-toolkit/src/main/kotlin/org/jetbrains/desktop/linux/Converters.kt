@@ -2,10 +2,8 @@ package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeActivationTokenResponse
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_SupportedActionsForMime
-// import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
-// import org.jetbrains.desktop.linux.generated.NativeCommonFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailableEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferCancelledEvent
 import org.jetbrains.desktop.linux.generated.NativeDataTransferContent
@@ -31,9 +29,7 @@ import org.jetbrains.desktop.linux.generated.NativeMouseMovedEvent
 import org.jetbrains.desktop.linux.generated.NativeMouseUpEvent
 import org.jetbrains.desktop.linux.generated.NativeNotificationClosedEvent
 import org.jetbrains.desktop.linux.generated.NativeNotificationShownEvent
-// import org.jetbrains.desktop.linux.generated.NativeOpenFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativePhysicalSize
-// import org.jetbrains.desktop.linux.generated.NativeSaveFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeScrollData
 import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.linux.generated.NativeSoftwareDrawData
@@ -52,7 +48,6 @@ import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
 import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
-import org.jetbrains.desktop.linux.generated.desktop_linux_x11_h as desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemoryLayout
 import java.lang.foreign.MemorySegment
@@ -62,6 +57,7 @@ import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
+import org.jetbrains.desktop.linux.generated.desktop_linux_x11_h as desktop_linux_h
 
 internal fun fromOptionalNativeString(s: MemorySegment): String? {
     return if (s == MemorySegment.NULL) null else s.getUtf8String(0)
@@ -157,46 +153,46 @@ private fun keyModifiersFromNative(nativeModifiers: Byte): Set<KeyModifiers> {
 
     return modifiers
 }
-//
-// internal fun PointerShape.toNative(): Int {
-//    return when (this) {
-//        PointerShape.Hidden -> desktop_linux_h.NativePointerShape_Hidden()
-//        PointerShape.Default -> desktop_linux_h.NativePointerShape_Default()
-//        PointerShape.ContextMenu -> desktop_linux_h.NativePointerShape_ContextMenu()
-//        PointerShape.Help -> desktop_linux_h.NativePointerShape_Help()
-//        PointerShape.Pointer -> desktop_linux_h.NativePointerShape_Pointer()
-//        PointerShape.Progress -> desktop_linux_h.NativePointerShape_Progress()
-//        PointerShape.Wait -> desktop_linux_h.NativePointerShape_Wait()
-//        PointerShape.Cell -> desktop_linux_h.NativePointerShape_Cell()
-//        PointerShape.Crosshair -> desktop_linux_h.NativePointerShape_Crosshair()
-//        PointerShape.Text -> desktop_linux_h.NativePointerShape_Text()
-//        PointerShape.VerticalText -> desktop_linux_h.NativePointerShape_VerticalText()
-//        PointerShape.Alias -> desktop_linux_h.NativePointerShape_Alias()
-//        PointerShape.Copy -> desktop_linux_h.NativePointerShape_Copy()
-//        PointerShape.Move -> desktop_linux_h.NativePointerShape_Move()
-//        PointerShape.NoDrop -> desktop_linux_h.NativePointerShape_NoDrop()
-//        PointerShape.NotAllowed -> desktop_linux_h.NativePointerShape_NotAllowed()
-//        PointerShape.Grab -> desktop_linux_h.NativePointerShape_Grab()
-//        PointerShape.Grabbing -> desktop_linux_h.NativePointerShape_Grabbing()
-//        PointerShape.EResize -> desktop_linux_h.NativePointerShape_EResize()
-//        PointerShape.NResize -> desktop_linux_h.NativePointerShape_NResize()
-//        PointerShape.NeResize -> desktop_linux_h.NativePointerShape_NeResize()
-//        PointerShape.NwResize -> desktop_linux_h.NativePointerShape_NwResize()
-//        PointerShape.SResize -> desktop_linux_h.NativePointerShape_SResize()
-//        PointerShape.SeResize -> desktop_linux_h.NativePointerShape_SeResize()
-//        PointerShape.SwResize -> desktop_linux_h.NativePointerShape_SwResize()
-//        PointerShape.WResize -> desktop_linux_h.NativePointerShape_WResize()
-//        PointerShape.EwResize -> desktop_linux_h.NativePointerShape_EwResize()
-//        PointerShape.NsResize -> desktop_linux_h.NativePointerShape_NsResize()
-//        PointerShape.NeswResize -> desktop_linux_h.NativePointerShape_NeswResize()
-//        PointerShape.NwseResize -> desktop_linux_h.NativePointerShape_NwseResize()
-//        PointerShape.ColResize -> desktop_linux_h.NativePointerShape_ColResize()
-//        PointerShape.RowResize -> desktop_linux_h.NativePointerShape_RowResize()
-//        PointerShape.AllScroll -> desktop_linux_h.NativePointerShape_AllScroll()
-//        PointerShape.ZoomIn -> desktop_linux_h.NativePointerShape_ZoomIn()
-//        PointerShape.ZoomOut -> desktop_linux_h.NativePointerShape_ZoomOut()
-//    }
-// }
+
+internal fun PointerShape.toNative(): Int {
+    return when (this) {
+        PointerShape.Hidden -> desktop_linux_h.NativePointerShape_Hidden()
+        PointerShape.Default -> desktop_linux_h.NativePointerShape_Default()
+        PointerShape.ContextMenu -> desktop_linux_h.NativePointerShape_ContextMenu()
+        PointerShape.Help -> desktop_linux_h.NativePointerShape_Help()
+        PointerShape.Pointer -> desktop_linux_h.NativePointerShape_Pointer()
+        PointerShape.Progress -> desktop_linux_h.NativePointerShape_Progress()
+        PointerShape.Wait -> desktop_linux_h.NativePointerShape_Wait()
+        PointerShape.Cell -> desktop_linux_h.NativePointerShape_Cell()
+        PointerShape.Crosshair -> desktop_linux_h.NativePointerShape_Crosshair()
+        PointerShape.Text -> desktop_linux_h.NativePointerShape_Text()
+        PointerShape.VerticalText -> desktop_linux_h.NativePointerShape_VerticalText()
+        PointerShape.Alias -> desktop_linux_h.NativePointerShape_Alias()
+        PointerShape.Copy -> desktop_linux_h.NativePointerShape_Copy()
+        PointerShape.Move -> desktop_linux_h.NativePointerShape_Move()
+        PointerShape.NoDrop -> desktop_linux_h.NativePointerShape_NoDrop()
+        PointerShape.NotAllowed -> desktop_linux_h.NativePointerShape_NotAllowed()
+        PointerShape.Grab -> desktop_linux_h.NativePointerShape_Grab()
+        PointerShape.Grabbing -> desktop_linux_h.NativePointerShape_Grabbing()
+        PointerShape.EResize -> desktop_linux_h.NativePointerShape_EResize()
+        PointerShape.NResize -> desktop_linux_h.NativePointerShape_NResize()
+        PointerShape.NeResize -> desktop_linux_h.NativePointerShape_NeResize()
+        PointerShape.NwResize -> desktop_linux_h.NativePointerShape_NwResize()
+        PointerShape.SResize -> desktop_linux_h.NativePointerShape_SResize()
+        PointerShape.SeResize -> desktop_linux_h.NativePointerShape_SeResize()
+        PointerShape.SwResize -> desktop_linux_h.NativePointerShape_SwResize()
+        PointerShape.WResize -> desktop_linux_h.NativePointerShape_WResize()
+        PointerShape.EwResize -> desktop_linux_h.NativePointerShape_EwResize()
+        PointerShape.NsResize -> desktop_linux_h.NativePointerShape_NsResize()
+        PointerShape.NeswResize -> desktop_linux_h.NativePointerShape_NeswResize()
+        PointerShape.NwseResize -> desktop_linux_h.NativePointerShape_NwseResize()
+        PointerShape.ColResize -> desktop_linux_h.NativePointerShape_ColResize()
+        PointerShape.RowResize -> desktop_linux_h.NativePointerShape_RowResize()
+        PointerShape.AllScroll -> desktop_linux_h.NativePointerShape_AllScroll()
+        PointerShape.ZoomIn -> desktop_linux_h.NativePointerShape_ZoomIn()
+        PointerShape.ZoomOut -> desktop_linux_h.NativePointerShape_ZoomOut()
+    }
+}
 
 internal fun RenderingMode.toNative() = when (this) {
     RenderingMode.Auto -> desktop_linux_h.NativeRenderingMode_Auto()

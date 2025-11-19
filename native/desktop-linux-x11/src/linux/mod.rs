@@ -11,7 +11,7 @@ pub mod geometry;
 // mod mime_types;
 mod mouse;
 // mod notifications;
-// mod pointer_shapes;
+mod pointer_shapes;
 pub mod pointer_shapes_api;
 mod rendering_egl;
 mod rendering_software;
