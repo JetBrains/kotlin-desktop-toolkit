@@ -202,7 +202,26 @@ impl ApplicationHandler for ApplicationState {
                         "WindowEvent::Resized: {:?}, {new_physical_size:?}, outer_size={outer_size:?}",
                         w.window_id
                     );
-                    // let event = WindowConfigureEvent {};
+                    let decoration_mode = if w.window.is_decorated() {
+                        WindowDecorationMode::Server
+                    } else {
+                        WindowDecorationMode::Client
+                    };
+                    let event = WindowConfigureEvent {
+                        window_id: w.window_id,
+                        size: w.window.surface_size().to_logical(w.current_scale).into(),
+                        active: false,
+                        maximized: w.window.is_maximized(),
+                        fullscreen: w.window.fullscreen().is_some(),
+                        decoration_mode,
+                        capabilities: WindowCapabilities {
+                            window_menu: true,
+                            maximize: true,
+                            fullscreen: true,
+                            minimize: true,
+                        },
+                    };
+                    self.send_event(event);
                 }
                 WindowEvent::Moved(physical_position) => {
                     //w.window.current_monitor()
