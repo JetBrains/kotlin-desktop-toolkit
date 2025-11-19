@@ -84,6 +84,14 @@ pub extern "C" fn window_close(mut app_ptr: AppPtr, window_id: WindowId) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_request_redraw(app_ptr: AppPtr, window_id: WindowId) {
+    with_window(&app_ptr, window_id, "window_request_redraw", |w| {
+        w.request_redraw();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_pointer_shape(app_ptr: AppPtr, window_id: WindowId, pointer_shape: PointerShape) {
     with_window(&app_ptr, window_id, "window_set_pointer_shape", |w| {
         w.set_cursor_icon(pointer_shape);

@@ -1371,7 +1371,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
 
         return when (event) {
             Event.ApplicationStarted -> {
-                createWindow(useCustomTitlebar = true, renderingMode = RenderingMode.Auto)
+                createWindow(useCustomTitlebar = true, renderingMode = RenderingMode.Software)
                 EventHandlerResult.Stop
             }
             Event.ApplicationWantsToTerminate -> EventHandlerResult.Continue

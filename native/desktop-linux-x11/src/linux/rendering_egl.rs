@@ -4,11 +4,13 @@ use khronos_egl as egl;
 use khronos_egl::NativeWindowType;
 use log::{debug, info};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
+use std::rc::Rc;
+use winit_core::window::Window as WinitWindow;
 
 #[derive(Debug)]
 pub struct EglRendering<'a> {
     egl: &'a EglInstance,
-    // wl_egl_surface: WlEglSurface,
+    w: Rc<Box<dyn WinitWindow>>,
     egl_display: egl::Display,
     egl_window_surface: khronos_egl::Surface,
     egl_context: egl::Context,
@@ -23,7 +25,7 @@ impl Drop for EglRendering<'_> {
 }
 
 impl<'a> EglRendering<'a> {
-    pub fn new<W: HasDisplayHandle + HasWindowHandle>(egl: &'a EglInstance, w: W) -> anyhow::Result<Self> {
+    pub fn new(egl: &'a EglInstance, w: Rc<Box<dyn WinitWindow>>) -> anyhow::Result<Self> {
         info!("Trying to use EGL rendering");
 
         let display_handle = w.display_handle().context("Failed to get raw window raw display handle")?;
@@ -78,7 +80,7 @@ impl<'a> EglRendering<'a> {
 
         Ok(Self {
             egl,
-            // wl_egl_surface,
+            w,
             egl_display,
             egl_window_surface,
             egl_context,
@@ -104,9 +106,10 @@ impl<'a> EglRendering<'a> {
             .unwrap();
 
         if do_draw(SoftwareDrawData::default()) {
+            self.w.pre_present_notify();
             self.egl
                 .swap_buffers(self.egl_display, self.egl_window_surface)
-                // .context(surface.id())
+                .with_context(|| format!("{:?}", self.w.id()))
                 .unwrap();
         }
     }

@@ -6,6 +6,8 @@ use std::rc::Rc;
 use winit_core::window::Window as WinitWindow;
 
 pub struct SoftwareRendering {
+    w: Rc<Box<dyn WinitWindow>>,
+
     #[allow(clippy::type_complexity)]
     surface: Surface<Rc<Box<dyn WinitWindow>>, Rc<Box<dyn WinitWindow>>>,
 }
@@ -16,8 +18,8 @@ impl SoftwareRendering {
 
     pub fn new(w: Rc<Box<dyn WinitWindow>>) -> anyhow::Result<Self> {
         let context = Context::new(w.clone()).map_err(|e| anyhow!("Failed to create software rendering context: {e}"))?;
-        let surface = Surface::new(&context, w).map_err(|e| anyhow!("Failed to create software rendering surface: {e}"))?;
-        Ok(Self { surface })
+        let surface = Surface::new(&context, w.clone()).map_err(|e| anyhow!("Failed to create software rendering surface: {e}"))?;
+        Ok(Self { w, surface })
     }
 
     pub fn resize(&mut self, size: PhysicalSize) {
@@ -38,6 +40,7 @@ impl SoftwareRendering {
             stride,
         };
         if do_draw(draw_data) {
+            self.w.pre_present_notify();
             buffer.present().unwrap();
         }
     }
