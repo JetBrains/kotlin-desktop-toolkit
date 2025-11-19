@@ -13,7 +13,7 @@ impl From<WindowResizeEdge> for Option<ResizeDirection> {
             WindowResizeEdge::BottomLeft => Some(ResizeDirection::SouthWest),
             WindowResizeEdge::Right => Some(ResizeDirection::East),
             WindowResizeEdge::TopRight => Some(ResizeDirection::NorthEast),
-            WindowResizeEdge::BottomRight => Some(ResizeDirection::SouthWest),
+            WindowResizeEdge::BottomRight => Some(ResizeDirection::SouthEast),
         }
     }
 }
