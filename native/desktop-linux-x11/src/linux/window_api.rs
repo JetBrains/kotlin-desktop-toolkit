@@ -103,7 +103,7 @@ pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> Logic
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_title: BorrowedStrPtr) {
     with_window(&app_ptr, window_id, "window_set_title", |w| {
-        w.window.set_title(new_title.as_str()?);
+        w.set_title(new_title.as_str()?);
         Ok(())
     });
 }
@@ -135,7 +135,7 @@ pub extern "C" fn window_show_menu(app_ptr: AppPtr, window_id: WindowId, positio
 #[unsafe(no_mangle)]
 pub extern "C" fn window_maximize(app_ptr: AppPtr, window_id: WindowId) {
     with_window(&app_ptr, window_id, "window_maximize", |w| {
-        w.window.set_maximized(true);
+        w.maximize();
         Ok(())
     });
 }
@@ -143,7 +143,7 @@ pub extern "C" fn window_maximize(app_ptr: AppPtr, window_id: WindowId) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_unmaximize(app_ptr: AppPtr, window_id: WindowId) {
     with_window(&app_ptr, window_id, "window_maximize", |w| {
-        w.window.set_maximized(false);
+        w.unmaximize();
         Ok(())
     });
 }
@@ -151,7 +151,7 @@ pub extern "C" fn window_unmaximize(app_ptr: AppPtr, window_id: WindowId) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_minimize(app_ptr: AppPtr, window_id: WindowId) {
     with_window(&app_ptr, window_id, "window_minimize", |w| {
-        w.window.set_minimized(true);
+        w.minimize();
         Ok(())
     });
 }
@@ -159,7 +159,7 @@ pub extern "C" fn window_minimize(app_ptr: AppPtr, window_id: WindowId) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_max_size(app_ptr: AppPtr, window_id: WindowId, size: LogicalSize) {
     with_window(&app_ptr, window_id, "window_set_max_size", |w| {
-        w.window.set_max_surface_size(Some(size.as_winit_size()));
+        w.set_max_size(size);
         Ok(())
     });
 }
@@ -167,7 +167,7 @@ pub extern "C" fn window_set_max_size(app_ptr: AppPtr, window_id: WindowId, size
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_min_size(app_ptr: AppPtr, window_id: WindowId, size: LogicalSize) {
     with_window(&app_ptr, window_id, "window_set_min_size", |w| {
-        w.window.set_min_surface_size(Some(size.as_winit_size()));
+        w.set_min_size(size);
         Ok(())
     });
 }
@@ -175,8 +175,7 @@ pub extern "C" fn window_set_min_size(app_ptr: AppPtr, window_id: WindowId, size
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_fullscreen(app_ptr: AppPtr, window_id: WindowId) {
     with_window(&app_ptr, window_id, "window_toggle_full_screen", |w| {
-        // TODO
-        // w.window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+        w.set_fullscreen();
         Ok(())
     });
 }
@@ -184,8 +183,7 @@ pub extern "C" fn window_set_fullscreen(app_ptr: AppPtr, window_id: WindowId) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_unset_fullscreen(app_ptr: AppPtr, window_id: WindowId) {
     with_window(&app_ptr, window_id, "window_toggle_full_screen", |w| {
-        // TODO
-        // w.window.set_fullscreen(None);
+        w.unset_fullscreen();
         Ok(())
     });
 }
