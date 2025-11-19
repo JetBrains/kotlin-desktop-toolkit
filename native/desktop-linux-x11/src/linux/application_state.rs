@@ -18,6 +18,7 @@ use std::ffi::CString;
 use std::rc::Rc;
 use std::sync::LazyLock;
 use std::sync::mpsc::Receiver;
+use std::time::Instant;
 use winit_common::xkb::physicalkey_to_scancode;
 use winit_core::application::ApplicationHandler;
 use winit_core::event::{ElementState, Ime, WindowEvent};
@@ -127,6 +128,8 @@ impl ApplicationState {
             window,
             current_scale,
             rendering_data,
+            last_draw_measure_time: Instant::now(),
+            draw_call_count: 0,
         };
         self.window_id_to_winit_window_id.insert(window_id, winit_window_id);
         self.windows.insert(winit_window_id, simple_window);

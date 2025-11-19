@@ -66,7 +66,9 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
+import kotlin.time.TimeSource
 import kotlin.time.toDuration
 
 const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
@@ -229,6 +231,10 @@ private class EditorState {
     private var selectionEndOffset: Int? = null
     private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
     private var statsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    private var fpsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    private var drawCallCount = 0
+    private var lastFps = 0
+    private var lastDrawMeasureTime = TimeSource.Monotonic.markNow()
     private var pastedImage: Image? = null
 
     companion object {
@@ -288,6 +294,14 @@ private class EditorState {
     }
 
     fun draw(canvas: Canvas, y: Float, scale: Float) {
+        val now = TimeSource.Monotonic.markNow()
+        drawCallCount += 1
+        if (now - lastDrawMeasureTime >= 1.seconds) {
+            lastFps = drawCallCount
+            lastDrawMeasureTime = now
+            drawCallCount = 0
+        }
+
         val textLineStats = statsTextLineCreator.makeTextLine(getTextLineStatsString(), 20 * scale)
         pastedImage?.let {
             Paint().use { paint ->
@@ -354,9 +368,11 @@ private class EditorState {
             canvas.drawLine(x0 = x0, y0 = y0, x1 = x0, y1 = y1, paint = paint)
         }
 
+        val textLineFps = fpsTextLineCreator.makeTextLine("$lastFps FPS", 20 * scale)
         Paint().use { paint ->
             paint.color = Color.WHITE
             canvas.drawTextLine(textLineStats, 0f, (SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT * scale) + textLineStats.height, paint)
+            canvas.drawTextLine(textLineFps, 600f, (SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT * scale) + textLineStats.height, paint)
             canvas.drawTextLine(textLine, 0f, y, paint)
         }
     }

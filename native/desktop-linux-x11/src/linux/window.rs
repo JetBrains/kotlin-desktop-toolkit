@@ -9,6 +9,7 @@ use crate::linux::{
 };
 use log::{debug, warn};
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 use winit_core::monitor::Fullscreen;
 use winit_core::window::Window as WinitWindow;
 
@@ -51,6 +52,8 @@ pub struct SimpleWindow {
     pub current_scale: f64,
     // decoration_mode: DecorationMode,
     pub rendering_data: RenderingData,
+    pub last_draw_measure_time: Instant,
+    pub draw_call_count: u32,
 }
 
 impl SimpleWindow {
@@ -70,6 +73,13 @@ impl SimpleWindow {
             did_draw
         };
 
+        let now = Instant::now();
+        self.draw_call_count += 1;
+        if now - self.last_draw_measure_time > Duration::from_millis(1000) {
+            debug!("{:?}: {} FPS", self.window_id, self.draw_call_count);
+            self.last_draw_measure_time = now;
+            self.draw_call_count = 0;
+        }
         self.rendering_data.draw(physical_size, do_draw);
     }
 
