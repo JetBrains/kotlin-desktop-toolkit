@@ -14,3 +14,4 @@ anyhow.workspace = true
 log.workspace = true
 desktop-common = { path = "../desktop-common" }
 desktop-linux = { path = "../desktop-linux" }
+url = "2.5.7"
