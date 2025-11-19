@@ -119,13 +119,13 @@ public class Window internal constructor(
             }
         }
     }
-//
-//    public fun setPointerShape(shape: PointerShape) {
-//        ffiDownCall {
-//            desktop_linux_h.window_set_pointer_shape(appPtr, windowId, shape.toNative())
-//        }
-//    }
-//
+
+    public fun setPointerShape(shape: PointerShape) {
+        ffiDownCall {
+            desktop_linux_h.window_set_pointer_shape(appPtr, windowId, shape.toNative())
+        }
+    }
+
 //    public fun requestDecorationMode(decorationMode: WindowDecorationMode) {
 //        ffiDownCall {
 //            desktop_linux_h.window_request_decoration_mode(appPtr, windowId, decorationMode.toNative())

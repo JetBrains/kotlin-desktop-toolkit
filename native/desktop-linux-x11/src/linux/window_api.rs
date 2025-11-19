@@ -6,6 +6,7 @@ use crate::linux::{
     events::WindowId,
     // file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
+    pointer_shapes_api::PointerShape,
     window_resize_edge_api::WindowResizeEdge,
 };
 use anyhow::Context;
@@ -80,13 +81,13 @@ pub extern "C" fn window_close(mut app_ptr: AppPtr, window_id: WindowId) {
     });
 }
 
-// #[unsafe(no_mangle)]
-// pub extern "C" fn window_set_pointer_shape(mut app_ptr: AppPtr, window_id: WindowId, pointer_shape: PointerShape) {
-//     with_window_mut(&mut app_ptr, window_id, "window_set_pointer_shape", |w| {
-//         w.set_cursor_icon(pointer_shape);
-//         Ok(())
-//     });
-// }
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_pointer_shape(app_ptr: AppPtr, window_id: WindowId, pointer_shape: PointerShape) {
+    with_window(&app_ptr, window_id, "window_set_pointer_shape", |w| {
+        w.set_cursor_icon(pointer_shape);
+        Ok(())
+    });
+}
 
 impl PanicDefault for LogicalSize {
     fn default() -> Self {

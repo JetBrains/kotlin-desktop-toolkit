@@ -3,14 +3,12 @@ package org.jetbrains.desktop.linux
 import org.jetbrains.desktop.linux.generated.NativeApplicationCallbacks
 import org.jetbrains.desktop.linux.generated.NativeEventHandler
 import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
-// import org.jetbrains.desktop.linux.generated.NativeScreenInfo
-// import org.jetbrains.desktop.linux.generated.NativeScreenInfoArray
 import org.jetbrains.desktop.linux.generated.NativeWindowParams
 import org.jetbrains.desktop.linux.generated.`application_run_on_event_loop_async$f`
-import org.jetbrains.desktop.linux.generated.desktop_linux_x11_h as desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
+import org.jetbrains.desktop.linux.generated.desktop_linux_x11_h as desktop_linux_h
 
 public enum class EventHandlerResult {
     Continue,

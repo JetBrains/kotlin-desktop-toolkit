@@ -2,6 +2,7 @@ use crate::linux::{
     application_state::EglInstance,
     events::{SoftwareDrawData, WindowDrawEvent, WindowId},
     geometry::{LogicalPoint, LogicalSize, PhysicalSize},
+    pointer_shapes_api::PointerShape,
     rendering_egl::EglRendering,
     rendering_software::SoftwareRendering,
     window_resize_edge_api::WindowResizeEdge,
@@ -46,40 +47,13 @@ pub struct SimpleWindow {
     pub window_id: WindowId,
     // pub app_id: String,
     pub window: Rc<Box<dyn WinitWindow>>,
-    // pub set_cursor: bool,
-    // decorations_cursor: Option<CursorIcon>,
     pub current_scale: f64,
     // decoration_mode: DecorationMode,
     pub rendering_data: RenderingData,
 }
 
 impl SimpleWindow {
-    pub fn draw(
-        &mut self,
-        // themed_pointer: Option<&mut ThemedPointer>,
-        callback: &dyn Fn(WindowDrawEvent) -> bool,
-    ) {
-        // let surface = self.window.wl_surface();
-        // if self.set_cursor
-        //     && let Some(themed_pointer) = themed_pointer
-        // {
-        //     debug!("Updating cursor to {:?} for {}", self.decorations_cursor, surface.id());
-        //     if let Some(decorations_cursor) = self.decorations_cursor {
-        //         match themed_pointer.set_cursor(conn, decorations_cursor) {
-        //             Ok(()) => {
-        //                 self.set_cursor = false;
-        //             }
-        //             Err(e) => {
-        //                 error!("Failed to set cursor, error: {e:?}");
-        //             }
-        //         }
-        //     } else if let Err(e) = themed_pointer.hide_cursor() {
-        //         warn!("Failed to hide cursor: {e}");
-        //     } else {
-        //         self.set_cursor = false;
-        //     }
-        // }
-
+    pub fn draw(&mut self, callback: &dyn Fn(WindowDrawEvent) -> bool) {
         let physical_size = self.get_physical_size();
 
         let do_draw = |software_draw_data: SoftwareDrawData| {
@@ -129,13 +103,14 @@ impl SimpleWindow {
         self.get_physical_size().to_logical(self.current_scale)
     }
 
-    // pub fn set_cursor_icon(&mut self, pointer_shape: PointerShape) {
-    //     let cursor_icon = pointer_shape.into();
-    //     if self.decorations_cursor != cursor_icon {
-    //         self.set_cursor = true;
-    //         self.decorations_cursor = cursor_icon;
-    //     }
-    // }
+    pub fn set_cursor_icon(&self, pointer_shape: PointerShape) {
+        if let Some(cursor) = pointer_shape.into() {
+            self.window.set_cursor(cursor);
+            self.window.set_cursor_visible(true);
+        } else {
+            self.window.set_cursor_visible(false);
+        }
+    }
 
     pub fn start_move(&self) -> anyhow::Result<()> {
         self.window.drag_window()?;
