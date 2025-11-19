@@ -9,6 +9,7 @@ use crate::linux::{
 };
 use log::{debug, warn};
 use std::rc::Rc;
+use winit_core::monitor::Fullscreen;
 use winit_core::window::Window as WinitWindow;
 
 pub enum RenderingData {
@@ -103,6 +104,30 @@ impl SimpleWindow {
         self.get_physical_size().to_logical(self.current_scale)
     }
 
+    pub fn maximize(&self) {
+        self.window.set_maximized(true);
+    }
+
+    pub fn unmaximize(&self) {
+        self.window.set_maximized(false);
+    }
+
+    pub fn minimize(&self) {
+        self.window.set_minimized(true);
+    }
+
+    pub fn set_max_size(&self, size: LogicalSize) {
+        self.window.set_max_surface_size(Some(size.as_winit_size()));
+    }
+
+    pub fn set_min_size(&self, size: LogicalSize) {
+        self.window.set_min_surface_size(Some(size.as_winit_size()));
+    }
+
+    pub fn set_title(&self, new_title: &str) {
+        self.window.set_title(new_title);
+    }
+
     pub fn set_cursor_icon(&self, pointer_shape: PointerShape) {
         if let Some(cursor) = pointer_shape.into() {
             self.window.set_cursor(cursor);
@@ -126,5 +151,13 @@ impl SimpleWindow {
 
     pub fn show_menu(&self, position: LogicalPoint) {
         self.window.show_window_menu(position.as_winit_position());
+    }
+
+    pub fn set_fullscreen(&self) {
+        self.window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+    }
+
+    pub fn unset_fullscreen(&self) {
+        self.window.set_fullscreen(None);
     }
 }
