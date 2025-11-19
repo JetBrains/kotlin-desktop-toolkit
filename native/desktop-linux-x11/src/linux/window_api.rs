@@ -52,6 +52,8 @@ pub struct WindowParams<'a> {
 
     pub rect: LogicalRect,
 
+    pub min_size: LogicalSize,
+
     pub title: BorrowedStrPtr<'a>,
 
     /// See <https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_app_id>

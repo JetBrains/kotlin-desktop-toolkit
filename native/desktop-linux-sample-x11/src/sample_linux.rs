@@ -355,6 +355,10 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
                         width: LogicalPixels(300.),
                         height: LogicalPixels(200.),
                     },
+                    min_size: LogicalSize {
+                        width: LogicalPixels::default(),
+                        height: LogicalPixels::default(),
+                    },
                     title: BorrowedStrPtr::new(c"Window N"),
                     app_id: BorrowedStrPtr::new(APP_ID),
                     prefer_client_side_decoration: true,
@@ -423,6 +427,10 @@ fn on_application_started(state: &mut State) {
                 width: LogicalPixels(200.),
                 height: LogicalPixels(300.),
             },
+            min_size: LogicalSize {
+                width: LogicalPixels::default(),
+                height: LogicalPixels::default(),
+            },
             title: BorrowedStrPtr::new(c"Window 1"),
             app_id: BorrowedStrPtr::new(APP_ID),
             prefer_client_side_decoration: false,
@@ -441,6 +449,10 @@ fn on_application_started(state: &mut State) {
                 y: LogicalPixels(0.),
                 width: LogicalPixels(300.),
                 height: LogicalPixels(200.),
+            },
+            min_size: LogicalSize {
+                width: LogicalPixels::default(),
+                height: LogicalPixels::default(),
             },
             title: BorrowedStrPtr::new(c"Window 2"),
             app_id: BorrowedStrPtr::new(APP_ID),
