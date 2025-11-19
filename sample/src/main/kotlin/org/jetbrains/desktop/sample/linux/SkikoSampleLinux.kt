@@ -1162,9 +1162,7 @@ private class RotatingBallWindow(
             xdgDesktopSettings: XdgDesktopSettings,
             requestClose: () -> Unit,
         ): RotatingBallWindow {
-            val windowSize = LogicalSize(640, 480)
-            val windowContentSize = windowSize // todo it's incorrect
-            val container = WindowContainer.create(windowContentSize, xdgDesktopSettings, requestClose)
+            val container = WindowContainer.create(windowParams.size, xdgDesktopSettings, requestClose)
 
             return RotatingBallWindow(container, app, windowParams)
         }
