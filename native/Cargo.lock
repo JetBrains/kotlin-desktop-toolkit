@@ -459,6 +459,7 @@ dependencies = [
  "desktop-common",
  "desktop-linux",
  "log",
+ "url",
 ]
 
 [[package]]
