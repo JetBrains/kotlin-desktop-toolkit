@@ -5,7 +5,7 @@ use crate::linux::events::{
     TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData, WindowCapabilities, WindowCloseRequestEvent,
     WindowConfigureEvent, WindowDecorationMode, WindowId, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent, WindowScaleChangedEvent,
 };
-use crate::linux::geometry::{LogicalRect, round_to_u32};
+use crate::linux::geometry::{LogicalRect, LogicalSize, round_to_u32};
 use crate::linux::keyboard::winit_key_to_keysym;
 use crate::linux::user_events::UserEvents;
 use crate::linux::window::{RenderingData, SimpleWindow};
@@ -79,16 +79,20 @@ impl ApplicationState {
         event_loop: &dyn ActiveEventLoop,
         window_id: WindowId,
         rect: LogicalRect,
+        min_size: Option<LogicalSize>,
         title: String,
         app_id: String,
         prefer_client_side_decoration: bool,
         rendering_mode: RenderingMode,
     ) {
-        let window_attributes = WindowAttributes::default()
+        let mut window_attributes = WindowAttributes::default()
             .with_title(title)
             .with_decorations(!prefer_client_side_decoration)
             .with_position(rect.as_winit_position())
             .with_surface_size(rect.as_winit_size());
+        if let Some(min_size) = min_size {
+            window_attributes = window_attributes.with_min_surface_size(min_size.as_winit_size());
+        }
         let window = Rc::new(event_loop.create_window(window_attributes).expect("Failed to create winit window"));
         let winit_window_id = window.id();
         let egl = match rendering_mode {
@@ -158,6 +162,7 @@ impl ApplicationHandler for ApplicationState {
                 UserEvents::CreateWindow {
                     window_id,
                     rect,
+                    min_size,
                     title,
                     app_id,
                     prefer_client_side_decoration,
@@ -166,6 +171,7 @@ impl ApplicationHandler for ApplicationState {
                     event_loop,
                     window_id,
                     rect,
+                    min_size,
                     title,
                     app_id,
                     prefer_client_side_decoration,

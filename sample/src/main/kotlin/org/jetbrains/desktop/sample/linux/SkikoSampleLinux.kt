@@ -1305,6 +1305,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         val windowParams = WindowParams(
             windowId = windowId,
             size = LogicalSize(width = 640, height = 480),
+            minSize = LogicalSize(320, 240),
             title = "Window $windowId",
             appId = "org.jetbrains.desktop.linux.skikoSample1",
             preferClientSideDecoration = useCustomTitlebar,

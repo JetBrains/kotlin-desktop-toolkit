@@ -149,9 +149,16 @@ impl Application {
             return Err(anyhow!("Window with ID {window_id:?} already exists"));
         }
 
+        let min_size = if params.min_size.height.0 == 0.0 {
+            None
+        } else {
+            Some(params.min_size)
+        };
+
         self.user_event(UserEvents::CreateWindow {
             window_id,
             rect: params.rect,
+            min_size,
             title: params.title.as_str()?.to_owned(),
             app_id: params.app_id.as_str()?.to_owned(),
             prefer_client_side_decoration: params.prefer_client_side_decoration,
