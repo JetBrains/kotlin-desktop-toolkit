@@ -72,12 +72,12 @@ abstract class SkikoWindowLinux(
     }
     val window = app.createWindow(params)
     private val creationTime = TimeSource.Monotonic.markNow()
-    private val softwareDrawFrameRequesterActive = AtomicBoolean(false)
+    private val drawRequesterActive = AtomicBoolean(false)
     private val frameSleepDurationMs = AtomicLong(16)
-    private var softwareDrawFrameRequester = Thread({
-        while (softwareDrawFrameRequesterActive.load()) {
+    private var drawRequester = Thread({
+        while (drawRequesterActive.load()) {
             app.runOnEventLoopAsync {
-                if (softwareDrawFrameRequesterActive.load()) {
+                if (drawRequesterActive.load()) {
                     window.requestRedraw()
                 }
             }
@@ -97,23 +97,20 @@ abstract class SkikoWindowLinux(
             surface.flushAndSubmit()
             true
         }
+        if (drawRequesterActive.compareAndSet(expectedValue = false, newValue = true)) {
+            drawRequester.start()
+        }
         return event.softwareDrawData?.let { softwareDrawData ->
-            performSoftwareDrawing(event.size, softwareDrawData, draw).also {
-                if (softwareDrawFrameRequesterActive.compareAndSet(expectedValue = false, newValue = true)) {
-                    softwareDrawFrameRequester.start()
-                }
-            }
+            performSoftwareDrawing(event.size, softwareDrawData, draw)
         } ?: run {
-            performOpenGlDrawing(event.size, directContext, draw).also {
-                window.requestRedraw()
-            }
+            performOpenGlDrawing(event.size, directContext, draw)
         }
     }
 
     abstract fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long)
 
     override fun close() {
-        softwareDrawFrameRequesterActive.store(false)
+        drawRequesterActive.store(false)
         window.close()
     }
 }
