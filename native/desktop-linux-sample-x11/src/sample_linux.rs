@@ -9,7 +9,6 @@ use desktop_common::{
     ffi_utils::{ArraySize, BorrowedArray, BorrowedStrPtr},
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
-use desktop_linux_x11::linux::events::MouseButton;
 use desktop_linux_x11::linux::geometry::LogicalPixels;
 use desktop_linux_x11::linux::{
     application_api::{
@@ -44,8 +43,9 @@ use desktop_linux_x11::linux::{
     },
 };
 use log::{debug, error, info, warn};
+use std::collections::hash_map::Entry;
+use std::sync::{LazyLock, Mutex};
 use std::{
-    cell::RefCell,
     collections::HashMap,
     ffi::{CStr, CString},
     str::FromStr,
@@ -63,7 +63,7 @@ const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
 const ALL_MIMES: &CStr = c"text/uri-list,text/plain;charset=utf-8";
 const DRAG_ICON_WINDOW_ID: WindowId = WindowId(-1);
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct OptionalAppPtr(Option<AppPtr<'static>>);
 
 impl OptionalAppPtr {
@@ -71,6 +71,9 @@ impl OptionalAppPtr {
         self.0.as_ref().unwrap().clone()
     }
 }
+
+unsafe impl Send for OptionalAppPtr {}
+unsafe impl Sync for OptionalAppPtr {}
 
 #[derive(Debug)]
 struct OpenglState {
@@ -116,6 +119,7 @@ struct State {
     request_sources: HashMap<RequestId, WindowId>,
     notification_sources: HashMap<u32, WindowId>,
     // activation_token_action: HashMap<u32, ActivationTokenAction>,
+    redraw_requester: Option<std::thread::JoinHandle<()>>,
 }
 
 impl State {
@@ -130,8 +134,11 @@ impl State {
     }
 }
 
-thread_local! {
-    static STATE: RefCell<State> = RefCell::new(State::default());
+static STATE: LazyLock<Mutex<State>> = LazyLock::new(|| Mutex::new(State::default()));
+
+fn with_borrow_mut_state<T>(f: impl FnOnce(&mut State) -> T) -> T {
+    let mut state = STATE.lock().unwrap();
+    f(&mut *state)
 }
 
 const V_POSITION: GLuint = 0;
@@ -440,11 +447,20 @@ fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut W
 }
 
 fn on_application_started(state: &mut State) {
-    let window_1_id = WindowId(1);
+    state.redraw_requester = Some(std::thread::spawn(move || {
+        loop {
+            with_borrow_mut_state(|state| {
+                for window_id in state.windows.keys() {
+                    window_request_redraw(state.app_ptr.get(), *window_id);
+                }
+            });
+            std::thread::sleep(std::time::Duration::from_millis(16));
+        }
+    }));
     window_create(
         state.app_ptr.get(),
         WindowParams {
-            window_id: window_1_id,
+            window_id: WindowId(1),
             rect: LogicalRect {
                 x: LogicalPixels(0.),
                 y: LogicalPixels(0.),
@@ -461,13 +477,11 @@ fn on_application_started(state: &mut State) {
             rendering_mode: RenderingMode::Software,
         },
     );
-    state.windows.insert(window_1_id, WindowState::default());
 
-    let window_2_id = WindowId(2);
     window_create(
         state.app_ptr.get(),
         WindowParams {
-            window_id: window_2_id,
+            window_id: WindowId(2),
             rect: LogicalRect {
                 x: LogicalPixels(0.),
                 y: LogicalPixels(0.),
@@ -484,7 +498,6 @@ fn on_application_started(state: &mut State) {
             rendering_mode: RenderingMode::Auto,
         },
     );
-    state.windows.insert(window_2_id, WindowState::default());
 }
 
 #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
@@ -499,7 +512,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
         }
     }
 
-    STATE.with_borrow_mut(|state| {
+    with_borrow_mut_state(|state| {
         let app_ptr = state.app_ptr.get();
         let is_event_loop_thread = application_is_event_loop_thread(app_ptr.clone());
         assert!(is_event_loop_thread);
@@ -513,13 +526,20 @@ extern "C" fn event_handler(event: &Event) -> bool {
             //     on_xdg_desktop_settings_change(data, state);
             //     true
             // }
+            Event::WindowConfigure(data) => {
+                if let Entry::Vacant(e) = state.windows.entry(data.window_id) {
+                    let mut window_state = WindowState::default();
+                    window_state.active = data.active;
+                    e.insert(window_state);
+                }
+                true
+            }
             Event::WindowDraw(data) => {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
                     window_state.animation_tick();
 
                     if data.software_draw_data.canvas.is_null() {
                         draw_opengl_triangle_with_init(data.physical_size, data.scale, data.window_id, window_state);
-                        window_request_redraw(app_ptr, data.window_id);
                     } else {
                         draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
                     }
@@ -704,7 +724,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
 // }
 
 extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> DragAndDropQueryResponse<'_> {
-    STATE.with_borrow_mut(|state| {
+    with_borrow_mut_state(|state| {
         state.with_mut_window_state(data.window_id, |window_state| {
             window_state.drag_and_drop_target = true;
         });
@@ -778,7 +798,7 @@ pub fn main() {
         query_drag_and_drop_target,
         get_data_transfer_data,
     });
-    STATE.with_borrow_mut(|state| {
+    with_borrow_mut_state(|state| {
         state.app_ptr = OptionalAppPtr(Some(app_ptr.clone()));
     });
     application_run_event_loop(app_ptr.clone());
