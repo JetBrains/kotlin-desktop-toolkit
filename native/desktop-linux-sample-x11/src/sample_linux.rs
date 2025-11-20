@@ -202,9 +202,19 @@ void main()
 }
 
 /// Draw a triangle using the shader pair created in `Init()`
-fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, physical_size: PhysicalSize, animation_progress: f32) {
+fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, physical_size: PhysicalSize, scale: f64, animation_progress: f32) {
     //    debug!("draw_opengl_triangle, program = {program}, event = {data:?}");
-    let v_vertices: [f32; 6] = [animation_progress, 1.0, -1.0, -1.0, 1.0, -1.0];
+    let rect_tip_x = (animation_progress + 1.0) * ((200. / f64::from(physical_size.width.0)) * scale) as f32;
+    let rect_bottom_right_x = ((400. / f64::from(physical_size.width.0)) * scale) as f32;
+    let rect_bottom_y = ((200. / f64::from(physical_size.height.0)) * scale) as f32;
+    let v_vertices: [f32; 6] = [
+        rect_tip_x - 1.0,           // rectangle tip x
+        1.0,                        // rectangle tip y
+        -1.0,                       // rectangle bottom-left x
+        1.0 - rect_bottom_y,        // rectangle bottom-left y
+        -1.0 + rect_bottom_right_x, // rectangle bottom-right x
+        1.0 - rect_bottom_y,        // rectangle bottom-right y
+    ];
     unsafe {
         (gl.glViewport)(0, 0, physical_size.width.0, physical_size.height.0);
         (gl.glClear)(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -218,7 +228,7 @@ fn draw_opengl_triangle(gl: &OpenGlFuncs, program: GLuint, physical_size: Physic
     }
 }
 
-fn draw_opengl_triangle_with_init(physical_size: PhysicalSize, window_id: WindowId, window_state: &mut WindowState) {
+fn draw_opengl_triangle_with_init(physical_size: PhysicalSize, scale: f64, window_id: WindowId, window_state: &mut WindowState) {
     let opengl_state = window_state.opengl.get_or_insert_with(|| {
         let egl_lib = application_get_egl_proc_func();
         let funcs = OpenGlFuncs::new(&egl_lib).unwrap();
@@ -238,7 +248,7 @@ fn draw_opengl_triangle_with_init(physical_size: PhysicalSize, window_id: Window
         1.0 - ((window_state.animation_progress - 100.) / 50.)
     };
 
-    draw_opengl_triangle(&opengl_state.funcs, *program, physical_size, animation_progress);
+    draw_opengl_triangle(&opengl_state.funcs, *program, physical_size, scale, animation_progress);
 }
 
 #[allow(clippy::many_single_char_names)]
@@ -508,7 +518,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     window_state.animation_tick();
 
                     if data.software_draw_data.canvas.is_null() {
-                        draw_opengl_triangle_with_init(data.physical_size, data.window_id, window_state);
+                        draw_opengl_triangle_with_init(data.physical_size, data.scale, data.window_id, window_state);
                         window_request_redraw(app_ptr, data.window_id);
                     } else {
                         draw_software(&data.software_draw_data, data.physical_size, data.scale, window_state);
@@ -524,7 +534,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 window_state.animation_tick();
 
                 if data.software_draw_data.canvas.is_null() {
-                    draw_opengl_triangle_with_init(data.physical_size, window_id, window_state);
+                    draw_opengl_triangle_with_init(data.physical_size, data.scale, window_id, window_state);
                 } else {
                     draw_software_drag_icon(&data.software_draw_data, data.physical_size, data.scale);
                 }
