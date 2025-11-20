@@ -342,10 +342,10 @@ impl ApplicationHandler for ApplicationState {
                 WindowEvent::PointerMoved {
                     device_id: _,
                     position,
-                    primary,
+                    primary: _,
                     source: _,
                 } => {
-                    debug!("PointerMoved {:?}: {position:?}", w.window_id);
+                    // debug!("PointerMoved {:?}: {position:?}", w.window_id);
                     let event = MouseMovedEvent {
                         window_id: w.window_id,
                         location_in_window: position.to_logical(w.current_scale).into(),
@@ -355,8 +355,8 @@ impl ApplicationHandler for ApplicationState {
                 WindowEvent::PointerEntered {
                     device_id: _,
                     position,
-                    primary,
-                    kind,
+                    primary: _,
+                    kind: _,
                 } => {
                     let event = MouseEnteredEvent {
                         window_id: w.window_id,
@@ -366,9 +366,9 @@ impl ApplicationHandler for ApplicationState {
                 }
                 WindowEvent::PointerLeft {
                     device_id: _,
-                    position,
-                    primary,
-                    kind,
+                    position: _,
+                    primary: _,
+                    kind: _,
                 } => {
                     let event = MouseExitedEvent { window_id: w.window_id };
                     self.send_event(event);
