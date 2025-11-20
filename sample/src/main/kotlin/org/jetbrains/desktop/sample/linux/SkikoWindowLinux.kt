@@ -19,7 +19,10 @@ import org.jetbrains.skia.SurfaceColorFormat
 import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
 import kotlin.concurrent.atomics.AtomicBoolean
+import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.math.floor
+import kotlin.math.roundToLong
 import kotlin.time.TimeSource
 
 internal fun performSoftwareDrawing(size: PhysicalSize, softwareDrawData: SoftwareDrawData, draw: (Surface) -> Boolean): Boolean {
@@ -70,6 +73,7 @@ abstract class SkikoWindowLinux(
     val window = app.createWindow(params)
     private val creationTime = TimeSource.Monotonic.markNow()
     private val softwareDrawFrameRequesterActive = AtomicBoolean(false)
+    private val frameSleepDurationMs = AtomicLong(16)
     private var softwareDrawFrameRequester = Thread({
         while (softwareDrawFrameRequesterActive.load()) {
             app.runOnEventLoopAsync {
@@ -77,9 +81,14 @@ abstract class SkikoWindowLinux(
                     window.requestRedraw()
                 }
             }
-            Thread.sleep(16)
+            Thread.sleep(frameSleepDurationMs.load())
         }
     })
+
+    fun setMillihertz(millihertz: UInt) {
+        val frameTime = 1_000_000.0 / millihertz.toDouble()
+        frameSleepDurationMs.store(floor(frameTime).roundToLong())
+    }
 
     fun performDrawing(event: Event.WindowDraw): Boolean {
         val draw = { surface: Surface ->

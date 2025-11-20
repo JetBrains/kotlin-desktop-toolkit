@@ -1261,6 +1261,12 @@ private class RotatingBallWindow(
         return editorState.onKeyDown(event, app, window, windowState, modifiers, clipboardHandler)
     }
 
+    fun onScreenChange(event: Event.WindowScreenChange, app: Application): EventHandlerResult {
+        val screen = app.allScreens().findById(event.newScreenId)!!
+        setMillihertz(screen.millihertz)
+        return EventHandlerResult.Stop
+    }
+
     fun onTextInputAvailability(event: Event.TextInputAvailability, app: Application): EventHandlerResult {
         return editorState.onTextInputAvailability(event, app)
     }
@@ -1521,7 +1527,8 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             is Event.WindowKeyboardLeave -> {
                 EventHandlerResult.Continue
             }
-            is Event.WindowScaleChanged, is Event.WindowScreenChange -> EventHandlerResult.Continue
+            is Event.WindowScreenChange -> windows[event.windowId]?.onScreenChange(event, app) ?: EventHandlerResult.Continue
+            is Event.WindowScaleChanged -> EventHandlerResult.Continue
             is Event.NotificationShown -> {
                 event.notificationId?.let { notificationId ->
                     requestSources.remove(event.requestId)?.let { requester ->

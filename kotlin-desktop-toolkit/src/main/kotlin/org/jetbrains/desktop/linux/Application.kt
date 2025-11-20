@@ -3,6 +3,8 @@ package org.jetbrains.desktop.linux
 import org.jetbrains.desktop.linux.generated.NativeApplicationCallbacks
 import org.jetbrains.desktop.linux.generated.NativeEventHandler
 import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
+import org.jetbrains.desktop.linux.generated.NativeScreenInfo
+import org.jetbrains.desktop.linux.generated.NativeScreenInfoArray
 import org.jetbrains.desktop.linux.generated.NativeWindowParams
 import org.jetbrains.desktop.linux.generated.`application_run_on_event_loop_async$f`
 import java.lang.foreign.Arena
@@ -218,24 +220,24 @@ public class Application : AutoCloseable {
             desktop_linux_h.application_run_on_event_loop_async(appPtr, runOnEventLoopAsyncFunc)
         }
     }
-//
-//    public fun allScreens(): AllScreens {
-//        return Arena.ofConfined().use { arena ->
-//            val screenInfoArray = ffiDownCall { desktop_linux_h.screen_list(arena, appPtr!!) }
-//            val screens = mutableListOf<Screen>()
-//            try {
-//                val ptr = NativeScreenInfoArray.ptr(screenInfoArray)
-//                val len = NativeScreenInfoArray.len(screenInfoArray)
-//
-//                for (i in 0 until len) {
-//                    screens.add(Screen.fromNative(NativeScreenInfo.asSlice(ptr, i)))
-//                }
-//            } finally {
-//                ffiDownCall { desktop_linux_h.screen_list_drop(screenInfoArray) }
-//            }
-//            AllScreens(screens)
-//        }
-//    }
+
+    public fun allScreens(): AllScreens {
+        return Arena.ofConfined().use { arena ->
+            val screenInfoArray = ffiDownCall { desktop_linux_h.screen_list(arena, appPtr!!) }
+            val screens = mutableListOf<Screen>()
+            try {
+                val ptr = NativeScreenInfoArray.ptr(screenInfoArray)
+                val len = NativeScreenInfoArray.len(screenInfoArray)
+
+                for (i in 0 until len) {
+                    screens.add(Screen.fromNative(NativeScreenInfo.asSlice(ptr, i)))
+                }
+            } finally {
+                ffiDownCall { desktop_linux_h.screen_list_drop(screenInfoArray) }
+            }
+            AllScreens(screens)
+        }
+    }
 
     public data class EglProcFunc(
         val fPtr: Long,
