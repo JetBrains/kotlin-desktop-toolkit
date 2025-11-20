@@ -15,7 +15,7 @@ mod pointer_shapes;
 pub mod pointer_shapes_api;
 mod rendering_egl;
 mod rendering_software;
-// pub mod screen;
+pub mod screen;
 pub mod string_api;
 // mod string_utils;
 // mod text_input;

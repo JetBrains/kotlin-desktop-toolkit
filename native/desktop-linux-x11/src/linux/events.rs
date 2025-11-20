@@ -22,7 +22,7 @@ pub type EventHandler = extern "C" fn(&Event) -> bool;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct ScreenId(pub u32);
+pub struct ScreenId(pub u64);
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]

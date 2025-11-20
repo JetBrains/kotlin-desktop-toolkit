@@ -1,9 +1,10 @@
 use crate::linux::application_api::{ApplicationCallbacks, RenderingMode};
 use crate::linux::events::{
     Event, KeyCode, KeyDownEvent, KeyModifierBitflag, KeyUpEvent, ModifiersChangedEvent, MouseDownEvent, MouseEnteredEvent,
-    MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScrollData, ScrollWheelEvent, TextInputAvailabilityEvent,
+    MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScreenId, ScrollData, ScrollWheelEvent, TextInputAvailabilityEvent,
     TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData, WindowCapabilities, WindowCloseRequestEvent,
     WindowConfigureEvent, WindowDecorationMode, WindowId, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent, WindowScaleChangedEvent,
+    WindowScreenChangeEvent,
 };
 use crate::linux::geometry::{LogicalRect, LogicalSize, round_to_u32};
 use crate::linux::keyboard::winit_key_to_keysym;
@@ -123,6 +124,11 @@ impl ApplicationState {
             },
         };
 
+        let screen_change_event = window.current_monitor().map(|monitor| WindowScreenChangeEvent {
+            window_id,
+            new_screen_id: ScreenId(monitor.native_id()),
+        });
+
         let simple_window = SimpleWindow {
             window_id,
             window,
@@ -134,6 +140,10 @@ impl ApplicationState {
         self.window_id_to_winit_window_id.insert(window_id, winit_window_id);
         self.windows.insert(winit_window_id, simple_window);
         self.send_event(configure_event);
+
+        if let Some(screen_change_event) = screen_change_event {
+            self.send_event(screen_change_event);
+        }
 
         let xdg_titlebar_event =
             XdgDesktopSettingChange(XdgDesktopSetting::TitlebarLayout(BorrowedStrPtr::new(c":minimize,maximize,close")));
