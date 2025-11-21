@@ -1,5 +1,4 @@
 use anyhow::{Context, anyhow};
-use clipboard_rs::{Clipboard as _, ClipboardContent, ContentFormat};
 use log::{debug, warn};
 use std::ffi::CString;
 use std::str::FromStr;
@@ -198,35 +197,36 @@ impl Application {
     // }
 
     // TODO: pass actual values
-    /// "text/uri-list" should not be combined with anything else. Implementation will set other plan text mime types.
     pub fn clipboard_put(&mut self, mime_types: MimeTypes) {
-        let ctx = &self.state.clipboard_context;
-        let contents = mime_types
-            .val
-            .into_iter()
-            .map(|mime_type| match mime_type.as_str() {
-                "text/plain;charset=utf-8" => ClipboardContent::Text("Some text".to_owned()),
-                "text/html" => ClipboardContent::Html("<html><span>Some <b>HTML</b> text</span></html>".to_owned()),
-                "text/rtf" => ClipboardContent::Rtf("Some RTF text".to_owned()),
-                "text/uri-list" => ClipboardContent::Files(vec!["/tmp".to_owned()]),
-                _ => ClipboardContent::Other(mime_type, Vec::new()),
-            })
-            .collect();
-        if let Err(e) = ctx.set(contents) {
+        let Some(clipboard) = &mut self.state.clipboard else {
+            warn!("application_clipboard_put: clipboard not initialized");
+            return;
+        };
+        let mut clipboard_setter = clipboard.set();
+        for mime_type in  mime_types.val {
+            clipboard_setter = match mime_type.as_str() {
+                "text/plain;charset=utf-8" => clipboard_setter.text("Some text"),
+                "text/html" => clipboard_setter.html("<html><span>Some <b>HTML</b> text</span></html>", Some("Some plain text")),
+                "text/uri-list" => clipboard_setter.file_list(&["/tmp"]),
+                _ => clipboard_setter.custom_format(mime_type.as_str(), Vec::new()),
+            }
+        }
+        if let Err(e) = clipboard_setter.commit() {
             warn!("application_clipboard_put: {e}");
         }
     }
 
     pub fn clipboard_get_available_mimetypes(&self) -> Option<String> {
-        let ctx = &self.state.clipboard_context;
-        let mime_types = match ctx.available_formats() {
-            Ok(mime_types) => mime_types,
-            Err(err) => {
-                warn!("application_clipboard_get_available_mimetypes: {err}");
-                return None;
-            }
-        };
-        Some(mime_types.join(","))
+        // let clipboard = self.state.clipboard.as_ref()?;
+        // let mime_types = match clipboard.available_formats() {
+        //     Ok(mime_types) => mime_types,
+        //     Err(err) => {
+        //         warn!("application_clipboard_get_available_mimetypes: {err}");
+        //         return None;
+        //     }
+        // };
+        // Some(mime_types.join(","))
+        None
     }
 
     // pub fn primary_selection_get_available_mimetypes(&self) -> Option<String> {
@@ -303,43 +303,46 @@ impl Application {
     // }
 
     pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
-        let ctx = &self.state.clipboard_context;
-        let mime_types = match ctx.available_formats() {
-            Ok(mime_types) => mime_types,
-            Err(err) => {
-                warn!("application_clipboard_paste: {err}");
-                return false;
-            }
-        };
-
-        debug!("application_clipboard_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
-
-        let Some(mime_type) = supported_mime_types
-            .split(',')
-            .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
-            .map(str::to_owned)
-        else {
-            debug!("application_clipboard_paste: clipboard content not supported");
+        let Some(clipboard) = self.state.clipboard.as_ref() else {
+            warn!("application_clipboard_paste: clipboard not initialized");
             return false;
         };
-
-        debug!("application_clipboard_paste: reading {mime_type}");
-        let all_res = match ctx.get(&[ContentFormat::Other(mime_type)]) {
-            Ok(res) => res,
-            Err(err) => {
-                warn!("application_clipboard_paste: {err}");
-                return false;
-            }
-        };
-        let Some(content) = all_res.into_iter().next() else {
-            warn!("application_clipboard_paste: failed receive the data");
-            return false;
-        };
-
-        if let Err(e) = self.user_event(UserEvents::ClipboardReceived { serial, content }) {
-            warn!("application_clipboard_paste: {e}");
-            return false;
-        }
+        // let mime_types = match clipboard.available_formats() {
+        //     Ok(mime_types) => mime_types,
+        //     Err(err) => {
+        //         warn!("application_clipboard_paste: {err}");
+        //         return false;
+        //     }
+        // };
+        //
+        // debug!("application_clipboard_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
+        //
+        // let Some(mime_type) = supported_mime_types
+        //     .split(',')
+        //     .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
+        //     .map(str::to_owned)
+        // else {
+        //     debug!("application_clipboard_paste: clipboard content not supported");
+        //     return false;
+        // };
+        //
+        // debug!("application_clipboard_paste: reading {mime_type}");
+        // let all_res = match ctx.get(&[ContentFormat::Other(mime_type)]) {
+        //     Ok(res) => res,
+        //     Err(err) => {
+        //         warn!("application_clipboard_paste: {err}");
+        //         return false;
+        //     }
+        // };
+        // let Some(content) = all_res.into_iter().next() else {
+        //     warn!("application_clipboard_paste: failed receive the data");
+        //     return false;
+        // };
+        //
+        // if let Err(e) = self.user_event(UserEvents::ClipboardReceived { serial, content }) {
+        //     warn!("application_clipboard_paste: {e}");
+        //     return false;
+        // }
         true
     }
 
