@@ -15,10 +15,11 @@ anyhow.workspace = true
 log.workspace = true
 log4rs.workspace = true
 desktop-common = { path = "../desktop-common" }
+percent-encoding = "2.3.2"
+env_logger = "0.11.8"
 
 [target.'cfg(target_os="linux")'.dependencies]
 ashpd = { version = "0.12.0", default-features = false, features = ["tokio"] }
-clipboard-rs = { version = "0.3.1", default-features = false, features = [] }
 enumflags2 = "0.7.12"
 futures-lite = "2.6.0"
 khronos-egl = { version = "6.0.0", features = ["dynamic"] }
@@ -32,3 +33,6 @@ winit-x11 = { git = "https://github.com/rust-windowing/winit.git", rev = "fa0795
 softbuffer = { version = "0.4.6", default-features = false, features = ["x11", "x11-dlopen"] }
 xkeysym = "0.2.1"
 raw-window-handle = "0.6.2"
+parking_lot = "0.12.5"
+x11rb = "0.13.2"
+image = "0.25.9"

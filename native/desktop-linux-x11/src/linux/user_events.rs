@@ -1,7 +1,6 @@
 use crate::linux::application_api::RenderingMode;
 use crate::linux::events::WindowId;
 use crate::linux::geometry::{LogicalRect, LogicalSize};
-use clipboard_rs::ClipboardContent;
 
 pub enum UserEvents {
     CreateWindow {
@@ -15,8 +14,8 @@ pub enum UserEvents {
     },
     Exit,
     RunOnEventLoop(extern "C" fn()),
-    ClipboardReceived {
-        serial: i32,
-        content: ClipboardContent,
-    },
+    // ClipboardReceived {
+    //     serial: i32,
+    //     content: ClipboardContent,
+    // },
 }

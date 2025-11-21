@@ -28,3 +28,4 @@ mod window_resize_edge;
 pub mod window_resize_edge_api;
 // mod xdg_desktop_settings;
 pub mod xdg_desktop_settings_api;
+mod clipboard_impl;
