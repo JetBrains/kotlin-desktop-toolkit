@@ -1,20 +1,19 @@
+use crate::linux::{
+    application::Application,
+    application_state::{EglInstance, get_egl},
+    events::{EventHandler, WindowId},
+    geometry::LogicalPoint,
+    mime_types::MimeTypes,
+    text_input_api::TextInputContext,
+    user_events::UserEvents,
+};
 use anyhow::bail;
+use desktop_common::ffi_utils::RustAllocatedStrPtr;
 use desktop_common::{
     ffi_utils::{BorrowedArray, BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr},
     logger::ffi_boundary,
 };
 use log::debug;
-// use crate::linux::mime_types::MimeTypes;
-use crate::linux::text_input_api::TextInputContext;
-use crate::linux::user_events::UserEvents;
-use crate::linux::{
-    application::Application,
-    application_state::{EglInstance, get_egl},
-    // data_transfer::MimeTypes,
-    events::{EventHandler, WindowId},
-    geometry::LogicalPoint,
-    // text_input_api::TextInputContext,
-};
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -151,9 +150,9 @@ pub extern "C" fn application_is_event_loop_thread(app_ptr: AppPtr) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_run_on_event_loop_async(mut app_ptr: AppPtr, f: extern "C" fn()) {
+pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr, f: extern "C" fn()) {
     ffi_boundary("application_run_on_event_loop_async", || {
-        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        let app = unsafe { app_ptr.borrow::<Application>() };
         app.user_event(UserEvents::RunOnEventLoop(f))
     });
 }
@@ -201,25 +200,25 @@ pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr) {
     });
 }
 
-// #[unsafe(no_mangle)]
-// pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr, mime_types: BorrowedStrPtr) {
-//     debug!("application_clipboard_put");
-//     ffi_boundary("application_clipboard_put", || {
-//         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-//         app.clipboard_put(MimeTypes::new(mime_types.as_str()?));
-//         Ok(())
-//     });
-// }
-//
-// #[unsafe(no_mangle)]
-// pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedStrPtr) -> bool {
-//     let t = std::thread::current();
-//     debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
-//     ffi_boundary("application_clipboard_paste", || {
-//         let app = unsafe { app_ptr.borrow::<Application>() };
-//         Ok(app.clipboard_paste(serial, supported_mime_types.as_str()?))
-//     })
-// }
+#[unsafe(no_mangle)]
+pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr, mime_types: BorrowedStrPtr) {
+    debug!("application_clipboard_put");
+    ffi_boundary("application_clipboard_put", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        app.clipboard_put(MimeTypes::new(mime_types.as_str()?));
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedStrPtr) -> bool {
+    let t = std::thread::current();
+    debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
+    ffi_boundary("application_clipboard_paste", || {
+        let app = unsafe { app_ptr.borrow::<Application>() };
+        Ok(app.clipboard_paste(serial, supported_mime_types.as_str()?))
+    })
+}
 //
 // #[unsafe(no_mangle)]
 // pub extern "C" fn application_primary_selection_put(mut app_ptr: AppPtr, mime_types: BorrowedStrPtr) {
@@ -240,20 +239,20 @@ pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr) {
 //         Ok(app.primary_selection_paste(serial, supported_mime_types.as_str()?))
 //     })
 // }
-//
-// #[unsafe(no_mangle)]
-// pub extern "C" fn application_clipboard_get_available_mimetypes(mut app_ptr: AppPtr) -> RustAllocatedStrPtr {
-//     debug!("application_clipboard_get_available_mimetypes");
-//     ffi_boundary("application_clipboard_get_available_mimetypes", || {
-//         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-//         if let Some(csv_mimetypes) = app.clipboard_get_available_mimetypes() {
-//             Ok(RustAllocatedStrPtr::allocate(csv_mimetypes)?)
-//         } else {
-//             Ok(RustAllocatedStrPtr::null())
-//         }
-//     })
-// }
-//
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_clipboard_get_available_mimetypes(mut app_ptr: AppPtr) -> RustAllocatedStrPtr {
+    debug!("application_clipboard_get_available_mimetypes");
+    ffi_boundary("application_clipboard_get_available_mimetypes", || {
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        if let Some(csv_mimetypes) = app.clipboard_get_available_mimetypes() {
+            Ok(RustAllocatedStrPtr::allocate(csv_mimetypes)?)
+        } else {
+            Ok(RustAllocatedStrPtr::null())
+        }
+    })
+}
+
 // #[unsafe(no_mangle)]
 // pub extern "C" fn application_primary_selection_get_available_mimetypes(mut app_ptr: AppPtr) -> RustAllocatedStrPtr {
 //     debug!("application_primary_selection_get_available_mimetypes");

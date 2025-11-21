@@ -9,6 +9,7 @@ use desktop_common::{
     ffi_utils::{ArraySize, BorrowedArray, BorrowedStrPtr},
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
+use desktop_linux_x11::linux::application_api::{application_clipboard_paste, application_clipboard_put};
 use desktop_linux_x11::linux::geometry::LogicalPixels;
 use desktop_linux_x11::linux::{
     application_api::{
@@ -60,7 +61,7 @@ const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
 const TEXT_MIME_TYPE: &CStr = c"text/plain;charset=utf-8";
 const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
 
-const ALL_MIMES: &CStr = c"text/uri-list,text/plain;charset=utf-8";
+const ALL_MIMES: &CStr = c"text/html,text/plain;charset=utf-8";
 const DRAG_ICON_WINDOW_ID: WindowId = WindowId(-1);
 
 #[derive(Debug, Default, Clone)]
@@ -118,6 +119,7 @@ struct State {
     settings: Settings,
     request_sources: HashMap<RequestId, WindowId>,
     notification_sources: HashMap<u32, WindowId>,
+    key_window_id: Option<WindowId>,
     // activation_token_action: HashMap<u32, ActivationTokenAction>,
     redraw_requester: Option<std::thread::JoinHandle<()>>,
 }
@@ -358,14 +360,14 @@ const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBit
 fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> bool {
     // const KEYCODE_BACKSPACE: u32 = 14;
     // const KEYCODE_TAB: u32 = 15;
-    // const KEYCODE_C: u32 = 46;
+    const KEYCODE_C: u32 = 46;
     // const KEYCODE_L: u32 = 38;
     const KEYCODE_N: u32 = 49;
     // const KEYCODE_O: u32 = 24;
     // const KEYCODE_P: u32 = 25;
     // const KEYCODE_S: u32 = 31;
     // const KEYCODE_U: u32 = 22;
-    // const KEYCODE_V: u32 = 47;
+    const KEYCODE_V: u32 = 47;
     const KEY_MODIFIER_CTRL: u8 = KeyModifier::Ctrl as u8;
 
     let modifiers: KeyModifierBitflag = shortcut_modifiers(state.key_modifiers);
@@ -373,6 +375,14 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
 
     #[allow(clippy::single_match_else)]
     match (modifiers.0, key_code) {
+        (KEY_MODIFIER_CTRL, KEYCODE_V) => {
+            application_clipboard_paste(app_ptr, 0, BorrowedStrPtr::new(TEXT_MIME_TYPE));
+            true
+        }
+        (KEY_MODIFIER_CTRL, KEYCODE_C) => {
+            application_clipboard_put(app_ptr, BorrowedStrPtr::new(ALL_MIMES));
+            true
+        }
         (KEY_MODIFIER_CTRL, KEYCODE_N) => {
             let new_window_id = WindowId(state.windows.len() as i64 + 1);
             window_create(
@@ -402,6 +412,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             if let Some(s) = event.characters.as_optional_str().unwrap() {
                 state.with_mut_window_state(event.window_id, |window_state| {
                     window_state.text += s;
+                    debug!("{}", window_state.text);
                 });
             }
             false
@@ -607,12 +618,16 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 true
             }
             Event::WindowKeyboardEnter(data) => {
+                state.key_window_id = Some(data.window_id);
                 state.with_mut_window_state(data.window_id, |window_state| {
                     window_state.active = true;
                 });
                 true
             }
             Event::WindowKeyboardLeave(data) => {
+                if state.key_window_id == Some(data.window_id) {
+                    state.key_window_id = None;
+                }
                 state.with_mut_window_state(data.window_id, |window_state| {
                     window_state.active = false;
                 });
@@ -632,16 +647,16 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 }
                 true
             }
-            // Event::DataTransfer(data) => {
-            //     if let Some(key_window_id) = state.key_window_id
-            //         && let Some(window_state) = state.windows.get_mut(&key_window_id)
-            //     {
-            //         on_data_transfer_received(&data.content, window_state);
-            //         true
-            //     } else {
-            //         false
-            //     }
-            // }
+            Event::DataTransfer(data) => {
+                if let Some(key_window_id) = state.key_window_id
+                    && let Some(window_state) = state.windows.get_mut(&key_window_id)
+                {
+                    on_data_transfer_received(&data.content, window_state);
+                    true
+                } else {
+                    false
+                }
+            }
             Event::DropPerformed(data) => state.with_mut_window_state(data.window_id, |window_state| {
                 on_data_transfer_received(&data.content, window_state);
             }),
