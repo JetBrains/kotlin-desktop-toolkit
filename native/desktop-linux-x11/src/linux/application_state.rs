@@ -1,15 +1,16 @@
 use crate::linux::application_api::{ApplicationCallbacks, RenderingMode};
 use crate::linux::events::{
-    Event, KeyCode, KeyDownEvent, KeyModifierBitflag, KeyUpEvent, ModifiersChangedEvent, MouseDownEvent, MouseEnteredEvent,
-    MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScreenId, ScrollData, ScrollWheelEvent, TextInputAvailabilityEvent,
-    TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData, WindowCapabilities, WindowCloseRequestEvent,
-    WindowConfigureEvent, WindowDecorationMode, WindowId, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent, WindowScaleChangedEvent,
-    WindowScreenChangeEvent,
+    DataTransferContent, DataTransferEvent, Event, KeyCode, KeyDownEvent, KeyModifierBitflag, KeyUpEvent, ModifiersChangedEvent,
+    MouseDownEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScreenId, ScrollData, ScrollWheelEvent,
+    TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData, WindowCapabilities,
+    WindowCloseRequestEvent, WindowConfigureEvent, WindowDecorationMode, WindowId, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent,
+    WindowScaleChangedEvent, WindowScreenChangeEvent,
 };
 use crate::linux::geometry::{LogicalRect, LogicalSize, round_to_u32};
 use crate::linux::keyboard::winit_key_to_keysym;
 use crate::linux::user_events::UserEvents;
 use crate::linux::window::{RenderingData, SimpleWindow};
+use clipboard_rs::{ClipboardContent, ClipboardContext};
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use dpi::PhysicalSize;
 use khronos_egl;
@@ -59,6 +60,7 @@ pub struct ApplicationState {
     pub window_id_to_winit_window_id: HashMap<WindowId, winit_core::window::WindowId>,
     pub windows: HashMap<winit_core::window::WindowId, SimpleWindow>,
     receiver: Receiver<UserEvents>,
+    pub clipboard_context: ClipboardContext,
 }
 
 impl ApplicationState {
@@ -68,6 +70,7 @@ impl ApplicationState {
             window_id_to_winit_window_id: HashMap::new(),
             windows: HashMap::new(),
             receiver,
+            clipboard_context: ClipboardContext::new().unwrap(),
         }
     }
 
@@ -191,6 +194,30 @@ impl ApplicationHandler for ApplicationState {
                     rendering_mode,
                 ),
                 UserEvents::RunOnEventLoop(f) => f(),
+                UserEvents::ClipboardReceived { serial, content } => match content {
+                    ClipboardContent::Text(val) => {
+                        let content = DataTransferContent::new(c"text/plain;charset=utf-8", val.as_bytes());
+                        self.send_event(DataTransferEvent { serial, content });
+                    }
+                    ClipboardContent::Rtf(val) => {
+                        let content = DataTransferContent::new(c"text/rtf", val.as_bytes());
+                        self.send_event(DataTransferEvent { serial, content });
+                    }
+                    ClipboardContent::Html(val) => {
+                        let content = DataTransferContent::new(c"text/html", val.as_bytes());
+                        self.send_event(DataTransferEvent { serial, content });
+                    }
+                    ClipboardContent::Files(val) => {
+                        let buf = val.join("\r\n");
+                        let content = DataTransferContent::new(c"text/uri-list", buf.as_bytes());
+                        self.send_event(DataTransferEvent { serial, content });
+                    }
+                    ClipboardContent::Other(mime_type, buf) => {
+                        let mime_type_cstr = CString::new(mime_type).unwrap();
+                        let content = DataTransferContent::new(&mime_type_cstr, &buf);
+                        self.send_event(DataTransferEvent { serial, content });
+                    }
+                },
             }
         }
     }

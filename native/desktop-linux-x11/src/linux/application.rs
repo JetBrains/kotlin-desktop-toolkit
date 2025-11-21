@@ -1,5 +1,8 @@
 use anyhow::{Context, anyhow};
-use log::debug;
+use clipboard_rs::{Clipboard as _, ClipboardContent, ContentFormat};
+use log::{debug, warn};
+use std::ffi::CString;
+use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::thread::ThreadId;
@@ -8,6 +11,8 @@ use winit_x11::EventLoop;
 // use tokio::spawn;
 
 use crate::linux::application_state::ApplicationState;
+use crate::linux::events::{DataTransferContent, DataTransferEvent};
+use crate::linux::mime_types::MimeTypes;
 use crate::linux::user_events::UserEvents;
 use crate::linux::{
     application_api::ApplicationCallbacks,
@@ -136,9 +141,9 @@ impl Application {
         Ok(())
     }
 
-    pub fn user_event(&mut self, event: UserEvents) -> anyhow::Result<()> {
+    pub fn user_event(&self, event: UserEvents) -> anyhow::Result<()> {
         self.sender.send(event)?;
-        let event_loop_proxy = self.event_loop_proxy.as_mut().context("Event loop not started")?;
+        let event_loop_proxy = self.event_loop_proxy.as_ref().context("Event loop not started")?;
         event_loop_proxy.wake_up();
         Ok(())
     }
@@ -191,41 +196,39 @@ impl Application {
     // pub fn set_cursor_theme(&mut self, name: &str, size: u32) -> anyhow::Result<()> {
     //     self.state.set_cursor_theme(&self.qh, name, size)
     // }
-    //
-    // pub fn clipboard_put(&mut self, mime_types: MimeTypes) {
-    //     if mime_types.val.is_empty() {
-    //         self.state.copy_paste_source = None;
-    //         warn!("application_clipboard_put: Passed mime_types are empty");
-    //         return;
-    //     }
-    //     let Some(device) = self.state.data_device.as_ref() else {
-    //         warn!("application_clipboard_put: No data device");
-    //         return;
-    //     };
-    //     if let Some((_seat, serial)) = self.state.get_latest_event_seat_and_serial() {
-    //         let copy_paste_source = self
-    //             .state
-    //             .data_device_manager_state
-    //             .create_copy_paste_source(&self.qh, mime_types.val);
-    //         copy_paste_source.set_selection(device, serial);
-    //         self.state.copy_paste_source = Some(copy_paste_source);
-    //     } else {
-    //         warn!("application_clipboard_put: No last event serial");
-    //     }
-    // }
-    //
-    // pub fn clipboard_get_available_mimetypes(&self) -> Option<String> {
-    //     let Some(data_device) = self.state.data_device.as_ref() else {
-    //         warn!("application_clipboard_get_available_mimetypes: No data device available");
-    //         return None;
-    //     };
-    //     let Some(selection_offer) = data_device.data().selection_offer() else {
-    //         debug!("application_clipboard_get_available_mimetypes: No selection offer found");
-    //         return None;
-    //     };
-    //     selection_offer.with_mime_types(|mime_types| Some(mime_types.join(",")))
-    // }
-    //
+
+    // TODO: pass actual values
+    /// "text/uri-list" should not be combined with anything else. Implementation will set other plan text mime types.
+    pub fn clipboard_put(&mut self, mime_types: MimeTypes) {
+        let ctx = &self.state.clipboard_context;
+        let contents = mime_types
+            .val
+            .into_iter()
+            .map(|mime_type| match mime_type.as_str() {
+                "text/plain;charset=utf-8" => ClipboardContent::Text("Some text".to_owned()),
+                "text/html" => ClipboardContent::Html("<html><span>Some <b>HTML</b> text</span></html>".to_owned()),
+                "text/rtf" => ClipboardContent::Rtf("Some RTF text".to_owned()),
+                "text/uri-list" => ClipboardContent::Files(vec!["/tmp".to_owned()]),
+                _ => ClipboardContent::Other(mime_type, Vec::new()),
+            })
+            .collect();
+        if let Err(e) = ctx.set(contents) {
+            warn!("application_clipboard_put: {e}");
+        }
+    }
+
+    pub fn clipboard_get_available_mimetypes(&self) -> Option<String> {
+        let ctx = &self.state.clipboard_context;
+        let mime_types = match ctx.available_formats() {
+            Ok(mime_types) => mime_types,
+            Err(err) => {
+                warn!("application_clipboard_get_available_mimetypes: {err}");
+                return None;
+            }
+        };
+        Some(mime_types.join(","))
+    }
+
     // pub fn primary_selection_get_available_mimetypes(&self) -> Option<String> {
     //     let Some(device) = self.state.primary_selection_device.as_ref() else {
     //         warn!("application_primary_selection_get_available_mimetypes: No primary selection device");
@@ -298,46 +301,48 @@ impl Application {
     //         },
     //     )
     // }
-    //
-    // pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
-    //     let Some(device) = self.state.data_device.as_ref() else {
-    //         warn!("application_clipboard_paste: No data device available");
-    //         return false;
-    //     };
-    //     let Some(offer) = device.data().selection_offer() else {
-    //         debug!("application_clipboard_paste: No selection offer found");
-    //         return false;
-    //     };
-    //     let Some(mime_type) = offer.with_mime_types(|mime_types| {
-    //         debug!("application_clipboard_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
-    //         supported_mime_types
-    //             .split(',')
-    //             .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
-    //             .map(str::to_owned)
-    //     }) else {
-    //         debug!("application_clipboard_paste: clipboard content not supported");
-    //         return false;
-    //     };
-    //
-    //     debug!("application_clipboard_paste: reading {mime_type}");
-    //     let read_pipe = match offer.receive(mime_type.clone()) {
-    //         Ok(v) => v,
-    //         Err(e) => {
-    //             warn!("application_clipboard_paste: failed receive the data offer: {e}");
-    //             return false;
-    //         }
-    //     };
-    //     read_from_pipe(
-    //         "application_clipboard_paste",
-    //         read_pipe,
-    //         mime_type,
-    //         &self.state.loop_handle,
-    //         move |state, content| {
-    //             state.send_event(DataTransferEvent { serial, content });
-    //         },
-    //     )
-    // }
-    //
+
+    pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
+        let ctx = &self.state.clipboard_context;
+        let mime_types = match ctx.available_formats() {
+            Ok(mime_types) => mime_types,
+            Err(err) => {
+                warn!("application_clipboard_paste: {err}");
+                return false;
+            }
+        };
+
+        debug!("application_clipboard_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
+
+        let Some(mime_type) = supported_mime_types
+            .split(',')
+            .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
+            .map(str::to_owned)
+        else {
+            debug!("application_clipboard_paste: clipboard content not supported");
+            return false;
+        };
+
+        debug!("application_clipboard_paste: reading {mime_type}");
+        let all_res = match ctx.get(&[ContentFormat::Other(mime_type)]) {
+            Ok(res) => res,
+            Err(err) => {
+                warn!("application_clipboard_paste: {err}");
+                return false;
+            }
+        };
+        let Some(content) = all_res.into_iter().next() else {
+            warn!("application_clipboard_paste: failed receive the data");
+            return false;
+        };
+
+        if let Err(e) = self.user_event(UserEvents::ClipboardReceived { serial, content }) {
+            warn!("application_clipboard_paste: {e}");
+            return false;
+        }
+        true
+    }
+
     // pub fn start_drag(
     //     &mut self,
     //     window_id: WindowId,

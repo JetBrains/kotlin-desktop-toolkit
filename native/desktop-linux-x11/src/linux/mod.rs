@@ -8,7 +8,7 @@ pub mod events;
 // mod file_dialog;
 // pub mod file_dialog_api;
 pub mod geometry;
-// mod mime_types;
+mod mime_types;
 mod mouse;
 // mod notifications;
 mod pointer_shapes;
