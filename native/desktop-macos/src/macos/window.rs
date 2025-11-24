@@ -42,6 +42,7 @@ use crate::{
     },
 };
 use desktop_common::logger::catch_panic;
+use crate::macos::window_api::TitlebarConfiguration;
 
 #[allow(clippy::struct_field_names)]
 pub(crate) struct Window {
@@ -174,6 +175,13 @@ impl Window {
         }
         if params.is_resizable {
             style |= NSWindowStyleMask::Resizable;
+        }
+
+        match params.titlebar_configuration {
+            TitlebarConfiguration::Custom { .. } => {
+                style |= NSWindowStyleMask::FullSizeContentView;
+            }
+            _ => {}
         }
 
         let screen_height = NSScreen::primary(mtm)
