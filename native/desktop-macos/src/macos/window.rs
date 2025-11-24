@@ -27,6 +27,7 @@ use super::{
     window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
 use crate::macos::titlebar::Titlebar;
+use crate::macos::window_api::TitlebarConfiguration;
 use crate::{
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     macos::{
@@ -42,7 +43,6 @@ use crate::{
     },
 };
 use desktop_common::logger::catch_panic;
-use crate::macos::window_api::TitlebarConfiguration;
 
 #[allow(clippy::struct_field_names)]
 pub(crate) struct Window {
@@ -177,11 +177,8 @@ impl Window {
             style |= NSWindowStyleMask::Resizable;
         }
 
-        match params.titlebar_configuration {
-            TitlebarConfiguration::Custom { .. } => {
-                style |= NSWindowStyleMask::FullSizeContentView;
-            }
-            _ => {}
+        if let TitlebarConfiguration::Custom { .. } = params.titlebar_configuration {
+            style |= NSWindowStyleMask::FullSizeContentView;
         }
 
         let screen_height = NSScreen::primary(mtm)

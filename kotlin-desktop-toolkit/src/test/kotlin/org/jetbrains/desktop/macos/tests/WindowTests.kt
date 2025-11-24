@@ -55,7 +55,7 @@ class WindowTests : KDTApplicationTestBase() {
                 title = "Window with custom titlebar",
                 size = LogicalSize(100.0, 100.0),
                 titlebarConfiguration = TitlebarConfiguration.Custom(titlebarHeight = 10.0),
-                isResizable = false
+                isResizable = false,
             )
         }
 
@@ -64,7 +64,7 @@ class WindowTests : KDTApplicationTestBase() {
                 title = "Window with regular titlebar",
                 size = LogicalSize(100.0, 100.0),
                 titlebarConfiguration = TitlebarConfiguration.Regular,
-                isResizable = false
+                isResizable = false,
             )
         }
 
