@@ -9,6 +9,8 @@ import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
 
 public class Application : AutoCloseable {
+    public companion object;
+
     private val arena: Arena
 
     private val callbacksQueue: ConcurrentLinkedQueue<() -> Unit>
@@ -116,5 +118,13 @@ public class Application : AutoCloseable {
         }
         ptr = null
         arena.close()
+    }
+}
+
+public fun Application.Companion.openURL(url: String) {
+    ffiDownCall {
+        Arena.ofConfined().use { arena ->
+            desktop_win32_h.application_open_url(arena.allocateUtf8String(url))
+        }
     }
 }
