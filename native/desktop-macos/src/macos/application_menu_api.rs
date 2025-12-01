@@ -52,7 +52,9 @@ pub enum AppMenuTrigger {
     Other,
 }
 
-pub type AppMenuItemCallback = extern "C" fn(trigger: AppMenuTrigger);
+pub type ItemId = i64;
+
+pub type AppMenuItemCallback = extern "C" fn(item_id: ItemId, trigger: AppMenuTrigger);
 
 #[repr(C)]
 #[derive(Debug)]
@@ -63,7 +65,7 @@ pub enum AppMenuItem<'a> {
         title: BorrowedStrPtr<'a>,
         special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<&'a AppMenuKeystroke<'a>>,
-        perform: AppMenuItemCallback,
+        item_id: ItemId,
     },
     SeparatorItem,
     SubMenuItem {
@@ -110,4 +112,26 @@ pub extern "C" fn main_menu_offer_current_event() -> bool {
         };
         Ok(result)
     })
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct AppMenuCallbacks {
+    pub on_menu_action: AppMenuItemCallback,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn app_menu_init(callbacks: AppMenuCallbacks) -> bool {
+    ffi_boundary("app_menu_init", || {
+        super::application_menu::app_menu_init_impl(callbacks);
+        Ok(true)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn app_menu_deinit() {
+    ffi_boundary("app_menu_deinit", || {
+        super::application_menu::app_menu_deinit_impl();
+        Ok(())
+    });
 }

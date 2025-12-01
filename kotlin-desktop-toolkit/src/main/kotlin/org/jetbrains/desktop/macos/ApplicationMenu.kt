@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.macos
 
+import org.jetbrains.desktop.macos.generated.NativeAppMenuCallbacks
 import org.jetbrains.desktop.macos.generated.NativeAppMenuItem
 import org.jetbrains.desktop.macos.generated.NativeAppMenuItemCallback
 import org.jetbrains.desktop.macos.generated.NativeAppMenuItem_NativeActionItem_Body
@@ -124,16 +125,34 @@ public data class AppMenuStructure(val items: List<AppMenuItem>) {
 }
 
 public object AppMenuManager {
-    internal var callbacksArena: Arena? = null
+    private lateinit var globalArena: Arena
+    internal val actionCallbacks = mutableMapOf<Long, (Trigger) -> Unit>()
+    private var isInitialized = false
+    private var idCounter: Long = 1
+
+    private fun ensureInitialized() {
+        if (!isInitialized) {
+            globalArena = Arena.ofConfined()
+            val menuActionCallbackStub = NativeAppMenuItemCallback.allocate(::onMenuAction, globalArena)
+
+            val callbacksSegment = globalArena.allocate(NativeAppMenuCallbacks.layout())
+            NativeAppMenuCallbacks.on_menu_action(callbacksSegment, menuActionCallbackStub)
+
+            desktop_macos_h.app_menu_init(callbacksSegment)
+            isInitialized = true
+        }
+    }
+
+    internal fun nextId(): Long = idCounter++
 
     public fun setMainMenu(menu: AppMenuStructure) {
+        ensureInitialized()
         ffiDownCall {
-            val previousCallbackArena = callbacksArena
-            callbacksArena = Arena.ofConfined()
+            // Clear previous callbacks when setting new menu
+            actionCallbacks.clear()
             Arena.ofConfined().use { arena ->
                 desktop_macos_h.main_menu_update(menu.toNative(arena))
             }
-            previousCallbackArena?.close()
         }
     }
 
@@ -146,6 +165,25 @@ public object AppMenuManager {
     public fun offerCurrentEvent() {
         ffiDownCall {
             desktop_macos_h.main_menu_offer_current_event()
+        }
+    }
+
+    public fun close() {
+        if (isInitialized) {
+            ffiDownCall {
+                desktop_macos_h.app_menu_deinit()
+            }
+            actionCallbacks.clear()
+            globalArena.close()
+            isInitialized = false
+        }
+    }
+
+    // called from native
+    private fun onMenuAction(itemId: Long, trigger: Int) {
+        ffiUpCall {
+            actionCallbacks[itemId]?.invoke(Trigger.fromNative(trigger))
+                ?: Logger.error { "onMenuAction: no callback registered for item $itemId" }
         }
     }
 }
@@ -162,20 +200,16 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
         is AppMenuItem.Action -> {
             NativeAppMenuItem.tag(nativeItem, desktop_macos_h.NativeAppMenuItem_ActionItem())
 
+            val itemId = AppMenuManager.nextId()
+            AppMenuManager.actionCallbacks[itemId] = menuItem.perform
+
             val actionItemBody = NativeAppMenuItem_NativeActionItem_Body.allocate(arena)
             NativeAppMenuItem_NativeActionItem_Body.enabled(actionItemBody, menuItem.isEnabled)
             NativeAppMenuItem_NativeActionItem_Body.state(actionItemBody, menuItem.state.toNative())
             NativeAppMenuItem_NativeActionItem_Body.title(actionItemBody, arena.allocateUtf8String(menuItem.title))
             NativeAppMenuItem_NativeActionItem_Body.special_tag(actionItemBody, menuItem.specialTag.toNative())
             NativeAppMenuItem_NativeActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)
-            NativeAppMenuItem_NativeActionItem_Body.perform(
-                actionItemBody,
-                NativeAppMenuItemCallback.allocate({ trigger ->
-                    ffiUpCall {
-                        menuItem.perform(Trigger.fromNative(trigger))
-                    }
-                }, AppMenuManager.callbacksArena),
-            )
+            NativeAppMenuItem_NativeActionItem_Body.item_id(actionItemBody, itemId)
             NativeAppMenuItem.action_item(nativeItem, actionItemBody)
         }
 

@@ -1,7 +1,8 @@
 use core::slice;
+use std::{cell::RefCell, thread_local};
 
 use anyhow::{Result, anyhow};
-
+use log::{error, log};
 use objc2::{DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, sel};
 use objc2_app_kit::{
     NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSEventType, NSMenu, NSMenuItem,
@@ -11,12 +12,27 @@ use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSString};
 use super::{
     application_api::MyNSApplication,
     application_menu_api::{
-        ActionItemState, ActionMenuItemSpecialTag, AppMenuItem, AppMenuItemCallback, AppMenuStructure, AppMenuTrigger,
-        SubMenuItemSpecialTag,
+        ActionItemState, ActionMenuItemSpecialTag, AppMenuCallbacks, AppMenuItem, AppMenuStructure, AppMenuTrigger, ItemId, SubMenuItemSpecialTag,
     },
     keyboard::KeyModifiersSet,
     string::copy_to_ns_string,
 };
+
+thread_local! {
+    static GLOBAL_MENU_STATE: RefCell<Option<AppMenuCallbacks>> = const { RefCell::new(None) };
+}
+
+pub fn app_menu_init_impl(callbacks: AppMenuCallbacks) {
+    GLOBAL_MENU_STATE.with(|state| {
+        *state.borrow_mut() = Some(callbacks);
+    });
+}
+
+pub fn app_menu_deinit_impl() {
+    GLOBAL_MENU_STATE.with(|state| {
+        *state.borrow_mut() = None;
+    });
+}
 
 pub fn main_menu_update_impl(menu: &AppMenuStructure) {
     let updated_menu = AppMenuStructureSafe::from_unsafe(menu).unwrap(); // todo come up with some error handling facility
@@ -48,7 +64,7 @@ enum AppMenuItemSafe {
         title: Retained<NSString>,
         special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<AppMenuKeystrokeSafe>,
-        perform: AppMenuItemCallback,
+        item_id: ItemId,
     },
     Separator,
     SubMenu {
@@ -85,7 +101,7 @@ impl AppMenuItemSafe {
                 ref title,
                 special_tag,
                 keystroke,
-                perform,
+                item_id,
             } => {
                 let keystroke = if let Some(keystroke) = keystroke {
                     Some(AppMenuKeystrokeSafe {
@@ -101,7 +117,7 @@ impl AppMenuItemSafe {
                     title: copy_to_ns_string(title)?,
                     special_tag,
                     keystroke,
-                    perform,
+                    item_id,
                 }
             }
             AppMenuItem::SeparatorItem => Self::Separator,
@@ -136,7 +152,7 @@ impl AppMenuItemSafe {
         title: &Retained<NSString>,
         _special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<&AppMenuKeystrokeSafe>,
-        perform: AppMenuItemCallback,
+        item_id: ItemId,
         mtm: MainThreadMarker,
     ) {
         unsafe {
@@ -149,7 +165,7 @@ impl AppMenuItemSafe {
             };
             item.setState(state);
 
-            let representer = MenuItemRepresenter::new(Some(perform), mtm);
+            let representer = MenuItemRepresenter::new(Some(item_id), mtm);
             item.setTarget(Some(&representer));
             item.setRepresentedObject(Some(&representer));
             item.setAction(Some(sel!(itemCallback:)));
@@ -187,9 +203,9 @@ impl AppMenuItemSafe {
                 title,
                 special_tag,
                 keystroke,
-                perform,
+                item_id,
             } => {
-                Self::reconcile_action(item, *enabled, *state, title, *special_tag, keystroke.as_ref(), *perform, mtm);
+                Self::reconcile_action(item, *enabled, *state, title, *special_tag, keystroke.as_ref(), *item_id, mtm);
             }
             Self::Separator => {
                 assert!(item.isSeparatorItem());
@@ -208,15 +224,15 @@ impl AppMenuItemSafe {
                 ref title,
                 special_tag,
                 ref keystroke,
-                perform,
+                item_id,
             } => {
                 let item = NSMenuItem::new(mtm);
-                Self::reconcile_action(&item, enabled, state, title, special_tag, keystroke.as_ref(), perform, mtm);
+                Self::reconcile_action(&item, enabled, state, title, special_tag, keystroke.as_ref(), item_id, mtm);
                 item
             }
             Self::Separator => {
                 let item = NSMenuItem::separatorItem(mtm);
-                let representer = MenuItemRepresenter::new(None, mtm);
+                let representer = MenuItemRepresenter::new(None, mtm); // Use None for separators
                 unsafe {
                     item.setTarget(Some(&representer));
                     item.setRepresentedObject(Some(&representer));
@@ -225,7 +241,7 @@ impl AppMenuItemSafe {
             }
             Self::SubMenu { title, special_tag, items } => {
                 let item = NSMenuItem::new(mtm);
-                let representer = MenuItemRepresenter::new(None, mtm);
+                let representer = MenuItemRepresenter::new(None, mtm); // Use None for submenus
                 unsafe {
                     item.setTarget(Some(&representer));
                     item.setRepresentedObject(Some(&representer));
@@ -253,7 +269,7 @@ impl AppMenuItemSafe {
 
 #[derive(Debug)]
 struct MenuItemRepresenterIvars {
-    callback: Option<AppMenuItemCallback>,
+    item_id: Option<ItemId>,
 }
 
 define_class!(
@@ -269,16 +285,23 @@ define_class!(
     impl MenuItemRepresenter {
         #[unsafe(method(itemCallback:))]
         fn item_callback(&self, _sender: &NSMenuItem) {
-            if let Some(callback) = self.ivars().callback {
-                callback(self.guess_trigger());
+            if let Some(item_id) = self.ivars().item_id {
+                GLOBAL_MENU_STATE.with(|state| {
+                    if let Some(ref callbacks) = *state.borrow() {
+                        let callback = callbacks.on_menu_action;
+                        callback(item_id, self.guess_trigger());
+                    } else {
+                        error!("Can't trigger an item with id: {item_id}, global menu state isn't initialized")
+                    }
+                });
             }
         }
     }
 );
 
 impl MenuItemRepresenter {
-    fn new(callback: Option<AppMenuItemCallback>, mtm: MainThreadMarker) -> Retained<Self> {
-        let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars { callback });
+    fn new(item_id: Option<ItemId>, mtm: MainThreadMarker) -> Retained<Self> {
+        let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars { item_id });
         unsafe { msg_send![super(obj), init] }
     }
 
