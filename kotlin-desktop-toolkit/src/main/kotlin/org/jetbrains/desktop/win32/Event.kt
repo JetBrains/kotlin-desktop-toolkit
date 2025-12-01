@@ -5,9 +5,10 @@ import org.jetbrains.desktop.win32.generated.NativeEvent
 import org.jetbrains.desktop.win32.generated.NativeKeyEvent
 import org.jetbrains.desktop.win32.generated.NativeNCCalcSizeEvent
 import org.jetbrains.desktop.win32.generated.NativeNCHitTestEvent
-import org.jetbrains.desktop.win32.generated.NativePointerButtonEvent
+import org.jetbrains.desktop.win32.generated.NativePointerDownEvent
 import org.jetbrains.desktop.win32.generated.NativePointerEnteredEvent
 import org.jetbrains.desktop.win32.generated.NativePointerExitedEvent
+import org.jetbrains.desktop.win32.generated.NativePointerUpEvent
 import org.jetbrains.desktop.win32.generated.NativePointerUpdatedEvent
 import org.jetbrains.desktop.win32.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
@@ -75,7 +76,8 @@ public sealed class Event {
     ) : Event()
 
     public data class PointerDown(
-        val button: PointerButtons,
+        val button: PointerButton,
+        val clickCount: Int,
         val locationInWindow: LogicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
@@ -100,7 +102,7 @@ public sealed class Event {
     ) : Event()
 
     public data class PointerUp(
-        val button: PointerButtons,
+        val button: PointerButton,
         val locationInWindow: LogicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
@@ -246,10 +248,11 @@ private fun ncHitTest(s: MemorySegment): Event {
 private fun pointerDown(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_down(s)
     return Event.PointerDown(
-        button = PointerButtons(NativePointerButtonEvent.button(nativeEvent)),
-        locationInWindow = LogicalPoint.fromNative(NativePointerButtonEvent.location_in_window(nativeEvent)),
-        state = PointerState.fromNative(NativePointerButtonEvent.state(nativeEvent)),
-        timestamp = Timestamp(NativePointerButtonEvent.timestamp(nativeEvent)),
+        button = PointerButton.fromNative(NativePointerDownEvent.button(nativeEvent)),
+        clickCount = NativePointerDownEvent.click_count(nativeEvent),
+        locationInWindow = LogicalPoint.fromNative(NativePointerDownEvent.location_in_window(nativeEvent)),
+        state = PointerState.fromNative(NativePointerDownEvent.state(nativeEvent)),
+        timestamp = Timestamp(NativePointerDownEvent.timestamp(nativeEvent)),
     )
 }
 
@@ -283,10 +286,10 @@ private fun pointerUpdated(s: MemorySegment): Event {
 private fun pointerUp(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_up(s)
     return Event.PointerUp(
-        button = PointerButtons(NativePointerButtonEvent.button(nativeEvent)),
-        locationInWindow = LogicalPoint.fromNative(NativePointerButtonEvent.location_in_window(nativeEvent)),
-        state = PointerState.fromNative(NativePointerButtonEvent.state(nativeEvent)),
-        timestamp = Timestamp(NativePointerButtonEvent.timestamp(nativeEvent)),
+        button = PointerButton.fromNative(NativePointerUpEvent.button(nativeEvent)),
+        locationInWindow = LogicalPoint.fromNative(NativePointerUpEvent.location_in_window(nativeEvent)),
+        state = PointerState.fromNative(NativePointerUpEvent.state(nativeEvent)),
+        timestamp = Timestamp(NativePointerUpEvent.timestamp(nativeEvent)),
     )
 }
 

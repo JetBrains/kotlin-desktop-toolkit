@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativePointerState
+import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.MemorySegment
 
 public data class PointerState(
@@ -11,31 +12,51 @@ public data class PointerState(
 }
 
 @JvmInline
-public value class PointerButtons internal constructor(private val value: Int) {
+public value class PointerButton private constructor(internal val value: Int) {
     public companion object {
-        public val None: PointerButtons = PointerButtons(0)
-        public val LeftButton: PointerButtons = PointerButtons(1)
-        public val RightButton: PointerButtons = PointerButtons(2)
-        public val MiddleButton: PointerButtons = PointerButtons(4)
-        public val XButton1: PointerButtons = PointerButtons(8)
-        public val XButton2: PointerButtons = PointerButtons(16)
+        public val None: PointerButton = PointerButton(desktop_win32_h.NativePointerButton_None())
+        public val Left: PointerButton = PointerButton(desktop_win32_h.NativePointerButton_Left())
+        public val Right: PointerButton = PointerButton(desktop_win32_h.NativePointerButton_Right())
+        public val Middle: PointerButton = PointerButton(desktop_win32_h.NativePointerButton_Middle())
+        public val XButton1: PointerButton = PointerButton(desktop_win32_h.NativePointerButton_XButton1())
+        public val XButton2: PointerButton = PointerButton(desktop_win32_h.NativePointerButton_XButton2())
     }
+}
 
-    public fun hasFlag(button: PointerButtons): Boolean {
+@JvmInline
+public value class PointerButtons internal constructor(private val value: Int) {
+    public fun hasFlag(button: PointerButton): Boolean {
         return (this.value and button.value) == button.value
     }
 }
 
 @JvmInline
-public value class PointerModifiers internal constructor(private val value: Int) {
+public value class PointerModifier private constructor(internal val value: Int) {
+    // See https://learn.microsoft.com/en-us/windows/win32/inputmsg/modifier-key-states-constants
     public companion object {
-        public val None: PointerModifiers = PointerModifiers(0)
-        public val Shift: PointerModifiers = PointerModifiers(4)
-        public val Control: PointerModifiers = PointerModifiers(8)
+        public val None: PointerModifier = PointerModifier(0)
+        public val Shift: PointerModifier = PointerModifier(4)
+        public val Control: PointerModifier = PointerModifier(8)
     }
+}
 
-    public fun hasFlag(button: PointerModifiers): Boolean {
-        return (this.value and button.value) == button.value
+@JvmInline
+public value class PointerModifiers internal constructor(private val value: Int) {
+    public fun hasFlag(modifier: PointerModifier): Boolean {
+        return (this.value and modifier.value) == modifier.value
+    }
+}
+
+internal fun PointerButton.Companion.fromNative(value: Int): PointerButton {
+    // additional validation; for a set of flags [PointerButtons] should be used
+    return when (value) {
+        desktop_win32_h.NativePointerButton_None() -> PointerButton.None
+        desktop_win32_h.NativePointerButton_Left() -> PointerButton.Left
+        desktop_win32_h.NativePointerButton_Right() -> PointerButton.Right
+        desktop_win32_h.NativePointerButton_Middle() -> PointerButton.Middle
+        desktop_win32_h.NativePointerButton_XButton1() -> PointerButton.XButton1
+        desktop_win32_h.NativePointerButton_XButton2() -> PointerButton.XButton2
+        else -> error("Unknown pointer button value: $value")
     }
 }
 

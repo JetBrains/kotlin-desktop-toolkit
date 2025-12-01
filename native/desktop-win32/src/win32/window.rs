@@ -38,6 +38,7 @@ use windows::{
 use super::{
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
+    pointer::PointerClickCounter,
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
     utils,
@@ -64,6 +65,7 @@ pub struct Window {
     size: RefCell<LogicalSize>,
     style: RefCell<WindowStyle>,
     pointer_in_client: AtomicBool,
+    pointer_click_counter: RefCell<PointerClickCounter>,
     event_loop: Weak<EventLoop>,
 }
 
@@ -95,6 +97,7 @@ impl Window {
             size: RefCell::default(),
             style: RefCell::default(),
             pointer_in_client: AtomicBool::new(false),
+            pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             event_loop,
         };
         Ok(window)
@@ -264,6 +267,12 @@ impl Window {
     #[inline]
     pub(crate) fn set_is_pointer_in_client(&self, value: bool) {
         self.pointer_in_client.store(value, Ordering::Relaxed);
+    }
+
+    #[inline]
+    pub(crate) fn with_mut_pointer_click_counter<R>(&self, f: impl FnOnce(&mut PointerClickCounter) -> R) -> R {
+        let mut pointer_click_counter = self.pointer_click_counter.borrow_mut();
+        f(&mut pointer_click_counter)
     }
 
     pub fn request_redraw(&self) -> WinResult<()> {

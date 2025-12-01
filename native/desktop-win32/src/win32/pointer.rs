@@ -1,23 +1,27 @@
 use windows::Win32::{
-    Foundation::WPARAM,
-    Graphics::Gdi::MapWindowPoints,
+    Foundation::{POINT, RECT, WPARAM},
+    Graphics::Gdi::{InflateRect, MapWindowPoints, PtInRect, SetRect},
     UI::{
         HiDpi::GetDpiForWindow,
-        Input::Pointer::{
-            GetPointerInfo, GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_FLAG_FIFTHBUTTON, POINTER_FLAG_FIRSTBUTTON,
-            POINTER_FLAG_FOURTHBUTTON, POINTER_FLAG_SECONDBUTTON, POINTER_FLAG_THIRDBUTTON, POINTER_INFO, POINTER_PEN_INFO,
-            POINTER_TOUCH_INFO,
+        Input::{
+            KeyboardAndMouse::GetDoubleClickTime,
+            Pointer::{
+                GetPointerInfo, GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_FLAG_FIFTHBUTTON, POINTER_FLAG_FIRSTBUTTON,
+                POINTER_FLAG_FOURTHBUTTON, POINTER_FLAG_SECONDBUTTON, POINTER_FLAG_THIRDBUTTON, POINTER_INFO, POINTER_PEN_INFO,
+                POINTER_TOUCH_INFO,
+            },
         },
         WindowsAndMessaging::{
-            POINTER_INPUT_TYPE, POINTER_MESSAGE_FLAG_FIFTHBUTTON, POINTER_MESSAGE_FLAG_FIRSTBUTTON, POINTER_MESSAGE_FLAG_FOURTHBUTTON,
-            POINTER_MESSAGE_FLAG_SECONDBUTTON, POINTER_MESSAGE_FLAG_THIRDBUTTON, PT_PEN, PT_TOUCH, USER_DEFAULT_SCREEN_DPI,
+            GetMessageTime, GetSystemMetrics, POINTER_INPUT_TYPE, POINTER_MESSAGE_FLAG_FIFTHBUTTON, POINTER_MESSAGE_FLAG_FIRSTBUTTON,
+            POINTER_MESSAGE_FLAG_FOURTHBUTTON, POINTER_MESSAGE_FLAG_SECONDBUTTON, POINTER_MESSAGE_FLAG_THIRDBUTTON, PT_PEN, PT_TOUCH,
+            SM_CXDOUBLECLK, SM_CYDOUBLECLK, USER_DEFAULT_SCREEN_DPI,
         },
     },
 };
 
 use super::{
     events::Timestamp,
-    geometry::LogicalPoint,
+    geometry::{LogicalPoint, PhysicalPoint},
     utils::{HIWORD, LOWORD},
 };
 
@@ -34,20 +38,41 @@ pub struct PointerState {
     modifiers: PointerModifiers,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerButton {
+    None = 0,
+    Left = 1 << 0,
+    Right = 1 << 1,
+    Middle = 1 << 2,
+    XButton1 = 1 << 3,
+    XButton2 = 1 << 4,
+}
+
+impl PointerButton {
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::double_parens)]
+    pub(crate) fn from_message_flags(value: WPARAM) -> Self {
+        let flags = u32::from(HIWORD!(value.0));
+        if (flags & POINTER_MESSAGE_FLAG_FIRSTBUTTON) == POINTER_MESSAGE_FLAG_FIRSTBUTTON {
+            Self::Left
+        } else if (flags & POINTER_MESSAGE_FLAG_SECONDBUTTON) == POINTER_MESSAGE_FLAG_SECONDBUTTON {
+            Self::Right
+        } else if (flags & POINTER_MESSAGE_FLAG_THIRDBUTTON) == POINTER_MESSAGE_FLAG_THIRDBUTTON {
+            Self::Middle
+        } else if (flags & POINTER_MESSAGE_FLAG_FOURTHBUTTON) == POINTER_MESSAGE_FLAG_FOURTHBUTTON {
+            Self::XButton1
+        } else if (flags & POINTER_MESSAGE_FLAG_FIFTHBUTTON) == POINTER_MESSAGE_FLAG_FIFTHBUTTON {
+            Self::XButton2
+        } else {
+            Self::None
+        }
+    }
+}
+
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct PointerButtons(u32);
-
-/// cbindgen:ignore
-const POINTER_BUTTON_LEFT: u32 = 1 << 0;
-/// cbindgen:ignore
-const POINTER_BUTTON_RIGHT: u32 = 1 << 1;
-/// cbindgen:ignore
-const POINTER_BUTTON_MIDDLE: u32 = 1 << 2;
-/// cbindgen:ignore
-const POINTER_BUTTON_XBUTTON1: u32 = 1 << 3;
-/// cbindgen:ignore
-const POINTER_BUTTON_XBUTTON2: u32 = 1 << 4;
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -102,19 +127,19 @@ impl PointerInfo {
         let pressed_buttons = {
             let mut buttons = 0_u32;
             if (pointer_flags & POINTER_FLAG_FIRSTBUTTON) == POINTER_FLAG_FIRSTBUTTON {
-                buttons |= POINTER_BUTTON_LEFT;
+                buttons |= PointerButton::Left as u32;
             }
             if (pointer_flags & POINTER_FLAG_SECONDBUTTON) == POINTER_FLAG_SECONDBUTTON {
-                buttons |= POINTER_BUTTON_RIGHT;
+                buttons |= PointerButton::Right as u32;
             }
             if (pointer_flags & POINTER_FLAG_THIRDBUTTON) == POINTER_FLAG_THIRDBUTTON {
-                buttons |= POINTER_BUTTON_MIDDLE;
+                buttons |= PointerButton::Middle as u32;
             }
             if (pointer_flags & POINTER_FLAG_FOURTHBUTTON) == POINTER_FLAG_FOURTHBUTTON {
-                buttons |= POINTER_BUTTON_XBUTTON1;
+                buttons |= PointerButton::XButton1 as u32;
             }
             if (pointer_flags & POINTER_FLAG_FIFTHBUTTON) == POINTER_FLAG_FIFTHBUTTON {
-                buttons |= POINTER_BUTTON_XBUTTON2;
+                buttons |= PointerButton::XButton2 as u32;
             }
             PointerButtons(buttons)
         };
@@ -139,25 +164,60 @@ impl PointerInfo {
         let y = ((points[0].y * USER_DEFAULT_SCREEN_DPI as i32) as f32) / (window_dpi as f32);
         LogicalPoint::new(x, y)
     }
+
+    pub(crate) const fn get_physical_location(&self) -> PhysicalPoint {
+        let native_pointer_info = self.get_native_pointer_info();
+        PhysicalPoint::new(native_pointer_info.ptPixelLocation.x, native_pointer_info.ptPixelLocation.y)
+    }
 }
 
-impl PointerButtons {
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::double_parens)]
-    pub(crate) fn from_message_flags(value: WPARAM) -> Self {
-        let flags = u32::from(HIWORD!(value.0));
-        if (flags & POINTER_MESSAGE_FLAG_FIRSTBUTTON) == POINTER_MESSAGE_FLAG_FIRSTBUTTON {
-            Self(POINTER_BUTTON_LEFT)
-        } else if (flags & POINTER_MESSAGE_FLAG_SECONDBUTTON) == POINTER_MESSAGE_FLAG_SECONDBUTTON {
-            Self(POINTER_BUTTON_RIGHT)
-        } else if (flags & POINTER_MESSAGE_FLAG_THIRDBUTTON) == POINTER_MESSAGE_FLAG_THIRDBUTTON {
-            Self(POINTER_BUTTON_MIDDLE)
-        } else if (flags & POINTER_MESSAGE_FLAG_FOURTHBUTTON) == POINTER_MESSAGE_FLAG_FOURTHBUTTON {
-            Self(POINTER_BUTTON_XBUTTON1)
-        } else if (flags & POINTER_MESSAGE_FLAG_FIFTHBUTTON) == POINTER_MESSAGE_FLAG_FIFTHBUTTON {
-            Self(POINTER_BUTTON_XBUTTON2)
-        } else {
-            Self(0_u32)
+pub(crate) struct PointerClickCounter {
+    button: PointerButton,
+    clicks: u32,
+    last_click_time: u32,
+    last_click_rect: RECT,
+}
+
+impl PointerClickCounter {
+    pub fn new() -> Self {
+        Self {
+            button: PointerButton::None,
+            clicks: 0,
+            last_click_time: 0,
+            last_click_rect: RECT::default(),
         }
+    }
+
+    // See https://devblogs.microsoft.com/oldnewthing/20041018-00/?p=37543
+    #[allow(clippy::cast_sign_loss)]
+    pub fn register_click(&mut self, button: PointerButton, physical_point: PhysicalPoint) -> u32 {
+        let (x, y) = (physical_point.x.0, physical_point.y.0);
+        let pt = POINT { x, y };
+        let tm_click = unsafe { GetMessageTime() } as u32;
+
+        if button != self.button
+            || !unsafe { PtInRect(&raw const self.last_click_rect, pt) }.as_bool()
+            || tm_click - self.last_click_time > unsafe { GetDoubleClickTime() }
+        {
+            self.clicks = 0;
+        }
+
+        self.clicks += 1;
+        self.last_click_time = tm_click;
+
+        unsafe {
+            let _ = SetRect(&raw mut self.last_click_rect, x, y, x, y);
+            let _ = InflateRect(
+                &raw mut self.last_click_rect,
+                GetSystemMetrics(SM_CXDOUBLECLK) / 2,
+                GetSystemMetrics(SM_CYDOUBLECLK) / 2,
+            );
+        }
+
+        self.clicks
+    }
+
+    pub const fn reset(&mut self) {
+        self.clicks = 0;
     }
 }

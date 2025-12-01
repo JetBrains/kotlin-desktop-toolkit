@@ -3,7 +3,7 @@ use desktop_common::ffi_utils::AutoDropStrPtr;
 use super::{
     geometry::{LogicalPoint, PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButtons, PointerState},
+    pointer::{PointerButton, PointerState},
     window::WindowId,
 };
 
@@ -16,11 +16,11 @@ pub enum Event {
     KeyUp(KeyEvent),
     NCCalcSize(NCCalcSizeEvent),
     NCHitTest(NCHitTestEvent),
-    PointerDown(PointerButtonEvent),
+    PointerDown(PointerDownEvent),
     PointerEntered(PointerEnteredEvent),
     PointerExited(PointerExitedEvent),
     PointerUpdated(PointerUpdatedEvent),
-    PointerUp(PointerButtonEvent),
+    PointerUp(PointerUpEvent),
     ScrollWheelX(ScrollWheelEvent),
     ScrollWheelY(ScrollWheelEvent),
     WindowCloseRequest,
@@ -96,8 +96,18 @@ impl From<NCHitTestEvent> for Event {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct PointerButtonEvent {
-    pub button: PointerButtons,
+pub struct PointerDownEvent {
+    pub button: PointerButton,
+    pub click_count: u32,
+    pub location_in_window: LogicalPoint,
+    pub state: PointerState,
+    pub timestamp: Timestamp,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct PointerUpEvent {
+    pub button: PointerButton,
     pub location_in_window: LogicalPoint,
     pub state: PointerState,
     pub timestamp: Timestamp,
