@@ -69,7 +69,6 @@ impl ApplicationState {
             let data_source = match kind {
                 LinuxClipboardKind::Clipboard => DataSource::Clipboard,
                 LinuxClipboardKind::Primary => DataSource::PrimarySelection,
-                LinuxClipboardKind::Secondary => DataSource::Clipboard,
             };
             let mime_type_cstr = CString::new(mime_type).unwrap();
             if let Ok(s) = (callbacks.get_data_transfer_data)(data_source, BorrowedStrPtr::new(&mime_type_cstr)).as_slice() {

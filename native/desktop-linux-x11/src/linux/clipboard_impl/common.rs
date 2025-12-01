@@ -8,6 +8,27 @@ the Apache 2.0 or the MIT license at the licensee's choice. The terms
 and conditions of the chosen license apply to this file.
 */
 
+/// Clipboard selection
+///
+/// Linux has a concept of clipboard "selections" which tend to be used in different contexts. This
+/// enum provides a way to get/set to a specific clipboard.
+///
+/// See <https://specifications.freedesktop.org/clipboards-spec/clipboards-0.1.txt> for a better
+/// description of the different clipboards.
+#[derive(Copy, Clone, Debug)]
+pub enum LinuxClipboardKind {
+    /// Typically used selection for explicit cut/copy/paste actions (ie. windows/macos like
+    /// clipboard behavior)
+    Clipboard,
+
+    /// Typically used for mouse selections and/or currently selected text. Accessible via middle
+    /// mouse click.
+    ///
+    /// *On Wayland, this may not be available for all systems (requires a compositor supporting
+    /// version 2 or above) and operations using this will return an error if unsupported.*
+    Primary,
+}
+
 /// An error that might happen during a clipboard operation.
 ///
 /// Note that both the `Display` and the `Debug` trait is implemented for this type in such a way
@@ -116,13 +137,8 @@ impl<F: FnOnce()> Drop for ScopeGuard<F> {
     }
 }
 
-/// Common trait for sealing platform extension traits.
-pub(crate) mod private {
-    use crate::linux::clipboard_impl::{Clear, Get, Set};
-
-    pub trait Sealed {}
-
-    impl Sealed for Get<'_> {}
-    impl Sealed for Set<'_> {}
-    impl Sealed for Clear<'_> {}
+pub fn into_unknown<E: std::fmt::Display>(error: E) -> Error {
+    Error::Unknown {
+        description: error.to_string(),
+    }
 }

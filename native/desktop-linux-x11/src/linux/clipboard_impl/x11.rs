@@ -39,8 +39,7 @@ use x11rb::{
     rust_connection::RustConnection,
     wrapper::ConnectionExt as _,
 };
-use super::platform::{LinuxClipboardKind, WaitConfig, into_unknown};
-use super::{Error, common::ScopeGuard};
+use super::{Error, common::{into_unknown, ScopeGuard}, LinuxClipboardKind, WaitConfig};
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -50,7 +49,6 @@ x11rb::atom_manager! {
     pub Atoms: AtomCookies {
         CLIPBOARD,
         PRIMARY,
-        SECONDARY,
 
         CLIPBOARD_MANAGER,
         SAVE_TARGETS,
@@ -83,6 +81,7 @@ x11rb::atom_manager! {
 thread_local! {
     static ATOM_NAME_CACHE: RefCell<HashMap<Atom, &'static str>> = Default::default();
 }
+
 
 // Some clipboard items, like images, may take a very long time to produce a
 // `SelectionNotify`. Multiple seconds long.
@@ -117,7 +116,6 @@ struct Inner {
 
     clipboard: Selection,
     primary: Selection,
-    secondary: Selection,
 
     handover_state: Mutex<ManagerHandoverState>,
     handover_cv: Condvar,
@@ -180,14 +178,6 @@ struct Selection {
     data_changed: Condvar,
 }
 
-#[derive(Debug, Clone)]
-struct ClipboardData {
-    bytes: Vec<u8>,
-
-    /// The atom representing the format in which the data is encoded.
-    format: Atom,
-}
-
 enum ReadSelNotifyResult {
     GotData(Vec<u8>),
     IncrStarted,
@@ -205,7 +195,6 @@ impl Inner {
             get_data_transfer_data: Mutex::new(get_data_transfer_data),
             clipboard: Selection::default(),
             primary: Selection::default(),
-            secondary: Selection::default(),
             handover_state: Mutex::new(ManagerHandoverState::Idle),
             handover_cv: Condvar::new(),
             serve_stopped: AtomicBool::new(false),
@@ -283,25 +272,14 @@ impl Inner {
     /// `formats` must be a slice of atoms, where each atom represents a target format.
     /// The first format from `formats`, which the clipboard owner supports, will be the
     /// format of the return value.
-    fn read(&self, formats: &[Atom], selection: LinuxClipboardKind) -> Result<ClipboardData> {
+    fn read(&self, format: Atom, selection: LinuxClipboardKind) -> Result<Vec<u8>> {
         // if let Some(data) = self.data.read().clone() {
         //     return Ok(data)
         // }
         let reader = XContext::new()?;
 
         trace!("Trying to get the clipboard data.");
-        for format in formats {
-            match self.read_single(&reader, selection, *format) {
-                Ok(bytes) => {
-                    return Ok(ClipboardData { bytes, format: *format });
-                }
-                Err(Error::ContentNotAvailable) => {
-                    continue;
-                }
-                Err(e) => return Err(e),
-            }
-        }
-        Err(Error::ContentNotAvailable)
+        self.read_single(&reader, selection, format)
     }
 
     fn read_single(&self, reader: &XContext, selection: LinuxClipboardKind, target_format: Atom) -> Result<Vec<u8>> {
@@ -378,7 +356,6 @@ impl Inner {
         match selection {
             LinuxClipboardKind::Clipboard => self.atoms.CLIPBOARD,
             LinuxClipboardKind::Primary => self.atoms.PRIMARY,
-            LinuxClipboardKind::Secondary => self.atoms.SECONDARY,
         }
     }
 
@@ -386,7 +363,6 @@ impl Inner {
         match selection {
             LinuxClipboardKind::Clipboard => &self.clipboard,
             LinuxClipboardKind::Primary => &self.primary,
-            LinuxClipboardKind::Secondary => &self.secondary,
         }
     }
 
@@ -394,7 +370,6 @@ impl Inner {
         match atom {
             a if a == self.atoms.CLIPBOARD => Some(LinuxClipboardKind::Clipboard),
             a if a == self.atoms.PRIMARY => Some(LinuxClipboardKind::Primary),
-            a if a == self.atoms.SECONDARY => Some(LinuxClipboardKind::Secondary),
             _ => None,
         }
     }
@@ -868,8 +843,8 @@ impl Clipboard {
                 description: e.to_string(),
             })?
             .atom;
-        let result = self.inner.read(&[atom], selection)?;
-        Ok(result.bytes)
+        let bytes = self.inner.read(atom, selection)?;
+        Ok(bytes)
     }
 
     pub(crate) fn commit_all_formats(
@@ -968,7 +943,6 @@ impl Drop for Clipboard {
 
                     collect_changed(&mut inner.clipboard.mutex);
                     collect_changed(&mut inner.primary.mutex);
-                    collect_changed(&mut inner.secondary.mutex);
 
                     change_timestamps.sort();
                     if let Some(last) = change_timestamps.last() {

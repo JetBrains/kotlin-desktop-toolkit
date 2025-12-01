@@ -10,7 +10,7 @@ use winit_x11::EventLoop;
 // use tokio::spawn;
 
 use crate::linux::application_state::ApplicationState;
-use crate::linux::clipboard_impl::{GetExtLinux, LinuxClipboardKind, SetExtLinux};
+use crate::linux::clipboard_impl::LinuxClipboardKind;
 use crate::linux::events::{DataTransferContent, DataTransferEvent};
 use crate::linux::mime_types::MimeTypes;
 use crate::linux::user_events::UserEvents;
@@ -203,7 +203,7 @@ impl Application {
             warn!("application_clipboard_put: clipboard not initialized");
             return;
         };
-        let mut clipboard_setter = clipboard.set().clipboard(kind);
+        let mut clipboard_setter = clipboard.set(kind);
         for mime_type in mime_types.val {
             clipboard_setter.custom_format(mime_type);
         }
@@ -251,7 +251,7 @@ impl Application {
             return false;
         };
         for mime_type in supported_mime_types.split(',') {
-            if let Ok(content) = clipboard.get().clipboard(kind).custom_format(mime_type) {
+            if let Ok(content) = clipboard.get(kind).custom_format(mime_type) {
                 if let Err(e) = self.user_event(UserEvents::ClipboardReceived {
                     serial,
                     mime_type: mime_type.to_owned(),

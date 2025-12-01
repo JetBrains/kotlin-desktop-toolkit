@@ -11,15 +11,12 @@ and conditions of the chosen license apply to this file.
 
 mod common;
 
-pub use common::Error;
+use std::time::Instant;
+pub use common::{Error, LinuxClipboardKind};
 
-mod platform;
 mod x11;
 
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "emscripten")),))]
-pub use platform::{ClearExtLinux, GetExtLinux, LinuxClipboardKind, SetExtLinux};
-
-/// The OS independent struct for accessing the clipboard.
+/// The struct for accessing the clipboard.
 ///
 /// Any number of `Clipboard` instances are allowed to exist at a single point in time. Note however
 /// that all `Clipboard`s must be 'dropped' before the program exits. In most scenarios this happens
@@ -31,21 +28,12 @@ pub use platform::{ClearExtLinux, GetExtLinux, LinuxClipboardKind, SetExtLinux};
 /// It is also valid to have these multiple `Clipboards` on separate threads at once but note that
 /// executing multiple clipboard operations in parallel might fail with a `ClipboardOccupied` error.
 ///
-/// # Platform-specific behavior
-///
-/// `arboard` does its best to abstract over different platforms, but sometimes the platform-specific
-/// behavior leaks through unsolvably. These differences, depending on which platforms are being targeted,
-/// may affect your app's clipboard architecture (ex, opening and closing a [`Clipboard`] every time
-/// or keeping one open in some application/global state).
-///
-/// ## Linux
-///
-/// Using either Wayland and X11, the clipboard and its content is "hosted" inside of the application
-/// that last put data onto it. This means that when the last `Clipboard` instance is dropped, the contents
-/// may become unavailable to other apps. See [SetExtLinux] for more details.
+/// The clipboard and its content is "hosted" inside of the application that last put data onto it.
+/// This means that when the last `Clipboard` instance is dropped, the contents may become unavailable to other apps.
+/// See [SetExtLinux] for more details.
 #[allow(rustdoc::broken_intra_doc_links)]
 pub struct Clipboard {
-    pub(crate) platform: platform::Clipboard,
+    pub(crate) platform: x11::Clipboard,
 }
 
 impl Clipboard {
@@ -57,7 +45,7 @@ impl Clipboard {
     /// supported. This may be retried.
     pub fn new(get_data_transfer_data: Box<dyn Fn(LinuxClipboardKind, &str) -> Vec<u8> + Send>) -> Result<Self, Error> {
         Ok(Clipboard {
-            platform: platform::Clipboard::new(get_data_transfer_data)?,
+            platform: x11::Clipboard::new(get_data_transfer_data)?,
         })
     }
 
@@ -67,53 +55,70 @@ impl Clipboard {
     /// # Errors
     ///
     /// Returns error on Windows or Linux if clipboard cannot be cleared.
-    pub fn clear(&mut self) -> Result<(), Error> {
-        self.clear_with().default()
-    }
-
-    /// Begins a "clear" option to remove data from the clipboard.
-    pub fn clear_with(&mut self) -> Clear<'_> {
-        Clear {
-            platform: platform::Clear::new(&mut self.platform),
-        }
+    pub fn clear(&mut self, selection: LinuxClipboardKind) -> Result<(), Error> {
+        self.platform.clear(selection)
     }
 
     /// Begins a "get" operation to retrieve data from the clipboard.
-    pub fn get(&self) -> Get<'_> {
-        Get {
-            platform: platform::Get::new(&self.platform),
-        }
+    pub fn get(&self, selection: LinuxClipboardKind) -> Get<'_> {
+        Get::new(&self.platform, selection)
     }
 
     /// Begins a "set" operation to set the clipboard's contents.
-    pub fn set(&mut self) -> Set<'_> {
-        Set {
-            platform: platform::Set::new(&mut self.platform),
-            pending_formats: Vec::new(),
+    pub fn set(&mut self, selection: LinuxClipboardKind) -> Set<'_> {
+        Set::new(&mut self.platform, selection)
+    }
+}
+
+pub(crate) struct Get<'clipboard> {
+    clipboard: &'clipboard x11::Clipboard,
+    selection: LinuxClipboardKind,
+}
+
+impl<'clipboard> Get<'clipboard> {
+    pub(crate) fn new(clipboard: &'clipboard x11::Clipboard, selection: LinuxClipboardKind) -> Self {
+        Self {
+            clipboard,
+            selection,
         }
     }
-}
 
-/// A builder for an operation that gets a value from the clipboard.
-#[must_use]
-pub struct Get<'clipboard> {
-    pub(crate) platform: platform::Get<'clipboard>,
-}
-
-impl Get<'_> {
-    pub fn custom_format(self, mime_type: &str) -> Result<Vec<u8>, Error> {
-        self.platform.custom_format(mime_type)
+    pub(crate) fn custom_format(self, mime_type: &str) -> Result<Vec<u8>, Error> {
+        self.clipboard.get_custom_format(self.selection, mime_type)
     }
 }
 
-/// A builder for an operation that sets a value to the clipboard.
-#[must_use]
-pub struct Set<'clipboard> {
-    pub(crate) platform: platform::Set<'clipboard>,
+/// Configuration on how long to wait for a new X11 copy event is emitted.
+#[derive(Default)]
+pub(crate) enum WaitConfig {
+    /// Waits until the given [`Instant`] has reached.
+    Until(Instant),
+
+    /// Waits forever until a new event is reached.
+    Forever,
+
+    /// It shouldn't wait.
+    #[default]
+    None,
+}
+
+pub(crate) struct Set<'clipboard> {
+    clipboard: &'clipboard mut x11::Clipboard,
+    wait: WaitConfig,
+    selection: LinuxClipboardKind,
     pub(crate) pending_formats: Vec<String>,
 }
 
-impl Set<'_> {
+impl<'clipboard> Set<'clipboard> {
+    pub(crate) fn new(clipboard: &'clipboard mut x11::Clipboard, selection: LinuxClipboardKind) -> Self {
+        Self {
+            clipboard,
+            wait: WaitConfig::default(),
+            selection,
+            pending_formats: Vec::new(),
+        }
+    }
+
     /// Adds a custom format to the clipboard with a MIME type identifier.
     /// Can be chained with other format methods. Call `commit()` to finalize.
     ///
@@ -143,20 +148,63 @@ impl Set<'_> {
                 description: "No formats were added to the clipboard".to_string(),
             });
         }
-        self.platform.commit_all(self.pending_formats)
+        self.clipboard.commit_all_formats(self.pending_formats, self.selection, self.wait)
+    }
+
+    /// Whether to wait for the clipboard's contents to be replaced after setting it.
+    ///
+    /// The Wayland and X11 clipboards work by having the clipboard content being, at any given
+    /// time, "owned" by a single process, and that process is expected to reply to all the requests
+    /// from any other system process that wishes to access the clipboard's contents. As a
+    /// consequence, when that process exits the contents of the clipboard will effectively be
+    /// cleared since there is no longer anyone around to serve requests for it.
+    ///
+    /// This poses a problem for short-lived programs that just want to copy to the clipboard and
+    /// then exit, since they don't want to wait until the user happens to copy something else just
+    /// to finish. To resolve that, whenever the user copies something you can offload the actual
+    /// work to a newly-spawned daemon process which will run in the background (potentially
+    /// outliving the current process) and serve all the requests. That process will then
+    /// automatically and silently exit once the user copies something else to their clipboard so it
+    /// doesn't take up too many resources.
+    ///
+    /// To support that pattern, this method will not only have the contents of the clipboard be
+    /// set, but will also wait and continue to serve requests until the clipboard is overwritten.
+    /// As long as you don't exit the current process until that method has returned, you can avoid
+    /// all surprising situations where the clipboard's contents seemingly disappear from under your
+    /// feet.
+    ///
+    /// See the [daemonize example] for a demo of how you could implement this.
+    ///
+    /// [daemonize example]: https://github.com/1Password/arboard/blob/master/examples/daemonize.rs
+    fn wait(mut self) -> Self {
+        self.wait = WaitConfig::Forever;
+        self
+    }
+
+    /// Whether or not to wait for the clipboard's content to be replaced after setting it. This waits until the
+    /// `deadline` has exceeded.
+    ///
+    /// This is useful for short-lived programs so it won't block until new contents on the clipboard
+    /// were added.
+    ///
+    /// Note: this is a superset of [`wait()`][wait] and will overwrite any state
+    /// that was previously set using it.
+    fn wait_until(mut self, deadline: Instant) -> Self {
+        self.wait = WaitConfig::Until(deadline);
+        self
     }
 }
 
-/// A builder for an operation that clears the data from the clipboard.
-#[must_use]
-pub struct Clear<'clipboard> {
-    pub(crate) platform: platform::Clear<'clipboard>,
+pub(crate) struct Clear<'clipboard> {
+    clipboard: &'clipboard mut x11::Clipboard,
 }
 
-impl Clear<'_> {
-    /// Completes the "clear" operation by deleting any existing clipboard data,
-    /// regardless of the format.
-    pub fn default(self) -> Result<(), Error> {
-        self.platform.clear()
+impl<'clipboard> Clear<'clipboard> {
+    pub(crate) fn new(clipboard: &'clipboard mut x11::Clipboard) -> Self {
+        Self { clipboard }
+    }
+
+    pub(crate) fn clear(self, selection: LinuxClipboardKind) -> Result<(), Error> {
+        self.clipboard.clear(selection)
     }
 }
