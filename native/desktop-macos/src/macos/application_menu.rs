@@ -2,16 +2,19 @@ use core::slice;
 use std::{cell::RefCell, thread_local};
 
 use anyhow::{Result, anyhow};
-use log::{error, log};
-use objc2::{DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, sel};
+use log::error;
 use objc2::__framework_prelude::NSInteger;
-use objc2_app_kit::{NSApp, NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSEventType, NSMenu, NSMenuItem};
+use objc2::{MainThreadOnly, define_class, msg_send, rc::Retained, sel};
+use objc2_app_kit::{
+    NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSEventType, NSMenu, NSMenuItem,
+};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSString};
 
 use super::{
     application_api::MyNSApplication,
     application_menu_api::{
-        ActionItemState, ActionMenuItemSpecialTag, AppMenuCallbacks, AppMenuItem, AppMenuStructure, AppMenuTrigger, ItemId, SubMenuItemSpecialTag,
+        ActionItemState, ActionMenuItemSpecialTag, AppMenuCallbacks, AppMenuItem, AppMenuStructure, AppMenuTrigger, ItemId,
+        SubMenuItemSpecialTag,
     },
     keyboard::KeyModifiersSet,
     string::copy_to_ns_string,
@@ -277,7 +280,7 @@ impl AppMenuItemSafe {
 }
 
 #[derive(Debug)]
-struct MenuItemRepresenterIvars { }
+struct MenuItemRepresenterIvars {}
 
 define_class!(
     #[unsafe(super(NSObject))]
@@ -295,7 +298,7 @@ define_class!(
 
 impl MenuItemRepresenter {
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
-        let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars { });
+        let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars {});
         unsafe { msg_send![super(obj), init] }
     }
 }
@@ -315,7 +318,7 @@ pub(crate) fn handle_app_menu_callback(item_id: ItemId) {
             let callback = callbacks.on_menu_action;
             callback(item_id, guess_trigger());
         } else {
-            error!("Can't trigger an item with id: {item_id}, global menu state isn't initialized")
+            error!("Can't trigger an item with id: {item_id}, global menu state isn't initialized");
         }
     });
 }

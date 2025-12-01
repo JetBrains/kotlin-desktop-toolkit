@@ -1,5 +1,11 @@
 use std::{cell::OnceCell, ffi::c_void};
 
+use crate::macos::application_menu::handle_app_menu_callback;
+use crate::macos::application_menu_api::ItemId;
+use crate::macos::events::{
+    handle_application_appearance_change, handle_application_did_finish_launching, handle_application_open_urls,
+    handle_display_configuration_change,
+};
 use anyhow::{Context, anyhow};
 use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedStrPtr},
@@ -11,16 +17,13 @@ use objc2::{
     rc::Retained,
     runtime::{AnyObject, ProtocolObject},
 };
-use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSMenuItem, NSRunningApplication, NSWorkspace};
+use objc2_app_kit::{
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
+    NSEventType, NSImage, NSMenuItem, NSRunningApplication, NSWorkspace,
+};
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
     NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults, ns_string,
-};
-use crate::macos::application_menu::handle_app_menu_callback;
-use crate::macos::application_menu_api::ItemId;
-use crate::macos::events::{
-    handle_application_appearance_change, handle_application_did_finish_launching, handle_application_open_urls,
-    handle_display_configuration_change,
 };
 
 use super::{
