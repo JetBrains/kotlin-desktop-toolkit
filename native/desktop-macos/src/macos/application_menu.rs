@@ -4,9 +4,8 @@ use std::{cell::RefCell, thread_local};
 use anyhow::{Result, anyhow};
 use log::{error, log};
 use objc2::{DeclaredClass, MainThreadOnly, define_class, msg_send, rc::Retained, sel};
-use objc2_app_kit::{
-    NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSEventType, NSMenu, NSMenuItem,
-};
+use objc2::__framework_prelude::NSInteger;
+use objc2_app_kit::{NSApp, NSControlStateValueMixed, NSControlStateValueOff, NSControlStateValueOn, NSEventModifierFlags, NSEventType, NSMenu, NSMenuItem};
 use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSString};
 
 use super::{
@@ -44,6 +43,9 @@ pub fn main_menu_update_impl(menu: &AppMenuStructure) {
     } else {
         let new_menu_root = NSMenu::new(mtm);
         app.setMainMenu(Some(&new_menu_root));
+        // todo do we need to set these?
+        // app.setHelpMenu();
+        // app.setServicesMenu();
         new_menu_root
     };
     menu_root.setAutoenablesItems(false);
@@ -150,7 +152,7 @@ impl AppMenuItemSafe {
         enabled: bool,
         state: ActionItemState,
         title: &Retained<NSString>,
-        _special_tag: ActionMenuItemSpecialTag,
+        special_tag: ActionMenuItemSpecialTag,
         keystroke: Option<&AppMenuKeystrokeSafe>,
         item_id: ItemId,
         mtm: MainThreadMarker,
@@ -165,10 +167,19 @@ impl AppMenuItemSafe {
             };
             item.setState(state);
 
-            let representer = MenuItemRepresenter::new(Some(item_id), mtm);
-            item.setTarget(Some(&representer));
+            let representer = MenuItemRepresenter::new(mtm);
             item.setRepresentedObject(Some(&representer));
-            item.setAction(Some(sel!(itemCallback:)));
+            let selector = match special_tag {
+                ActionMenuItemSpecialTag::None => sel!(itemCallback:),
+                ActionMenuItemSpecialTag::Undo => sel!(undo:),
+                ActionMenuItemSpecialTag::Redo => sel!(redo:),
+                ActionMenuItemSpecialTag::Cut => sel!(cut:),
+                ActionMenuItemSpecialTag::Copy => sel!(copy:),
+                ActionMenuItemSpecialTag::Paste => sel!(paste:),
+                ActionMenuItemSpecialTag::SelectAll => sel!(selectAll:),
+            };
+            item.setAction(Some(selector));
+            item.setTag(item_id as NSInteger);
 
             if let Some(keystroke) = keystroke {
                 item.setKeyEquivalent(&keystroke.key);
@@ -232,18 +243,16 @@ impl AppMenuItemSafe {
             }
             Self::Separator => {
                 let item = NSMenuItem::separatorItem(mtm);
-                let representer = MenuItemRepresenter::new(None, mtm); // Use None for separators
+                let representer = MenuItemRepresenter::new(mtm);
                 unsafe {
-                    item.setTarget(Some(&representer));
                     item.setRepresentedObject(Some(&representer));
                 };
                 item
             }
             Self::SubMenu { title, special_tag, items } => {
                 let item = NSMenuItem::new(mtm);
-                let representer = MenuItemRepresenter::new(None, mtm); // Use None for submenus
+                let representer = MenuItemRepresenter::new(mtm);
                 unsafe {
-                    item.setTarget(Some(&representer));
                     item.setRepresentedObject(Some(&representer));
                 };
                 let submenu = NSMenu::new(mtm);
@@ -268,9 +277,7 @@ impl AppMenuItemSafe {
 }
 
 #[derive(Debug)]
-struct MenuItemRepresenterIvars {
-    item_id: Option<ItemId>,
-}
+struct MenuItemRepresenterIvars { }
 
 define_class!(
     #[unsafe(super(NSObject))]
@@ -283,36 +290,34 @@ define_class!(
     unsafe impl NSObjectProtocol for MenuItemRepresenter {}
 
     impl MenuItemRepresenter {
-        #[unsafe(method(itemCallback:))]
-        fn item_callback(&self, _sender: &NSMenuItem) {
-            if let Some(item_id) = self.ivars().item_id {
-                GLOBAL_MENU_STATE.with(|state| {
-                    if let Some(ref callbacks) = *state.borrow() {
-                        let callback = callbacks.on_menu_action;
-                        callback(item_id, self.guess_trigger());
-                    } else {
-                        error!("Can't trigger an item with id: {item_id}, global menu state isn't initialized")
-                    }
-                });
-            }
-        }
     }
 );
 
 impl MenuItemRepresenter {
-    fn new(item_id: Option<ItemId>, mtm: MainThreadMarker) -> Retained<Self> {
-        let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars { item_id });
+    fn new(mtm: MainThreadMarker) -> Retained<Self> {
+        let obj = Self::alloc(mtm).set_ivars(MenuItemRepresenterIvars { });
         unsafe { msg_send![super(obj), init] }
     }
+}
 
-    fn guess_trigger(&self) -> AppMenuTrigger {
-        let mtm = self.mtm();
-        let app = MyNSApplication::sharedApplication(mtm);
-        match app.currentEvent() {
-            Some(ns_event) if ns_event.r#type() == NSEventType::KeyDown => AppMenuTrigger::Keystroke,
-            _ => AppMenuTrigger::Other,
-        }
+pub(crate) fn guess_trigger() -> AppMenuTrigger {
+    let mtm = MainThreadMarker::new().unwrap();
+    let app = MyNSApplication::sharedApplication(mtm);
+    match app.currentEvent() {
+        Some(ns_event) if ns_event.r#type() == NSEventType::KeyDown => AppMenuTrigger::Keystroke,
+        _ => AppMenuTrigger::Other,
     }
+}
+
+pub(crate) fn handle_app_menu_callback(item_id: ItemId) {
+    GLOBAL_MENU_STATE.with(|state| {
+        if let Some(ref callbacks) = *state.borrow() {
+            let callback = callbacks.on_menu_action;
+            callback(item_id, guess_trigger());
+        } else {
+            error!("Can't trigger an item with id: {item_id}, global menu state isn't initialized")
+        }
+    });
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]

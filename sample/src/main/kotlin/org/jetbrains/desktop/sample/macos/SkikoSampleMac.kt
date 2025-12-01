@@ -647,6 +647,7 @@ class ApplicationState : AutoCloseable {
                 AppMenuItem.Action(
                     title = "Copy",
                     keystroke = Keystroke(key = "c", modifiers = KeyModifiersSet.create(command = true)),
+                    specialTag = AppMenuItem.Action.SpecialTag.Copy,
                     perform = {
                         Pasteboard.clear()
                         val result = Pasteboard.writeObjects(Pasteboard.Item.of(Pasteboard.PNG_IMAGE_TYPE, jbIconBytes()))
@@ -656,6 +657,7 @@ class ApplicationState : AutoCloseable {
                 AppMenuItem.Action(
                     title = "Paste",
                     keystroke = Keystroke(key = "v", modifiers = KeyModifiersSet.create(command = true)),
+                    specialTag = AppMenuItem.Action.SpecialTag.Paste,
                     perform = {
                         Logger.info {
                             Pasteboard.readItemsOfType(Pasteboard.STRING_TYPE).toString()

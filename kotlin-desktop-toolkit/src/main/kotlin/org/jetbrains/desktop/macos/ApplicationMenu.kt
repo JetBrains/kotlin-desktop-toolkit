@@ -51,7 +51,7 @@ public sealed class AppMenuItem {
             Cut,
             Copy,
             Paste,
-            Delete,
+            SelectAll,
             ;
 
             internal fun toNative(): Int {
@@ -62,7 +62,7 @@ public sealed class AppMenuItem {
                     Cut -> desktop_macos_h.NativeActionMenuItemSpecialTag_Cut()
                     Copy -> desktop_macos_h.NativeActionMenuItemSpecialTag_Copy()
                     Paste -> desktop_macos_h.NativeActionMenuItemSpecialTag_Paste()
-                    Delete -> desktop_macos_h.NativeActionMenuItemSpecialTag_Delete()
+                    SelectAll -> desktop_macos_h.NativeActionMenuItemSpecialTag_SelectAll()
                 }
             }
         }

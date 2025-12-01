@@ -35,7 +35,7 @@ pub enum ActionMenuItemSpecialTag {
     Cut,
     Copy,
     Paste,
-    Delete,
+    SelectAll,
 }
 
 #[repr(C)]

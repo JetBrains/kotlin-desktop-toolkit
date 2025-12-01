@@ -11,15 +11,13 @@ use objc2::{
     rc::Retained,
     runtime::{AnyObject, ProtocolObject},
 };
-use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
-    NSEventType, NSImage, NSRunningApplication, NSWorkspace,
-};
+use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSMenuItem, NSRunningApplication, NSWorkspace};
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
     NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults, ns_string,
 };
-
+use crate::macos::application_menu::handle_app_menu_callback;
+use crate::macos::application_menu_api::ItemId;
 use crate::macos::events::{
     handle_application_appearance_change, handle_application_did_finish_launching, handle_application_open_urls,
     handle_display_configuration_change,
@@ -379,6 +377,45 @@ define_class!(
                 }
                 Ok(())
             });
+        }
+
+        #[unsafe(method(itemCallback:))]
+        fn item_callback(&self, sender: &NSMenuItem) {
+            handle_app_menu_callback(sender.tag() as ItemId);
+        }
+
+        // We need this strange layer of delegation to give MacOS a chance to handle
+        // application menu events before we handle them ourselves.
+        // For example, copy, paste and others wouldn't work in open dialogs without this.
+
+        #[unsafe(method(undo:))]
+        fn undo(&self, sender: &NSMenuItem) {
+            handle_app_menu_callback(sender.tag() as ItemId);
+        }
+
+        #[unsafe(method(redo:))]
+        fn redo(&self, sender: &NSMenuItem) {
+            handle_app_menu_callback(sender.tag() as ItemId);
+        }
+
+        #[unsafe(method(cut:))]
+        fn cut(&self, sender: &NSMenuItem) {
+            handle_app_menu_callback(sender.tag() as ItemId);
+        }
+
+        #[unsafe(method(copy:))]
+        fn copy(&self, sender: &NSMenuItem) {
+            handle_app_menu_callback(sender.tag() as ItemId);
+        }
+
+        #[unsafe(method(paste:))]
+        fn paste(&self, sender: &NSMenuItem) {
+            handle_app_menu_callback(sender.tag() as ItemId);
+        }
+
+        #[unsafe(method(selectAll:))]
+        fn select_all(&self, sender: &NSMenuItem) {
+            handle_app_menu_callback(sender.tag() as ItemId);
         }
     }
 
