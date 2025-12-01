@@ -23,13 +23,13 @@ use windows::Win32::{
 
 use super::{
     events::{
-        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerButtonEvent, PointerEnteredEvent,
-        PointerExitedEvent, PointerUpdatedEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
-        WindowResizeKind, WindowScaleChangedEvent, WindowTitleChangedEvent,
+        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
+        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowMoveEvent,
+        WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButtons, PointerInfo},
+    pointer::{PointerButton, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
@@ -243,6 +243,7 @@ fn on_settext(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: L
 
 #[allow(clippy::unnecessary_wraps)]
 fn on_activate(window: &Window) -> Option<LRESULT> {
+    window.with_mut_pointer_click_counter(PointerClickCounter::reset);
     let _ = window
         .extend_content_into_titlebar()
         .inspect_err(|err| log::error!("failed to extend content into the title bar: {err}"));
@@ -419,8 +420,12 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> 
 
 fn on_pointerdown(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
-    let event = PointerButtonEvent {
-        button: PointerButtons::from_message_flags(wparam),
+    let pointer_button = PointerButton::from_message_flags(wparam);
+    let click_location = pointer_info.get_physical_location();
+    let click_count = window.with_mut_pointer_click_counter(|c| c.register_click(pointer_button, click_location));
+    let event = PointerDownEvent {
+        button: pointer_button,
+        click_count,
         location_in_window: pointer_info.get_location_in_window(),
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
@@ -430,8 +435,8 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Op
 
 fn on_pointerup(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
-    let event = PointerButtonEvent {
-        button: PointerButtons::from_message_flags(wparam),
+    let event = PointerUpEvent {
+        button: PointerButton::from_message_flags(wparam),
         location_in_window: pointer_info.get_location_in_window(),
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
