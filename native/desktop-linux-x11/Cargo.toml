@@ -15,8 +15,6 @@ anyhow.workspace = true
 log.workspace = true
 log4rs.workspace = true
 desktop-common = { path = "../desktop-common" }
-percent-encoding = "2.3.2"
-env_logger = "0.11.8"
 
 [target.'cfg(target_os="linux")'.dependencies]
 ashpd = { version = "0.12.0", default-features = false, features = ["tokio"] }

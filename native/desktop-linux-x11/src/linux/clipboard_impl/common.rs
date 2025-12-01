@@ -76,19 +76,21 @@ impl std::fmt::Debug for Error {
 			}
 		}
         let name = kind_to_str!(
-			ContentNotAvailable,
-			ClipboardNotSupported,
-			ClipboardOccupied,
-			ConversionFailure,
-			Unknown { .. }
-		);
+            ContentNotAvailable,
+            ClipboardNotSupported,
+            ClipboardOccupied,
+            ConversionFailure,
+            Unknown { .. }
+        );
         f.write_fmt(format_args!("{name} - \"{self}\""))
     }
 }
 
 impl Error {
     pub(crate) fn unknown<M: Into<String>>(message: M) -> Self {
-        Error::Unknown { description: message.into() }
+        Error::Unknown {
+            description: message.into(),
+        }
     }
 }
 
@@ -112,19 +114,6 @@ impl<F: FnOnce()> Drop for ScopeGuard<F> {
             (callback)();
         }
     }
-}
-
-/// Represents different data formats that can be stored on the clipboard.
-#[derive(Clone)]
-pub(crate) enum FormatData {
-    /// Plain text (UTF-8)
-    Text(String),
-    /// HTML with optional plain text alternative
-    Html { html: String, alt_text: Option<String> },
-    /// List of file paths
-    FileList(Vec<std::path::PathBuf>),
-    /// Custom format with MIME type and raw data
-    Custom { mime_type: String, data: Vec<u8> },
 }
 
 /// Common trait for sealing platform extension traits.

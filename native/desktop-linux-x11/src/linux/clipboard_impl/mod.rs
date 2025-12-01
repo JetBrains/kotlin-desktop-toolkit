@@ -10,28 +10,14 @@ and conditions of the chosen license apply to this file.
 #![warn(unreachable_pub)]
 
 mod common;
-use std::{
-    borrow::Cow,
-    path::{Path, PathBuf},
-};
 
 pub use common::Error;
-use common::FormatData;
 
 mod platform;
 mod x11;
 
-#[cfg(all(
-    unix,
-    not(any(target_os = "macos", target_os = "android", target_os = "emscripten")),
-))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "emscripten")),))]
 pub use platform::{ClearExtLinux, GetExtLinux, LinuxClipboardKind, SetExtLinux};
-
-#[cfg(windows)]
-pub use platform::SetExtWindows;
-
-#[cfg(target_os = "macos")]
-pub use platform::SetExtApple;
 
 /// The OS independent struct for accessing the clipboard.
 ///
@@ -57,15 +43,6 @@ pub use platform::SetExtApple;
 /// Using either Wayland and X11, the clipboard and its content is "hosted" inside of the application
 /// that last put data onto it. This means that when the last `Clipboard` instance is dropped, the contents
 /// may become unavailable to other apps. See [SetExtLinux] for more details.
-///
-/// ## Windows
-///
-/// The clipboard on Windows is a global object, which may only be opened on one thread at once.
-/// This means that `arboard` only truly opens the clipboard during each operation to prevent
-/// multiple `Clipboard`s from existing at once.
-///
-/// This means that attempting operations in parallel has a high likelihood to return an error or
-/// deadlock. As such, it is recommended to avoid creating/operating clipboard objects on >1 thread.
 #[allow(rustdoc::broken_intra_doc_links)]
 pub struct Clipboard {
     pub(crate) platform: platform::Clipboard,
@@ -78,41 +55,10 @@ impl Clipboard {
     ///
     /// On some platforms or desktop environments, an error can be returned if clipboards are not
     /// supported. This may be retried.
-    pub fn new() -> Result<Self, Error> {
-        Ok(Clipboard { platform: platform::Clipboard::new()? })
-    }
-
-    /// Fetches UTF-8 text from the clipboard and returns it.
-    ///
-    /// # Errors
-    ///
-    /// Returns error if clipboard is empty or contents are not UTF-8 text.
-    pub fn get_text(&mut self) -> Result<String, Error> {
-        self.get().text()
-    }
-
-    /// Places the text onto the clipboard. Any valid UTF-8 string is accepted.
-    ///
-    /// # Errors
-    ///
-    /// Returns error if `text` failed to be stored on the clipboard.
-    pub fn set_text<'a, T: Into<Cow<'a, str>>>(&mut self, text: T) -> Result<(), Error> {
-        self.set().text(text).commit()
-    }
-
-    /// Places the HTML as well as a plain-text alternative onto the clipboard.
-    ///
-    /// Any valid UTF-8 string is accepted.
-    ///
-    /// # Errors
-    ///
-    /// Returns error if both `html` and `alt_text` failed to be stored on the clipboard.
-    pub fn set_html<'a, T: Into<Cow<'a, str>>>(
-        &mut self,
-        html: T,
-        alt_text: Option<T>,
-    ) -> Result<(), Error> {
-        self.set().html(html, alt_text).commit()
+    pub fn new(get_data_transfer_data: Box<dyn Fn(LinuxClipboardKind, &str) -> Vec<u8> + Send>) -> Result<Self, Error> {
+        Ok(Clipboard {
+            platform: platform::Clipboard::new(get_data_transfer_data)?,
+        })
     }
 
     /// Clears any contents that may be present from the platform's default clipboard,
@@ -127,12 +73,16 @@ impl Clipboard {
 
     /// Begins a "clear" option to remove data from the clipboard.
     pub fn clear_with(&mut self) -> Clear<'_> {
-        Clear { platform: platform::Clear::new(&mut self.platform) }
+        Clear {
+            platform: platform::Clear::new(&mut self.platform),
+        }
     }
 
     /// Begins a "get" operation to retrieve data from the clipboard.
-    pub fn get(&mut self) -> Get<'_> {
-        Get { platform: platform::Get::new(&mut self.platform) }
+    pub fn get(&self) -> Get<'_> {
+        Get {
+            platform: platform::Get::new(&self.platform),
+        }
     }
 
     /// Begins a "set" operation to set the clipboard's contents.
@@ -151,19 +101,8 @@ pub struct Get<'clipboard> {
 }
 
 impl Get<'_> {
-    /// Completes the "get" operation by fetching UTF-8 text from the clipboard.
-    pub fn text(self) -> Result<String, Error> {
-        self.platform.text()
-    }
-
-    /// Completes the "get" operation by fetching HTML from the clipboard.
-    pub fn html(self) -> Result<String, Error> {
-        self.platform.html()
-    }
-
-    /// Completes the "get" operation by fetching a list of file paths from the clipboard.
-    pub fn file_list(self) -> Result<Vec<PathBuf>, Error> {
-        self.platform.file_list()
+    pub fn custom_format(self, mime_type: &str) -> Result<Vec<u8>, Error> {
+        self.platform.custom_format(mime_type)
     }
 }
 
@@ -171,52 +110,10 @@ impl Get<'_> {
 #[must_use]
 pub struct Set<'clipboard> {
     pub(crate) platform: platform::Set<'clipboard>,
-    pub(crate) pending_formats: Vec<FormatData>,
+    pub(crate) pending_formats: Vec<String>,
 }
 
 impl Set<'_> {
-    /// Adds text to the clipboard. Can be chained with other format methods.
-    /// Call `commit()` to finalize the operation.
-    ///
-    /// # Example
-    /// ```no_run
-    /// # use arboard::Clipboard;
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut clipboard = Clipboard::new()?;
-    /// clipboard.set()
-    ///     .text("plain text")
-    ///     .html("<b>bold text</b>", None)
-    ///     .commit()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn text<'a, T: Into<Cow<'a, str>>>(mut self, text: T) -> Self {
-        let text = text.into().into_owned();
-        self.pending_formats.push(FormatData::Text(text));
-        self
-    }
-
-    /// Adds HTML (with optional plain-text alternative) to the clipboard.
-    /// Can be chained with other format methods. Call `commit()` to finalize.
-    pub fn html<'a, T: Into<Cow<'a, str>>>(
-        mut self,
-        html: T,
-        alt_text: Option<T>,
-    ) -> Self {
-        let html = html.into().into_owned();
-        let alt_text = alt_text.map(|t| t.into().into_owned());
-        self.pending_formats.push(FormatData::Html { html, alt_text });
-        self
-    }
-
-    /// Adds a list of file paths to the clipboard. Can be chained with other format methods.
-    /// Call `commit()` to finalize.
-    pub fn file_list(mut self, file_list: &[impl AsRef<Path>]) -> Self {
-        let paths: Vec<PathBuf> = file_list.iter().map(|p| p.as_ref().to_path_buf()).collect();
-        self.pending_formats.push(FormatData::FileList(paths));
-        self
-    }
-
     /// Adds a custom format to the clipboard with a MIME type identifier.
     /// Can be chained with other format methods. Call `commit()` to finalize.
     ///
@@ -232,12 +129,8 @@ impl Set<'_> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn custom_format(mut self, mime_type: &str, data: Vec<u8>) -> Self {
-        self.pending_formats.push(FormatData::Custom {
-            mime_type: mime_type.to_string(),
-            data,
-        });
-        self
+    pub fn custom_format(&mut self, mime_type: String) {
+        self.pending_formats.push(mime_type);
     }
 
     /// Commits all added formats to the clipboard.
@@ -265,204 +158,5 @@ impl Clear<'_> {
     /// regardless of the format.
     pub fn default(self) -> Result<(), Error> {
         self.platform.clear()
-    }
-}
-
-/// All tests grouped in one because the windows clipboard cannot be open on
-/// multiple threads at once.
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::{sync::Arc, thread, time::Duration};
-
-    #[test]
-    fn all_tests() {
-        let _ = env_logger::builder().is_test(true).try_init();
-        {
-            let mut ctx = Clipboard::new().unwrap();
-            let text = "some string";
-            ctx.set_text(text).unwrap();
-            assert_eq!(ctx.get_text().unwrap(), text);
-
-            // We also need to check that the content persists after the drop; this is
-            // especially important on X11
-            drop(ctx);
-
-            // Give any external mechanism a generous amount of time to take over
-            // responsibility for the clipboard, in case that happens asynchronously
-            // (it appears that this is the case on X11 plus Mutter 3.34+, see #4)
-            thread::sleep(Duration::from_millis(300));
-
-            let mut ctx = Clipboard::new().unwrap();
-            assert_eq!(ctx.get_text().unwrap(), text);
-        }
-        {
-            let mut ctx = Clipboard::new().unwrap();
-            let text = "Some utf8: 🤓 ∑φ(n)<ε 🐔";
-            ctx.set_text(text).unwrap();
-            assert_eq!(ctx.get_text().unwrap(), text);
-        }
-        {
-            let mut ctx = Clipboard::new().unwrap();
-            let text = "hello world";
-
-            ctx.set_text(text).unwrap();
-            assert_eq!(ctx.get_text().unwrap(), text);
-
-            ctx.clear().unwrap();
-
-            match ctx.get_text() {
-                Ok(text) => assert!(text.is_empty()),
-                Err(Error::ContentNotAvailable) => {}
-                Err(e) => panic!("unexpected error: {e}"),
-            };
-
-            // confirm it is OK to clear when already empty.
-            ctx.clear().unwrap();
-        }
-        {
-            let mut ctx = Clipboard::new().unwrap();
-            let html = "<b>hello</b> <i>world</i>!";
-
-            ctx.set_html(html, None).unwrap();
-
-            match ctx.get_text() {
-                Ok(text) => assert!(text.is_empty()),
-                Err(Error::ContentNotAvailable) => {}
-                Err(e) => panic!("unexpected error: {e}"),
-            };
-        }
-        {
-            let mut ctx = Clipboard::new().unwrap();
-
-            let html = "<b>hello</b> <i>world</i>!";
-            let alt_text = "hello world!";
-
-            ctx.set_html(html, Some(alt_text)).unwrap();
-            assert_eq!(ctx.get_text().unwrap(), alt_text);
-        }
-        {
-            let mut ctx = Clipboard::new().unwrap();
-
-            let html = "<b>hello</b> <i>world</i>!";
-
-            ctx.set().html(html, None).unwrap();
-
-            if cfg!(target_os = "macos") {
-                // Copying HTML on macOS adds wrapper content to work around
-                // historical platform bugs. We control this wrapper, so we are
-                // able to check that the full user data still appears and at what
-                // position in the final copy contents.
-                let content = ctx.get().html().unwrap();
-                assert!(content.ends_with(&format!("{html}</body></html>")));
-            } else {
-                assert_eq!(ctx.get().html().unwrap(), html);
-            }
-        }
-        {
-            let mut ctx = Clipboard::new().unwrap();
-
-            let this_dir = env!("CARGO_MANIFEST_DIR");
-
-            let paths = &[
-                PathBuf::from(this_dir).join("README.md"),
-                PathBuf::from(this_dir).join("Cargo.toml"),
-            ];
-
-            ctx.set().file_list(paths).unwrap();
-            assert_eq!(ctx.get().file_list().unwrap().as_slice(), paths);
-        }
-        #[cfg(all(
-            unix,
-            not(any(target_os = "macos", target_os = "android", target_os = "emscripten")),
-        ))]
-        {
-            use super::{LinuxClipboardKind, SetExtLinux};
-            use std::sync::atomic::{self, AtomicBool};
-
-            let mut ctx = Clipboard::new().unwrap();
-
-            const TEXT1: &str = "I'm a little teapot,";
-            const TEXT2: &str = "short and stout,";
-            const TEXT3: &str = "here is my handle";
-
-            ctx.set().clipboard(LinuxClipboardKind::Clipboard).text(TEXT1.to_string()).unwrap();
-
-            ctx.set().clipboard(LinuxClipboardKind::Primary).text(TEXT2.to_string()).unwrap();
-
-            // The secondary clipboard is not available under wayland
-            if !cfg!(feature = "wayland-data-control")
-                || std::env::var_os("WAYLAND_DISPLAY").is_none()
-            {
-                ctx.set().clipboard(LinuxClipboardKind::Secondary).text(TEXT3.to_string()).unwrap();
-            }
-
-            assert_eq!(TEXT1, &ctx.get().clipboard(LinuxClipboardKind::Clipboard).text().unwrap());
-
-            assert_eq!(TEXT2, &ctx.get().clipboard(LinuxClipboardKind::Primary).text().unwrap());
-
-            // The secondary clipboard is not available under wayland
-            if !cfg!(feature = "wayland-data-control")
-                || std::env::var_os("WAYLAND_DISPLAY").is_none()
-            {
-                assert_eq!(
-                    TEXT3,
-                    &ctx.get().clipboard(LinuxClipboardKind::Secondary).text().unwrap()
-                );
-            }
-
-            let was_replaced = Arc::new(AtomicBool::new(false));
-
-            let setter = thread::spawn({
-                let was_replaced = was_replaced.clone();
-                move || {
-                    thread::sleep(Duration::from_millis(100));
-                    let mut ctx = Clipboard::new().unwrap();
-                    ctx.set_text("replacement text".to_owned()).unwrap();
-                    was_replaced.store(true, atomic::Ordering::Release);
-                }
-            });
-
-            ctx.set().wait().text("initial text".to_owned()).unwrap();
-
-            assert!(was_replaced.load(atomic::Ordering::Acquire));
-
-            setter.join().unwrap();
-        }
-    }
-
-    // The cross-platform abstraction should allow any number of clipboards
-    // to be open at once without issue, as documented under [Clipboard].
-    #[test]
-    fn multiple_clipboards_at_once() {
-        const THREAD_COUNT: usize = 100;
-
-        let mut handles = Vec::with_capacity(THREAD_COUNT);
-        let barrier = Arc::new(std::sync::Barrier::new(THREAD_COUNT));
-
-        for _ in 0..THREAD_COUNT {
-            let barrier = barrier.clone();
-            handles.push(thread::spawn(move || {
-                // As long as the clipboard isn't used multiple times at once, multiple instances
-                // are perfectly fine.
-                let _ctx = Clipboard::new().unwrap();
-
-                thread::sleep(Duration::from_millis(10));
-
-                barrier.wait();
-            }));
-        }
-
-        for thread_handle in handles {
-            thread_handle.join().unwrap();
-        }
-    }
-
-    #[test]
-    fn clipboard_trait_consistently() {
-        fn assert_send_sync<T: Send + Sync + 'static>() {}
-
-        assert_send_sync::<Clipboard>();
-        assert!(std::mem::needs_drop::<Clipboard>());
     }
 }

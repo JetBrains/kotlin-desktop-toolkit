@@ -13,83 +13,75 @@ and conditions of the chosen license apply to this file.
 // https://freedesktop.org/wiki/ClipboardManager/
 
 use std::{
-    borrow::Cow,
     cell::RefCell,
-    collections::{hash_map::Entry, HashMap},
-    path::{Path, PathBuf},
+    collections::{HashMap, hash_map::Entry},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     thread::JoinHandle,
     thread_local,
     time::{Duration, Instant},
 };
 
-use log::{error, trace, warn};
+use log::{error, info, trace, warn};
 use parking_lot::{Condvar, Mutex, MutexGuard, RwLock};
 use x11rb::{
+    COPY_DEPTH_FROM_PARENT, COPY_FROM_PARENT, NONE,
     connection::Connection,
     protocol::{
-        xproto::{
-            Atom, AtomEnum, ConnectionExt as _, CreateWindowAux, EventMask, PropMode, Property,
-            PropertyNotifyEvent, SelectionNotifyEvent, SelectionRequestEvent, Time, WindowClass,
-            SELECTION_NOTIFY_EVENT,
-        },
         Event,
+        xproto::{
+            Atom, AtomEnum, ConnectionExt as _, CreateWindowAux, EventMask, PropMode, Property, PropertyNotifyEvent,
+            SELECTION_NOTIFY_EVENT, SelectionNotifyEvent, SelectionRequestEvent, Time, WindowClass,
+        },
     },
     rust_connection::RustConnection,
     wrapper::ConnectionExt as _,
-    COPY_DEPTH_FROM_PARENT, COPY_FROM_PARENT, NONE,
 };
-
-use super::platform::{
-    into_unknown, paths_from_uri_list, paths_to_uri_list, LinuxClipboardKind, WaitConfig,
-    KDE_EXCLUSION_HINT, KDE_EXCLUSION_MIME,
-};
-use super::{common::ScopeGuard, Error};
+use super::platform::{LinuxClipboardKind, WaitConfig, into_unknown};
+use super::{Error, common::ScopeGuard};
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
 static CLIPBOARD: Mutex<Option<GlobalClipboard>> = parking_lot::const_mutex(None);
 
 x11rb::atom_manager! {
-	pub Atoms: AtomCookies {
-		CLIPBOARD,
-		PRIMARY,
-		SECONDARY,
+    pub Atoms: AtomCookies {
+        CLIPBOARD,
+        PRIMARY,
+        SECONDARY,
 
-		CLIPBOARD_MANAGER,
-		SAVE_TARGETS,
-		TARGETS,
-		ATOM,
-		INCR,
+        CLIPBOARD_MANAGER,
+        SAVE_TARGETS,
+        TARGETS,
+        ATOM,
+        INCR,
 
-		UTF8_STRING,
-		UTF8_MIME_0: b"text/plain;charset=utf-8",
-		UTF8_MIME_1: b"text/plain;charset=UTF-8",
-		// Text in ISO Latin-1 encoding
-		// See: https://tronche.com/gui/x/icccm/sec-2.html#s-2.6.2
-		STRING,
-		// Text in unknown encoding
-		// See: https://tronche.com/gui/x/icccm/sec-2.html#s-2.6.2
-		TEXT,
-		TEXT_MIME_UNKNOWN: b"text/plain",
+        UTF8_STRING,
+        UTF8_MIME_0: b"text/plain;charset=utf-8",
+        UTF8_MIME_1: b"text/plain;charset=UTF-8",
+        // Text in ISO Latin-1 encoding
+        // See: https://tronche.com/gui/x/icccm/sec-2.html#s-2.6.2
+        STRING,
+        // Text in unknown encoding
+        // See: https://tronche.com/gui/x/icccm/sec-2.html#s-2.6.2
+        TEXT,
+        TEXT_MIME_UNKNOWN: b"text/plain",
 
-		HTML: b"text/html",
-		URI_LIST: b"text/uri-list",
+        HTML: b"text/html",
+        URI_LIST: b"text/uri-list",
 
-		PNG_MIME: b"image/png",
-		X_KDE_PASSWORDMANAGERHINT: KDE_EXCLUSION_MIME.as_bytes(),
+        PNG_MIME: b"image/png",
 
-		// This is just some random name for the property on our window, into which
-		// the clipboard owner writes the data we requested.
-		ARBOARD_CLIPBOARD,
-	}
+        // This is just some random name for the property on our window, into which
+        // the clipboard owner writes the data we requested.
+        ARBOARD_CLIPBOARD,
+    }
 }
 
 thread_local! {
-	static ATOM_NAME_CACHE: RefCell<HashMap<Atom, &'static str>> = Default::default();
+    static ATOM_NAME_CACHE: RefCell<HashMap<Atom, &'static str>> = Default::default();
 }
 
 // Some clipboard items, like images, may take a very long time to produce a
@@ -121,6 +113,7 @@ struct Inner {
     /// requests coming to us.
     server: XContext,
     atoms: Atoms,
+    get_data_transfer_data: Mutex<Box<dyn Fn(LinuxClipboardKind, &str) -> Vec<u8> + Send>>,
 
     clipboard: Selection,
     primary: Selection,
@@ -136,9 +129,7 @@ impl XContext {
     fn new() -> Result<Self> {
         // create a new connection to an X11 server
         let (conn, screen_num): (RustConnection, _) =
-            RustConnection::connect(None).map_err(|_| {
-                Error::unknown("X11 server connection timed out because it was unreachable")
-            })?;
+            RustConnection::connect(None).map_err(|_| Error::unknown("X11 server connection timed out because it was unreachable"))?;
         let screen = conn.setup().roots.get(screen_num).ok_or(Error::unknown("no screen found"))?;
         let win_id = conn.generate_id().map_err(into_unknown)?;
 
@@ -164,7 +155,7 @@ impl XContext {
             // don't subscribe to any special events because we are requesting everything we need ourselves
             &CreateWindowAux::new().event_mask(event_mask),
         )
-            .map_err(into_unknown)?;
+        .map_err(into_unknown)?;
         conn.flush().map_err(into_unknown)?;
 
         Ok(Self { conn, win_id })
@@ -172,8 +163,14 @@ impl XContext {
 }
 
 #[derive(Default)]
+struct MimeData {
+    name: String,
+    format: Atom,
+}
+
+#[derive(Default)]
 struct Selection {
-    data: RwLock<Option<Vec<ClipboardData>>>,
+    data: RwLock<Option<Vec<MimeData>>>,
     /// Mutex around when this selection was last changed by us
     /// for both use with the below condvar and logging.
     mutex: Mutex<Option<Instant>>,
@@ -198,14 +195,14 @@ enum ReadSelNotifyResult {
 }
 
 impl Inner {
-    fn new() -> Result<Self> {
+    fn new(get_data_transfer_data: Box<dyn Fn(LinuxClipboardKind, &str) -> Vec<u8> + Send>) -> Result<Self> {
         let server = XContext::new()?;
-        let atoms =
-            Atoms::new(&server.conn).map_err(into_unknown)?.reply().map_err(into_unknown)?;
+        let atoms = Atoms::new(&server.conn).map_err(into_unknown)?.reply().map_err(into_unknown)?;
 
         Ok(Self {
             server,
             atoms,
+            get_data_transfer_data: Mutex::new(get_data_transfer_data),
             clipboard: Selection::default(),
             primary: Selection::default(),
             secondary: Selection::default(),
@@ -233,14 +230,11 @@ impl Inner {
         self.server.conn.flush().map_err(into_unknown)
     }
 
-    fn write(
-        &self,
-        data: Vec<ClipboardData>,
-        clipboard_selection: LinuxClipboardKind,
-        wait: WaitConfig,
-    ) -> Result<()> {
+    fn write(&self, data: Vec<MimeData>, clipboard_selection: LinuxClipboardKind, wait: WaitConfig) -> Result<()> {
         if self.serve_stopped.load(Ordering::Relaxed) {
-            return Err(Error::unknown("The clipboard handler thread seems to have stopped. Logging messages may reveal the cause. (See the `log` crate.)"));
+            return Err(Error::unknown(
+                "The clipboard handler thread seems to have stopped. Logging messages may reveal the cause. (See the `log` crate.)",
+            ));
         }
 
         let server_win = self.server.win_id;
@@ -287,23 +281,9 @@ impl Inner {
     }
 
     /// `formats` must be a slice of atoms, where each atom represents a target format.
-    /// The first format from `formats`, which the clipboard owner supports will be the
+    /// The first format from `formats`, which the clipboard owner supports, will be the
     /// format of the return value.
     fn read(&self, formats: &[Atom], selection: LinuxClipboardKind) -> Result<ClipboardData> {
-        // if we are the current owner, we can get the current clipboard ourselves
-        if self.is_owner(selection)? {
-            let data = self.selection_of(selection).data.read();
-            if let Some(data_list) = &*data {
-                for data in data_list {
-                    for format in formats {
-                        if *format == data.format {
-                            return Ok(data.clone());
-                        }
-                    }
-                }
-            }
-            return Err(Error::ContentNotAvailable);
-        }
         // if let Some(data) = self.data.read().clone() {
         //     return Ok(data)
         // }
@@ -324,12 +304,7 @@ impl Inner {
         Err(Error::ContentNotAvailable)
     }
 
-    fn read_single(
-        &self,
-        reader: &XContext,
-        selection: LinuxClipboardKind,
-        target_format: Atom,
-    ) -> Result<Vec<u8>> {
+    fn read_single(&self, reader: &XContext, selection: LinuxClipboardKind, target_format: Atom) -> Result<Vec<u8>> {
         // Delete the property so that we can detect (using property notify)
         // when the selection owner receives our request.
         reader
@@ -370,13 +345,7 @@ impl Inner {
                 // The first response after requesting a selection.
                 Event::SelectionNotify(event) => {
                     trace!("Read SelectionNotify");
-                    let result = self.handle_read_selection_notify(
-                        reader,
-                        target_format,
-                        &mut using_incr,
-                        &mut incr_data,
-                        event,
-                    )?;
+                    let result = self.handle_read_selection_notify(reader, target_format, &mut using_incr, &mut incr_data, event)?;
                     match result {
                         ReadSelNotifyResult::GotData(data) => return Ok(data),
                         ReadSelNotifyResult::IncrStarted => {
@@ -392,22 +361,16 @@ impl Inner {
                 // will be sent in INCR segments, each segment is transferred in
                 // a PropertyNotify event.
                 Event::PropertyNotify(event) => {
-                    let result = self.handle_read_property_notify(
-                        reader,
-                        target_format,
-                        using_incr,
-                        &mut incr_data,
-                        &mut timeout_end,
-                        event,
-                    )?;
+                    let result =
+                        self.handle_read_property_notify(reader, target_format, using_incr, &mut incr_data, &mut timeout_end, event)?;
                     if result {
                         return Ok(incr_data);
                     }
                 }
-                _ => log::trace!("An unexpected event arrived while reading the clipboard."),
+                _ => trace!("An unexpected event arrived while reading the clipboard."),
             }
         }
-        log::info!("Time-out hit while reading the clipboard.");
+        info!("Time-out hit while reading the clipboard.");
         Err(Error::ContentNotAvailable)
     }
 
@@ -449,7 +412,7 @@ impl Inner {
         Ok(current == self.server.win_id)
     }
 
-    fn atom_name(&self, atom: x11rb::protocol::xproto::Atom) -> Result<String> {
+    fn atom_name(&self, atom: Atom) -> Result<String> {
         String::from_utf8(
             self.server
                 .conn
@@ -459,9 +422,9 @@ impl Inner {
                 .map_err(into_unknown)?
                 .name,
         )
-            .map_err(into_unknown)
+        .map_err(into_unknown)
     }
-    fn atom_name_dbg(&self, atom: x11rb::protocol::xproto::Atom) -> &'static str {
+    fn atom_name_dbg(&self, atom: Atom) -> &'static str {
         ATOM_NAME_CACHE.with(|cache| {
             let mut cache = cache.borrow_mut();
             match cache.entry(atom) {
@@ -495,11 +458,11 @@ impl Inner {
             return Err(Error::ContentNotAvailable);
         }
         if self.kind_of(event.selection).is_none() {
-            log::info!("Received a SelectionNotify for a selection other than CLIPBOARD, PRIMARY or SECONDARY. This is unexpected.");
+            info!("Received a SelectionNotify for a selection other than CLIPBOARD, PRIMARY or SECONDARY. This is unexpected.");
             return Ok(ReadSelNotifyResult::EventNotRecognized);
         }
         if *using_incr {
-            log::warn!("Received a SelectionNotify while already expecting INCR segments.");
+            warn!("Received a SelectionNotify while already expecting INCR segments.");
             return Ok(ReadSelNotifyResult::EventNotRecognized);
         }
         // request the selection
@@ -522,18 +485,11 @@ impl Inner {
             // property type. But the type didn't match in the previous call.
             reply = reader
                 .conn
-                .get_property(
-                    true,
-                    event.requestor,
-                    event.property,
-                    self.atoms.INCR,
-                    0,
-                    u32::MAX / 4,
-                )
+                .get_property(true, event.requestor, event.property, self.atoms.INCR, 0, u32::MAX / 4)
                 .map_err(into_unknown)?
                 .reply()
                 .map_err(into_unknown)?;
-            log::trace!("Receiving INCR segments");
+            trace!("Receiving INCR segments");
             *using_incr = true;
             if reply.value_len == 4 {
                 let min_data_len = reply.value32().and_then(|mut vals| vals.next()).unwrap_or(0);
@@ -571,7 +527,7 @@ impl Inner {
             .reply()
             .map_err(into_unknown)?;
 
-        // log::trace!("Received segment. value_len {}", reply.value_len,);
+        // trace!("Received segment. value_len {}", reply.value_len,);
         if reply.value_len == 0 {
             // This indicates that all the data has been sent.
             return Ok(true);
@@ -600,10 +556,9 @@ impl Inner {
             trace!("Handling TARGETS, dst property is {}", self.atom_name_dbg(event.property));
 
             let data = self.selection_of(selection).data.read();
-            let (data_targets, excluded) = if let Some(data_list) = &*data {
+            let data_targets= if let Some(data_list) = &*data {
                 // Estimation based on current data types, plus the other UTF-8 ones, plus `SAVE_TARGETS`.
                 let mut targets = Vec::with_capacity(data_list.len() + 3);
-                let mut excluded = false;
 
                 for data in data_list {
                     targets.push(data.format);
@@ -613,21 +568,17 @@ impl Inner {
                         targets.push(self.atoms.UTF8_MIME_0);
                         targets.push(self.atoms.UTF8_MIME_1);
                     }
-
-                    if data.format == self.atoms.X_KDE_PASSWORDMANAGERHINT {
-                        excluded = true;
-                    }
                 }
-                (targets, excluded)
+                targets
             } else {
                 // If there's no data, we advertise an empty list of targets.
-                (Vec::with_capacity(2), false)
+                Vec::with_capacity(2)
             };
 
             let mut targets = data_targets;
             targets.push(self.atoms.TARGETS);
 
-            // NB: `SAVE_TARGETS` in this context is a marker atom which infomrs the clipboard manager
+            // NB: `SAVE_TARGETS` in this context is a marker atom which informs the clipboard manager
             // we support this operation and _may_ use it in the future. To try and keep the manager's
             // expectations/assumptions (if any) about when we will invoke this handoff, we go ahead and
             // skip advertising support for the save operation entirely when the data was marked as
@@ -635,9 +586,7 @@ impl Inner {
             //
             // Note that even if we don't advertise it, some managers may respond to it anyways so this is
             // only half of exclusion handling. See `ask_clipboard_manager_to_request_our_data` for more.
-            if !excluded {
-                targets.push(self.atoms.SAVE_TARGETS);
-            }
+            targets.push(self.atoms.SAVE_TARGETS);
 
             self.server
                 .conn
@@ -658,15 +607,10 @@ impl Inner {
             if let Some(data_list) = &*data {
                 success = match data_list.iter().find(|d| d.format == event.target) {
                     Some(data) => {
+                        let content = self.get_data_transfer_data.lock()(selection, &data.name);
                         self.server
                             .conn
-                            .change_property8(
-                                PropMode::REPLACE,
-                                event.requestor,
-                                event.property,
-                                event.target,
-                                &data.bytes,
-                            )
+                            .change_property8(PropMode::REPLACE, event.requestor, event.property, event.target, &content)
                             .map_err(into_unknown)?;
                         self.server.conn.flush().map_err(into_unknown)?;
                         true
@@ -721,38 +665,9 @@ impl Inner {
             return Ok(());
         }
 
-        match &*self.selection_of(selection).data.read() {
-            Some(data) => {
-                // If the data we are serving intended to be excluded, then don't bother asking the clipboard
-                // manager to save it. This is for several reasons:
-                // 1. Its counter-intuitive because the caller asked for this data to be minimally retained.
-                // 2. Regardless of if `SAVE_TARGETS` was advertised, we have to assume the manager may be saving history
-                // in a more proactive way and that would also be entirely dependent on it seeing the exclusion MIME before this.
-                // 3. Due to varying behavior in clipboard managers (some save prior to `SAVE_TARGETS`), it may just
-                // generate unnessecary warning logs in our handoff path even when we know a well-behaving manager isn't
-                // trying to save our sensitive data and that is misleading to users.
-                if data.iter().any(|data| data.format == self.atoms.X_KDE_PASSWORDMANAGERHINT) {
-                    // This step is the most important. Without it, some clipboard managers may think that our process
-                    // crashed since the X window is destroyed without changing the selection owner first and try to save data.
-                    //
-                    // While this shouldn't need to happen based only on ICCCM 2.3.1 ("Voluntarily Giving Up Selection Ownership"),
-                    // its documentation that destorying the owner window or terminating also reverts the owner to `None` doesn't
-                    // reflect how desktop environment's X servers work in reality.
-                    //
-                    // By removing the owner, the manager doesn't think it needs to pick up our window's data serving once
-                    // its destroyed and cleanly lets the data disappear based off the previously advertised exclusion hint.
-                    if let Err(e) = self.clear(selection) {
-                        warn!("failed to release sensitive data's clipboard ownership: {e}; it may end up persisted!");
-                        // This is still not an error because we werent going to handoff anything to the manager.
-                    }
-
-                    return Ok(());
-                }
-            }
-            None => {
-                // If we don't have any data, there's nothing to do.
-                return Ok(());
-            }
+        if self.selection_of(selection).data.read().is_none() {
+            // If we don't have any data, there's nothing to do.
+            return Ok(());
         }
 
         // It's important that we lock the state before sending the request
@@ -794,7 +709,7 @@ impl Inner {
 
 fn serve_requests(context: Arc<Inner>) -> Result<(), Box<dyn std::error::Error>> {
     fn handover_finished(clip: &Arc<Inner>, mut handover_state: MutexGuard<ManagerHandoverState>) {
-        log::trace!("Finishing clipboard manager handover.");
+        trace!("Finishing clipboard manager handover.");
         *handover_state = ManagerHandoverState::Finished;
 
         // Not sure if unlocking the mutex is necessary here but better safe than sorry.
@@ -841,10 +756,10 @@ fn serve_requests(context: Arc<Inner>) -> Result<(), Box<dyn std::error::Error>>
             }
             Event::SelectionRequest(event) => {
                 trace!(
-					"SelectionRequest - selection is: {}, target is {}",
-					context.atom_name_dbg(event.selection),
-					context.atom_name_dbg(event.target),
-				);
+                    "SelectionRequest - selection is: {}, target is {}",
+                    context.atom_name_dbg(event.selection),
+                    context.atom_name_dbg(event.target),
+                );
                 // Someone is requesting the clipboard content from us.
                 if let Err(e) = context.handle_selection_request(event) {
                     error!("Failed to handle selection request: {e}");
@@ -873,7 +788,9 @@ fn serve_requests(context: Arc<Inner>) -> Result<(), Box<dyn std::error::Error>>
                 // clipboard contents, this must come from the clipboard manager
                 // signaling that the data was handed over successfully.
                 if event.selection != context.atoms.CLIPBOARD_MANAGER {
-                    error!("Received a `SelectionNotify` from a selection other than the CLIPBOARD_MANAGER. This is unexpected in this thread.");
+                    error!(
+                        "Received a `SelectionNotify` from a selection other than the CLIPBOARD_MANAGER. This is unexpected in this thread."
+                    );
                     continue;
                 }
                 let handover_state = context.handover_state.lock();
@@ -908,13 +825,15 @@ pub(crate) struct Clipboard {
 }
 
 impl Clipboard {
-    pub(crate) fn new() -> Result<Self> {
+    pub(crate) fn new(get_data_transfer_data: Box<dyn Fn(LinuxClipboardKind, &str) -> Vec<u8> + Send>) -> Result<Self> {
         let mut global_cb = CLIPBOARD.lock();
         if let Some(global_cb) = &*global_cb {
-            return Ok(Self { inner: Arc::clone(&global_cb.inner) });
+            return Ok(Self {
+                inner: Arc::clone(&global_cb.inner),
+            });
         }
         // At this point we know that the clipboard does not exist.
-        let ctx = Arc::new(Inner::new()?);
+        let ctx = Arc::new(Inner::new(get_data_transfer_data)?);
         let join_handle;
         {
             let ctx = Arc::clone(&ctx);
@@ -924,177 +843,61 @@ impl Clipboard {
                 }
             });
         }
-        *global_cb = Some(GlobalClipboard { inner: Arc::clone(&ctx), server_handle: join_handle });
+        *global_cb = Some(GlobalClipboard {
+            inner: Arc::clone(&ctx),
+            server_handle: join_handle,
+        });
         Ok(Self { inner: ctx })
-    }
-
-    fn add_clipboard_exclusions(&self, exclude_from_history: bool, data: &mut Vec<ClipboardData>) {
-        if exclude_from_history {
-            data.push(ClipboardData {
-                bytes: KDE_EXCLUSION_HINT.to_vec(),
-                format: self.inner.atoms.X_KDE_PASSWORDMANAGERHINT,
-            })
-        }
     }
 
     pub(crate) fn clear(&self, selection: LinuxClipboardKind) -> Result<()> {
         self.inner.clear(selection)
     }
 
-    pub(crate) fn get_text(&self, selection: LinuxClipboardKind) -> Result<String> {
-        let formats = [
-            self.inner.atoms.UTF8_STRING,
-            self.inner.atoms.UTF8_MIME_0,
-            self.inner.atoms.UTF8_MIME_1,
-            self.inner.atoms.STRING,
-            self.inner.atoms.TEXT,
-            self.inner.atoms.TEXT_MIME_UNKNOWN,
-        ];
-        let result = self.inner.read(&formats, selection)?;
-        if result.format == self.inner.atoms.STRING {
-            // ISO Latin-1
-            // See: https://stackoverflow.com/questions/28169745/what-are-the-options-to-convert-iso-8859-1-latin-1-to-a-string-utf-8
-            Ok(result.bytes.into_iter().map(|c| c as char).collect())
-        } else {
-            String::from_utf8(result.bytes).map_err(|_| Error::ConversionFailure)
-        }
-    }
-
-    pub(crate) fn set_text(
-        &self,
-        message: Cow<'_, str>,
-        selection: LinuxClipboardKind,
-        wait: WaitConfig,
-        exclude_from_history: bool,
-    ) -> Result<()> {
-        let mut data = Vec::with_capacity(if exclude_from_history { 2 } else { 1 });
-        data.push(ClipboardData {
-            bytes: message.into_owned().into_bytes(),
-            format: self.inner.atoms.UTF8_STRING,
-        });
-
-        self.add_clipboard_exclusions(exclude_from_history, &mut data);
-
-        self.inner.write(data, selection, wait)
-    }
-
-    pub(crate) fn get_html(&self, selection: LinuxClipboardKind) -> Result<String> {
-        let formats = [self.inner.atoms.HTML];
-        let result = self.inner.read(&formats, selection)?;
-        String::from_utf8(result.bytes).map_err(|_| Error::ConversionFailure)
-    }
-
-    pub(crate) fn set_html(
-        &self,
-        html: Cow<'_, str>,
-        alt: Option<Cow<'_, str>>,
-        selection: LinuxClipboardKind,
-        wait: WaitConfig,
-        exclude_from_history: bool,
-    ) -> Result<()> {
-        let mut data = {
-            let cap = [true, alt.is_some(), exclude_from_history]
-                .map(|v| usize::from(v as u8))
-                .iter()
-                .sum();
-            Vec::with_capacity(cap)
-        };
-
-        if let Some(alt_text) = alt {
-            data.push(ClipboardData {
-                bytes: alt_text.into_owned().into_bytes(),
-                format: self.inner.atoms.UTF8_STRING,
-            });
-        }
-        data.push(ClipboardData {
-            bytes: html.into_owned().into_bytes(),
-            format: self.inner.atoms.HTML,
-        });
-
-        self.add_clipboard_exclusions(exclude_from_history, &mut data);
-
-        self.inner.write(data, selection, wait)
-    }
-
-    pub(crate) fn get_file_list(&self, selection: LinuxClipboardKind) -> Result<Vec<PathBuf>> {
-        let result = self.inner.read(&[self.inner.atoms.URI_LIST], selection)?;
-
-        Ok(paths_from_uri_list(result.bytes))
-    }
-
-    pub(crate) fn set_file_list(
-        &self,
-        file_list: &[impl AsRef<Path>],
-        selection: LinuxClipboardKind,
-        wait: WaitConfig,
-        exclude_from_history: bool,
-    ) -> Result<()> {
-        let files = paths_to_uri_list(file_list)?;
-        let mut data = Vec::with_capacity(if exclude_from_history { 2 } else { 1 });
-
-        data.push(ClipboardData { bytes: files.into_bytes(), format: self.inner.atoms.URI_LIST });
-        self.add_clipboard_exclusions(exclude_from_history, &mut data);
-
-        self.inner.write(data, selection, wait)
+    pub(crate) fn get_custom_format(&self, selection: LinuxClipboardKind, mime_type: &str) -> Result<Vec<u8>> {
+        let atom = self
+            .inner
+            .server
+            .conn
+            .intern_atom(true, mime_type.as_bytes())
+            .map_err(|e| Error::Unknown {
+                description: e.to_string(),
+            })?
+            .reply()
+            .map_err(|e| Error::Unknown {
+                description: e.to_string(),
+            })?
+            .atom;
+        let result = self.inner.read(&[atom], selection)?;
+        Ok(result.bytes)
     }
 
     pub(crate) fn commit_all_formats(
         &self,
-        formats: Vec<super::common::FormatData>,
+        formats: Vec<String>,
         selection: LinuxClipboardKind,
         wait: WaitConfig,
-        exclude_from_history: bool,
     ) -> Result<()> {
-        use super::common::FormatData;
-
         let mut data = Vec::new();
 
-        for format in formats {
-            match format {
-                FormatData::Text(text) => {
-                    data.push(ClipboardData {
-                        bytes: text.into_bytes(),
-                        format: self.inner.atoms.UTF8_STRING,
-                    });
-                }
-                FormatData::Html { html, alt_text } => {
-                    // Add HTML format
-                    data.push(ClipboardData {
-                        bytes: html.into_bytes(),
-                        format: self.inner.atoms.HTML,
-                    });
-                    // Add plain text alternative if provided
-                    if let Some(alt) = alt_text {
-                        data.push(ClipboardData {
-                            bytes: alt.into_bytes(),
-                            format: self.inner.atoms.UTF8_STRING,
-                        });
-                    }
-                }
-                FormatData::FileList(paths) => {
-                    let files = paths_to_uri_list(&paths)?;
-                    data.push(ClipboardData {
-                        bytes: files.into_bytes(),
-                        format: self.inner.atoms.URI_LIST,
-                    });
-                }
-                FormatData::Custom { mime_type, data: custom_data } => {
-                    // Register custom MIME type as X11 atom
-                    let atom = self.inner.server.conn
-                        .intern_atom(false, mime_type.as_bytes())
-                        .map_err(|e| Error::Unknown { description: e.to_string() })?
-                        .reply()
-                        .map_err(|e| Error::Unknown { description: e.to_string() })?
-                        .atom;
-                    data.push(ClipboardData {
-                        bytes: custom_data,
-                        format: atom,
-                    });
-                }
-            }
+        for mime_type in formats {
+            // Register a custom MIME type as X11 atom
+            let atom = self
+                .inner
+                .server
+                .conn
+                .intern_atom(false, mime_type.as_bytes())
+                .map_err(|e| Error::Unknown {
+                    description: e.to_string(),
+                })?
+                .reply()
+                .map_err(|e| Error::Unknown {
+                    description: e.to_string(),
+                })?
+                .atom;
+            data.push(MimeData { name: mime_type, format: atom } );
         }
 
-        self.add_clipboard_exclusions(exclude_from_history, &mut data);
         self.inner.write(data, selection, wait)
     }
 }
@@ -1140,10 +943,7 @@ impl Drop for Clipboard {
                         message = None;
                     }
                     if let Some(message) = message {
-                        error!(
-							"The clipboard server thread panicked. Panic message: '{}'",
-							message,
-						);
+                        error!("The clipboard server thread panicked. Panic message: '{}'", message,);
                     } else {
                         error!("The clipboard server thread panicked.");
                     }
@@ -1183,11 +983,13 @@ impl Drop for Clipboard {
                         // If the app isn't running in a terminal don't print, use log instead.
                         // Printing has a higher chance of being seen though, so its our default.
                         // Its also close enough to a `debug_assert!` that it shouldn't come across strange.
-                        let msg = format!("Clipboard was dropped very quickly after writing ({elapsed}ms); clipboard managers may not have seen the contents\nConsider keeping `Clipboard` in more persistent state somewhere or keeping the contents alive longer using `SetLinuxExt` and/or threads.");
+                        let msg = format!(
+                            "Clipboard was dropped very quickly after writing ({elapsed}ms); clipboard managers may not have seen the contents\nConsider keeping `Clipboard` in more persistent state somewhere or keeping the contents alive longer using `SetLinuxExt` and/or threads."
+                        );
                         if std::io::stderr().is_terminal() {
                             eprintln!("{msg}");
                         } else {
-                            log::warn!("{msg}");
+                            warn!("{msg}");
                         }
                     }
                 }

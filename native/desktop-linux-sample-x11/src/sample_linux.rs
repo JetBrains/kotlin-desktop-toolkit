@@ -9,7 +9,7 @@ use desktop_common::{
     ffi_utils::{ArraySize, BorrowedArray, BorrowedStrPtr},
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
-use desktop_linux_x11::linux::application_api::{application_clipboard_paste, application_clipboard_put};
+use desktop_linux_x11::linux::application_api::{application_clipboard_paste, application_clipboard_put, application_primary_selection_paste};
 use desktop_linux_x11::linux::geometry::LogicalPixels;
 use desktop_linux_x11::linux::{
     application_api::{
@@ -608,7 +608,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     true
                 }
                 MOUSE_BUTTON_MIDDLE => {
-                    // application_primary_selection_paste(app_ptr, 1, BorrowedStrPtr::new(TEXT_MIME_TYPE));
+                    application_primary_selection_paste(app_ptr, 1, BorrowedStrPtr::new(TEXT_MIME_TYPE));
                     true
                 }
                 _ => false,

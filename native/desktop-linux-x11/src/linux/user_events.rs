@@ -14,8 +14,9 @@ pub enum UserEvents {
     },
     Exit,
     RunOnEventLoop(extern "C" fn()),
-    // ClipboardReceived {
-    //     serial: i32,
-    //     content: ClipboardContent,
-    // },
+    ClipboardReceived {
+        serial: i32,
+        mime_type: String,
+        content: Vec<u8>,
+    },
 }

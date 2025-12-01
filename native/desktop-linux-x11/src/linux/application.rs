@@ -10,6 +10,7 @@ use winit_x11::EventLoop;
 // use tokio::spawn;
 
 use crate::linux::application_state::ApplicationState;
+use crate::linux::clipboard_impl::{GetExtLinux, LinuxClipboardKind, SetExtLinux};
 use crate::linux::events::{DataTransferContent, DataTransferEvent};
 use crate::linux::mime_types::MimeTypes;
 use crate::linux::user_events::UserEvents;
@@ -197,23 +198,22 @@ impl Application {
     // }
 
     // TODO: pass actual values
-    pub fn clipboard_put(&mut self, mime_types: MimeTypes) {
+    fn clipboard_put_impl(&mut self, mime_types: MimeTypes, kind: LinuxClipboardKind) {
         let Some(clipboard) = &mut self.state.clipboard else {
             warn!("application_clipboard_put: clipboard not initialized");
             return;
         };
-        let mut clipboard_setter = clipboard.set();
-        for mime_type in  mime_types.val {
-            clipboard_setter = match mime_type.as_str() {
-                "text/plain;charset=utf-8" => clipboard_setter.text("Some text"),
-                "text/html" => clipboard_setter.html("<html><span>Some <b>HTML</b> text</span></html>", Some("Some plain text")),
-                "text/uri-list" => clipboard_setter.file_list(&["/tmp"]),
-                _ => clipboard_setter.custom_format(mime_type.as_str(), Vec::new()),
-            }
+        let mut clipboard_setter = clipboard.set().clipboard(kind);
+        for mime_type in mime_types.val {
+            clipboard_setter.custom_format(mime_type);
         }
         if let Err(e) = clipboard_setter.commit() {
             warn!("application_clipboard_put: {e}");
         }
+    }
+
+    pub fn clipboard_put(&mut self, mime_types: MimeTypes) {
+        self.clipboard_put_impl(mime_types, LinuxClipboardKind::Clipboard)
     }
 
     pub fn clipboard_get_available_mimetypes(&self) -> Option<String> {
@@ -240,110 +240,38 @@ impl Application {
     //     };
     //     selection_offer.with_mime_types(|mime_types| Some(mime_types.join(",")))
     // }
-    //
-    // pub fn primary_selection_put(&mut self, mime_types: MimeTypes) {
-    //     if mime_types.val.is_empty() {
-    //         self.state.primary_selection_source = None;
-    //         warn!("application_primary_selection_put: None");
-    //         return;
-    //     }
-    //     let Some(device) = self.state.primary_selection_device.as_ref() else {
-    //         warn!("application_primary_selection_put: No primary selection device");
-    //         return;
-    //     };
-    //     let Some(manager) = self.state.primary_selection_manager.as_ref() else {
-    //         warn!("application_primary_selection_put: No primary selection manager");
-    //         return;
-    //     };
-    //     if let Some((_seat, serial)) = self.state.get_latest_event_seat_and_serial() {
-    //         let source = manager.create_selection_source(&self.qh, mime_types.val);
-    //         source.set_selection(device, serial);
-    //         self.state.primary_selection_source = Some(source);
-    //     } else {
-    //         warn!("application_primary_selection_put: No last event serial");
-    //     }
-    // }
-    //
-    // pub fn primary_selection_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
-    //     let Some(device) = self.state.primary_selection_device.as_ref() else {
-    //         return false;
-    //     };
-    //
-    //     let Some(offer) = device.data().selection_offer() else {
-    //         debug!("application_primary_selection_paste: No selection offer found");
-    //         return false;
-    //     };
-    //     let Some(mime_type) = offer.with_mime_types(|mime_types| {
-    //         debug!("application_primary_selection_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
-    //         supported_mime_types
-    //             .split(',')
-    //             .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
-    //             .map(str::to_owned)
-    //     }) else {
-    //         debug!("application_primary_selection_paste: clipboard content not supported");
-    //         return false;
-    //     };
-    //     debug!("application_primary_selection_paste: reading {mime_type}");
-    //     let read_pipe = match offer.receive(mime_type.clone()) {
-    //         Ok(v) => v,
-    //         Err(e) => {
-    //             warn!("application_primary_selection_paste: failed receive the data offer: {e}");
-    //             return false;
-    //         }
-    //     };
-    //     read_from_pipe(
-    //         "application_primary_selection_paste",
-    //         read_pipe,
-    //         mime_type,
-    //         &self.state.loop_handle,
-    //         move |state, content| {
-    //             state.send_event(DataTransferEvent { serial, content });
-    //         },
-    //     )
-    // }
 
-    pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
+    pub fn primary_selection_put(&mut self, mime_types: MimeTypes) {
+        self.clipboard_put_impl(mime_types, LinuxClipboardKind::Primary)
+    }
+
+    fn clipboard_paste_impl(&self, serial: i32, supported_mime_types: &str, kind: LinuxClipboardKind) -> bool {
         let Some(clipboard) = self.state.clipboard.as_ref() else {
             warn!("application_clipboard_paste: clipboard not initialized");
             return false;
         };
-        // let mime_types = match clipboard.available_formats() {
-        //     Ok(mime_types) => mime_types,
-        //     Err(err) => {
-        //         warn!("application_clipboard_paste: {err}");
-        //         return false;
-        //     }
-        // };
-        //
-        // debug!("application_clipboard_paste: offer MIME types: {mime_types:?}, supported MIME types: {supported_mime_types}");
-        //
-        // let Some(mime_type) = supported_mime_types
-        //     .split(',')
-        //     .find(|&supported_mime_type| mime_types.iter().any(|m| m == supported_mime_type))
-        //     .map(str::to_owned)
-        // else {
-        //     debug!("application_clipboard_paste: clipboard content not supported");
-        //     return false;
-        // };
-        //
-        // debug!("application_clipboard_paste: reading {mime_type}");
-        // let all_res = match ctx.get(&[ContentFormat::Other(mime_type)]) {
-        //     Ok(res) => res,
-        //     Err(err) => {
-        //         warn!("application_clipboard_paste: {err}");
-        //         return false;
-        //     }
-        // };
-        // let Some(content) = all_res.into_iter().next() else {
-        //     warn!("application_clipboard_paste: failed receive the data");
-        //     return false;
-        // };
-        //
-        // if let Err(e) = self.user_event(UserEvents::ClipboardReceived { serial, content }) {
-        //     warn!("application_clipboard_paste: {e}");
-        //     return false;
-        // }
-        true
+        for mime_type in supported_mime_types.split(',') {
+            if let Ok(content) = clipboard.get().clipboard(kind).custom_format(mime_type) {
+                if let Err(e) = self.user_event(UserEvents::ClipboardReceived {
+                    serial,
+                    mime_type: mime_type.to_owned(),
+                    content,
+                }) {
+                    warn!("application_clipboard_paste: {e}");
+                    return false;
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn primary_selection_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
+        self.clipboard_paste_impl(serial, supported_mime_types, LinuxClipboardKind::Primary)
+    }
+
+    pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
+        self.clipboard_paste_impl(serial, supported_mime_types, LinuxClipboardKind::Clipboard)
     }
 
     // pub fn start_drag(

@@ -1,4 +1,5 @@
-use crate::linux::application_api::{ApplicationCallbacks, RenderingMode};
+use super::clipboard_impl::{Clipboard, Error, LinuxClipboardKind};
+use crate::linux::application_api::{ApplicationCallbacks, DataSource, RenderingMode};
 use crate::linux::events::{
     DataTransferContent, DataTransferEvent, Event, KeyCode, KeyDownEvent, KeyModifierBitflag, KeyUpEvent, ModifiersChangedEvent,
     MouseDownEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScreenId, ScrollData, ScrollWheelEvent,
@@ -20,7 +21,6 @@ use std::rc::Rc;
 use std::sync::LazyLock;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
-use super::clipboard_impl::{Clipboard, Error};
 use winit_common::xkb::physicalkey_to_scancode;
 use winit_core::application::ApplicationHandler;
 use winit_core::event::{ElementState, Ime, WindowEvent};
@@ -65,7 +65,19 @@ pub struct ApplicationState {
 
 impl ApplicationState {
     pub fn new(callbacks: ApplicationCallbacks, receiver: Receiver<UserEvents>) -> Self {
-        let clipboard = match Clipboard::new() {
+        let clipboard = match Clipboard::new(Box::new(move |kind, mime_type| {
+            let data_source = match kind {
+                LinuxClipboardKind::Clipboard => DataSource::Clipboard,
+                LinuxClipboardKind::Primary => DataSource::PrimarySelection,
+                LinuxClipboardKind::Secondary => DataSource::Clipboard,
+            };
+            let mime_type_cstr = CString::new(mime_type).unwrap();
+            if let Ok(s) = (callbacks.get_data_transfer_data)(data_source, BorrowedStrPtr::new(&mime_type_cstr)).as_slice() {
+                s.into()
+            } else {
+                Vec::new()
+            }
+        })) {
             Ok(v) => Some(v),
             Err(e) => {
                 warn!("Failed to initialize the clipboard: {e}");
@@ -201,30 +213,15 @@ impl ApplicationHandler for ApplicationState {
                     rendering_mode,
                 ),
                 UserEvents::RunOnEventLoop(f) => f(),
-                // UserEvents::ClipboardReceived { serial, content } => match content {
-                //     ClipboardContent::Text(val) => {
-                //         let content = DataTransferContent::new(c"text/plain;charset=utf-8", val.as_bytes());
-                //         self.send_event(DataTransferEvent { serial, content });
-                //     }
-                //     ClipboardContent::Rtf(val) => {
-                //         let content = DataTransferContent::new(c"text/rtf", val.as_bytes());
-                //         self.send_event(DataTransferEvent { serial, content });
-                //     }
-                //     ClipboardContent::Html(val) => {
-                //         let content = DataTransferContent::new(c"text/html", val.as_bytes());
-                //         self.send_event(DataTransferEvent { serial, content });
-                //     }
-                //     ClipboardContent::Files(val) => {
-                //         let buf = val.join("\r\n");
-                //         let content = DataTransferContent::new(c"text/uri-list", buf.as_bytes());
-                //         self.send_event(DataTransferEvent { serial, content });
-                //     }
-                //     ClipboardContent::Other(mime_type, buf) => {
-                //         let mime_type_cstr = CString::new(mime_type).unwrap();
-                //         let content = DataTransferContent::new(&mime_type_cstr, &buf);
-                //         self.send_event(DataTransferEvent { serial, content });
-                //     }
-                // },
+                UserEvents::ClipboardReceived {
+                    serial,
+                    mime_type,
+                    content,
+                } => {
+                    let mime_type_cstr = CString::new(mime_type).unwrap();
+                    let content = DataTransferContent::new(&mime_type_cstr, &content);
+                    self.send_event(DataTransferEvent { serial, content });
+                }
             }
         }
     }
