@@ -182,7 +182,7 @@ impl AppMenuItemSafe {
                 ActionMenuItemSpecialTag::SelectAll => sel!(selectAll:),
             };
             item.setAction(Some(selector));
-            item.setTag(item_id as NSInteger);
+            item.setTag(NSInteger::try_from(item_id).unwrap());
 
             if let Some(keystroke) = keystroke {
                 item.setKeyEquivalent(&keystroke.key);
