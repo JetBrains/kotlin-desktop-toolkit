@@ -43,14 +43,10 @@ use x11rb::{
     COPY_DEPTH_FROM_PARENT, COPY_FROM_PARENT, NONE,
 };
 
-#[cfg(feature = "image-data")]
-use super::encode_as_png;
 use super::platform::{
     into_unknown, paths_from_uri_list, paths_to_uri_list, LinuxClipboardKind, WaitConfig,
     KDE_EXCLUSION_HINT, KDE_EXCLUSION_MIME,
 };
-#[cfg(feature = "image-data")]
-use crate::ImageData;
 use super::{common::ScopeGuard, Error};
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -1020,42 +1016,6 @@ impl Clipboard {
         self.inner.write(data, selection, wait)
     }
 
-    #[cfg(feature = "image-data")]
-    pub(crate) fn get_image(&self, selection: LinuxClipboardKind) -> Result<ImageData<'static>> {
-        let formats = [self.inner.atoms.PNG_MIME];
-        let bytes = self.inner.read(&formats, selection)?.bytes;
-
-        let cursor = std::io::Cursor::new(&bytes);
-        let mut reader = image::io::Reader::new(cursor);
-        reader.set_format(image::ImageFormat::Png);
-        let image = match reader.decode() {
-            Ok(img) => img.into_rgba8(),
-            Err(_e) => return Err(Error::ConversionFailure),
-        };
-        let (w, h) = image.dimensions();
-        let image_data =
-            ImageData { width: w as usize, height: h as usize, bytes: image.into_raw().into() };
-        Ok(image_data)
-    }
-
-    #[cfg(feature = "image-data")]
-    pub(crate) fn set_image(
-        &self,
-        image: ImageData,
-        selection: LinuxClipboardKind,
-        wait: WaitConfig,
-        exclude_from_history: bool,
-    ) -> Result<()> {
-        let encoded = encode_as_png(&image)?;
-        let mut data = Vec::with_capacity(if exclude_from_history { 2 } else { 1 });
-
-        data.push(ClipboardData { bytes: encoded, format: self.inner.atoms.PNG_MIME });
-
-        self.add_clipboard_exclusions(exclude_from_history, &mut data);
-
-        self.inner.write(data, selection, wait)
-    }
-
     pub(crate) fn get_file_list(&self, selection: LinuxClipboardKind) -> Result<Vec<PathBuf>> {
         let result = self.inner.read(&[self.inner.atoms.URI_LIST], selection)?;
 
@@ -1110,14 +1070,6 @@ impl Clipboard {
                             format: self.inner.atoms.UTF8_STRING,
                         });
                     }
-                }
-                #[cfg(feature = "image-data")]
-                FormatData::Image(image) => {
-                    let encoded = encode_as_png(&image)?;
-                    data.push(ClipboardData {
-                        bytes: encoded,
-                        format: self.inner.atoms.PNG_MIME,
-                    });
                 }
                 FormatData::FileList(paths) => {
                     let files = paths_to_uri_list(&paths)?;

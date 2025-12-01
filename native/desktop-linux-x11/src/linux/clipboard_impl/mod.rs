@@ -16,8 +16,6 @@ use std::{
 };
 
 pub use common::Error;
-#[cfg(feature = "image-data")]
-pub use common::ImageData;
 use common::FormatData;
 
 mod platform;
@@ -117,38 +115,6 @@ impl Clipboard {
         self.set().html(html, alt_text).commit()
     }
 
-    /// Fetches image data from the clipboard, and returns the decoded pixels.
-    ///
-    /// Any image data placed on the clipboard with `set_image` will be possible read back, using
-    /// this function. However it's of not guaranteed that an image placed on the clipboard by any
-    /// other application will be of a supported format.
-    ///
-    /// # Errors
-    ///
-    /// Returns error if clipboard is empty, contents are not an image, or the contents cannot be
-    /// converted to an appropriate format and stored in the [`ImageData`] type.
-    #[cfg(feature = "image-data")]
-    pub fn get_image(&mut self) -> Result<ImageData<'static>, Error> {
-        self.get().image()
-    }
-
-    /// Places an image to the clipboard.
-    ///
-    /// The chosen output format, depending on the platform is the following:
-    ///
-    /// - On macOS: `NSImage` object
-    /// - On Linux: PNG, under the atom `image/png`
-    /// - On Windows: In order of priority `CF_DIB` and `CF_BITMAP`
-    ///
-    /// # Errors
-    ///
-    /// Returns error if `image` cannot be converted to an appropriate format or if it failed to be
-    /// stored on the clipboard.
-    #[cfg(feature = "image-data")]
-    pub fn set_image(&mut self, image: ImageData) -> Result<(), Error> {
-        self.set().image(image).commit()
-    }
-
     /// Clears any contents that may be present from the platform's default clipboard,
     /// regardless of the format of the data.
     ///
@@ -188,17 +154,6 @@ impl Get<'_> {
     /// Completes the "get" operation by fetching UTF-8 text from the clipboard.
     pub fn text(self) -> Result<String, Error> {
         self.platform.text()
-    }
-
-    /// Completes the "get" operation by fetching image data from the clipboard and returning the
-    /// decoded pixels.
-    ///
-    /// Any image data placed on the clipboard with `set_image` will be possible read back, using
-    /// this function. However it's of not guaranteed that an image placed on the clipboard by any
-    /// other application will be of a supported format.
-    #[cfg(feature = "image-data")]
-    pub fn image(self) -> Result<ImageData<'static>, Error> {
-        self.platform.image()
     }
 
     /// Completes the "get" operation by fetching HTML from the clipboard.
@@ -251,20 +206,6 @@ impl Set<'_> {
         let html = html.into().into_owned();
         let alt_text = alt_text.map(|t| t.into().into_owned());
         self.pending_formats.push(FormatData::Html { html, alt_text });
-        self
-    }
-
-    /// Adds an image to the clipboard. Can be chained with other format methods.
-    /// Call `commit()` to finalize.
-    ///
-    /// The chosen output format, depending on the platform is the following:
-    ///
-    /// - On macOS: `NSImage` object
-    /// - On Linux: PNG, under the atom `image/png`
-    /// - On Windows: In order of priority `CF_DIB` and `CF_BITMAP`
-    #[cfg(feature = "image-data")]
-    pub fn image(mut self, image: ImageData) -> Self {
-        self.pending_formats.push(FormatData::Image(image.to_owned_img()));
         self
     }
 
@@ -430,46 +371,6 @@ mod tests {
 
             ctx.set().file_list(paths).unwrap();
             assert_eq!(ctx.get().file_list().unwrap().as_slice(), paths);
-        }
-        #[cfg(feature = "image-data")]
-        {
-            let mut ctx = Clipboard::new().unwrap();
-            #[rustfmt::skip]
-			let bytes = [
-				255, 100, 100, 255,
-				100, 255, 100, 100,
-				100, 100, 255, 100,
-				0, 0, 0, 255,
-			];
-            let img_data = ImageData { width: 2, height: 2, bytes: bytes.as_ref().into() };
-
-            // Make sure that setting one format overwrites the other.
-            ctx.set_image(img_data.clone()).unwrap();
-            assert!(matches!(ctx.get_text(), Err(Error::ContentNotAvailable)));
-
-            ctx.set_text("clipboard test").unwrap();
-            assert!(matches!(ctx.get_image(), Err(Error::ContentNotAvailable)));
-
-            // Test if we get the same image that we put onto the clipboard
-            ctx.set_image(img_data.clone()).unwrap();
-            let got = ctx.get_image().unwrap();
-            assert_eq!(img_data.bytes, got.bytes);
-
-            #[rustfmt::skip]
-			let big_bytes = vec![
-				255, 100, 100, 255,
-				100, 255, 100, 100,
-				100, 100, 255, 100,
-
-				0, 1, 2, 255,
-				0, 1, 2, 255,
-				0, 1, 2, 255,
-			];
-            let bytes_cloned = big_bytes.clone();
-            let big_img_data = ImageData { width: 3, height: 2, bytes: big_bytes.into() };
-            ctx.set_image(big_img_data).unwrap();
-            let got = ctx.get_image().unwrap();
-            assert_eq!(bytes_cloned.as_slice(), got.bytes.as_ref());
         }
         #[cfg(all(
             unix,

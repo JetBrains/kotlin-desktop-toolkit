@@ -8,9 +8,6 @@ the Apache 2.0 or the MIT license at the licensee's choice. The terms
 and conditions of the chosen license apply to this file.
 */
 
-#[cfg(feature = "image-data")]
-use std::borrow::Cow;
-
 /// An error that might happen during a clipboard operation.
 ///
 /// Note that both the `Display` and the `Debug` trait is implemented for this type in such a way
@@ -95,60 +92,6 @@ impl Error {
     }
 }
 
-/// Stores pixel data of an image.
-///
-/// Each element in `bytes` stores the value of a channel of a single pixel.
-/// This struct stores four channels (red, green, blue, alpha) so
-/// a `3*3` image is going to be stored on `3*3*4 = 36` bytes of data.
-///
-/// The pixels are in row-major order meaning that the second pixel
-/// in `bytes` (starting at the fifth byte) corresponds to the pixel that's
-/// sitting to the right side of the top-left pixel (x=1, y=0)
-///
-/// Assigning a `2*1` image would for example look like this
-/// ```
-/// use arboard::ImageData;
-/// use std::borrow::Cow;
-/// let bytes = [
-///     // A red pixel
-///     255, 0, 0, 255,
-///
-///     // A green pixel
-///     0, 255, 0, 255,
-/// ];
-/// let img = ImageData {
-///     width: 2,
-///     height: 1,
-///     bytes: Cow::from(bytes.as_ref())
-/// };
-/// ```
-#[cfg(feature = "image-data")]
-#[derive(Debug, Clone)]
-pub struct ImageData<'a> {
-    pub width: usize,
-    pub height: usize,
-    pub bytes: Cow<'a, [u8]>,
-}
-
-#[cfg(feature = "image-data")]
-impl ImageData<'_> {
-    /// Returns a the bytes field in a way that it's guaranteed to be owned.
-    /// It moves the bytes if they are already owned and clones them if they are borrowed.
-    pub fn into_owned_bytes(self) -> Cow<'static, [u8]> {
-        self.bytes.into_owned().into()
-    }
-
-    /// Returns an image data that is guaranteed to own its bytes.
-    /// It moves the bytes if they are already owned and clones them if they are borrowed.
-    pub fn to_owned_img(&self) -> ImageData<'static> {
-        ImageData {
-            width: self.width,
-            height: self.height,
-            bytes: self.bytes.clone().into_owned().into(),
-        }
-    }
-}
-
 #[cfg(any(windows, all(unix, not(target_os = "macos"))))]
 pub(crate) struct ScopeGuard<F: FnOnce()> {
     callback: Option<F>,
@@ -178,9 +121,6 @@ pub(crate) enum FormatData {
     Text(String),
     /// HTML with optional plain text alternative
     Html { html: String, alt_text: Option<String> },
-    /// Image data in RGBA format
-    #[cfg(feature = "image-data")]
-    Image(ImageData<'static>),
     /// List of file paths
     FileList(Vec<std::path::PathBuf>),
     /// Custom format with MIME type and raw data

@@ -9,8 +9,6 @@ use std::{
 use log::{trace, warn};
 use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
 
-#[cfg(feature = "image-data")]
-use crate::ImageData;
 use super::{common::private, x11, Error};
 
 // Magic strings used in `Set::exclude_from_history()` on linux
@@ -22,28 +20,6 @@ mod wayland;
 
 pub fn into_unknown<E: std::fmt::Display>(error: E) -> Error {
     Error::Unknown { description: error.to_string() }
-}
-
-#[cfg(feature = "image-data")]
-fn encode_as_png(image: &ImageData) -> Result<Vec<u8>, Error> {
-    use image::ImageEncoder as _;
-
-    if image.bytes.is_empty() || image.width == 0 || image.height == 0 {
-        return Err(Error::ConversionFailure);
-    }
-
-    let mut png_bytes = Vec::new();
-    let encoder = image::codecs::png::PngEncoder::new(&mut png_bytes);
-    encoder
-        .write_image(
-            image.bytes.as_ref(),
-            image.width as u32,
-            image.height as u32,
-            image::ExtendedColorType::Rgba8,
-        )
-        .map_err(|_| Error::ConversionFailure)?;
-
-    Ok(png_bytes)
 }
 
 pub fn paths_from_uri_list(uri_list: Vec<u8>) -> Vec<PathBuf> {
@@ -162,15 +138,6 @@ impl<'clipboard> Get<'clipboard> {
         }
     }
 
-    #[cfg(feature = "image-data")]
-    pub(crate) fn image(self) -> Result<ImageData<'static>, Error> {
-        match self.clipboard {
-            Clipboard::X11(clipboard) => clipboard.get_image(self.selection),
-            #[cfg(feature = "wayland-data-control")]
-            Clipboard::WlDataControl(clipboard) => clipboard.get_image(self.selection),
-        }
-    }
-
     pub(crate) fn html(self) -> Result<String, Error> {
         match self.clipboard {
             Clipboard::X11(clipboard) => clipboard.get_html(self.selection),
@@ -270,20 +237,6 @@ impl<'clipboard> Set<'clipboard> {
             #[cfg(feature = "wayland-data-control")]
             Clipboard::WlDataControl(clipboard) => {
                 clipboard.set_html(html, alt, self.selection, self.wait, self.exclude_from_history)
-            }
-        }
-    }
-
-    #[cfg(feature = "image-data")]
-    pub(crate) fn image(self, image: ImageData<'_>) -> Result<(), Error> {
-        match self.clipboard {
-            Clipboard::X11(clipboard) => {
-                clipboard.set_image(image, self.selection, self.wait, self.exclude_from_history)
-            }
-
-            #[cfg(feature = "wayland-data-control")]
-            Clipboard::WlDataControl(clipboard) => {
-                clipboard.set_image(image, self.selection, self.wait, self.exclude_from_history)
             }
         }
     }
