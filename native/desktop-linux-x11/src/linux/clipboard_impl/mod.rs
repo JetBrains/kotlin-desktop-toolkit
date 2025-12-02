@@ -43,7 +43,7 @@ impl Clipboard {
     ///
     /// On some platforms or desktop environments, an error can be returned if clipboards are not
     /// supported. This may be retried.
-    pub fn new(get_data_transfer_data: Box<dyn Fn(LinuxClipboardKind, &str) -> Vec<u8> + Send>) -> Result<Self, Error> {
+    pub fn new(get_data_transfer_data: Box<dyn Fn(LinuxClipboardKind, &str) -> Option<Vec<u8>> + Send>) -> Result<Self, Error> {
         Ok(Clipboard {
             platform: x11::Clipboard::new(get_data_transfer_data)?,
         })

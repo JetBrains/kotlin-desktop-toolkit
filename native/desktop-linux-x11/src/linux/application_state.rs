@@ -63,19 +63,23 @@ pub struct ApplicationState {
     pub clipboard: Option<Clipboard>,
 }
 
+impl From<LinuxClipboardKind> for DataSource {
+    fn from(value: LinuxClipboardKind) -> Self {
+        match value {
+            LinuxClipboardKind::Clipboard => Self::Clipboard,
+            LinuxClipboardKind::Primary => Self::PrimarySelection,
+        }
+    }
+}
+
 impl ApplicationState {
     pub fn new(callbacks: ApplicationCallbacks, receiver: Receiver<UserEvents>) -> Self {
         let clipboard = match Clipboard::new(Box::new(move |kind, mime_type| {
-            let data_source = match kind {
-                LinuxClipboardKind::Clipboard => DataSource::Clipboard,
-                LinuxClipboardKind::Primary => DataSource::PrimarySelection,
-            };
             let mime_type_cstr = CString::new(mime_type).unwrap();
-            if let Ok(s) = (callbacks.get_data_transfer_data)(data_source, BorrowedStrPtr::new(&mime_type_cstr)).as_slice() {
-                s.into()
-            } else {
-                Vec::new()
-            }
+            (callbacks.get_data_transfer_data)(kind.into(), BorrowedStrPtr::new(&mime_type_cstr))
+                .as_slice()
+                .ok()
+                .map(Into::into)
         })) {
             Ok(v) => Some(v),
             Err(e) => {

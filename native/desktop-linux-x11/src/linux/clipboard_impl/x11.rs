@@ -112,7 +112,7 @@ struct Inner {
     /// requests coming to us.
     server: XContext,
     atoms: Atoms,
-    get_data_transfer_data: Mutex<Box<dyn Fn(LinuxClipboardKind, &str) -> Vec<u8> + Send>>,
+    get_data_transfer_data: Mutex<Box<dyn Fn(LinuxClipboardKind, &str) -> Option<Vec<u8>> + Send>>,
 
     clipboard: Selection,
     primary: Selection,
@@ -185,7 +185,7 @@ enum ReadSelNotifyResult {
 }
 
 impl Inner {
-    fn new(get_data_transfer_data: Box<dyn Fn(LinuxClipboardKind, &str) -> Vec<u8> + Send>) -> Result<Self> {
+    fn new(get_data_transfer_data: Box<dyn Fn(LinuxClipboardKind, &str) -> Option<Vec<u8>> + Send>) -> Result<Self> {
         let server = XContext::new()?;
         let atoms = Atoms::new(&server.conn).map_err(into_unknown)?.reply().map_err(into_unknown)?;
 
@@ -269,9 +269,6 @@ impl Inner {
         Ok(())
     }
 
-    /// `formats` must be a slice of atoms, where each atom represents a target format.
-    /// The first format from `formats`, which the clipboard owner supports, will be the
-    /// format of the return value.
     fn read(&self, format: Atom, selection: LinuxClipboardKind) -> Result<Vec<u8>> {
         // if let Some(data) = self.data.read().clone() {
         //     return Ok(data)
@@ -582,13 +579,16 @@ impl Inner {
             if let Some(data_list) = &*data {
                 success = match data_list.iter().find(|d| d.format == event.target) {
                     Some(data) => {
-                        let content = self.get_data_transfer_data.lock()(selection, &data.name);
-                        self.server
-                            .conn
-                            .change_property8(PropMode::REPLACE, event.requestor, event.property, event.target, &content)
-                            .map_err(into_unknown)?;
-                        self.server.conn.flush().map_err(into_unknown)?;
-                        true
+                        if let Some(content) = self.get_data_transfer_data.lock()(selection, &data.name) {
+                            self.server
+                                .conn
+                                .change_property8(PropMode::REPLACE, event.requestor, event.property, event.target, &content)
+                                .map_err(into_unknown)?;
+                            self.server.conn.flush().map_err(into_unknown)?;
+                            true
+                        } else {
+                            false
+                        }
                     }
                     None => false,
                 };
@@ -800,7 +800,7 @@ pub(crate) struct Clipboard {
 }
 
 impl Clipboard {
-    pub(crate) fn new(get_data_transfer_data: Box<dyn Fn(LinuxClipboardKind, &str) -> Vec<u8> + Send>) -> Result<Self> {
+    pub(crate) fn new(get_data_transfer_data: Box<dyn Fn(LinuxClipboardKind, &str) -> Option<Vec<u8>> + Send>) -> Result<Self> {
         let mut global_cb = CLIPBOARD.lock();
         if let Some(global_cb) = &*global_cb {
             return Ok(Self {
