@@ -11,8 +11,8 @@ and conditions of the chosen license apply to this file.
 
 mod common;
 
-use std::time::Instant;
 pub use common::{Error, LinuxClipboardKind};
+use std::time::Instant;
 
 mod x11;
 
@@ -77,10 +77,7 @@ pub(crate) struct Get<'clipboard> {
 
 impl<'clipboard> Get<'clipboard> {
     pub(crate) fn new(clipboard: &'clipboard x11::Clipboard, selection: LinuxClipboardKind) -> Self {
-        Self {
-            clipboard,
-            selection,
-        }
+        Self { clipboard, selection }
     }
 
     pub(crate) fn custom_format(self, mime_type: &str) -> Result<Vec<u8>, Error> {

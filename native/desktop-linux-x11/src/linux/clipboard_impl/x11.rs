@@ -24,6 +24,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::{
+    Error, LinuxClipboardKind, WaitConfig,
+    common::{ScopeGuard, into_unknown},
+};
 use log::{error, info, trace, warn};
 use parking_lot::{Condvar, Mutex, MutexGuard, RwLock};
 use x11rb::{
@@ -39,7 +43,6 @@ use x11rb::{
     rust_connection::RustConnection,
     wrapper::ConnectionExt as _,
 };
-use super::{Error, common::{into_unknown, ScopeGuard}, LinuxClipboardKind, WaitConfig};
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -81,7 +84,6 @@ x11rb::atom_manager! {
 thread_local! {
     static ATOM_NAME_CACHE: RefCell<HashMap<Atom, &'static str>> = Default::default();
 }
-
 
 // Some clipboard items, like images, may take a very long time to produce a
 // `SelectionNotify`. Multiple seconds long.
@@ -528,7 +530,7 @@ impl Inner {
             trace!("Handling TARGETS, dst property is {}", self.atom_name_dbg(event.property));
 
             let data = self.selection_of(selection).data.read();
-            let data_targets= if let Some(data_list) = &*data {
+            let data_targets = if let Some(data_list) = &*data {
                 // Estimation based on current data types, plus the other UTF-8 ones, plus `SAVE_TARGETS`.
                 let mut targets = Vec::with_capacity(data_list.len() + 3);
 
@@ -847,12 +849,7 @@ impl Clipboard {
         Ok(bytes)
     }
 
-    pub(crate) fn commit_all_formats(
-        &self,
-        formats: Vec<String>,
-        selection: LinuxClipboardKind,
-        wait: WaitConfig,
-    ) -> Result<()> {
+    pub(crate) fn commit_all_formats(&self, formats: Vec<String>, selection: LinuxClipboardKind, wait: WaitConfig) -> Result<()> {
         let mut data = Vec::new();
 
         for mime_type in formats {
@@ -870,7 +867,10 @@ impl Clipboard {
                     description: e.to_string(),
                 })?
                 .atom;
-            data.push(MimeData { name: mime_type, format: atom } );
+            data.push(MimeData {
+                name: mime_type,
+                format: atom,
+            });
         }
 
         self.inner.write(data, selection, wait)
