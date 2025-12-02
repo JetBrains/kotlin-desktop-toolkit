@@ -57,7 +57,7 @@ pub struct WindowId(pub isize);
 pub struct Window {
     id: WindowId,
     hwnd: AtomicPtr<core::ffi::c_void>,
-    compositor: Weak<Compositor>,
+    compositor: Compositor,
     composition_target: RefCell<Option<DesktopWindowTarget>>,
     sprite_visual: RefCell<Option<SpriteVisual>>,
     min_size: RefCell<Option<LogicalSize>>,
@@ -71,7 +71,7 @@ pub struct Window {
 
 impl Window {
     #[allow(clippy::cast_possible_truncation)]
-    pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor: Weak<Compositor>) -> WinResult<Self> {
+    pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor: Compositor) -> WinResult<Self> {
         static WNDCLASS_INIT: OnceLock<u16> = OnceLock::new();
         if WNDCLASS_INIT.get().is_none() {
             let wndclass = WNDCLASSEXW {
@@ -364,13 +364,9 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
 }
 
 fn initialize_composition(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
-    let compositor = window
-        .compositor
-        .upgrade()
-        .context("failed to upgrade the compositor weak reference")?;
-    let compositor_interop: ICompositorDesktopInterop = compositor.cast()?;
+    let compositor_interop: ICompositorDesktopInterop = window.compositor.cast()?;
     let desktop_window_target = unsafe { compositor_interop.CreateDesktopWindowTarget(hwnd, true) }?;
-    let sprite_visual = compositor.CreateSpriteVisual()?;
+    let sprite_visual = window.compositor.CreateSpriteVisual()?;
     desktop_window_target.SetRoot(&sprite_visual)?;
     window.composition_target.replace(Some(desktop_window_target));
     window.sprite_visual.replace(Some(sprite_visual));
