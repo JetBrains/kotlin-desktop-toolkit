@@ -625,6 +625,20 @@ impl Inner {
         self.server.conn.flush().map_err(into_unknown)
     }
 
+    // pub(crate) fn get_supported_formats(&self, selection: LinuxClipboardKind) -> Result<Vec<String>> {
+    //     if self.is_owner(selection)? {
+    //         let data = self.selection_of(selection).data.read();
+    //         if let Some(data_list) = &*data {
+    //             Ok(data_list.iter().map(|e| e.name.clone()).collect())
+    //         } else {
+    //             Ok(Vec::new())
+    //         }
+    //     } else {
+    //         // TODO
+    //         Ok(Vec::new())
+    //     }
+    // }
+
     fn ask_clipboard_manager_to_request_our_data(&self) -> Result<()> {
         if self.server.win_id == 0 {
             // This shouldn't really ever happen but let's just check.
@@ -848,6 +862,10 @@ impl Clipboard {
         let bytes = self.inner.read(atom, selection)?;
         Ok(bytes)
     }
+
+    // pub(crate) fn get_supported_formats(&self, selection: LinuxClipboardKind) -> Result<Vec<String>> {
+    //     self.inner.get_supported_formats(selection)
+    // }
 
     pub(crate) fn commit_all_formats(&self, formats: Vec<String>, selection: LinuxClipboardKind, wait: WaitConfig) -> Result<()> {
         let mut data = Vec::new();

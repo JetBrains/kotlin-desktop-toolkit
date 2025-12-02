@@ -148,6 +148,10 @@ impl<'clipboard> Set<'clipboard> {
         self.clipboard.commit_all_formats(self.pending_formats, self.selection, self.wait)
     }
 
+    // pub(crate) fn get_supported_formats(&self, selection: LinuxClipboardKind) -> Result<Vec<String>, Error> {
+    //     self.clipboard.get_supported_formats(selection)
+    // }
+
     /// Whether to wait for the clipboard's contents to be replaced after setting it.
     ///
     /// The Wayland and X11 clipboards work by having the clipboard content being, at any given
