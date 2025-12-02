@@ -23,7 +23,7 @@ use super::{
 pub struct Application {
     dispatcher_queue_controller: DispatcherQueueController,
     event_loop: Rc<EventLoop>,
-    compositor: Rc<Compositor>,
+    compositor: Compositor,
 }
 
 impl Application {
@@ -40,7 +40,7 @@ impl Application {
         Ok(Self {
             dispatcher_queue_controller,
             event_loop: Rc::new(event_loop),
-            compositor: Rc::new(compositor),
+            compositor,
         })
     }
 
@@ -69,7 +69,7 @@ impl Application {
     }
 
     pub(crate) fn new_window(&self, window_id: WindowId) -> WinResult<Window> {
-        Window::new(window_id, Rc::downgrade(&self.event_loop), Rc::downgrade(&self.compositor))
+        Window::new(window_id, Rc::downgrade(&self.event_loop), self.compositor.clone())
     }
 }
 
