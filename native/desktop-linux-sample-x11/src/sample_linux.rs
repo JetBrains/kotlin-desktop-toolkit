@@ -9,7 +9,9 @@ use desktop_common::{
     ffi_utils::{ArraySize, BorrowedArray, BorrowedStrPtr},
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
-use desktop_linux_x11::linux::application_api::{application_clipboard_paste, application_clipboard_put, application_primary_selection_paste};
+use desktop_linux_x11::linux::application_api::{
+    application_clipboard_paste, application_clipboard_put, application_primary_selection_paste,
+};
 use desktop_linux_x11::linux::geometry::LogicalPixels;
 use desktop_linux_x11::linux::{
     application_api::{
