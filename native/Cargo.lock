@@ -649,6 +649,7 @@ dependencies = [
  "log",
  "log4rs",
  "parking_lot",
+ "percent-encoding",
  "raw-window-handle",
  "softbuffer",
  "tokio",

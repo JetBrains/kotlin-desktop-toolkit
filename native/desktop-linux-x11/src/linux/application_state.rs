@@ -1,12 +1,6 @@
 use super::clipboard_impl::{Clipboard, Error, LinuxClipboardKind};
-use crate::linux::application_api::{ApplicationCallbacks, DataSource, RenderingMode};
-use crate::linux::events::{
-    DataTransferContent, DataTransferEvent, Event, KeyCode, KeyDownEvent, KeyModifierBitflag, KeyUpEvent, ModifiersChangedEvent,
-    MouseDownEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScreenId, ScrollData, ScrollWheelEvent,
-    TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData, WindowCapabilities,
-    WindowCloseRequestEvent, WindowConfigureEvent, WindowDecorationMode, WindowId, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent,
-    WindowScaleChangedEvent, WindowScreenChangeEvent,
-};
+use crate::linux::application_api::{ApplicationCallbacks, DataSource, DragAndDropAction, DragAndDropQueryData, RenderingMode};
+use crate::linux::events::{DataTransferContent, DataTransferEvent, DragAndDropFinishedEvent, DragAndDropLeaveEvent, DropPerformedEvent, Event, KeyCode, KeyDownEvent, KeyModifierBitflag, KeyUpEvent, ModifiersChangedEvent, MouseDownEvent, MouseEnteredEvent, MouseExitedEvent, MouseMovedEvent, MouseUpEvent, ScreenId, ScrollData, ScrollWheelEvent, TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData, WindowCapabilities, WindowCloseRequestEvent, WindowConfigureEvent, WindowDecorationMode, WindowId, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent, WindowScaleChangedEvent, WindowScreenChangeEvent};
 use crate::linux::geometry::{LogicalRect, LogicalSize, round_to_u32};
 use crate::linux::keyboard::winit_key_to_keysym;
 use crate::linux::user_events::UserEvents;
@@ -14,13 +8,14 @@ use crate::linux::window::{RenderingData, SimpleWindow};
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use dpi::PhysicalSize;
 use khronos_egl;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::rc::Rc;
 use std::sync::LazyLock;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
+use percent_encoding::percent_encode;
 use winit_common::xkb::physicalkey_to_scancode;
 use winit_core::application::ApplicationHandler;
 use winit_core::event::{ElementState, Ime, WindowEvent};
@@ -29,6 +24,7 @@ use winit_core::event_loop::ActiveEventLoop;
 use crate::linux::events::Event::XdgDesktopSettingChange;
 use crate::linux::xdg_desktop_settings_api::XdgDesktopSetting;
 use winit_core::window::WindowAttributes;
+use crate::linux::pointer_shapes_api::PointerShape;
 
 /// cbindgen:ignore
 pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
@@ -519,10 +515,42 @@ impl ApplicationHandler for ApplicationState {
                 WindowEvent::RedrawRequested => {
                     w.draw(&|e| self.callbacks.send_event(e));
                 }
-                WindowEvent::DragEntered { .. } => {}
-                WindowEvent::DragMoved { .. } => {}
-                WindowEvent::DragDropped { .. } => {}
-                WindowEvent::DragLeft { .. } => {}
+                WindowEvent::DragEntered { paths, position } => {
+                    info!("DragEntered {:?}", paths);
+                    let query = DragAndDropQueryData{ window_id: w.window_id, location_in_window: position.to_logical(w.current_scale).into() };
+                    // Unsupported:
+                    // * d&d of anything else than files (so, e.g., text)
+                    // * rejecting d&d
+                    // * choosing whether to copy or move
+                    _ = (self.callbacks.query_drag_and_drop_target)(&query);
+                }
+                WindowEvent::DragMoved { position } => {
+                    info!("DragMoved {:?}", position);
+                    w.set_cursor_icon(PointerShape::Move);
+                    let query = DragAndDropQueryData{ window_id: w.window_id, location_in_window: position.to_logical(w.current_scale).into() };
+                    _ = (self.callbacks.query_drag_and_drop_target)(&query);
+                }
+                WindowEvent::DragDropped { paths, position } => {
+                    info!("DragDropped {:?}", paths);
+                    let query = DragAndDropQueryData{ window_id: w.window_id, location_in_window: position.to_logical(w.current_scale).into() };
+                    let res = (self.callbacks.query_drag_and_drop_target)(&query);
+                    if res.supported_actions_per_mime.as_slice().unwrap().iter().any(|e| {
+                        let supports_copy = e.supported_actions.0 & DragAndDropAction::Copy as u8 != 0;
+                        supports_copy && e.supported_mime_type.as_str().unwrap() == "text/uri-list"
+                    }) {
+                        let data_as_bytes = paths.iter().map(|e|
+                            percent_encode(e.into_os_string().into_encoded_bytes())
+                        ).collect::<Vec<_>>().join("\r\n");
+                        let content = DataTransferContent { mime_type: BorrowedStrPtr::new(c"text/uri-list"), data: data_as_bytes };
+                        let event = DropPerformedEvent { window_id: w.window_id, content, action: DragAndDropAction::Copy };
+                        self.send_event(event);
+                    }
+                }
+                WindowEvent::DragLeft { position } => {
+                    info!("DragLeft {:?}", position);
+                    let event = DragAndDropLeaveEvent { window_id: w.window_id };
+                    self.send_event(event);
+                }
             }
         }
     }
