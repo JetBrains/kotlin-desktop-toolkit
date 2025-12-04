@@ -15,17 +15,18 @@ use windows::Win32::{
             SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
             USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN,
             WM_KEYUP, WM_KILLFOCUS, WM_MOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
-            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETFOCUS, WM_SETTEXT, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR,
-            WM_SYSKEYDOWN, WM_SYSKEYUP,
+            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE,
+            WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
         },
     },
 };
 
 use super::{
+    appearance::Appearance,
     events::{
-        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
-        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, Timestamp, WindowDrawEvent, WindowMoveEvent,
-        WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent, WindowTitleChangedEvent,
+        ApplicationAppearanceChangeEvent, CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent,
+        PointerDownEvent, PointerEnteredEvent, PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, Timestamp,
+        WindowDrawEvent, WindowMoveEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
@@ -106,6 +107,8 @@ impl EventLoop {
             WM_NCMOUSELEAVE => on_ncmouseleave(window, wparam, lparam),
 
             WM_SETTEXT => on_settext(self, window, wparam, lparam),
+
+            WM_SETTINGCHANGE => on_settingchange(self, window, wparam, lparam),
 
             WM_CLOSE => self.handle_event(window, Event::WindowCloseRequest),
 
@@ -239,6 +242,21 @@ fn on_settext(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: L
         event_loop.handle_event(window, event.into());
     }
     Some(result)
+}
+
+fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    // borrowed from https://github.com/microsoft/terminal/blob/73948072120beb51d355b3c74b5f774a6526b277/src/cascadia/WindowsTerminal/IslandWindow.cpp#L748
+    if wparam.0 == 0 && lparam.0 != 0 {
+        let param = unsafe { windows::core::PWSTR(lparam.0 as *mut u16).to_hstring() };
+        if &param == windows::core::h!("ImmersiveColorSet") {
+            let new_appearance = Appearance::get_current()
+                .inspect_err(|err| log::error!("failed to get current system appearance: {err}"))
+                .ok()?;
+            let event = ApplicationAppearanceChangeEvent { new_appearance };
+            event_loop.handle_event(window, event.into());
+        }
+    }
+    None
 }
 
 #[allow(clippy::unnecessary_wraps)]

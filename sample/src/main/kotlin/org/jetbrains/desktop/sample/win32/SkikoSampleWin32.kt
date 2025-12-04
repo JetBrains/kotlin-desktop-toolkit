@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.sample.win32
 
 import org.jetbrains.desktop.sample.common.runtimeInfo
+import org.jetbrains.desktop.win32.Appearance
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
@@ -92,6 +93,9 @@ class ApplicationState(private val app: Application) : AutoCloseable {
         window.window.create(windowParams)
         window.window.setMinSize(LogicalSize(320.0f, 240.0f))
         window.window.show()
+
+        val appearance = Appearance.getCurrent()
+        Logger.debug { "Current appearance: $appearance" }
     }
 
     fun handleEvent(event: Event, windowId: WindowId): EventHandlerResult {

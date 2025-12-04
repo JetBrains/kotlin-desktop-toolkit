@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.win32
 
+import org.jetbrains.desktop.win32.generated.NativeApplicationAppearanceChangeEvent
 import org.jetbrains.desktop.win32.generated.NativeCharacterReceivedEvent
 import org.jetbrains.desktop.win32.generated.NativeEvent
 import org.jetbrains.desktop.win32.generated.NativeKeyEvent
@@ -41,6 +42,8 @@ public typealias EventHandler = (WindowId, Event) -> EventHandlerResult
 
 public sealed class Event {
     internal companion object;
+
+    public data class ApplicationAppearanceChange(public val newAppearance: Appearance) : Event()
 
     public data class CharacterReceived(
         val keyCode: Char,
@@ -174,6 +177,7 @@ public sealed class WindowResizeKind {
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
+    desktop_win32_h.NativeEvent_ApplicationAppearanceChange() -> applicationAppearanceChange(s)
     desktop_win32_h.NativeEvent_CharacterReceived() -> characterReceived(s)
     desktop_win32_h.NativeEvent_KeyDown() -> keyDown(s)
     desktop_win32_h.NativeEvent_KeyUp() -> keyUp(s)
@@ -195,6 +199,13 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
     desktop_win32_h.NativeEvent_WindowTitleChanged() -> windowTitleChanged(s)
     else -> error("Unexpected Event tag")
+}
+
+private fun applicationAppearanceChange(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.application_appearance_change(s)
+    return Event.ApplicationAppearanceChange(
+        newAppearance = Appearance.fromNative(NativeApplicationAppearanceChangeEvent.new_appearance(nativeEvent)),
+    )
 }
 
 private fun characterReceived(s: MemorySegment): Event {
