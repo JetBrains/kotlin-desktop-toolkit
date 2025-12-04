@@ -44,7 +44,7 @@
 | Position           | ✅    | ➖ (`startMove`)   | ✅      |     |
 | Size               | ✅    | ➖ (`startResize`) | ✅      |     |
 | Max/Min size       | ✅    | ✅                 | ✅      |     |
-| Content size       | ✅    | ➖                 | 🚧      |     |
+| Content size       | ✅    | ➖                 | ✅      |     |
 | Current screen     | ✅    | ✅                 | ✅      |     |
 | Full screen        | ✅    | ✅                 | ❌      |     |
 | Maximize/Minimize  | ✅    | ✅                 | 🚧      |     |
@@ -52,7 +52,7 @@
 | Set cursor icon    | ✅    | ✅                 | 🚧      |     |
 | Transparency       | ✅    | ✅                 | ✅      |     |
 | Background effects | ✅    | ❌                 | ✅      |     |
-| Close window       | ✅    | ✅                 | 🚧      |     |
+| Close window       | ✅    | ✅                 | ✅      |     |
 
 #### Rendering
 
@@ -87,8 +87,8 @@
 | WindowFullScreenToggle        | ✅    | ✅      | ❌      |     |
 | WindowChangedOcclusionState   | ✅    | ❌      | 🚧      |     |
 | DisplayConfigurationChange    | ✅    | ✅      | 🚧      |     |
-| ApplicationOpenURL            | ✅    | ✅      | ➖      |     |
-| ApplicationAppearanceChange   | ✅    | ✅      | ❌      |     |
+| ApplicationOpenURL            | ✅    | ✅      | ✅      |     |
+| ApplicationAppearanceChange   | ✅    | ✅      | ✅      |     |
 | ApplicationDidFinishLaunching | ✅    | ✅      | ✅*     |     |
 
 \* Currently on Windows, we can enqueue a callback before starting the event loop. We probably want to replace this logic with an `ApplicationDidFinishLaunching` event.
@@ -97,8 +97,8 @@
 
 |                | MacOS | Wayland | Windows | X11 |
 | -------------- | ----- | ------- | ------- | --- |
-| isDark/isLight | ✅    | ✅      | ❌      |     |
-| Sync with OS   | ✅    | ✅      | ❌      |     |
+| isDark/isLight | ✅    | ✅      | ✅      |     |
+| Sync with OS   | ✅    | ✅      | ✅      |     |
 
 #### Input Methods
 
