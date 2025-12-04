@@ -21,16 +21,6 @@ pub struct PhysicalSize {
     pub height: PhysicalPixels,
 }
 
-#[allow(clippy::fallible_impl_from)]
-impl From<dpi::PhysicalSize<u32>> for PhysicalSize {
-    fn from(size: dpi::PhysicalSize<u32>) -> Self {
-        Self {
-            width: PhysicalPixels(i32::try_from(size.width).unwrap()),
-            height: PhysicalPixels(i32::try_from(size.height).unwrap()),
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LogicalPoint {
@@ -47,36 +37,11 @@ impl<T: Into<f64>> From<(T, T)> for LogicalPoint {
     }
 }
 
-impl From<dpi::LogicalPosition<f64>> for LogicalPoint {
-    fn from(value: dpi::LogicalPosition<f64>) -> Self {
-        Self {
-            x: LogicalPixels(value.x),
-            y: LogicalPixels(value.y),
-        }
-    }
-}
-
-impl LogicalPoint {
-    #[must_use]
-    pub const fn as_winit_position(&self) -> dpi::Position {
-        dpi::Position::Logical(dpi::LogicalPosition { x: self.x.0, y: self.y.0 })
-    }
-}
-
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LogicalSize {
     pub width: LogicalPixels,
     pub height: LogicalPixels,
-}
-
-impl From<dpi::LogicalSize<f64>> for LogicalSize {
-    fn from(value: dpi::LogicalSize<f64>) -> Self {
-        Self {
-            width: LogicalPixels(value.width),
-            height: LogicalPixels(value.height),
-        }
-    }
 }
 
 #[must_use]
@@ -102,14 +67,6 @@ impl LogicalSize {
             width: to_physical_value(self.width.0, scale),
             height: to_physical_value(self.height.0, scale),
         }
-    }
-
-    #[must_use]
-    pub const fn as_winit_size(&self) -> dpi::Size {
-        dpi::Size::Logical(dpi::LogicalSize {
-            width: self.width.0,
-            height: self.height.0,
-        })
     }
 }
 
@@ -167,19 +124,6 @@ impl LogicalRect {
         LogicalSize {
             width: self.width,
             height: self.height,
-        }
-    }
-
-    #[must_use]
-    pub const fn as_winit_position(&self) -> dpi::LogicalPosition<f64> {
-        dpi::LogicalPosition { x: self.x.0, y: self.y.0 }
-    }
-
-    #[must_use]
-    pub const fn as_winit_size(&self) -> dpi::LogicalSize<f64> {
-        dpi::LogicalSize {
-            width: self.width.0,
-            height: self.height.0,
         }
     }
 }

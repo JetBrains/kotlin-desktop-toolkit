@@ -5,7 +5,6 @@ use crate::linux::{
     geometry::LogicalPoint,
     mime_types::MimeTypes,
     text_input_api::TextInputContext,
-    user_events::UserEvents,
 };
 use anyhow::bail;
 use desktop_common::ffi_utils::RustAllocatedStrPtr;
@@ -99,7 +98,8 @@ pub extern "C" fn application_stop_event_loop(mut app_ptr: AppPtr) {
     debug!("application_stop_event_loop");
     ffi_boundary("application_stop_event_loop", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.user_event(UserEvents::Exit)
+        app.exit = true;
+        Ok(())
     });
 }
 
@@ -153,7 +153,8 @@ pub extern "C" fn application_is_event_loop_thread(app_ptr: AppPtr) -> bool {
 pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr, f: extern "C" fn()) {
     ffi_boundary("application_run_on_event_loop_async", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.user_event(UserEvents::RunOnEventLoop(f))
+        // app.user_event(UserEvents::RunOnEventLoop(f))
+        Ok(())
     });
 }
 
@@ -166,17 +167,17 @@ pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr, f: extern
 //     });
 // }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn application_text_input_enable(mut app_ptr: AppPtr, context: TextInputContext) {
-    debug!("application_text_input_enable");
-    ffi_boundary("application_text_input_enable", || {
-        let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        for w in app.state.windows.values_mut() {
-            w.window.set_ime_allowed(true);
-        }
-        Ok(())
-    });
-}
+// #[unsafe(no_mangle)]
+// pub extern "C" fn application_text_input_enable(mut app_ptr: AppPtr, context: TextInputContext) {
+//     debug!("application_text_input_enable");
+//     ffi_boundary("application_text_input_enable", || {
+//         let app = unsafe { app_ptr.borrow_mut::<Application>() };
+//         for w in app.state.windows.values_mut() {
+//             w.window.set_ime_allowed(true);
+//         }
+//         Ok(())
+//     });
+// }
 
 // #[unsafe(no_mangle)]
 // pub extern "C" fn application_text_input_update(mut app_ptr: AppPtr, context: TextInputContext) {
@@ -188,17 +189,17 @@ pub extern "C" fn application_text_input_enable(mut app_ptr: AppPtr, context: Te
 //     });
 // }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr) {
-    debug!("application_text_input_disable");
-    ffi_boundary("application_text_input_disable", || {
-        let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        for w in app.state.windows.values_mut() {
-            w.window.set_ime_allowed(false);
-        }
-        Ok(())
-    });
-}
+// #[unsafe(no_mangle)]
+// pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr) {
+//     debug!("application_text_input_disable");
+//     ffi_boundary("application_text_input_disable", || {
+//         let app = unsafe { app_ptr.borrow_mut::<Application>() };
+//         for w in app.state.windows.values_mut() {
+//             w.window.set_ime_allowed(false);
+//         }
+//         Ok(())
+//     });
+// }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr, mime_types: BorrowedStrPtr) {

@@ -1,19 +1,18 @@
-use anyhow::{Context, anyhow};
-use log::{debug, warn};
-use std::ffi::CString;
-use std::str::FromStr;
-use std::sync::mpsc;
+use anyhow::{Context, anyhow, bail};
+use log::{debug, trace, warn};
+use std::sync::{mpsc, Mutex};
 use std::sync::mpsc::Sender;
 use std::thread::ThreadId;
-use winit_core::event_loop::{ControlFlow, EventLoopProxy};
-use winit_x11::EventLoop;
+use sdl3_sys::events::{SDL_AddEventWatch, SDL_Event, SDL_EventType, SDL_PollEvent, SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED, SDL_EVENT_DISPLAY_ORIENTATION, SDL_EVENT_WINDOW_HDR_STATE_CHANGED, SDL_EVENT_WINDOW_SHOWN};
+use sdl3_sys::everything::SDL_HITTEST_NORMAL;
+use sdl3_sys::init::{SDL_InitSubSystem, SDL_Quit, SDL_INIT_VIDEO};
+// use sdl3_main::app::::event_loop::{ControlFlow, EventLoopProxy};
+// use winit_x11::EventLoop;
 // use tokio::spawn;
 
 use crate::linux::application_state::ApplicationState;
-use crate::linux::clipboard_impl::LinuxClipboardKind;
 use crate::linux::events::{DataTransferContent, DataTransferEvent};
 use crate::linux::mime_types::MimeTypes;
-use crate::linux::user_events::UserEvents;
 use crate::linux::{
     application_api::ApplicationCallbacks,
     events::{Event, WindowId},
@@ -27,10 +26,10 @@ use desktop_common::logger::catch_panic;
 pub struct Application {
     // pub app: GpuiApplication,
     // qh: QueueHandle<ApplicationState>,
+    pub exit: bool,
     pub state: ApplicationState,
-    event_loop_proxy: Option<EventLoopProxy>,
+    // event_loop_proxy: Option<EventLoopProxy>,
     // pub run_on_event_loop: Option<Sender<extern "C" fn()>>,
-    sender: Sender<UserEvents>,
     pub event_loop_thread_id: Option<ThreadId>,
     // rt: tokio::runtime::Runtime,
     // async_request_counter: u32,
@@ -66,20 +65,25 @@ impl ApplicationCallbacks {
 //     sender
 // }
 
+impl Drop for Application {
+    fn drop(&mut self) {
+        unsafe { SDL_Quit() };
+    }
+}
+
 impl Application {
     pub fn new(callbacks: ApplicationCallbacks) -> anyhow::Result<Self> {
-        let (sender, receiver) = mpsc::channel();
-        let state = ApplicationState::new(callbacks, receiver);
+        let state = ApplicationState::new(callbacks);
 
         // let rt = tokio::runtime::Builder::new_multi_thread().enable_io().worker_threads(1).build()?;
         // let run_async_sender = create_run_async_sender(&event_loop);
 
         Ok(Self {
+            exit: false,
             state,
-            event_loop_proxy: None,
+            // event_loop_proxy: None,
             // run_on_event_loop: None,
             event_loop_thread_id: None,
-            sender,
             // rt,
             // async_request_counter: 0,
             // run_async_sender,
@@ -126,31 +130,136 @@ impl Application {
     pub fn run(&mut self) -> Result<(), anyhow::Error> {
         debug!("Application event loop: starting");
 
+        if !unsafe { SDL_InitSubSystem(SDL_INIT_VIDEO) } {
+            bail!("SDL_InitSubSystem failed");
+        }
         // self.init_notifications();
         // self.init_xdg_desktop_settings_notifier();
-        let event_loop = EventLoop::new()?;
-        let active_event_loop = event_loop.window_target();
-        active_event_loop.set_control_flow(ControlFlow::Wait);
+        // let event_loop = EventLoop::new()?;
+        // let active_event_loop = event_loop.window_target();
+        // active_event_loop.set_control_flow(ControlFlow::Wait);
 
-        self.event_loop_proxy = Some(active_event_loop.create_proxy());
+        // self.event_loop_proxy = Some(active_event_loop.create_proxy());
         self.event_loop_thread_id = Some(std::thread::current().id());
 
-        event_loop.run_app(&mut self.state)?;
+        self.state.send_event(Event::ApplicationStarted);
+        while !self.exit {
+            let mut event = SDL_Event::default();
+            trace!("SDL_PollEvent");
+            while unsafe { SDL_PollEvent(&raw mut event) } {
+                self.handle_event(event);
+            }
+            trace!("Received SDL_Event");
+        }
 
         debug!("Application event loop: stopped");
         Ok(())
     }
 
-    pub fn user_event(&self, event: UserEvents) -> anyhow::Result<()> {
-        self.sender.send(event)?;
-        let event_loop_proxy = self.event_loop_proxy.as_ref().context("Event loop not started")?;
-        event_loop_proxy.wake_up();
-        Ok(())
+    pub fn handle_event(&mut self, event: SDL_Event) {
+        let event_type = unsafe { event.r#type };
+        debug!("Received event: {event_type:?}");
+        match SDL_EventType(event_type) {
+            SDL_EventType::QUIT => self.exit = true,
+            SDL_EventType::TERMINATING => {}
+            _ => self.state.handle_event(event),
+        }
+        // /// Display has been added to the system
+        // pub const DISPLAY_ADDED: Self = Self(338);
+        // /// Display has been removed from the system
+        // pub const DISPLAY_REMOVED: Self = Self(339);
+        // /// Display has changed position
+        // pub const DISPLAY_MOVED: Self = Self(340);
+        // /// Display has changed desktop mode
+        // pub const DISPLAY_DESKTOP_MODE_CHANGED: Self = Self(341);
+        // /// Display has changed current mode
+        // pub const DISPLAY_CURRENT_MODE_CHANGED: Self = Self(342);
+        // /// Display has changed content scale
+        // pub const DISPLAY_CONTENT_SCALE_CHANGED: Self = Self(343);
+        // /// Window has been shown
+        // pub const WINDOW_SHOWN: Self = Self(0x202);
+        // /// Window has been hidden
+        // pub const WINDOW_HIDDEN: Self = Self(515);
+        // /// Window has been exposed and should be redrawn, and can be redrawn directly from event watchers for this event
+        // pub const WINDOW_EXPOSED: Self = Self(516);
+        // /// Window has been moved to data1, data2
+        // pub const WINDOW_MOVED: Self = Self(517);
+        // /// Window has been resized to data1xdata2
+        // pub const WINDOW_RESIZED: Self = Self(518);
+        // /// The pixel size of the window has changed to data1xdata2
+        // pub const WINDOW_PIXEL_SIZE_CHANGED: Self = Self(519);
+        // /// The pixel size of a Metal view associated with the window has changed
+        // pub const WINDOW_METAL_VIEW_RESIZED: Self = Self(520);
+        // /// Window has been minimized
+        // pub const WINDOW_MINIMIZED: Self = Self(521);
+        // /// Window has been maximized
+        // pub const WINDOW_MAXIMIZED: Self = Self(522);
+        // /// Window has been restored to normal size and position
+        // pub const WINDOW_RESTORED: Self = Self(523);
+        // /// Window has gained mouse focus
+        // pub const WINDOW_MOUSE_ENTER: Self = Self(524);
+        // /// Window has lost mouse focus
+        // pub const WINDOW_MOUSE_LEAVE: Self = Self(525);
+        // /// Window has gained keyboard focus
+        // pub const WINDOW_FOCUS_GAINED: Self = Self(526);
+        // /// Window has lost keyboard focus
+        // pub const WINDOW_FOCUS_LOST: Self = Self(527);
+        // /// The window manager requests that the window be closed
+        // pub const WINDOW_CLOSE_REQUESTED: Self = Self(528);
+        // /// Window had a hit test that wasn't [`SDL_HITTEST_NORMAL`]
+        // pub const WINDOW_HIT_TEST: Self = Self(529);
+        // /// The ICC profile of the window's display has changed
+        // pub const WINDOW_ICCPROF_CHANGED: Self = Self(530);
+        // /// Window has been moved to display data1
+        // pub const WINDOW_DISPLAY_CHANGED: Self = Self(531);
+        // /// Window display scale has been changed
+        // pub const WINDOW_DISPLAY_SCALE_CHANGED: Self = Self(532);
+        // /// The window safe area has been changed
+        // pub const WINDOW_SAFE_AREA_CHANGED: Self = Self(533);
+        // /// The window has been occluded
+        // pub const WINDOW_OCCLUDED: Self = Self(534);
+        // /// The window has entered fullscreen mode
+        // pub const WINDOW_ENTER_FULLSCREEN: Self = Self(535);
+        // /// The window has left fullscreen mode
+        // pub const WINDOW_LEAVE_FULLSCREEN: Self = Self(536);
+        // /// The window with the associated ID is being or has been destroyed. If this message is being handled
+        // /// in an event watcher, the window handle is still valid and can still be used to retrieve any properties
+        // /// associated with the window. Otherwise, the handle has already been destroyed and all resources
+        // /// associated with it are invalid
+        // pub const WINDOW_DESTROYED: Self = Self(537);
+        // /// Window HDR properties have changed
+        // pub const WINDOW_HDR_STATE_CHANGED: Self = Self(538);
+        // /// Key pressed
+        // pub const KEY_DOWN: Self = Self(0x300);
+        // /// Key released
+        // pub const KEY_UP: Self = Self(769);
+        // /// Keyboard text editing (composition)
+        // pub const TEXT_EDITING: Self = Self(770);
+        // /// Keyboard text input
+        // pub const TEXT_INPUT: Self = Self(771);
+        // /// Keymap changed due to a system event such as an
+        // /// input language or keyboard layout change.
+        // pub const KEYMAP_CHANGED: Self = Self(772);
+        // /// A new keyboard has been inserted into the system
+        // pub const KEYBOARD_ADDED: Self = Self(773);
+        // /// A keyboard has been removed
+        // pub const KEYBOARD_REMOVED: Self = Self(774);
+        // /// Keyboard text editing candidates
+        // pub const TEXT_EDITING_CANDIDATES: Self = Self(775);
+        // /// Mouse moved
+        // pub const MOUSE_MOTION: Self = Self(0x400);
+        // /// Mouse button pressed
+        // pub const MOUSE_BUTTON_DOWN: Self = Self(1025);
+        // /// Mouse button released
+        // pub const MOUSE_BUTTON_UP: Self = Self(1026);
+        // /// Mouse wheel motion
+        // pub const MOUSE_WHEEL: Self = Self(1027);
     }
+
 
     pub fn new_window(&mut self, params: &WindowParams) -> anyhow::Result<()> {
         let window_id = params.window_id;
-        if self.state.window_id_to_winit_window_id.contains_key(&window_id) {
+        if self.state.window_id_to_sdl_window_id.contains_key(&window_id) {
             return Err(anyhow!("Window with ID {window_id:?} already exists"));
         }
 
@@ -160,26 +269,26 @@ impl Application {
             Some(params.min_size)
         };
 
-        self.user_event(UserEvents::CreateWindow {
+        self.state.create_window(
             window_id,
-            rect: params.rect,
+            params.rect,
             min_size,
-            title: params.title.as_str()?.to_owned(),
-            app_id: params.app_id.as_str()?.to_owned(),
-            prefer_client_side_decoration: params.prefer_client_side_decoration,
-            rendering_mode: params.rendering_mode,
-        })
+            params.title.as_optional_cstr(),
+            params.app_id.as_str()?.to_owned(),
+            params.prefer_client_side_decoration,
+            params.rendering_mode,
+        )
     }
 
     pub fn close_window(&mut self, window_id: WindowId) {
-        if let Some(winit_window_id) = self.state.window_id_to_winit_window_id.remove(&window_id) {
+        if let Some(winit_window_id) = self.state.window_id_to_sdl_window_id.remove(&window_id) {
             self.state.windows.remove(&winit_window_id);
         }
     }
 
     pub fn get_window(&self, window_id: WindowId) -> anyhow::Result<&SimpleWindow> {
         self.state
-            .window_id_to_winit_window_id
+            .window_id_to_sdl_window_id
             .get(&window_id)
             .and_then(|surface_id| self.state.windows.get(surface_id))
             .with_context(|| format!("Couldn't find window for {window_id:?}"))
@@ -187,7 +296,7 @@ impl Application {
 
     pub fn get_window_mut(&mut self, window_id: WindowId) -> anyhow::Result<&mut SimpleWindow> {
         self.state
-            .window_id_to_winit_window_id
+            .window_id_to_sdl_window_id
             .get(&window_id)
             .and_then(|surface_id| self.state.windows.get_mut(surface_id))
             .with_context(|| format!("Couldn't find window for {window_id:?}"))
@@ -197,23 +306,22 @@ impl Application {
     //     self.state.set_cursor_theme(&self.qh, name, size)
     // }
 
-    // TODO: pass actual values
-    fn clipboard_put_impl(&mut self, mime_types: MimeTypes, kind: LinuxClipboardKind) {
-        let Some(clipboard) = &mut self.state.clipboard else {
-            warn!("application_clipboard_put: clipboard not initialized");
-            return;
-        };
-        let mut clipboard_setter = clipboard.set(kind);
-        for mime_type in mime_types.val {
-            clipboard_setter.custom_format(mime_type);
-        }
-        if let Err(e) = clipboard_setter.commit() {
-            warn!("application_clipboard_put: {e}");
-        }
-    }
+    // fn clipboard_put_impl(&mut self, mime_types: MimeTypes, kind: LinuxClipboardKind) {
+    //     let Some(clipboard) = &mut self.state.clipboard else {
+    //         warn!("application_clipboard_put: clipboard not initialized");
+    //         return;
+    //     };
+    //     let mut clipboard_setter = clipboard.set(kind);
+    //     for mime_type in mime_types.val {
+    //         clipboard_setter.custom_format(mime_type);
+    //     }
+    //     if let Err(e) = clipboard_setter.commit() {
+    //         warn!("application_clipboard_put: {e}");
+    //     }
+    // }
 
     pub fn clipboard_put(&mut self, mime_types: MimeTypes) {
-        self.clipboard_put_impl(mime_types, LinuxClipboardKind::Clipboard)
+        // self.clipboard_put_impl(mime_types, LinuxClipboardKind::Clipboard)
     }
 
     pub fn clipboard_get_available_mimetypes(&self) -> Option<String> {
@@ -242,36 +350,38 @@ impl Application {
     // }
 
     pub fn primary_selection_put(&mut self, mime_types: MimeTypes) {
-        self.clipboard_put_impl(mime_types, LinuxClipboardKind::Primary)
+        // self.clipboard_put_impl(mime_types, LinuxClipboardKind::Primary)
     }
-
-    fn clipboard_paste_impl(&self, serial: i32, supported_mime_types: &str, kind: LinuxClipboardKind) -> bool {
-        let Some(clipboard) = self.state.clipboard.as_ref() else {
-            warn!("application_clipboard_paste: clipboard not initialized");
-            return false;
-        };
-        for mime_type in supported_mime_types.split(',') {
-            if let Ok(content) = clipboard.get(kind).custom_format(mime_type) {
-                if let Err(e) = self.user_event(UserEvents::ClipboardReceived {
-                    serial,
-                    mime_type: mime_type.to_owned(),
-                    content,
-                }) {
-                    warn!("application_clipboard_paste: {e}");
-                    return false;
-                }
-                return true;
-            }
-        }
-        false
-    }
+    //
+    // fn clipboard_paste_impl(&self, serial: i32, supported_mime_types: &str, kind: LinuxClipboardKind) -> bool {
+    //     let Some(clipboard) = self.state.clipboard.as_ref() else {
+    //         warn!("application_clipboard_paste: clipboard not initialized");
+    //         return false;
+    //     };
+    //     for mime_type in supported_mime_types.split(',') {
+    //         if let Ok(content) = clipboard.get(kind).custom_format(mime_type) {
+    //             if let Err(e) = self.user_event(UserEvents::ClipboardReceived {
+    //                 serial,
+    //                 mime_type: mime_type.to_owned(),
+    //                 content,
+    //             }) {
+    //                 warn!("application_clipboard_paste: {e}");
+    //                 return false;
+    //             }
+    //             return true;
+    //         }
+    //     }
+    //     false
+    // }
 
     pub fn primary_selection_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
-        self.clipboard_paste_impl(serial, supported_mime_types, LinuxClipboardKind::Primary)
+        false
+        // self.clipboard_paste_impl(serial, supported_mime_types, LinuxClipboardKind::Primary)
     }
 
     pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
-        self.clipboard_paste_impl(serial, supported_mime_types, LinuxClipboardKind::Clipboard)
+        false
+        // self.clipboard_paste_impl(serial, supported_mime_types, LinuxClipboardKind::Clipboard)
     }
 
     // pub fn start_drag(

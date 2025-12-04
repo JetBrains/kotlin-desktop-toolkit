@@ -24,14 +24,15 @@ khronos-egl = { version = "6.0.0", features = ["dynamic"] }
 libloading = "0.8.6"
 tokio = { version = "1.46.1", features = ["rt-multi-thread"] }
 zbus = { version = "5.12.0", default-features = false, features = ["tokio"] }
-dpi = { git = "https://github.com/rust-windowing/winit.git", rev = "fa0795a50cd4cd40c46dfeff60c872064017914c" }
-winit-core = { git = "https://github.com/rust-windowing/winit.git", rev = "fa0795a50cd4cd40c46dfeff60c872064017914c" }
-winit-common = { git = "https://github.com/rust-windowing/winit.git", rev = "fa0795a50cd4cd40c46dfeff60c872064017914c" }
-winit-x11 = { git = "https://github.com/rust-windowing/winit.git", rev = "fa0795a50cd4cd40c46dfeff60c872064017914c" }
-softbuffer = { version = "0.4.6", default-features = false, features = ["x11", "x11-dlopen"] }
+#dpi = { git = "https://github.com/rust-windowing/winit.git", rev = "fa0795a50cd4cd40c46dfeff60c872064017914c" }
+#winit-core = { git = "https://github.com/rust-windowing/winit.git", rev = "fa0795a50cd4cd40c46dfeff60c872064017914c" }
+#winit-common = { git = "https://github.com/rust-windowing/winit.git", rev = "fa0795a50cd4cd40c46dfeff60c872064017914c" }
+#winit-x11 = { git = "https://github.com/rust-windowing/winit.git", rev = "fa0795a50cd4cd40c46dfeff60c872064017914c" }
+#softbuffer = { version = "0.4.6", default-features = false, features = ["x11", "x11-dlopen"] }
 xkeysym = "0.2.1"
-raw-window-handle = "0.6.2"
-parking_lot = "0.12.5"
-x11rb = "0.13.2"
-image = "0.25.9"
-percent-encoding = "2.3.2"
+#raw-window-handle = "0.6.2"
+#parking_lot = "0.12.5"
+#x11rb = "0.13.2"
+#image = "0.25.9"
+#percent-encoding = "2.3.2"
+sdl3-sys = "0.5.11"

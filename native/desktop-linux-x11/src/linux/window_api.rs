@@ -9,7 +9,7 @@ use crate::linux::{
     pointer_shapes_api::PointerShape,
     window_resize_edge_api::WindowResizeEdge,
 };
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use desktop_common::{
     ffi_utils::BorrowedStrPtr,
     logger::{PanicDefault, ffi_boundary},
@@ -113,7 +113,8 @@ pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> Logic
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_title: BorrowedStrPtr) {
     with_window(&app_ptr, window_id, "window_set_title", |w| {
-        w.set_title(new_title.as_str()?);
+        let new_title_cstr = new_title.as_optional_cstr().ok_or(anyhow!("new_title is null"))?;
+        w.set_title(new_title_cstr);
         Ok(())
     });
 }

@@ -470,26 +470,26 @@ fn on_application_started(state: &mut State) {
             std::thread::sleep(std::time::Duration::from_millis(16));
         }
     }));
-    window_create(
-        state.app_ptr.get(),
-        WindowParams {
-            window_id: WindowId(1),
-            rect: LogicalRect {
-                x: LogicalPixels(0.),
-                y: LogicalPixels(0.),
-                width: LogicalPixels(200.),
-                height: LogicalPixels(300.),
-            },
-            min_size: LogicalSize {
-                width: LogicalPixels::default(),
-                height: LogicalPixels::default(),
-            },
-            title: BorrowedStrPtr::new(c"Window 1"),
-            app_id: BorrowedStrPtr::new(APP_ID),
-            prefer_client_side_decoration: false,
-            rendering_mode: RenderingMode::Software,
-        },
-    );
+    // window_create(
+    //     state.app_ptr.get(),
+    //     WindowParams {
+    //         window_id: WindowId(1),
+    //         rect: LogicalRect {
+    //             x: LogicalPixels(0.),
+    //             y: LogicalPixels(0.),
+    //             width: LogicalPixels(200.),
+    //             height: LogicalPixels(300.),
+    //         },
+    //         min_size: LogicalSize {
+    //             width: LogicalPixels::default(),
+    //             height: LogicalPixels::default(),
+    //         },
+    //         title: BorrowedStrPtr::new(c"Window 1"),
+    //         app_id: BorrowedStrPtr::new(APP_ID),
+    //         prefer_client_side_decoration: false,
+    //         rendering_mode: RenderingMode::Software,
+    //     },
+    // );
 
     window_create(
         state.app_ptr.get(),
