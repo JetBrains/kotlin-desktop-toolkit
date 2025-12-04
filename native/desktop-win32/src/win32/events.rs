@@ -1,6 +1,7 @@
 use desktop_common::ffi_utils::AutoDropStrPtr;
 
 use super::{
+    appearance::Appearance,
     geometry::{LogicalPoint, PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
     pointer::{PointerButton, PointerState},
@@ -11,6 +12,7 @@ use super::{
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum Event {
+    ApplicationAppearanceChange(ApplicationAppearanceChangeEvent),
     CharacterReceived(CharacterReceivedEvent),
     KeyDown(KeyEvent),
     KeyUp(KeyEvent),
@@ -41,6 +43,18 @@ pub type EventHandler = extern "C" fn(WindowId, &Event) -> bool;
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct Timestamp(pub u64);
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct ApplicationAppearanceChangeEvent {
+    pub new_appearance: Appearance,
+}
+
+impl From<ApplicationAppearanceChangeEvent> for Event {
+    fn from(value: ApplicationAppearanceChangeEvent) -> Self {
+        Self::ApplicationAppearanceChange(value)
+    }
+}
 
 #[repr(C)]
 #[derive(Debug)]

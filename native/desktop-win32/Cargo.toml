@@ -22,7 +22,7 @@ windows = { version = "0.62.0", features = [
     "System",
     "UI_Composition",
     "UI_Composition_Desktop",
-    "UI_Input",
+    "UI_ViewManagement",
     "Win32_Foundation",
     "Win32_Globalization",
     "Win32_Graphics_Direct3D11",

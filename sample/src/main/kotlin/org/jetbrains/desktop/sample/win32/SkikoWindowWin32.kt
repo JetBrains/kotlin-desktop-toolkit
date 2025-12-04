@@ -45,6 +45,11 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
 
     open fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
+            is Event.ApplicationAppearanceChange -> with(event) {
+                Logger.debug { "Setting change: new appearance: $newAppearance" }
+                EventHandlerResult.Stop
+            }
+
             is Event.WindowDraw -> with(event) {
                 performDrawing(size, scale)
                 EventHandlerResult.Stop

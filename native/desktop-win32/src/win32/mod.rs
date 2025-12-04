@@ -1,3 +1,5 @@
+pub mod appearance;
+pub mod appearance_api;
 pub mod application;
 pub mod application_api;
 pub mod event_loop;
