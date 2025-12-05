@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.sample.win32
 
 import org.jetbrains.desktop.win32.AngleRenderer
+import org.jetbrains.desktop.win32.Appearance
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
@@ -47,6 +48,8 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
         return when (event) {
             is Event.ApplicationAppearanceChange -> with(event) {
                 Logger.debug { "Setting change: new appearance: $newAppearance" }
+                val enableImmersiveDarkMode = newAppearance == Appearance.Dark
+                window.setImmersiveDarkMode(enableImmersiveDarkMode)
                 EventHandlerResult.Stop
             }
 
