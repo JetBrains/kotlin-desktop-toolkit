@@ -147,6 +147,14 @@ pub extern "C" fn window_get_screen_info(window_ptr: WindowPtr) -> ScreenInfo {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_set_immersive_dark_mode(window_ptr: WindowPtr, enabled: bool) {
+    with_window(&window_ptr, "window_set_immersive_dark_mode", |window| {
+        window.set_immersive_dark_mode(enabled)?;
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) {
     with_window(&window_ptr, "window_set_min_size", |window| {
         window.set_min_size(size);
@@ -164,17 +172,17 @@ pub extern "C" fn window_set_title(window_ptr: WindowPtr, title: BorrowedStrPtr)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_show(window_ptr: WindowPtr) {
-    with_window(&window_ptr, "window_show", |window| {
-        window.show();
+pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: LogicalPoint, size: LogicalSize) {
+    with_window(&window_ptr, "window_set_rect", |window| {
+        window.set_position(origin, size)?;
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_set_rect(window_ptr: WindowPtr, origin: LogicalPoint, size: LogicalSize) {
-    with_window(&window_ptr, "window_set_rect", |window| {
-        window.set_position(origin, size)?;
+pub extern "C" fn window_show(window_ptr: WindowPtr) {
+    with_window(&window_ptr, "window_show", |window| {
+        window.show();
         Ok(())
     });
 }

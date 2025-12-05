@@ -112,6 +112,14 @@ public class Window internal constructor(
         }
     }
 
+    public fun setImmersiveDarkMode(enabled: Boolean) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_win32_h.window_set_immersive_dark_mode(ptr, enabled)
+            }
+        }
+    }
+
     public fun setMinSize(size: LogicalSize) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
@@ -127,10 +135,6 @@ public class Window internal constructor(
         }
     }
 
-    public fun show() {
-        return ffiDownCall { desktop_win32_h.window_show(ptr) }
-    }
-
     public fun setRect(origin: LogicalPoint, size: LogicalSize) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
@@ -141,6 +145,10 @@ public class Window internal constructor(
                 )
             }
         }
+    }
+
+    public fun show() {
+        return ffiDownCall { desktop_win32_h.window_show(ptr) }
     }
 
     public fun requestRedraw() {

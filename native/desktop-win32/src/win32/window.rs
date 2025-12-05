@@ -16,7 +16,7 @@ use windows::{
         Graphics::{
             Dwm::{
                 DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_EXTENDED_FRAME_BOUNDS, DWMWA_SYSTEMBACKDROP_TYPE,
-                DwmExtendFrameIntoClientArea, DwmGetWindowAttribute, DwmSetWindowAttribute,
+                DWMWA_USE_IMMERSIVE_DARK_MODE, DwmExtendFrameIntoClientArea, DwmGetWindowAttribute, DwmSetWindowAttribute,
             },
             Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow, RDW_INVALIDATE, RDW_NOERASE, RDW_NOFRAME, RedrawWindow},
         },
@@ -187,7 +187,7 @@ impl Window {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub fn extend_content_into_titlebar(&self) -> WinResult<()> {
+    pub(crate) fn extend_content_into_titlebar(&self) -> WinResult<()> {
         if utils::is_windows_11_build_22000_or_higher() {
             let colorref = COLORREF(DWMWA_COLOR_NONE);
             unsafe {
@@ -210,7 +210,7 @@ impl Window {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub fn apply_system_backdrop(&self) -> WinResult<()> {
+    pub(crate) fn apply_system_backdrop(&self) -> WinResult<()> {
         if utils::is_windows_11_build_22621_or_higher() {
             let backdrop: DWM_SYSTEMBACKDROP_TYPE = self.style.borrow().system_backdrop_type.to_system();
             unsafe {
@@ -227,6 +227,26 @@ impl Window {
 
     pub fn show(&self) -> bool {
         unsafe { ShowWindow(self.hwnd(), SW_SHOW) }.as_bool()
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn set_immersive_dark_mode(&self, enabled: bool) -> WinResult<()> {
+        if utils::is_windows_11_build_22000_or_higher() {
+            let enablement = if enabled {
+                windows::Win32::Foundation::TRUE
+            } else {
+                windows::Win32::Foundation::FALSE
+            };
+            unsafe {
+                DwmSetWindowAttribute(
+                    self.hwnd(),
+                    DWMWA_USE_IMMERSIVE_DARK_MODE,
+                    (&raw const enablement).cast(),
+                    size_of::<windows::core::BOOL>() as _,
+                )?;
+            }
+        }
+        Ok(())
     }
 
     pub fn set_position(&self, origin: LogicalPoint, size: LogicalSize) -> WinResult<()> {
