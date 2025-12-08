@@ -320,8 +320,8 @@ pub extern "C" fn application_open_url(url: BorrowedStrPtr) -> bool {
     ffi_boundary("application_open_url", || {
         let url_string = copy_to_ns_string(&url)?;
         let url = NSURL::URLWithString(&url_string).context("Can't create NSURL from string")?;
-        let was_openned = NSWorkspace::sharedWorkspace().openURL(&url);
-        Ok(was_openned)
+        let was_opened = NSWorkspace::sharedWorkspace().openURL(&url);
+        Ok(was_opened)
     })
 }
 

@@ -180,12 +180,12 @@ class ContentArea(
                 paint,
             )
         }
-        canvas.drawSpiningCircle(contentOrigin, contentSize, time, scale.toFloat())
+        canvas.drawSpinningCircle(contentOrigin, contentSize, time, scale.toFloat())
         canvas.drawWindowBorders(contentOrigin, contentSize, time, scale.toFloat())
         canvas.drawCursor(contentOrigin, contentSize, time, scale.toFloat())
     }
 
-    private fun Canvas.drawSpiningCircle(origin: PhysicalPoint, size: PhysicalSize, t: Long, scale: Float) = withTranslated(origin) {
+    private fun Canvas.drawSpinningCircle(origin: PhysicalPoint, size: PhysicalSize, t: Long, scale: Float) = withTranslated(origin) {
         val width = size.width.toFloat()
         val height = size.height.toFloat()
         val angle = (t / 2000f) * 2f * PI
