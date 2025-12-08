@@ -12,7 +12,7 @@ use crate::macos::window_api::{DraggingItem, TitlebarConfiguration};
 use crate::{
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     macos::{
-        drag_and_drop::{handle_drag_entered, handle_drag_exited, handle_drag_perform, handle_drag_updated},
+        drag_and_drop::{handle_drag_target_entered, handle_drag_target_exited, handle_drag_target_perform, handle_drag_target_updated},
         events::{
             handle_flags_change, handle_key_up_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
             handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_changed_occlusion_state, handle_window_close_request,
@@ -649,7 +649,7 @@ define_class!(
             info: &ProtocolObject<dyn NSDraggingInfo>,
         ) -> NSDragOperation {
             catch_panic(|| {
-                Ok(handle_drag_entered(info))
+                Ok(handle_drag_target_entered(info))
             }).unwrap_or(NSDragOperation::None)
         }
 
@@ -659,14 +659,14 @@ define_class!(
             info: &ProtocolObject<dyn NSDraggingInfo>,
         ) -> NSDragOperation {
             catch_panic(|| {
-                Ok(handle_drag_updated(info))
+                Ok(handle_drag_target_updated(info))
             }).unwrap_or(NSDragOperation::None)
         }
 
         #[unsafe(method(draggingExited:))]
         unsafe fn dragging_exited(&self, info: Option<&ProtocolObject<dyn NSDraggingInfo>>) {
             catch_panic(|| {
-                handle_drag_exited(info);
+                handle_drag_target_exited(info);
                 Ok(())
             });
         }
@@ -674,7 +674,7 @@ define_class!(
         #[unsafe(method(performDragOperation:))]
         unsafe fn perform_drag_operation(&self, info: &ProtocolObject<dyn NSDraggingInfo>) -> bool {
             catch_panic(|| {
-                Ok(handle_drag_perform(info))
+                Ok(handle_drag_target_perform(info))
             }).unwrap_or(false)
         }
     }
@@ -687,7 +687,6 @@ define_class!(
             context: NSDraggingContext,
         ) -> NSDragOperation {
             catch_panic(|| {
-                println!("session: {session:?} context: {context:?}");
                 Ok(NSDragOperation::None)
             }).unwrap_or(NSDragOperation::None)
         }
@@ -725,13 +724,13 @@ define_class!(
             });
         }
 
-        #[unsafe(method(ignoreModifierKeysForDraggingSession:))]
-        fn ignore_modifier_keys_for_dragging_session(&self, session: &NSDraggingSession) -> bool {
-            catch_panic(|| {
-                println!("session: {session:?}");
-                Ok(false)
-            }).unwrap_or(false)
-        }
+        // #[unsafe(method(ignoreModifierKeysForDraggingSession:))]
+        // fn ignore_modifier(&self, session: &NSDraggingSession) -> bool {
+        //     catch_panic(|| {
+        //         println!("session: {session:?}");
+        //         Ok(false)
+        //     }).unwrap_or(false)
+        // }
     }
 
     impl RootView {

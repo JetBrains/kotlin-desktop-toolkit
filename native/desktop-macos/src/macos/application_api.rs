@@ -55,7 +55,7 @@ impl AppState {
         F: FnOnce(&Self) -> T,
     {
         APP_STATE.with(|app_state| {
-            let app_state = app_state.get().expect("Can't access app state before initialization!"); // todo handle error
+            let app_state = app_state.get().expect("Can't access the app state before initialization!");
             f(app_state)
         })
     }
@@ -64,7 +64,7 @@ impl AppState {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ApplicationCallbacks {
-    // returns true if application should terminate,
+    // returns true if the application should terminate,
     // otherwise termination will be canceled
     pub on_should_terminate: extern "C" fn() -> bool,
     pub on_will_terminate: extern "C" fn(),
