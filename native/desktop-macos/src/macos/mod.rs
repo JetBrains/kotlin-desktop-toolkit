@@ -10,6 +10,7 @@ pub mod display_link;
 pub mod drag_and_drop;
 pub mod events;
 pub mod file_dialog;
+pub mod image;
 pub mod keyboard;
 pub mod metal_api;
 pub mod mouse;

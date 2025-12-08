@@ -83,22 +83,20 @@ pub enum PasteboardItem<'a> {
     },
 }
 
-fn copy_to_objects(items: &BorrowedArray<PasteboardItem>) -> anyhow::Result<Retained<NSArray<ProtocolObject<dyn NSPasteboardWriting>>>> {
-    let items = items.as_slice()?;
-    let array = NSMutableArray::<ProtocolObject<dyn NSPasteboardWriting>>::arrayWithCapacity(items.len());
-    for item in items {
-        match item {
+impl PasteboardItem<'_> {
+    pub(crate) fn to_ns_pasteboard_item(&self) -> anyhow::Result<Retained<ProtocolObject<dyn NSPasteboardWriting>>> {
+        let pasteboard_writing = match self {
             PasteboardItem::URLItem { url } => {
                 let url = copy_to_ns_string(url)?;
                 let ns_url = NSURL::URLWithString(&url).with_context(|| format!("Malformed URL: {url:?}"))?;
                 debug!("is file url: {:?}", ns_url.isFileURL());
-                array.addObject(&ProtocolObject::from_retained(ns_url));
+                ProtocolObject::from_retained(ns_url)
             }
             PasteboardItem::FSPathItem { path } => {
                 debug!("FSPathItem added: {path:?}");
                 let path = copy_to_ns_string(path)?;
                 let ns_url = NSURL::fileURLWithPath(&path);
-                array.addObject(&ProtocolObject::from_retained(ns_url));
+                ProtocolObject::from_retained(ns_url)
             }
             PasteboardItem::CombinedItem { elements } => {
                 let elements = elements.as_slice()?;
@@ -108,11 +106,20 @@ fn copy_to_objects(items: &BorrowedArray<PasteboardItem>) -> anyhow::Result<Reta
                     let data = NSData::with_bytes(element.content.as_slice()?);
                     assert!(item.setData_forType(&data, &uti));
                 }
-                array.addObject(&ProtocolObject::from_retained(item));
+                ProtocolObject::from_retained(item)
             }
-        }
+        };
+        Ok(pasteboard_writing)
     }
-    Ok(array.into_super())
+
+    fn copy_to_ns_array(items: &[Self]) -> anyhow::Result<Retained<NSArray<ProtocolObject<dyn NSPasteboardWriting>>>> {
+        let array = NSMutableArray::<ProtocolObject<dyn NSPasteboardWriting>>::arrayWithCapacity(items.len());
+        for item in items {
+            let object: Retained<ProtocolObject<dyn NSPasteboardWriting>> = item.to_ns_pasteboard_item()?;
+            array.addObject(&object);
+        }
+        Ok(array.into_super())
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -120,7 +127,7 @@ pub extern "C" fn pasteboard_write_objects(items: BorrowedArray<PasteboardItem>)
     ffi_boundary("pasteboard_write_objects", || {
         with_pasteboard(&PasteboardType::Global, |pasteboard| {
             debug!("pasteboard_write_objects: {items:?}");
-            let objects = copy_to_objects(&items)?;
+            let objects = PasteboardItem::copy_to_ns_array(items.as_slice()?)?;
             Ok(pasteboard.writeObjects(&objects))
         })
     })

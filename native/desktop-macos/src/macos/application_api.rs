@@ -1,11 +1,19 @@
 use std::{cell::OnceCell, ffi::c_void};
 
+use super::{
+    appearance::Appearance,
+    drag_and_drop::DragAndDropHandlerState,
+    events::EventHandler,
+    string::{copy_to_c_string, copy_to_ns_string},
+    text_direction::TextDirection,
+};
 use crate::macos::application_menu::handle_app_menu_callback;
 use crate::macos::application_menu_api::ItemId;
 use crate::macos::events::{
     handle_application_appearance_change, handle_application_did_finish_launching, handle_application_open_urls,
     handle_display_configuration_change,
 };
+use crate::macos::image::Image;
 use anyhow::{Context, anyhow};
 use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedStrPtr},
@@ -19,19 +27,11 @@ use objc2::{
 };
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
-    NSEventType, NSImage, NSMenuItem, NSRequestUserAttentionType, NSRunningApplication, NSWorkspace,
+    NSEventType, NSMenuItem, NSRequestUserAttentionType, NSRunningApplication, NSWorkspace,
 };
 use objc2_foundation::{
-    MainThreadMarker, NSArray, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
+    MainThreadMarker, NSArray, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
     NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults, ns_string,
-};
-
-use super::{
-    appearance::Appearance,
-    drag_and_drop::DragAndDropHandlerState,
-    events::EventHandler,
-    string::{copy_to_c_string, copy_to_ns_string},
-    text_direction::TextDirection,
 };
 
 thread_local! {
@@ -249,18 +249,12 @@ pub extern "C" fn application_activate_ignoring_other_apps() {
     });
 }
 
-/// # Safety
-///
-/// `data` must be a valid, non-null, pointer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u64) {
+pub extern "C" fn application_set_dock_icon(image: Image) {
     ffi_boundary("application_set_dock_icon", || {
         let mtm = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
-        assert!(!data.is_null());
-        let bytes = unsafe { std::slice::from_raw_parts_mut(data, data_length.try_into().unwrap()) };
-        let data = NSData::with_bytes(bytes);
-        let image = NSImage::initWithData(mtm.alloc(), &data).context("Can't create image from data")?;
+        let image = image.to_ns_image(mtm)?;
         unsafe {
             app.setApplicationIconImage(Some(&image));
         }

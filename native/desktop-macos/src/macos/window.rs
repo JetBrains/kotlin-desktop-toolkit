@@ -1,23 +1,3 @@
-use anyhow::{Context, Ok};
-use log::debug;
-use objc2::{
-    DeclaredClass, MainThreadOnly, Message, define_class, msg_send,
-    rc::Retained,
-    runtime::{AnyObject, ProtocolObject, Sel},
-};
-use objc2_app_kit::{
-    NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingDestination,
-    NSDraggingInfo, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
-    NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior,
-    NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask,
-};
-use objc2_foundation::{
-    MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
-    NSRangePointer, NSRect, NSUInteger,
-};
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
 use super::{
     application_api::MyNSApplication,
     events::handle_key_down_event,
@@ -26,8 +6,9 @@ use super::{
     text_input_client::{TextInputClient, TextInputClientHandler},
     window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
+use crate::geometry::LogicalPixels;
 use crate::macos::titlebar::Titlebar;
-use crate::macos::window_api::TitlebarConfiguration;
+use crate::macos::window_api::{DraggingItem, TitlebarConfiguration};
 use crate::{
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     macos::{
@@ -42,7 +23,29 @@ use crate::{
         text_input_client::NOT_FOUND_NS_RANGE,
     },
 };
+use anyhow::{Context, Ok};
+use desktop_common::ffi_utils::BorrowedArray;
 use desktop_common::logger::catch_panic;
+use log::debug;
+use objc2::AnyThread;
+use objc2::{
+    DeclaredClass, MainThreadOnly, Message, define_class, msg_send,
+    rc::Retained,
+    runtime::{AnyObject, ProtocolObject, Sel},
+};
+use objc2_app_kit::{
+    NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingContext,
+    NSDraggingDestination, NSDraggingInfo, NSDraggingItem, NSDraggingSession, NSDraggingSource, NSEvent, NSEventType, NSNormalWindowLevel,
+    NSPasteboardWriting, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode,
+    NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate,
+    NSWindowOrderingMode, NSWindowStyleMask,
+};
+use objc2_foundation::{
+    MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSMutableArray, NSNotification, NSObject, NSObjectProtocol,
+    NSPoint, NSRange, NSRangePointer, NSRect, NSUInteger,
+};
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 #[allow(clippy::struct_field_names)]
 pub(crate) struct Window {
@@ -290,6 +293,45 @@ impl Window {
 
         layer.layer_view.setFrameSize(content_view.frame().size);
         content_view.addSubview_positioned_relativeTo(&layer.layer_view, NSWindowOrderingMode::Below, Some(&self.root_view));
+    }
+
+    pub(crate) fn start_dragging_session(&self, mtm: MainThreadMarker, drag_items: &BorrowedArray<DraggingItem>) -> anyhow::Result<()> {
+        let app = MyNSApplication::sharedApplication(mtm);
+        let event = app
+            .currentEvent()
+            .take_if(|event| event.r#type() == NSEventType::LeftMouseDown || event.r#type() == NSEventType::RightMouseDown)
+            .context("Drag session can be started only from a mouse down event handler")?;
+        let screen_height = NSScreen::primary(mtm)?.height();
+        let items = DraggingItem::copy_to_ns_array(drag_items.as_slice()?, mtm, screen_height)?;
+        let session = self
+            .root_view
+            .beginDraggingSessionWithItems_event_source(&items, &event, ProtocolObject::from_ref(&*self.root_view));
+        session.setAnimatesToStartingPositionsOnCancelOrFail(false);
+        Ok(())
+    }
+}
+
+impl DraggingItem<'_> {
+    fn to_ns_dragging_item(&self, mtm: MainThreadMarker, screen_height: LogicalPixels) -> anyhow::Result<Retained<NSDraggingItem>> {
+        let pasteboard_writer: Retained<ProtocolObject<dyn NSPasteboardWriting>> = self.pasteboard_item.to_ns_pasteboard_item()?;
+        let item = NSDraggingItem::initWithPasteboardWriter(NSDraggingItem::alloc(), &pasteboard_writer);
+        let frame = self.rect.as_macos_coords(screen_height);
+        let image = self.image.to_ns_image(mtm)?;
+        unsafe { item.setDraggingFrame_contents(frame, Some(image.as_ref())) }
+        Ok(item)
+    }
+
+    fn copy_to_ns_array(
+        items: &[Self],
+        mtm: MainThreadMarker,
+        screen_height: LogicalPixels,
+    ) -> anyhow::Result<Retained<NSArray<NSDraggingItem>>> {
+        let array = NSMutableArray::<NSDraggingItem>::arrayWithCapacity(items.len());
+        for item in items {
+            let item = item.to_ns_dragging_item(mtm, screen_height)?;
+            array.addObject(&item);
+        }
+        Ok(array.into_super())
     }
 }
 
@@ -633,6 +675,61 @@ define_class!(
         unsafe fn perform_drag_operation(&self, info: &ProtocolObject<dyn NSDraggingInfo>) -> bool {
             catch_panic(|| {
                 Ok(handle_drag_perform(info))
+            }).unwrap_or(false)
+        }
+    }
+
+    unsafe impl NSDraggingSource for RootView {
+        #[unsafe(method(draggingSession:sourceOperationMaskForDraggingContext:))]
+        fn dragging_session_source_operation_mask_for_dragging_context(
+            &self,
+            session: &NSDraggingSession,
+            context: NSDraggingContext,
+        ) -> NSDragOperation {
+            catch_panic(|| {
+                println!("session: {session:?} context: {context:?}");
+                Ok(NSDragOperation::None)
+            }).unwrap_or(NSDragOperation::None)
+        }
+
+        #[unsafe(method(draggingSession:willBeginAtPoint:))]
+        fn dragging_session_will_begin_at_point(
+            &self,
+            session: &NSDraggingSession,
+            screen_point: NSPoint,
+        ) {
+            catch_panic(|| {
+                println!("session: {session:?} screen_point: {screen_point:?}");
+               Ok(())
+            });
+        }
+
+        #[unsafe(method(draggingSession:movedToPoint:))]
+        fn dragging_session_moved_to_point(&self, session: &NSDraggingSession, screen_point: NSPoint) {
+            catch_panic(|| {
+                println!("session: {session:?} screen_point: {screen_point:?}");
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(draggingSession:endedAtPoint:operation:))]
+        fn dragging_session_ended_at_point_operation(
+            &self,
+            session: &NSDraggingSession,
+            screen_point: NSPoint,
+            operation: NSDragOperation,
+        ) {
+            catch_panic(|| {
+                println!("session: {session:?} screen_point: {screen_point:?}, operation: {operation:?}");
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(ignoreModifierKeysForDraggingSession:))]
+        fn ignore_modifier_keys_for_dragging_session(&self, session: &NSDraggingSession) -> bool {
+            catch_panic(|| {
+                println!("session: {session:?}");
+                Ok(false)
             }).unwrap_or(false)
         }
     }
