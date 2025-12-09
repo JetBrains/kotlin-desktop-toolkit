@@ -5,7 +5,7 @@ import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.AppMenuStructure
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Cursor
-import org.jetbrains.desktop.macos.DragAndDropCallbacks
+import org.jetbrains.desktop.macos.DragTargetCallbacks
 import org.jetbrains.desktop.macos.DragAndDropHandler
 import org.jetbrains.desktop.macos.DragInfo
 import org.jetbrains.desktop.macos.DragOperation
@@ -1094,8 +1094,8 @@ class ApplicationState : AutoCloseable {
     }
 }
 
-fun dragAndDropCallback(): DragAndDropCallbacks {
-    return object : DragAndDropCallbacks {
+fun dragAndDropCallback(): DragTargetCallbacks {
+    return object : DragTargetCallbacks {
         override fun onDragEntered(info: DragInfo): DragOperation {
             val files = Pasteboard.readFileItemPaths(pasteboardName = info.pasteboardName)
             println("Drag Entered: $info, files: $files")

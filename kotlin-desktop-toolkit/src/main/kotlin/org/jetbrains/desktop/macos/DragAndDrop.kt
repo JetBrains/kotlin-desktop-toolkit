@@ -54,7 +54,7 @@ public data class DragInfo(
 /**
  * Callback interface for handling drag and drop operations.
  */
-public interface DragAndDropCallbacks {
+public interface DragTargetCallbacks {
     /**
      * Called when a drag operation enters the window.
      * @param info Information about the drag operation
@@ -88,11 +88,11 @@ public interface DragAndDropCallbacks {
  */
 public object DragAndDropHandler : AutoCloseable {
     private lateinit var arena: Arena
-    private lateinit var dragAndDropCallbacks: DragAndDropCallbacks
+    private lateinit var dragTargetCallbacks: DragTargetCallbacks
 
-    public fun init(callbacks: DragAndDropCallbacks) {
+    public fun init(callbacks: DragTargetCallbacks) {
         arena = Arena.ofConfined()
-        dragAndDropCallbacks = callbacks
+        dragTargetCallbacks = callbacks
         desktop_macos_h.set_drag_and_drop_callbacks(dragAndDropCallbacks())
     }
 
@@ -120,14 +120,14 @@ public object DragAndDropHandler : AutoCloseable {
     // called from native
     private fun onDragEntered(dragInfo: MemorySegment): Long {
         return ffiUpCall(defaultResult = DragOperation.NONE.value) {
-            dragAndDropCallbacks.onDragEntered(DragInfo.fromNative(dragInfo)).value
+            dragTargetCallbacks.onDragEntered(DragInfo.fromNative(dragInfo)).value
         }
     }
 
     // called from native
     private fun onDragUpdated(dragInfo: MemorySegment): Long {
         return ffiUpCall(defaultResult = DragOperation.NONE.value) {
-            dragAndDropCallbacks.onDragUpdated(DragInfo.fromNative(dragInfo)).value
+            dragTargetCallbacks.onDragUpdated(DragInfo.fromNative(dragInfo)).value
         }
     }
 
@@ -139,14 +139,14 @@ public object DragAndDropHandler : AutoCloseable {
             } else {
                 DragInfo.fromNative(dragInfo)
             }
-            dragAndDropCallbacks.onDragExited(dragInfo)
+            dragTargetCallbacks.onDragExited(dragInfo)
         }
     }
 
     // called from native
     private fun onDragPerformed(dragInfo: MemorySegment): Boolean {
         return ffiUpCall(defaultResult = false) {
-            dragAndDropCallbacks.onDragPerformed(DragInfo.fromNative(dragInfo))
+            dragTargetCallbacks.onDragPerformed(DragInfo.fromNative(dragInfo))
         }
     }
 
