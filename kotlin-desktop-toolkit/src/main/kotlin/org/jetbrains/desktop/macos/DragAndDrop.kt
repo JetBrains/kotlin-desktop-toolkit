@@ -1,6 +1,10 @@
 package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeDragAndDropCallbacks
+import org.jetbrains.desktop.macos.generated.NativeDragSourceOperationMaskCallback
+import org.jetbrains.desktop.macos.generated.NativeDragSourceSessionEndedAt
+import org.jetbrains.desktop.macos.generated.NativeDragSourceSessionMovedTo
+import org.jetbrains.desktop.macos.generated.NativeDragSourceSessionWillBeginAt
 import org.jetbrains.desktop.macos.generated.NativeDragTargetEnteredCallback
 import org.jetbrains.desktop.macos.generated.NativeDragTargetExitedCallback
 import org.jetbrains.desktop.macos.generated.NativeDragTargetInfo
@@ -52,6 +56,17 @@ public data class DragInfo(
 }
 
 /**
+ * Dragging context constants.
+ */
+@JvmInline
+public value class DraggingContext internal constructor(public val value: Long) {
+    public companion object {
+        public val OUTSIDE_APPLICATION: DraggingContext = DraggingContext(0L)
+        public val WITHIN_APPLICATION: DraggingContext = DraggingContext(1L)
+    }
+}
+
+/**
  * Callback interface for handling drag and drop operations.
  */
 public interface DragTargetCallbacks {
@@ -84,15 +99,61 @@ public interface DragTargetCallbacks {
 }
 
 /**
+ * Callback interface for handling drag source operations.
+ */
+public interface DragSourceCallbacks {
+    /**
+     * Called to determine which drag operations are allowed for the drag session.
+     * @param sourceWindowId The window that initiated the drag
+     * @param sequenceNumber Unique identifier for this drag session
+     * @param context The dragging context (within or outside application)
+     * @return Bitset of allowed drag operations
+     */
+    public fun onDragSourceOperationMask(sourceWindowId: WindowId, sequenceNumber: Long, context: DraggingContext): Long = 0L
+
+    /**
+     * Called when a drag session begins.
+     * @param sourceWindowId The window that initiated the drag
+     * @param sequenceNumber Unique identifier for this drag session
+     * @param locationOnScreen The location where the drag began on the screen
+     */
+    public fun onDragSourceSessionWillBeginAt(sourceWindowId: WindowId, sequenceNumber: Long, locationOnScreen: LogicalPoint) {}
+
+    /**
+     * Called when the drag moves to a new location.
+     * @param sourceWindowId The window that initiated the drag
+     * @param sequenceNumber Unique identifier for this drag session
+     * @param locationOnScreen The current location of the drag on the screen
+     */
+    public fun onDragSourceSessionMovedTo(sourceWindowId: WindowId, sequenceNumber: Long, locationOnScreen: LogicalPoint) {}
+
+    /**
+     * Called when the drag session ends.
+     * @param sourceWindowId The window that initiated the drag
+     * @param sequenceNumber Unique identifier for this drag session
+     * @param locationOnScreen The location where the drag ended on the screen
+     * @param dragOperation The final drag operation that was performed
+     */
+    public fun onDragSourceSessionEndedAt(
+        sourceWindowId: WindowId,
+        sequenceNumber: Long,
+        locationOnScreen: LogicalPoint,
+        dragOperation: DragOperation,
+    ) {}
+}
+
+/**
  * Holder for drag and drop callbacks that manages native callback allocation.
  */
 public object DragAndDropHandler : AutoCloseable {
     private lateinit var arena: Arena
     private lateinit var dragTargetCallbacks: DragTargetCallbacks
+    private lateinit var dragSourceCallbacks: DragSourceCallbacks
 
-    public fun init(callbacks: DragTargetCallbacks) {
+    public fun init(targetCallbacks: DragTargetCallbacks, sourceCallbacks: DragSourceCallbacks) {
         arena = Arena.ofConfined()
-        dragTargetCallbacks = callbacks
+        dragTargetCallbacks = targetCallbacks
+        dragSourceCallbacks = sourceCallbacks
         desktop_macos_h.set_drag_and_drop_callbacks(dragAndDropCallbacks())
     }
 
@@ -113,6 +174,22 @@ public object DragAndDropHandler : AutoCloseable {
         NativeDragAndDropCallbacks.drag_target_perform_callback(
             callbacks,
             NativeDragTargetPerformCallback.allocate(::onDragPerformed, arena),
+        )
+        NativeDragAndDropCallbacks.drag_source_operation_mask_callback(
+            callbacks,
+            NativeDragSourceOperationMaskCallback.allocate(::onDragSourceOperationMask, arena),
+        )
+        NativeDragAndDropCallbacks.drag_source_session_will_begin_at(
+            callbacks,
+            NativeDragSourceSessionWillBeginAt.allocate(::onDragSourceSessionWillBeginAt, arena),
+        )
+        NativeDragAndDropCallbacks.drag_source_session_moved_to(
+            callbacks,
+            NativeDragSourceSessionMovedTo.allocate(::onDragSourceSessionMovedTo, arena),
+        )
+        NativeDragAndDropCallbacks.drag_source_session_ended_at(
+            callbacks,
+            NativeDragSourceSessionEndedAt.allocate(::onDragSourceSessionEndedAt, arena),
         )
         return callbacks
     }
@@ -147,6 +224,56 @@ public object DragAndDropHandler : AutoCloseable {
     private fun onDragPerformed(dragInfo: MemorySegment): Boolean {
         return ffiUpCall(defaultResult = false) {
             dragTargetCallbacks.onDragPerformed(DragInfo.fromNative(dragInfo))
+        }
+    }
+
+    // called from native
+    private fun onDragSourceOperationMask(sourceWindowId: Long, sequenceNumber: Long, context: Long): Long {
+        return ffiUpCall(defaultResult = 0L) {
+            dragSourceCallbacks.onDragSourceOperationMask(
+                sourceWindowId,
+                sequenceNumber,
+                DraggingContext(context),
+            )
+        }
+    }
+
+    // called from native
+    private fun onDragSourceSessionWillBeginAt(sourceWindowId: Long, sequenceNumber: Long, locationOnScreen: MemorySegment) {
+        ffiUpCall {
+            dragSourceCallbacks.onDragSourceSessionWillBeginAt(
+                sourceWindowId,
+                sequenceNumber,
+                LogicalPoint.fromNative(locationOnScreen),
+            )
+        }
+    }
+
+    // called from native
+    private fun onDragSourceSessionMovedTo(sourceWindowId: Long, sequenceNumber: Long, locationOnScreen: MemorySegment) {
+        ffiUpCall {
+            dragSourceCallbacks.onDragSourceSessionMovedTo(
+                sourceWindowId,
+                sequenceNumber,
+                LogicalPoint.fromNative(locationOnScreen),
+            )
+        }
+    }
+
+    // called from native
+    private fun onDragSourceSessionEndedAt(
+        sourceWindowId: Long,
+        sequenceNumber: Long,
+        locationOnScreen: MemorySegment,
+        dragOperation: Long,
+    ) {
+        ffiUpCall {
+            dragSourceCallbacks.onDragSourceSessionEndedAt(
+                sourceWindowId,
+                sequenceNumber,
+                LogicalPoint.fromNative(locationOnScreen),
+                DragOperation(dragOperation),
+            )
         }
     }
 

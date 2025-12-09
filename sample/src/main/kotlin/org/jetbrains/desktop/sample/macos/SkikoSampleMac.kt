@@ -5,10 +5,12 @@ import org.jetbrains.desktop.macos.AppMenuManager
 import org.jetbrains.desktop.macos.AppMenuStructure
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Cursor
-import org.jetbrains.desktop.macos.DragTargetCallbacks
 import org.jetbrains.desktop.macos.DragAndDropHandler
 import org.jetbrains.desktop.macos.DragInfo
 import org.jetbrains.desktop.macos.DragOperation
+import org.jetbrains.desktop.macos.DragSourceCallbacks
+import org.jetbrains.desktop.macos.DragTargetCallbacks
+import org.jetbrains.desktop.macos.DraggingContext
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.FileDialog
@@ -1094,7 +1096,7 @@ class ApplicationState : AutoCloseable {
     }
 }
 
-fun dragAndDropCallback(): DragTargetCallbacks {
+fun dragTargetCallbacks(): DragTargetCallbacks {
     return object : DragTargetCallbacks {
         override fun onDragEntered(info: DragInfo): DragOperation {
             val files = Pasteboard.readFileItemPaths(pasteboardName = info.pasteboardName)
@@ -1117,6 +1119,34 @@ fun dragAndDropCallback(): DragTargetCallbacks {
             val files = Pasteboard.readFileItemPaths(pasteboardName = info.pasteboardName)
             println("Drag Performed: $info files: $files")
             return true
+        }
+    }
+}
+
+fun dragSourceCallbacks(): DragSourceCallbacks {
+    return object : DragSourceCallbacks {
+        override fun onDragSourceOperationMask(sourceWindowId: WindowId, sequenceNumber: Long, context: DraggingContext): Long {
+            println("Drag Source Operation Mask: windowId=$sourceWindowId, seq=$sequenceNumber, context=$context")
+            return 0
+        }
+
+        override fun onDragSourceSessionWillBeginAt(sourceWindowId: WindowId, sequenceNumber: Long, locationOnScreen: LogicalPoint) {
+            println("Drag Source Session Will Begin: windowId=$sourceWindowId, seq=$sequenceNumber, location=$locationOnScreen")
+        }
+
+        override fun onDragSourceSessionMovedTo(sourceWindowId: WindowId, sequenceNumber: Long, locationOnScreen: LogicalPoint) {
+            println("Drag Source Session Moved: windowId=$sourceWindowId, seq=$sequenceNumber, location=$locationOnScreen")
+        }
+
+        override fun onDragSourceSessionEndedAt(
+            sourceWindowId: WindowId,
+            sequenceNumber: Long,
+            locationOnScreen: LogicalPoint,
+            dragOperation: DragOperation,
+        ) {
+            println(
+                "Drag Source Session Ended: windowId=$sourceWindowId, seq=$sequenceNumber, location=$locationOnScreen, op=$dragOperation",
+            )
         }
     }
 }
@@ -1181,7 +1211,10 @@ fun main() {
     Logger.info { runtimeInfo() }
     GrandCentralDispatch.startOnMainThread {
         Application.init(Application.ApplicationConfig())
-        DragAndDropHandler.init(dragAndDropCallback())
+        DragAndDropHandler.init(
+            targetCallbacks = dragTargetCallbacks(),
+            sourceCallbacks = dragSourceCallbacks(),
+        )
         ApplicationState().use { state ->
             state.createWindow(useCustomTitlebar = true)
             Application.runEventLoop { event ->
