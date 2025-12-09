@@ -12,7 +12,11 @@ use crate::macos::window_api::{DraggingItem, TitlebarConfiguration};
 use crate::{
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     macos::{
-        drag_and_drop::{handle_drag_target_entered, handle_drag_target_exited, handle_drag_target_perform, handle_drag_target_updated},
+        drag_and_drop::{
+            handle_drag_source_operation_mask, handle_drag_source_session_ended_at, handle_drag_source_session_moved_to,
+            handle_drag_source_session_will_begin_at, handle_drag_target_entered, handle_drag_target_exited, handle_drag_target_perform,
+            handle_drag_target_updated,
+        },
         events::{
             handle_flags_change, handle_key_up_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
             handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_changed_occlusion_state, handle_window_close_request,
@@ -687,7 +691,9 @@ define_class!(
             context: NSDraggingContext,
         ) -> NSDragOperation {
             catch_panic(|| {
-                Ok(NSDragOperation::None)
+                let window_id = self.window().map(|w| w.window_id()).expect("Detached view");
+                let mask = handle_drag_source_operation_mask(window_id, session, context);
+                Ok(NSDragOperation(mask))
             }).unwrap_or(NSDragOperation::None)
         }
 
@@ -698,15 +704,19 @@ define_class!(
             screen_point: NSPoint,
         ) {
             catch_panic(|| {
-                println!("session: {session:?} screen_point: {screen_point:?}");
-               Ok(())
+                let mtm = self.mtm();
+                let window_id = self.window().map(|w| w.window_id()).expect("Detached view");
+                handle_drag_source_session_will_begin_at(window_id, session, screen_point, mtm);
+                Ok(())
             });
         }
 
         #[unsafe(method(draggingSession:movedToPoint:))]
         fn dragging_session_moved_to_point(&self, session: &NSDraggingSession, screen_point: NSPoint) {
             catch_panic(|| {
-                println!("session: {session:?} screen_point: {screen_point:?}");
+                let mtm = self.mtm();
+                let window_id = self.window().map(|w| w.window_id()).expect("Detached view");
+                handle_drag_source_session_moved_to(window_id, session, screen_point, mtm);
                 Ok(())
             });
         }
@@ -719,7 +729,9 @@ define_class!(
             operation: NSDragOperation,
         ) {
             catch_panic(|| {
-                println!("session: {session:?} screen_point: {screen_point:?}, operation: {operation:?}");
+                let mtm = self.mtm();
+                let window_id = self.window().map(|w| w.window_id()).expect("Detached view");
+                handle_drag_source_session_ended_at(window_id, session, screen_point, operation, mtm);
                 Ok(())
             });
         }
