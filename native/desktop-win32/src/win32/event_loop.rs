@@ -15,8 +15,8 @@ use windows::Win32::{
             SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
             USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN,
             WM_KEYUP, WM_KILLFOCUS, WM_MOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
-            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE,
-            WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
+            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
+            WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
         },
     },
 };
@@ -105,6 +105,8 @@ impl EventLoop {
             // we still have to handle this message because we manually hit-test the non-client area
             // see https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmdefwindowproc
             WM_NCMOUSELEAVE => on_ncmouseleave(window, wparam, lparam),
+
+            WM_SETCURSOR => on_setcursor(window, lparam),
 
             WM_SETTEXT => on_settext(self, window, wparam, lparam),
 
@@ -224,6 +226,21 @@ fn on_getminmaxinfo(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
         return Some(LRESULT(0));
     }
     None
+}
+
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
+fn on_setcursor(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
+    let hit_test = LOWORD!(lparam.0);
+    if u32::from(hit_test) == HTCLIENT {
+        window
+            .refresh_cursor()
+            .inspect_err(|err| log::error!("failed to set cursor: {err}"))
+            .ok()
+            .map(|()| LRESULT(windows::Win32::Foundation::TRUE.0 as isize))
+    } else {
+        None
+    }
 }
 
 #[allow(clippy::unnecessary_wraps)]
