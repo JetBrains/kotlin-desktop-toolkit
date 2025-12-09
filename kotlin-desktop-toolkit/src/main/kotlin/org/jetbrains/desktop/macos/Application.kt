@@ -6,7 +6,6 @@ import org.jetbrains.desktop.macos.generated.NativeEventHandler
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
-import java.lang.foreign.ValueLayout
 
 public enum class EventHandlerResult {
     Continue,
@@ -116,13 +115,16 @@ public object Application {
         }
     }
 
-    public fun setDockIcon(icon: ByteArray) {
+    public fun setDockIcon(icon: Image) {
         ffiDownCall {
             Arena.ofConfined().use { arena ->
-                val segment = arena.allocateArray(ValueLayout.JAVA_BYTE, *icon)
-                desktop_macos_h.application_set_dock_icon(segment, segment.byteSize())
+                desktop_macos_h.application_set_dock_icon(icon.toNative(arena))
             }
         }
+    }
+
+    public fun setDockIcon(iconBytes: ByteArray) {
+        setDockIcon(Image.fromBytes(iconBytes))
     }
 
     public fun setDockIconBadge(label: String) {

@@ -1,11 +1,11 @@
 package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeDragAndDropCallbacks
-import org.jetbrains.desktop.macos.generated.NativeDragEnteredCallback
-import org.jetbrains.desktop.macos.generated.NativeDragExitedCallback
-import org.jetbrains.desktop.macos.generated.NativeDragInfo
-import org.jetbrains.desktop.macos.generated.NativeDragPerformCallback
-import org.jetbrains.desktop.macos.generated.NativeDragUpdatedCallback
+import org.jetbrains.desktop.macos.generated.NativeDragTargetEnteredCallback
+import org.jetbrains.desktop.macos.generated.NativeDragTargetExitedCallback
+import org.jetbrains.desktop.macos.generated.NativeDragTargetInfo
+import org.jetbrains.desktop.macos.generated.NativeDragTargetPerformCallback
+import org.jetbrains.desktop.macos.generated.NativeDragTargetUpdatedCallback
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -35,11 +35,11 @@ public data class DragInfo(
 ) {
     internal companion object {
         fun fromNative(segment: MemorySegment): DragInfo {
-            val destinationWindowId = NativeDragInfo.destination_window_id(segment)
-            val locationInWindow = LogicalPoint.fromNative(NativeDragInfo.location_in_window(segment))
-            val allowedOperations = NativeDragInfo.allowed_operations(segment)
-            val sequenceNumber = NativeDragInfo.sequence_number(segment)
-            val pasteboardName = NativeDragInfo.pasteboard_name(segment).getUtf8String(0)
+            val destinationWindowId = NativeDragTargetInfo.destination_window_id(segment)
+            val locationInWindow = LogicalPoint.fromNative(NativeDragTargetInfo.location_in_window(segment))
+            val allowedOperations = NativeDragTargetInfo.allowed_operations(segment)
+            val sequenceNumber = NativeDragTargetInfo.sequence_number(segment)
+            val pasteboardName = NativeDragTargetInfo.pasteboard_name(segment).getUtf8String(0)
             return DragInfo(
                 destinationWindowId,
                 locationInWindow,
@@ -98,21 +98,21 @@ public object DragAndDropHandler : AutoCloseable {
 
     private fun dragAndDropCallbacks(): MemorySegment {
         val callbacks = NativeDragAndDropCallbacks.allocate(arena)
-        NativeDragAndDropCallbacks.drag_entered_callback(
+        NativeDragAndDropCallbacks.drag_target_entered_callback(
             callbacks,
-            NativeDragEnteredCallback.allocate(::onDragEntered, arena),
+            NativeDragTargetEnteredCallback.allocate(::onDragEntered, arena),
         )
-        NativeDragAndDropCallbacks.drag_updated_callback(
+        NativeDragAndDropCallbacks.drag_target_updated_callback(
             callbacks,
-            NativeDragUpdatedCallback.allocate(::onDragUpdated, arena),
+            NativeDragTargetUpdatedCallback.allocate(::onDragUpdated, arena),
         )
-        NativeDragAndDropCallbacks.drag_exited_callback(
+        NativeDragAndDropCallbacks.drag_target_exited_callback(
             callbacks,
-            NativeDragExitedCallback.allocate(::onDragExited, arena),
+            NativeDragTargetExitedCallback.allocate(::onDragExited, arena),
         )
-        NativeDragAndDropCallbacks.drag_perform_callback(
+        NativeDragAndDropCallbacks.drag_target_perform_callback(
             callbacks,
-            NativeDragPerformCallback.allocate(::onDragPerformed, arena),
+            NativeDragTargetPerformCallback.allocate(::onDragPerformed, arena),
         )
         return callbacks
     }
