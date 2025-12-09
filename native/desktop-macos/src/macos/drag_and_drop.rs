@@ -54,11 +54,18 @@ pub type DragTargetPerformCallback = extern "C" fn(info: DragTargetInfo) -> bool
 #[repr(transparent)]
 pub struct DraggingContext(pub isize);
 
-pub type DragSourceOperationMaskCallback = extern "C" fn(source_window_id: WindowId, sequence_number: SequenceNumber, context: DraggingContext) -> DragOperationsBitSet;
-pub type DragSourceSessionWillBeginAt = extern "C" fn(source_window_id: WindowId, sequence_number: SequenceNumber, location_on_screen: LogicalPoint);
-pub type DragSourceSessionMovedTo = extern "C" fn(source_window_id: WindowId, sequence_number: SequenceNumber, location_on_screen: LogicalPoint);
-pub type DragSourceSessionEndedAt =
-    extern "C" fn(source_window_id: WindowId, sequence_number: SequenceNumber, location_on_screen: LogicalPoint, drag_operation: DragOperation);
+pub type DragSourceOperationMaskCallback =
+    extern "C" fn(source_window_id: WindowId, sequence_number: SequenceNumber, context: DraggingContext) -> DragOperationsBitSet;
+pub type DragSourceSessionWillBeginAt =
+    extern "C" fn(source_window_id: WindowId, sequence_number: SequenceNumber, location_on_screen: LogicalPoint);
+pub type DragSourceSessionMovedTo =
+    extern "C" fn(source_window_id: WindowId, sequence_number: SequenceNumber, location_on_screen: LogicalPoint);
+pub type DragSourceSessionEndedAt = extern "C" fn(
+    source_window_id: WindowId,
+    sequence_number: SequenceNumber,
+    location_on_screen: LogicalPoint,
+    drag_operation: DragOperation,
+);
 
 #[derive(Debug)]
 #[repr(C)]
@@ -142,13 +149,24 @@ pub fn handle_drag_target_perform(info: &ProtocolObject<dyn NSDraggingInfo>) -> 
     .unwrap_or(false)
 }
 
-pub fn handle_drag_source_operation_mask(source_window_id: WindowId, session: &NSDraggingSession, context: NSDraggingContext) -> DragOperationsBitSet {
+pub fn handle_drag_source_operation_mask(
+    source_window_id: WindowId,
+    session: &NSDraggingSession,
+    context: NSDraggingContext,
+) -> DragOperationsBitSet {
     let sequence_number = session.draggingSequenceNumber();
-    with_drag_callbacks(|callbacks| (callbacks.drag_source_operation_mask_callback)(source_window_id, sequence_number, DraggingContext(context.0)))
-        .unwrap_or(0)
+    with_drag_callbacks(|callbacks| {
+        (callbacks.drag_source_operation_mask_callback)(source_window_id, sequence_number, DraggingContext(context.0))
+    })
+    .unwrap_or(0)
 }
 
-pub fn handle_drag_source_session_will_begin_at(source_window_id: WindowId, session: &NSDraggingSession, screen_point: NSPoint, mtm: MainThreadMarker) {
+pub fn handle_drag_source_session_will_begin_at(
+    source_window_id: WindowId,
+    session: &NSDraggingSession,
+    screen_point: NSPoint,
+    mtm: MainThreadMarker,
+) {
     let sequence_number = session.draggingSequenceNumber();
     if let Ok(screen) = NSScreen::primary(mtm) {
         let screen_height = screen.height();
@@ -159,7 +177,12 @@ pub fn handle_drag_source_session_will_begin_at(source_window_id: WindowId, sess
     }
 }
 
-pub fn handle_drag_source_session_moved_to(source_window_id: WindowId, session: &NSDraggingSession, screen_point: NSPoint, mtm: MainThreadMarker) {
+pub fn handle_drag_source_session_moved_to(
+    source_window_id: WindowId,
+    session: &NSDraggingSession,
+    screen_point: NSPoint,
+    mtm: MainThreadMarker,
+) {
     let sequence_number = session.draggingSequenceNumber();
     if let Ok(screen) = NSScreen::primary(mtm) {
         let screen_height = screen.height();
