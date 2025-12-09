@@ -263,9 +263,9 @@ public class Window internal constructor(
         }
     }
 
-    public fun startDrag() {
+    public fun startDragWindow() {
         ffiDownCall {
-            desktop_macos_h.window_start_drag(pointer)
+            desktop_macos_h.window_start_drag_window(pointer)
         }
     }
 

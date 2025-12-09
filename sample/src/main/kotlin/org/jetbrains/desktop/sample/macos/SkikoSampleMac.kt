@@ -360,7 +360,7 @@ class RotatingBallWindow(
                 }
             }
             windowContainer.customTitlebar?.startWindowDrag = {
-                window.startDrag()
+                window.startDragWindow()
             }
             windowContainer.customTitlebar?.zoomBoxClicked = {
                 window.toggleMaximize()

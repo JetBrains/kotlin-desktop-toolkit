@@ -356,8 +356,8 @@ pub extern "C" fn window_is_visible(window_ptr: WindowPtr) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_start_drag(window_ptr: WindowPtr) {
-    ffi_boundary("window_start_drag", || {
+pub extern "C" fn window_start_drag_window(window_ptr: WindowPtr) {
+    ffi_boundary("window_start_drag_window", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
         if let Some(event) = app.currentEvent() {
