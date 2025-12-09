@@ -3,6 +3,7 @@ package org.jetbrains.desktop.sample.win32
 import org.jetbrains.desktop.win32.AngleRenderer
 import org.jetbrains.desktop.win32.Appearance
 import org.jetbrains.desktop.win32.Application
+import org.jetbrains.desktop.win32.CursorIcon
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.Logger
@@ -75,6 +76,9 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                     }
                     VirtualKey.T -> {
                         window.setTitle("New Title")
+                    }
+                    VirtualKey.C -> {
+                        window.setCursor(CursorIcon.Hand)
                     }
                 }
                 EventHandlerResult.Continue

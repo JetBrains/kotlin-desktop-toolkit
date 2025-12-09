@@ -5,6 +5,7 @@ import org.jetbrains.desktop.win32.generated.NativeWindowStyle
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import java.nio.file.Path
 import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.concurrent.atomics.fetchAndIncrement
@@ -112,11 +113,22 @@ public class Window internal constructor(
         }
     }
 
-    public fun setImmersiveDarkMode(enabled: Boolean) {
+    public fun setCursor(cursorIcon: CursorIcon) {
+        ffiDownCall {
+            desktop_win32_h.window_set_cursor_from_system(ptr, cursorIcon.toNative())
+        }
+    }
+
+    public fun setCursorFromFile(path: Path) {
         Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                desktop_win32_h.window_set_immersive_dark_mode(ptr, enabled)
-            }
+            val nativePathString = arena.allocateUtf8String(path.toFile().absolutePath)
+            ffiDownCall { desktop_win32_h.window_set_cursor_from_file(ptr, nativePathString) }
+        }
+    }
+
+    public fun setImmersiveDarkMode(enabled: Boolean) {
+        ffiDownCall {
+            desktop_win32_h.window_set_immersive_dark_mode(ptr, enabled)
         }
     }
 

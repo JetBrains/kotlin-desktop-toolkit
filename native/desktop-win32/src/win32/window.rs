@@ -25,10 +25,10 @@ use windows::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
-                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW, IDC_ARROW,
-                LoadCursorW, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
-                SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE,
-                WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
+                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW, PostMessageW,
+                RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetCursor, SetPropW,
+                SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE,
+                WM_NCDESTROY, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
@@ -36,6 +36,7 @@ use windows::{
 };
 
 use super::{
+    cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     pointer::PointerClickCounter,
@@ -66,6 +67,7 @@ pub struct Window {
     style: RefCell<WindowStyle>,
     pointer_in_client: AtomicBool,
     pointer_click_counter: RefCell<PointerClickCounter>,
+    cursor: RefCell<Option<Cursor>>,
     event_loop: Weak<EventLoop>,
 }
 
@@ -79,7 +81,6 @@ impl Window {
                 hInstance: crate::get_dll_instance(),
                 lpszClassName: WNDCLASS_NAME,
                 lpfnWndProc: Some(wndproc),
-                hCursor: unsafe { LoadCursorW(None, IDC_ARROW) }?,
                 style: CS_HREDRAW | CS_VREDRAW,
                 ..Default::default()
             };
@@ -98,6 +99,7 @@ impl Window {
             style: RefCell::default(),
             pointer_in_client: AtomicBool::new(false),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
+            cursor: RefCell::new(None),
             event_loop,
         };
         Ok(window)
@@ -227,6 +229,22 @@ impl Window {
 
     pub fn show(&self) -> bool {
         unsafe { ShowWindow(self.hwnd(), SW_SHOW) }.as_bool()
+    }
+
+    pub fn set_cursor(&self, cursor: Cursor) {
+        unsafe { SetCursor(Some(cursor.as_native())) };
+        self.cursor.replace(Some(cursor));
+    }
+
+    pub(crate) fn refresh_cursor(&self) -> WinResult<()> {
+        let current_cursor = self.cursor.borrow();
+        if let Some(cursor) = current_cursor.as_ref() {
+            unsafe { SetCursor(Some(cursor.as_native())) };
+        } else {
+            let arrow_cursor = Cursor::load_from_system(CursorIcon::Arrow)?;
+            unsafe { SetCursor(Some(arrow_cursor.as_native())) };
+        }
+        Ok(())
     }
 
     #[allow(clippy::cast_possible_truncation)]
@@ -380,7 +398,9 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.hwnd.store(hwnd.0, Ordering::Release);
     unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.borrow().to_system().0 as _) };
     window.set_position(*window.origin.borrow(), *window.size.borrow())?;
-    initialize_composition(window, hwnd).context("failed to initialize composition")
+    initialize_composition(window, hwnd).context("failed to initialize composition")?;
+    window.set_cursor(Cursor::load_from_system(CursorIcon::Arrow)?);
+    Ok(())
 }
 
 fn initialize_composition(window: &Window, hwnd: HWND) -> anyhow::Result<()> {

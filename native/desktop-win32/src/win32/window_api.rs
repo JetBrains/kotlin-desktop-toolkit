@@ -12,6 +12,7 @@ use windows::Win32::{
 use super::{
     application::Application,
     application_api::AppPtr,
+    cursor::{Cursor, CursorIcon},
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     screen::ScreenInfo,
     strings::copy_from_utf8_string,
@@ -144,6 +145,25 @@ pub extern "C" fn window_get_rect(window_ptr: WindowPtr) -> LogicalRect {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_screen_info(window_ptr: WindowPtr) -> ScreenInfo {
     with_window(&window_ptr, "window_get_screen_info", Window::get_screen_info)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_cursor_from_file(window_ptr: WindowPtr, path: BorrowedStrPtr) {
+    with_window(&window_ptr, "window_set_cursor_from_file", |window| {
+        let cursor_file_path = copy_from_utf8_string(&path)?.to_os_string();
+        let cursor = Cursor::load_from_file(cursor_file_path)?;
+        window.set_cursor(cursor);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_cursor_from_system(window_ptr: WindowPtr, cursor_icon: CursorIcon) {
+    with_window(&window_ptr, "window_set_cursor_from_system", |window| {
+        let cursor = Cursor::load_from_system(cursor_icon)?;
+        window.set_cursor(cursor);
+        Ok(())
+    });
 }
 
 #[unsafe(no_mangle)]
