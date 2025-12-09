@@ -362,6 +362,10 @@ public class Window internal constructor(
     }
 }
 
+/**
+ * @param rect is relative to window origin. But the cursor should be inside this rect.
+ * If it's not, the rect will move with animation to match this condition
+ */
 public data class DraggingItem(
     val pasteboardItem: Pasteboard.Item,
     val rect: LogicalRect,

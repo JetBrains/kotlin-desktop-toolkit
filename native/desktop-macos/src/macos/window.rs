@@ -37,13 +37,7 @@ use objc2::{
     rc::Retained,
     runtime::{AnyObject, ProtocolObject, Sel},
 };
-use objc2_app_kit::{
-    NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingContext,
-    NSDraggingDestination, NSDraggingInfo, NSDraggingItem, NSDraggingSession, NSDraggingSource, NSEvent, NSEventType, NSNormalWindowLevel,
-    NSPasteboardWriting, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode,
-    NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate,
-    NSWindowOrderingMode, NSWindowStyleMask,
-};
+use objc2_app_kit::{NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingContext, NSDraggingDestination, NSDraggingFormation, NSDraggingInfo, NSDraggingItem, NSDraggingSession, NSDraggingSource, NSEvent, NSEventType, NSNormalWindowLevel, NSPasteboardWriting, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask};
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSMutableArray, NSNotification, NSObject, NSObjectProtocol,
     NSPoint, NSRange, NSRangePointer, NSRect, NSUInteger,
@@ -305,21 +299,22 @@ impl Window {
             .currentEvent()
             .take_if(|event| event.r#type() == NSEventType::LeftMouseDown || event.r#type() == NSEventType::RightMouseDown)
             .context("Drag session can be started only from a mouse down event handler")?;
-        let screen_height = NSScreen::primary(mtm)?.height();
-        let items = DraggingItem::copy_to_ns_array(drag_items.as_slice()?, mtm, screen_height)?;
+        let window_height = self.ns_window.frame().size.height;
+        let items = DraggingItem::copy_to_ns_array(drag_items.as_slice()?, mtm, window_height)?;
         let session = self
             .root_view
             .beginDraggingSessionWithItems_event_source(&items, &event, ProtocolObject::from_ref(&*self.root_view));
         session.setAnimatesToStartingPositionsOnCancelOrFail(false);
+        session.setDraggingFormation(NSDraggingFormation::None);
         Ok(())
     }
 }
 
 impl DraggingItem<'_> {
-    fn to_ns_dragging_item(&self, mtm: MainThreadMarker, screen_height: LogicalPixels) -> anyhow::Result<Retained<NSDraggingItem>> {
+    fn to_ns_dragging_item(&self, mtm: MainThreadMarker, window_height: LogicalPixels) -> anyhow::Result<Retained<NSDraggingItem>> {
         let pasteboard_writer: Retained<ProtocolObject<dyn NSPasteboardWriting>> = self.pasteboard_item.to_ns_pasteboard_item()?;
         let item = NSDraggingItem::initWithPasteboardWriter(NSDraggingItem::alloc(), &pasteboard_writer);
-        let frame = self.rect.as_macos_coords(screen_height);
+        let frame = self.rect.as_macos_coords(window_height);
         let image = self.image.to_ns_image(mtm)?;
         unsafe { item.setDraggingFrame_contents(frame, Some(image.as_ref())) }
         Ok(item)
@@ -328,11 +323,11 @@ impl DraggingItem<'_> {
     fn copy_to_ns_array(
         items: &[Self],
         mtm: MainThreadMarker,
-        screen_height: LogicalPixels,
+        window_height: LogicalPixels,
     ) -> anyhow::Result<Retained<NSArray<NSDraggingItem>>> {
         let array = NSMutableArray::<NSDraggingItem>::arrayWithCapacity(items.len());
         for item in items {
-            let item = item.to_ns_dragging_item(mtm, screen_height)?;
+            let item = item.to_ns_dragging_item(mtm, window_height)?;
             array.addObject(&item);
         }
         Ok(array.into_super())
