@@ -2,6 +2,20 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 
+public object Cursor {
+    public fun show(): Int {
+        return ffiDownCall {
+            desktop_win32_h.cursor_show()
+        }
+    }
+
+    public fun hide(): Int {
+        return ffiDownCall {
+            desktop_win32_h.cursor_hide()
+        }
+    }
+}
+
 public enum class CursorIcon {
     Arrow,
     IBeam,
