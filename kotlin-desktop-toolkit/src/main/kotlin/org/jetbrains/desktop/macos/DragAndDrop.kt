@@ -30,10 +30,30 @@ public value class DragOperation internal constructor(internal val value: Long) 
     }
 }
 
+/**
+ * Bitset of drag operations.
+ */
+@JvmInline
+public value class DragOperationsSet internal constructor(internal val value: Long) {
+    public operator fun contains(operation: DragOperation): Boolean = (value and operation.value) != 0L
+
+    public operator fun plus(operation: DragOperation): DragOperationsSet =
+        DragOperationsSet(value or operation.value)
+
+    public operator fun plus(other: DragOperationsSet): DragOperationsSet =
+        DragOperationsSet(value or other.value)
+
+    public companion object {
+        public fun of(operation: DragOperation): DragOperationsSet = DragOperationsSet(operation.value)
+
+        public val NONE: DragOperationsSet = DragOperationsSet(0L)
+    }
+}
+
 public data class DragInfo(
     val destinationWindowId: WindowId,
     val locationInWindow: LogicalPoint,
-    val allowedOperations: Long,
+    val allowedOperations: DragOperationsSet,
     val sequenceNumber: Long,
     val pasteboardName: String,
 ) {
@@ -41,7 +61,7 @@ public data class DragInfo(
         fun fromNative(segment: MemorySegment): DragInfo {
             val destinationWindowId = NativeDragTargetInfo.destination_window_id(segment)
             val locationInWindow = LogicalPoint.fromNative(NativeDragTargetInfo.location_in_window(segment))
-            val allowedOperations = NativeDragTargetInfo.allowed_operations(segment)
+            val allowedOperations = DragOperationsSet(NativeDragTargetInfo.allowed_operations(segment))
             val sequenceNumber = NativeDragTargetInfo.sequence_number(segment)
             val pasteboardName = NativeDragTargetInfo.pasteboard_name(segment).getUtf8String(0)
             return DragInfo(
@@ -109,7 +129,7 @@ public interface DragSourceCallbacks {
      * @param context The dragging context (within or outside application)
      * @return Bitset of allowed drag operations
      */
-    public fun onDragSourceOperationMask(sourceWindowId: WindowId, sequenceNumber: Long, context: DraggingContext): Long = 0L
+    public fun onDragSourceOperationMask(sourceWindowId: WindowId, sequenceNumber: Long, context: DraggingContext): DragOperationsSet = DragOperationsSet.NONE
 
     /**
      * Called when a drag session begins.
@@ -234,7 +254,7 @@ public object DragAndDropHandler : AutoCloseable {
                 sourceWindowId,
                 sequenceNumber,
                 DraggingContext(context),
-            )
+            ).value
         }
     }
 
