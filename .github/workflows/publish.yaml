@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         targets: [
-          { os: "macos-14",
+          { os: "macos-15",
             rust_targets: "x86_64-apple-darwin,aarch64-apple-darwin",
             publish_common: false,
             package_manager: "brew" },
