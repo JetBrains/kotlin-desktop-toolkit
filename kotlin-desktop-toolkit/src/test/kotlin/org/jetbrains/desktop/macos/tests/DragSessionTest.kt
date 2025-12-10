@@ -22,23 +22,23 @@ class DragSessionTest : KDTApplicationTestBase() {
             Window.create(
                 origin = LogicalPoint(100.0, 200.0),
                 size = LogicalSize(400.0, 300.0),
-                title = "Drag Test Window"
+                title = "Drag Test Window",
             )
         }
 
         ui {
             val pasteboardItem = Pasteboard.Item.ofString(
                 type = Pasteboard.STRING_TYPE,
-                content = "Dragged text"
+                content = "Dragged text",
             )
 
             val draggingItem = DraggingItem(
                 pasteboardItem = pasteboardItem,
                 rect = LogicalRect(
                     origin = LogicalPoint(10.0, 10.0),
-                    size = LogicalSize(50.0, 50.0)
+                    size = LogicalSize(50.0, 50.0),
                 ),
-                image = Image.fromBytes(jbIconBytes())
+                image = Image.fromBytes(jbIconBytes()),
             )
 
             // startDragSession can only be called from a mouse down event handler

@@ -37,11 +37,9 @@ public value class DragOperation internal constructor(internal val value: Long) 
 public value class DragOperationsSet internal constructor(internal val value: Long) {
     public operator fun contains(operation: DragOperation): Boolean = (value and operation.value) != 0L
 
-    public operator fun plus(operation: DragOperation): DragOperationsSet =
-        DragOperationsSet(value or operation.value)
+    public operator fun plus(operation: DragOperation): DragOperationsSet = DragOperationsSet(value or operation.value)
 
-    public operator fun plus(other: DragOperationsSet): DragOperationsSet =
-        DragOperationsSet(value or other.value)
+    public operator fun plus(other: DragOperationsSet): DragOperationsSet = DragOperationsSet(value or other.value)
 
     public companion object {
         public fun of(operation: DragOperation): DragOperationsSet = DragOperationsSet(operation.value)
@@ -129,7 +127,8 @@ public interface DragSourceCallbacks {
      * @param context The dragging context (within or outside application)
      * @return Bitset of allowed drag operations
      */
-    public fun onDragSourceOperationMask(sourceWindowId: WindowId, sequenceNumber: Long, context: DraggingContext): DragOperationsSet = DragOperationsSet.NONE
+    public fun onDragSourceOperationMask(sourceWindowId: WindowId, sequenceNumber: Long, context: DraggingContext): DragOperationsSet =
+        DragOperationsSet.NONE
 
     /**
      * Called when a drag session begins.

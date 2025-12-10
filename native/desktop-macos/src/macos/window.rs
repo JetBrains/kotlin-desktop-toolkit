@@ -37,7 +37,13 @@ use objc2::{
     rc::Retained,
     runtime::{AnyObject, ProtocolObject, Sel},
 };
-use objc2_app_kit::{NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingContext, NSDraggingDestination, NSDraggingFormation, NSDraggingInfo, NSDraggingItem, NSDraggingSession, NSDraggingSource, NSEvent, NSEventType, NSNormalWindowLevel, NSPasteboardWriting, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask};
+use objc2_app_kit::{
+    NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingContext,
+    NSDraggingDestination, NSDraggingFormation, NSDraggingInfo, NSDraggingItem, NSDraggingSession, NSDraggingSource, NSEvent, NSEventType,
+    NSNormalWindowLevel, NSPasteboardWriting, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
+    NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior,
+    NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask,
+};
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSMutableArray, NSNotification, NSObject, NSObjectProtocol,
     NSPoint, NSRange, NSRangePointer, NSRect, NSUInteger,

@@ -1126,7 +1126,11 @@ fun dragTargetCallbacks(): DragTargetCallbacks {
 
 fun dragSourceCallbacks(): DragSourceCallbacks {
     return object : DragSourceCallbacks {
-        override fun onDragSourceOperationMask(sourceWindowId: WindowId, sequenceNumber: Long, context: DraggingContext): DragOperationsSet {
+        override fun onDragSourceOperationMask(
+            sourceWindowId: WindowId,
+            sequenceNumber: Long,
+            context: DraggingContext,
+        ): DragOperationsSet {
             println("Drag Source Operation Mask: windowId=$sourceWindowId, seq=$sequenceNumber, context=$context")
             return DragOperationsSet.of(DragOperation.GENERIC)
         }
