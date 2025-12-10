@@ -44,6 +44,7 @@ public object GrandCentralDispatch : AutoCloseable {
                 desktop_macos_h.dispatcher_start_on_main_thread(
                     `dispatcher_start_on_main_thread$f`.allocate({
                         ffiUpCall {
+                            Thread.currentThread().name = "AppKit Main Thread"
                             body()
                         }
                     }, arena),

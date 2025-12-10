@@ -1,11 +1,15 @@
 package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.NativeDragAndDropCallbacks
-import org.jetbrains.desktop.macos.generated.NativeDragEnteredCallback
-import org.jetbrains.desktop.macos.generated.NativeDragExitedCallback
-import org.jetbrains.desktop.macos.generated.NativeDragInfo
-import org.jetbrains.desktop.macos.generated.NativeDragPerformCallback
-import org.jetbrains.desktop.macos.generated.NativeDragUpdatedCallback
+import org.jetbrains.desktop.macos.generated.NativeDragSourceOperationMaskCallback
+import org.jetbrains.desktop.macos.generated.NativeDragSourceSessionEndedAt
+import org.jetbrains.desktop.macos.generated.NativeDragSourceSessionMovedTo
+import org.jetbrains.desktop.macos.generated.NativeDragSourceSessionWillBeginAt
+import org.jetbrains.desktop.macos.generated.NativeDragTargetEnteredCallback
+import org.jetbrains.desktop.macos.generated.NativeDragTargetExitedCallback
+import org.jetbrains.desktop.macos.generated.NativeDragTargetInfo
+import org.jetbrains.desktop.macos.generated.NativeDragTargetPerformCallback
+import org.jetbrains.desktop.macos.generated.NativeDragTargetUpdatedCallback
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -26,20 +30,38 @@ public value class DragOperation internal constructor(internal val value: Long) 
     }
 }
 
+/**
+ * Bitset of drag operations.
+ */
+@JvmInline
+public value class DragOperationsSet internal constructor(internal val value: Long) {
+    public operator fun contains(operation: DragOperation): Boolean = (value and operation.value) != 0L
+
+    public operator fun plus(operation: DragOperation): DragOperationsSet = DragOperationsSet(value or operation.value)
+
+    public operator fun plus(other: DragOperationsSet): DragOperationsSet = DragOperationsSet(value or other.value)
+
+    public companion object {
+        public fun of(operation: DragOperation): DragOperationsSet = DragOperationsSet(operation.value)
+
+        public val NONE: DragOperationsSet = DragOperationsSet(0L)
+    }
+}
+
 public data class DragInfo(
     val destinationWindowId: WindowId,
     val locationInWindow: LogicalPoint,
-    val allowedOperations: Long,
+    val allowedOperations: DragOperationsSet,
     val sequenceNumber: Long,
     val pasteboardName: String,
 ) {
     internal companion object {
         fun fromNative(segment: MemorySegment): DragInfo {
-            val destinationWindowId = NativeDragInfo.destination_window_id(segment)
-            val locationInWindow = LogicalPoint.fromNative(NativeDragInfo.location_in_window(segment))
-            val allowedOperations = NativeDragInfo.allowed_operations(segment)
-            val sequenceNumber = NativeDragInfo.sequence_number(segment)
-            val pasteboardName = NativeDragInfo.pasteboard_name(segment).getUtf8String(0)
+            val destinationWindowId = NativeDragTargetInfo.destination_window_id(segment)
+            val locationInWindow = LogicalPoint.fromNative(NativeDragTargetInfo.location_in_window(segment))
+            val allowedOperations = DragOperationsSet(NativeDragTargetInfo.allowed_operations(segment))
+            val sequenceNumber = NativeDragTargetInfo.sequence_number(segment)
+            val pasteboardName = NativeDragTargetInfo.pasteboard_name(segment).getUtf8String(0)
             return DragInfo(
                 destinationWindowId,
                 locationInWindow,
@@ -52,9 +74,20 @@ public data class DragInfo(
 }
 
 /**
+ * Dragging context constants.
+ */
+@JvmInline
+public value class DraggingContext internal constructor(public val value: Long) {
+    public companion object {
+        public val OUTSIDE_APPLICATION: DraggingContext = DraggingContext(0L)
+        public val WITHIN_APPLICATION: DraggingContext = DraggingContext(1L)
+    }
+}
+
+/**
  * Callback interface for handling drag and drop operations.
  */
-public interface DragAndDropCallbacks {
+public interface DragTargetCallbacks {
     /**
      * Called when a drag operation enters the window.
      * @param info Information about the drag operation
@@ -84,35 +117,98 @@ public interface DragAndDropCallbacks {
 }
 
 /**
+ * Callback interface for handling drag source operations.
+ */
+public interface DragSourceCallbacks {
+    /**
+     * Called to determine which drag operations are allowed for the drag session.
+     * @param sourceWindowId The window that initiated the drag
+     * @param sequenceNumber Unique identifier for this drag session
+     * @param context The dragging context (within or outside application)
+     * @return Bitset of allowed drag operations
+     */
+    public fun onDragSourceOperationMask(sourceWindowId: WindowId, sequenceNumber: Long, context: DraggingContext): DragOperationsSet =
+        DragOperationsSet.NONE
+
+    /**
+     * Called when a drag session begins.
+     * @param sourceWindowId The window that initiated the drag
+     * @param sequenceNumber Unique identifier for this drag session
+     * @param locationOnScreen The location where the drag began on the screen
+     */
+    public fun onDragSourceSessionWillBeginAt(sourceWindowId: WindowId, sequenceNumber: Long, locationOnScreen: LogicalPoint) {}
+
+    /**
+     * Called when the drag moves to a new location.
+     * @param sourceWindowId The window that initiated the drag
+     * @param sequenceNumber Unique identifier for this drag session
+     * @param locationOnScreen The current location of the drag on the screen
+     */
+    public fun onDragSourceSessionMovedTo(sourceWindowId: WindowId, sequenceNumber: Long, locationOnScreen: LogicalPoint) {}
+
+    /**
+     * Called when the drag session ends.
+     * @param sourceWindowId The window that initiated the drag
+     * @param sequenceNumber Unique identifier for this drag session
+     * @param locationOnScreen The location where the drag ended on the screen
+     * @param dragOperation The final drag operation that was performed
+     */
+    public fun onDragSourceSessionEndedAt(
+        sourceWindowId: WindowId,
+        sequenceNumber: Long,
+        locationOnScreen: LogicalPoint,
+        dragOperation: DragOperation,
+    ) {}
+}
+
+/**
  * Holder for drag and drop callbacks that manages native callback allocation.
  */
 public object DragAndDropHandler : AutoCloseable {
     private lateinit var arena: Arena
-    private lateinit var dragAndDropCallbacks: DragAndDropCallbacks
+    private lateinit var dragTargetCallbacks: DragTargetCallbacks
+    private lateinit var dragSourceCallbacks: DragSourceCallbacks
 
-    public fun init(callbacks: DragAndDropCallbacks) {
+    public fun init(targetCallbacks: DragTargetCallbacks, sourceCallbacks: DragSourceCallbacks) {
         arena = Arena.ofConfined()
-        dragAndDropCallbacks = callbacks
+        dragTargetCallbacks = targetCallbacks
+        dragSourceCallbacks = sourceCallbacks
         desktop_macos_h.set_drag_and_drop_callbacks(dragAndDropCallbacks())
     }
 
     private fun dragAndDropCallbacks(): MemorySegment {
         val callbacks = NativeDragAndDropCallbacks.allocate(arena)
-        NativeDragAndDropCallbacks.drag_entered_callback(
+        NativeDragAndDropCallbacks.drag_target_entered_callback(
             callbacks,
-            NativeDragEnteredCallback.allocate(::onDragEntered, arena),
+            NativeDragTargetEnteredCallback.allocate(::onDragEntered, arena),
         )
-        NativeDragAndDropCallbacks.drag_updated_callback(
+        NativeDragAndDropCallbacks.drag_target_updated_callback(
             callbacks,
-            NativeDragUpdatedCallback.allocate(::onDragUpdated, arena),
+            NativeDragTargetUpdatedCallback.allocate(::onDragUpdated, arena),
         )
-        NativeDragAndDropCallbacks.drag_exited_callback(
+        NativeDragAndDropCallbacks.drag_target_exited_callback(
             callbacks,
-            NativeDragExitedCallback.allocate(::onDragExited, arena),
+            NativeDragTargetExitedCallback.allocate(::onDragExited, arena),
         )
-        NativeDragAndDropCallbacks.drag_perform_callback(
+        NativeDragAndDropCallbacks.drag_target_perform_callback(
             callbacks,
-            NativeDragPerformCallback.allocate(::onDragPerformed, arena),
+            NativeDragTargetPerformCallback.allocate(::onDragPerformed, arena),
+        )
+        NativeDragAndDropCallbacks.drag_source_operation_mask_callback(
+            callbacks,
+            NativeDragSourceOperationMaskCallback.allocate(::onDragSourceOperationMask, arena),
+        )
+        NativeDragAndDropCallbacks.drag_source_session_will_begin_at(
+            callbacks,
+            NativeDragSourceSessionWillBeginAt.allocate(::onDragSourceSessionWillBeginAt, arena),
+        )
+        NativeDragAndDropCallbacks.drag_source_session_moved_to(
+            callbacks,
+            NativeDragSourceSessionMovedTo.allocate(::onDragSourceSessionMovedTo, arena),
+        )
+        NativeDragAndDropCallbacks.drag_source_session_ended_at(
+            callbacks,
+            NativeDragSourceSessionEndedAt.allocate(::onDragSourceSessionEndedAt, arena),
         )
         return callbacks
     }
@@ -120,14 +216,14 @@ public object DragAndDropHandler : AutoCloseable {
     // called from native
     private fun onDragEntered(dragInfo: MemorySegment): Long {
         return ffiUpCall(defaultResult = DragOperation.NONE.value) {
-            dragAndDropCallbacks.onDragEntered(DragInfo.fromNative(dragInfo)).value
+            dragTargetCallbacks.onDragEntered(DragInfo.fromNative(dragInfo)).value
         }
     }
 
     // called from native
     private fun onDragUpdated(dragInfo: MemorySegment): Long {
         return ffiUpCall(defaultResult = DragOperation.NONE.value) {
-            dragAndDropCallbacks.onDragUpdated(DragInfo.fromNative(dragInfo)).value
+            dragTargetCallbacks.onDragUpdated(DragInfo.fromNative(dragInfo)).value
         }
     }
 
@@ -139,14 +235,64 @@ public object DragAndDropHandler : AutoCloseable {
             } else {
                 DragInfo.fromNative(dragInfo)
             }
-            dragAndDropCallbacks.onDragExited(dragInfo)
+            dragTargetCallbacks.onDragExited(dragInfo)
         }
     }
 
     // called from native
     private fun onDragPerformed(dragInfo: MemorySegment): Boolean {
         return ffiUpCall(defaultResult = false) {
-            dragAndDropCallbacks.onDragPerformed(DragInfo.fromNative(dragInfo))
+            dragTargetCallbacks.onDragPerformed(DragInfo.fromNative(dragInfo))
+        }
+    }
+
+    // called from native
+    private fun onDragSourceOperationMask(sourceWindowId: Long, sequenceNumber: Long, context: Long): Long {
+        return ffiUpCall(defaultResult = 0L) {
+            dragSourceCallbacks.onDragSourceOperationMask(
+                sourceWindowId,
+                sequenceNumber,
+                DraggingContext(context),
+            ).value
+        }
+    }
+
+    // called from native
+    private fun onDragSourceSessionWillBeginAt(sourceWindowId: Long, sequenceNumber: Long, locationOnScreen: MemorySegment) {
+        ffiUpCall {
+            dragSourceCallbacks.onDragSourceSessionWillBeginAt(
+                sourceWindowId,
+                sequenceNumber,
+                LogicalPoint.fromNative(locationOnScreen),
+            )
+        }
+    }
+
+    // called from native
+    private fun onDragSourceSessionMovedTo(sourceWindowId: Long, sequenceNumber: Long, locationOnScreen: MemorySegment) {
+        ffiUpCall {
+            dragSourceCallbacks.onDragSourceSessionMovedTo(
+                sourceWindowId,
+                sequenceNumber,
+                LogicalPoint.fromNative(locationOnScreen),
+            )
+        }
+    }
+
+    // called from native
+    private fun onDragSourceSessionEndedAt(
+        sourceWindowId: Long,
+        sequenceNumber: Long,
+        locationOnScreen: MemorySegment,
+        dragOperation: Long,
+    ) {
+        ffiUpCall {
+            dragSourceCallbacks.onDragSourceSessionEndedAt(
+                sourceWindowId,
+                sequenceNumber,
+                LogicalPoint.fromNative(locationOnScreen),
+                DragOperation(dragOperation),
+            )
         }
     }
 

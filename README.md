@@ -142,4 +142,4 @@
 | Drag updated          | ✅    | ✅      | ❌      |     |
 | Drag exited           | ✅    | ✅      | ❌      |     |
 | Drag performed        | ✅    | ✅      | ❌      |     |
-| Drag source           | ❌    | ✅      | ❌      |     |
+| Drag source           | ✅    | ✅      | ❌      |     |

@@ -2,13 +2,6 @@ use objc2::__framework_prelude::Retained;
 use objc2_app_kit::{NSAppearanceCustomization, NSWindowOcclusionState, NSWindowStyleMask};
 use objc2_foundation::{MainThreadMarker, NSArray, NSString};
 
-use crate::geometry::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize};
-use desktop_common::ffi_utils::BorrowedArray;
-use desktop_common::{
-    ffi_utils::{BorrowedStrPtr, RustAllocatedRawPtr, RustAllocatedStrPtr},
-    logger::{PanicDefault, ffi_boundary},
-};
-
 use super::{
     appearance::Appearance,
     application_api::MyNSApplication,
@@ -18,6 +11,14 @@ use super::{
     text_direction::TextDirection,
     text_input_client::TextInputClient,
     window::{NSWindowExts, Window},
+};
+use crate::geometry::{Color, LogicalPixels, LogicalPoint, LogicalRect, LogicalSize};
+use crate::macos::image::Image;
+use crate::macos::pasteboard::PasteboardItem;
+use desktop_common::ffi_utils::BorrowedArray;
+use desktop_common::{
+    ffi_utils::{BorrowedStrPtr, RustAllocatedRawPtr, RustAllocatedStrPtr},
+    logger::{PanicDefault, ffi_boundary},
 };
 
 pub type WindowId = isize;
@@ -355,8 +356,8 @@ pub extern "C" fn window_is_visible(window_ptr: WindowPtr) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_start_drag(window_ptr: WindowPtr) {
-    ffi_boundary("window_start_drag", || {
+pub extern "C" fn window_start_drag_window(window_ptr: WindowPtr) {
+    ffi_boundary("window_start_drag_window", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let app = MyNSApplication::sharedApplication(mtm);
         if let Some(event) = app.currentEvent() {
@@ -432,6 +433,24 @@ pub extern "C" fn window_unregister_dragged_types(window_ptr: WindowPtr) {
     ffi_boundary("window_unregister_dragged_types", || {
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.root_view.unregisterDraggedTypes();
+        Ok(())
+    });
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct DraggingItem<'a> {
+    pub pasteboard_item: PasteboardItem<'a>,
+    pub rect: LogicalRect,
+    pub image: Image,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_start_drag_session(window_ptr: WindowPtr, drag_items: BorrowedArray<DraggingItem>) {
+    ffi_boundary("window_start_drag_session", || {
+        let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        window.start_dragging_session(mtm, &drag_items)?;
         Ok(())
     });
 }

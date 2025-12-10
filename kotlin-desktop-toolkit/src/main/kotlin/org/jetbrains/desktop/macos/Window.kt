@@ -1,5 +1,7 @@
 package org.jetbrains.desktop.macos
 
+import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_DraggingItem
+import org.jetbrains.desktop.macos.generated.NativeDraggingItem
 import org.jetbrains.desktop.macos.generated.NativeTitlebarConfiguration
 import org.jetbrains.desktop.macos.generated.NativeTitlebarConfiguration_NativeCustom_Body
 import org.jetbrains.desktop.macos.generated.NativeWindowBackground
@@ -263,9 +265,9 @@ public class Window internal constructor(
         }
     }
 
-    public fun startDrag() {
+    public fun startDragWindow() {
         ffiDownCall {
-            desktop_macos_h.window_start_drag(pointer)
+            desktop_macos_h.window_start_drag_window(pointer)
         }
     }
 
@@ -346,11 +348,33 @@ public class Window internal constructor(
         }
     }
 
+    /**
+     * This function should be called from mouse down event handler only.
+     * It's possible to remove this restriction in the future, e.g., chrome and electron do it.
+     */
+    public fun startDragSession(items: List<DraggingItem>) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_macos_h.window_start_drag_session(pointer, items.toNative(arena))
+            }
+        }
+    }
+
     override fun close() {
         super.close()
         textInputClientHolder.close()
     }
 }
+
+/**
+ * @param rect is relative to window origin. But the cursor should be inside this rect.
+ * If it's not, the rect will move with animation to match this condition
+ */
+public data class DraggingItem(
+    val pasteboardItem: Pasteboard.Item,
+    val rect: LogicalRect,
+    val image: Image,
+)
 
 public sealed class WindowBackground {
     public data object Transparent : WindowBackground()
@@ -433,4 +457,25 @@ public enum class WindowVisualEffect {
             UnderPageBackgroundEffect -> desktop_macos_h.NativeWindowVisualEffect_UnderPageBackgroundEffect()
         }
     }
+}
+
+// DraggingItem conversion functions
+
+internal fun DraggingItem.toNative(nativeItem: MemorySegment, arena: Arena) {
+    pasteboardItem.toNative(NativeDraggingItem.pasteboard_item(nativeItem), arena)
+    rect.toNative(NativeDraggingItem.rect(nativeItem))
+    NativeDraggingItem.image(nativeItem, image.toNative(arena))
+}
+
+internal fun List<DraggingItem>.toNative(arena: Arena): MemorySegment {
+    val itemsCount = this.count().toLong()
+    val itemsArray = NativeDraggingItem.allocateArray(itemsCount, arena)
+    this.forEachIndexed { i, item ->
+        item.toNative(NativeDraggingItem.asSlice(itemsArray, i.toLong()), arena)
+    }
+
+    val result = NativeBorrowedArray_DraggingItem.allocate(arena)
+    NativeBorrowedArray_DraggingItem.ptr(result, itemsArray)
+    NativeBorrowedArray_DraggingItem.len(result, itemsCount)
+    return result
 }

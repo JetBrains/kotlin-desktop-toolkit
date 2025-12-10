@@ -1,23 +1,3 @@
-use anyhow::{Context, Ok};
-use log::debug;
-use objc2::{
-    DeclaredClass, MainThreadOnly, Message, define_class, msg_send,
-    rc::Retained,
-    runtime::{AnyObject, ProtocolObject, Sel},
-};
-use objc2_app_kit::{
-    NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingDestination,
-    NSDraggingInfo, NSEvent, NSNormalWindowLevel, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
-    NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior,
-    NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask,
-};
-use objc2_foundation::{
-    MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange,
-    NSRangePointer, NSRect, NSUInteger,
-};
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
-
 use super::{
     application_api::MyNSApplication,
     events::handle_key_down_event,
@@ -26,12 +6,17 @@ use super::{
     text_input_client::{TextInputClient, TextInputClientHandler},
     window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
+use crate::geometry::LogicalPixels;
 use crate::macos::titlebar::Titlebar;
-use crate::macos::window_api::TitlebarConfiguration;
+use crate::macos::window_api::{DraggingItem, TitlebarConfiguration};
 use crate::{
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
     macos::{
-        drag_and_drop::{handle_drag_entered, handle_drag_exited, handle_drag_perform, handle_drag_updated},
+        drag_and_drop::{
+            handle_drag_source_operation_mask, handle_drag_source_session_ended_at, handle_drag_source_session_moved_to,
+            handle_drag_source_session_will_begin_at, handle_drag_target_entered, handle_drag_target_exited, handle_drag_target_perform,
+            handle_drag_target_updated,
+        },
         events::{
             handle_flags_change, handle_key_up_event, handle_mouse_down, handle_mouse_drag, handle_mouse_enter, handle_mouse_exit,
             handle_mouse_move, handle_mouse_up, handle_scroll_wheel, handle_window_changed_occlusion_state, handle_window_close_request,
@@ -42,7 +27,29 @@ use crate::{
         text_input_client::NOT_FOUND_NS_RANGE,
     },
 };
+use anyhow::{Context, Ok};
+use desktop_common::ffi_utils::BorrowedArray;
 use desktop_common::logger::catch_panic;
+use log::debug;
+use objc2::AnyThread;
+use objc2::{
+    DeclaredClass, MainThreadOnly, Message, define_class, msg_send,
+    rc::Retained,
+    runtime::{AnyObject, ProtocolObject, Sel},
+};
+use objc2_app_kit::{
+    NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingContext,
+    NSDraggingDestination, NSDraggingFormation, NSDraggingInfo, NSDraggingItem, NSDraggingSession, NSDraggingSource, NSEvent, NSEventType,
+    NSNormalWindowLevel, NSPasteboardWriting, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
+    NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior,
+    NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask,
+};
+use objc2_foundation::{
+    MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSMutableArray, NSNotification, NSObject, NSObjectProtocol,
+    NSPoint, NSRange, NSRangePointer, NSRect, NSUInteger,
+};
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 #[allow(clippy::struct_field_names)]
 pub(crate) struct Window {
@@ -290,6 +297,46 @@ impl Window {
 
         layer.layer_view.setFrameSize(content_view.frame().size);
         content_view.addSubview_positioned_relativeTo(&layer.layer_view, NSWindowOrderingMode::Below, Some(&self.root_view));
+    }
+
+    pub(crate) fn start_dragging_session(&self, mtm: MainThreadMarker, drag_items: &BorrowedArray<DraggingItem>) -> anyhow::Result<()> {
+        let app = MyNSApplication::sharedApplication(mtm);
+        let event = app
+            .currentEvent()
+            .take_if(|event| event.r#type() == NSEventType::LeftMouseDown || event.r#type() == NSEventType::RightMouseDown)
+            .context("Drag session can be started only from a mouse down event handler")?;
+        let window_height = self.root_view.frame().size.height;
+        let items = DraggingItem::copy_to_ns_array(drag_items.as_slice()?, mtm, window_height)?;
+        let session = self
+            .root_view
+            .beginDraggingSessionWithItems_event_source(&items, &event, ProtocolObject::from_ref(&*self.root_view));
+        session.setAnimatesToStartingPositionsOnCancelOrFail(false);
+        session.setDraggingFormation(NSDraggingFormation::None);
+        Ok(())
+    }
+}
+
+impl DraggingItem<'_> {
+    fn to_ns_dragging_item(&self, mtm: MainThreadMarker, window_height: LogicalPixels) -> anyhow::Result<Retained<NSDraggingItem>> {
+        let pasteboard_writer: Retained<ProtocolObject<dyn NSPasteboardWriting>> = self.pasteboard_item.to_ns_pasteboard_item()?;
+        let item = NSDraggingItem::initWithPasteboardWriter(NSDraggingItem::alloc(), &pasteboard_writer);
+        let frame = self.rect.as_macos_coords(window_height);
+        let image = self.image.to_ns_image(mtm)?;
+        unsafe { item.setDraggingFrame_contents(frame, Some(image.as_ref())) }
+        Ok(item)
+    }
+
+    fn copy_to_ns_array(
+        items: &[Self],
+        mtm: MainThreadMarker,
+        window_height: LogicalPixels,
+    ) -> anyhow::Result<Retained<NSArray<NSDraggingItem>>> {
+        let array = NSMutableArray::<NSDraggingItem>::arrayWithCapacity(items.len());
+        for item in items {
+            let item = item.to_ns_dragging_item(mtm, window_height)?;
+            array.addObject(&item);
+        }
+        Ok(array.into_super())
     }
 }
 
@@ -607,7 +654,7 @@ define_class!(
             info: &ProtocolObject<dyn NSDraggingInfo>,
         ) -> NSDragOperation {
             catch_panic(|| {
-                Ok(handle_drag_entered(info))
+                Ok(handle_drag_target_entered(info))
             }).unwrap_or(NSDragOperation::None)
         }
 
@@ -617,14 +664,14 @@ define_class!(
             info: &ProtocolObject<dyn NSDraggingInfo>,
         ) -> NSDragOperation {
             catch_panic(|| {
-                Ok(handle_drag_updated(info))
+                Ok(handle_drag_target_updated(info))
             }).unwrap_or(NSDragOperation::None)
         }
 
         #[unsafe(method(draggingExited:))]
         unsafe fn dragging_exited(&self, info: Option<&ProtocolObject<dyn NSDraggingInfo>>) {
             catch_panic(|| {
-                handle_drag_exited(info);
+                handle_drag_target_exited(info);
                 Ok(())
             });
         }
@@ -632,9 +679,71 @@ define_class!(
         #[unsafe(method(performDragOperation:))]
         unsafe fn perform_drag_operation(&self, info: &ProtocolObject<dyn NSDraggingInfo>) -> bool {
             catch_panic(|| {
-                Ok(handle_drag_perform(info))
+                Ok(handle_drag_target_perform(info))
             }).unwrap_or(false)
         }
+    }
+
+    unsafe impl NSDraggingSource for RootView {
+        #[unsafe(method(draggingSession:sourceOperationMaskForDraggingContext:))]
+        fn dragging_session_source_operation_mask_for_dragging_context(
+            &self,
+            session: &NSDraggingSession,
+            context: NSDraggingContext,
+        ) -> NSDragOperation {
+            catch_panic(|| {
+                let window_id = self.window().map(|w| w.window_id()).expect("Detached view");
+                let mask = handle_drag_source_operation_mask(window_id, session, context);
+                Ok(NSDragOperation(mask))
+            }).unwrap_or(NSDragOperation::None)
+        }
+
+        #[unsafe(method(draggingSession:willBeginAtPoint:))]
+        fn dragging_session_will_begin_at_point(
+            &self,
+            session: &NSDraggingSession,
+            screen_point: NSPoint,
+        ) {
+            catch_panic(|| {
+                let mtm = self.mtm();
+                let window_id = self.window().map(|w| w.window_id()).expect("Detached view");
+                handle_drag_source_session_will_begin_at(window_id, session, screen_point, mtm);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(draggingSession:movedToPoint:))]
+        fn dragging_session_moved_to_point(&self, session: &NSDraggingSession, screen_point: NSPoint) {
+            catch_panic(|| {
+                let mtm = self.mtm();
+                let window_id = self.window().map(|w| w.window_id()).expect("Detached view");
+                handle_drag_source_session_moved_to(window_id, session, screen_point, mtm);
+                Ok(())
+            });
+        }
+
+        #[unsafe(method(draggingSession:endedAtPoint:operation:))]
+        fn dragging_session_ended_at_point_operation(
+            &self,
+            session: &NSDraggingSession,
+            screen_point: NSPoint,
+            operation: NSDragOperation,
+        ) {
+            catch_panic(|| {
+                let mtm = self.mtm();
+                let window_id = self.window().map(|w| w.window_id()).expect("Detached view");
+                handle_drag_source_session_ended_at(window_id, session, screen_point, operation, mtm);
+                Ok(())
+            });
+        }
+
+        // #[unsafe(method(ignoreModifierKeysForDraggingSession:))]
+        // fn ignore_modifier(&self, session: &NSDraggingSession) -> bool {
+        //     catch_panic(|| {
+        //         println!("session: {session:?}");
+        //         Ok(true)
+        //     }).unwrap_or(false)
+        // }
     }
 
     impl RootView {
