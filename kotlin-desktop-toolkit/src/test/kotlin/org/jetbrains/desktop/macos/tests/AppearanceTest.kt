@@ -50,4 +50,26 @@ class AppearanceTest : KDTApplicationTestBase() {
             Application.setDockIcon(jbIconBytes())
         }
     }
+
+    @Test
+    fun setDockIconBadgeTest() {
+        ui {
+            Application.setDockIconBadge("42")
+        }
+        ui {
+            Application.setDockIconBadge("")
+        }
+    }
+
+    @Test
+    fun requestUserAttentionTest() {
+        ui {
+            val requestId = Application.requestUserAttention(isCritical = false)
+            requestId?.let { Application.cancelUserAttentionRequest(it) }
+        }
+        ui {
+            val requestId = Application.requestUserAttention(isCritical = true)
+            requestId?.let { Application.cancelUserAttentionRequest(it) }
+        }
+    }
 }

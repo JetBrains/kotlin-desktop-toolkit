@@ -17,10 +17,7 @@ use objc2::{
     rc::Retained,
     runtime::{AnyObject, ProtocolObject},
 };
-use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
-    NSEventType, NSImage, NSMenuItem, NSRunningApplication, NSWorkspace,
-};
+use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSMenuItem, NSRequestUserAttentionType, NSRunningApplication, NSWorkspace};
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
     NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults, ns_string,
@@ -266,6 +263,43 @@ pub unsafe extern "C" fn application_set_dock_icon(data: *mut u8, data_length: u
         }
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_set_dock_icon_badge(label: BorrowedStrPtr) {
+    ffi_boundary("application_set_dock_icon_badge", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        let label = copy_to_ns_string(&label)?;
+        app.dockTile().setBadgeLabel(Some(&label));
+        Ok(())
+    })
+}
+
+type AttentionRequestId = isize;
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_request_user_attention(is_critical: bool) -> AttentionRequestId {
+    ffi_boundary("application_set_dock_icon_badge", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        let attention_type = if is_critical {
+            NSRequestUserAttentionType::CriticalRequest
+        } else {
+            NSRequestUserAttentionType::InformationalRequest
+        };
+        Ok(app.requestUserAttention(attention_type))
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn application_cancel_request_user_attention(request_id: AttentionRequestId) {
+    ffi_boundary("application_cancel_request_user_attention", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = MyNSApplication::sharedApplication(mtm);
+        app.cancelUserAttentionRequest(request_id);
+        Ok(())
+    })
 }
 
 #[unsafe(no_mangle)]

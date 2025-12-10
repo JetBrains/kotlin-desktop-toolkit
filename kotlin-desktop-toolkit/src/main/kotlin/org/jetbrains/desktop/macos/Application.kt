@@ -125,6 +125,39 @@ public object Application {
         }
     }
 
+    public fun setDockIconBadge(label: String) {
+        ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_macos_h.application_set_dock_icon_badge(arena.allocateUtf8String(label))
+            }
+        }
+    }
+
+    @JvmInline
+    public value class UserAttentionRequestId(internal val value: Long)
+
+    /**
+     * Jump with application icon
+     * @param isCritical if set to true, will jump until the app gets focused or the request is canceled
+     * for non-critical requests will jump only once.
+     * Be aware if the app was in focus when the request is performed, it will be no op and @return null
+     */
+    public fun requestUserAttention(isCritical: Boolean = false): UserAttentionRequestId? {
+        val requestId = ffiDownCall {
+            desktop_macos_h.application_request_user_attention(isCritical)
+        }
+        return if (requestId == -1L) null else UserAttentionRequestId(requestId)
+    }
+
+    /**
+     * Cancel the attention request, it's also canceled automatically when the application gets focus
+     */
+    public fun cancelUserAttentionRequest(requestId: UserAttentionRequestId) {
+        ffiDownCall {
+            desktop_macos_h.application_cancel_request_user_attention(requestId.value)
+        }
+    }
+
     public fun orderFrontCharactersPalette() {
         ffiDownCall {
             desktop_macos_h.application_order_front_character_palete()

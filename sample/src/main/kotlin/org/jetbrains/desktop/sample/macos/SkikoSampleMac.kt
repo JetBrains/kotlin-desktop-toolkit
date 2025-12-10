@@ -1054,6 +1054,33 @@ class ApplicationState : AutoCloseable {
                         }
                     },
                 ),
+                AppMenuItem.Action(
+                    title = "Request User Attention",
+                    perform = {
+                        thread {
+                            sleep(3000)
+                            for (i in 1..3) {
+                                GrandCentralDispatch.dispatchOnMain {
+                                    val requestId = Application.requestUserAttention()
+                                    println("RequestId: $requestId")
+                                }
+
+                            }
+                        }
+                    },
+                ),
+                AppMenuItem.Action(
+                    title = "Request User Attention Critical",
+                    perform = {
+                        thread {
+                            sleep(3000)
+                            GrandCentralDispatch.dispatchOnMain {
+                                val requestId = Application.requestUserAttention(isCritical = true)
+                                println("RequestId: $requestId")
+                            }
+                        }
+                    },
+                )
             ),
             AppMenuItem.SubMenu(title = "Help"),
         )
@@ -1162,6 +1189,7 @@ fun main() {
                 if (event is Event.ApplicationDidFinishLaunching) {
                     setupNotificationCategories()
                     Application.setDockIcon(jbIconBytes())
+                    Application.setDockIconBadge("42")
                     AppMenuManager.setMainMenu(state.buildMenu())
                 }
                 state.handleEvent(event)
