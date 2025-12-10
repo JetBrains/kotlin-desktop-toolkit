@@ -17,7 +17,10 @@ use objc2::{
     rc::Retained,
     runtime::{AnyObject, ProtocolObject},
 };
-use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags, NSEventType, NSImage, NSMenuItem, NSRequestUserAttentionType, NSRunningApplication, NSWorkspace};
+use objc2_app_kit::{
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSApplicationTerminateReply, NSEvent, NSEventModifierFlags,
+    NSEventType, NSImage, NSMenuItem, NSRequestUserAttentionType, NSRunningApplication, NSWorkspace,
+};
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSData, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
     NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults, ns_string,
@@ -273,7 +276,7 @@ pub extern "C" fn application_set_dock_icon_badge(label: BorrowedStrPtr) {
         let label = copy_to_ns_string(&label)?;
         app.dockTile().setBadgeLabel(Some(&label));
         Ok(())
-    })
+    });
 }
 
 type AttentionRequestId = isize;
@@ -299,7 +302,7 @@ pub extern "C" fn application_cancel_request_user_attention(request_id: Attentio
         let app = MyNSApplication::sharedApplication(mtm);
         app.cancelUserAttentionRequest(request_id);
         Ok(())
-    })
+    });
 }
 
 #[unsafe(no_mangle)]

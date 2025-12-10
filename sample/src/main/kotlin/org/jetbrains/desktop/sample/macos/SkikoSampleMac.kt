@@ -1064,7 +1064,6 @@ class ApplicationState : AutoCloseable {
                                     val requestId = Application.requestUserAttention()
                                     println("RequestId: $requestId")
                                 }
-
                             }
                         }
                     },
@@ -1080,7 +1079,7 @@ class ApplicationState : AutoCloseable {
                             }
                         }
                     },
-                )
+                ),
             ),
             AppMenuItem.SubMenu(title = "Help"),
         )
