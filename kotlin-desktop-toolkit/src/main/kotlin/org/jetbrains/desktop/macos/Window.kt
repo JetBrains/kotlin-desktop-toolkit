@@ -348,6 +348,10 @@ public class Window internal constructor(
         }
     }
 
+    /**
+     * This function should be called from mouse down event handler only.
+     * It's possible to remove this restriction in the future, e.g., chrome and electron do it.
+     */
     public fun startDragSession(items: List<DraggingItem>) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
