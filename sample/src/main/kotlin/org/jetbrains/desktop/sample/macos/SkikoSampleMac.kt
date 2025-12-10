@@ -8,6 +8,7 @@ import org.jetbrains.desktop.macos.Cursor
 import org.jetbrains.desktop.macos.DragAndDropHandler
 import org.jetbrains.desktop.macos.DragInfo
 import org.jetbrains.desktop.macos.DragOperation
+import org.jetbrains.desktop.macos.DragOperationsSet
 import org.jetbrains.desktop.macos.DragSourceCallbacks
 import org.jetbrains.desktop.macos.DragTargetCallbacks
 import org.jetbrains.desktop.macos.DraggingContext
@@ -1125,9 +1126,9 @@ fun dragTargetCallbacks(): DragTargetCallbacks {
 
 fun dragSourceCallbacks(): DragSourceCallbacks {
     return object : DragSourceCallbacks {
-        override fun onDragSourceOperationMask(sourceWindowId: WindowId, sequenceNumber: Long, context: DraggingContext): Long {
+        override fun onDragSourceOperationMask(sourceWindowId: WindowId, sequenceNumber: Long, context: DraggingContext): DragOperationsSet {
             println("Drag Source Operation Mask: windowId=$sourceWindowId, seq=$sequenceNumber, context=$context")
-            return 0
+            return DragOperationsSet.of(DragOperation.GENERIC)
         }
 
         override fun onDragSourceSessionWillBeginAt(sourceWindowId: WindowId, sequenceNumber: Long, locationOnScreen: LogicalPoint) {
