@@ -67,22 +67,13 @@ public object GrandCentralDispatch : AutoCloseable {
     public fun <T> dispatchOnMainSync(highPriority: Boolean = false, f: () -> T): T {
         checkIsNotClosed()
         val latch = CountDownLatch(1)
-        var result: T? = null
-        var throwable: Throwable? = null
+        var result: Result<T>? = null
         dispatchOnMain(highPriority) {
-            result = try {
-                f()
-            } catch (e: Throwable) {
-                throwable = e
-                null
-            }
+            result = runCatching(f)
             latch.countDown()
         }
         latch.await()
-        if (throwable != null) {
-            throw throwable
-        }
-        return result!!
+        return result!!.getOrThrow()
     }
 
     private fun checkIsNotClosed() {
