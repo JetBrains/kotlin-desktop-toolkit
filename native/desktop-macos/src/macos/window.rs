@@ -299,7 +299,7 @@ impl Window {
             .currentEvent()
             .take_if(|event| event.r#type() == NSEventType::LeftMouseDown || event.r#type() == NSEventType::RightMouseDown)
             .context("Drag session can be started only from a mouse down event handler")?;
-        let window_height = self.ns_window.frame().size.height;
+        let window_height = self.root_view.frame().size.height;
         let items = DraggingItem::copy_to_ns_array(drag_items.as_slice()?, mtm, window_height)?;
         let session = self
             .root_view
@@ -735,7 +735,7 @@ define_class!(
         // fn ignore_modifier(&self, session: &NSDraggingSession) -> bool {
         //     catch_panic(|| {
         //         println!("session: {session:?}");
-        //         Ok(false)
+        //         Ok(true)
         //     }).unwrap_or(false)
         // }
     }
