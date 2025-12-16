@@ -14,9 +14,10 @@ use windows::Win32::{
             HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SM_CXPADDEDBORDER,
             SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
             USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_GETMINMAXINFO, WM_KEYDOWN,
-            WM_KEYUP, WM_KILLFOCUS, WM_MOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
-            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
-            WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
+            WM_KEYUP, WM_KILLFOCUS, WM_MOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP,
+            WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE,
+            WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN,
+            WM_SYSKEYUP,
         },
     },
 };
@@ -30,7 +31,7 @@ use super::{
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButton, PointerClickCounter, PointerInfo},
+    pointer::{PointerButtonChangeKind, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
@@ -86,11 +87,11 @@ impl EventLoop {
 
             WM_CHAR | WM_DEADCHAR | WM_SYSCHAR | WM_SYSDEADCHAR => on_char(self, window, msg, wparam, lparam),
 
-            WM_POINTERUPDATE => on_pointerupdate(self, window, wparam),
+            WM_POINTERUPDATE | WM_NCPOINTERUPDATE => on_pointerupdate(self, window, msg, wparam),
 
-            WM_POINTERDOWN => on_pointerdown(self, window, wparam),
+            WM_POINTERDOWN | WM_NCPOINTERDOWN => on_pointerdown(self, window, msg, wparam),
 
-            WM_POINTERUP => on_pointerup(self, window, wparam),
+            WM_POINTERUP | WM_NCPOINTERUP => on_pointerup(self, window, msg, wparam),
 
             WM_POINTERWHEEL | WM_POINTERHWHEEL => on_pointerwheel(self, window, msg, wparam),
 
@@ -431,18 +432,20 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
 
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::double_parens)]
-fn on_pointerupdate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
+fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
+    let is_non_client = matches!(msg, WM_NCPOINTERUPDATE);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
-    let event: Event = if window.is_pointer_in_client() {
+    let event: Event = if window.is_pointer_in_window() {
         PointerUpdatedEvent {
             location_in_window: pointer_info.get_location_in_window(),
+            non_client_area: is_non_client,
             state: pointer_info.get_pointer_state(),
             timestamp: pointer_info.get_timestamp(),
         }
         .into()
     } else {
         // see https://devblogs.microsoft.com/oldnewthing/20031013-00/?p=42193
-        window.set_is_pointer_in_client(true);
+        window.set_is_pointer_in_window(true);
         PointerEnteredEvent {
             location_in_window: pointer_info.get_location_in_window(),
             state: pointer_info.get_pointer_state(),
@@ -453,30 +456,51 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> 
     event_loop.handle_event(window, event)
 }
 
-fn on_pointerdown(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
+fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
+    let is_non_client = matches!(msg, WM_NCPOINTERDOWN);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
-    let pointer_button = PointerButton::from_message_flags(wparam);
+    let pointer_button = match pointer_info.get_pointer_button_change() {
+        Some(change) if change.kind() == PointerButtonChangeKind::Pressed => change.button(),
+        pointer_button_change => {
+            log::error!("Unexpected pointer button change on pointer down: {pointer_button_change:?}");
+            return None;
+        }
+    };
     let click_location = pointer_info.get_physical_location();
     let click_count = window.with_mut_pointer_click_counter(|c| c.register_click(pointer_button, click_location));
     let event = PointerDownEvent {
         button: pointer_button,
         click_count,
         location_in_window: pointer_info.get_location_in_window(),
+        non_client_area: is_non_client,
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
     };
-    event_loop.handle_event(window, Event::PointerDown(event))
+    let result = event_loop.handle_event(window, Event::PointerDown(event));
+    // WM_NCPOINTERDOWN should always return None so that the window buttons work
+    if is_non_client { None } else { result }
 }
 
-fn on_pointerup(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
+fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
+    let is_non_client = matches!(msg, WM_NCPOINTERUP);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
+    let pointer_button = match pointer_info.get_pointer_button_change() {
+        Some(change) if change.kind() == PointerButtonChangeKind::Released => change.button(),
+        pointer_button_change => {
+            log::error!("Unexpected pointer button change on pointer up: {pointer_button_change:?}");
+            return None;
+        }
+    };
     let event = PointerUpEvent {
-        button: PointerButton::from_message_flags(wparam),
+        button: pointer_button,
         location_in_window: pointer_info.get_location_in_window(),
+        non_client_area: is_non_client,
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
     };
-    event_loop.handle_event(window, Event::PointerUp(event))
+    let result = event_loop.handle_event(window, Event::PointerUp(event));
+    // WM_NCPOINTERUP should always return None so that the window buttons work
+    if is_non_client { None } else { result }
 }
 
 #[allow(clippy::cast_lossless)]
@@ -499,7 +523,7 @@ fn on_pointerwheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WP
 
 fn on_pointerleave(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
-    window.set_is_pointer_in_client(false);
+    window.set_is_pointer_in_window(false);
     let event = PointerExitedEvent {
         location_in_window: pointer_info.get_location_in_window(),
         state: pointer_info.get_pointer_state(),

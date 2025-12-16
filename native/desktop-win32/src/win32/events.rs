@@ -114,6 +114,7 @@ pub struct PointerDownEvent {
     pub button: PointerButton,
     pub click_count: u32,
     pub location_in_window: LogicalPoint,
+    pub non_client_area: bool,
     pub state: PointerState,
     pub timestamp: Timestamp,
 }
@@ -123,6 +124,7 @@ pub struct PointerDownEvent {
 pub struct PointerUpEvent {
     pub button: PointerButton,
     pub location_in_window: LogicalPoint,
+    pub non_client_area: bool,
     pub state: PointerState,
     pub timestamp: Timestamp,
 }
@@ -159,6 +161,7 @@ impl From<PointerExitedEvent> for Event {
 #[derive(Debug)]
 pub struct PointerUpdatedEvent {
     pub location_in_window: LogicalPoint,
+    pub non_client_area: bool,
     pub state: PointerState,
     pub timestamp: Timestamp,
 }
