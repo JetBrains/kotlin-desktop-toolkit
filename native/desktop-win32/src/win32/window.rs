@@ -55,6 +55,7 @@ const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32WindowClass");
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct WindowId(pub isize);
 
+#[allow(clippy::struct_field_names)]
 pub struct Window {
     id: WindowId,
     hwnd: AtomicPtr<core::ffi::c_void>,
@@ -65,7 +66,7 @@ pub struct Window {
     origin: RefCell<LogicalPoint>,
     size: RefCell<LogicalSize>,
     style: RefCell<WindowStyle>,
-    pointer_in_client: AtomicBool,
+    pointer_in_window: AtomicBool,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
     event_loop: Weak<EventLoop>,
@@ -97,7 +98,7 @@ impl Window {
             origin: RefCell::default(),
             size: RefCell::default(),
             style: RefCell::default(),
-            pointer_in_client: AtomicBool::new(false),
+            pointer_in_window: AtomicBool::new(false),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
             event_loop,
@@ -298,13 +299,13 @@ impl Window {
     }
 
     #[inline]
-    pub(crate) fn is_pointer_in_client(&self) -> bool {
-        self.pointer_in_client.load(Ordering::Relaxed)
+    pub(crate) fn is_pointer_in_window(&self) -> bool {
+        self.pointer_in_window.load(Ordering::Relaxed)
     }
 
     #[inline]
-    pub(crate) fn set_is_pointer_in_client(&self, value: bool) {
-        self.pointer_in_client.store(value, Ordering::Relaxed);
+    pub(crate) fn set_is_pointer_in_window(&self, value: bool) {
+        self.pointer_in_window.store(value, Ordering::Relaxed);
     }
 
     #[inline]

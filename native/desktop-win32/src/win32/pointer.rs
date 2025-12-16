@@ -6,15 +6,16 @@ use windows::Win32::{
         Input::{
             KeyboardAndMouse::GetDoubleClickTime,
             Pointer::{
-                GetPointerInfo, GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_FLAG_FIFTHBUTTON, POINTER_FLAG_FIRSTBUTTON,
-                POINTER_FLAG_FOURTHBUTTON, POINTER_FLAG_SECONDBUTTON, POINTER_FLAG_THIRDBUTTON, POINTER_INFO, POINTER_PEN_INFO,
-                POINTER_TOUCH_INFO,
+                GetPointerInfo, GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_CHANGE_FIFTHBUTTON_DOWN,
+                POINTER_CHANGE_FIFTHBUTTON_UP, POINTER_CHANGE_FIRSTBUTTON_DOWN, POINTER_CHANGE_FIRSTBUTTON_UP,
+                POINTER_CHANGE_FOURTHBUTTON_DOWN, POINTER_CHANGE_FOURTHBUTTON_UP, POINTER_CHANGE_SECONDBUTTON_DOWN,
+                POINTER_CHANGE_SECONDBUTTON_UP, POINTER_CHANGE_THIRDBUTTON_DOWN, POINTER_CHANGE_THIRDBUTTON_UP, POINTER_FLAG_FIFTHBUTTON,
+                POINTER_FLAG_FIRSTBUTTON, POINTER_FLAG_FOURTHBUTTON, POINTER_FLAG_SECONDBUTTON, POINTER_FLAG_THIRDBUTTON, POINTER_INFO,
+                POINTER_PEN_INFO, POINTER_TOUCH_INFO,
             },
         },
         WindowsAndMessaging::{
-            GetMessageTime, GetSystemMetrics, POINTER_INPUT_TYPE, POINTER_MESSAGE_FLAG_FIFTHBUTTON, POINTER_MESSAGE_FLAG_FIRSTBUTTON,
-            POINTER_MESSAGE_FLAG_FOURTHBUTTON, POINTER_MESSAGE_FLAG_SECONDBUTTON, POINTER_MESSAGE_FLAG_THIRDBUTTON, PT_PEN, PT_TOUCH,
-            SM_CXDOUBLECLK, SM_CYDOUBLECLK, USER_DEFAULT_SCREEN_DPI,
+            GetMessageTime, GetSystemMetrics, POINTER_INPUT_TYPE, PT_PEN, PT_TOUCH, SM_CXDOUBLECLK, SM_CYDOUBLECLK, USER_DEFAULT_SCREEN_DPI,
         },
     },
 };
@@ -22,7 +23,7 @@ use windows::Win32::{
 use super::{
     events::Timestamp,
     geometry::{LogicalPoint, PhysicalPoint},
-    utils::{HIWORD, LOWORD},
+    utils::LOWORD,
 };
 
 pub(crate) enum PointerInfo {
@@ -49,27 +50,6 @@ pub enum PointerButton {
     XButton2 = 1 << 4,
 }
 
-impl PointerButton {
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::double_parens)]
-    pub(crate) fn from_message_flags(value: WPARAM) -> Self {
-        let flags = u32::from(HIWORD!(value.0));
-        if (flags & POINTER_MESSAGE_FLAG_FIRSTBUTTON) == POINTER_MESSAGE_FLAG_FIRSTBUTTON {
-            Self::Left
-        } else if (flags & POINTER_MESSAGE_FLAG_SECONDBUTTON) == POINTER_MESSAGE_FLAG_SECONDBUTTON {
-            Self::Right
-        } else if (flags & POINTER_MESSAGE_FLAG_THIRDBUTTON) == POINTER_MESSAGE_FLAG_THIRDBUTTON {
-            Self::Middle
-        } else if (flags & POINTER_MESSAGE_FLAG_FOURTHBUTTON) == POINTER_MESSAGE_FLAG_FOURTHBUTTON {
-            Self::XButton1
-        } else if (flags & POINTER_MESSAGE_FLAG_FIFTHBUTTON) == POINTER_MESSAGE_FLAG_FIFTHBUTTON {
-            Self::XButton2
-        } else {
-            Self::None
-        }
-    }
-}
-
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct PointerButtons(u32);
@@ -77,6 +57,30 @@ pub struct PointerButtons(u32);
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct PointerModifiers(u32);
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct PointerButtonChange {
+    button: PointerButton,
+    kind: PointerButtonChangeKind,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerButtonChangeKind {
+    Pressed,
+    Released,
+}
+
+impl PointerButtonChange {
+    pub(crate) const fn button(self) -> PointerButton {
+        self.button
+    }
+
+    pub(crate) const fn kind(self) -> PointerButtonChangeKind {
+        self.kind
+    }
+}
 
 impl PointerInfo {
     #[allow(clippy::cast_possible_truncation)]
@@ -168,6 +172,54 @@ impl PointerInfo {
     pub(crate) const fn get_physical_location(&self) -> PhysicalPoint {
         let native_pointer_info = self.get_native_pointer_info();
         PhysicalPoint::new(native_pointer_info.ptPixelLocation.x, native_pointer_info.ptPixelLocation.y)
+    }
+
+    pub(crate) const fn get_pointer_button_change(&self) -> Option<PointerButtonChange> {
+        let native_pointer_info = self.get_native_pointer_info();
+        let pointer_button_change = match native_pointer_info.ButtonChangeType {
+            POINTER_CHANGE_FIRSTBUTTON_DOWN => PointerButtonChange {
+                button: PointerButton::Left,
+                kind: PointerButtonChangeKind::Pressed,
+            },
+            POINTER_CHANGE_FIRSTBUTTON_UP => PointerButtonChange {
+                button: PointerButton::Left,
+                kind: PointerButtonChangeKind::Released,
+            },
+            POINTER_CHANGE_SECONDBUTTON_DOWN => PointerButtonChange {
+                button: PointerButton::Right,
+                kind: PointerButtonChangeKind::Pressed,
+            },
+            POINTER_CHANGE_SECONDBUTTON_UP => PointerButtonChange {
+                button: PointerButton::Right,
+                kind: PointerButtonChangeKind::Released,
+            },
+            POINTER_CHANGE_THIRDBUTTON_DOWN => PointerButtonChange {
+                button: PointerButton::Middle,
+                kind: PointerButtonChangeKind::Pressed,
+            },
+            POINTER_CHANGE_THIRDBUTTON_UP => PointerButtonChange {
+                button: PointerButton::Middle,
+                kind: PointerButtonChangeKind::Released,
+            },
+            POINTER_CHANGE_FOURTHBUTTON_DOWN => PointerButtonChange {
+                button: PointerButton::XButton1,
+                kind: PointerButtonChangeKind::Pressed,
+            },
+            POINTER_CHANGE_FOURTHBUTTON_UP => PointerButtonChange {
+                button: PointerButton::XButton1,
+                kind: PointerButtonChangeKind::Released,
+            },
+            POINTER_CHANGE_FIFTHBUTTON_DOWN => PointerButtonChange {
+                button: PointerButton::XButton2,
+                kind: PointerButtonChangeKind::Pressed,
+            },
+            POINTER_CHANGE_FIFTHBUTTON_UP => PointerButtonChange {
+                button: PointerButton::XButton2,
+                kind: PointerButtonChangeKind::Released,
+            },
+            _ => return None,
+        };
+        Some(pointer_button_change)
     }
 }
 

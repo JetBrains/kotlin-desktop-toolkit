@@ -82,6 +82,7 @@ public sealed class Event {
         val button: PointerButton,
         val clickCount: Int,
         val locationInWindow: LogicalPoint,
+        val nonClientArea: Boolean,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
@@ -100,6 +101,7 @@ public sealed class Event {
 
     public data class PointerUpdated(
         val locationInWindow: LogicalPoint,
+        val nonClientArea: Boolean,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
@@ -107,6 +109,7 @@ public sealed class Event {
     public data class PointerUp(
         val button: PointerButton,
         val locationInWindow: LogicalPoint,
+        val nonClientArea: Boolean,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
@@ -262,6 +265,7 @@ private fun pointerDown(s: MemorySegment): Event {
         button = PointerButton.fromNative(NativePointerDownEvent.button(nativeEvent)),
         clickCount = NativePointerDownEvent.click_count(nativeEvent),
         locationInWindow = LogicalPoint.fromNative(NativePointerDownEvent.location_in_window(nativeEvent)),
+        nonClientArea = NativePointerDownEvent.non_client_area(nativeEvent),
         state = PointerState.fromNative(NativePointerDownEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerDownEvent.timestamp(nativeEvent)),
     )
@@ -289,6 +293,7 @@ private fun pointerUpdated(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_updated(s)
     return Event.PointerUpdated(
         locationInWindow = LogicalPoint.fromNative(NativePointerUpdatedEvent.location_in_window(nativeEvent)),
+        nonClientArea = NativePointerUpdatedEvent.non_client_area(nativeEvent),
         state = PointerState.fromNative(NativePointerUpdatedEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerUpdatedEvent.timestamp(nativeEvent)),
     )
@@ -299,6 +304,7 @@ private fun pointerUp(s: MemorySegment): Event {
     return Event.PointerUp(
         button = PointerButton.fromNative(NativePointerUpEvent.button(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativePointerUpEvent.location_in_window(nativeEvent)),
+        nonClientArea = NativePointerUpEvent.non_client_area(nativeEvent),
         state = PointerState.fromNative(NativePointerUpEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerUpEvent.timestamp(nativeEvent)),
     )
