@@ -437,6 +437,7 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
     let event: Event = if window.is_pointer_in_window() {
         PointerUpdatedEvent {
+            button_change: pointer_info.get_pointer_button_change(),
             location_in_window: pointer_info.get_location_in_window(),
             non_client_area: is_non_client,
             state: pointer_info.get_pointer_state(),
@@ -460,7 +461,7 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPA
     let is_non_client = matches!(msg, WM_NCPOINTERDOWN);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
     let pointer_button = match pointer_info.get_pointer_button_change() {
-        Some(change) if change.kind() == PointerButtonChangeKind::Pressed => change.button(),
+        change if change.kind() == PointerButtonChangeKind::Pressed => change.button(),
         pointer_button_change => {
             log::error!("Unexpected pointer button change on pointer down: {pointer_button_change:?}");
             return None;
@@ -485,7 +486,7 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
     let is_non_client = matches!(msg, WM_NCPOINTERUP);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
     let pointer_button = match pointer_info.get_pointer_button_change() {
-        Some(change) if change.kind() == PointerButtonChangeKind::Released => change.button(),
+        change if change.kind() == PointerButtonChangeKind::Released => change.button(),
         pointer_button_change => {
             log::error!("Unexpected pointer button change on pointer up: {pointer_button_change:?}");
             return None;

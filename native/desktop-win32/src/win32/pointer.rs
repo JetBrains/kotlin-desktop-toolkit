@@ -68,15 +68,18 @@ pub struct PointerButtonChange {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PointerButtonChangeKind {
+    Other,
     Pressed,
     Released,
 }
 
 impl PointerButtonChange {
+    #[inline]
     pub(crate) const fn button(self) -> PointerButton {
         self.button
     }
 
+    #[inline]
     pub(crate) const fn kind(self) -> PointerButtonChangeKind {
         self.kind
     }
@@ -174,9 +177,9 @@ impl PointerInfo {
         PhysicalPoint::new(native_pointer_info.ptPixelLocation.x, native_pointer_info.ptPixelLocation.y)
     }
 
-    pub(crate) const fn get_pointer_button_change(&self) -> Option<PointerButtonChange> {
+    pub(crate) const fn get_pointer_button_change(&self) -> PointerButtonChange {
         let native_pointer_info = self.get_native_pointer_info();
-        let pointer_button_change = match native_pointer_info.ButtonChangeType {
+        match native_pointer_info.ButtonChangeType {
             POINTER_CHANGE_FIRSTBUTTON_DOWN => PointerButtonChange {
                 button: PointerButton::Left,
                 kind: PointerButtonChangeKind::Pressed,
@@ -217,9 +220,11 @@ impl PointerInfo {
                 button: PointerButton::XButton2,
                 kind: PointerButtonChangeKind::Released,
             },
-            _ => return None,
-        };
-        Some(pointer_button_change)
+            _ => PointerButtonChange {
+                button: PointerButton::None,
+                kind: PointerButtonChangeKind::Other,
+            },
+        }
     }
 }
 
