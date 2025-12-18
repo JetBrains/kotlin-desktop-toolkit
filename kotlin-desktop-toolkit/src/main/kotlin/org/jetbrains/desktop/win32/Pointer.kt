@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.win32
 
+import org.jetbrains.desktop.win32.generated.NativePointerButtonChange
 import org.jetbrains.desktop.win32.generated.NativePointerState
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.MemorySegment
@@ -47,6 +48,22 @@ public value class PointerModifiers internal constructor(private val value: Int)
     }
 }
 
+public data class PointerButtonChange(
+    public val button: PointerButton,
+    public val kind: PointerButtonChangeKind,
+) {
+    internal companion object
+}
+
+public enum class PointerButtonChangeKind {
+    Other,
+    Pressed,
+    Released,
+    ;
+
+    internal companion object
+}
+
 internal fun PointerButton.Companion.fromNative(value: Int): PointerButton {
     // additional validation; for a set of flags [PointerButtons] should be used
     return when (value) {
@@ -65,4 +82,20 @@ internal fun PointerState.Companion.fromNative(s: MemorySegment): PointerState {
         pressedButtons = PointerButtons(NativePointerState.pressed_buttons(s)),
         modifiers = PointerModifiers(NativePointerState.modifiers(s)),
     )
+}
+
+internal fun PointerButtonChange.Companion.fromNative(s: MemorySegment): PointerButtonChange {
+    return PointerButtonChange(
+        button = PointerButton.fromNative(NativePointerButtonChange.button(s)),
+        kind = PointerButtonChangeKind.fromNative(NativePointerButtonChange.kind(s)),
+    )
+}
+
+private fun PointerButtonChangeKind.Companion.fromNative(value: Int): PointerButtonChangeKind {
+    return when (value) {
+        desktop_win32_h.NativePointerButtonChangeKind_Other() -> PointerButtonChangeKind.Other
+        desktop_win32_h.NativePointerButtonChangeKind_Pressed() -> PointerButtonChangeKind.Pressed
+        desktop_win32_h.NativePointerButtonChangeKind_Released() -> PointerButtonChangeKind.Released
+        else -> error("Unknown pointer button change kind: $value")
+    }
 }

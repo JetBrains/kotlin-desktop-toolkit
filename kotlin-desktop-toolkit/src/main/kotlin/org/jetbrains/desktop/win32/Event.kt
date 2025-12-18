@@ -100,6 +100,7 @@ public sealed class Event {
     ) : Event()
 
     public data class PointerUpdated(
+        val buttonChange: PointerButtonChange,
         val locationInWindow: LogicalPoint,
         val nonClientArea: Boolean,
         val state: PointerState,
@@ -292,6 +293,7 @@ private fun pointerExited(s: MemorySegment): Event {
 private fun pointerUpdated(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_updated(s)
     return Event.PointerUpdated(
+        buttonChange = PointerButtonChange.fromNative(NativePointerUpdatedEvent.button_change(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativePointerUpdatedEvent.location_in_window(nativeEvent)),
         nonClientArea = NativePointerUpdatedEvent.non_client_area(nativeEvent),
         state = PointerState.fromNative(NativePointerUpdatedEvent.state(nativeEvent)),
