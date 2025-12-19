@@ -25,9 +25,9 @@ use windows::Win32::{
 use super::{
     appearance::Appearance,
     events::{
-        ApplicationAppearanceChangeEvent, CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent,
-        PointerDownEvent, PointerEnteredEvent, PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, Timestamp,
-        WindowDrawEvent, WindowMoveEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent, WindowTitleChangedEvent,
+        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
+        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent, Timestamp, WindowDrawEvent,
+        WindowMoveEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
@@ -272,7 +272,7 @@ fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lpa
             let new_appearance = Appearance::get_current()
                 .inspect_err(|err| log::error!("failed to get current system appearance: {err}"))
                 .ok()?;
-            let event = ApplicationAppearanceChangeEvent { new_appearance };
+            let event = SystemAppearanceChangeEvent { new_appearance };
             event_loop.handle_event(window, event.into());
         }
     }

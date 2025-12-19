@@ -1,6 +1,5 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.win32.generated.NativeApplicationAppearanceChangeEvent
 import org.jetbrains.desktop.win32.generated.NativeCharacterReceivedEvent
 import org.jetbrains.desktop.win32.generated.NativeEvent
 import org.jetbrains.desktop.win32.generated.NativeKeyEvent
@@ -12,6 +11,7 @@ import org.jetbrains.desktop.win32.generated.NativePointerExitedEvent
 import org.jetbrains.desktop.win32.generated.NativePointerUpEvent
 import org.jetbrains.desktop.win32.generated.NativePointerUpdatedEvent
 import org.jetbrains.desktop.win32.generated.NativeScrollWheelEvent
+import org.jetbrains.desktop.win32.generated.NativeSystemAppearanceChangeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowMoveEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
@@ -42,8 +42,6 @@ public typealias EventHandler = (WindowId, Event) -> EventHandlerResult
 
 public sealed class Event {
     internal companion object;
-
-    public data class ApplicationAppearanceChange(public val newAppearance: Appearance) : Event()
 
     public data class CharacterReceived(
         val keyCode: Char,
@@ -129,6 +127,8 @@ public sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
+    public data class SystemAppearanceChange(public val newAppearance: Appearance) : Event()
+
     public data object WindowCloseRequest : Event()
 
     public data class WindowDraw(
@@ -181,7 +181,6 @@ public sealed class WindowResizeKind {
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
-    desktop_win32_h.NativeEvent_ApplicationAppearanceChange() -> applicationAppearanceChange(s)
     desktop_win32_h.NativeEvent_CharacterReceived() -> characterReceived(s)
     desktop_win32_h.NativeEvent_KeyDown() -> keyDown(s)
     desktop_win32_h.NativeEvent_KeyUp() -> keyUp(s)
@@ -194,6 +193,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_PointerUp() -> pointerUp(s)
     desktop_win32_h.NativeEvent_ScrollWheelX() -> scrollWheelX(s)
     desktop_win32_h.NativeEvent_ScrollWheelY() -> scrollWheelY(s)
+    desktop_win32_h.NativeEvent_SystemAppearanceChange() -> systemAppearanceChange(s)
     desktop_win32_h.NativeEvent_WindowCloseRequest() -> Event.WindowCloseRequest
     desktop_win32_h.NativeEvent_WindowDraw() -> windowDraw(s)
     desktop_win32_h.NativeEvent_WindowKeyboardEnter() -> Event.WindowKeyboardEnter
@@ -203,13 +203,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_WindowScaleChanged() -> windowScaleChanged(s)
     desktop_win32_h.NativeEvent_WindowTitleChanged() -> windowTitleChanged(s)
     else -> error("Unexpected Event tag")
-}
-
-private fun applicationAppearanceChange(s: MemorySegment): Event {
-    val nativeEvent = NativeEvent.application_appearance_change(s)
-    return Event.ApplicationAppearanceChange(
-        newAppearance = Appearance.fromNative(NativeApplicationAppearanceChangeEvent.new_appearance(nativeEvent)),
-    )
 }
 
 private fun characterReceived(s: MemorySegment): Event {
@@ -329,6 +322,13 @@ private fun scrollWheelY(s: MemorySegment): Event {
         locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
         state = PointerState.fromNative(NativeScrollWheelEvent.state(nativeEvent)),
         timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
+    )
+}
+
+private fun systemAppearanceChange(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.system_appearance_change(s)
+    return Event.SystemAppearanceChange(
+        newAppearance = Appearance.fromNative(NativeSystemAppearanceChangeEvent.new_appearance(nativeEvent)),
     )
 }
 

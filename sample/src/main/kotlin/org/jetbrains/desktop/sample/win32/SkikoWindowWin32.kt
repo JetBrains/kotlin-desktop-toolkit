@@ -47,13 +47,6 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
 
     open fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
-            is Event.ApplicationAppearanceChange -> with(event) {
-                Logger.debug { "Setting change: new appearance: $newAppearance" }
-                val enableImmersiveDarkMode = newAppearance == Appearance.Dark
-                window.setImmersiveDarkMode(enableImmersiveDarkMode)
-                EventHandlerResult.Stop
-            }
-
             is Event.WindowDraw -> with(event) {
                 performDrawing(size, scale)
                 EventHandlerResult.Stop
@@ -82,6 +75,13 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                     }
                 }
                 EventHandlerResult.Continue
+            }
+
+            is Event.SystemAppearanceChange -> with(event) {
+                Logger.debug { "Setting change: new appearance: $newAppearance" }
+                val enableImmersiveDarkMode = newAppearance == Appearance.Dark
+                window.setImmersiveDarkMode(enableImmersiveDarkMode)
+                EventHandlerResult.Stop
             }
 
             is Event.WindowTitleChanged -> with(event) {

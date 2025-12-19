@@ -12,7 +12,6 @@ use super::{
 #[derive(Debug)]
 #[allow(dead_code)]
 pub enum Event {
-    ApplicationAppearanceChange(ApplicationAppearanceChangeEvent),
     CharacterReceived(CharacterReceivedEvent),
     KeyDown(KeyEvent),
     KeyUp(KeyEvent),
@@ -25,6 +24,7 @@ pub enum Event {
     PointerUp(PointerUpEvent),
     ScrollWheelX(ScrollWheelEvent),
     ScrollWheelY(ScrollWheelEvent),
+    SystemAppearanceChange(SystemAppearanceChangeEvent),
     WindowCloseRequest,
     WindowDraw(WindowDrawEvent),
     //WindowFocusChange(WindowFocusChangeEvent),
@@ -43,18 +43,6 @@ pub type EventHandler = extern "C" fn(WindowId, &Event) -> bool;
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct Timestamp(pub u64);
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct ApplicationAppearanceChangeEvent {
-    pub new_appearance: Appearance,
-}
-
-impl From<ApplicationAppearanceChangeEvent> for Event {
-    fn from(value: ApplicationAppearanceChangeEvent) -> Self {
-        Self::ApplicationAppearanceChange(value)
-    }
-}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -121,16 +109,6 @@ pub struct PointerDownEvent {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct PointerUpEvent {
-    pub button: PointerButton,
-    pub location_in_window: LogicalPoint,
-    pub non_client_area: bool,
-    pub state: PointerState,
-    pub timestamp: Timestamp,
-}
-
-#[repr(C)]
-#[derive(Debug)]
 pub struct PointerEnteredEvent {
     pub location_in_window: LogicalPoint,
     pub state: PointerState,
@@ -175,11 +153,33 @@ impl From<PointerUpdatedEvent> for Event {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct PointerUpEvent {
+    pub button: PointerButton,
+    pub location_in_window: LogicalPoint,
+    pub non_client_area: bool,
+    pub state: PointerState,
+    pub timestamp: Timestamp,
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct ScrollWheelEvent {
     pub scrolling_delta: i32,
     pub location_in_window: LogicalPoint,
     pub state: PointerState,
     pub timestamp: Timestamp,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct SystemAppearanceChangeEvent {
+    pub new_appearance: Appearance,
+}
+
+impl From<SystemAppearanceChangeEvent> for Event {
+    fn from(value: SystemAppearanceChangeEvent) -> Self {
+        Self::SystemAppearanceChange(value)
+    }
 }
 
 #[repr(C)]
