@@ -460,7 +460,6 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
 }
 
 fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
-    let is_non_client = matches!(msg, WM_NCPOINTERDOWN);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
     let pointer_button = match pointer_info.get_pointer_button_change() {
         change if change.kind() == PointerButtonChangeKind::Pressed => change.button(),
@@ -475,13 +474,11 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPA
         button: pointer_button,
         click_count,
         location_in_window: pointer_info.get_location_in_window(),
-        non_client_area: is_non_client,
+        non_client_area: matches!(msg, WM_NCPOINTERDOWN),
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
     };
-    let result = event_loop.handle_event(window, Event::PointerDown(event));
-    // WM_NCPOINTERDOWN should always return None so that the window buttons work
-    if is_non_client { None } else { result }
+    event_loop.handle_event(window, Event::PointerDown(event))
 }
 
 fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
