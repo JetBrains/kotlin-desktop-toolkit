@@ -648,6 +648,13 @@ class ApplicationState : AutoCloseable {
             AppMenuItem.SubMenu(
                 title = "Edit",
                 AppMenuItem.Action(
+                    title = "Cut",
+                    keystroke = Keystroke(key = "x", modifiers = KeyModifiersSet.create(command = true)),
+                    specialTag = AppMenuItem.Action.SpecialTag.Cut,
+                    perform = {
+                    },
+                ),
+                AppMenuItem.Action(
                     title = "Copy",
                     keystroke = Keystroke(key = "c", modifiers = KeyModifiersSet.create(command = true)),
                     specialTag = AppMenuItem.Action.SpecialTag.Copy,
