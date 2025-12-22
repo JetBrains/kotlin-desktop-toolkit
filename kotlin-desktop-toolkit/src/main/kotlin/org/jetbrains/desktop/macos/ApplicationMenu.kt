@@ -12,7 +12,7 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
 /**
- * Be aware capital letter turns shift modifier on
+ * Be aware a capital letter turns shift modifier on
  */
 public data class Keystroke(
     val key: String,
@@ -100,6 +100,7 @@ public sealed class AppMenuItem {
             AppNameMenu,
             Window,
             Services,
+            Help,
             ;
 
             internal fun toNative(): Int {
@@ -108,6 +109,7 @@ public sealed class AppMenuItem {
                     AppNameMenu -> desktop_macos_h.NativeSubMenuItemSpecialTag_AppNameMenu()
                     Window -> desktop_macos_h.NativeSubMenuItemSpecialTag_Window()
                     Services -> desktop_macos_h.NativeSubMenuItemSpecialTag_Services()
+                    Help -> desktop_macos_h.NativeSubMenuItemSpecialTag_Help()
                 }
             }
         }

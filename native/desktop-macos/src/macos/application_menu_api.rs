@@ -24,6 +24,7 @@ pub enum SubMenuItemSpecialTag {
     AppNameMenu,
     Window,
     Services,
+    Help,
 }
 
 #[repr(C)]

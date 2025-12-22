@@ -46,9 +46,6 @@ pub fn main_menu_update_impl(menu: &AppMenuStructure) {
     } else {
         let new_menu_root = NSMenu::new(mtm);
         app.setMainMenu(Some(&new_menu_root));
-        // todo do we need to set these?
-        // app.setHelpMenu();
-        // app.setServicesMenu();
         new_menu_root
     };
     menu_root.setAutoenablesItems(false);
@@ -269,6 +266,10 @@ impl AppMenuItemSafe {
                     SubMenuItemSpecialTag::Services => {
                         let app = MyNSApplication::sharedApplication(mtm);
                         app.setServicesMenu(Some(&submenu));
+                    }
+                    SubMenuItemSpecialTag::Help => {
+                        let app = MyNSApplication::sharedApplication(mtm);
+                        app.setHelpMenu(Some(&submenu));
                     }
                     _ => {}
                 }
