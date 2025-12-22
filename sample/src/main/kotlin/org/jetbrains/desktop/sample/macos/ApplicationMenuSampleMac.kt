@@ -1,7 +1,10 @@
 package org.jetbrains.desktop.sample.macos
 
+import org.jetbrains.desktop.macos.AppMenuItem
 import org.jetbrains.desktop.macos.AppMenuManager
+import org.jetbrains.desktop.macos.AppMenuStructure
 import org.jetbrains.desktop.macos.Application
+import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
@@ -21,19 +24,41 @@ fun main() {
                 //        disableCharacterPaletteMenuItem = true
             ),
         )
-        AppMenuManager.setMainMenu(buildAppMenu())
         val window1 = Window.create(origin = LogicalPoint(100.0, 200.0), title = "Window1")
         val window2 = Window.create(origin = LogicalPoint(200.0, 300.0), title = "Window2")
 
-        thread {
-            while (true) {
-                GrandCentralDispatch.dispatchOnMain {
-                    AppMenuManager.setMainMenu(buildAppMenu())
+        // We set this dummy menu here before ApplicationDidFinishLaunching
+        // to make macOS populate edit submenu with Start Dictation and Character Palette items
+        AppMenuManager.setMainMenu(AppMenuStructure(AppMenuItem.SubMenu(
+            // Ignored
+            title = "App",
+            specialTag = AppMenuItem.SubMenu.SpecialTag.AppNameMenu,
+        ),
+            AppMenuItem.SubMenu(
+                title = "File"
+            ),
+            AppMenuItem.SubMenu(
+                title = "Edit",
+                AppMenuItem.Separator // This separator is important, macOS wouldn't populate an empty edit menu
+            )))
+        Application.runEventLoop { event ->
+            when (event) {
+                is Event.ApplicationDidFinishLaunching -> {
+//                    AppMenuManager.setMainMenu(buildAppMenu())
+                    thread(start = true) {
+                        Thread.sleep(100)
+                        while (true) {
+                            GrandCentralDispatch.dispatchOnMain {
+                                AppMenuManager.setMainMenu(buildAppMenu())
+                            }
+                            Thread.sleep(1000)
+                        }
+                    }
                 }
-                Thread.sleep(1000)
+                else -> {}
             }
+            EventHandlerResult.Continue
         }
-        Application.runEventLoop { EventHandlerResult.Continue }
         window1.close()
         window2.close()
     }
