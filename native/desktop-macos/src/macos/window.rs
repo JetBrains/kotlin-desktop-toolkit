@@ -39,14 +39,14 @@ use objc2::{
 };
 use objc2_app_kit::{
     NSApplicationPresentationOptions, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingContext,
-    NSDraggingDestination, NSDraggingFormation, NSDraggingInfo, NSDraggingItem, NSDraggingSession, NSDraggingSource, NSEvent, NSEventType,
-    NSNormalWindowLevel, NSPasteboardWriting, NSScreen, NSTextInputClient, NSTrackingArea, NSTrackingAreaOptions, NSView,
-    NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow, NSWindowCollectionBehavior,
-    NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask,
+    NSDraggingDestination, NSDraggingFormation, NSDraggingInfo, NSDraggingItem, NSDraggingSession, NSDraggingSource, NSEvent,
+    NSEventModifierFlags, NSEventType, NSNormalWindowLevel, NSPasteboardWriting, NSScreen, NSTextInputClient, NSTrackingArea,
+    NSTrackingAreaOptions, NSView, NSVisualEffectBlendingMode, NSVisualEffectMaterial, NSVisualEffectState, NSVisualEffectView, NSWindow,
+    NSWindowCollectionBehavior, NSWindowDelegate, NSWindowOrderingMode, NSWindowStyleMask,
 };
 use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSAttributedStringKey, NSMutableArray, NSNotification, NSObject, NSObjectProtocol,
-    NSPoint, NSRange, NSRangePointer, NSRect, NSUInteger,
+    NSPoint, NSProcessInfo, NSRange, NSRangePointer, NSRect, NSUInteger,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -299,13 +299,27 @@ impl Window {
         content_view.addSubview_positioned_relativeTo(&layer.layer_view, NSWindowOrderingMode::Below, Some(&self.root_view));
     }
 
-    pub(crate) fn start_dragging_session(&self, mtm: MainThreadMarker, drag_items: &BorrowedArray<DraggingItem>) -> anyhow::Result<()> {
-        let app = MyNSApplication::sharedApplication(mtm);
-        let event = app
-            .currentEvent()
-            .take_if(|event| event.r#type() == NSEventType::LeftMouseDown || event.r#type() == NSEventType::RightMouseDown)
-            .context("Drag session can be started only from a mouse down event handler")?;
+    pub(crate) fn start_dragging_session(
+        &self,
+        mtm: MainThreadMarker,
+        position: &LogicalPoint,
+        drag_items: &BorrowedArray<DraggingItem>,
+    ) -> anyhow::Result<()> {
         let window_height = self.root_view.frame().size.height;
+        let location = position.as_macos_coords(window_height);
+        // https://github.com/electron/electron/blob/33f69425651629234103bcf51cf1380d18d61fb6/shell/browser/ui/drag_util_mac.mm#L72
+        let event = NSEvent::mouseEventWithType_location_modifierFlags_timestamp_windowNumber_context_eventNumber_clickCount_pressure(
+            NSEventType::LeftMouseDragged,
+            location,
+            NSEventModifierFlags::empty(),
+            NSProcessInfo::processInfo().systemUptime(),
+            self.ns_window.windowNumber(),
+            None,
+            0,
+            1,
+            1.0,
+        )
+        .unwrap();
         let items = DraggingItem::copy_to_ns_array(drag_items.as_slice()?, mtm, window_height)?;
         let session = self
             .root_view

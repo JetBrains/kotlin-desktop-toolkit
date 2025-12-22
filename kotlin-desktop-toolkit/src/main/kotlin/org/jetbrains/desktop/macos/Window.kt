@@ -352,10 +352,10 @@ public class Window internal constructor(
      * This function should be called from mouse down event handler only.
      * It's possible to remove this restriction in the future, e.g., chrome and electron do it.
      */
-    public fun startDragSession(items: List<DraggingItem>) {
+    public fun startDragSession(positionInWindow: LogicalPoint, items: List<DraggingItem>) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_macos_h.window_start_drag_session(pointer, items.toNative(arena))
+                desktop_macos_h.window_start_drag_session(pointer, positionInWindow.toNative(arena), items.toNative(arena))
             }
         }
     }

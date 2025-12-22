@@ -5,14 +5,11 @@ import org.jetbrains.desktop.macos.Image
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.LogicalRect
 import org.jetbrains.desktop.macos.LogicalSize
-import org.jetbrains.desktop.macos.NativeError
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertFailsWith
 
 @EnabledOnOs(OS.MAC)
 class DragSessionTest : KDTApplicationTestBase() {
@@ -41,12 +38,7 @@ class DragSessionTest : KDTApplicationTestBase() {
                 image = Image.fromBytes(jbIconBytes()),
             )
 
-            // startDragSession can only be called from a mouse down event handler
-            // This test verifies the API is callable and returns expected error
-            val exception = assertFailsWith<NativeError> {
-                window.startDragSession(listOf(draggingItem))
-            }
-            assertContains(exception.message ?: "", "mouse down event handler")
+            window.startDragSession(LogicalPoint(10.0, 10.0), listOf(draggingItem))
         }
 
         ui {

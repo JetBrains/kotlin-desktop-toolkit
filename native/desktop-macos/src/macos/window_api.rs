@@ -446,11 +446,11 @@ pub struct DraggingItem<'a> {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_start_drag_session(window_ptr: WindowPtr, drag_items: BorrowedArray<DraggingItem>) {
+pub extern "C" fn window_start_drag_session(window_ptr: WindowPtr, position: LogicalPoint, drag_items: BorrowedArray<DraggingItem>) {
     ffi_boundary("window_start_drag_session", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
-        window.start_dragging_session(mtm, &drag_items)?;
+        window.start_dragging_session(mtm, &position, &drag_items)?;
         Ok(())
     });
 }
