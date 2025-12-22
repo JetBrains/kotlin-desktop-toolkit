@@ -20,8 +20,8 @@ fun buildAppMenu(): AppMenuStructure {
      * 3. We can register Windows, Help and Services menus, and OS will add some additional items there
      * 4. Menu with name Help will have search field as a first item
      * 5. Edit submenu have `AutoFill`, `Start Dictation` and Emoji & Symbols items
-     * 6. `Edit` submenu needs some careful threatment, additional items might be easily removed
-     * 7. `Edit` submenu items might be removed when reconciled with empty list
+     * 6. `Edit` submenu needs some careful treatment, additional items might be easily removed
+     * 7. `Edit` submenu items might be removed when reconciled with an empty list
      * 8. Hiden items are used by macOS to handle shortcut aliases
      * 9. Multiple separators are rendered as single separator, but still remains in app menu
      * 10. View submenu may have some additional items, including `Toggle Fullscreen` and some other
