@@ -87,6 +87,7 @@ pub struct AppMenuStructure<'a> {
 #[unsafe(no_mangle)]
 pub extern "C" fn main_menu_update(menu: AppMenuStructure) {
     ffi_boundary("main_menu_update", || {
+        let menu = crate::macos::application_menu::AppMenuStructureSafe::from_unsafe(&menu)?;
         main_menu_update_impl(&menu);
         Ok(())
     });

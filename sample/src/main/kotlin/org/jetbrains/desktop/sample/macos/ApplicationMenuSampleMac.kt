@@ -1,8 +1,6 @@
 package org.jetbrains.desktop.sample.macos
 
-import org.jetbrains.desktop.macos.AppMenuItem
 import org.jetbrains.desktop.macos.AppMenuManager
-import org.jetbrains.desktop.macos.AppMenuStructure
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
@@ -27,20 +25,6 @@ fun main() {
         val window1 = Window.create(origin = LogicalPoint(100.0, 200.0), title = "Window1")
         val window2 = Window.create(origin = LogicalPoint(200.0, 300.0), title = "Window2")
 
-        // We set this dummy menu here before ApplicationDidFinishLaunching
-        // to make macOS populate edit submenu with Start Dictation and Character Palette items
-        AppMenuManager.setMainMenu(AppMenuStructure(AppMenuItem.SubMenu(
-            // Ignored
-            title = "App",
-            specialTag = AppMenuItem.SubMenu.SpecialTag.AppNameMenu,
-        ),
-            AppMenuItem.SubMenu(
-                title = "File"
-            ),
-            AppMenuItem.SubMenu(
-                title = "Edit",
-                AppMenuItem.Separator // This separator is important, macOS wouldn't populate an empty edit menu
-            )))
         Application.runEventLoop { event ->
             when (event) {
                 is Event.ApplicationDidFinishLaunching -> {

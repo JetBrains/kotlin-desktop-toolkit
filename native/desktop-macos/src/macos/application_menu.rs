@@ -36,8 +36,42 @@ pub fn app_menu_deinit_impl() {
     });
 }
 
-pub fn main_menu_update_impl(menu: &AppMenuStructure) {
-    let updated_menu = AppMenuStructureSafe::from_unsafe(menu).unwrap(); // todo come up with some error handling facility
+// Need to be called before ApplicationDidFinishLaunching
+// to allow macOS to insert system-provided items
+pub(crate) fn set_initial_app_menu() {
+    let dummy_menu = AppMenuStructureSafe {
+        items: vec![
+            AppMenuItemSafe::SubMenu {
+                title: NSString::from_str("App"),
+                special_tag: SubMenuItemSpecialTag::AppNameMenu,
+                items: vec![],
+            },
+            AppMenuItemSafe::SubMenu {
+                title: NSString::from_str("File"),
+                special_tag: SubMenuItemSpecialTag::None,
+                items: vec![],
+            },
+            AppMenuItemSafe::SubMenu {
+                title: NSString::from_str("Edit"),
+                special_tag: SubMenuItemSpecialTag::None,
+                items: vec![AppMenuItemSafe::Separator],
+            },
+            AppMenuItemSafe::SubMenu {
+                title: NSString::from_str("Window"),
+                special_tag: SubMenuItemSpecialTag::Window,
+                items: vec![],
+            },
+            AppMenuItemSafe::SubMenu {
+                title: NSString::from_str("Help"),
+                special_tag: SubMenuItemSpecialTag::Help,
+                items: vec![],
+            },
+        ],
+    };
+    main_menu_update_impl(&dummy_menu);
+}
+
+pub(crate) fn main_menu_update_impl(menu: &AppMenuStructureSafe) {
     let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
     let app = MyNSApplication::sharedApplication(mtm);
 
@@ -49,7 +83,7 @@ pub fn main_menu_update_impl(menu: &AppMenuStructure) {
         new_menu_root
     };
     menu_root.setAutoenablesItems(false);
-    reconcile_ns_menu_items(mtm, &menu_root, true, &updated_menu.items);
+    reconcile_ns_menu_items(mtm, &menu_root, true, &menu.items);
 }
 
 #[derive(Debug)]
@@ -77,12 +111,12 @@ enum AppMenuItemSafe {
 }
 
 #[derive(Debug)]
-struct AppMenuStructureSafe {
+pub(crate) struct AppMenuStructureSafe {
     items: Vec<AppMenuItemSafe>,
 }
 
 impl AppMenuStructureSafe {
-    fn from_unsafe(menu: &AppMenuStructure) -> Result<Self> {
+    pub(crate) fn from_unsafe(menu: &AppMenuStructure) -> Result<Self> {
         let items = {
             if menu.items.is_null() {
                 return Err(anyhow!("Null found in {menu:?}"));
@@ -360,7 +394,7 @@ fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_top_level: b
         .enumerate()
         .map(|(i, (item, title))| {
             if is_top_level && i == 0 {
-                // the first item in top level menu is always item wiht the app name
+                // the first item in a top level menu is always the item with the app name
                 ItemIdentity::AppNameSubMenu
             } else {
                 item.representedObject()
@@ -384,7 +418,7 @@ fn reconcile_ns_menu_items(mtm: MainThreadMarker, menu: &NSMenu, is_top_level: b
     let last_item = old_item_ids.iter().rposition(|it| *it != ItemIdentity::MacOSProvided);
     let (old_item_ids, base_position) = match (first_item, last_item) {
         (Some(first_item), Some(last_item)) => (&old_item_ids[first_item..=last_item], first_item),
-        // All items in menu are macOS provided
+        // All items in the menu are macOS provided
         // Our items will be placed before them
         _ => ([].as_slice(), 0),
     };

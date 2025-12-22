@@ -1,5 +1,3 @@
-use std::{cell::OnceCell, ffi::c_void};
-
 use super::{
     appearance::Appearance,
     drag_and_drop::DragAndDropHandlerState,
@@ -7,7 +5,7 @@ use super::{
     string::{copy_to_c_string, copy_to_ns_string},
     text_direction::TextDirection,
 };
-use crate::macos::application_menu::handle_app_menu_callback;
+use crate::macos::application_menu::{handle_app_menu_callback, set_initial_app_menu};
 use crate::macos::application_menu_api::ItemId;
 use crate::macos::events::{
     handle_application_appearance_change, handle_application_did_finish_launching, handle_application_open_urls,
@@ -33,6 +31,7 @@ use objc2_foundation::{
     MainThreadMarker, NSArray, NSDictionary, NSKeyValueChangeKey, NSKeyValueObservingOptions, NSNotification, NSObject,
     NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults, ns_string,
 };
+use std::{cell::OnceCell, ffi::c_void};
 
 thread_local! {
     pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
@@ -472,9 +471,20 @@ define_class!(
             });
         }
 
+        #[unsafe(method(applicationWillFinishLaunching:))]
+        fn application_will_finish_launching(&self, _notification: &NSNotification) {
+            catch_panic(|| {
+                set_initial_app_menu();
+                Ok(())
+            });
+        }
+
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn did_finish_launching(&self, _notification: &NSNotification) {
-            handle_application_did_finish_launching();
+            catch_panic(|| {
+                handle_application_did_finish_launching();
+                Ok(())
+            });
         }
 
         #[unsafe(method(applicationShouldTerminate:))]
