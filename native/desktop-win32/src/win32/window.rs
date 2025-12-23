@@ -25,10 +25,10 @@ use windows::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
-                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW, PostMessageW,
-                RegisterClassExW, RemovePropW, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetCursor, SetPropW,
-                SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE,
-                WM_NCDESTROY, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
+                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW, IsIconic,
+                IsZoomed, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SWP_NOACTIVATE,
+                SWP_NOOWNERZORDER, SWP_NOZORDER, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
+                USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
@@ -185,6 +185,16 @@ impl Window {
     }
 
     #[must_use]
+    pub fn is_maximized(&self) -> bool {
+        unsafe { IsZoomed(self.hwnd()) }.as_bool()
+    }
+
+    #[must_use]
+    pub fn is_minimized(&self) -> bool {
+        unsafe { IsIconic(self.hwnd()) }.as_bool()
+    }
+
+    #[must_use]
     pub fn is_resizable(&self) -> bool {
         self.style.borrow().is_resizable
     }
@@ -226,6 +236,14 @@ impl Window {
             }
         }
         Ok(())
+    }
+
+    pub fn maximize(&self) -> bool {
+        unsafe { ShowWindow(self.hwnd(), SW_SHOWMAXIMIZED) }.as_bool()
+    }
+
+    pub fn minimize(&self) -> bool {
+        unsafe { ShowWindow(self.hwnd(), SW_SHOWMINIMIZED) }.as_bool()
     }
 
     pub fn show(&self) -> bool {

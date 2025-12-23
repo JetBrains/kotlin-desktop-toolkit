@@ -148,6 +148,26 @@ pub extern "C" fn window_get_screen_info(window_ptr: WindowPtr) -> ScreenInfo {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_is_maximized(window_ptr: WindowPtr) -> bool {
+    with_window(&window_ptr, "window_is_maximized", |window| Ok(window.is_maximized()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_is_minimized(window_ptr: WindowPtr) -> bool {
+    with_window(&window_ptr, "window_is_minimized", |window| Ok(window.is_minimized()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_maximize(window_ptr: WindowPtr) -> bool {
+    with_window(&window_ptr, "window_maximize", |window| Ok(window.maximize()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_minimize(window_ptr: WindowPtr) -> bool {
+    with_window(&window_ptr, "window_minimize", |window| Ok(window.minimize()))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_cursor_from_file(window_ptr: WindowPtr, path: BorrowedStrPtr) {
     with_window(&window_ptr, "window_set_cursor_from_file", |window| {
         let cursor_file_path = copy_from_utf8_string(&path)?.to_os_string();
