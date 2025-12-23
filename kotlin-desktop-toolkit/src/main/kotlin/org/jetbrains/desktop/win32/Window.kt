@@ -113,6 +113,26 @@ public class Window internal constructor(
         }
     }
 
+    public fun isMaximized(): Boolean {
+        return ffiDownCall {
+            desktop_win32_h.window_is_maximized(ptr)
+        }
+    }
+
+    public fun isMinimized(): Boolean {
+        return ffiDownCall {
+            desktop_win32_h.window_is_minimized(ptr)
+        }
+    }
+
+    public fun maximize(): Boolean {
+        return ffiDownCall { desktop_win32_h.window_maximize(ptr) }
+    }
+
+    public fun minimize(): Boolean {
+        return ffiDownCall { desktop_win32_h.window_minimize(ptr) }
+    }
+
     public fun setCursor(cursorIcon: CursorIcon) {
         ffiDownCall {
             desktop_win32_h.window_set_cursor_from_system(ptr, cursorIcon.toNative())

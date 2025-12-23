@@ -47,9 +47,9 @@
 | Content size       | ✅    | ➖                 | ✅      |     |
 | Current screen     | ✅    | ✅                 | ✅      |     |
 | Full screen        | ✅    | ✅                 | ❌      |     |
-| Maximize/Minimize  | ✅    | ✅                 | 🚧      |     |
+| Maximize/Minimize  | ✅    | ✅                 | ✅      |     |
 | Request focus      | ✅    | ✅                 | 🚧      |     |
-| Set cursor icon    | ✅    | ✅                 | 🚧      |     |
+| Set cursor icon    | ✅    | ✅                 | ✅      |     |
 | Transparency       | ✅    | ✅                 | ✅      |     |
 | Background effects | ✅    | ❌                 | ✅      |     |
 | Close window       | ✅    | ✅                 | ✅      |     |
