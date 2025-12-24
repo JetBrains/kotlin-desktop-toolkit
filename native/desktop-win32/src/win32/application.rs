@@ -48,6 +48,7 @@ impl Application {
         self.dispatcher_queue_controller
             .DispatcherQueue()?
             .TryEnqueue(&DispatcherQueueHandler::new(move || {
+                log::trace!("Application dispatcher invoke");
                 callback();
                 Ok(())
             }))
@@ -88,7 +89,7 @@ fn create_dispatcher_queue() -> WinResult<DispatcherQueueController> {
     dispatcher_queue_controller
         .DispatcherQueue()?
         .ShutdownCompleted(&TypedEventHandler::new(|_, _| {
-            log::debug!("Shutting down the dispatcher queue");
+            log::trace!("Shutting down the dispatcher queue");
             unsafe { PostQuitMessage(0) };
             Ok(())
         }))?;

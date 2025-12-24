@@ -48,12 +48,14 @@ impl EventLoop {
 
     #[allow(clippy::unused_self)]
     pub fn run(&self) {
+        log::trace!("Event loop is starting");
         let mut msg = MSG::default();
         unsafe {
             while GetMessageW(&raw mut msg, None, 0, 0).as_bool() {
                 DispatchMessageW(&raw const msg);
             }
         }
+        log::trace!("Event loop has finished");
     }
 
     #[allow(clippy::needless_pass_by_value)]
