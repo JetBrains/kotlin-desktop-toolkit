@@ -7,7 +7,7 @@ use windows::Win32::{
         Gdi::{BeginPaint, EndPaint, PAINTSTRUCT},
     },
     UI::{
-        HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
+        HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow, GetSystemMetricsForDpi, SetThreadDpiAwarenessContext},
         Input::Pointer::EnableMouseInPointer,
         WindowsAndMessaging::{
             DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
@@ -42,6 +42,7 @@ pub struct EventLoop {
 
 impl EventLoop {
     pub fn new(event_handler: EventHandler) -> windows::core::Result<Self> {
+        unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
         unsafe { EnableMouseInPointer(true)? };
         Ok(Self { event_handler })
     }
