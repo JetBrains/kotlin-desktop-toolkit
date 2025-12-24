@@ -189,14 +189,14 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
 
 fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     let windowpos = unsafe { (lparam.0 as *mut WINDOWPOS).as_ref() }?;
-    if windowpos.flags.0 & SWP_NOMOVE.0 != 0 {
+    if windowpos.flags.0 & SWP_NOMOVE.0 == 0 {
         let event = WindowMoveEvent {
             origin: PhysicalPoint::new(windowpos.x, windowpos.y),
             scale: window.get_scale(),
         };
         event_loop.handle_event(window, event.into());
     }
-    if windowpos.flags.0 & SWP_NOSIZE.0 != 0 {
+    if windowpos.flags.0 & SWP_NOSIZE.0 == 0 {
         let event = WindowResizeEvent {
             size: PhysicalSize::new(windowpos.cx, windowpos.cy),
             scale: window.get_scale(),
