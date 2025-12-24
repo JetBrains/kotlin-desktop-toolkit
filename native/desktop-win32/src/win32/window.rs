@@ -356,7 +356,7 @@ impl Window {
 
 impl Drop for Window {
     fn drop(&mut self) {
-        log::debug!("window drop");
+        log::trace!("Window has been dropped");
     }
 }
 
