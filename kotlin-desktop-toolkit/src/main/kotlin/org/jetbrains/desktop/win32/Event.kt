@@ -15,7 +15,6 @@ import org.jetbrains.desktop.win32.generated.NativeSystemAppearanceChangeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowMoveEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
-import org.jetbrains.desktop.win32.generated.NativeWindowResizeKind
 import org.jetbrains.desktop.win32.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowTitleChangedEvent
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
@@ -148,7 +147,6 @@ public sealed class Event {
     public data class WindowResize(
         val size: PhysicalSize,
         val scale: Float,
-        val kind: WindowResizeKind,
     ) : Event()
 
     public data class WindowScaleChanged(
@@ -158,26 +156,6 @@ public sealed class Event {
     ) : Event()
 
     public data class WindowTitleChanged(val title: String) : Event()
-}
-
-public sealed class WindowResizeKind {
-    internal companion object {
-        internal fun fromNative(s: MemorySegment): WindowResizeKind = when (NativeWindowResizeKind.tag(s)) {
-            desktop_win32_h.NativeWindowResizeKind_Restored() -> Restored
-            desktop_win32_h.NativeWindowResizeKind_Maximized() -> Maximized
-            desktop_win32_h.NativeWindowResizeKind_Minimized() -> Minimized
-            desktop_win32_h.NativeWindowResizeKind_Other() -> Other(NativeWindowResizeKind.other(s).toUInt())
-            else -> error("Unexpected WindowResizeKind tag")
-        }
-    }
-
-    public data object Restored : WindowResizeKind()
-
-    public data object Maximized : WindowResizeKind()
-
-    public data object Minimized : WindowResizeKind()
-
-    public data class Other(val kind: UInt) : WindowResizeKind()
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
@@ -353,7 +331,6 @@ private fun windowResize(s: MemorySegment): Event {
     return Event.WindowResize(
         size = PhysicalSize.fromNative(NativeWindowResizeEvent.size(nativeEvent)),
         scale = NativeWindowResizeEvent.scale(nativeEvent),
-        kind = WindowResizeKind.fromNative(NativeWindowResizeEvent.kind(nativeEvent)),
     )
 }
 

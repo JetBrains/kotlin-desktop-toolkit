@@ -213,17 +213,6 @@ impl From<WindowMoveEvent> for Event {
 pub struct WindowResizeEvent {
     pub size: PhysicalSize,
     pub scale: f32,
-    pub kind: WindowResizeKind,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-#[allow(dead_code)]
-pub enum WindowResizeKind {
-    Restored,
-    Maximized,
-    Minimized,
-    Other(u32),
 }
 
 impl From<WindowResizeEvent> for Event {

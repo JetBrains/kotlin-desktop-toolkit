@@ -92,14 +92,20 @@ public class Window internal constructor(
         )
     }
 
-    public fun getScaleFactor(): Float {
-        return ffiDownCall { desktop_win32_h.window_get_scale_factor(ptr) }
+    public fun getClientSize(): LogicalSize {
+        return Arena.ofConfined().use { arena ->
+            LogicalSize.fromNative(ffiDownCall { desktop_win32_h.window_get_client_size(arena, ptr) })
+        }
     }
 
     public fun getRect(): LogicalRect {
         return Arena.ofConfined().use { arena ->
             LogicalRect.fromNative(ffiDownCall { desktop_win32_h.window_get_rect(arena, ptr) })
         }
+    }
+
+    public fun getScaleFactor(): Float {
+        return ffiDownCall { desktop_win32_h.window_get_scale_factor(ptr) }
     }
 
     public fun getScreen(): Screen {
