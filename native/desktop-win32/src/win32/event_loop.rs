@@ -11,13 +11,12 @@ use windows::Win32::{
         Input::Pointer::EnableMouseInPointer,
         WindowsAndMessaging::{
             DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
-            HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SIZE_MAXIMIZED, SIZE_MINIMIZED, SIZE_RESTORED, SM_CXPADDEDBORDER,
-            SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage,
-            USER_DEFAULT_SCREEN_DPI, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND,
-            WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_MOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN,
-            WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP,
-            WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCHAR,
-            WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
+            HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED,
+            SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR,
+            WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS,
+            WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN,
+            WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT,
+            WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
 };
@@ -27,7 +26,7 @@ use super::{
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
         PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent, Timestamp, WindowDrawEvent,
-        WindowMoveEvent, WindowResizeEvent, WindowResizeKind, WindowScaleChangedEvent, WindowTitleChangedEvent,
+        WindowMoveEvent, WindowResizeEvent, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
@@ -73,9 +72,7 @@ impl EventLoop {
 
             WM_DPICHANGED => on_dpichanged(self, window, wparam, lparam),
 
-            WM_SIZE => on_size(self, window, wparam, lparam),
-
-            WM_MOVE => on_move(self, window, lparam),
+            WM_WINDOWPOSCHANGED => on_windowposchanged(self, window, lparam),
 
             WM_GETMINMAXINFO => on_getminmaxinfo(window, lparam),
 
@@ -187,35 +184,23 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     event_loop.handle_event(window, event.into())
 }
 
-#[allow(clippy::cast_possible_truncation)]
-#[allow(clippy::cast_sign_loss)]
-fn on_size(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let width = LOWORD!(lparam.0);
-    let height = HIWORD!(lparam.0);
-    let kind = match wparam.0 as u32 {
-        SIZE_MAXIMIZED => WindowResizeKind::Maximized,
-        SIZE_MINIMIZED => WindowResizeKind::Minimized,
-        SIZE_RESTORED => WindowResizeKind::Restored,
-        kind => WindowResizeKind::Other(kind),
-    };
-    let event = WindowResizeEvent {
-        size: PhysicalSize::new(width.into(), height.into()),
-        scale: window.get_scale(),
-        kind,
-    };
-    event_loop.handle_event(window, event.into())
-}
-
-#[allow(clippy::cast_possible_truncation)]
-#[allow(clippy::cast_sign_loss)]
-fn on_move(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
-    let x = LOWORD!(lparam.0);
-    let y = HIWORD!(lparam.0);
-    let event = WindowMoveEvent {
-        origin: PhysicalPoint::new(x.into(), y.into()),
-        scale: window.get_scale(),
-    };
-    event_loop.handle_event(window, event.into())
+fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
+    let windowpos = unsafe { (lparam.0 as *mut WINDOWPOS).as_ref() }?;
+    if windowpos.flags.0 & SWP_NOMOVE.0 != 0 {
+        let event = WindowMoveEvent {
+            origin: PhysicalPoint::new(windowpos.x, windowpos.y),
+            scale: window.get_scale(),
+        };
+        event_loop.handle_event(window, event.into());
+    }
+    if windowpos.flags.0 & SWP_NOSIZE.0 != 0 {
+        let event = WindowResizeEvent {
+            size: PhysicalSize::new(windowpos.cx, windowpos.cy),
+            scale: window.get_scale(),
+        };
+        event_loop.handle_event(window, event.into());
+    }
+    Some(LRESULT(0))
 }
 
 fn on_getminmaxinfo(window: &Window, lparam: LPARAM) -> Option<LRESULT> {

@@ -85,7 +85,7 @@ impl LogicalPoint {
 }
 
 #[repr(C)]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct LogicalSize {
     pub width: LogicalPixels,
     pub height: LogicalPixels,
@@ -114,6 +114,15 @@ impl LogicalSize {
             f32::floor(self.width.0.mul_add(scale, 0.5_f32)) as i32,
             f32::floor(self.height.0.mul_add(scale, 0.5_f32)) as i32,
         )
+    }
+}
+
+impl PanicDefault for LogicalSize {
+    fn default() -> Self {
+        Self {
+            width: LogicalPixels::default(),
+            height: LogicalPixels::default(),
+        }
     }
 }
 

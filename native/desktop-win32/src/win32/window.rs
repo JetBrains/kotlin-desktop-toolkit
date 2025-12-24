@@ -25,10 +25,11 @@ use windows::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
-                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetPropW, IsIconic,
-                IsZoomed, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SWP_NOACTIVATE,
-                SWP_NOOWNERZORDER, SWP_NOZORDER, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
-                USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
+                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetClientRect, GetPropW,
+                IsIconic, IsZoomed, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED,
+                SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
+                ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW,
+                WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
@@ -96,7 +97,7 @@ impl Window {
             sprite_visual: RefCell::new(None),
             min_size: RefCell::new(None),
             origin: RefCell::default(),
-            size: RefCell::default(),
+            size: RefCell::new(LogicalSize::new(0.0, 0.0)),
             style: RefCell::default(),
             pointer_in_window: AtomicBool::new(false),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
@@ -150,11 +151,12 @@ impl Window {
             .cloned()
     }
 
-    #[allow(clippy::cast_precision_loss)]
-    #[must_use]
-    pub fn get_scale(&self) -> f32 {
-        let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
-        (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
+    pub fn get_client_size(&self) -> anyhow::Result<LogicalSize> {
+        let mut rect = RECT::default();
+        unsafe { GetClientRect(self.hwnd(), &raw mut rect)? };
+        // According to the documentation (https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclientrect):
+        //   "The left and top members are zero. The right and bottom members contain the width and height of the window."
+        Ok(LogicalSize::from_physical(rect.right, rect.bottom, self.get_scale()))
     }
 
     #[allow(clippy::cast_possible_truncation)]
@@ -172,6 +174,13 @@ impl Window {
         let origin = LogicalPoint::from_physical(rect.left, rect.top, scale);
         let size = LogicalSize::from_physical(rect.right - rect.left, rect.bottom - rect.top, scale);
         Ok(LogicalRect { origin, size })
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    #[must_use]
+    pub fn get_scale(&self) -> f32 {
+        let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
+        (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
     }
 
     pub fn get_screen_info(&self) -> anyhow::Result<ScreenInfo> {
