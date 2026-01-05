@@ -22,20 +22,20 @@ desktop-common = { path = "../desktop-common" }
 [build-dependencies]
 
 [dev-dependencies]
-test-log = "0.2.17"
+test-log = "0.2.19"
 quickcheck = "1"
 quickcheck_macros = "1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 foreign-types = "0.5"
 dispatch2 = { version = "0.3.0" }
-block2 = { version = "0.6.1" }
+block2 = { version = "0.6.2" }
 # "catch-all" feature add try catch for obj-c exceptions in msg_send![]
 # it's nice to have at least for the beginning, but later we need to check how it impacts performance
-objc2 = { version = "0.6.2", features = ["exception", "catch-all"] }
-objc2-foundation = { version = "0.3.1" }
-objc2-core-foundation = { version = "0.3.1" }
-objc2-app-kit = { version = "0.3.1", features = [
+objc2 = { version = "0.6.3", features = ["exception", "catch-all"] }
+objc2-foundation = { version = "0.3.2" }
+objc2-core-foundation = { version = "0.3.2" }
+objc2-app-kit = { version = "0.3.2", features = [
   "NSApplication",
   "NSWindow",
   "NSWindowRestoration",
@@ -60,11 +60,11 @@ objc2-app-kit = { version = "0.3.1", features = [
   "NSDraggingSession",
   "objc2-quartz-core",
 ] }
-objc2-quartz-core = { version = "0.3.1" }
-objc2-core-graphics = { version = "0.3.1" }
-objc2-metal = { version = "0.3.1" }
-objc2-uniform-type-identifiers = { version = "0.3.1" }
-objc2-user-notifications = { version = "0.3.1", features = [
+objc2-quartz-core = { version = "0.3.2" }
+objc2-core-graphics = { version = "0.3.2" }
+objc2-metal = { version = "0.3.2" }
+objc2-uniform-type-identifiers = { version = "0.3.2" }
+objc2-user-notifications = { version = "0.3.2", features = [
   "UNUserNotificationCenter",
   "UNNotificationSettings",
   "UNNotificationContent",
