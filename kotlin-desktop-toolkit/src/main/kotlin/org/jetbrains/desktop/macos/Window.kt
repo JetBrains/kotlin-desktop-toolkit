@@ -351,9 +351,10 @@ public class Window internal constructor(
     /**
      * This function should be called from mouse down event handler only.
      * It's possible to remove this restriction in the future, e.g., chrome and electron do it.
+     * @return session sequence number, the session is referenced by this number in drag and drop callbacks
      */
-    public fun startDragSession(positionInWindow: LogicalPoint, items: List<DraggingItem>) {
-        Arena.ofConfined().use { arena ->
+    public fun startDragSession(positionInWindow: LogicalPoint, items: List<DraggingItem>): Long {
+        return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.window_start_drag_session(pointer, positionInWindow.toNative(arena), items.toNative(arena))
             }

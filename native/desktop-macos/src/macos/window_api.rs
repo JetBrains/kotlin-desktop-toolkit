@@ -20,6 +20,7 @@ use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedRawPtr, RustAllocatedStrPtr},
     logger::{PanicDefault, ffi_boundary},
 };
+use crate::macos::drag_and_drop::SequenceNumber;
 
 pub type WindowId = isize;
 
@@ -446,13 +447,13 @@ pub struct DraggingItem<'a> {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_start_drag_session(window_ptr: WindowPtr, position: LogicalPoint, drag_items: BorrowedArray<DraggingItem>) {
+pub extern "C" fn window_start_drag_session(window_ptr: WindowPtr, position: LogicalPoint, drag_items: BorrowedArray<DraggingItem>) -> SequenceNumber {
     ffi_boundary("window_start_drag_session", || {
         let mtm: MainThreadMarker = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
-        window.start_dragging_session(mtm, &position, &drag_items)?;
-        Ok(())
-    });
+        let sequence_number = window.start_dragging_session(mtm, &position, &drag_items)?;
+        Ok(sequence_number)
+    })
 }
 
 #[derive(Debug)]

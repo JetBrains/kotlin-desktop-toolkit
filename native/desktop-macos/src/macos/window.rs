@@ -50,6 +50,7 @@ use objc2_foundation::{
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use crate::macos::drag_and_drop::SequenceNumber;
 
 #[allow(clippy::struct_field_names)]
 pub(crate) struct Window {
@@ -304,7 +305,7 @@ impl Window {
         mtm: MainThreadMarker,
         position: &LogicalPoint,
         drag_items: &BorrowedArray<DraggingItem>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<SequenceNumber> {
         let window_height = self.root_view.frame().size.height;
         let location = position.as_macos_coords(window_height);
         // https://github.com/electron/electron/blob/33f69425651629234103bcf51cf1380d18d61fb6/shell/browser/ui/drag_util_mac.mm#L72
@@ -326,7 +327,7 @@ impl Window {
             .beginDraggingSessionWithItems_event_source(&items, &event, ProtocolObject::from_ref(&*self.root_view));
         session.setAnimatesToStartingPositionsOnCancelOrFail(false);
         session.setDraggingFormation(NSDraggingFormation::None);
-        Ok(())
+        Ok(session.draggingSequenceNumber())
     }
 }
 
