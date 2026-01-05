@@ -1,8 +1,8 @@
-use anyhow::Context;
 use crate::macos::keyboard::KeyCode;
-use objc2_core_graphics::{CGEvent, CGEventSource, CGEventSourceStateID, CGEventTapLocation};
-use objc2_core_foundation::CFRetained;
+use anyhow::Context;
 use desktop_common::logger::ffi_boundary;
+use objc2_core_foundation::CFRetained;
+use objc2_core_graphics::{CGEvent, CGEventSource, CGEventSourceStateID, CGEventTapLocation};
 use std::cell::LazyCell;
 
 thread_local! {
@@ -12,11 +12,7 @@ thread_local! {
 }
 
 fn get_event_source() -> anyhow::Result<CFRetained<CGEventSource>> {
-    EVENT_SOURCE.with(|source| {
-        source.as_ref()
-            .context("Failed to create CGEventSource")
-            .map(|s| s.clone())
-    })
+    EVENT_SOURCE.with(|source| source.as_ref().context("Failed to create CGEventSource").cloned())
 }
 
 #[unsafe(no_mangle)]
