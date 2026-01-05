@@ -16,262 +16,264 @@ package org.jetbrains.desktop.macos
 *    keycode.
 */
 @JvmInline
-public value class KeyCode internal constructor(private val value: String) {
+public value class KeyCode internal constructor(private val value: Short) {
     @Suppress("MemberVisibilityCanBePrivate")
     public companion object {
-        public val ANSI_A: KeyCode = KeyCode("ANSI_A")
-        public val ANSI_S: KeyCode = KeyCode("ANSI_S")
-        public val ANSI_D: KeyCode = KeyCode("ANSI_D")
-        public val ANSI_F: KeyCode = KeyCode("ANSI_F")
-        public val ANSI_H: KeyCode = KeyCode("ANSI_H")
-        public val ANSI_G: KeyCode = KeyCode("ANSI_G")
-        public val ANSI_Z: KeyCode = KeyCode("ANSI_Z")
-        public val ANSI_X: KeyCode = KeyCode("ANSI_X")
-        public val ANSI_C: KeyCode = KeyCode("ANSI_C")
-        public val ANSI_V: KeyCode = KeyCode("ANSI_V")
-        public val ANSI_B: KeyCode = KeyCode("ANSI_B")
-        public val ANSI_Q: KeyCode = KeyCode("ANSI_Q")
-        public val ANSI_W: KeyCode = KeyCode("ANSI_W")
-        public val ANSI_E: KeyCode = KeyCode("ANSI_E")
-        public val ANSI_R: KeyCode = KeyCode("ANSI_R")
-        public val ANSI_Y: KeyCode = KeyCode("ANSI_Y")
-        public val ANSI_T: KeyCode = KeyCode("ANSI_T")
-        public val ANSI_1: KeyCode = KeyCode("ANSI_1")
-        public val ANSI_2: KeyCode = KeyCode("ANSI_2")
-        public val ANSI_3: KeyCode = KeyCode("ANSI_3")
-        public val ANSI_4: KeyCode = KeyCode("ANSI_4")
-        public val ANSI_6: KeyCode = KeyCode("ANSI_6")
-        public val ANSI_5: KeyCode = KeyCode("ANSI_5")
-        public val ANSI_Equal: KeyCode = KeyCode("ANSI_Equal")
-        public val ANSI_9: KeyCode = KeyCode("ANSI_9")
-        public val ANSI_7: KeyCode = KeyCode("ANSI_7")
-        public val ANSI_Minus: KeyCode = KeyCode("ANSI_Minus")
-        public val ANSI_8: KeyCode = KeyCode("ANSI_8")
-        public val ANSI_0: KeyCode = KeyCode("ANSI_0")
-        public val ANSI_RightBracket: KeyCode = KeyCode("ANSI_RightBracket")
-        public val ANSI_O: KeyCode = KeyCode("ANSI_O")
-        public val ANSI_U: KeyCode = KeyCode("ANSI_U")
-        public val ANSI_LeftBracket: KeyCode = KeyCode("ANSI_LeftBracket")
-        public val ANSI_I: KeyCode = KeyCode("ANSI_I")
-        public val ANSI_P: KeyCode = KeyCode("ANSI_P")
-        public val ANSI_L: KeyCode = KeyCode("ANSI_L")
-        public val ANSI_J: KeyCode = KeyCode("ANSI_J")
-        public val ANSI_Quote: KeyCode = KeyCode("ANSI_Quote")
-        public val ANSI_K: KeyCode = KeyCode("ANSI_K")
-        public val ANSI_Semicolon: KeyCode = KeyCode("ANSI_Semicolon")
-        public val ANSI_Backslash: KeyCode = KeyCode("ANSI_Backslash")
-        public val ANSI_Comma: KeyCode = KeyCode("ANSI_Comma")
-        public val ANSI_Slash: KeyCode = KeyCode("ANSI_Slash")
-        public val ANSI_N: KeyCode = KeyCode("ANSI_N")
-        public val ANSI_M: KeyCode = KeyCode("ANSI_M")
-        public val ANSI_Period: KeyCode = KeyCode("ANSI_Period")
-        public val ANSI_Grave: KeyCode = KeyCode("ANSI_Grave")
-        public val ANSI_KeypadDecimal: KeyCode = KeyCode("ANSI_KeypadDecimal")
-        public val ANSI_KeypadMultiply: KeyCode = KeyCode("ANSI_KeypadMultiply")
-        public val ANSI_KeypadPlus: KeyCode = KeyCode("ANSI_KeypadPlus")
-        public val ANSI_KeypadClear: KeyCode = KeyCode("ANSI_KeypadClear")
-        public val ANSI_KeypadDivide: KeyCode = KeyCode("ANSI_KeypadDivide")
-        public val ANSI_KeypadEnter: KeyCode = KeyCode("ANSI_KeypadEnter")
-        public val ANSI_KeypadMinus: KeyCode = KeyCode("ANSI_KeypadMinus")
-        public val ANSI_KeypadEquals: KeyCode = KeyCode("ANSI_KeypadEquals")
-        public val ANSI_Keypad0: KeyCode = KeyCode("ANSI_Keypad0")
-        public val ANSI_Keypad1: KeyCode = KeyCode("ANSI_Keypad1")
-        public val ANSI_Keypad2: KeyCode = KeyCode("ANSI_Keypad2")
-        public val ANSI_Keypad3: KeyCode = KeyCode("ANSI_Keypad3")
-        public val ANSI_Keypad4: KeyCode = KeyCode("ANSI_Keypad4")
-        public val ANSI_Keypad5: KeyCode = KeyCode("ANSI_Keypad5")
-        public val ANSI_Keypad6: KeyCode = KeyCode("ANSI_Keypad6")
-        public val ANSI_Keypad7: KeyCode = KeyCode("ANSI_Keypad7")
-        public val ANSI_Keypad8: KeyCode = KeyCode("ANSI_Keypad8")
-        public val ANSI_Keypad9: KeyCode = KeyCode("ANSI_Keypad9")
+        public val ANSI_A: KeyCode = KeyCode(0)
+        public val ANSI_S: KeyCode = KeyCode(1)
+        public val ANSI_D: KeyCode = KeyCode(2)
+        public val ANSI_F: KeyCode = KeyCode(3)
+        public val ANSI_H: KeyCode = KeyCode(4)
+        public val ANSI_G: KeyCode = KeyCode(5)
+        public val ANSI_Z: KeyCode = KeyCode(6)
+        public val ANSI_X: KeyCode = KeyCode(7)
+        public val ANSI_C: KeyCode = KeyCode(8)
+        public val ANSI_V: KeyCode = KeyCode(9)
+        public val ANSI_B: KeyCode = KeyCode(11)
+        public val ANSI_Q: KeyCode = KeyCode(12)
+        public val ANSI_W: KeyCode = KeyCode(13)
+        public val ANSI_E: KeyCode = KeyCode(14)
+        public val ANSI_R: KeyCode = KeyCode(15)
+        public val ANSI_Y: KeyCode = KeyCode(16)
+        public val ANSI_T: KeyCode = KeyCode(17)
+        public val ANSI_1: KeyCode = KeyCode(18)
+        public val ANSI_2: KeyCode = KeyCode(19)
+        public val ANSI_3: KeyCode = KeyCode(20)
+        public val ANSI_4: KeyCode = KeyCode(21)
+        public val ANSI_6: KeyCode = KeyCode(22)
+        public val ANSI_5: KeyCode = KeyCode(23)
+        public val ANSI_Equal: KeyCode = KeyCode(24)
+        public val ANSI_9: KeyCode = KeyCode(25)
+        public val ANSI_7: KeyCode = KeyCode(26)
+        public val ANSI_Minus: KeyCode = KeyCode(27)
+        public val ANSI_8: KeyCode = KeyCode(28)
+        public val ANSI_0: KeyCode = KeyCode(29)
+        public val ANSI_RightBracket: KeyCode = KeyCode(30)
+        public val ANSI_O: KeyCode = KeyCode(31)
+        public val ANSI_U: KeyCode = KeyCode(32)
+        public val ANSI_LeftBracket: KeyCode = KeyCode(33)
+        public val ANSI_I: KeyCode = KeyCode(34)
+        public val ANSI_P: KeyCode = KeyCode(35)
+        public val ANSI_L: KeyCode = KeyCode(37)
+        public val ANSI_J: KeyCode = KeyCode(38)
+        public val ANSI_Quote: KeyCode = KeyCode(39)
+        public val ANSI_K: KeyCode = KeyCode(40)
+        public val ANSI_Semicolon: KeyCode = KeyCode(41)
+        public val ANSI_Backslash: KeyCode = KeyCode(42)
+        public val ANSI_Comma: KeyCode = KeyCode(43)
+        public val ANSI_Slash: KeyCode = KeyCode(44)
+        public val ANSI_N: KeyCode = KeyCode(45)
+        public val ANSI_M: KeyCode = KeyCode(46)
+        public val ANSI_Period: KeyCode = KeyCode(47)
+        public val ANSI_Grave: KeyCode = KeyCode(50)
+        public val ANSI_KeypadDecimal: KeyCode = KeyCode(65)
+        public val ANSI_KeypadMultiply: KeyCode = KeyCode(67)
+        public val ANSI_KeypadPlus: KeyCode = KeyCode(69)
+        public val ANSI_KeypadClear: KeyCode = KeyCode(71)
+        public val ANSI_KeypadDivide: KeyCode = KeyCode(75)
+        public val ANSI_KeypadEnter: KeyCode = KeyCode(76)
+        public val ANSI_KeypadMinus: KeyCode = KeyCode(78)
+        public val ANSI_KeypadEquals: KeyCode = KeyCode(81)
+        public val ANSI_Keypad0: KeyCode = KeyCode(82)
+        public val ANSI_Keypad1: KeyCode = KeyCode(83)
+        public val ANSI_Keypad2: KeyCode = KeyCode(84)
+        public val ANSI_Keypad3: KeyCode = KeyCode(85)
+        public val ANSI_Keypad4: KeyCode = KeyCode(86)
+        public val ANSI_Keypad5: KeyCode = KeyCode(87)
+        public val ANSI_Keypad6: KeyCode = KeyCode(88)
+        public val ANSI_Keypad7: KeyCode = KeyCode(89)
+        public val ANSI_Keypad8: KeyCode = KeyCode(91)
+        public val ANSI_Keypad9: KeyCode = KeyCode(92)
 
         /* keycodes for keys that are independent of keyboard layout*/
-        public val Return: KeyCode = KeyCode("Return")
-        public val Tab: KeyCode = KeyCode("Tab")
-        public val Space: KeyCode = KeyCode("Space")
-        public val Delete: KeyCode = KeyCode("Delete")
-        public val Escape: KeyCode = KeyCode("Escape")
-        public val Command: KeyCode = KeyCode("Command")
-        public val Shift: KeyCode = KeyCode("Shift")
-        public val CapsLock: KeyCode = KeyCode("CapsLock")
-        public val Option: KeyCode = KeyCode("Option")
-        public val Control: KeyCode = KeyCode("Control")
-        public val RightCommand: KeyCode = KeyCode("RightCommand")
-        public val RightShift: KeyCode = KeyCode("RightShift")
-        public val RightOption: KeyCode = KeyCode("RightOption")
-        public val RightControl: KeyCode = KeyCode("RightControl")
-        public val Function: KeyCode = KeyCode("Function")
-        public val F17: KeyCode = KeyCode("F17")
-        public val VolumeUp: KeyCode = KeyCode("VolumeUp")
-        public val VolumeDown: KeyCode = KeyCode("VolumeDown")
-        public val Mute: KeyCode = KeyCode("Mute")
-        public val F18: KeyCode = KeyCode("F18")
-        public val F19: KeyCode = KeyCode("F19")
-        public val F20: KeyCode = KeyCode("F20")
-        public val F5: KeyCode = KeyCode("F5")
-        public val F6: KeyCode = KeyCode("F6")
-        public val F7: KeyCode = KeyCode("F7")
-        public val F3: KeyCode = KeyCode("F3")
-        public val F8: KeyCode = KeyCode("F8")
-        public val F9: KeyCode = KeyCode("F9")
-        public val F11: KeyCode = KeyCode("F11")
-        public val F13: KeyCode = KeyCode("F13")
-        public val F16: KeyCode = KeyCode("F16")
-        public val F14: KeyCode = KeyCode("F14")
-        public val F10: KeyCode = KeyCode("F10")
-        public val ContextualMenu: KeyCode = KeyCode("ContextualMenu")
-        public val F12: KeyCode = KeyCode("F12")
-        public val F15: KeyCode = KeyCode("F15")
-        public val Help: KeyCode = KeyCode("Help")
-        public val Home: KeyCode = KeyCode("Home")
-        public val PageUp: KeyCode = KeyCode("PageUp")
-        public val ForwardDelete: KeyCode = KeyCode("ForwardDelete")
-        public val F4: KeyCode = KeyCode("F4")
-        public val End: KeyCode = KeyCode("End")
-        public val F2: KeyCode = KeyCode("F2")
-        public val PageDown: KeyCode = KeyCode("PageDown")
-        public val F1: KeyCode = KeyCode("F1")
-        public val LeftArrow: KeyCode = KeyCode("LeftArrow")
-        public val RightArrow: KeyCode = KeyCode("RightArrow")
-        public val DownArrow: KeyCode = KeyCode("DownArrow")
-        public val UpArrow: KeyCode = KeyCode("UpArrow")
+        public val Return: KeyCode = KeyCode(36)
+        public val Tab: KeyCode = KeyCode(48)
+        public val Space: KeyCode = KeyCode(49)
+        public val Delete: KeyCode = KeyCode(51)
+        public val Escape: KeyCode = KeyCode(53)
+        public val Command: KeyCode = KeyCode(55)
+        public val Shift: KeyCode = KeyCode(56)
+        public val CapsLock: KeyCode = KeyCode(57)
+        public val Option: KeyCode = KeyCode(58)
+        public val Control: KeyCode = KeyCode(59)
+        public val RightCommand: KeyCode = KeyCode(54)
+        public val RightShift: KeyCode = KeyCode(60)
+        public val RightOption: KeyCode = KeyCode(61)
+        public val RightControl: KeyCode = KeyCode(62)
+        public val Function: KeyCode = KeyCode(63)
+        public val F17: KeyCode = KeyCode(64)
+        public val VolumeUp: KeyCode = KeyCode(72)
+        public val VolumeDown: KeyCode = KeyCode(73)
+        public val Mute: KeyCode = KeyCode(74)
+        public val F18: KeyCode = KeyCode(79)
+        public val F19: KeyCode = KeyCode(80)
+        public val F20: KeyCode = KeyCode(90)
+        public val F5: KeyCode = KeyCode(96)
+        public val F6: KeyCode = KeyCode(97)
+        public val F7: KeyCode = KeyCode(98)
+        public val F3: KeyCode = KeyCode(99)
+        public val F8: KeyCode = KeyCode(100)
+        public val F9: KeyCode = KeyCode(101)
+        public val F11: KeyCode = KeyCode(103)
+        public val F13: KeyCode = KeyCode(105)
+        public val F16: KeyCode = KeyCode(106)
+        public val F14: KeyCode = KeyCode(107)
+        public val F10: KeyCode = KeyCode(109)
+        public val ContextualMenu: KeyCode = KeyCode(110)
+        public val F12: KeyCode = KeyCode(111)
+        public val F15: KeyCode = KeyCode(113)
+        public val Help: KeyCode = KeyCode(114)
+        public val Home: KeyCode = KeyCode(115)
+        public val PageUp: KeyCode = KeyCode(116)
+        public val ForwardDelete: KeyCode = KeyCode(117)
+        public val F4: KeyCode = KeyCode(118)
+        public val End: KeyCode = KeyCode(119)
+        public val F2: KeyCode = KeyCode(120)
+        public val PageDown: KeyCode = KeyCode(121)
+        public val F1: KeyCode = KeyCode(122)
+        public val LeftArrow: KeyCode = KeyCode(123)
+        public val RightArrow: KeyCode = KeyCode(124)
+        public val DownArrow: KeyCode = KeyCode(125)
+        public val UpArrow: KeyCode = KeyCode(126)
 
         /* ISO keyboards only*/
-        public val ISO_Section: KeyCode = KeyCode("ISO_Section")
+        public val ISO_Section: KeyCode = KeyCode(10)
 
-        public val JIS_Yen: KeyCode = KeyCode("JIS_Yen")
-        public val JIS_Underscore: KeyCode = KeyCode("JIS_Underscore")
-        public val JIS_KeypadComma: KeyCode = KeyCode("JIS_KeypadComma")
-        public val JIS_Eisu: KeyCode = KeyCode("JIS_Eisu")
-        public val JIS_Kana: KeyCode = KeyCode("JIS_Kana")
+        public val JIS_Yen: KeyCode = KeyCode(93)
+        public val JIS_Underscore: KeyCode = KeyCode(94)
+        public val JIS_KeypadComma: KeyCode = KeyCode(95)
+        public val JIS_Eisu: KeyCode = KeyCode(102)
+        public val JIS_Kana: KeyCode = KeyCode(104)
 
         internal fun fromNative(code: Short): KeyCode {
-            return when (code.toInt()) {
-                0 -> ANSI_A
-                1 -> ANSI_S
-                2 -> ANSI_D
-                3 -> ANSI_F
-                4 -> ANSI_H
-                5 -> ANSI_G
-                6 -> ANSI_Z
-                7 -> ANSI_X
-                8 -> ANSI_C
-                9 -> ANSI_V
-                11 -> ANSI_B
-                12 -> ANSI_Q
-                13 -> ANSI_W
-                14 -> ANSI_E
-                15 -> ANSI_R
-                16 -> ANSI_Y
-                17 -> ANSI_T
-                18 -> ANSI_1
-                19 -> ANSI_2
-                20 -> ANSI_3
-                21 -> ANSI_4
-                22 -> ANSI_6
-                23 -> ANSI_5
-                24 -> ANSI_Equal
-                25 -> ANSI_9
-                26 -> ANSI_7
-                27 -> ANSI_Minus
-                28 -> ANSI_8
-                29 -> ANSI_0
-                30 -> ANSI_RightBracket
-                31 -> ANSI_O
-                32 -> ANSI_U
-                33 -> ANSI_LeftBracket
-                34 -> ANSI_I
-                35 -> ANSI_P
-                37 -> ANSI_L
-                38 -> ANSI_J
-                39 -> ANSI_Quote
-                40 -> ANSI_K
-                41 -> ANSI_Semicolon
-                42 -> ANSI_Backslash
-                43 -> ANSI_Comma
-                44 -> ANSI_Slash
-                45 -> ANSI_N
-                46 -> ANSI_M
-                47 -> ANSI_Period
-                50 -> ANSI_Grave
-                65 -> ANSI_KeypadDecimal
-                67 -> ANSI_KeypadMultiply
-                69 -> ANSI_KeypadPlus
-                71 -> ANSI_KeypadClear
-                75 -> ANSI_KeypadDivide
-                76 -> ANSI_KeypadEnter
-                78 -> ANSI_KeypadMinus
-                81 -> ANSI_KeypadEquals
-                82 -> ANSI_Keypad0
-                83 -> ANSI_Keypad1
-                84 -> ANSI_Keypad2
-                85 -> ANSI_Keypad3
-                86 -> ANSI_Keypad4
-                87 -> ANSI_Keypad5
-                88 -> ANSI_Keypad6
-                89 -> ANSI_Keypad7
-                91 -> ANSI_Keypad8
-                92 -> ANSI_Keypad9
-                36 -> Return
-                48 -> Tab
-                49 -> Space
-                51 -> Delete
-                53 -> Escape
-                55 -> Command
-                56 -> Shift
-                57 -> CapsLock
-                58 -> Option
-                59 -> Control
-                54 -> RightCommand
-                60 -> RightShift
-                61 -> RightOption
-                62 -> RightControl
-                63 -> Function
-                64 -> F17
-                72 -> VolumeUp
-                73 -> VolumeDown
-                74 -> Mute
-                79 -> F18
-                80 -> F19
-                90 -> F20
-                96 -> F5
-                97 -> F6
-                98 -> F7
-                99 -> F3
-                100 -> F8
-                101 -> F9
-                103 -> F11
-                105 -> F13
-                106 -> F16
-                107 -> F14
-                109 -> F10
-                110 -> ContextualMenu
-                111 -> F12
-                113 -> F15
-                114 -> Help
-                115 -> Home
-                116 -> PageUp
-                117 -> ForwardDelete
-                118 -> F4
-                119 -> End
-                120 -> F2
-                121 -> PageDown
-                122 -> F1
-                123 -> LeftArrow
-                124 -> RightArrow
-                125 -> DownArrow
-                126 -> UpArrow
-                10 -> ISO_Section
-                93 -> JIS_Yen
-                94 -> JIS_Underscore
-                95 -> JIS_KeypadComma
-                102 -> JIS_Eisu
-                104 -> JIS_Kana
-                else -> {
-                    val keyCode = KeyCode("Unknown($code)")
-                    Logger.warn { "Got unknown keycode: $keyCode" }
-                    keyCode
-                }
+            return KeyCode(code)
+        }
+    }
+
+    override fun toString(): String {
+        return when (this) {
+            ANSI_A -> "ANSI_A"
+            ANSI_S -> "ANSI_S"
+            ANSI_D -> "ANSI_D"
+            ANSI_F -> "ANSI_F"
+            ANSI_H -> "ANSI_H"
+            ANSI_G -> "ANSI_G"
+            ANSI_Z -> "ANSI_Z"
+            ANSI_X -> "ANSI_X"
+            ANSI_C -> "ANSI_C"
+            ANSI_V -> "ANSI_V"
+            ANSI_B -> "ANSI_B"
+            ANSI_Q -> "ANSI_Q"
+            ANSI_W -> "ANSI_W"
+            ANSI_E -> "ANSI_E"
+            ANSI_R -> "ANSI_R"
+            ANSI_Y -> "ANSI_Y"
+            ANSI_T -> "ANSI_T"
+            ANSI_1 -> "ANSI_1"
+            ANSI_2 -> "ANSI_2"
+            ANSI_3 -> "ANSI_3"
+            ANSI_4 -> "ANSI_4"
+            ANSI_6 -> "ANSI_6"
+            ANSI_5 -> "ANSI_5"
+            ANSI_Equal -> "ANSI_Equal"
+            ANSI_9 -> "ANSI_9"
+            ANSI_7 -> "ANSI_7"
+            ANSI_Minus -> "ANSI_Minus"
+            ANSI_8 -> "ANSI_8"
+            ANSI_0 -> "ANSI_0"
+            ANSI_RightBracket -> "ANSI_RightBracket"
+            ANSI_O -> "ANSI_O"
+            ANSI_U -> "ANSI_U"
+            ANSI_LeftBracket -> "ANSI_LeftBracket"
+            ANSI_I -> "ANSI_I"
+            ANSI_P -> "ANSI_P"
+            ANSI_L -> "ANSI_L"
+            ANSI_J -> "ANSI_J"
+            ANSI_Quote -> "ANSI_Quote"
+            ANSI_K -> "ANSI_K"
+            ANSI_Semicolon -> "ANSI_Semicolon"
+            ANSI_Backslash -> "ANSI_Backslash"
+            ANSI_Comma -> "ANSI_Comma"
+            ANSI_Slash -> "ANSI_Slash"
+            ANSI_N -> "ANSI_N"
+            ANSI_M -> "ANSI_M"
+            ANSI_Period -> "ANSI_Period"
+            ANSI_Grave -> "ANSI_Grave"
+            ANSI_KeypadDecimal -> "ANSI_KeypadDecimal"
+            ANSI_KeypadMultiply -> "ANSI_KeypadMultiply"
+            ANSI_KeypadPlus -> "ANSI_KeypadPlus"
+            ANSI_KeypadClear -> "ANSI_KeypadClear"
+            ANSI_KeypadDivide -> "ANSI_KeypadDivide"
+            ANSI_KeypadEnter -> "ANSI_KeypadEnter"
+            ANSI_KeypadMinus -> "ANSI_KeypadMinus"
+            ANSI_KeypadEquals -> "ANSI_KeypadEquals"
+            ANSI_Keypad0 -> "ANSI_Keypad0"
+            ANSI_Keypad1 -> "ANSI_Keypad1"
+            ANSI_Keypad2 -> "ANSI_Keypad2"
+            ANSI_Keypad3 -> "ANSI_Keypad3"
+            ANSI_Keypad4 -> "ANSI_Keypad4"
+            ANSI_Keypad5 -> "ANSI_Keypad5"
+            ANSI_Keypad6 -> "ANSI_Keypad6"
+            ANSI_Keypad7 -> "ANSI_Keypad7"
+            ANSI_Keypad8 -> "ANSI_Keypad8"
+            ANSI_Keypad9 -> "ANSI_Keypad9"
+            Return -> "Return"
+            Tab -> "Tab"
+            Space -> "Space"
+            Delete -> "Delete"
+            Escape -> "Escape"
+            Command -> "Command"
+            Shift -> "Shift"
+            CapsLock -> "CapsLock"
+            Option -> "Option"
+            Control -> "Control"
+            RightCommand -> "RightCommand"
+            RightShift -> "RightShift"
+            RightOption -> "RightOption"
+            RightControl -> "RightControl"
+            Function -> "Function"
+            F17 -> "F17"
+            VolumeUp -> "VolumeUp"
+            VolumeDown -> "VolumeDown"
+            Mute -> "Mute"
+            F18 -> "F18"
+            F19 -> "F19"
+            F20 -> "F20"
+            F5 -> "F5"
+            F6 -> "F6"
+            F7 -> "F7"
+            F3 -> "F3"
+            F8 -> "F8"
+            F9 -> "F9"
+            F11 -> "F11"
+            F13 -> "F13"
+            F16 -> "F16"
+            F14 -> "F14"
+            F10 -> "F10"
+            ContextualMenu -> "ContextualMenu"
+            F12 -> "F12"
+            F15 -> "F15"
+            Help -> "Help"
+            Home -> "Home"
+            PageUp -> "PageUp"
+            ForwardDelete -> "ForwardDelete"
+            F4 -> "F4"
+            End -> "End"
+            F2 -> "F2"
+            PageDown -> "PageDown"
+            F1 -> "F1"
+            LeftArrow -> "LeftArrow"
+            RightArrow -> "RightArrow"
+            DownArrow -> "DownArrow"
+            UpArrow -> "UpArrow"
+            ISO_Section -> "ISO_Section"
+            JIS_Yen -> "JIS_Yen"
+            JIS_Underscore -> "JIS_Underscore"
+            JIS_KeypadComma -> "JIS_KeypadComma"
+            JIS_Eisu -> "JIS_Eisu"
+            JIS_Kana -> "JIS_Kana"
+            else -> {
+                "UNKNOWN"
             }
         }
     }
