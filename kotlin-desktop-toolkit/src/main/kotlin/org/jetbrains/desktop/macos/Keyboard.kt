@@ -16,7 +16,7 @@ package org.jetbrains.desktop.macos
 *    keycode.
 */
 @JvmInline
-public value class KeyCode internal constructor(private val value: Short) {
+public value class KeyCode internal constructor(internal val value: Short) {
     @Suppress("MemberVisibilityCanBePrivate")
     public companion object {
         public val ANSI_A: KeyCode = KeyCode(0)
