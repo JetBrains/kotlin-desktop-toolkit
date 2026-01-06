@@ -31,17 +31,16 @@ open class KDTTestBase {
 }
 
 open class KDTApplicationTestBase : KDTTestBase() {
-
-    fun <T> withEventHandler(handler: (Event) -> EventHandlerResult, body: () -> T): T {
-        eventHandler = handler
-        val result = body()
-        eventHandler = null
-        return result
-    }
-
-    fun <T> ui(body: () -> T): T = GrandCentralDispatch.dispatchOnMainSync(highPriority = false, body)
-
     companion object {
+        fun <T> withEventHandler(handler: (Event) -> EventHandlerResult, body: () -> T): T {
+            eventHandler = handler
+            val result = body()
+            eventHandler = null
+            return result
+        }
+
+        fun <T> ui(body: () -> T): T = GrandCentralDispatch.dispatchOnMainSync(highPriority = false, body)
+
         val eventQueue = ArrayBlockingQueue<Event>(1000, true)
 
         fun awaitEvent(predicate: (Event) -> Boolean): Event {

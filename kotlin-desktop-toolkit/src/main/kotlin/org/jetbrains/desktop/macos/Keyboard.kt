@@ -355,6 +355,7 @@ public object CodepointConstants {
     public const val LineSeparatorCharacter: Int = 0x2028
     public const val ParagraphSeparatorCharacter: Int = 0x2029
 
+    // Unicode private use area
     public const val UpArrowFunctionKey: Int = 0xF700
     public const val DownArrowFunctionKey: Int = 0xF701
     public const val LeftArrowFunctionKey: Int = 0xF702
