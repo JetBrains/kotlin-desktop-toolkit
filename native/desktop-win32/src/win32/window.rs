@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::Context;
 use windows::{
-    UI::Composition::{Compositor, Desktop::DesktopWindowTarget, SpriteVisual},
+    UI::Composition::{Compositor, ContainerVisual, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
         Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, RECT, WPARAM},
         Graphics::{
@@ -62,7 +62,7 @@ pub struct Window {
     hwnd: AtomicPtr<core::ffi::c_void>,
     compositor: Compositor,
     composition_target: RefCell<Option<DesktopWindowTarget>>,
-    sprite_visual: RefCell<Option<SpriteVisual>>,
+    composition_root: RefCell<Option<ContainerVisual>>,
     min_size: RefCell<Option<LogicalSize>>,
     origin: RefCell<LogicalPoint>,
     size: RefCell<LogicalSize>,
@@ -94,7 +94,7 @@ impl Window {
             hwnd: AtomicPtr::default(),
             compositor,
             composition_target: RefCell::new(None),
-            sprite_visual: RefCell::new(None),
+            composition_root: RefCell::new(None),
             min_size: RefCell::new(None),
             origin: RefCell::default(),
             size: RefCell::new(LogicalSize::new(0.0, 0.0)),
@@ -143,12 +143,15 @@ impl Window {
     }
 
     #[inline]
-    pub(crate) fn get_visual(&self) -> anyhow::Result<SpriteVisual> {
-        self.sprite_visual
+    pub(crate) fn add_visual(&self) -> anyhow::Result<SpriteVisual> {
+        let sprite_visual = self.compositor.CreateSpriteVisual()?;
+        self.composition_root
             .borrow()
             .as_ref()
-            .context("Window has not been created yet")
-            .cloned()
+            .context("Window has not been created yet")?
+            .Children()?
+            .InsertAtTop(&sprite_visual)?;
+        Ok(sprite_visual)
     }
 
     pub fn get_client_size(&self) -> anyhow::Result<LogicalSize> {
@@ -434,9 +437,9 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
 fn initialize_composition(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     let compositor_interop: ICompositorDesktopInterop = window.compositor.cast()?;
     let desktop_window_target = unsafe { compositor_interop.CreateDesktopWindowTarget(hwnd, true) }?;
-    let sprite_visual = window.compositor.CreateSpriteVisual()?;
-    desktop_window_target.SetRoot(&sprite_visual)?;
+    let root_visual = window.compositor.CreateContainerVisual()?;
+    desktop_window_target.SetRoot(&root_visual)?;
     window.composition_target.replace(Some(desktop_window_target));
-    window.sprite_visual.replace(Some(sprite_visual));
+    window.composition_root.replace(Some(root_visual));
     Ok(())
 }

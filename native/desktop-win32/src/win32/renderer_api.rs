@@ -65,8 +65,7 @@ pub extern "C" fn renderer_angle_resize_surface(mut angle_device_ptr: AngleDevic
 pub extern "C" fn renderer_angle_make_current(angle_device_ptr: AngleDevicePtr) {
     ffi_boundary("renderer_angle_make_current", || {
         let angle_device = unsafe { angle_device_ptr.borrow::<AngleDevice>() };
-        angle_device.make_current()?;
-        Ok(())
+        angle_device.make_current()
     });
 }
 
@@ -74,8 +73,7 @@ pub extern "C" fn renderer_angle_make_current(angle_device_ptr: AngleDevicePtr) 
 pub extern "C" fn renderer_angle_swap_buffers(angle_device_ptr: AngleDevicePtr, wait_for_vsync: bool) {
     ffi_boundary("renderer_angle_swap_buffers", || {
         let angle_device = unsafe { angle_device_ptr.borrow::<AngleDevice>() };
-        angle_device.swap_buffers(wait_for_vsync)?;
-        Ok(())
+        angle_device.swap_buffers(wait_for_vsync)
     });
 }
 
