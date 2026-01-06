@@ -9,16 +9,16 @@ import org.jetbrains.desktop.macos.LogLevel
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
- * We expect that every test class will be executed with separate JVM instance, without parralle forks.
+ * We expect that every test class will be executed with a separate JVM instance, without parallel forks.
  * Tests from one test class also should be executed sequentially.
- * This is requirement because tests interacts with NSApplication which can be initialized only once per process,
+ * This is a requirement because tests interact with NSApplication, which can be initialized only once per process,
  * moreover often the test might change OS state shared across different processes, so it's better to not run it
- * in parrallel event in separate processes.
+ * in parallel event in separate processes.
  */
 open class KDTTestBase {
     companion object {
@@ -42,6 +42,19 @@ open class KDTApplicationTestBase : KDTTestBase() {
     fun <T> ui(body: () -> T): T = GrandCentralDispatch.dispatchOnMainSync(highPriority = false, body)
 
     companion object {
+        val eventQueue = ArrayBlockingQueue<Event>(1000, true)
+
+        fun awaitEvent(predicate: (Event) -> Boolean): Event {
+            while (true) {
+                val event = eventQueue.take()
+                if (predicate(event)) return event
+            }
+        }
+
+        inline fun <reified T : Event> awaitEventOfType(crossinline predicate: (T) -> Boolean): T {
+            return awaitEvent { it is T && predicate(it) } as T
+        }
+
         var eventHandler: ((Event) -> EventHandlerResult)? = null
 
         @Volatile
@@ -51,20 +64,17 @@ open class KDTApplicationTestBase : KDTTestBase() {
         @BeforeAll
         @JvmStatic
         fun startApplication() {
-            val applicationStartedLatch = CountDownLatch(1)
             handle = thread {
                 GrandCentralDispatch.startOnMainThread {
                     Application.init()
                     Application.runEventLoop { event ->
-                        if (event is Event.ApplicationDidFinishLaunching) {
-                            applicationStartedLatch.countDown()
-                        }
+                        eventQueue.put(event)
                         eventHandler?.invoke(event) ?: EventHandlerResult.Continue
                     }
                     GrandCentralDispatch.close()
                 }
             }
-            applicationStartedLatch.await()
+            awaitEvent { it is Event.ApplicationDidFinishLaunching }
         }
 
         @Timeout(value = 5, unit = TimeUnit.SECONDS)
