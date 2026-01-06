@@ -116,7 +116,7 @@ impl AngleDevice {
             egl_instance.create_context(display, surface_config, None, &context_attribs)?
         };
 
-        let visual = window.get_visual()?;
+        let visual = window.add_visual()?;
         let surface = unsafe {
             #[rustfmt::skip]
             let surface_attribs = [
