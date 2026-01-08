@@ -12,9 +12,6 @@ import kotlin.test.Test
 import kotlin.test.assertNotNull
 
 class RobotTest : KDTApplicationTestBase() {
-    /**
-     * Otherwise when we emulate some key press e.g., Shift+A, modifier might have no effect
-     */
 
     companion object {
         lateinit var window: Window
@@ -72,6 +69,27 @@ class RobotTest : KDTApplicationTestBase() {
                     },
                 )
             }
+        }
+    }
+
+    @Test
+    fun `modifiers are correctly stacked`() {
+        val events = mutableListOf<Event.ModifiersChanged>()
+        withEventHandler(handler = {
+            if (it is Event.ModifiersChanged) events.add(it)
+            EventHandlerResult.Continue
+        }) {
+            ui { robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = true) }
+            ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = true) }
+            ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = true) }
+            awaitEventOfType<Event.ModifiersChanged> { it.keyCode == KeyCode.Option && it.modifiers.shift && it.modifiers.command && it.modifiers.option }
+
+            ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = false) }
+            ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = false) }
+            ui { robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = false) }
+            awaitEventOfType<Event.ModifiersChanged> { it.keyCode == KeyCode.Shift && !it.modifiers.shift && !it.modifiers.command && !it.modifiers.option }
+
+            println("ModifiersChanged events:\n" + events.joinToString("\n"))
         }
     }
 }
