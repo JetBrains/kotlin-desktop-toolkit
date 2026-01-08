@@ -28,10 +28,14 @@ pub extern "C" fn robot_deinitialize() {
     ffi_boundary("robot_deinitialize", || {
         let _mtm = MainThreadMarker::new().context("Robot can be initialized only from the main thread")?;
         ROBOT.with_borrow_mut(|robot| {
-            if robot.is_none() {
-                bail!("Robot is not initialized");
+            match robot.take() {
+                None => {
+                    bail!("Robot is not initialized");
+                }
+                Some(mut robot) => {
+                    robot.shutdown()?;
+                }
             }
-            drop(robot.take());
             Ok(())
         })
     });
@@ -41,8 +45,8 @@ pub extern "C" fn robot_deinitialize() {
 pub extern "C" fn emulate_keyboard_event(keycode: KeyCode, key_down: bool) {
     ffi_boundary("emulate_key_press", || {
         let _mtm = MainThreadMarker::new().context("Robot can be initialized only from the main thread")?;
-        ROBOT.with_borrow(|robot| {
-            let robot = robot.as_ref().context("Robot is not initialized")?;
+        ROBOT.with_borrow_mut(|robot| {
+            let robot = robot.as_mut().context("Robot is not initialized")?;
             robot.emulate_keyboard_event(keycode, key_down)?;
             Ok(())
         })
