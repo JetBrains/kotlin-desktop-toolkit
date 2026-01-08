@@ -57,6 +57,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
             return awaitEvent { it is T && predicate(it) } as T
         }
 
+        @Volatile
         var eventHandler: ((Event) -> EventHandlerResult)? = null
 
         @Volatile
