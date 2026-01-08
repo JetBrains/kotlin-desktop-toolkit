@@ -35,7 +35,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         try {
             for (modifier in modifiers) {
                 ui {
-                    Robot.emulateKeyboardEvent(modifier, true)
+                    robot.emulateKeyboardEvent(modifier, true)
                 }
             }
 
@@ -48,10 +48,10 @@ class KeyboardTest : KDTApplicationTestBase() {
             }
 
             ui {
-                Robot.emulateKeyboardEvent(keyCode, true)
+                robot.emulateKeyboardEvent(keyCode, true)
             }
             ui {
-                Robot.emulateKeyboardEvent(keyCode, false)
+                robot.emulateKeyboardEvent(keyCode, false)
             }
 
             awaitEventOfType<Event.KeyDown> {
@@ -71,7 +71,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         } finally {
             for (modifier in modifiers) {
                 ui {
-                    Robot.emulateKeyboardEvent(modifier, false)
+                    robot.emulateKeyboardEvent(modifier, false)
                 }
             }
 
@@ -83,10 +83,12 @@ class KeyboardTest : KDTApplicationTestBase() {
 
     companion object {
         lateinit var window: Window
+        lateinit var robot: Robot
 
         @JvmStatic
         @BeforeAll
         fun createWindow() {
+            robot = ui { Robot() }
             window = ui {
                 Window.create(origin = LogicalPoint(100.0, 200.0), title = "Main Window")
             }
@@ -110,6 +112,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 window.close()
             }
             eventHandler = null
+            ui { robot.close() }
         }
     }
 

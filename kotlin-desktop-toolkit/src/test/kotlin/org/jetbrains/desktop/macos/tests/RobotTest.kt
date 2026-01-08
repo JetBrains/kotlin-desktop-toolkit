@@ -8,7 +8,6 @@ import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.RepeatedTest
 import kotlin.test.Test
 import kotlin.test.assertNotNull
 
@@ -19,10 +18,12 @@ class RobotTest : KDTApplicationTestBase() {
 
     companion object {
         lateinit var window: Window
+        lateinit var robot: Robot
 
         @BeforeAll
         @JvmStatic
         fun init() {
+            robot = ui { Robot() }
             window = ui {
                 Window.create(origin = LogicalPoint(100.0, 200.0), title = "Main Window")
             }
@@ -35,6 +36,7 @@ class RobotTest : KDTApplicationTestBase() {
         @AfterAll
         @JvmStatic
         fun destroy() {
+            ui { robot.close() }
             ui {
                 window.close()
             }
@@ -49,16 +51,16 @@ class RobotTest : KDTApplicationTestBase() {
                 events.add(it)
                 EventHandlerResult.Continue
             }) {
-                ui { Robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = true) }
+                ui { robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = true) }
 
-                ui { Robot.emulateKeyboardEvent(KeyCode.ANSI_A, isKeyDown = true) }
+                ui { robot.emulateKeyboardEvent(KeyCode.ANSI_A, isKeyDown = true) }
 
-                ui { Robot.emulateKeyboardEvent(KeyCode.ANSI_A, isKeyDown = false) }
+                ui { robot.emulateKeyboardEvent(KeyCode.ANSI_A, isKeyDown = false) }
 
-                ui { Robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = false) }
+                ui { robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = false) }
 
-                ui { Robot.emulateKeyboardEvent(KeyCode.ANSI_X, isKeyDown = true) }
-                ui { Robot.emulateKeyboardEvent(KeyCode.ANSI_X, isKeyDown = false) }
+                ui { robot.emulateKeyboardEvent(KeyCode.ANSI_X, isKeyDown = true) }
+                ui { robot.emulateKeyboardEvent(KeyCode.ANSI_X, isKeyDown = false) }
                 awaitEventOfType<Event.KeyUp> { it.keyCode == KeyCode.ANSI_X }
 
                 val keyDownEvents = events.filterIsInstance<Event.KeyDown>()
