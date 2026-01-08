@@ -56,7 +56,7 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
       - name: Test with Gradle
-        run: ./gradlew test --rerun
+        run: ./gradlew test --rerun --info
 
 
       - name: Publish Test Report
