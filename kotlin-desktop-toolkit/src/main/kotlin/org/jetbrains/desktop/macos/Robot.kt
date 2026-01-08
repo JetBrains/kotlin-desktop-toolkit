@@ -2,7 +2,7 @@ package org.jetbrains.desktop.macos
 
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 
-public class Robot: AutoCloseable {
+public class Robot : AutoCloseable {
 
     init {
         ffiDownCall {

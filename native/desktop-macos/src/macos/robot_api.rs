@@ -1,12 +1,12 @@
 use crate::macos::keyboard::KeyCode;
 use crate::macos::robot::Robot;
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use desktop_common::logger::ffi_boundary;
 use objc2::MainThreadMarker;
 use std::cell::RefCell;
 
 thread_local! {
-    static ROBOT: RefCell<Option<Robot>> = RefCell::new(None);
+    static ROBOT: RefCell<Option<Robot>> = const { RefCell::new(None) };
 }
 
 #[unsafe(no_mangle)]

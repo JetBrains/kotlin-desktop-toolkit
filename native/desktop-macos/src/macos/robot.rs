@@ -1,15 +1,18 @@
 use crate::macos::keyboard::KeyCode;
 use anyhow::Context;
-use objc2_core_foundation::{kCFRunLoopDefaultMode, CFMachPort, CFRetained, CFRunLoop, CFRunLoopSource};
-use objc2_core_graphics::{CGEvent, CGEventField, CGEventMask, CGEventSource, CGEventSourceStateID, CGEventTapCallBack, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy, CGEventType};
+use objc2_core_foundation::{CFMachPort, CFRetained, CFRunLoop, CFRunLoopSource, kCFRunLoopDefaultMode};
+use objc2_core_graphics::{
+    CGEvent, CGEventField, CGEventMask, CGEventSource, CGEventSourceStateID, CGEventTapCallBack, CGEventTapLocation, CGEventTapOptions,
+    CGEventTapPlacement, CGEventTapProxy, CGEventType,
+};
 use std::ffi::c_void;
 use std::ptr::NonNull;
-use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
+use std::sync::mpsc::SyncSender;
 use std::thread;
 use std::thread::JoinHandle;
 
-pub(crate) struct Robot {
+pub struct Robot {
     event_tap_thread: EventTapThread,
     event_source: CFRetained<CGEventSource>,
     event_counter: i64,
@@ -27,9 +30,9 @@ impl Robot {
         Ok(robot)
     }
 
-    fn next_event_id(&mut self) -> i64 {
+    const fn next_event_id(&mut self) -> i64 {
         self.event_counter += 1;
-        Robot::EVENT_MARKER ^ self.event_counter
+        Self::EVENT_MARKER ^ self.event_counter
     }
 
     pub(crate) fn emulate_keyboard_event(&mut self, keycode: KeyCode, key_down: bool) -> anyhow::Result<()> {
@@ -69,7 +72,6 @@ struct TapSubscription {
     tap: CFRetained<CFMachPort>,
     run_loop_source: CFRetained<CFRunLoopSource>,
     run_loop: CFRetained<CFRunLoop>,
-
 }
 
 impl EventTapThread {
@@ -83,7 +85,9 @@ impl EventTapThread {
         let user_data = CGEvent::integer_value_field(Some(event_ref), CGEventField::EventSourceUserData);
         let events_data_snd_ptr = user_info.cast::<SyncSender<i64>>();
         let event_data_snd = unsafe { events_data_snd_ptr.as_ref() }.unwrap_or_else(|| panic!("user_info: {user_info:?}"));
-        event_data_snd.send(user_data).unwrap_or_else(|_| log::error!("Failed to send event data"));
+        event_data_snd
+            .send(user_data)
+            .unwrap_or_else(|_| log::error!("Failed to send event data"));
         event.as_ptr()
     }
 
@@ -99,10 +103,12 @@ impl EventTapThread {
             let events_data_snd = Arc::new(events_data_snd);
             match Self::create_tap_subscription(Arc::as_ptr(&events_data_snd)) {
                 Ok(subscription) => {
-                    mark_is_ready.send(Ok(RunLoopWrapper(subscription.run_loop.clone()))).expect("Can't fail here");
+                    mark_is_ready
+                        .send(Ok(RunLoopWrapper(subscription.run_loop.clone())))
+                        .expect("Can't fail here");
                     CFRunLoop::run();
                     Self::remove_tap_subscription(subscription);
-                },
+                }
                 Err(err) => {
                     mark_is_ready.send(Err(err)).expect("Can't fail here");
                 }
@@ -111,7 +117,11 @@ impl EventTapThread {
 
         let run_loop_wrapper = check_is_ready.recv().expect("Can't fail here")?;
 
-        Ok(Self { handle: Some(handle), events_data_rcv, run_loop_wrapper })
+        Ok(Self {
+            handle: Some(handle),
+            events_data_rcv,
+            run_loop_wrapper,
+        })
     }
 
     fn create_tap_subscription(events_data_snd_ptr: *const SyncSender<i64>) -> anyhow::Result<TapSubscription> {
@@ -125,28 +135,29 @@ impl EventTapThread {
                 callback,
                 events_data_snd_ptr.cast_mut().cast::<c_void>(),
             )
-        }.context("Failed to create event tap. Check accessibility permissions.")?;
+        }
+        .context("Failed to create event tap. Check accessibility permissions.")?;
 
         let run_loop_source = CFMachPort::new_run_loop_source(None, Some(&tap), 0).context("Failed to create run loop source")?;
         let run_loop = CFRunLoop::current().context("Failed to get current run loop")?;
-        run_loop.add_source(Some(&run_loop_source), unsafe { kCFRunLoopDefaultMode });;
+        run_loop.add_source(Some(&run_loop_source), unsafe { kCFRunLoopDefaultMode });
 
         Ok(TapSubscription {
             tap,
             run_loop_source,
-            run_loop
+            run_loop,
         })
     }
 
     fn remove_tap_subscription(subscription: TapSubscription) {
-        subscription.run_loop.remove_source(Some(&subscription.run_loop_source), unsafe { kCFRunLoopDefaultMode });
+        subscription
+            .run_loop
+            .remove_source(Some(&subscription.run_loop_source), unsafe { kCFRunLoopDefaultMode });
         subscription.tap.invalidate();
     }
 
     fn wait_for_event(&self, event_id: i64) {
-        self.events_data_rcv.iter().find(|it| {
-            *it == event_id
-        });
+        self.events_data_rcv.iter().find(|it| *it == event_id);
     }
 
     fn join(&mut self) -> anyhow::Result<()> {
