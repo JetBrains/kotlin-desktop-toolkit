@@ -175,6 +175,16 @@ class KeyboardTest : KDTApplicationTestBase() {
 
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
+    fun latinLettersWithControlShiftTest() {
+        val modifiers = setOf(KeyCode.Control, KeyCode.Shift)
+        ansiLetters.forEach { (keyCode, letter) ->
+            val keyWithModifiers: String = controlLayer[keyCode]!!
+            pressOneKeyAndAwaitEvent(keyCode, typed = keyWithModifiers, key = letter, keyWithModifiers = keyWithModifiers, modifiers = modifiers)
+        }
+    }
+
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
     fun latinLettersWithOptionTest() {
         val modifiers = setOf(KeyCode.Option)
 
