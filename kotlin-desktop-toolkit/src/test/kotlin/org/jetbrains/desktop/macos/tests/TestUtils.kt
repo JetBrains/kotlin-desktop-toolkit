@@ -34,8 +34,11 @@ open class KDTApplicationTestBase : KDTTestBase() {
     companion object {
         fun <T> withEventHandler(handler: (Event) -> EventHandlerResult, body: () -> T): T {
             eventHandler = handler
-            val result = body()
-            eventHandler = null
+            val result = try {
+                body()
+            } finally {
+                eventHandler = null
+            }
             return result
         }
 

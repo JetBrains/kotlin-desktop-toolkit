@@ -12,7 +12,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
 import java.util.Locale.getDefault
 import java.util.concurrent.TimeUnit
-import kotlin.streams.toList
 import kotlin.test.Test
 
 class KeyboardTest : KDTApplicationTestBase() {
@@ -26,17 +25,11 @@ class KeyboardTest : KDTApplicationTestBase() {
             capsLock = contains(KeyCode.CapsLock),
             numericPad = false,
             help = false,
-            function = false
+            function = false,
         )
     }
 
-    fun pressOneKeyAndAwaitEvent(
-        keyCode: KeyCode,
-        typed: String,
-        key: String,
-        keyWithModifiers: String,
-        modifiers: Set<KeyCode>
-    ) {
+    fun pressOneKeyAndAwaitEvent(keyCode: KeyCode, typed: String, key: String, keyWithModifiers: String, modifiers: Set<KeyCode>) {
         val modifiersSet = modifiers.toModifiersSet()
 
         try {
@@ -63,19 +56,18 @@ class KeyboardTest : KDTApplicationTestBase() {
 
             awaitEventOfType<Event.KeyDown> {
                 it.keyCode == keyCode &&
-                        it.typedCharacters == typed &&
-                        it.key == key &&
-                        it.keyWithModifiers == keyWithModifiers &&
-                        it.modifiers == modifiersSet
+                    it.typedCharacters == typed &&
+                    it.key == key &&
+                    it.keyWithModifiers == keyWithModifiers &&
+                    it.modifiers == modifiersSet
             }
             awaitEventOfType<Event.KeyUp> {
                 it.keyCode == keyCode &&
-                        it.typedCharacters == typed &&
-                        it.key == key &&
-                        it.keyWithModifiers == keyWithModifiers &&
-                        it.modifiers == modifiersSet
+                    it.typedCharacters == typed &&
+                    it.key == key &&
+                    it.keyWithModifiers == keyWithModifiers &&
+                    it.modifiers == modifiersSet
             }
-
         } finally {
             for (modifier in modifiers) {
                 ui {
@@ -103,9 +95,10 @@ class KeyboardTest : KDTApplicationTestBase() {
             }
             awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
             eventHandler = { event ->
-                (event as? Event.KeyDown)?.let { event ->
-                    println("Event: $event, typedCharacters: ${event.typedCharacters.codePoints().toList()} keyWithModifiers: ${event.keyWithModifiers.codePoints().toList()}")
-                }
+                println("Event: $event")
+//                (event as? Event.KeyDown)?.let { event ->
+//                    println("Event: $event, typedCharacters: ${event.typedCharacters.codePoints().toList()} keyWithModifiers: ${event.keyWithModifiers.codePoints().toList()}")
+//                }
                 EventHandlerResult.Continue
             }
         }
@@ -134,7 +127,13 @@ class KeyboardTest : KDTApplicationTestBase() {
         val modifiers = setOf(KeyCode.Shift)
         ansiLetters.forEach { (keyCode, letter) ->
             val uppercaseLetter = letter.uppercase(getDefault())
-            pressOneKeyAndAwaitEvent(keyCode, typed = uppercaseLetter, key = letter, keyWithModifiers = uppercaseLetter, modifiers = modifiers)
+            pressOneKeyAndAwaitEvent(
+                keyCode,
+                typed = uppercaseLetter,
+                key = letter,
+                keyWithModifiers = uppercaseLetter,
+                modifiers = modifiers,
+            )
         }
     }
 
@@ -174,9 +173,27 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+//    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+//    @Test
+//    fun latinLettersWithOptionShiftTest() {
+//        val modifiers = setOf(KeyCode.Option, KeyCode.Shift)
+//
+//        ansiLetters.forEach { (keyCode, letter) ->
+//            val keyData = optionLayer[keyCode]!!
+//            val optionLayerLetter = keyData.letter.uppercase(getDefault())
+//            //println("KeyCode: $keyCode, optionLayerLetter: $optionLayerLetter")
+//            val typed = if (keyData.isDeadKey) {
+//                ""
+//            } else {
+//                optionLayerLetter
+//            }
+//            pressOneKeyAndAwaitEvent(keyCode, typed = typed, key = letter, keyWithModifiers = optionLayerLetter, modifiers = modifiers)
+//        }
+//    }
+
     data class KeyData(
         val keyCode: KeyCode,
-        val letter: String
+        val letter: String,
     )
 
     val ansiLetters = listOf(
@@ -205,10 +222,13 @@ class KeyboardTest : KDTApplicationTestBase() {
         KeyData(KeyCode.ANSI_W, "w"),
         KeyData(KeyCode.ANSI_X, "x"),
         KeyData(KeyCode.ANSI_Y, "y"),
-        KeyData(KeyCode.ANSI_Z, "z")
+        KeyData(KeyCode.ANSI_Z, "z"),
     )
 
-    data class OptionLayerKeyData(val letter: String, val isDeadKey: Boolean)
+    data class OptionLayerKeyData(
+        val letter: String,
+        val isDeadKey: Boolean,
+    )
 
     val optionLayer = mapOf(
         Pair(KeyCode.ANSI_A, OptionLayerKeyData("å", isDeadKey = false)),
@@ -239,34 +259,36 @@ class KeyboardTest : KDTApplicationTestBase() {
         Pair(KeyCode.ANSI_Z, OptionLayerKeyData("Ω", isDeadKey = false)),
     )
 
+//    val optionLayerShifted = mapOf()
+
     // https://chatgpt.com/share/695d443f-4260-8005-8992-3a13a00a575c
     // Historically Ctrl+A or other letters used for entering control characters
     val controlLayer = mapOf(
-        Pair(KeyCode.ANSI_A, String(intArrayOf(1), 0, 1)), //Start of Heading
-        Pair(KeyCode.ANSI_B, String(intArrayOf(2), 0, 1)), //Start of Text
-        Pair(KeyCode.ANSI_C, String(intArrayOf(3), 0, 1)), //End of Text
-        Pair(KeyCode.ANSI_D, String(intArrayOf(4), 0, 1)), //End of Transmission
-        Pair(KeyCode.ANSI_E, String(intArrayOf(5), 0, 1)), //Enquiry
-        Pair(KeyCode.ANSI_F, String(intArrayOf(6), 0, 1)), //Acknowledge
-        Pair(KeyCode.ANSI_G, String(intArrayOf(7), 0, 1)), //Bell
-        Pair(KeyCode.ANSI_H, String(intArrayOf(8), 0, 1)), //Backspace
-        Pair(KeyCode.ANSI_I, String(intArrayOf(9), 0, 1)), //Horizontal Tab
-        Pair(KeyCode.ANSI_J, String(intArrayOf(10), 0, 1)), //Line Feed
-        Pair(KeyCode.ANSI_K, String(intArrayOf(11), 0, 1)), //Vertical Tab
-        Pair(KeyCode.ANSI_L, String(intArrayOf(12), 0, 1)), //Form Feed
-        Pair(KeyCode.ANSI_M, String(intArrayOf(13), 0, 1)), //Carriage Return
-        Pair(KeyCode.ANSI_N, String(intArrayOf(14), 0, 1)), //Shift Out
-        Pair(KeyCode.ANSI_O, String(intArrayOf(15), 0, 1)), //Shift In
-        Pair(KeyCode.ANSI_P, String(intArrayOf(16), 0, 1)), //Data Link Escape
-        Pair(KeyCode.ANSI_Q, String(intArrayOf(17), 0, 1)), //Device Control 1
-        Pair(KeyCode.ANSI_R, String(intArrayOf(18), 0, 1)), //Device Control 2
-        Pair(KeyCode.ANSI_S, String(intArrayOf(19), 0, 1)), //Device Control 3
-        Pair(KeyCode.ANSI_T, String(intArrayOf(20), 0, 1)), //Device Control 4
-        Pair(KeyCode.ANSI_U, String(intArrayOf(21), 0, 1)), //Negative Acknowledge
-        Pair(KeyCode.ANSI_V, String(intArrayOf(22), 0, 1)), //Synchronous Idle
-        Pair(KeyCode.ANSI_W, String(intArrayOf(23), 0, 1)), //End of Transmission Block
-        Pair(KeyCode.ANSI_X, String(intArrayOf(24), 0, 1)), //Cancel
-        Pair(KeyCode.ANSI_Y, String(intArrayOf(25), 0, 1)), //End of Medium
-        Pair(KeyCode.ANSI_Z, String(intArrayOf(26), 0, 1)), //Substitute
+        Pair(KeyCode.ANSI_A, String(intArrayOf(1), 0, 1)), // Start of Heading
+        Pair(KeyCode.ANSI_B, String(intArrayOf(2), 0, 1)), // Start of Text
+        Pair(KeyCode.ANSI_C, String(intArrayOf(3), 0, 1)), // End of Text
+        Pair(KeyCode.ANSI_D, String(intArrayOf(4), 0, 1)), // End of Transmission
+        Pair(KeyCode.ANSI_E, String(intArrayOf(5), 0, 1)), // Enquiry
+        Pair(KeyCode.ANSI_F, String(intArrayOf(6), 0, 1)), // Acknowledge
+        Pair(KeyCode.ANSI_G, String(intArrayOf(7), 0, 1)), // Bell
+        Pair(KeyCode.ANSI_H, String(intArrayOf(8), 0, 1)), // Backspace
+        Pair(KeyCode.ANSI_I, String(intArrayOf(9), 0, 1)), // Horizontal Tab
+        Pair(KeyCode.ANSI_J, String(intArrayOf(10), 0, 1)), // Line Feed
+        Pair(KeyCode.ANSI_K, String(intArrayOf(11), 0, 1)), // Vertical Tab
+        Pair(KeyCode.ANSI_L, String(intArrayOf(12), 0, 1)), // Form Feed
+        Pair(KeyCode.ANSI_M, String(intArrayOf(13), 0, 1)), // Carriage Return
+        Pair(KeyCode.ANSI_N, String(intArrayOf(14), 0, 1)), // Shift Out
+        Pair(KeyCode.ANSI_O, String(intArrayOf(15), 0, 1)), // Shift In
+        Pair(KeyCode.ANSI_P, String(intArrayOf(16), 0, 1)), // Data Link Escape
+        Pair(KeyCode.ANSI_Q, String(intArrayOf(17), 0, 1)), // Device Control 1
+        Pair(KeyCode.ANSI_R, String(intArrayOf(18), 0, 1)), // Device Control 2
+        Pair(KeyCode.ANSI_S, String(intArrayOf(19), 0, 1)), // Device Control 3
+        Pair(KeyCode.ANSI_T, String(intArrayOf(20), 0, 1)), // Device Control 4
+        Pair(KeyCode.ANSI_U, String(intArrayOf(21), 0, 1)), // Negative Acknowledge
+        Pair(KeyCode.ANSI_V, String(intArrayOf(22), 0, 1)), // Synchronous Idle
+        Pair(KeyCode.ANSI_W, String(intArrayOf(23), 0, 1)), // End of Transmission Block
+        Pair(KeyCode.ANSI_X, String(intArrayOf(24), 0, 1)), // Cancel
+        Pair(KeyCode.ANSI_Y, String(intArrayOf(25), 0, 1)), // End of Medium
+        Pair(KeyCode.ANSI_Z, String(intArrayOf(26), 0, 1)), // Substitute
     )
 }
