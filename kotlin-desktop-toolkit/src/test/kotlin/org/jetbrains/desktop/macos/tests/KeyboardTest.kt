@@ -138,6 +138,33 @@ class KeyboardTest : KDTApplicationTestBase() {
 
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
+    fun latinLettersWithCommandShiftTest() {
+        val modifiers = setOf(KeyCode.Command, KeyCode.Shift)
+        for ((keyCode, letter) in ansiLetters) {
+            if (keyCode == KeyCode.ANSI_Q) {
+                continue // Close all apps and quit
+            }
+            pressOneKeyAndAwaitEvent(keyCode, typed = letter, key = letter, keyWithModifiers = letter, modifiers = modifiers)
+        }
+    }
+
+    @Test
+    fun latinLettersWithCommandControlTest() {
+        val modifiers = setOf(KeyCode.Command, KeyCode.Control)
+        for ((keyCode, letter) in ansiLetters) {
+            if (keyCode == KeyCode.ANSI_D) {
+                continue // Reserved by Dictionary.app
+            }
+            if (keyCode == KeyCode.ANSI_Q) {
+                continue // Quit session
+            }
+            val keyWithModifiers: String = controlLayer[keyCode]!!
+            pressOneKeyAndAwaitEvent(keyCode, typed = keyWithModifiers, key = letter, keyWithModifiers = keyWithModifiers, modifiers = modifiers)
+        }
+    }
+
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
     fun latinLettersWithControlTest() {
         val modifiers = setOf(KeyCode.Control)
         ansiLetters.forEach { (keyCode, letter) ->
