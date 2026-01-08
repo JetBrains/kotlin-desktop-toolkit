@@ -86,9 +86,6 @@ class KeyboardTest : KDTApplicationTestBase() {
             awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
             eventHandler = { event ->
                 println("Event: $event")
-//                (event as? Event.KeyDown)?.let { event ->
-//                    println("Event: $event, typedCharacters: ${event.typedCharacters.codePoints().toList()} keyWithModifiers: ${event.keyWithModifiers.codePoints().toList()}")
-//                }
                 EventHandlerResult.Continue
             }
         }
@@ -164,23 +161,22 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
-//    @Timeout(value = 5, unit = TimeUnit.SECONDS)
-//    @Test
-//    fun latinLettersWithOptionShiftTest() {
-//        val modifiers = setOf(KeyCode.Option, KeyCode.Shift)
-//
-//        ansiLetters.forEach { (keyCode, letter) ->
-//            val keyData = optionLayer[keyCode]!!
-//            val optionLayerLetter = keyData.letter.uppercase(getDefault())
-//            //println("KeyCode: $keyCode, optionLayerLetter: $optionLayerLetter")
-//            val typed = if (keyData.isDeadKey) {
-//                ""
-//            } else {
-//                optionLayerLetter
-//            }
-//            pressOneKeyAndAwaitEvent(keyCode, typed = typed, key = letter, keyWithModifiers = optionLayerLetter, modifiers = modifiers)
-//        }
-//    }
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
+    fun latinLettersWithOptionShiftTest() {
+        val modifiers = setOf(KeyCode.Option, KeyCode.Shift)
+
+        ansiLetters.forEach { (keyCode, letter) ->
+            val keyData = optionLayerShifted[keyCode]!!
+            val optionLayerLetter = keyData.letter
+            val typed = if (keyData.isDeadKey) {
+                ""
+            } else {
+                optionLayerLetter
+            }
+            pressOneKeyAndAwaitEvent(keyCode, typed = typed, key = letter, keyWithModifiers = optionLayerLetter, modifiers = modifiers)
+        }
+    }
 
     data class KeyData(
         val keyCode: KeyCode,
@@ -250,7 +246,34 @@ class KeyboardTest : KDTApplicationTestBase() {
         Pair(KeyCode.ANSI_Z, OptionLayerKeyData("Ω", isDeadKey = false)),
     )
 
-//    val optionLayerShifted = mapOf()
+val optionLayerShifted = mapOf(
+        Pair(KeyCode.ANSI_A, OptionLayerKeyData("Å", isDeadKey = false)),
+        Pair(KeyCode.ANSI_B, OptionLayerKeyData("ı", isDeadKey = false)),
+        Pair(KeyCode.ANSI_C, OptionLayerKeyData("Ç", isDeadKey = false)),
+        Pair(KeyCode.ANSI_D, OptionLayerKeyData("Î", isDeadKey = false)),
+        Pair(KeyCode.ANSI_E, OptionLayerKeyData("´", isDeadKey = false)),
+        Pair(KeyCode.ANSI_F, OptionLayerKeyData("Ï", isDeadKey = false)),
+        Pair(KeyCode.ANSI_G, OptionLayerKeyData("˝", isDeadKey = false)),
+        Pair(KeyCode.ANSI_H, OptionLayerKeyData("Ó", isDeadKey = false)),
+        Pair(KeyCode.ANSI_I, OptionLayerKeyData("ˆ", isDeadKey = false)),
+        Pair(KeyCode.ANSI_J, OptionLayerKeyData("Ô", isDeadKey = false)),
+        Pair(KeyCode.ANSI_K, OptionLayerKeyData("\uF8FF", isDeadKey = false)), // Apple logo
+        Pair(KeyCode.ANSI_L, OptionLayerKeyData("Ò", isDeadKey = false)),
+        Pair(KeyCode.ANSI_M, OptionLayerKeyData("Â", isDeadKey = false)),
+        Pair(KeyCode.ANSI_N, OptionLayerKeyData("˜", isDeadKey = false)),
+        Pair(KeyCode.ANSI_O, OptionLayerKeyData("Ø", isDeadKey = false)),
+        Pair(KeyCode.ANSI_P, OptionLayerKeyData("∏", isDeadKey = false)),
+        Pair(KeyCode.ANSI_Q, OptionLayerKeyData("Œ", isDeadKey = false)),
+        Pair(KeyCode.ANSI_R, OptionLayerKeyData("‰", isDeadKey = false)),
+        Pair(KeyCode.ANSI_S, OptionLayerKeyData("Í", isDeadKey = false)),
+        Pair(KeyCode.ANSI_T, OptionLayerKeyData("ˇ", isDeadKey = false)),
+        Pair(KeyCode.ANSI_U, OptionLayerKeyData("¨", isDeadKey = false)),
+        Pair(KeyCode.ANSI_V, OptionLayerKeyData("◊", isDeadKey = false)),
+        Pair(KeyCode.ANSI_W, OptionLayerKeyData("„", isDeadKey = false)),
+        Pair(KeyCode.ANSI_X, OptionLayerKeyData("˛", isDeadKey = false)),
+        Pair(KeyCode.ANSI_Y, OptionLayerKeyData("Á", isDeadKey = false)),
+        Pair(KeyCode.ANSI_Z, OptionLayerKeyData("¸", isDeadKey = false)),
+    )
 
     // https://chatgpt.com/share/695d443f-4260-8005-8992-3a13a00a575c
     // Historically Ctrl+A or other letters used for entering control characters
