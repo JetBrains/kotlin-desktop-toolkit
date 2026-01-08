@@ -12,6 +12,7 @@ use std::sync::mpsc::SyncSender;
 use std::thread;
 use std::thread::JoinHandle;
 
+#[allow(clippy::struct_field_names)]
 pub struct Robot {
     event_tap_thread: EventTapThread,
     event_source: CFRetained<CGEventSource>,
@@ -66,6 +67,7 @@ impl RunLoopWrapper {
 
 // SAFETY: Still under discussion, see:
 // https://github.com/madsmtm/objc2/issues/696
+#[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl Send for RunLoopWrapper {}
 
 struct TapSubscription {
@@ -154,6 +156,7 @@ impl EventTapThread {
             .run_loop
             .remove_source(Some(&subscription.run_loop_source), unsafe { kCFRunLoopDefaultMode });
         subscription.tap.invalidate();
+        drop(subscription);
     }
 
     fn wait_for_event(&self, event_id: i64) {

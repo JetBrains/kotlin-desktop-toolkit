@@ -159,7 +159,13 @@ class KeyboardTest : KDTApplicationTestBase() {
                 continue // Quit session
             }
             val keyWithModifiers: String = controlLayer[keyCode]!!
-            pressOneKeyAndAwaitEvent(keyCode, typed = keyWithModifiers, key = letter, keyWithModifiers = keyWithModifiers, modifiers = modifiers)
+            pressOneKeyAndAwaitEvent(
+                keyCode,
+                typed = keyWithModifiers,
+                key = letter,
+                keyWithModifiers = keyWithModifiers,
+                modifiers = modifiers,
+            )
         }
     }
 
@@ -169,7 +175,13 @@ class KeyboardTest : KDTApplicationTestBase() {
         val modifiers = setOf(KeyCode.Control)
         ansiLetters.forEach { (keyCode, letter) ->
             val keyWithModifiers: String = controlLayer[keyCode]!!
-            pressOneKeyAndAwaitEvent(keyCode, typed = keyWithModifiers, key = letter, keyWithModifiers = keyWithModifiers, modifiers = modifiers)
+            pressOneKeyAndAwaitEvent(
+                keyCode,
+                typed = keyWithModifiers,
+                key = letter,
+                keyWithModifiers = keyWithModifiers,
+                modifiers = modifiers,
+            )
         }
     }
 
@@ -179,7 +191,13 @@ class KeyboardTest : KDTApplicationTestBase() {
         val modifiers = setOf(KeyCode.Control, KeyCode.Shift)
         ansiLetters.forEach { (keyCode, letter) ->
             val keyWithModifiers: String = controlLayer[keyCode]!!
-            pressOneKeyAndAwaitEvent(keyCode, typed = keyWithModifiers, key = letter, keyWithModifiers = keyWithModifiers, modifiers = modifiers)
+            pressOneKeyAndAwaitEvent(
+                keyCode,
+                typed = keyWithModifiers,
+                key = letter,
+                keyWithModifiers = keyWithModifiers,
+                modifiers = modifiers,
+            )
         }
     }
 
@@ -229,7 +247,13 @@ class KeyboardTest : KDTApplicationTestBase() {
             } else {
                 optionLayerLetter
             }
-            pressOneKeyAndAwaitEvent(keyCode, typed = keyWithModifiers, key = letter, keyWithModifiers = keyWithModifiers, modifiers = modifiers)
+            pressOneKeyAndAwaitEvent(
+                keyCode,
+                typed = keyWithModifiers,
+                key = letter,
+                keyWithModifiers = keyWithModifiers,
+                modifiers = modifiers,
+            )
         }
     }
 
@@ -240,7 +264,13 @@ class KeyboardTest : KDTApplicationTestBase() {
         val modifiers = setOf(KeyCode.Control, KeyCode.Option)
         ansiLetters.forEach { (keyCode, letter) ->
             val keyWithModifiers: String = controlLayer[keyCode]!!
-            pressOneKeyAndAwaitEvent(keyCode, typed = keyWithModifiers, key = letter, keyWithModifiers = keyWithModifiers, modifiers = modifiers)
+            pressOneKeyAndAwaitEvent(
+                keyCode,
+                typed = keyWithModifiers,
+                key = letter,
+                keyWithModifiers = keyWithModifiers,
+                modifiers = modifiers,
+            )
         }
     }
 

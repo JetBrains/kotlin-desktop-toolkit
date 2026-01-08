@@ -77,9 +77,9 @@ class RobotTest : KDTApplicationTestBase() {
                 ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = true) }
                 awaitEventOfType<Event.ModifiersChanged> {
                     it.keyCode == KeyCode.Option &&
-                            it.modifiers.shift &&
-                            it.modifiers.command &&
-                            it.modifiers.option
+                        it.modifiers.shift &&
+                        it.modifiers.command &&
+                        it.modifiers.option
                 }
 
                 ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = false) }
@@ -87,9 +87,9 @@ class RobotTest : KDTApplicationTestBase() {
                 ui { robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = false) }
                 awaitEventOfType<Event.ModifiersChanged> {
                     it.keyCode == KeyCode.Shift &&
-                            !it.modifiers.shift &&
-                            !it.modifiers.command &&
-                            !it.modifiers.option
+                        !it.modifiers.shift &&
+                        !it.modifiers.command &&
+                        !it.modifiers.option
                 }
             }
         }
@@ -105,16 +105,16 @@ class RobotTest : KDTApplicationTestBase() {
                 ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = true) }
                 ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = true) }
                 awaitEventOfType<Event.ModifiersChanged> {
-                            it.modifiers.command &&
-                            it.modifiers.option
+                    it.modifiers.command &&
+                        it.modifiers.option
                 }
 
                 ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = false) }
                 ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = false) }
                 awaitEventOfType<Event.ModifiersChanged> {
-                            !it.modifiers.shift &&
-                            !it.modifiers.command &&
-                            !it.modifiers.option
+                    !it.modifiers.shift &&
+                        !it.modifiers.command &&
+                        !it.modifiers.option
                 }
             }
         }
