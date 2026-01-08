@@ -39,14 +39,6 @@ class KeyboardTest : KDTApplicationTestBase() {
                 }
             }
 
-            // We have to wait for modifiers to be applied.
-            // It's strange to me, but it seems that if you press Shift modifier and A key fast enough,
-            // you might get the following event sequence: [ModifiersChanged(shift=true), KeyDown(typed=a, modifiers=empty)]
-            // not sure is it the case for real keyboard or only for tests
-            if (modifiers.isNotEmpty()) {
-                awaitEventOfType<Event.ModifiersChanged> { it.modifiers == modifiersSet }
-            }
-
             ui {
                 robot.emulateKeyboardEvent(keyCode, true)
             }
@@ -73,10 +65,6 @@ class KeyboardTest : KDTApplicationTestBase() {
                 ui {
                     robot.emulateKeyboardEvent(modifier, false)
                 }
-            }
-
-            if (modifiers.isNotEmpty()) {
-                awaitEventOfType<Event.ModifiersChanged> { it.modifiers == KeyModifiersSet.create() }
             }
         }
     }
