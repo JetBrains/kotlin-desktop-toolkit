@@ -85,7 +85,9 @@ class KeyboardTest : KDTApplicationTestBase() {
             }
             awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
             eventHandler = { event ->
-                println("Event: $event")
+                if (event is Event.KeyDown || event is Event.KeyUp || event is Event.ModifiersChanged) {
+                    println("Event: $event")
+                }
                 EventHandlerResult.Continue
             }
         }
@@ -139,8 +141,8 @@ class KeyboardTest : KDTApplicationTestBase() {
     fun latinLettersWithControlTest() {
         val modifiers = setOf(KeyCode.Control)
         ansiLetters.forEach { (keyCode, letter) ->
-            val typed: String = controlLayer[keyCode]!!
-            pressOneKeyAndAwaitEvent(keyCode, typed = typed, key = letter, keyWithModifiers = typed, modifiers = modifiers)
+            val keyWithModifiers: String = controlLayer[keyCode]!!
+            pressOneKeyAndAwaitEvent(keyCode, typed = keyWithModifiers, key = letter, keyWithModifiers = keyWithModifiers, modifiers = modifiers)
         }
     }
 
@@ -175,6 +177,33 @@ class KeyboardTest : KDTApplicationTestBase() {
                 optionLayerLetter
             }
             pressOneKeyAndAwaitEvent(keyCode, typed = typed, key = letter, keyWithModifiers = optionLayerLetter, modifiers = modifiers)
+        }
+    }
+
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
+    fun latinLettersWithOptionCommandTest() {
+        val modifiers = setOf(KeyCode.Command, KeyCode.Option)
+        ansiLetters.forEach { (keyCode, letter) ->
+            val keyData = optionLayer[keyCode]!!
+            val optionLayerLetter = keyData.letter
+            val keyWithModifiers = if (keyData.isDeadKey) {
+                keyData.deadKeyReplacement!!
+            } else {
+                optionLayerLetter
+            }
+            pressOneKeyAndAwaitEvent(keyCode, typed = keyWithModifiers, key = letter, keyWithModifiers = keyWithModifiers, modifiers = modifiers)
+        }
+    }
+
+    // Same behavior as in Ctrl+Letter
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
+    fun latinLettersWithOptionControlTest() {
+        val modifiers = setOf(KeyCode.Control, KeyCode.Option)
+        ansiLetters.forEach { (keyCode, letter) ->
+            val keyWithModifiers: String = controlLayer[keyCode]!!
+            pressOneKeyAndAwaitEvent(keyCode, typed = keyWithModifiers, key = letter, keyWithModifiers = keyWithModifiers, modifiers = modifiers)
         }
     }
 
@@ -215,6 +244,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     data class OptionLayerKeyData(
         val letter: String,
         val isDeadKey: Boolean,
+        val deadKeyReplacement: String? = null,
     )
 
     val optionLayer = mapOf(
@@ -222,23 +252,23 @@ class KeyboardTest : KDTApplicationTestBase() {
         Pair(KeyCode.ANSI_B, OptionLayerKeyData("∫", isDeadKey = false)),
         Pair(KeyCode.ANSI_C, OptionLayerKeyData("ç", isDeadKey = false)),
         Pair(KeyCode.ANSI_D, OptionLayerKeyData("∂", isDeadKey = false)),
-        Pair(KeyCode.ANSI_E, OptionLayerKeyData("´", isDeadKey = true)),
+        Pair(KeyCode.ANSI_E, OptionLayerKeyData("´", isDeadKey = true, deadKeyReplacement = "´")),
         Pair(KeyCode.ANSI_F, OptionLayerKeyData("ƒ", isDeadKey = false)),
         Pair(KeyCode.ANSI_G, OptionLayerKeyData("©", isDeadKey = false)),
         Pair(KeyCode.ANSI_H, OptionLayerKeyData("˙", isDeadKey = false)),
-        Pair(KeyCode.ANSI_I, OptionLayerKeyData("ˆ", isDeadKey = true)),
+        Pair(KeyCode.ANSI_I, OptionLayerKeyData("ˆ", isDeadKey = true, deadKeyReplacement = "^")),
         Pair(KeyCode.ANSI_J, OptionLayerKeyData("∆", isDeadKey = false)),
         Pair(KeyCode.ANSI_K, OptionLayerKeyData("˚", isDeadKey = false)),
         Pair(KeyCode.ANSI_L, OptionLayerKeyData("¬", isDeadKey = false)),
         Pair(KeyCode.ANSI_M, OptionLayerKeyData("µ", isDeadKey = false)),
-        Pair(KeyCode.ANSI_N, OptionLayerKeyData("˜", isDeadKey = true)),
+        Pair(KeyCode.ANSI_N, OptionLayerKeyData("˜", isDeadKey = true, deadKeyReplacement = "~")),
         Pair(KeyCode.ANSI_O, OptionLayerKeyData("ø", isDeadKey = false)),
         Pair(KeyCode.ANSI_P, OptionLayerKeyData("π", isDeadKey = false)),
         Pair(KeyCode.ANSI_Q, OptionLayerKeyData("œ", isDeadKey = false)),
         Pair(KeyCode.ANSI_R, OptionLayerKeyData("®", isDeadKey = false)),
         Pair(KeyCode.ANSI_S, OptionLayerKeyData("ß", isDeadKey = false)),
         Pair(KeyCode.ANSI_T, OptionLayerKeyData("†", isDeadKey = false)),
-        Pair(KeyCode.ANSI_U, OptionLayerKeyData("¨", isDeadKey = true)),
+        Pair(KeyCode.ANSI_U, OptionLayerKeyData("¨", isDeadKey = true, deadKeyReplacement = "¨")),
         Pair(KeyCode.ANSI_V, OptionLayerKeyData("√", isDeadKey = false)),
         Pair(KeyCode.ANSI_W, OptionLayerKeyData("∑", isDeadKey = false)),
         Pair(KeyCode.ANSI_X, OptionLayerKeyData("≈", isDeadKey = false)),
@@ -246,7 +276,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         Pair(KeyCode.ANSI_Z, OptionLayerKeyData("Ω", isDeadKey = false)),
     )
 
-val optionLayerShifted = mapOf(
+    val optionLayerShifted = mapOf(
         Pair(KeyCode.ANSI_A, OptionLayerKeyData("Å", isDeadKey = false)),
         Pair(KeyCode.ANSI_B, OptionLayerKeyData("ı", isDeadKey = false)),
         Pair(KeyCode.ANSI_C, OptionLayerKeyData("Ç", isDeadKey = false)),
