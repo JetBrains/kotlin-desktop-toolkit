@@ -243,6 +243,9 @@ class KeyboardTest : KDTApplicationTestBase() {
             if (keyCode == KeyCode.ANSI_D) {
                 continue // Is not reported on CI
             }
+            if (keyCode == KeyCode.ANSI_N) {
+                continue // Global shortcut used by Arc browser
+            }
             val keyData = optionLayer[keyCode]!!
             val optionLayerLetter = keyData.letter
             val keyWithModifiers = if (keyData.isDeadKey) {
