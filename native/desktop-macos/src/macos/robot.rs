@@ -20,6 +20,7 @@ pub struct Robot {
 }
 
 impl Robot {
+    /// cbindgen:ignore
     const EVENT_MARKER: i64 = 0x4B44_545F_524F_424F; // "KDT_ROBO" in hex
 
     pub(crate) fn new() -> anyhow::Result<Self> {
@@ -77,6 +78,8 @@ struct TapSubscription {
 }
 
 impl EventTapThread {
+    /// cbindgen:ignore
+    #[unsafe(no_mangle)]
     unsafe extern "C-unwind" fn event_tap_callback(
         _proxy: CGEventTapProxy,
         _event_type: CGEventType,
