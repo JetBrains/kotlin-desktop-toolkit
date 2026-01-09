@@ -51,12 +51,12 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-#      - name: Lint with Gradle
-#        run: ./gradlew lint
-#      - name: Build with Gradle
-#        run: ./gradlew build
+      - name: Lint with Gradle
+        run: ./gradlew lint
       - name: Test with Gradle
-        run: ./gradlew test --rerun --info
+        run: ./gradlew test --info
+      - name: Build with Gradle
+        run: ./gradlew build
 
 
       - name: Publish Test Report
