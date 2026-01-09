@@ -257,7 +257,6 @@ class KeyboardTest : KDTApplicationTestBase() {
                 keyWithModifiers = keyWithModifiers,
                 modifiers = modifiers,
             )
-
         }
     }
 
