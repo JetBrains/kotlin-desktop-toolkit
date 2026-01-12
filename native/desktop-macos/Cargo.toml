@@ -75,5 +75,6 @@ objc2-user-notifications = { version = "0.3.2", features = [
   "UNNotificationResponse",
   "UNNotification",
 ] }
+objc2-carbon = { version = "0.3.2" }
 num-traits = "0.2"
 num-derive = "0.4"

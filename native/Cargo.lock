@@ -390,6 +390,7 @@ dependencies = [
  "num-traits",
  "objc2",
  "objc2-app-kit",
+ "objc2-carbon",
  "objc2-core-foundation",
  "objc2-core-graphics",
  "objc2-foundation",
@@ -1111,6 +1112,12 @@ dependencies = [
  "objc2-foundation",
  "objc2-quartz-core",
 ]
+
+[[package]]
+name = "objc2-carbon"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1819e58fe713a21174bbbef4e8547a250a1bc21d17ff9938ceef9a7024da40ce"
 
 [[package]]
 name = "objc2-cloud-kit"

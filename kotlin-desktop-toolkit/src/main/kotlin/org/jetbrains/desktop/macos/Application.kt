@@ -178,6 +178,39 @@ public object Application {
         }
     }
 
+    public fun currentKeyboardLayout(): String? {
+        val layout =  ffiDownCall {
+            desktop_macos_h.application_current_keyboard_layout()
+        }
+        if (layout == MemorySegment.NULL) return null
+        return try {
+            layout.getUtf8String(0)
+        } finally {
+            ffiDownCall { desktop_macos_h.string_drop(layout) }
+        }
+    }
+
+    public fun listInputSources(): List<String> {
+        return ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                val result = desktop_macos_h.application_list_input_sources(arena)
+                try {
+                    listOfStringsFromNative(result)
+                } finally {
+                    ffiDownCall { desktop_macos_h.string_array_drop(result) }
+                }
+            }
+        }
+    }
+
+    public fun chooseInputSource(sourceId: String): Boolean {
+        return ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_macos_h.application_choose_input_source(arena.allocateUtf8String(sourceId))
+            }
+        }
+    }
+
     private var isSafeToQuit: () -> Boolean = { true }
 
     // called from native
