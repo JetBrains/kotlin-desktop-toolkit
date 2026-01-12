@@ -173,5 +173,19 @@ class RobotTest : KDTApplicationTestBase() {
         }
     }
 
+    @Test
+    fun `swedish test`() {
+        val layoutId = "com.apple.keylayout.Swedish-Pro"
+        assert(ui { Application.chooseInputSource(layoutId) })
+        withEventHandler(handler = {
+            println("Event: $it")
+            EventHandlerResult.Continue
+        }) {
+            ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, true) }
+            ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, false) }
+            awaitEventOfType<Event.KeyDown> { it.typedCharacters == "ö" }
+        }
+    }
+
     // todo test CJK
 }
