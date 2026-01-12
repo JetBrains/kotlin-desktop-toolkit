@@ -179,7 +179,7 @@ public object Application {
     }
 
     public fun currentKeyboardLayout(): String? {
-        val layout =  ffiDownCall {
+        val layout = ffiDownCall {
             desktop_macos_h.application_current_keyboard_layout()
         }
         if (layout == MemorySegment.NULL) return null

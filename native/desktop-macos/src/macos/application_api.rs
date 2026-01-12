@@ -13,6 +13,7 @@ use crate::macos::events::{
 };
 use crate::macos::image::Image;
 use anyhow::{Context, anyhow};
+use desktop_common::ffi_utils::AutoDropArray;
 use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedStrPtr},
     logger::{catch_panic, ffi_boundary},
@@ -32,7 +33,6 @@ use objc2_foundation::{
     NSObjectNSKeyValueObserverRegistration, NSObjectProtocol, NSPoint, NSString, NSURL, NSUserDefaults, ns_string,
 };
 use std::{cell::OnceCell, ffi::c_void};
-use desktop_common::ffi_utils::AutoDropArray;
 
 thread_local! {
     pub static APP_STATE: OnceCell<AppState> = const { OnceCell::new() };
@@ -319,20 +319,14 @@ pub extern "C" fn application_open_url(url: BorrowedStrPtr) -> bool {
     })
 }
 
-// Carbon Text Input Source Services FFI
+#[allow(unused_doc_comments)]
 /// cbindgen:ignore
 #[link(name = "Carbon", kind = "framework")]
 unsafe extern "C" {
     pub(super) fn TISCopyCurrentKeyboardLayoutInputSource() -> *const c_void;
     // Note: TISGetInputSourceProperty returns a borrowed reference, NOT an owned one
-    pub(super) fn TISGetInputSourceProperty(
-        inputSource: *const c_void,
-        propertyKey: *const c_void,
-    ) -> *const c_void;
-    pub(super) fn TISCreateInputSourceList(
-        properties: *const c_void,
-        include_all_installed: bool,
-    ) -> *const c_void;
+    pub(super) fn TISGetInputSourceProperty(inputSource: *const c_void, propertyKey: *const c_void) -> *const c_void;
+    pub(super) fn TISCreateInputSourceList(properties: *const c_void, include_all_installed: bool) -> *const c_void;
     pub(super) fn TISSelectInputSource(inputSource: *const c_void) -> i32;
     #[allow(dead_code)]
     pub(super) static kTISPropertyUnicodeKeyLayoutData: *const c_void;
@@ -341,6 +335,7 @@ unsafe extern "C" {
     pub(super) static kTISPropertyLocalizedName: *const c_void;
 }
 
+#[allow(unused_doc_comments)]
 /// cbindgen:ignore
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
@@ -366,7 +361,7 @@ pub extern "C" fn application_current_keyboard_layout() -> RustAllocatedStrPtr {
                 Ok(RustAllocatedStrPtr::null())
             } else {
                 // source_id is a CFStringRef (borrowed), toll-free bridged to NSString
-                let ns_string: &NSString = &*(source_id_ptr as *const NSString);
+                let ns_string: &NSString = &*source_id_ptr.cast::<NSString>();
                 copy_to_c_string(ns_string)
             };
 
@@ -388,6 +383,7 @@ pub extern "C" fn application_list_input_sources() -> AutoDropArray<RustAllocate
                 return Ok(AutoDropArray::new(Box::new([])));
             }
 
+            #[allow(clippy::cast_sign_loss)]
             let count = CFArrayGetCount(source_list) as usize;
 
             if count == 0 {
@@ -402,7 +398,7 @@ pub extern "C" fn application_list_input_sources() -> AutoDropArray<RustAllocate
                 let source_id_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceID);
                 if !source_id_ptr.is_null() {
                     // source_id is a CFStringRef (borrowed), toll-free bridged to NSString
-                    let ns_string: &NSString = &*(source_id_ptr as *const NSString);
+                    let ns_string: &NSString = &*source_id_ptr.cast::<NSString>();
                     source_ids.push(copy_to_c_string(ns_string)?);
                 }
             }
@@ -424,6 +420,7 @@ pub extern "C" fn application_choose_input_source(source_id: BorrowedStrPtr) -> 
                 return Ok(false);
             }
 
+            #[allow(clippy::cast_sign_loss)]
             let count = CFArrayGetCount(source_list) as usize;
             let mut result = false;
 
@@ -431,7 +428,7 @@ pub extern "C" fn application_choose_input_source(source_id: BorrowedStrPtr) -> 
                 let input_source = CFArrayGetValueAtIndex(source_list, i as isize);
                 let prop_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceID);
                 if !prop_ptr.is_null() {
-                    let ns_string: &NSString = &*(prop_ptr as *const NSString);
+                    let ns_string: &NSString = &*prop_ptr.cast::<NSString>();
                     if ns_string.to_string() == source_id_str {
                         let status = TISSelectInputSource(input_source);
                         result = status == 0; // noErr
