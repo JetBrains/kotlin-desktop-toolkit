@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.macos.tests
 
+import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.KeyCode
@@ -90,6 +91,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 }
                 EventHandlerResult.Continue
             }
+            ui { Application.chooseInputSource("com.apple.keylayout.ABC") }
         }
 
         @JvmStatic

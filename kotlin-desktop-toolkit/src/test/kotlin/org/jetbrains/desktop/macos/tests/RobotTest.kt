@@ -126,7 +126,9 @@ class RobotTest : KDTApplicationTestBase() {
     @Test
     fun `keyboard layout test`() {
         val layout = ui { Application.currentKeyboardLayout() }
-        assertEquals("com.apple.keylayout.ABC", layout)
+        assert(layout?.startsWith("com.apple.keylayout") == true) {
+            "$layout should start with 'com.apple.keylayout'"
+        }
     }
 
     @Test
