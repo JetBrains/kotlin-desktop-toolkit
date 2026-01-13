@@ -19,7 +19,7 @@ if [ ! ${#layouts[@]} -eq ${#ids[@]} ] ; then
 fi
 
 # The keys we have to add for each layout
-apple_keys=("AppleEnabledInputSources" "AppleInputSourceHistory" "AppleSelectedInputSources")
+apple_keys=("AppleEnabledInputSources" "AppleSelectedInputSources")
 
 # Create the XML entries with defaults write
 defaults -host "${USER}" write com.apple.HIToolbox AppleCurrentKeyboardLayoutInputSourceID com.apple.keylayout.Swedish-Pro

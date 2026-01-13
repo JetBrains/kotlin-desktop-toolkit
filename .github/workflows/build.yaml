@@ -56,7 +56,7 @@ jobs:
       - name: Lint with Gradle
         run: ./gradlew lint
       - name: Test with Gradle
-        run: ./gradlew test --info
+        run: ./gradlew test --info --no-daemon
       - name: Build with Gradle
         run: ./gradlew build
 
