@@ -423,24 +423,43 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
 fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
     let is_non_client = matches!(msg, WM_NCPOINTERUPDATE);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
-    let event: Event = if window.is_pointer_in_window() {
-        PointerUpdatedEvent {
-            button_change: pointer_info.get_pointer_button_change(),
-            location_in_window: pointer_info.get_location_in_window(),
-            non_client_area: is_non_client,
-            state: pointer_info.get_pointer_state(),
-            timestamp: pointer_info.get_timestamp(),
+    let event = if window.is_pointer_in_window() {
+        let button_change = pointer_info.get_pointer_button_change();
+        match button_change.kind() {
+            PointerButtonChangeKind::Pressed => {
+                let click_location = pointer_info.get_physical_location();
+                let click_count = window.with_mut_pointer_click_counter(|c| c.register_click(button_change.button(), click_location));
+                Event::PointerDown(PointerDownEvent {
+                    button: button_change.button(),
+                    click_count,
+                    location_in_window: pointer_info.get_location_in_window(),
+                    non_client_area: is_non_client,
+                    state: pointer_info.get_pointer_state(),
+                    timestamp: pointer_info.get_timestamp(),
+                })
+            }
+            PointerButtonChangeKind::Released => Event::PointerUp(PointerUpEvent {
+                button: button_change.button(),
+                location_in_window: pointer_info.get_location_in_window(),
+                non_client_area: is_non_client,
+                state: pointer_info.get_pointer_state(),
+                timestamp: pointer_info.get_timestamp(),
+            }),
+            PointerButtonChangeKind::Other => Event::PointerUpdated(PointerUpdatedEvent {
+                location_in_window: pointer_info.get_location_in_window(),
+                non_client_area: is_non_client,
+                state: pointer_info.get_pointer_state(),
+                timestamp: pointer_info.get_timestamp(),
+            }),
         }
-        .into()
     } else {
         // see https://devblogs.microsoft.com/oldnewthing/20031013-00/?p=42193
         window.set_is_pointer_in_window(true);
-        PointerEnteredEvent {
+        Event::PointerEntered(PointerEnteredEvent {
             location_in_window: pointer_info.get_location_in_window(),
             state: pointer_info.get_pointer_state(),
             timestamp: pointer_info.get_timestamp(),
-        }
-        .into()
+        })
     };
     event_loop.handle_event(window, event)
 }
