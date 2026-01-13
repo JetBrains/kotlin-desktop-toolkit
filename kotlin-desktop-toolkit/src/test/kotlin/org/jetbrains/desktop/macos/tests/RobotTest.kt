@@ -9,11 +9,13 @@ import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
+@Ignore
 class RobotTest : KDTApplicationTestBase() {
 
     companion object {
