@@ -9,8 +9,8 @@ reset='\033[0m'
 # about no running process
 killall 'System Preferences' &>/dev/null
 
-layouts=('USInternational-PC' 'Swedish - Pro')
-ids=('1500' '7')
+layouts=('USInternational-PC' 'Swedish - Pro' 'ABC')
+ids=('1500' '7' '252')
 
 if [ ! ${#layouts[@]} -eq ${#ids[@]} ] ; then
         echo -e "${red}Number of layout names does not equal number of ids! ${reset}"
