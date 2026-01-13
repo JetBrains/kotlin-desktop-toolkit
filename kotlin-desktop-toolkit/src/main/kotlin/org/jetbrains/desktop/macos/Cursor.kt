@@ -105,11 +105,13 @@ public object Cursor {
             return hideCount > 0
         }
         set(value) {
-            while (hideCount > 0) {
-                popHide()
-            }
-            if (value) {
+            if (value && hideCount == 0) {
                 pushHide()
+            }
+            if (!value && hideCount > 0) {
+                while (hideCount > 0) {
+                    popHide()
+                }
             }
         }
 
