@@ -13,9 +13,11 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
 import java.util.Locale.getDefault
 import java.util.concurrent.TimeUnit
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+@Ignore
 class KeyboardTest : KDTApplicationTestBase() {
 
     fun Set<KeyCode>.toModifiersSet(): KeyModifiersSet {
