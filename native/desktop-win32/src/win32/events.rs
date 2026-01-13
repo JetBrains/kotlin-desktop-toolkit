@@ -4,7 +4,7 @@ use super::{
     appearance::Appearance,
     geometry::{LogicalPoint, PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButton, PointerButtonChange, PointerState},
+    pointer::{PointerButton, PointerState},
     window::WindowId,
 };
 
@@ -115,12 +115,6 @@ pub struct PointerEnteredEvent {
     pub timestamp: Timestamp,
 }
 
-impl From<PointerEnteredEvent> for Event {
-    fn from(value: PointerEnteredEvent) -> Self {
-        Self::PointerEntered(value)
-    }
-}
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct PointerExitedEvent {
@@ -138,17 +132,10 @@ impl From<PointerExitedEvent> for Event {
 #[repr(C)]
 #[derive(Debug)]
 pub struct PointerUpdatedEvent {
-    pub button_change: PointerButtonChange,
     pub location_in_window: LogicalPoint,
     pub non_client_area: bool,
     pub state: PointerState,
     pub timestamp: Timestamp,
-}
-
-impl From<PointerUpdatedEvent> for Event {
-    fn from(value: PointerUpdatedEvent) -> Self {
-        Self::PointerUpdated(value)
-    }
 }
 
 #[repr(C)]
