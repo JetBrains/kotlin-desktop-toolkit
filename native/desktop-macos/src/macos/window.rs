@@ -7,6 +7,7 @@ use super::{
     window_api::{WindowBackground, WindowId, WindowParams, WindowVisualEffect},
 };
 use crate::geometry::LogicalPixels;
+use crate::macos::drag_and_drop::SequenceNumber;
 use crate::macos::titlebar::Titlebar;
 use crate::macos::window_api::{DraggingItem, TitlebarConfiguration};
 use crate::{
@@ -50,7 +51,6 @@ use objc2_foundation::{
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use crate::macos::drag_and_drop::SequenceNumber;
 
 #[allow(clippy::struct_field_names)]
 pub(crate) struct Window {
