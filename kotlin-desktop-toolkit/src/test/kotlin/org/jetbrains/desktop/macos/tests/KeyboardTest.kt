@@ -17,7 +17,6 @@ import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-@Ignore
 class KeyboardTest : KDTApplicationTestBase() {
 
     fun Set<KeyCode>.toModifiersSet(): KeyModifiersSet {
@@ -79,6 +78,7 @@ class KeyboardTest : KDTApplicationTestBase() {
 
         @JvmStatic
         @BeforeAll
+        @Timeout(value = 5, unit = TimeUnit.SECONDS)
         fun createWindow() {
             robot = ui { Robot() }
             window = ui {
@@ -100,6 +100,7 @@ class KeyboardTest : KDTApplicationTestBase() {
 
         @JvmStatic
         @AfterAll
+        @Timeout(value = 5, unit = TimeUnit.SECONDS)
         fun destroyWindow() {
             ui {
                 window.close()
@@ -111,6 +112,13 @@ class KeyboardTest : KDTApplicationTestBase() {
 
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
+    fun smokeTest() {
+        assert(true)
+    }
+
+    @Ignore
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    @Test
     fun latinLettersNoModifiersTest() {
         assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
         ansiLetters.forEach { (keyCode, letter) ->
@@ -118,6 +126,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
     fun latinLettersWithShiftTest() {
@@ -135,6 +144,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
     fun latinLettersWithCommandTest() {
@@ -145,6 +155,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
     fun latinLettersWithCommandShiftTest() {
@@ -158,6 +169,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore
     @Test
     fun latinLettersWithCommandControlTest() {
         assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
@@ -180,6 +192,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
     fun latinLettersWithControlTest() {
@@ -197,6 +210,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
     fun latinLettersWithControlShiftTest() {
@@ -214,6 +228,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
     fun latinLettersWithOptionTest() {
@@ -232,6 +247,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
     fun latinLettersWithOptionShiftTest() {
@@ -250,6 +266,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
     fun latinLettersWithOptionCommandTest() {
@@ -280,6 +297,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     }
 
     // Same behavior as in Ctrl+Letter
+    @Ignore
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     @Test
     fun latinLettersWithOptionControlTest() {
