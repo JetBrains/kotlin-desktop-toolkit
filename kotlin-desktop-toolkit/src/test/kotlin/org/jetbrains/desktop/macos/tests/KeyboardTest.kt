@@ -17,7 +17,6 @@ import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-@Ignore
 class KeyboardTest : KDTApplicationTestBase() {
 
     fun Set<KeyCode>.toModifiersSet(): KeyModifiersSet {
@@ -81,6 +80,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         @BeforeAll
         @Timeout(value = 5, unit = TimeUnit.SECONDS)
         fun createWindow() {
+            println("KeyboardTest INIT STARTED")
             robot = ui { Robot() }
             window = ui {
                 Window.create(origin = LogicalPoint(100.0, 200.0), title = "Keyboard Test Window")
@@ -97,17 +97,20 @@ class KeyboardTest : KDTApplicationTestBase() {
             }
             assert(ui { Application.chooseInputSource("com.apple.keylayout.ABC") }) { "Failed to choose ABC keyboard layout" }
             assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+            println("KeyboardTest INIT FINISHED")
         }
 
         @JvmStatic
         @AfterAll
         @Timeout(value = 5, unit = TimeUnit.SECONDS)
         fun destroyWindow() {
+            println("KeyboardTest DESTROY STARTED")
             ui {
                 window.close()
             }
             eventHandler = null
             ui { robot.close() }
+            println("KeyboardTest DESTROY FINISHED")
         }
     }
 
