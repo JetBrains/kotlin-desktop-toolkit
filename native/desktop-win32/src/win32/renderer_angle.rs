@@ -57,7 +57,6 @@ pub struct AngleDevice {
 }
 
 impl AngleDevice {
-    #[allow(clippy::items_after_statements)]
     pub fn create_for_window(window: &Window) -> anyhow::Result<Self> {
         let egl_instance = load_angle_egl_instance()?;
 

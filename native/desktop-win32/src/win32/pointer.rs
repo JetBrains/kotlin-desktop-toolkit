@@ -86,8 +86,6 @@ impl PointerButtonChange {
 }
 
 impl PointerInfo {
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::double_parens)]
     pub(crate) fn try_from_message(wparam: WPARAM) -> windows::core::Result<Self> {
         let pointer_id = u32::from(LOWORD!(wparam.0));
 

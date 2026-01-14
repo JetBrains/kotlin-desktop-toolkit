@@ -58,12 +58,11 @@ unsafe extern "system" fn monitor_enum_proc(hmonitor: HMONITOR, _hdc: HDC, _lprc
     windows::Win32::Foundation::TRUE
 }
 
-#[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_precision_loss)]
 pub(crate) fn get_screen_info(hmonitor: HMONITOR) -> anyhow::Result<ScreenInfo> {
     let mut monitor_info = MONITORINFOEXW {
         monitorInfo: MONITORINFO {
-            cbSize: size_of::<MONITORINFOEXW>() as _,
+            cbSize: size_of::<MONITORINFOEXW>().try_into()?,
             ..Default::default()
         },
         ..Default::default()
@@ -73,7 +72,7 @@ pub(crate) fn get_screen_info(hmonitor: HMONITOR) -> anyhow::Result<ScreenInfo> 
     }
     let device_name = HSTRING::from_wide(&monitor_info.szDevice);
     let mut display_device = DISPLAY_DEVICEW {
-        cb: size_of::<DISPLAY_DEVICEW>() as _,
+        cb: size_of::<DISPLAY_DEVICEW>().try_into()?,
         ..Default::default()
     };
     if !unsafe { EnumDisplayDevicesW(&device_name, 0, &raw mut display_device, 0).as_bool() } {
@@ -83,7 +82,7 @@ pub(crate) fn get_screen_info(hmonitor: HMONITOR) -> anyhow::Result<ScreenInfo> 
         anyhow::bail!("display device is not attached to the desktop");
     }
     let mut device_mode = DEVMODEW {
-        dmSize: size_of::<DEVMODEW>() as u16,
+        dmSize: size_of::<DEVMODEW>().try_into()?,
         dmDriverExtra: 0,
         ..Default::default()
     };

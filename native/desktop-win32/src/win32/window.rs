@@ -74,12 +74,11 @@ pub struct Window {
 }
 
 impl Window {
-    #[allow(clippy::cast_possible_truncation)]
     pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor: Compositor) -> WinResult<Self> {
         static WNDCLASS_INIT: OnceLock<u16> = OnceLock::new();
         if WNDCLASS_INIT.get().is_none() {
             let wndclass = WNDCLASSEXW {
-                cbSize: size_of::<WNDCLASSEXW>() as _,
+                cbSize: size_of::<WNDCLASSEXW>().try_into()?,
                 hInstance: crate::get_dll_instance(),
                 lpszClassName: WNDCLASS_NAME,
                 lpfnWndProc: Some(wndproc),
@@ -162,7 +161,6 @@ impl Window {
         Ok(LogicalSize::from_physical(rect.right, rect.bottom, self.get_scale()))
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     pub fn get_rect(&self) -> anyhow::Result<LogicalRect> {
         let mut rect = RECT::default();
         unsafe {
@@ -170,7 +168,7 @@ impl Window {
                 self.hwnd(),
                 DWMWA_EXTENDED_FRAME_BOUNDS,
                 (&raw mut rect).cast(),
-                size_of::<RECT>() as _,
+                size_of::<RECT>().try_into()?,
             )?;
         };
         let scale = self.get_scale();
@@ -211,7 +209,6 @@ impl Window {
         self.style.borrow().is_resizable
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn extend_content_into_titlebar(&self) -> WinResult<()> {
         if utils::is_windows_11_build_22000_or_higher() {
             let colorref = COLORREF(DWMWA_COLOR_NONE);
@@ -221,7 +218,7 @@ impl Window {
                     self.hwnd(),
                     DWMWA_CAPTION_COLOR,
                     (&raw const colorref).cast(),
-                    size_of::<COLORREF>() as _,
+                    size_of::<COLORREF>().try_into()?,
                 )?;
             }
         }
@@ -234,7 +231,6 @@ impl Window {
         unsafe { DwmExtendFrameIntoClientArea(self.hwnd(), &raw const margins) }
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn apply_system_backdrop(&self) -> WinResult<()> {
         if utils::is_windows_11_build_22621_or_higher() {
             let backdrop: DWM_SYSTEMBACKDROP_TYPE = self.style.borrow().system_backdrop_type.to_system();
@@ -243,7 +239,7 @@ impl Window {
                     self.hwnd(),
                     DWMWA_SYSTEMBACKDROP_TYPE,
                     (&raw const backdrop).cast(),
-                    size_of::<DWM_SYSTEMBACKDROP_TYPE>() as _,
+                    size_of::<DWM_SYSTEMBACKDROP_TYPE>().try_into()?,
                 )?;
             }
         }
@@ -278,7 +274,6 @@ impl Window {
         Ok(())
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     pub fn set_immersive_dark_mode(&self, enabled: bool) -> WinResult<()> {
         if utils::is_windows_11_build_22000_or_higher() {
             let enablement = if enabled {
@@ -291,7 +286,7 @@ impl Window {
                     self.hwnd(),
                     DWMWA_USE_IMMERSIVE_DARK_MODE,
                     (&raw const enablement).cast(),
-                    size_of::<windows::core::BOOL>() as _,
+                    size_of::<windows::core::BOOL>().try_into()?,
                 )?;
             }
         }
