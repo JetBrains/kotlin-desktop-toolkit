@@ -95,8 +95,8 @@ class KeyboardTest : KDTApplicationTestBase() {
                 }
                 EventHandlerResult.Continue
             }
-//            assert(ui { Application.chooseInputSource("com.apple.keylayout.ABC") }) { "Failed to choose ABC keyboard layout" }
-//            assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+            assert(ui { Application.chooseInputSource("com.apple.keylayout.ABC") }) { "Failed to choose ABC keyboard layout" }
+            assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
             println("KeyboardTest INIT FINISHED")
         }
 
