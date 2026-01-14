@@ -9,13 +9,11 @@ import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
-@Ignore
 class RobotTest : KDTApplicationTestBase() {
 
     companion object {
@@ -144,6 +142,23 @@ class RobotTest : KDTApplicationTestBase() {
     }
 
     @Test
+    fun `check that all required input sources are installed`() {
+        val inputSources = ui { Application.listInputSources() }
+        assertContains(inputSources, "com.apple.keylayout.ABC")
+        assertContains(inputSources, "com.apple.keylayout.Russian")
+        assertContains(inputSources, "com.apple.keylayout.Swedish-Pro")
+        assertContains(inputSources, "com.apple.keylayout.USInternational-PC")
+        assertContains(inputSources, "com.apple.keylayout.German")
+        assertContains(inputSources, "com.apple.keylayout.Serbian-Latin")
+        assertContains(inputSources, "com.apple.keylayout.Serbian")
+        assertContains(inputSources, "com.apple.keylayout.Dvorak")
+        assertContains(inputSources, "com.apple.keylayout.DVORAK-QWERTYCMD")
+        assertContains(inputSources, "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese")
+        assertContains(inputSources, "com.apple.inputmethod.TCIM.Pinyin")
+        assertContains(inputSources, "com.apple.inputmethod.Korean.2SetKorean")
+    }
+
+    @Test
     fun `current input source is in the list of input sources`() {
         val currentLayout = ui { Application.currentKeyboardLayout() }
         val inputSources = ui { Application.listInputSources() }
@@ -190,6 +205,4 @@ class RobotTest : KDTApplicationTestBase() {
             awaitEventOfType<Event.KeyDown> { it.typedCharacters == "ö" }
         }
     }
-
-    // todo test CJK
 }

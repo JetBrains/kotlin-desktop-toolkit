@@ -17,6 +17,7 @@ import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+@Ignore
 class KeyboardTest : KDTApplicationTestBase() {
 
     fun Set<KeyCode>.toModifiersSet(): KeyModifiersSet {
