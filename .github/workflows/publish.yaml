@@ -47,6 +47,10 @@ jobs:
           sudo apt install libwayland-dev libxkbcommon-dev
         shell: bash
 
+      - name: Install Keyboard Layouts
+        if: ${{ startsWith(matrix.targets.os, 'macos') }}
+        run: ./scripts/macos_install_input_sources.sh
+
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:

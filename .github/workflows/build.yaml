@@ -34,6 +34,10 @@ jobs:
           sudo apt update
           sudo apt install libwayland-dev libxkbcommon-dev
 
+      - name: Install Keyboard Layouts
+        if: ${{ startsWith(matrix.targets.os, 'macos') }}
+        run: ./scripts/macos_install_input_sources.sh
+
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -49,8 +53,6 @@ jobs:
           distribution: 'temurin'
           java-version: 21
 
-      - name: Install Keyboard Layouts
-        run: ./scripts/install_input_sources.sh
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 #      - name: Lint with Gradle
