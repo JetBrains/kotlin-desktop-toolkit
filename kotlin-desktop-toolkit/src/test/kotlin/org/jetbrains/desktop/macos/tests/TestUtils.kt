@@ -44,6 +44,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
 
         fun <T> ui(body: () -> T): T = GrandCentralDispatch.dispatchOnMainSync(highPriority = false, body)
 
+//        val eventQueue = LinkedBlockingQueue<Event>()
         val eventQueue = ArrayBlockingQueue<Event>(1000, true)
 
         fun awaitEvent(predicate: (Event) -> Boolean): Event {
@@ -71,7 +72,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
                 GrandCentralDispatch.startOnMainThread {
                     Application.init()
                     Application.runEventLoop { event ->
-                        eventQueue.put(event)
+                        assert(eventQueue.offer(event), { "Event queue overflow" })
                         eventHandler?.invoke(event) ?: EventHandlerResult.Continue
                     }
                     GrandCentralDispatch.close()
