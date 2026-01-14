@@ -21,18 +21,16 @@ pub struct PhysicalKeyStatus {
 }
 
 impl PhysicalKeyStatus {
-    #[allow(clippy::cast_possible_truncation)]
-    #[allow(clippy::cast_sign_loss)]
     #[must_use]
     pub const fn parse(lparam: LPARAM) -> Self {
-        let key_flags = HIWORD!(lparam.0);
+        let key_flags = HIWORD!(lparam.0) as u32;
         let repeat_count = LOWORD!(lparam.0) as u32;
 
         let scan_code = LOBYTE!(key_flags) as u32;
-        let is_extended_key = (key_flags as u32 & KF_EXTENDED) == KF_EXTENDED;
-        let is_menu_key_down = (key_flags as u32 & KF_ALTDOWN) == KF_ALTDOWN;
-        let was_key_down = (key_flags as u32 & KF_REPEAT) == KF_REPEAT;
-        let is_key_released = (key_flags as u32 & KF_UP) == KF_UP;
+        let is_extended_key = (key_flags & KF_EXTENDED) == KF_EXTENDED;
+        let is_menu_key_down = (key_flags & KF_ALTDOWN) == KF_ALTDOWN;
+        let was_key_down = (key_flags & KF_REPEAT) == KF_REPEAT;
+        let is_key_released = (key_flags & KF_UP) == KF_UP;
 
         Self {
             scan_code,

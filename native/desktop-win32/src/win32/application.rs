@@ -74,12 +74,11 @@ impl Application {
     }
 }
 
-#[allow(clippy::cast_possible_truncation)]
 #[inline]
 fn create_dispatcher_queue() -> WinResult<DispatcherQueueController> {
     let dispatcher_queue_controller = unsafe {
         CreateDispatcherQueueController(DispatcherQueueOptions {
-            dwSize: size_of::<DispatcherQueueOptions>() as _,
+            dwSize: size_of::<DispatcherQueueOptions>().try_into()?,
             threadType: DQTYPE_THREAD_CURRENT,
             apartmentType: DQTAT_COM_NONE,
         })?

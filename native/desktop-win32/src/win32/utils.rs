@@ -1,37 +1,61 @@
 macro_rules! LOWORD {
-    ($arg:expr) => {
-        (($arg as usize & 0xffff) as u16)
-    };
+    ($arg:expr) => {{
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        {
+            ($arg as usize & 0xffff) as u16
+        }
+    }};
 }
 
 macro_rules! HIWORD {
-    ($arg:expr) => {
-        ((($arg as usize >> 16) & 0xffff) as u16)
-    };
+    ($arg:expr) => {{
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        {
+            (($arg as usize >> 16) & 0xffff) as u16
+        }
+    }};
 }
 
 macro_rules! LOBYTE {
-    ($arg:expr) => {
-        (($arg as usize & 0xff) as u8)
-    };
+    ($arg:expr) => {{
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        {
+            ($arg as usize & 0xff) as u8
+        }
+    }};
 }
 
 macro_rules! GET_X_LPARAM {
-    ($arg:expr) => {
-        ((($arg as usize & 0xffff) as i16) as i32)
-    };
+    ($arg:expr) => {{
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        {
+            i32::from((($arg as usize & 0xffff) as u16) as i16)
+        }
+    }};
 }
 
 macro_rules! GET_Y_LPARAM {
-    ($arg:expr) => {
-        (((($arg as usize >> 16) & 0xffff) as i16) as i32)
-    };
+    ($arg:expr) => {{
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        {
+            i32::from(((($arg as usize >> 16) & 0xffff) as u16) as i16)
+        }
+    }};
 }
 
 macro_rules! GET_WHEEL_DELTA_WPARAM {
-    ($arg:ident) => {
-        ((((($arg.0) as usize >> 16) & 0xffff) as i16) as i32)
-    };
+    ($arg:ident) => {{
+        #[allow(clippy::cast_possible_truncation)]
+        #[allow(clippy::cast_sign_loss)]
+        {
+            i32::from((((($arg.0) as usize >> 16) & 0xffff) as u16) as i16)
+        }
+    }};
 }
 
 pub(crate) use {GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOBYTE, LOWORD};

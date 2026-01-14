@@ -167,8 +167,6 @@ fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
     handled
 }
 
-#[allow(clippy::cast_lossless)]
-#[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_precision_loss)]
 fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let dpi = HIWORD!(wparam.0);
@@ -177,7 +175,7 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         LOWORD!(wparam.0),
         "The DPI values of the X-axis and the Y-axis should be identical for Windows apps."
     );
-    let scale = (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
+    let scale = f32::from(dpi) / (USER_DEFAULT_SCREEN_DPI as f32);
     let rect = unsafe { *(lparam.0 as *const RECT) };
     let event = WindowScaleChangedEvent {
         origin: PhysicalPoint::new(rect.left, rect.top),
@@ -216,8 +214,6 @@ fn on_getminmaxinfo(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     Some(LRESULT(0))
 }
 
-#[allow(clippy::cast_possible_truncation)]
-#[allow(clippy::cast_sign_loss)]
 fn on_setcursor(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     let hit_test = LOWORD!(lparam.0);
     if u32::from(hit_test) == HTCLIENT {
@@ -300,9 +296,6 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     Some(result)
 }
 
-#[allow(clippy::cast_lossless)]
-#[allow(clippy::cast_possible_truncation)]
-#[allow(clippy::cast_sign_loss)]
 fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     if !window.has_custom_title_bar() || !window.is_resizable() {
         return None;
@@ -355,17 +348,15 @@ fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LR
     }
 }
 
-#[allow(clippy::cast_lossless)]
-#[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_sign_loss)]
 fn on_keydown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let vk_code = LOWORD!(wparam.0);
-    let timestamp = unsafe { GetMessageTime() };
+    let timestamp = unsafe { GetMessageTime() } as u32;
     let event = KeyEvent {
         key_code: VirtualKey(vk_code),
         key_status: PhysicalKeyStatus::parse(lparam),
         is_system_key: matches!(msg, WM_SYSKEYDOWN),
-        timestamp: Timestamp(timestamp as _),
+        timestamp: Timestamp(u64::from(timestamp)),
     };
     let result = event_loop.handle_event(window, Event::KeyDown(event));
     if result.is_none() {
@@ -375,7 +366,7 @@ fn on_keydown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM,
             message: msg,
             wParam: wparam,
             lParam: lparam,
-            time: timestamp as _,
+            time: timestamp,
             pt: POINT {
                 x: GET_X_LPARAM!(pos),
                 y: GET_Y_LPARAM!(pos),
@@ -386,7 +377,6 @@ fn on_keydown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM,
     result
 }
 
-#[allow(clippy::cast_possible_truncation)]
 fn on_keyup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let vk_code = LOWORD!(wparam.0);
     let event = KeyEvent {
@@ -398,7 +388,6 @@ fn on_keyup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, l
     event_loop.handle_event(window, Event::KeyUp(event))
 }
 
-#[allow(clippy::cast_possible_truncation)]
 fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let char = LOWORD!(wparam.0);
     let characters = match copy_from_wide_string(&[char]) {
@@ -418,8 +407,6 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
     event_loop.handle_event(window, event.into())
 }
 
-#[allow(clippy::cast_possible_truncation)]
-#[allow(clippy::double_parens)]
 fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
     let is_non_client = matches!(msg, WM_NCPOINTERUPDATE);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
@@ -508,8 +495,6 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
     if is_non_client { None } else { result }
 }
 
-#[allow(clippy::cast_lossless)]
-#[allow(clippy::cast_possible_truncation)]
 fn on_pointerwheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
     let event_args = ScrollWheelEvent {
