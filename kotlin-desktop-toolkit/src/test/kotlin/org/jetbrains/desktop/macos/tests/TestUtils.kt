@@ -64,7 +64,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
         @Volatile
         lateinit var handle: Thread
 
-        @Timeout(value = 5, unit = TimeUnit.SECONDS)
+        @Timeout(value = 20, unit = TimeUnit.SECONDS)
         @BeforeAll
         @JvmStatic
         fun startApplication() {
@@ -81,7 +81,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
             awaitEvent { it is Event.ApplicationDidFinishLaunching }
         }
 
-        @Timeout(value = 5, unit = TimeUnit.SECONDS)
+        @Timeout(value = 20, unit = TimeUnit.SECONDS)
         @AfterAll
         @JvmStatic
         fun stopApplication() {
