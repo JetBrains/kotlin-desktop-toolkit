@@ -83,7 +83,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         fun createWindow() {
             robot = ui { Robot() }
             window = ui {
-                Window.create(origin = LogicalPoint(100.0, 200.0), title = "Main Window")
+                Window.create(origin = LogicalPoint(100.0, 200.0), title = "Keyboard Test Window")
             }
             ui {
                 window.makeKeyAndOrderFront()

@@ -23,23 +23,27 @@ class RobotTest : KDTApplicationTestBase() {
         @BeforeAll
         @JvmStatic
         fun init() {
+            println("RobotTest INIT STARTED")
             robot = ui { Robot() }
             window = ui {
-                Window.create(origin = LogicalPoint(100.0, 200.0), title = "Main Window")
+                Window.create(origin = LogicalPoint(100.0, 200.0), title = "Robot Test Window")
             }
             ui {
                 window.makeKeyAndOrderFront()
             }
             awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
+            println("RobotTest INIT FINISHED")
         }
 
         @AfterAll
         @JvmStatic
         fun destroy() {
+            println("RobotTest DESTROY STARTED")
             ui { robot.close() }
             ui {
                 window.close()
             }
+            println("RobotTest DESTROY FINISHED")
         }
     }
 
