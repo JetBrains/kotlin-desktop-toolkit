@@ -3,7 +3,10 @@ package org.jetbrains.desktop.macos.tests
 import org.jetbrains.desktop.macos.Screen
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 
+@EnabledOnOs(OS.MAC)
 class ScreenTests : KDTApplicationTestBase() {
     @Test
     fun `allScreens returns at least one screen with valid uuid`() {
