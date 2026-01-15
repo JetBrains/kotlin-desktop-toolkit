@@ -24,6 +24,14 @@ pub extern "C" fn cursor_pop_hide() {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn cursor_set_hidden_until_mouse_moves(flag: bool) {
+    ffi_boundary("cursor_set_hidden_until_mouse_moves", || {
+        NSCursor::setHiddenUntilMouseMoves(flag);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn cursor_set_icon(icon: CursorIcon) {
     ffi_boundary("cursor_set_icon", || {
         CURSOR_ICONS_CACHE.with(|cache| {

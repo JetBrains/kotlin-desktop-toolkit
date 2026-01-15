@@ -116,6 +116,19 @@ public object Cursor {
         }
 
     /**
+     * Sets the cursor to be hidden until the mouse moves.
+     * The cursor will automatically reappear when the user moves the mouse.
+     * @param flag
+     * true to hide the cursor until one of the following occurs:
+     * - The mouse moves.
+     * - You invoke the method again, with [flag] set to false.
+     * Do not try to counter this method by invoking unhide. The results are undefined.
+     */
+    public fun setHiddenUntilMouseMoves(flag: Boolean) {
+        ffiDownCall { desktop_macos_h.cursor_set_hidden_until_mouse_moves(flag) }
+    }
+
+    /**
      * You can change mouse cursor with this property.
      * Though it will have an effect only for the time when cursor is in the same window.
      * Basically cursor might be changed by OS at any moment when it leaves or enters any window.

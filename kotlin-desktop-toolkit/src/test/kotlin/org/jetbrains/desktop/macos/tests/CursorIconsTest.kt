@@ -69,4 +69,16 @@ class CursorIconsTest : KDTApplicationTestBase() {
         }
         assertEquals(actualVisible, true)
     }
+
+    @Test
+    fun setHiddenUntilMouseMovesTest() {
+        ui {
+            Cursor.setHiddenUntilMouseMoves(true)
+        }
+        // The cursor should be hidden until the mouse moves.
+        // We can't easily verify the visual effect, but we can verify the call doesn't crash.
+        ui {
+            Cursor.setHiddenUntilMouseMoves(false)
+        }
+    }
 }
