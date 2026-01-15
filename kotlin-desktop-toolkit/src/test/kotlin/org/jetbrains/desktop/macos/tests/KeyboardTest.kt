@@ -80,6 +80,12 @@ class KeyboardTest : KDTApplicationTestBase() {
         @Timeout(value = 15, unit = TimeUnit.SECONDS)
         fun init() {
             println("KeyboardTest INIT STARTED")
+            eventHandler = { event ->
+                if (event is Event.KeyDown || event is Event.KeyUp || event is Event.ModifiersChanged) {
+                    println("Event: $event")
+                }
+                EventHandlerResult.Continue
+            }
             robot = ui { Robot() }
             window = ui {
                 Window.create(origin = LogicalPoint(100.0, 200.0), title = "Keyboard Test Window")
@@ -87,14 +93,9 @@ class KeyboardTest : KDTApplicationTestBase() {
             ui {
                 window.makeKeyAndOrderFront()
             }
+            println("KeyboardTest before Window focused")
             awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
             println("KeyboardTest Window focused")
-            eventHandler = { event ->
-                if (event is Event.KeyDown || event is Event.KeyUp || event is Event.ModifiersChanged) {
-                    println("Event: $event")
-                }
-                EventHandlerResult.Continue
-            }
             assert(ui { Application.chooseInputSource("com.apple.keylayout.ABC") }) { "Failed to choose ABC keyboard layout" }
             assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
             println("KeyboardTest INIT FINISHED")
