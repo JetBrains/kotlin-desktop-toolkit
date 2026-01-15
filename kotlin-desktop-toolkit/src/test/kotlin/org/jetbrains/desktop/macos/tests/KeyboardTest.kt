@@ -90,12 +90,15 @@ class KeyboardTest : KDTApplicationTestBase() {
                 window.makeKeyAndOrderFront()
             }
             awaitEventOfType<Event.WindowChangedOcclusionState> { it.windowId == window.windowId() && it.isVisible }
-            ui {
-                window.makeKeyAndOrderFront()
+
+            if (!window.isKey) {
+                ui {
+                    window.makeKeyAndOrderFront()
+                }
+                Logger.info { "KeyboardTest before Window focused" }
+                awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
+                Logger.info { "KeyboardTest Window focused" }
             }
-            Logger.info { "KeyboardTest before Window focused" }
-            awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
-            Logger.info { "KeyboardTest Window focused" }
             assert(ui { Application.chooseInputSource("com.apple.keylayout.ABC") }) { "Failed to choose ABC keyboard layout" }
             assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
             Logger.info { "KeyboardTest INIT FINISHED" }

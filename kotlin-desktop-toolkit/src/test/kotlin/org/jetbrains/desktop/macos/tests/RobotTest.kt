@@ -36,8 +36,13 @@ class RobotTest : KDTApplicationTestBase() {
                 window.makeKeyAndOrderFront()
             }
             awaitEventOfType<Event.WindowChangedOcclusionState> { it.windowId == window.windowId() && it.isVisible }
-            ui {
-                window.makeKeyAndOrderFront()
+            if (!window.isKey) {
+                ui {
+                    window.makeKeyAndOrderFront()
+                }
+                Logger.info { "RobotTest before Window focused" }
+                awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
+                Logger.info { "RobotTest Window focused" }
             }
 
             println("RobotTest INIT FINISHED")
