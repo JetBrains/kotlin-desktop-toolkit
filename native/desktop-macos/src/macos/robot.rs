@@ -40,7 +40,12 @@ impl Robot {
     pub(crate) fn emulate_keyboard_event(&mut self, keycode: KeyCode, key_down: bool) -> anyhow::Result<()> {
         let keycode = keycode.0;
         let event_id = self.next_event_id();
-        log::debug!("Emulate key press: {:?} {} event_id: {}", keycode, if key_down {"down"} else {"up"}, event_id);
+        log::debug!(
+            "Emulate key press: {:?} {} event_id: {}",
+            keycode,
+            if key_down { "down" } else { "up" },
+            event_id
+        );
         CGEventSource::set_user_data(Some(&self.event_source), event_id);
         let key_event = CGEvent::new_keyboard_event(Some(&self.event_source), keycode, key_down).context("Failed to create key event")?;
         CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&key_event));

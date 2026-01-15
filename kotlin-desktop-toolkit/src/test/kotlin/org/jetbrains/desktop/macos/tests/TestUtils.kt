@@ -10,7 +10,6 @@ import org.jetbrains.desktop.macos.Logger
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
-import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -27,8 +26,10 @@ open class KDTTestBase {
         @BeforeAll
         @JvmStatic
         fun loadLibrary() {
-            KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info,
-                useDebugBuild = true)
+            KotlinDesktopToolkit.init(
+                consoleLogLevel = LogLevel.Info,
+                useDebugBuild = true,
+            )
         }
     }
 }
