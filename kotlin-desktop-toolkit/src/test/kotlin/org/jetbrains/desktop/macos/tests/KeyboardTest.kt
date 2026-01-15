@@ -81,9 +81,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         fun init() {
             println("KeyboardTest INIT STARTED")
             eventHandler = { event ->
-                if (event is Event.KeyDown || event is Event.KeyUp || event is Event.ModifiersChanged) {
-                    println("Event: $event")
-                }
+                println("KeyboardTest Event: $event")
                 EventHandlerResult.Continue
             }
             robot = ui { Robot() }
