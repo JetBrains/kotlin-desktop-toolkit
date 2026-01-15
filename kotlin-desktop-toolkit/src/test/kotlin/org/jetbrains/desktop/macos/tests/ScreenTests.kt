@@ -15,7 +15,7 @@ class ScreenTests : KDTApplicationTestBase() {
             // UUID format: XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
             assertTrue(
                 screen.uuid.matches(Regex("[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}")),
-                "Screen UUID should match UUID format, got: ${screen.uuid}"
+                "Screen UUID should match UUID format, got: ${screen.uuid}",
             )
         }
     }

@@ -121,16 +121,27 @@ pub(crate) trait NSScreenExts {
             return None;
         }
         // SAFETY: We checked for null above, and the pointer is a valid CFUUID
-        let uuid: &CFUUID = unsafe { &*(uuid_ptr as *const CFUUID) };
+        let uuid: &CFUUID = unsafe { &*uuid_ptr.cast::<CFUUID>() };
         let bytes = uuid.uuid_bytes();
         // Format as standard UUID string
         Some(format!(
             "{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
-            bytes.byte0, bytes.byte1, bytes.byte2, bytes.byte3,
-            bytes.byte4, bytes.byte5,
-            bytes.byte6, bytes.byte7,
-            bytes.byte8, bytes.byte9,
-            bytes.byte10, bytes.byte11, bytes.byte12, bytes.byte13, bytes.byte14, bytes.byte15
+            bytes.byte0,
+            bytes.byte1,
+            bytes.byte2,
+            bytes.byte3,
+            bytes.byte4,
+            bytes.byte5,
+            bytes.byte6,
+            bytes.byte7,
+            bytes.byte8,
+            bytes.byte9,
+            bytes.byte10,
+            bytes.byte11,
+            bytes.byte12,
+            bytes.byte13,
+            bytes.byte14,
+            bytes.byte15
         ))
     }
 }
