@@ -88,6 +88,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 window.makeKeyAndOrderFront()
             }
             awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
+            println("KeyboardTest Window focused")
             eventHandler = { event ->
                 if (event is Event.KeyDown || event is Event.KeyUp || event is Event.ModifiersChanged) {
                     println("Event: $event")
