@@ -1,4 +1,4 @@
-use desktop_common::ffi_utils::RustAllocatedStrPtr;
+use desktop_common::ffi_utils::{BorrowedOpaquePtr, RustAllocatedStrPtr};
 
 use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
@@ -12,9 +12,9 @@ use windows::Win32::{
         WindowsAndMessaging::{
             DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
             HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED,
-            SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR,
-            WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS,
-            WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN,
+            SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE,
+            WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE,
+            WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN,
             WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT,
             WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
@@ -79,9 +79,7 @@ impl EventLoop {
 
             WM_GETMINMAXINFO => on_getminmaxinfo(window, lparam),
 
-            WM_KEYDOWN | WM_SYSKEYDOWN => on_keydown(self, window, msg, wparam, lparam),
-
-            WM_KEYUP | WM_SYSKEYUP => on_keyup(self, window, msg, wparam, lparam),
+            WM_KEYDOWN | WM_SYSKEYDOWN | WM_KEYUP | WM_SYSKEYUP => on_keyevent(self, window, msg, wparam, lparam),
 
             WM_SETFOCUS => self.handle_event(window, Event::WindowKeyboardEnter),
 
@@ -125,12 +123,6 @@ impl EventLoop {
             None => unsafe { DefWindowProcW(window.hwnd(), msg, wparam, lparam) },
         }
     }
-}
-
-#[allow(clippy::cast_sign_loss)]
-#[inline]
-fn get_message_timestamp() -> Timestamp {
-    Timestamp(unsafe { GetMessageTime() } as u64 * 1000)
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -349,58 +341,41 @@ fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LR
 }
 
 #[allow(clippy::cast_sign_loss)]
-fn on_keydown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let vk_code = LOWORD!(wparam.0);
+fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    let virtual_key = VirtualKey::from(wparam);
     let timestamp = unsafe { GetMessageTime() } as u32;
-    let event = KeyEvent {
-        key_code: VirtualKey(vk_code),
-        key_status: PhysicalKeyStatus::parse(lparam),
-        is_system_key: matches!(msg, WM_SYSKEYDOWN),
-        timestamp: Timestamp(u64::from(timestamp)),
+    let pos = unsafe { GetMessagePos() };
+    let message = MSG {
+        hwnd: window.hwnd(),
+        message: msg,
+        wParam: wparam,
+        lParam: lparam,
+        time: timestamp,
+        pt: POINT {
+            x: GET_X_LPARAM!(pos),
+            y: GET_Y_LPARAM!(pos),
+        },
     };
-    let result = event_loop.handle_event(window, Event::KeyDown(event));
-    if result.is_none() {
-        let pos = unsafe { GetMessagePos() };
-        let msg = MSG {
-            hwnd: window.hwnd(),
-            message: msg,
-            wParam: wparam,
-            lParam: lparam,
-            time: timestamp,
-            pt: POINT {
-                x: GET_X_LPARAM!(pos),
-                y: GET_Y_LPARAM!(pos),
-            },
-        };
-        let _ = unsafe { TranslateMessage(&raw const msg) };
-    }
-    result
-}
-
-fn on_keyup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let vk_code = LOWORD!(wparam.0);
-    let event = KeyEvent {
-        key_code: VirtualKey(vk_code),
-        key_status: PhysicalKeyStatus::parse(lparam),
-        is_system_key: matches!(msg, WM_SYSKEYUP),
-        timestamp: get_message_timestamp(),
+    let key_event = KeyEvent {
+        is_system_key: matches!(msg, WM_SYSKEYDOWN | WM_SYSKEYUP),
+        key_status: PhysicalKeyStatus::from(lparam),
+        virtual_key,
+        timestamp: Timestamp(u64::from(timestamp) * 1000),
+        original_msg: BorrowedOpaquePtr::new(Some(&message)),
     };
-    event_loop.handle_event(window, Event::KeyUp(event))
+    let event = match msg {
+        WM_KEYDOWN | WM_SYSKEYDOWN => Event::KeyDown(key_event),
+        WM_KEYUP | WM_SYSKEYUP => Event::KeyUp(key_event),
+        _ => unreachable!("unknown key event"),
+    };
+    event_loop.handle_event(window, event)
 }
 
 fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    let char = LOWORD!(wparam.0);
-    let characters = match copy_from_wide_string(&[char]) {
-        Ok(chars) => RustAllocatedStrPtr::from_c_string(chars).to_auto_drop(),
-        Err(err) => {
-            log::error!("Failed to get a C-string from the char {char}: {err:?}");
-            return Some(LRESULT(1));
-        }
-    };
+    let character = LOWORD!(wparam.0);
     let event = CharacterReceivedEvent {
-        key_code: char,
-        characters,
-        key_status: PhysicalKeyStatus::parse(lparam),
+        character,
+        key_status: PhysicalKeyStatus::from(lparam),
         is_dead_char: matches!(msg, WM_DEADCHAR | WM_SYSDEADCHAR),
         is_system_key: matches!(msg, WM_SYSCHAR | WM_SYSDEADCHAR),
     };

@@ -58,7 +58,7 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
             }
 
             is Event.KeyDown -> {
-                when (event.keyCode) {
+                when (event.virtualKey) {
                     VirtualKey.S -> {
                         val screens = Screen.allScreens()
                         for (screen in screens) {
@@ -73,7 +73,16 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                     VirtualKey.C -> {
                         window.setCursor(CursorIcon.Hand)
                     }
+                    else -> {
+                        val translated = event.translate()
+                        Logger.debug { "WM_KEYDOWN translated: $translated" }
+                    }
                 }
+                EventHandlerResult.Continue
+            }
+
+            is Event.CharacterReceived -> {
+                Logger.debug { "CharacterReceived event, character: ${event.character}" }
                 EventHandlerResult.Continue
             }
 
