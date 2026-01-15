@@ -4,6 +4,7 @@ import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.KeyCode
+import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.Window
@@ -25,13 +26,20 @@ class RobotTest : KDTApplicationTestBase() {
         fun init() {
             println("RobotTest INIT STARTED")
             robot = ui { Robot() }
+
             window = ui {
-                Window.create(origin = LogicalPoint(100.0, 200.0), title = "Robot Test Window")
+                val window = Window.create(origin = LogicalPoint(100.0, 200.0), title = "Robot Test Window")
+                Logger.info { "RobotTest create window with ID: ${window.windowId()}" }
+                window
             }
             ui {
                 window.makeKeyAndOrderFront()
             }
-            awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
+            awaitEventOfType<Event.WindowChangedOcclusionState> { it.windowId == window.windowId() && it.isVisible }
+            ui {
+                window.makeKeyAndOrderFront()
+            }
+
             println("RobotTest INIT FINISHED")
         }
 

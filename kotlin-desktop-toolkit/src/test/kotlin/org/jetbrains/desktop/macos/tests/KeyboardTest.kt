@@ -89,6 +89,10 @@ class KeyboardTest : KDTApplicationTestBase() {
             ui {
                 window.makeKeyAndOrderFront()
             }
+            awaitEventOfType<Event.WindowChangedOcclusionState> { it.windowId == window.windowId() && it.isVisible }
+            ui {
+                window.makeKeyAndOrderFront()
+            }
             Logger.info { "KeyboardTest before Window focused" }
             awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
             Logger.info { "KeyboardTest Window focused" }
