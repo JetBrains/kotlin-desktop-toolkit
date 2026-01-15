@@ -66,6 +66,8 @@ public data class Screen(
     val screenId: ScreenId,
     val isPrimary: Boolean,
     val name: String,
+    /** Persistent UUID that survives reboots and reconnections */
+    val uuid: String,
     val origin: LogicalPoint,
     val size: LogicalSize,
     val scale: Double,
@@ -77,6 +79,7 @@ public data class Screen(
                 screenId = NativeScreenInfo.screen_id(s),
                 isPrimary = NativeScreenInfo.is_primary(s),
                 name = NativeScreenInfo.name(s).getUtf8String(0),
+                uuid = NativeScreenInfo.uuid(s).getUtf8String(0),
                 origin = LogicalPoint.fromNative(NativeScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(NativeScreenInfo.size(s)),
                 scale = NativeScreenInfo.scale(s),
