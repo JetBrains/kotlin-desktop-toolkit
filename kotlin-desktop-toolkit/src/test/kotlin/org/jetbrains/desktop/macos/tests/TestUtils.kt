@@ -6,10 +6,12 @@ import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.LogLevel
+import org.jetbrains.desktop.macos.Logger
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
@@ -25,7 +27,7 @@ open class KDTTestBase {
         @BeforeAll
         @JvmStatic
         fun loadLibrary() {
-            KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Error)
+            KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
         }
     }
 }
@@ -44,8 +46,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
 
         fun <T> ui(body: () -> T): T = GrandCentralDispatch.dispatchOnMainSync(highPriority = false, body)
 
-//        val eventQueue = LinkedBlockingQueue<Event>()
-        val eventQueue = ArrayBlockingQueue<Event>(1000, true)
+        val eventQueue = LinkedBlockingQueue<Event>()
 
         fun awaitEvent(predicate: (Event) -> Boolean): Event {
             while (true) {
@@ -72,6 +73,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
                 GrandCentralDispatch.startOnMainThread {
                     Application.init()
                     Application.runEventLoop { event ->
+                        Logger.info { "Event: $event" }
                         assert(eventQueue.offer(event), { "Event queue overflow" })
                         eventHandler?.invoke(event) ?: EventHandlerResult.Continue
                     }
