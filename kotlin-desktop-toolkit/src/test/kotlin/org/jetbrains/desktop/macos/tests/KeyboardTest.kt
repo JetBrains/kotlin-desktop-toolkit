@@ -2,9 +2,9 @@ package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
-import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.KeyModifiersSet
+import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.Window
@@ -79,37 +79,35 @@ class KeyboardTest : KDTApplicationTestBase() {
         @BeforeAll
         @Timeout(value = 15, unit = TimeUnit.SECONDS)
         fun init() {
-            println("KeyboardTest INIT STARTED")
-            eventHandler = { event ->
-                println("KeyboardTest Event: $event")
-                EventHandlerResult.Continue
-            }
+            Logger.info { "KeyboardTest INIT STARTED" }
             robot = ui { Robot() }
             window = ui {
-                Window.create(origin = LogicalPoint(100.0, 200.0), title = "Keyboard Test Window")
+                val window = Window.create(origin = LogicalPoint(100.0, 200.0), title = "Keyboard Test Window")
+                Logger.info { "KeyboardTest create window with ID: ${window.windowId()}" }
+                window
             }
             ui {
                 window.makeKeyAndOrderFront()
             }
-            println("KeyboardTest before Window focused")
+            Logger.info { "KeyboardTest before Window focused" }
             awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
-            println("KeyboardTest Window focused")
+            Logger.info { "KeyboardTest Window focused" }
             assert(ui { Application.chooseInputSource("com.apple.keylayout.ABC") }) { "Failed to choose ABC keyboard layout" }
             assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
-            println("KeyboardTest INIT FINISHED")
+            Logger.info { "KeyboardTest INIT FINISHED" }
         }
 
         @JvmStatic
         @AfterAll
         @Timeout(value = 15, unit = TimeUnit.SECONDS)
         fun destroy() {
-            println("KeyboardTest DESTROY STARTED")
+            Logger.info { "KeyboardTest DESTROY STARTED" }
             ui {
                 window.close()
             }
             eventHandler = null
             ui { robot.close() }
-            println("KeyboardTest DESTROY FINISHED")
+            Logger.info { "KeyboardTest DESTROY FINISHED" }
         }
     }
 

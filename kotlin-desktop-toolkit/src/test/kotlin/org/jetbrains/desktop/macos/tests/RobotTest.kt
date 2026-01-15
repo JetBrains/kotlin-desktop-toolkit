@@ -201,7 +201,7 @@ class RobotTest : KDTApplicationTestBase() {
         val layoutId = "com.apple.keylayout.Swedish-Pro"
         assert(ui { Application.chooseInputSource(layoutId) })
         withEventHandler(handler = {
-            println("Event: $it")
+//            println("Event: $it")
             EventHandlerResult.Continue
         }) {
             ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, true) }

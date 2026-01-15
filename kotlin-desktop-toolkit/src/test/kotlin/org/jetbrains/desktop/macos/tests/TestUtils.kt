@@ -27,7 +27,8 @@ open class KDTTestBase {
         @BeforeAll
         @JvmStatic
         fun loadLibrary() {
-            KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info)
+            KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Info,
+                useDebugBuild = true)
         }
     }
 }

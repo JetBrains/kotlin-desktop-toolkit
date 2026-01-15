@@ -40,6 +40,7 @@ impl Robot {
     pub(crate) fn emulate_keyboard_event(&mut self, keycode: KeyCode, key_down: bool) -> anyhow::Result<()> {
         let keycode = keycode.0;
         let event_id = self.next_event_id();
+        log::debug!("Emulate key press: {:?} {} event_id: {}", keycode, if key_down {"down"} else {"up"}, event_id);
         CGEventSource::set_user_data(Some(&self.event_source), event_id);
         let key_event = CGEvent::new_keyboard_event(Some(&self.event_source), keycode, key_down).context("Failed to create key event")?;
         CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&key_event));
@@ -82,12 +83,13 @@ impl EventTapThread {
     #[unsafe(no_mangle)]
     unsafe extern "C-unwind" fn event_tap_callback(
         _proxy: CGEventTapProxy,
-        _event_type: CGEventType,
+        event_type: CGEventType,
         event: NonNull<CGEvent>,
         user_info: *mut c_void,
     ) -> *mut CGEvent {
         let event_ref = unsafe { event.as_ref() };
         let user_data = CGEvent::integer_value_field(Some(event_ref), CGEventField::EventSourceUserData);
+        log::debug!("Got event of type: {event_type:?} with id: {user_data}");
         let events_data_snd_ptr = user_info.cast::<SyncSender<i64>>();
         let event_data_snd = unsafe { events_data_snd_ptr.as_ref() }.unwrap_or_else(|| panic!("user_info: {user_info:?}"));
         event_data_snd
