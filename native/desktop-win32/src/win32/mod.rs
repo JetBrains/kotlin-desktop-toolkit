@@ -6,6 +6,7 @@ pub mod cursor;
 pub mod cursor_api;
 pub mod event_loop;
 pub mod events;
+pub mod events_api;
 pub mod geometry;
 pub mod keyboard;
 pub mod keyboard_api;

@@ -1,4 +1,4 @@
-use desktop_common::ffi_utils::AutoDropStrPtr;
+use desktop_common::ffi_utils::{AutoDropStrPtr, BorrowedOpaquePtr};
 
 use super::{
     appearance::Appearance,
@@ -11,9 +11,12 @@ use super::{
 #[repr(C)]
 #[derive(Debug)]
 #[allow(dead_code)]
-pub enum Event {
+pub enum Event<'a> {
     CharacterReceived(CharacterReceivedEvent),
-    KeyDown(KeyEvent),
+    KeyDown {
+        event: KeyEvent,
+        original_msg: BorrowedOpaquePtr<'a>,
+    },
     KeyUp(KeyEvent),
     NCCalcSize(NCCalcSizeEvent),
     NCHitTest(NCHitTestEvent),
@@ -47,14 +50,13 @@ pub struct Timestamp(pub u64);
 #[repr(C)]
 #[derive(Debug)]
 pub struct CharacterReceivedEvent {
-    pub key_code: u16,
-    pub characters: AutoDropStrPtr,
+    pub character: u16,
     pub key_status: PhysicalKeyStatus,
     pub is_dead_char: bool,
     pub is_system_key: bool,
 }
 
-impl From<CharacterReceivedEvent> for Event {
+impl From<CharacterReceivedEvent> for Event<'_> {
     fn from(value: CharacterReceivedEvent) -> Self {
         Self::CharacterReceived(value)
     }
@@ -63,9 +65,9 @@ impl From<CharacterReceivedEvent> for Event {
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyEvent {
-    pub key_code: VirtualKey,
-    pub key_status: PhysicalKeyStatus,
     pub is_system_key: bool,
+    pub key_status: PhysicalKeyStatus,
+    pub virtual_key: VirtualKey,
     pub timestamp: Timestamp,
 }
 
@@ -77,7 +79,7 @@ pub struct NCCalcSizeEvent {
     pub scale: f32,
 }
 
-impl From<NCCalcSizeEvent> for Event {
+impl From<NCCalcSizeEvent> for Event<'_> {
     fn from(value: NCCalcSizeEvent) -> Self {
         Self::NCCalcSize(value)
     }
@@ -90,7 +92,7 @@ pub struct NCHitTestEvent {
     pub mouse_y: i32,
 }
 
-impl From<NCHitTestEvent> for Event {
+impl From<NCHitTestEvent> for Event<'_> {
     fn from(value: NCHitTestEvent) -> Self {
         Self::NCHitTest(value)
     }
@@ -123,7 +125,7 @@ pub struct PointerExitedEvent {
     pub timestamp: Timestamp,
 }
 
-impl From<PointerExitedEvent> for Event {
+impl From<PointerExitedEvent> for Event<'_> {
     fn from(value: PointerExitedEvent) -> Self {
         Self::PointerExited(value)
     }
@@ -163,7 +165,7 @@ pub struct SystemAppearanceChangeEvent {
     pub new_appearance: Appearance,
 }
 
-impl From<SystemAppearanceChangeEvent> for Event {
+impl From<SystemAppearanceChangeEvent> for Event<'_> {
     fn from(value: SystemAppearanceChangeEvent) -> Self {
         Self::SystemAppearanceChange(value)
     }
@@ -176,7 +178,7 @@ pub struct WindowDrawEvent {
     pub scale: f32,
 }
 
-impl From<WindowDrawEvent> for Event {
+impl From<WindowDrawEvent> for Event<'_> {
     fn from(value: WindowDrawEvent) -> Self {
         Self::WindowDraw(value)
     }
@@ -189,7 +191,7 @@ pub struct WindowMoveEvent {
     pub scale: f32,
 }
 
-impl From<WindowMoveEvent> for Event {
+impl From<WindowMoveEvent> for Event<'_> {
     fn from(value: WindowMoveEvent) -> Self {
         Self::WindowMove(value)
     }
@@ -202,7 +204,7 @@ pub struct WindowResizeEvent {
     pub scale: f32,
 }
 
-impl From<WindowResizeEvent> for Event {
+impl From<WindowResizeEvent> for Event<'_> {
     fn from(value: WindowResizeEvent) -> Self {
         Self::WindowResize(value)
     }
@@ -216,7 +218,7 @@ pub struct WindowScaleChangedEvent {
     pub scale: f32,
 }
 
-impl From<WindowScaleChangedEvent> for Event {
+impl From<WindowScaleChangedEvent> for Event<'_> {
     fn from(value: WindowScaleChangedEvent) -> Self {
         Self::WindowScaleChanged(value)
     }
@@ -228,7 +230,7 @@ pub struct WindowTitleChangedEvent {
     pub title: AutoDropStrPtr,
 }
 
-impl From<WindowTitleChangedEvent> for Event {
+impl From<WindowTitleChangedEvent> for Event<'_> {
     fn from(value: WindowTitleChangedEvent) -> Self {
         Self::WindowTitleChanged(value)
     }

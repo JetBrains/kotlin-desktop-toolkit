@@ -2,6 +2,7 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeCharacterReceivedEvent
 import org.jetbrains.desktop.win32.generated.NativeEvent
+import org.jetbrains.desktop.win32.generated.NativeEvent_NativeKeyDown_Body
 import org.jetbrains.desktop.win32.generated.NativeKeyEvent
 import org.jetbrains.desktop.win32.generated.NativeNCCalcSizeEvent
 import org.jetbrains.desktop.win32.generated.NativeNCHitTestEvent
@@ -43,24 +44,28 @@ public sealed class Event {
     internal companion object;
 
     public data class CharacterReceived(
-        val keyCode: Char,
-        val characters: String,
+        val character: Char,
         val keyStatus: PhysicalKeyStatus,
         val isDeadChar: Boolean,
         val isSystemKey: Boolean,
     ) : Event()
 
     public data class KeyDown(
-        val keyCode: VirtualKey,
-        val keyStatus: PhysicalKeyStatus,
         val isSystemKey: Boolean,
+        val keyStatus: PhysicalKeyStatus,
+        val virtualKey: VirtualKey,
         val timestamp: Timestamp,
-    ) : Event()
+        private val originalMsg: MemorySegment,
+    ) : Event() {
+        public fun translate(): Boolean = ffiDownCall {
+            desktop_win32_h.keydown_translate_message(originalMsg)
+        }
+    }
 
     public data class KeyUp(
-        val keyCode: VirtualKey,
-        val keyStatus: PhysicalKeyStatus,
         val isSystemKey: Boolean,
+        val keyStatus: PhysicalKeyStatus,
+        val virtualKey: VirtualKey,
         val timestamp: Timestamp,
     ) : Event()
 
@@ -185,8 +190,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
 private fun characterReceived(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.character_received(s)
     return Event.CharacterReceived(
-        keyCode = NativeCharacterReceivedEvent.key_code(nativeEvent).toInt().toChar(),
-        characters = NativeCharacterReceivedEvent.characters(nativeEvent).getUtf8String(0),
+        character = NativeCharacterReceivedEvent.character(nativeEvent).toInt().toChar(),
         keyStatus = PhysicalKeyStatus.fromNative(NativeCharacterReceivedEvent.key_status(nativeEvent)),
         isDeadChar = NativeCharacterReceivedEvent.is_dead_char(nativeEvent),
         isSystemKey = NativeCharacterReceivedEvent.is_system_key(nativeEvent),
@@ -194,21 +198,23 @@ private fun characterReceived(s: MemorySegment): Event {
 }
 
 private fun keyDown(s: MemorySegment): Event {
-    val nativeEvent = NativeEvent.key_down(s)
+    val nativeKeyDown = NativeEvent.key_down(s)
+    val nativeEvent = NativeEvent_NativeKeyDown_Body.event(nativeKeyDown)
     return Event.KeyDown(
-        keyCode = VirtualKey.fromNative(NativeKeyEvent.key_code(nativeEvent)),
-        keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
         isSystemKey = NativeKeyEvent.is_system_key(nativeEvent),
+        keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
+        virtualKey = VirtualKey.fromNative(NativeKeyEvent.virtual_key(nativeEvent)),
         timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
+        originalMsg = NativeEvent_NativeKeyDown_Body.original_msg(nativeKeyDown),
     )
 }
 
 private fun keyUp(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.key_up(s)
     return Event.KeyUp(
-        keyCode = VirtualKey.fromNative(NativeKeyEvent.key_code(nativeEvent)),
-        keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
         isSystemKey = NativeKeyEvent.is_system_key(nativeEvent),
+        keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
+        virtualKey = VirtualKey.fromNative(NativeKeyEvent.virtual_key(nativeEvent)),
         timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
     )
 }
