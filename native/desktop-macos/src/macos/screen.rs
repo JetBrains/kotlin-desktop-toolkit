@@ -1,9 +1,10 @@
 use std::ffi::c_void;
+use std::ptr::NonNull;
 
 use anyhow::Context;
 use objc2::rc::Retained;
 use objc2_app_kit::NSScreen;
-use objc2_core_foundation::CFUUID;
+use objc2_core_foundation::{CFRetained, CFUUID};
 use objc2_foundation::{MainThreadMarker, NSNumber, ns_string};
 
 #[link(name = "CoreGraphics", kind = "framework")]
@@ -116,12 +117,9 @@ pub(crate) trait NSScreenExts {
     fn persistent_uuid(&self) -> Option<String> {
         let display_id = self.screen_id();
         // SAFETY: CGDisplayCreateUUIDFromDisplayID is safe to call with any display ID
-        let uuid_ptr = unsafe { CGDisplayCreateUUIDFromDisplayID(display_id) };
-        if uuid_ptr.is_null() {
-            return None;
-        }
-        // SAFETY: We checked for null above, and the pointer is a valid CFUUID
-        let uuid: &CFUUID = unsafe { &*uuid_ptr.cast::<CFUUID>() };
+        // and returns a retained CFUUID that we must release (handled by CFRetained)
+        let uuid_ptr = NonNull::new(unsafe { CGDisplayCreateUUIDFromDisplayID(display_id) }.cast_mut())?;
+        let uuid: CFRetained<CFUUID> = unsafe { CFRetained::from_raw(uuid_ptr.cast()) };
         let bytes = uuid.uuid_bytes();
         // Format as standard UUID string
         Some(format!(
