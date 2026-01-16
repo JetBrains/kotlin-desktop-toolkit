@@ -100,7 +100,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 Logger.info { "KeyboardTest Window focused" }
             }
             assert(ui { Application.chooseInputSource("com.apple.keylayout.ABC") }) { "Failed to choose ABC keyboard layout" }
-            assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+            assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
             Logger.info { "KeyboardTest INIT FINISHED" }
         }
 
@@ -121,7 +121,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersNoModifiersTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         ansiLetters.forEach { (keyCode, letter) ->
             pressOneKeyAndAwaitEvent(keyCode, typed = letter, key = letter, keyWithModifiers = letter, modifiers = emptySet())
         }
@@ -130,7 +130,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithShiftTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Shift)
         ansiLetters.forEach { (keyCode, letter) ->
             val uppercaseLetter = letter.uppercase(getDefault())
@@ -147,7 +147,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithCommandTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Command)
         ansiLetters.forEach { (keyCode, letter) ->
             pressOneKeyAndAwaitEvent(keyCode, typed = letter, key = letter, keyWithModifiers = letter, modifiers = modifiers)
@@ -157,7 +157,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithCommandShiftTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Command, KeyCode.Shift)
         for ((keyCode, letter) in ansiLetters) {
             if (keyCode == KeyCode.ANSI_Q) {
@@ -170,7 +170,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithCommandControlTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Command, KeyCode.Control)
         for ((keyCode, letter) in ansiLetters) {
             if (keyCode == KeyCode.ANSI_D) {
@@ -193,7 +193,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithControlTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Control)
         ansiLetters.forEach { (keyCode, letter) ->
             val keyWithModifiers: String = controlLayer[keyCode]!!
@@ -210,7 +210,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithControlShiftTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Control, KeyCode.Shift)
         ansiLetters.forEach { (keyCode, letter) ->
             val keyWithModifiers: String = controlLayer[keyCode]!!
@@ -227,7 +227,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Option)
 
         ansiLetters.forEach { (keyCode, letter) ->
@@ -245,7 +245,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionShiftTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Option, KeyCode.Shift)
 
         ansiLetters.forEach { (keyCode, letter) ->
@@ -263,7 +263,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionCommandTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Command, KeyCode.Option)
         for ((keyCode, letter) in ansiLetters) {
             if (keyCode == KeyCode.ANSI_D) {
@@ -293,7 +293,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionControlTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentKeyboardLayout() })
+        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Control, KeyCode.Option)
         ansiLetters.forEach { (keyCode, letter) ->
             val keyWithModifiers: String = controlLayer[keyCode]!!

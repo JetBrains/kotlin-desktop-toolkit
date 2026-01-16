@@ -141,10 +141,10 @@ class RobotTest : KDTApplicationTestBase() {
     }
 
     @Test
-    fun `keyboard layout test`() {
-        val layout = ui { Application.currentKeyboardLayout() }
-        assert(layout?.startsWith("com.apple.keylayout") == true) {
-            "$layout should start with 'com.apple.keylayout'"
+    fun `input source test`() {
+        val inputSource = ui { Application.currentInputSource() }
+        assert(inputSource?.startsWith("com.apple.keylayout") == true) {
+            "$inputSource should start with 'com.apple.keylayout'"
         }
     }
 
@@ -177,7 +177,7 @@ class RobotTest : KDTApplicationTestBase() {
 
     @Test
     fun `current input source is in the list of input sources`() {
-        val currentLayout = ui { Application.currentKeyboardLayout() }
+        val currentLayout = ui { Application.currentInputSource() }
         val inputSources = ui { Application.listInputSources() }
         assert(currentLayout != null) { "Current keyboard layout should not be null" }
         assertContains(inputSources, currentLayout, "Current keyboard layout should be in the list of input sources")
@@ -185,7 +185,7 @@ class RobotTest : KDTApplicationTestBase() {
 
     @Test
     fun `choose input source and restore`() {
-        val originalLayout = ui { Application.currentKeyboardLayout() }
+        val originalLayout = ui { Application.currentInputSource() }
         assertNotNull(originalLayout)
 
         val inputSources = ui { Application.listInputSources() }
@@ -195,14 +195,14 @@ class RobotTest : KDTApplicationTestBase() {
             val switched = ui { Application.chooseInputSource(anotherLayout) }
             assert(switched) { "Failed to switch to $anotherLayout" }
 
-            val currentAfterSwitch = ui { Application.currentKeyboardLayout() }
+            val currentAfterSwitch = ui { Application.currentInputSource() }
             assertEquals(anotherLayout, currentAfterSwitch)
 
             // Restore original layout
             val restored = ui { Application.chooseInputSource(originalLayout) }
             assert(restored) { "Failed to restore to $originalLayout" }
 
-            val currentAfterRestore = ui { Application.currentKeyboardLayout() }
+            val currentAfterRestore = ui { Application.currentInputSource() }
             assertEquals(originalLayout, currentAfterRestore)
         } else {
             println("Only one keyboard layout available, skipping switch test")

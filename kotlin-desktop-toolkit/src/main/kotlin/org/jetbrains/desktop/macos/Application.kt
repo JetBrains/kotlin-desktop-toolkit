@@ -178,9 +178,9 @@ public object Application {
         }
     }
 
-    public fun currentKeyboardLayout(): String? {
+    public fun currentInputSource(): String? {
         val layout = ffiDownCall {
-            desktop_macos_h.application_current_keyboard_layout()
+            desktop_macos_h.application_current_input_source()
         }
         if (layout == MemorySegment.NULL) return null
         return try {

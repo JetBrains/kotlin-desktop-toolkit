@@ -345,8 +345,8 @@ unsafe extern "C" {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_current_keyboard_layout() -> RustAllocatedStrPtr {
-    ffi_boundary("application_current_keyboard_layout", || {
+pub extern "C" fn application_current_input_source() -> RustAllocatedStrPtr {
+    ffi_boundary("application_current_input_source", || {
         let _mtm = MainThreadMarker::new().unwrap();
         unsafe {
             let input_source = TISCopyCurrentKeyboardLayoutInputSource();
@@ -373,7 +373,6 @@ pub extern "C" fn application_current_keyboard_layout() -> RustAllocatedStrPtr {
     })
 }
 
-// todo test CJK
 #[unsafe(no_mangle)]
 pub extern "C" fn application_list_input_sources() -> AutoDropArray<RustAllocatedStrPtr> {
     ffi_boundary("application_list_input_sources", || {
