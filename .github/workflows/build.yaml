@@ -9,7 +9,8 @@ on:
 
 env:
   RUST_VERSION: 1.91.0 # the same as in rust-toolchain
-#  ACTIONS_STEP_DEBUG: true
+  ACTIONS_STEP_DEBUG: true
+  CARGO_INCREMENTAL: 1
 
 jobs:
   build_all:
@@ -34,6 +35,10 @@ jobs:
           sudo apt update
           sudo apt install libwayland-dev libxkbcommon-dev
 
+      - name: Install Keyboard Layouts
+        if: ${{ startsWith(matrix.targets.os, 'macos') }}
+        run: ./scripts/macos_install_input_sources.sh
+
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -53,10 +58,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - name: Lint with Gradle
         run: ./gradlew lint
+      - name: Test with Gradle
+        run: ./gradlew test --info
       - name: Build with Gradle
         run: ./gradlew build
-      - name: Test with Gradle
-        run: ./gradlew test --rerun
 
 
       - name: Publish Test Report

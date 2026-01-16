@@ -648,6 +648,14 @@ class ApplicationState : AutoCloseable {
             AppMenuItem.SubMenu(
                 title = "Edit",
                 AppMenuItem.Action(
+                    title = "Log input source",
+                    keystroke = Keystroke(key = "x", modifiers = KeyModifiersSet.create(command = true)),
+                    specialTag = AppMenuItem.Action.SpecialTag.Cut,
+                    perform = {
+                        Logger.info { "Current input source: ${Application.currentInputSource()}" }
+                    },
+                ),
+                AppMenuItem.Action(
                     title = "Cut",
                     keystroke = Keystroke(key = "x", modifiers = KeyModifiersSet.create(command = true)),
                     specialTag = AppMenuItem.Action.SpecialTag.Cut,

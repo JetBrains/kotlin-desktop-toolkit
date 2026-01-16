@@ -17,6 +17,8 @@ pub mod mouse;
 pub mod notifications;
 pub mod notifications_api;
 pub mod pasteboard;
+mod robot;
+pub mod robot_api;
 pub mod screen;
 pub mod sound_api;
 pub mod string;
