@@ -24,7 +24,7 @@ class RobotTest : KDTApplicationTestBase() {
         @BeforeAll
         @JvmStatic
         fun init() {
-            println("RobotTest INIT STARTED")
+            Logger.info { "RobotTest INIT STARTED" }
             robot = ui { Robot() }
 
             window = ui {
@@ -45,18 +45,18 @@ class RobotTest : KDTApplicationTestBase() {
                 Logger.info { "RobotTest Window focused" }
             }
 
-            println("RobotTest INIT FINISHED")
+            Logger.info { "RobotTest INIT FINISHED" }
         }
 
         @AfterAll
         @JvmStatic
         fun destroy() {
-            println("RobotTest DESTROY STARTED")
+            Logger.info { "RobotTest DESTROY STARTED" }
             ui { robot.close() }
             ui {
                 window.close()
             }
-            println("RobotTest DESTROY FINISHED")
+            Logger.info { "RobotTest DESTROY FINISHED" }
         }
     }
 
@@ -89,28 +89,24 @@ class RobotTest : KDTApplicationTestBase() {
     @Test
     fun `modifiers are correctly stacked`() {
         repeat(100) {
-            withEventHandler(handler = {
-                EventHandlerResult.Continue
-            }) {
-                ui { robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = true) }
-                ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = true) }
-                ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = true) }
-                awaitEventOfType<Event.ModifiersChanged> {
-                    it.keyCode == KeyCode.Option &&
-                        it.modifiers.shift &&
-                        it.modifiers.command &&
-                        it.modifiers.option
-                }
+            ui { robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = true) }
+            ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = true) }
+            ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = true) }
+            awaitEventOfType<Event.ModifiersChanged> {
+                it.keyCode == KeyCode.Option &&
+                    it.modifiers.shift &&
+                    it.modifiers.command &&
+                    it.modifiers.option
+            }
 
-                ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = false) }
-                ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = false) }
-                ui { robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = false) }
-                awaitEventOfType<Event.ModifiersChanged> {
-                    it.keyCode == KeyCode.Shift &&
-                        !it.modifiers.shift &&
-                        !it.modifiers.command &&
-                        !it.modifiers.option
-                }
+            ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = false) }
+            ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = false) }
+            ui { robot.emulateKeyboardEvent(KeyCode.Shift, isKeyDown = false) }
+            awaitEventOfType<Event.ModifiersChanged> {
+                it.keyCode == KeyCode.Shift &&
+                    !it.modifiers.shift &&
+                    !it.modifiers.command &&
+                    !it.modifiers.option
             }
         }
     }
@@ -118,24 +114,19 @@ class RobotTest : KDTApplicationTestBase() {
     @Test
     fun `modifiers command option`() {
         repeat(100) {
-            withEventHandler(handler = {
-                println("Event: $it")
-                EventHandlerResult.Continue
-            }) {
-                ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = true) }
-                ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = true) }
-                awaitEventOfType<Event.ModifiersChanged> {
-                    it.modifiers.command &&
-                        it.modifiers.option
-                }
+            ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = true) }
+            ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = true) }
+            awaitEventOfType<Event.ModifiersChanged> {
+                it.modifiers.command &&
+                    it.modifiers.option
+            }
 
-                ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = false) }
-                ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = false) }
-                awaitEventOfType<Event.ModifiersChanged> {
-                    !it.modifiers.shift &&
-                        !it.modifiers.command &&
-                        !it.modifiers.option
-                }
+            ui { robot.emulateKeyboardEvent(KeyCode.Command, isKeyDown = false) }
+            ui { robot.emulateKeyboardEvent(KeyCode.Option, isKeyDown = false) }
+            awaitEventOfType<Event.ModifiersChanged> {
+                !it.modifiers.shift &&
+                    !it.modifiers.command &&
+                    !it.modifiers.option
             }
         }
     }
@@ -151,7 +142,7 @@ class RobotTest : KDTApplicationTestBase() {
     @Test
     fun `list input sources test`() {
         val inputSources = ui { Application.listInputSources() }
-        println("Input sources: $inputSources")
+        Logger.info { "Input sources: $inputSources" }
         assert(inputSources.isNotEmpty()) { "Input sources list should not be empty" }
         assert(inputSources.any { it.startsWith("com.apple.keylayout.") }) {
             "Should contain at least one keyboard layout"
@@ -213,13 +204,8 @@ class RobotTest : KDTApplicationTestBase() {
     fun `swedish test`() {
         val layoutId = "com.apple.keylayout.Swedish-Pro"
         assert(ui { Application.chooseInputSource(layoutId) })
-        withEventHandler(handler = {
-//            println("Event: $it")
-            EventHandlerResult.Continue
-        }) {
-            ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, true) }
-            ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, false) }
-            awaitEventOfType<Event.KeyDown> { it.typedCharacters == "ö" }
-        }
+        ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, true) }
+        ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, false) }
+        awaitEventOfType<Event.KeyDown> { it.typedCharacters == "ö" }
     }
 }
