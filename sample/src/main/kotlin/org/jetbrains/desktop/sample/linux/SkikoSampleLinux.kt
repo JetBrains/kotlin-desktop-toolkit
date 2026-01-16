@@ -21,7 +21,6 @@ import org.jetbrains.desktop.linux.KeyModifiers
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
 import org.jetbrains.desktop.linux.LogLevel
 import org.jetbrains.desktop.linux.Logger
-import org.jetbrains.desktop.linux.LogicalPixels
 import org.jetbrains.desktop.linux.LogicalPoint
 import org.jetbrains.desktop.linux.LogicalRect
 import org.jetbrains.desktop.linux.LogicalSize
@@ -63,12 +62,15 @@ import java.net.URI
 import java.text.BreakIterator
 import kotlin.io.path.Path
 import kotlin.math.PI
+import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.DurationUnit
+import kotlin.time.TimeSource
 import kotlin.time.toDuration
 
 const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
@@ -169,7 +171,7 @@ internal data class XdgDesktopSettings(
     var fontAntialiasing: FontAntialiasingValue = FontAntialiasingValue.Grayscale,
     var fontHinting: FontHintingValue = FontHintingValue.Medium,
     var fontRgbaOrder: FontRgbaOrderValue = FontRgbaOrderValue.Rgb,
-    var cursorSize: Int? = null,
+    var cursorSize: UInt? = null,
     var cursorTheme: String? = null,
     var cursorBlink: Boolean = true,
     var cursorBlinkTime: Duration = 1200.toDuration(DurationUnit.MILLISECONDS),
@@ -223,24 +225,26 @@ private interface ClipboardHandler {
 private class EditorState {
     private var textInputEnabled: Boolean = false
     private var composedText: String = ""
-    private var composedTextStartOffset: Int? = null
-    private var composedTextEndOffset: Int? = null
+    private var composedTextRange: Pair<Int, Int>? = null
     private var text: StringBuilder = StringBuilder()
-    private var cursorVisible = true
     private var cursorOffset: Int = 0
-    private var cursorRectangle = LogicalRect(LogicalPoint(0f, 0f), LogicalSize(0f, 0f))
+    private var cursorRectangle = LogicalRect(0, 0, 0, 0)
     private var selectionStartOffset: Int? = null
     private var selectionEndOffset: Int? = null
     private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
     private var statsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    private var fpsTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
+    private var drawCallCount = 0
+    private var lastFps = 0
+    private var lastDrawMeasureTime = TimeSource.Monotonic.markNow()
     private var pastedImage: Image? = null
 
     companion object {
-        private fun codepointFromOffset(sb: StringBuilder, offset: Int): Short {
+        private fun codepointFromOffset(sb: StringBuilder, offset: Int): UShort {
             if (offset == 0) {
-                return 0
+                return 0U
             }
-            return sb.codePointCount(0, offset).toShort()
+            return sb.codePointCount(0, offset).toUShort()
         }
 
         private fun getPreviousGlyphOffset(text: String, offset: Int): Int {
@@ -285,13 +289,21 @@ private class EditorState {
         if (selectionStartOffset != null && selectionEndOffset != null) {
             s.append(", selection: $selectionStartOffset - $selectionEndOffset")
         }
-        if (composedTextStartOffset != null && composedTextEndOffset != null) {
+        composedTextRange?.let { (composedTextStartOffset, composedTextEndOffset) ->
             s.append(", compose: $composedTextStartOffset - $composedTextEndOffset")
         }
         return s.toString()
     }
 
     fun draw(canvas: Canvas, y: Float, scale: Float) {
+        val now = TimeSource.Monotonic.markNow()
+        drawCallCount += 1
+        if (now - lastDrawMeasureTime >= 1.seconds) {
+            lastFps = drawCallCount
+            lastDrawMeasureTime = now
+            drawCallCount = 0
+        }
+
         val textLineStats = statsTextLineCreator.makeTextLine(getTextLineStatsString(), 20 * scale)
         pastedImage?.let {
             Paint().use { paint ->
@@ -304,7 +316,6 @@ private class EditorState {
                 )
             }
         }
-        val composedTextStartOffset = this.composedTextStartOffset
         val cursorOffset = cursorOffset
         val stringLine = if (composedText.isEmpty()) {
             text
@@ -318,7 +329,8 @@ private class EditorState {
                 paint.strokeWidth = 5 * scale
                 val x0 = textLine.getCoordAtOffset(cursorOffset)
                 val x1 = textLine.getCoordAtOffset(cursorOffset + composedText.length)
-                canvas.drawLine(x0 = x0, y0 = y + (5 * scale), x1 = x1, y1 = y + (5 * scale), paint = paint)
+                val y = y + textLine.descent
+                canvas.drawLine(x0 = x0, y0 = y, x1 = x1, y1 = y, paint = paint)
             }
         }
         val selectionStartOffset = selectionStartOffset
@@ -331,30 +343,37 @@ private class EditorState {
                 canvas.drawRect(r = Rect(left = x0, top = y + textLine.ascent, right = x1, bottom = y + textLine.descent), paint = paint)
             }
         }
+
+        val composedTextStartOffset = composedTextRange?.let { (composedTextStartOffset, composedTextEndOffset) ->
+            check(composedTextStartOffset == composedTextEndOffset) {
+                "composedTextStartOffset ($composedTextStartOffset) != composedTextEndOffset ($composedTextEndOffset)"
+            }
+            composedTextStartOffset
+        } ?: 0
+
+        Paint().use { paint ->
+            val x = textLine.getCoordAtOffset(cursorOffset + composedTextStartOffset)
+            val y0 = y + textLine.ascent
+            val y1 = y + textLine.descent
+
+            cursorRectangle = LogicalRect(
+                x = (x / scale).roundToInt(),
+                y = (y0 / scale).roundToInt(),
+                width = scale.roundToInt(),
+                height = ((textLine.descent - textLine.ascent) / scale).roundToInt(),
+            )
+            paint.color = Color.GREEN
+            paint.strokeWidth = cursorRectangle.width * scale
+
+            canvas.drawLine(x0 = x, y0 = y0, x1 = x, y1 = y1, paint = paint)
+        }
+
+        val textLineFps = fpsTextLineCreator.makeTextLine("$lastFps FPS", 20 * scale)
         Paint().use { paint ->
             paint.color = Color.WHITE
             canvas.drawTextLine(textLineStats, 0f, (SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT * scale) + textLineStats.height, paint)
+            canvas.drawTextLine(textLineFps, 600f, (SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT * scale) + textLineStats.height, paint)
             canvas.drawTextLine(textLine, 0f, y, paint)
-        }
-        if (cursorVisible) {
-            Paint().use { paint ->
-                val coord = textLine.getCoordAtOffset(cursorOffset + (composedTextStartOffset ?: 0))
-
-                cursorRectangle = LogicalRect(
-                    LogicalPoint(x = coord / scale, y = (y + textLine.ascent) / scale),
-                    LogicalSize(width = 5f, height = (textLine.descent - textLine.ascent) / scale),
-                )
-                paint.color = Color.GREEN
-                paint.strokeWidth = cursorRectangle.size.width
-
-                canvas.drawLine(
-                    x0 = cursorRectangle.point.x * scale,
-                    y0 = cursorRectangle.point.y * scale,
-                    x1 = cursorRectangle.point.x * scale,
-                    y1 = (cursorRectangle.point.y + cursorRectangle.size.height) * scale,
-                    paint = paint,
-                )
-            }
         }
     }
 
@@ -392,7 +411,6 @@ private class EditorState {
 
     fun onKeyDown(
         event: Event.KeyDown,
-        app: Application,
         window: Window,
         windowState: WindowState,
         modifiers: Set<KeyModifiers>,
@@ -433,6 +451,7 @@ private class EditorState {
 
             setOf(KeyModifiers.Control) -> when (event.keyCode.value) {
                 KeyCode.V -> {
+                    clipboardHandler.paste(listOf("application/fleet-multi-caret"))
                     clipboardHandler.paste(listOf(PNG_MIME_TYPE, TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
                     EventHandlerResult.Stop
                 }
@@ -462,11 +481,6 @@ private class EditorState {
 
                 KeyCode.M -> {
                     window.startMove()
-                    EventHandlerResult.Stop
-                }
-
-                KeyCode.Tab -> {
-                    window.requestInternalActivationToken()
                     EventHandlerResult.Stop
                 }
 
@@ -557,12 +571,12 @@ private class EditorState {
         }
 
         if (textInputEnabled) {
-            app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+            window.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
         }
         return EventHandlerResult.Stop
     }
 
-    fun onDataTransfer(content: DataTransferContent, app: Application): EventHandlerResult {
+    fun onDataTransfer(content: DataTransferContent, window: Window): EventHandlerResult {
         when (content.mimeType) {
             URI_LIST_MIME_TYPE -> {
                 val files = content.data.decodeToString().trimEnd().split("\r\n")
@@ -581,7 +595,7 @@ private class EditorState {
                 selectionStartOffset = null
                 selectionEndOffset = null
                 if (textInputEnabled) {
-                    app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+                    window.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
                 }
             }
 
@@ -601,22 +615,22 @@ private class EditorState {
         return EventHandlerResult.Stop
     }
 
-    fun onTextInputAvailability(event: Event.TextInputAvailability, app: Application): EventHandlerResult {
-        if (event.available) {
-            app.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
+    fun onTextInputAvailability(available: Boolean, window: Window): EventHandlerResult {
+        if (available) {
+            window.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
             textInputEnabled = true
         } else {
-            app.textInputDisable()
+            window.textInputDisable()
             textInputEnabled = false
         }
         return EventHandlerResult.Stop
     }
 
-    fun onTextInput(event: Event.TextInput, app: Application): EventHandlerResult {
+    fun onTextInput(event: Event.TextInput, window: Window): EventHandlerResult {
         composedText = ""
         event.deleteSurroundingTextData?.let { deleteSurroundingTextData ->
-            val deleteStart = cursorOffset - utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.beforeLengthInBytes)
-            val deleteEnd = cursorOffset + utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.afterLengthInBytes)
+            val deleteStart = cursorOffset - utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.beforeLengthInBytes.toLong())
+            val deleteEnd = cursorOffset + utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.afterLengthInBytes.toLong())
             this.text.delete(deleteStart, deleteEnd)
         }
         event.commitStringData?.let { commitStringData ->
@@ -627,19 +641,24 @@ private class EditorState {
         }
         event.preeditStringData?.let { preeditStringData ->
             deleteSelection()
-            cursorVisible = !(preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1)
-            preeditStringData.text?.let { preeditString ->
-                composedText = preeditString
-                composedTextStartOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBeginBytePos)
-                composedTextEndOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorEndBytePos)
+            composedText = preeditStringData.text ?: ""
+            if (preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1) {
+                composedTextRange = null
+            } else {
+                check(preeditStringData.cursorBeginBytePos >= 0)
+                check(preeditStringData.cursorEndBytePos >= 0)
+
+                preeditStringData.text?.let { preeditString ->
+                    val startOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBeginBytePos.toLong())
+                    val endOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorEndBytePos.toLong())
+                    composedTextRange = Pair(startOffset, endOffset)
+                }
             }
         } ?: run {
-            composedTextStartOffset = null
-            composedTextEndOffset = null
-            cursorVisible = true
+            composedTextRange = null
         }
         if (event.deleteSurroundingTextData != null || event.commitStringData != null) {
-            app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = true))
+            window.textInputUpdate(createTextInputContext(changeCausedByInputMethod = true))
         }
         return EventHandlerResult.Stop
     }
@@ -681,6 +700,7 @@ internal class WindowState {
     var fullscreen: Boolean = false
     var capabilities: WindowCapabilities? = null
     var pointerShape: PointerShape = PointerShape.Default
+    var scale: Double = 1.0
 
     fun configure(event: Event.WindowConfigure) {
         active = event.active
@@ -688,6 +708,10 @@ internal class WindowState {
         fullscreen = event.fullscreen
         capabilities = event.capabilities
     }
+}
+
+fun TextLine.toLogicalSize(): LogicalSize {
+    return LogicalSize(width = ceil(width).roundToInt(), height = ceil(height).roundToInt())
 }
 
 private class ContentArea(
@@ -717,7 +741,7 @@ private class ContentArea(
                     val skikoTextLine = dragIconTextLineCreator.makeTextLine(EXAMPLE_FILES.joinToString("\n"), 10f)
                     val dragIconParams = DragIconParams(
                         renderingMode = RenderingMode.Auto,
-                        size = LogicalSize(width = skikoTextLine.width, height = skikoTextLine.height),
+                        size = skikoTextLine.toLogicalSize(),
                     )
                     val content = DataTransferContentType.UriList(EXAMPLE_FILES)
                     val startDragAndDropParams = StartDragAndDropParams(
@@ -740,7 +764,7 @@ private class ContentArea(
                         val skikoTextLine = dragIconTextLineCreator.makeTextLine(it, 30f)
                         val dragIconParams = DragIconParams(
                             renderingMode = RenderingMode.Auto,
-                            size = LogicalSize(width = skikoTextLine.width, height = skikoTextLine.height),
+                            size = skikoTextLine.toLogicalSize(),
                         )
                         val content = DataTransferContentType.Text(it)
                         val startDragAndDropParams = StartDragAndDropParams(
@@ -866,7 +890,7 @@ private class ContentArea(
 
 private class CustomBorders {
     companion object {
-        const val BORDER_SIZE: LogicalPixels = 5f
+        const val BORDER_SIZE = 5
 
         fun edgeToPointerShape(edge: WindowResizeEdge): PointerShape {
             return when (edge) {
@@ -886,28 +910,42 @@ private class CustomBorders {
 
     fun configure(event: Event.WindowConfigure) {
         rectangles.clear()
-        val edgeSize = LogicalSize(BORDER_SIZE, BORDER_SIZE)
-        rectangles.add(Pair(LogicalRect(LogicalPoint.Zero, edgeSize), WindowResizeEdge.TopLeft))
-        rectangles.add(Pair(LogicalRect(LogicalPoint(event.size.width - BORDER_SIZE, 0f), edgeSize), WindowResizeEdge.TopRight))
-        rectangles.add(Pair(LogicalRect(LogicalPoint(0f, event.size.height - BORDER_SIZE), edgeSize), WindowResizeEdge.BottomLeft))
+        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = BORDER_SIZE, height = BORDER_SIZE), WindowResizeEdge.TopLeft))
         rectangles.add(
             Pair(
-                LogicalRect(LogicalPoint(event.size.width - BORDER_SIZE, event.size.height - BORDER_SIZE), edgeSize),
+                LogicalRect(x = event.size.width - BORDER_SIZE, y = 0, width = BORDER_SIZE, height = BORDER_SIZE),
+                WindowResizeEdge.TopRight,
+            ),
+        )
+        rectangles.add(
+            Pair(
+                LogicalRect(x = 0, y = event.size.height - BORDER_SIZE, width = BORDER_SIZE, height = BORDER_SIZE),
+                WindowResizeEdge.BottomLeft,
+            ),
+        )
+        rectangles.add(
+            Pair(
+                LogicalRect(
+                    x = event.size.width - BORDER_SIZE,
+                    y = event.size.height - BORDER_SIZE,
+                    width = BORDER_SIZE,
+                    height = BORDER_SIZE,
+                ),
                 WindowResizeEdge.BottomRight,
             ),
         )
 
-        rectangles.add(Pair(LogicalRect(LogicalPoint.Zero, LogicalSize(BORDER_SIZE, event.size.height)), WindowResizeEdge.Left))
+        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = BORDER_SIZE, height = event.size.height), WindowResizeEdge.Left))
         rectangles.add(
             Pair(
-                LogicalRect(LogicalPoint(event.size.width - BORDER_SIZE, 0f), LogicalSize(BORDER_SIZE, event.size.height)),
+                LogicalRect(x = event.size.width - BORDER_SIZE, y = 0, width = BORDER_SIZE, height = event.size.height),
                 WindowResizeEdge.Right,
             ),
         )
-        rectangles.add(Pair(LogicalRect(LogicalPoint.Zero, LogicalSize(event.size.width, BORDER_SIZE)), WindowResizeEdge.Top))
+        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = event.size.width, height = BORDER_SIZE), WindowResizeEdge.Top))
         rectangles.add(
             Pair(
-                LogicalRect(LogicalPoint(0f, event.size.height - BORDER_SIZE), LogicalSize(event.size.width, BORDER_SIZE)),
+                LogicalRect(x = 0, y = event.size.height - BORDER_SIZE, width = event.size.width, height = BORDER_SIZE),
                 WindowResizeEdge.Bottom,
             ),
         )
@@ -987,7 +1025,6 @@ private class WindowContainer(
             )
             val titlebarSize = LogicalSize(width = event.size.width, height = SkikoCustomTitlebarLinux.CUSTOM_TITLEBAR_HEIGHT)
             val titlebar = customTitlebar ?: SkikoCustomTitlebarLinux(
-                origin = LogicalPoint.Zero,
                 size = titlebarSize,
                 titlebarLayout,
                 requestClose,
@@ -997,7 +1034,7 @@ private class WindowContainer(
             titlebar.configure(event, titlebarLayout)
             val customBorders = customBorders ?: CustomBorders().also { customBorders = it }
             customBorders.configure(event)
-            contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height)
+            contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height.toFloat())
             contentArea.size =
                 LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
         } else {
@@ -1121,9 +1158,7 @@ private class RotatingBallWindow(
             xdgDesktopSettings: XdgDesktopSettings,
             requestClose: () -> Unit,
         ): RotatingBallWindow {
-            val windowSize = LogicalSize(640f, 480f)
-            val windowContentSize = windowSize // todo it's incorrect
-            val container = WindowContainer.create(windowContentSize, xdgDesktopSettings, requestClose)
+            val container = WindowContainer.create(windowParams.size, xdgDesktopSettings, requestClose)
 
             return RotatingBallWindow(container, app, windowParams)
         }
@@ -1174,6 +1209,14 @@ private class RotatingBallWindow(
         windowContainer.draw(canvas, time, scale.toFloat(), title, editorState, windowState)
     }
 
+    fun onWindowDraw(event: Event.WindowDraw): EventHandlerResult {
+        return if (performDrawing(event, windowState.scale)) {
+            EventHandlerResult.Stop
+        } else {
+            EventHandlerResult.Continue
+        }
+    }
+
     fun configure(event: Event.WindowConfigure): EventHandlerResult {
         windowState.configure(event)
         windowContainer.configure(event)
@@ -1188,9 +1231,9 @@ private class RotatingBallWindow(
         }
     }
 
-    fun onDataTransfer(content: DataTransferContent?, app: Application): EventHandlerResult {
+    fun onDataTransfer(content: DataTransferContent?): EventHandlerResult {
         return content?.let {
-            editorState.onDataTransfer(it, app)
+            editorState.onDataTransfer(it, window)
         } ?: EventHandlerResult.Stop
     }
 
@@ -1209,25 +1252,30 @@ private class RotatingBallWindow(
         }
     }
 
-    fun onKeyDown(
-        event: Event.KeyDown,
-        app: Application,
-        modifiers: Set<KeyModifiers>,
-        clipboardHandler: ClipboardHandler,
-    ): EventHandlerResult {
+    fun onKeyDown(event: Event.KeyDown, modifiers: Set<KeyModifiers>, clipboardHandler: ClipboardHandler): EventHandlerResult {
         if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.H) {
             changePointerShape(PointerShape.Hidden)
             return EventHandlerResult.Stop
         }
-        return editorState.onKeyDown(event, app, window, windowState, modifiers, clipboardHandler)
+        return editorState.onKeyDown(event, window, windowState, modifiers, clipboardHandler)
     }
 
-    fun onTextInputAvailability(event: Event.TextInputAvailability, app: Application): EventHandlerResult {
-        return editorState.onTextInputAvailability(event, app)
+    fun onScreenChange(event: Event.WindowScreenChange, app: Application): EventHandlerResult {
+        val screen = app.allScreens().findById(event.newScreenId)!!
+        return EventHandlerResult.Stop
     }
 
-    fun onTextInput(event: Event.TextInput, app: Application): EventHandlerResult {
-        return editorState.onTextInput(event, app)
+    fun onScaleChange(event: Event.WindowScaleChanged): EventHandlerResult {
+        windowState.scale = event.newScale
+        return EventHandlerResult.Stop
+    }
+
+    fun onTextInputAvailability(available: Boolean): EventHandlerResult {
+        return editorState.onTextInputAvailability(available, window)
+    }
+
+    fun onTextInput(event: Event.TextInput): EventHandlerResult {
+        return editorState.onTextInput(event, window)
     }
 
     fun onMouseEntered(locationInWindow: LogicalPoint): EventHandlerResult {
@@ -1280,9 +1328,9 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         nextWindowId += 1
         val windowParams = WindowParams(
             windowId = windowId,
-            size = LogicalSize(width = 640f, height = 480f),
+            size = LogicalSize(width = 640, height = 480),
+            minSize = LogicalSize(320, 240),
             title = "Window $windowId",
-            appId = "org.jetbrains.desktop.linux.skikoSample1",
             preferClientSideDecoration = useCustomTitlebar,
             renderingMode = renderingMode,
         )
@@ -1292,7 +1340,10 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             windowParams,
             xdgDesktopSettings,
         ) {
-            handleEvent(Event.WindowCloseRequest(windowId))
+            windows[windowId]?.let { window ->
+                onWindowCloseRequest(windowId)
+                window.close()
+            }
         }
         windows[windowId] = window
         windowClipboardHandlers[windowId] = object : ClipboardHandler {
@@ -1326,7 +1377,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
     }
 
     fun handleEvent(event: Event): EventHandlerResult {
-        if (event !is Event.MouseMoved && event !is Event.WindowDraw) {
+        if (event !is Event.MouseMoved && event !is Event.WindowDraw && event !is Event.ShouldRedraw) {
             Logger.info { "$event" }
         }
 
@@ -1342,47 +1393,24 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 settingChanged(event.setting)
                 EventHandlerResult.Stop
             }
-            is Event.WindowCloseRequest -> {
-                val windowId = event.windowId
-                val window = windows[windowId] ?: return EventHandlerResult.Continue
-                window.close()
-                windows.remove(windowId)
-                windowClipboardHandlers.remove(windowId)
-
-                requestSources.entries.removeIf { it.value == windowId }
-                notificationSources.entries.removeIf { entry ->
-                    (entry.value == windowId).also { shouldRemove ->
-                        if (shouldRemove) {
-                            app.closeNotification(entry.key)
-                        }
-                    }
-                }
-
-                if (windows.isEmpty()) {
-                    app.stopEventLoop()
-                }
-                EventHandlerResult.Stop
-            }
-            is Event.WindowDraw -> {
-                if (windows[event.windowId]?.performDrawing(event) == true) {
-                    EventHandlerResult.Stop
-                } else {
-                    EventHandlerResult.Continue
-                }
-            }
+            is Event.WindowDraw -> windows[event.windowId]?.onWindowDraw(event) ?: EventHandlerResult.Continue
             is Event.WindowConfigure -> {
-                windows[event.windowId]?.configure(event) ?: EventHandlerResult.Continue
+                windows[event.windowId]?.configure(event).also {
+                    if (event.active) {
+                        keyWindowId = event.windowId
+                    }
+                } ?: EventHandlerResult.Continue
             }
             is Event.MouseMoved -> {
                 windows[event.windowId]?.onMouseMoved(event.locationInWindow) ?: EventHandlerResult.Continue
             }
             is Event.DataTransfer -> {
                 clipboardPasteSerialToWindow.remove(event.serial)?.let { windowId ->
-                    windows[windowId]?.onDataTransfer(event.content, app)
+                    windows[windowId]?.onDataTransfer(event.content)
                 } ?: EventHandlerResult.Continue
             }
             is Event.DropPerformed -> {
-                windows[event.windowId]?.onDataTransfer(event.content, app) ?: EventHandlerResult.Continue
+                windows[event.windowId]?.onDataTransfer(event.content) ?: EventHandlerResult.Continue
             }
             is Event.DragAndDropLeave -> EventHandlerResult.Stop
             is Event.DragIconDraw -> {
@@ -1392,21 +1420,17 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                         surface.flushAndSubmit()
                         true
                     }
-                    event.softwareDrawData?.let { softwareDrawData ->
-                        performSoftwareDrawing(event.size, softwareDrawData, drawImpl)
+                    dragIconDirectContext?.let {
+                        performOpenGlDrawing(event.openGlDrawData.framebuffer, event.size, it, drawImpl)
                     } ?: run {
-                        dragIconDirectContext?.let {
-                            performOpenGlDrawing(event.size, it, drawImpl)
-                        } ?: run {
-                            val eglFunc = app.getEglProcFunc()!!
-                            val openGlInterface = GLAssembledInterface.createFromNativePointers(
-                                ctxPtr = eglFunc.ctxPtr,
-                                fPtr = eglFunc.fPtr,
-                            )
-                            val directContext = DirectContext.makeGLWithInterface(openGlInterface)
-                            dragIconDirectContext = directContext
-                            performOpenGlDrawing(event.size, directContext, drawImpl)
-                        }
+                        val eglFunc = app.getEglProcFunc()!!
+                        val openGlInterface = GLAssembledInterface.createFromNativePointers(
+                            ctxPtr = eglFunc.ctxPtr,
+                            fPtr = eglFunc.fPtr,
+                        )
+                        val directContext = DirectContext.makeGLWithInterface(openGlInterface)
+                        dragIconDirectContext = directContext
+                        performOpenGlDrawing(event.openGlDrawData.framebuffer, event.size, directContext, drawImpl)
                     }
                     EventHandlerResult.Stop
                 } ?: EventHandlerResult.Continue
@@ -1426,13 +1450,6 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 Logger.info { "File chooser response: $event" }
                 EventHandlerResult.Stop
             }
-            is Event.ActivationTokenResponse -> {
-                windows.keys.firstOrNull { it != keyWindowId }?.let { windowIdToActivate ->
-                    val w = windows[windowIdToActivate]!!
-                    w.window.activate(event.token)
-                }
-                EventHandlerResult.Stop
-            }
             is Event.KeyDown -> {
                 if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.N) {
                     createWindow(useCustomTitlebar = true, renderingMode = RenderingMode.Auto)
@@ -1448,8 +1465,11 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                         requestSources[requestId] = windowId
                     }
                     EventHandlerResult.Stop
+                } else if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.Tab) {
+                    windows.firstNotNullOfOrNull { if (it.key == keyWindowId) null else it.value }?.window?.activate(null)
+                    EventHandlerResult.Stop
                 } else {
-                    windows[keyWindowId]?.onKeyDown(event, app, modifiers, windowClipboardHandlers[keyWindowId]!!)
+                    windows[event.windowId]?.onKeyDown(event, modifiers, windowClipboardHandlers[event.windowId]!!)
                         ?: EventHandlerResult.Continue
                 }
             }
@@ -1474,18 +1494,19 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 windows[event.windowId]?.onMouseUp(event, xdgDesktopSettings) ?: EventHandlerResult.Continue
             }
             is Event.ScrollWheel -> EventHandlerResult.Continue
-            is Event.TextInput -> windows[keyWindowId]?.onTextInput(event, app) ?: EventHandlerResult.Continue
-            is Event.TextInputAvailability -> windows[event.windowId]?.onTextInputAvailability(event, app) ?: EventHandlerResult.Continue
+            is Event.TextInput -> windows[event.windowId]?.onTextInput(event) ?: EventHandlerResult.Continue
             is Event.WindowKeyboardEnter -> {
                 keyWindowId = event.windowId
-                EventHandlerResult.Continue
+                windows[event.windowId]?.onTextInputAvailability(true) ?: EventHandlerResult.Continue
             }
             is Event.WindowKeyboardLeave -> {
-                check(keyWindowId == event.windowId)
-                keyWindowId = null
-                EventHandlerResult.Continue
+                if (keyWindowId == event.windowId) {
+                    keyWindowId = null
+                }
+                windows[event.windowId]?.onTextInputAvailability(false) ?: EventHandlerResult.Continue
             }
-            is Event.WindowScaleChanged, is Event.WindowScreenChange -> EventHandlerResult.Continue
+            is Event.WindowScreenChange -> windows[event.windowId]?.onScreenChange(event, app) ?: EventHandlerResult.Continue
+            is Event.WindowScaleChanged -> windows[event.windowId]?.onScaleChange(event) ?: EventHandlerResult.Continue
             is Event.NotificationShown -> {
                 event.notificationId?.let { notificationId ->
                     requestSources.remove(event.requestId)?.let { requester ->
@@ -1505,16 +1526,42 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 }
                 EventHandlerResult.Stop
             }
+
+            is Event.ShouldRedraw -> {
+                windows[event.windowId]?.window?.requestRedraw()
+                EventHandlerResult.Stop
+            }
+
+            Event.ShouldRedrawDragIcon -> {
+                app.requestRedrawDragIcon()
+                EventHandlerResult.Stop
+            }
+
+            is Event.WindowClosed -> {
+                val windowId = event.windowId
+                windows.remove(windowId)
+                windowClipboardHandlers.remove(windowId)
+
+                requestSources.entries.removeIf { it.value == windowId }
+                notificationSources.entries.removeIf { entry ->
+                    (entry.value == windowId).also { shouldRemove ->
+                        if (shouldRemove) {
+                            app.closeNotification(entry.key)
+                        }
+                    }
+                }
+
+                if (windows.isEmpty()) {
+                    app.stopEventLoop()
+                }
+
+                EventHandlerResult.Stop
+            }
         }
     }
 
     fun settingChanged(s: XdgDesktopSetting) {
         this.xdgDesktopSettings.update(s)
-        xdgDesktopSettings.cursorTheme?.let { cursorTheme ->
-            xdgDesktopSettings.cursorSize?.let { cursorSize ->
-                app.setCursorTheme(cursorTheme, cursorSize)
-            }
-        }
         windows.values.forEach { it.settingsChanged(xdgDesktopSettings) }
     }
 
@@ -1552,6 +1599,10 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         }
     }
 
+    fun onWindowCloseRequest(windowId: WindowId): Boolean {
+        return true
+    }
+
     fun onDataTransferCancelled(dataSource: DataSource) {
         when (dataSource) {
             DataSource.Clipboard -> currentClipboard = null
@@ -1578,12 +1629,16 @@ fun main(args: Array<String>) {
     ApplicationState(app).use { state ->
         app.runEventLoop(
             ApplicationConfig(
+                appId = "org.jetbrains.desktop.linux.skikoSample1",
                 eventHandler = { state.handleEvent(it) },
                 queryDragAndDropTarget = { queryData ->
                     state.queryDragAndDropTarget(queryData)
                 },
                 getDataTransferData = { dataSource, mimeType ->
                     state.getDataTransferData(dataSource, mimeType)
+                },
+                windowCloseRequest = { windowId ->
+                    state.onWindowCloseRequest(windowId)
                 },
             ),
         )

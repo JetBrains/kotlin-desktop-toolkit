@@ -26,7 +26,7 @@ val skikoTargetArch = when (targetArch(project) ?: hostArch()) {
     Arch.x86_64 -> "x64"
 }
 
-val skikoVersion = "0.9.30"
+val skikoVersion = "0.9.37.3"
 val skikoTarget = "$skikoTargetOs-$skikoTargetArch"
 dependencies {
     implementation(project(":kotlin-desktop-toolkit"))

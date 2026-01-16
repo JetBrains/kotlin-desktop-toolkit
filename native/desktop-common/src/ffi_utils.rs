@@ -150,6 +150,11 @@ impl<'a> BorrowedStrPtr<'a> {
     }
 
     #[must_use]
+    pub const fn from_ptr(ptr: *const std::ffi::c_char) -> Self {
+        Self(GenericRawPtr { ptr, phantom: PhantomData })
+    }
+
+    #[must_use]
     pub const fn null() -> Self {
         Self(GenericRawPtr {
             ptr: std::ptr::null(),
