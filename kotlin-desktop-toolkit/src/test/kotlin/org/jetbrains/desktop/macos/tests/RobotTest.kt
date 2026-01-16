@@ -10,11 +10,14 @@ import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
+@EnabledOnOs(OS.MAC)
 class RobotTest : KDTApplicationTestBase() {
 
     companion object {

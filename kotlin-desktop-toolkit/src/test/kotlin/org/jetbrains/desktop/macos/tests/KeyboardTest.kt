@@ -11,11 +11,14 @@ import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import java.util.Locale.getDefault
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+@EnabledOnOs(OS.MAC)
 class KeyboardTest : KDTApplicationTestBase() {
 
     fun Set<KeyCode>.toModifiersSet(): KeyModifiersSet {
