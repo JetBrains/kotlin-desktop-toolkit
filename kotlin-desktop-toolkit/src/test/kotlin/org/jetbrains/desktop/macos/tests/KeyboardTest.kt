@@ -77,12 +77,14 @@ class KeyboardTest : KDTApplicationTestBase() {
     companion object {
         lateinit var window: Window
         lateinit var robot: Robot
+        lateinit var inputSourceBeforeTest: String
 
         @JvmStatic
         @BeforeAll
         @Timeout(value = 15, unit = TimeUnit.SECONDS)
         fun init() {
             Logger.info { "KeyboardTest INIT STARTED" }
+            inputSourceBeforeTest = ui { Application.currentInputSource()!! }
             robot = ui { Robot() }
             window = createWindowAndEnsureItsFocused(name = "KeyboardTest Window")
             assert(ui { Application.chooseInputSource("com.apple.keylayout.ABC") }) { "Failed to choose ABC keyboard layout" }
@@ -95,11 +97,11 @@ class KeyboardTest : KDTApplicationTestBase() {
         @Timeout(value = 15, unit = TimeUnit.SECONDS)
         fun destroy() {
             Logger.info { "KeyboardTest DESTROY STARTED" }
+            ui { robot.close() }
             ui {
                 window.close()
             }
-            eventHandler = null
-            ui { robot.close() }
+            ui { Application.chooseInputSource(inputSourceBeforeTest) }
             Logger.info { "KeyboardTest DESTROY FINISHED" }
         }
     }

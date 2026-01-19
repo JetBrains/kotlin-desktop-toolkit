@@ -5,7 +5,6 @@ import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.Logger
-import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.AfterAll
@@ -23,11 +22,13 @@ class RobotTest : KDTApplicationTestBase() {
     companion object {
         lateinit var window: Window
         lateinit var robot: Robot
+        lateinit var inputSourceBeforeTest: String
 
         @BeforeAll
         @JvmStatic
         fun init() {
             Logger.info { "RobotTest INIT STARTED" }
+            inputSourceBeforeTest = ui { Application.currentInputSource()!! }
             robot = ui { Robot() }
             window = createWindowAndEnsureItsFocused(name = "RobotTest Window")
             Logger.info { "RobotTest INIT FINISHED" }
@@ -41,6 +42,7 @@ class RobotTest : KDTApplicationTestBase() {
             ui {
                 window.close()
             }
+            ui { Application.chooseInputSource(inputSourceBeforeTest) }
             Logger.info { "RobotTest DESTROY FINISHED" }
         }
     }
