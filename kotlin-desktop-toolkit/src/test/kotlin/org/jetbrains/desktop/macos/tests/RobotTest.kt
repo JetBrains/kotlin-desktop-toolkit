@@ -29,25 +29,7 @@ class RobotTest : KDTApplicationTestBase() {
         fun init() {
             Logger.info { "RobotTest INIT STARTED" }
             robot = ui { Robot() }
-
-            window = ui {
-                val window = Window.create(origin = LogicalPoint(100.0, 200.0), title = "Robot Test Window")
-                Logger.info { "RobotTest create window with ID: ${window.windowId()}" }
-                window
-            }
-            ui {
-                window.makeKeyAndOrderFront()
-            }
-            awaitEventOfType<Event.WindowChangedOcclusionState> { it.windowId == window.windowId() && it.isVisible }
-            if (!window.isKey) {
-                ui {
-                    window.makeKeyAndOrderFront()
-                }
-                Logger.info { "RobotTest before Window focused" }
-                awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
-                Logger.info { "RobotTest Window focused" }
-            }
-
+            window = createWindowAndEnsureItsFocused(name = "RobotTest Window")
             Logger.info { "RobotTest INIT FINISHED" }
         }
 

@@ -7,6 +7,9 @@ import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.LogLevel
 import org.jetbrains.desktop.macos.Logger
+import org.jetbrains.desktop.macos.LogicalPoint
+import org.jetbrains.desktop.macos.Window
+import org.jetbrains.desktop.macos.tests.KeyboardTest.Companion.window
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
@@ -47,6 +50,28 @@ open class KDTApplicationTestBase : KDTTestBase() {
         }
 
         fun <T> ui(body: () -> T): T = GrandCentralDispatch.dispatchOnMainSync(highPriority = false, body)
+
+        fun createWindowAndEnsureItsFocused(name: String): Window {
+            window = ui {
+                val window = Window.create(origin = LogicalPoint(100.0, 200.0), title = name)
+                Logger.info { "$name create with ID: ${window.windowId()}" }
+                window
+            }
+            ui {
+                window.makeKeyAndOrderFront()
+            }
+            awaitEventOfType<Event.WindowChangedOcclusionState> { it.windowId == window.windowId() && it.isVisible }
+
+            if (!window.isKey) {
+                ui {
+                    window.makeKeyAndOrderFront()
+                }
+                Logger.info { "$name before Window focused" }
+                awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
+                Logger.info { "$name Window focused" }
+            }
+            return window
+        }
 
         val eventQueue = LinkedBlockingQueue<Event>()
 

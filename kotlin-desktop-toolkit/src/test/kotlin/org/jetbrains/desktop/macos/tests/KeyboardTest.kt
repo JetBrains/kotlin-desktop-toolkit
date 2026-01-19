@@ -84,24 +84,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         fun init() {
             Logger.info { "KeyboardTest INIT STARTED" }
             robot = ui { Robot() }
-            window = ui {
-                val window = Window.create(origin = LogicalPoint(100.0, 200.0), title = "Keyboard Test Window")
-                Logger.info { "KeyboardTest create window with ID: ${window.windowId()}" }
-                window
-            }
-            ui {
-                window.makeKeyAndOrderFront()
-            }
-            awaitEventOfType<Event.WindowChangedOcclusionState> { it.windowId == window.windowId() && it.isVisible }
-
-            if (!window.isKey) {
-                ui {
-                    window.makeKeyAndOrderFront()
-                }
-                Logger.info { "KeyboardTest before Window focused" }
-                awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
-                Logger.info { "KeyboardTest Window focused" }
-            }
+            window = createWindowAndEnsureItsFocused(name = "KeyboardTest Window")
             assert(ui { Application.chooseInputSource("com.apple.keylayout.ABC") }) { "Failed to choose ABC keyboard layout" }
             assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
             Logger.info { "KeyboardTest INIT FINISHED" }
