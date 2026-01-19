@@ -129,7 +129,7 @@
 | Scale               | ✅    | ✅      | ✅      |     |
 | FPS                 | ✅    | ✅      | ✅      |     |
 | Color space         | ❌    | ❌      | ❌      |     |
-| Persistent identity | ❌    | 🚧      | ❌      |     |
+| Persistent identity | ✅    | 🚧      | ❌      |     |
 
 
 
