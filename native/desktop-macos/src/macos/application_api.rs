@@ -90,6 +90,9 @@ pub extern "C" fn application_init(config: &ApplicationConfig, callbacks: Applic
             config.disable_character_palette_menu_item,
             ns_string!("NSDisabledCharacterPaletteMenuItem"),
         );
+        // Disable autofill heuristic controller because it makes the app not responsive on macOS 26
+        // Similar case: https://github.com/ghostty-org/ghostty/pull/8625
+        user_defaults.setBool_forKey(false, ns_string!("NSAutoFillHeuristicControllerEnabled"));
         let app = MyNSApplication::sharedApplication(mtm);
         //    let default_presentation_options = app.presentationOptions();
         //    app.setPresentationOptions(default_presentation_options | NSApplicationPresentationOptions::NSApplicationPresentationFullScreen);
