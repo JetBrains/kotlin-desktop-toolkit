@@ -5,6 +5,7 @@ import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_PasteboardItem
 import org.jetbrains.desktop.macos.generated.NativeCombinedItemElement
 import org.jetbrains.desktop.macos.generated.NativePasteboardContentResult
 import org.jetbrains.desktop.macos.generated.NativePasteboardItem
+import org.jetbrains.desktop.macos.generated.NativePasteboardItemDataResult
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -161,6 +162,34 @@ public object Pasteboard {
             val result = listOfByteArraysFromNative(items).map { String(it) }
             ffiDownCall {
                 desktop_macos_h.pasteboard_content_drop(nativeResult)
+            }
+            result
+        }
+    }
+
+    /**
+     * Returns the data for a specific item at the given index and type.
+     * When pasteboardName is null general clipboard is used.
+     * Returns null if the item doesn't have data for the given type.
+     */
+    public fun readItemData(itemIndex: Int, type: String, pasteboardName: String? = null): ByteArray? {
+        return Arena.ofConfined().use { arena ->
+            val nativeResult = ffiDownCall {
+                desktop_macos_h.pasteboard_read_item_data(
+                    arena,
+                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    itemIndex.toLong(),
+                    arena.allocateUtf8String(type),
+                )
+            }
+            val found = NativePasteboardItemDataResult.found(nativeResult)
+            val result = if (found) {
+                byteArrayFromNative(NativePasteboardItemDataResult.data(nativeResult))
+            } else {
+                null
+            }
+            ffiDownCall {
+                desktop_macos_h.pasteboard_item_data_drop(nativeResult)
             }
             result
         }

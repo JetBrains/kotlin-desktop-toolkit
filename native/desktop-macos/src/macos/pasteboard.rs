@@ -191,6 +191,55 @@ pub extern "C" fn pasteboard_read_file_items(pasteboard_name: BorrowedStrPtr) ->
     })
 }
 
+#[repr(C)]
+pub struct PasteboardItemDataResult {
+    data: AutoDropArray<u8>,
+    found: bool,
+}
+
+impl PanicDefault for PasteboardItemDataResult {
+    fn default() -> Self {
+        Self {
+            data: AutoDropArray::new(Box::new([])),
+            found: false,
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pasteboard_read_item_data(
+    pasteboard_name: BorrowedStrPtr,
+    item_index: usize,
+    uniform_type_identifier: BorrowedStrPtr,
+) -> PasteboardItemDataResult {
+    ffi_boundary("pasteboard_read_item_data", || {
+        with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
+            let uti = copy_to_ns_string(&uniform_type_identifier)?;
+            let items = pasteboard.pasteboardItems().context("Can't retrieve items")?;
+            anyhow::ensure!(item_index < items.count(), "Item index out of bounds");
+            let item = items.objectAtIndex(item_index);
+            Ok(match item.dataForType(&uti) {
+                Some(data) => PasteboardItemDataResult {
+                    data: AutoDropArray::new(data.to_vec().into_boxed_slice()),
+                    found: true,
+                },
+                None => PasteboardItemDataResult {
+                    data: AutoDropArray::new(Box::new([])),
+                    found: false,
+                },
+            })
+        })
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pasteboard_item_data_drop(result: PasteboardItemDataResult) {
+    ffi_boundary("pasteboard_item_data_drop", || {
+        drop(result);
+        Ok(())
+    });
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn pasteboard_read_item_types(pasteboard_name: BorrowedStrPtr, item_index: usize) -> PasteboardContentResult {
     ffi_boundary("pasteboard_read_item_types", || {

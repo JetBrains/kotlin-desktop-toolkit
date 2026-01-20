@@ -9,6 +9,7 @@ import kotlin.io.path.createTempFile
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @EnabledOnOs(OS.MAC)
@@ -249,5 +250,33 @@ class PasteboardTest : KDTApplicationTestBase() {
 
         val types1 = Pasteboard.readItemTypes(1, testPasteboard)
         assertTrue(types1.contains(Pasteboard.HTML_TYPE))
+    }
+
+    @Test
+    fun `readItemData returns data for specific item and type`() {
+        val testPasteboard = "org.jetbrains.kdt.test-pasteboard3"
+        Pasteboard.clear(testPasteboard)
+        Pasteboard.writeObjects(
+            listOf(
+                Pasteboard.Item(
+                    Element.ofString(Pasteboard.STRING_TYPE, "First String"),
+                    Element.ofString(Pasteboard.HTML_TYPE, "<b>First HTML</b>"),
+                ),
+                Pasteboard.Item.ofString(Pasteboard.STRING_TYPE, "Second String"),
+            ),
+            pasteboardName = testPasteboard,
+        )
+
+        val item0String = Pasteboard.readItemData(0, Pasteboard.STRING_TYPE, testPasteboard)
+        assertEquals("First String", item0String?.decodeToString())
+
+        val item0Html = Pasteboard.readItemData(0, Pasteboard.HTML_TYPE, testPasteboard)
+        assertEquals("<b>First HTML</b>", item0Html?.decodeToString())
+
+        val item1String = Pasteboard.readItemData(1, Pasteboard.STRING_TYPE, testPasteboard)
+        assertEquals("Second String", item1String?.decodeToString())
+
+        val item1Html = Pasteboard.readItemData(1, Pasteboard.HTML_TYPE, testPasteboard)
+        assertNull(item1Html)
     }
 }
