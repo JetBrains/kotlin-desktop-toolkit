@@ -77,6 +77,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
             val previousInputSource = ui { Application.currentInputSource()!! }
             if (previousInputSource != inputSource) {
                 assert(ui { Application.chooseInputSource(inputSource) })
+                assert(ui { Application.currentInputSource()!! } == inputSource)
             }
             try {
                 body()

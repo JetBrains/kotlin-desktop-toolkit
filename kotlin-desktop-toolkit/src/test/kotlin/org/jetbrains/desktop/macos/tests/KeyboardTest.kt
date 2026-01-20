@@ -188,6 +188,64 @@ class KeyboardTest : KDTApplicationTestBase() {
     }
 
     @Test
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    fun cyrillicLayoutNoModifiersTest() {
+        withInputSource("com.apple.keylayout.Russian") {
+            // Physical ANSI keys mapped to Cyrillic letters in Russian layout
+            val cyrillicLetters = listOf(
+                KeyData(KeyCode.ANSI_A, "ф"),
+                KeyData(KeyCode.ANSI_B, "и"),
+                KeyData(KeyCode.ANSI_C, "с"),
+                KeyData(KeyCode.ANSI_D, "в"),
+                KeyData(KeyCode.ANSI_E, "у"),
+                KeyData(KeyCode.ANSI_F, "а"),
+                KeyData(KeyCode.ANSI_G, "п"),
+                KeyData(KeyCode.ANSI_H, "р"),
+                KeyData(KeyCode.ANSI_I, "ш"),
+                KeyData(KeyCode.ANSI_J, "о"),
+                KeyData(KeyCode.ANSI_K, "л"),
+                KeyData(KeyCode.ANSI_L, "д"),
+                KeyData(KeyCode.ANSI_M, "ь"),
+                KeyData(KeyCode.ANSI_N, "т"),
+                KeyData(KeyCode.ANSI_O, "щ"),
+                KeyData(KeyCode.ANSI_P, "з"),
+                KeyData(KeyCode.ANSI_Q, "й"),
+                KeyData(KeyCode.ANSI_R, "к"),
+                KeyData(KeyCode.ANSI_S, "ы"),
+                KeyData(KeyCode.ANSI_T, "е"),
+                KeyData(KeyCode.ANSI_U, "г"),
+                KeyData(KeyCode.ANSI_V, "м"),
+                KeyData(KeyCode.ANSI_W, "ц"),
+                KeyData(KeyCode.ANSI_X, "ч"),
+                KeyData(KeyCode.ANSI_Y, "н"),
+                KeyData(KeyCode.ANSI_Z, "я"),
+            )
+
+            cyrillicLetters.forEach { (keyCode, expectedLetter) ->
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = expectedLetter,
+                    key = expectedLetter,
+                    keyWithModifiers = expectedLetter,
+                    modifiers = emptySet(),
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = expectedLetter,
+                    key = expectedLetter,
+                    keyWithModifiers = expectedLetter,
+                    modifiers = emptySet(),
+                )
+            }
+        }
+    }
+
+    @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithShiftTest() {
         withInputSource("com.apple.keylayout.ABC") {
