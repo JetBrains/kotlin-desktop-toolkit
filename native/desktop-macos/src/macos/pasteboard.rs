@@ -51,10 +51,14 @@ fn with_pasteboard<R, F: FnOnce(&NSPasteboard) -> R>(pasteboard_type: &Pasteboar
     }
 }
 
+fn pasteboard_type_by_str_ptr(pasteboard_name: &BorrowedStrPtr) -> PasteboardType {
+    copy_to_ns_string_if_not_null(pasteboard_name).map_or(PasteboardType::Global, PasteboardType::WithName)
+}
+
 #[unsafe(no_mangle)]
-pub extern "C" fn pasteboard_clear() -> isize {
+pub extern "C" fn pasteboard_clear(pasteboard_name: BorrowedStrPtr) -> isize {
     ffi_boundary("pasteboard_clear", || {
-        let result = with_pasteboard(&PasteboardType::Global, NSPasteboard::clearContents);
+        let result = with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), NSPasteboard::clearContents);
         Ok(result)
     })
 }
@@ -96,9 +100,9 @@ impl PasteboardItem<'_> {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pasteboard_write_objects(items: BorrowedArray<PasteboardItem>) -> bool {
+pub extern "C" fn pasteboard_write_objects(pasteboard_name: BorrowedStrPtr, items: BorrowedArray<PasteboardItem>) -> bool {
     ffi_boundary("pasteboard_write_objects", || {
-        with_pasteboard(&PasteboardType::Global, |pasteboard| {
+        with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
             debug!("pasteboard_write_objects: {items:?}");
             let objects = PasteboardItem::copy_to_ns_array(items.as_slice()?)?;
             Ok(pasteboard.writeObjects(&objects))
@@ -119,22 +123,18 @@ impl PanicDefault for PasteboardContentResult {
     }
 }
 
-fn pasteboard_type_by_str_ptr(pasteboard_name: &BorrowedStrPtr) -> PasteboardType {
-    copy_to_ns_string_if_not_null(pasteboard_name).map_or(PasteboardType::Global, PasteboardType::WithName)
-}
-
 #[unsafe(no_mangle)]
-pub extern "C" fn pasteboard_read_change_count() -> isize {
+pub extern "C" fn pasteboard_read_change_count(pasteboard_name: BorrowedStrPtr) -> isize {
     ffi_boundary("pasteboard_read_change_count", || {
-        let result = with_pasteboard(&PasteboardType::Global, |pasteboard| pasteboard.changeCount());
+        let result = with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| pasteboard.changeCount());
         Ok(result)
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pasteboard_read_items_count() -> isize {
+pub extern "C" fn pasteboard_read_items_count(pasteboard_name: BorrowedStrPtr) -> isize {
     ffi_boundary("pasteboard_read_items_count", || {
-        let result = with_pasteboard(&PasteboardType::Global, |pasteboard| {
+        let result = with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
             pasteboard.pasteboardItems().map_or(0, |items| items.count()) as isize
         });
         Ok(result)

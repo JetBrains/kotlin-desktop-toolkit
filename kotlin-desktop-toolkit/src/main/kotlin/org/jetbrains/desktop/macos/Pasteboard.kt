@@ -42,28 +42,64 @@ public object Pasteboard {
         }
     }
 
-    public fun clear(): Long {
-        return ffiDownCall { desktop_macos_h.pasteboard_clear() }
-    }
-
-    public fun changeCount(): Long {
-        return ffiDownCall { desktop_macos_h.pasteboard_read_change_count() }
-    }
-
-    public fun itemCount(): Long {
-        return ffiDownCall { desktop_macos_h.pasteboard_read_items_count() }
+    /**
+     * When pasteboardName is null general clipboard is used
+     */
+    public fun clear(pasteboardName: String? = null): Long {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_macos_h.pasteboard_clear(
+                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                )
+            }
+        }
     }
 
     /**
-     * Order plays role here, items at the beginning have preference over others
+     * When pasteboardName is null general clipboard is used
      */
-    public fun writeObjects(vararg items: Item): Boolean {
-        return writeObjects(items.toList())
+    public fun changeCount(pasteboardName: String? = null): Long {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_macos_h.pasteboard_read_change_count(
+                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                )
+            }
+        }
     }
 
-    public fun writeObjects(items: List<Item>): Boolean {
+    /**
+     * When pasteboardName is null general clipboard is used
+     */
+    public fun itemCount(pasteboardName: String? = null): Long {
         return Arena.ofConfined().use { arena ->
-            ffiDownCall { desktop_macos_h.pasteboard_write_objects(items.toNative(arena)) }
+            ffiDownCall {
+                desktop_macos_h.pasteboard_read_items_count(
+                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                )
+            }
+        }
+    }
+
+    /**
+     * Order plays role here, items at the beginning have preference over others.
+     * When pasteboardName is null general clipboard is used
+     */
+    public fun writeObjects(vararg items: Item, pasteboardName: String? = null): Boolean {
+        return writeObjects(items.toList(), pasteboardName)
+    }
+
+    /**
+     * When pasteboardName is null general clipboard is used
+     */
+    public fun writeObjects(items: List<Item>, pasteboardName: String? = null): Boolean {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_macos_h.pasteboard_write_objects(
+                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    items.toNative(arena),
+                )
+            }
         }
     }
 
