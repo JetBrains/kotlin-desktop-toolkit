@@ -124,6 +124,24 @@ fn pasteboard_type_by_str_ptr(pasteboard_name: &BorrowedStrPtr) -> PasteboardTyp
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn pasteboard_read_change_count() -> isize {
+    ffi_boundary("pasteboard_read_change_count", || {
+        let result = with_pasteboard(&PasteboardType::Global, |pasteboard| pasteboard.changeCount());
+        Ok(result)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pasteboard_read_items_count() -> isize {
+    ffi_boundary("pasteboard_read_items_count", || {
+        let result = with_pasteboard(&PasteboardType::Global, |pasteboard| {
+            pasteboard.pasteboardItems().map_or(0, |items| items.count()) as isize
+        });
+        Ok(result)
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn pasteboard_read_items_of_type(
     pasteboard_name: BorrowedStrPtr,
     uniform_type_identifier: BorrowedStrPtr,

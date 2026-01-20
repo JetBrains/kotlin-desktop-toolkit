@@ -46,6 +46,14 @@ public object Pasteboard {
         return ffiDownCall { desktop_macos_h.pasteboard_clear() }
     }
 
+    public fun changeCount(): Long {
+        return ffiDownCall { desktop_macos_h.pasteboard_read_change_count() }
+    }
+
+    public fun itemCount(): Long {
+        return ffiDownCall { desktop_macos_h.pasteboard_read_items_count() }
+    }
+
     /**
      * Order plays role here, items at the beginning have preference over others
      */
