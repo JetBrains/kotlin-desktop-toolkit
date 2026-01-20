@@ -198,303 +198,312 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithShiftTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        val modifiers = setOf(KeyCode.Shift)
-        ansiLetters.forEach { (keyCode, letter) ->
-            val uppercaseLetter = letter.uppercase(getDefault())
-            withModifiersPressed(modifiers = modifiers) {
-                ui { robot.emulateKeyboardEvent(keyCode, true) }
-                ui { robot.emulateKeyboardEvent(keyCode, false) }
+        withInputSource("com.apple.keylayout.ABC") {
+            val modifiers = setOf(KeyCode.Shift)
+            ansiLetters.forEach { (keyCode, letter) ->
+                val uppercaseLetter = letter.uppercase(getDefault())
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = uppercaseLetter,
+                    key = letter,
+                    keyWithModifiers = uppercaseLetter,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = uppercaseLetter,
+                    key = letter,
+                    keyWithModifiers = uppercaseLetter,
+                    modifiers = modifiers
+                )
             }
-            assertKeyDown(
-                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-                keyCode,
-                typed = uppercaseLetter,
-                key = letter,
-                keyWithModifiers = uppercaseLetter,
-                modifiers = modifiers
-            )
-            assertKeyUp(
-                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-                keyCode,
-                typed = uppercaseLetter,
-                key = letter,
-                keyWithModifiers = uppercaseLetter,
-                modifiers = modifiers
-            )
         }
     }
 
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithCommandTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        val modifiers = setOf(KeyCode.Command)
-        ansiLetters.forEach { (keyCode, letter) ->
-            withModifiersPressed(modifiers = modifiers) {
-                ui { robot.emulateKeyboardEvent(keyCode, true) }
-                ui { robot.emulateKeyboardEvent(keyCode, false) }
+        withInputSource("com.apple.keylayout.ABC") {
+            val modifiers = setOf(KeyCode.Command)
+            ansiLetters.forEach { (keyCode, letter) ->
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = letter,
+                    key = letter,
+                    keyWithModifiers = letter,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = letter,
+                    key = letter,
+                    keyWithModifiers = letter,
+                    modifiers = modifiers
+                )
             }
-            assertKeyDown(
-                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-                keyCode,
-                typed = letter,
-                key = letter,
-                keyWithModifiers = letter,
-                modifiers = modifiers
-            )
-            assertKeyUp(
-                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-                keyCode,
-                typed = letter,
-                key = letter,
-                keyWithModifiers = letter,
-                modifiers = modifiers
-            )
         }
     }
 
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithCommandShiftTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        val modifiers = setOf(KeyCode.Command, KeyCode.Shift)
-        for ((keyCode, letter) in ansiLetters) {
-            if (keyCode == KeyCode.ANSI_Q) {
-                continue // Close all apps and quit
+        withInputSource("com.apple.keylayout.ABC") {
+            val modifiers = setOf(KeyCode.Command, KeyCode.Shift)
+            for ((keyCode, letter) in ansiLetters) {
+                if (keyCode == KeyCode.ANSI_Q) {
+                    continue // Close all apps and quit
+                }
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = letter,
+                    key = letter,
+                    keyWithModifiers = letter,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = letter,
+                    key = letter,
+                    keyWithModifiers = letter,
+                    modifiers = modifiers
+                )
             }
-            withModifiersPressed(modifiers = modifiers) {
-                ui { robot.emulateKeyboardEvent(keyCode, true) }
-                ui { robot.emulateKeyboardEvent(keyCode, false) }
-            }
-            assertKeyDown(
-                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-                keyCode,
-                typed = letter,
-                key = letter,
-                keyWithModifiers = letter,
-                modifiers = modifiers
-            )
-            assertKeyUp(
-                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-                keyCode,
-                typed = letter,
-                key = letter,
-                keyWithModifiers = letter,
-                modifiers = modifiers
-            )
         }
     }
 
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithCommandControlTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        val modifiers = setOf(KeyCode.Command, KeyCode.Control)
-        for ((keyCode, letter) in ansiLetters) {
-            if (keyCode == KeyCode.ANSI_D) {
-                continue // Reserved by Dictionary.app
+        withInputSource("com.apple.keylayout.ABC") {
+            val modifiers = setOf(KeyCode.Command, KeyCode.Control)
+            for ((keyCode, letter) in ansiLetters) {
+                if (keyCode == KeyCode.ANSI_D) {
+                    continue // Reserved by Dictionary.app
+                }
+                if (keyCode == KeyCode.ANSI_Q) {
+                    continue // Quit session
+                }
+                val keyWithModifiers: String = controlLayer[keyCode]!!
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = keyWithModifiers,
+                    key = letter,
+                    keyWithModifiers = keyWithModifiers,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = keyWithModifiers,
+                    key = letter,
+                    keyWithModifiers = keyWithModifiers,
+                    modifiers = modifiers
+                )
             }
-            if (keyCode == KeyCode.ANSI_Q) {
-                continue // Quit session
-            }
-            val keyWithModifiers: String = controlLayer[keyCode]!!
-            withModifiersPressed(modifiers = modifiers) {
-                ui { robot.emulateKeyboardEvent(keyCode, true) }
-                ui { robot.emulateKeyboardEvent(keyCode, false) }
-            }
-            assertKeyDown(
-                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-                keyCode,
-                typed = keyWithModifiers,
-                key = letter,
-                keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers
-            )
-            assertKeyUp(
-                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-                keyCode,
-                typed = keyWithModifiers,
-                key = letter,
-                keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers
-            )
         }
     }
 
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithControlTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        val modifiers = setOf(KeyCode.Control)
-        ansiLetters.forEach { (keyCode, letter) ->
-            val keyWithModifiers: String = controlLayer[keyCode]!!
-            withModifiersPressed(modifiers = modifiers) {
-                ui { robot.emulateKeyboardEvent(keyCode, true) }
-                ui { robot.emulateKeyboardEvent(keyCode, false) }
+        withInputSource("com.apple.keylayout.ABC") {
+            val modifiers = setOf(KeyCode.Control)
+            ansiLetters.forEach { (keyCode, letter) ->
+                val keyWithModifiers: String = controlLayer[keyCode]!!
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = keyWithModifiers,
+                    key = letter,
+                    keyWithModifiers = keyWithModifiers,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = keyWithModifiers,
+                    key = letter,
+                    keyWithModifiers = keyWithModifiers,
+                    modifiers = modifiers
+                )
             }
-            assertKeyDown(
-                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-                keyCode,
-                typed = keyWithModifiers,
-                key = letter,
-                keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers
-            )
-            assertKeyUp(
-                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-                keyCode,
-                typed = keyWithModifiers,
-                key = letter,
-                keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers
-            )
         }
     }
 
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithControlShiftTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        val modifiers = setOf(KeyCode.Control, KeyCode.Shift)
-        ansiLetters.forEach { (keyCode, letter) ->
-            val keyWithModifiers: String = controlLayer[keyCode]!!
-            withModifiersPressed(modifiers = modifiers) {
-                ui { robot.emulateKeyboardEvent(keyCode, true) }
-                ui { robot.emulateKeyboardEvent(keyCode, false) }
+        withInputSource("com.apple.keylayout.ABC") {
+            val modifiers = setOf(KeyCode.Control, KeyCode.Shift)
+            ansiLetters.forEach { (keyCode, letter) ->
+                val keyWithModifiers: String = controlLayer[keyCode]!!
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = keyWithModifiers,
+                    key = letter,
+                    keyWithModifiers = keyWithModifiers,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = keyWithModifiers,
+                    key = letter,
+                    keyWithModifiers = keyWithModifiers,
+                    modifiers = modifiers
+                )
             }
-            assertKeyDown(
-                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-                keyCode,
-                typed = keyWithModifiers,
-                key = letter,
-                keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers
-            )
-            assertKeyUp(
-                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-                keyCode,
-                typed = keyWithModifiers,
-                key = letter,
-                keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers
-            )
         }
     }
 
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        val modifiers = setOf(KeyCode.Option)
+        withInputSource("com.apple.keylayout.ABC") {
+            val modifiers = setOf(KeyCode.Option)
 
-        ansiLetters.forEach { (keyCode, letter) ->
-            val keyData = optionLayer[keyCode]!!
-            val optionLayerLetter = keyData.letter
-            val typed = if (keyData.isDeadKey) {
-                ""
-            } else {
-                optionLayerLetter
+            ansiLetters.forEach { (keyCode, letter) ->
+                val keyData = optionLayer[keyCode]!!
+                val optionLayerLetter = keyData.letter
+                val typed = if (keyData.isDeadKey) {
+                    ""
+                } else {
+                    optionLayerLetter
+                }
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = typed,
+                    key = letter,
+                    keyWithModifiers = optionLayerLetter,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = typed,
+                    key = letter,
+                    keyWithModifiers = optionLayerLetter,
+                    modifiers = modifiers
+                )
             }
-            withModifiersPressed(modifiers = modifiers) {
-                ui { robot.emulateKeyboardEvent(keyCode, true) }
-                ui { robot.emulateKeyboardEvent(keyCode, false) }
-            }
-            assertKeyDown(
-                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-                keyCode,
-                typed = typed,
-                key = letter,
-                keyWithModifiers = optionLayerLetter,
-                modifiers = modifiers
-            )
-            assertKeyUp(
-                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-                keyCode,
-                typed = typed,
-                key = letter,
-                keyWithModifiers = optionLayerLetter,
-                modifiers = modifiers
-            )
         }
     }
 
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionShiftTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        val modifiers = setOf(KeyCode.Option, KeyCode.Shift)
+        withInputSource("com.apple.keylayout.ABC") {
+            val modifiers = setOf(KeyCode.Option, KeyCode.Shift)
 
-        ansiLetters.forEach { (keyCode, letter) ->
-            val keyData = optionLayerShifted[keyCode]!!
-            val optionLayerLetter = keyData.letter
-            val typed = if (keyData.isDeadKey) {
-                ""
-            } else {
-                optionLayerLetter
+            ansiLetters.forEach { (keyCode, letter) ->
+                val keyData = optionLayerShifted[keyCode]!!
+                val optionLayerLetter = keyData.letter
+                val typed = if (keyData.isDeadKey) {
+                    ""
+                } else {
+                    optionLayerLetter
+                }
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = typed,
+                    key = letter,
+                    keyWithModifiers = optionLayerLetter,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = typed,
+                    key = letter,
+                    keyWithModifiers = optionLayerLetter,
+                    modifiers = modifiers
+                )
             }
-            withModifiersPressed(modifiers = modifiers) {
-                ui { robot.emulateKeyboardEvent(keyCode, true) }
-                ui { robot.emulateKeyboardEvent(keyCode, false) }
-            }
-            assertKeyDown(
-                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-                keyCode,
-                typed = typed,
-                key = letter,
-                keyWithModifiers = optionLayerLetter,
-                modifiers = modifiers
-            )
-            assertKeyUp(
-                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-                keyCode,
-                typed = typed,
-                key = letter,
-                keyWithModifiers = optionLayerLetter,
-                modifiers = modifiers
-            )
         }
     }
 
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionCommandTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        val modifiers = setOf(KeyCode.Command, KeyCode.Option)
-        for ((keyCode, letter) in ansiLetters) {
-            if (keyCode == KeyCode.ANSI_D) {
-                continue // Is not reported on CI
+        withInputSource("com.apple.keylayout.ABC") {
+            val modifiers = setOf(KeyCode.Command, KeyCode.Option)
+            for ((keyCode, letter) in ansiLetters) {
+                if (keyCode == KeyCode.ANSI_D) {
+                    continue // Is not reported on CI
+                }
+                if (keyCode == KeyCode.ANSI_N) {
+                    continue // Global shortcut used by Arc browser
+                }
+                val keyData = optionLayer[keyCode]!!
+                val optionLayerLetter = keyData.letter
+                val keyWithModifiers = if (keyData.isDeadKey) {
+                    keyData.deadKeyReplacement!!
+                } else {
+                    optionLayerLetter
+                }
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = keyWithModifiers,
+                    key = letter,
+                    keyWithModifiers = keyWithModifiers,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = keyWithModifiers,
+                    key = letter,
+                    keyWithModifiers = keyWithModifiers,
+                    modifiers = modifiers
+                )
             }
-            if (keyCode == KeyCode.ANSI_N) {
-                continue // Global shortcut used by Arc browser
-            }
-            val keyData = optionLayer[keyCode]!!
-            val optionLayerLetter = keyData.letter
-            val keyWithModifiers = if (keyData.isDeadKey) {
-                keyData.deadKeyReplacement!!
-            } else {
-                optionLayerLetter
-            }
-            withModifiersPressed(modifiers = modifiers) {
-                ui { robot.emulateKeyboardEvent(keyCode, true) }
-                ui { robot.emulateKeyboardEvent(keyCode, false) }
-            }
-            assertKeyDown(
-                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-                keyCode,
-                typed = keyWithModifiers,
-                key = letter,
-                keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers
-            )
-            assertKeyUp(
-                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-                keyCode,
-                typed = keyWithModifiers,
-                key = letter,
-                keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers
-            )
         }
     }
 
@@ -502,30 +511,31 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionControlTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        val modifiers = setOf(KeyCode.Control, KeyCode.Option)
-        ansiLetters.forEach { (keyCode, letter) ->
-            val keyWithModifiers: String = controlLayer[keyCode]!!
-            withModifiersPressed(modifiers = modifiers) {
-                ui { robot.emulateKeyboardEvent(keyCode, true) }
-                ui { robot.emulateKeyboardEvent(keyCode, false) }
+        withInputSource("com.apple.keylayout.ABC") {
+            val modifiers = setOf(KeyCode.Control, KeyCode.Option)
+            ansiLetters.forEach { (keyCode, letter) ->
+                val keyWithModifiers: String = controlLayer[keyCode]!!
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = keyWithModifiers,
+                    key = letter,
+                    keyWithModifiers = keyWithModifiers,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = keyWithModifiers,
+                    key = letter,
+                    keyWithModifiers = keyWithModifiers,
+                    modifiers = modifiers
+                )
             }
-            assertKeyDown(
-                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-                keyCode,
-                typed = keyWithModifiers,
-                key = letter,
-                keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers
-            )
-            assertKeyUp(
-                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-                keyCode,
-                typed = keyWithModifiers,
-                key = letter,
-                keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers
-            )
         }
     }
 
