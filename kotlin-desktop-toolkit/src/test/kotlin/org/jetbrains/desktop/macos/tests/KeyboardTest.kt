@@ -5,7 +5,6 @@ import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.KeyModifiersSet
 import org.jetbrains.desktop.macos.Logger
-import org.jetbrains.desktop.macos.LogicalPoint
 import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.AfterAll
@@ -15,6 +14,7 @@ import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.util.Locale.getDefault
 import java.util.concurrent.TimeUnit
+import kotlin.collections.emptySet
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -34,43 +34,46 @@ class KeyboardTest : KDTApplicationTestBase() {
         )
     }
 
-    fun pressOneKeyAndAwaitEvent(keyCode: KeyCode, typed: String, key: String, keyWithModifiers: String, modifiers: Set<KeyCode>) {
-        val modifiersSet = modifiers.toModifiersSet()
-
+    fun withModifiersPressed(modifiers: Set<KeyCode>, block: () -> Unit) {
         try {
-            for (modifier in modifiers) {
-                ui {
-                    robot.emulateKeyboardEvent(modifier, true)
-                }
-            }
-
-            ui {
-                robot.emulateKeyboardEvent(keyCode, true)
-            }
-            ui {
-                robot.emulateKeyboardEvent(keyCode, false)
-            }
-
-            awaitEventOfType<Event.KeyDown> {
-                it.keyCode == keyCode &&
-                    it.typedCharacters == typed &&
-                    it.key == key &&
-                    it.keyWithModifiers == keyWithModifiers &&
-                    it.modifiers == modifiersSet
-            }
-            awaitEventOfType<Event.KeyUp> {
-                it.keyCode == keyCode &&
-                    it.typedCharacters == typed &&
-                    it.key == key &&
-                    it.keyWithModifiers == keyWithModifiers &&
-                    it.modifiers == modifiersSet
-            }
+            modifiers.forEach { ui { robot.emulateKeyboardEvent(it, true) } }
+            block()
         } finally {
-            for (modifier in modifiers) {
-                ui {
-                    robot.emulateKeyboardEvent(modifier, false)
-                }
-            }
+            modifiers.forEach { ui { robot.emulateKeyboardEvent(it, false) } }
+        }
+    }
+
+    fun assertKeyDown(
+        event: Event.KeyDown,
+        keyCode: KeyCode,
+        typed: String,
+        key: String,
+        keyWithModifiers: String,
+        modifiers: Set<KeyCode>
+    ) {
+        val isKeyDownExpected = event.typedCharacters == typed &&
+                event.key == key &&
+                event.keyWithModifiers == keyWithModifiers &&
+                event.modifiers == modifiers.toModifiersSet()
+        assert(isKeyDownExpected) {
+            "Expected keyDown event with keyCode=$keyCode, typed=$typed, key=$key, keyWithModifiers=$keyWithModifiers, modifiers=$modifiers, but got $event"
+        }
+    }
+
+    fun assertKeyUp(
+        event: Event.KeyUp,
+        keyCode: KeyCode,
+        typed: String,
+        key: String,
+        keyWithModifiers: String,
+        modifiers: Set<KeyCode>
+    ) {
+        val isKeyDownExpected = event.typedCharacters == typed &&
+                event.key == key &&
+                event.keyWithModifiers == keyWithModifiers &&
+                event.modifiers == modifiers.toModifiersSet()
+        assert(isKeyDownExpected) {
+            "Expected keyUp event with keyCode=$keyCode, typed=$typed, key=$key, keyWithModifiers=$keyWithModifiers, modifiers=$modifiers, but got $event"
         }
     }
 
@@ -87,8 +90,6 @@ class KeyboardTest : KDTApplicationTestBase() {
             inputSourceBeforeTest = ui { Application.currentInputSource()!! }
             robot = ui { Robot() }
             window = createWindowAndEnsureItsFocused(name = "KeyboardTest Window")
-            assert(ui { Application.chooseInputSource("com.apple.keylayout.ABC") }) { "Failed to choose ABC keyboard layout" }
-            assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
             Logger.info { "KeyboardTest INIT FINISHED" }
         }
 
@@ -109,9 +110,88 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersNoModifiersTest() {
-        assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
-        ansiLetters.forEach { (keyCode, letter) ->
-            pressOneKeyAndAwaitEvent(keyCode, typed = letter, key = letter, keyWithModifiers = letter, modifiers = emptySet())
+        withInputSource("com.apple.keylayout.ABC") {
+            ansiLetters.forEach { (keyCode, letter) ->
+                val modifiers = emptySet<KeyCode>()
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = letter,
+                    key = letter,
+                    keyWithModifiers = letter,
+                    modifiers = modifiers
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = letter,
+                    key = letter,
+                    keyWithModifiers = letter,
+                    modifiers = modifiers
+                )
+            }
+        }
+    }
+
+    @Test
+    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    fun germanLayoutNoModifiersTest() {
+        withInputSource("com.apple.keylayout.German") {
+            // In German layout, Y and Z physical keys are swapped
+            val germanLetters = listOf(
+                KeyData(KeyCode.ANSI_A, "a"),
+                KeyData(KeyCode.ANSI_B, "b"),
+                KeyData(KeyCode.ANSI_C, "c"),
+                KeyData(KeyCode.ANSI_D, "d"),
+                KeyData(KeyCode.ANSI_E, "e"),
+                KeyData(KeyCode.ANSI_F, "f"),
+                KeyData(KeyCode.ANSI_G, "g"),
+                KeyData(KeyCode.ANSI_H, "h"),
+                KeyData(KeyCode.ANSI_I, "i"),
+                KeyData(KeyCode.ANSI_J, "j"),
+                KeyData(KeyCode.ANSI_K, "k"),
+                KeyData(KeyCode.ANSI_L, "l"),
+                KeyData(KeyCode.ANSI_M, "m"),
+                KeyData(KeyCode.ANSI_N, "n"),
+                KeyData(KeyCode.ANSI_O, "o"),
+                KeyData(KeyCode.ANSI_P, "p"),
+                KeyData(KeyCode.ANSI_Q, "q"),
+                KeyData(KeyCode.ANSI_R, "r"),
+                KeyData(KeyCode.ANSI_S, "s"),
+                KeyData(KeyCode.ANSI_T, "t"),
+                KeyData(KeyCode.ANSI_U, "u"),
+                KeyData(KeyCode.ANSI_V, "v"),
+                KeyData(KeyCode.ANSI_W, "w"),
+                KeyData(KeyCode.ANSI_X, "x"),
+                KeyData(KeyCode.ANSI_Y, "z"),  // Y key produces z in German layout
+                KeyData(KeyCode.ANSI_Z, "y"),  // Z key produces y in German layout
+            )
+
+            germanLetters.forEach { (keyCode, expectedLetter) ->
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = expectedLetter,
+                    key = expectedLetter,
+                    keyWithModifiers = expectedLetter,
+                    modifiers = emptySet()
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = expectedLetter,
+                    key = expectedLetter,
+                    keyWithModifiers = expectedLetter,
+                    modifiers = emptySet()
+                )
+            }
         }
     }
 
@@ -122,12 +202,25 @@ class KeyboardTest : KDTApplicationTestBase() {
         val modifiers = setOf(KeyCode.Shift)
         ansiLetters.forEach { (keyCode, letter) ->
             val uppercaseLetter = letter.uppercase(getDefault())
-            pressOneKeyAndAwaitEvent(
+            withModifiersPressed(modifiers = modifiers) {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+            }
+            assertKeyDown(
+                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                 keyCode,
                 typed = uppercaseLetter,
                 key = letter,
                 keyWithModifiers = uppercaseLetter,
-                modifiers = modifiers,
+                modifiers = modifiers
+            )
+            assertKeyUp(
+                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                keyCode,
+                typed = uppercaseLetter,
+                key = letter,
+                keyWithModifiers = uppercaseLetter,
+                modifiers = modifiers
             )
         }
     }
@@ -138,7 +231,26 @@ class KeyboardTest : KDTApplicationTestBase() {
         assertEquals("com.apple.keylayout.ABC", ui { Application.currentInputSource() })
         val modifiers = setOf(KeyCode.Command)
         ansiLetters.forEach { (keyCode, letter) ->
-            pressOneKeyAndAwaitEvent(keyCode, typed = letter, key = letter, keyWithModifiers = letter, modifiers = modifiers)
+            withModifiersPressed(modifiers = modifiers) {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+            }
+            assertKeyDown(
+                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                keyCode,
+                typed = letter,
+                key = letter,
+                keyWithModifiers = letter,
+                modifiers = modifiers
+            )
+            assertKeyUp(
+                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                keyCode,
+                typed = letter,
+                key = letter,
+                keyWithModifiers = letter,
+                modifiers = modifiers
+            )
         }
     }
 
@@ -151,7 +263,26 @@ class KeyboardTest : KDTApplicationTestBase() {
             if (keyCode == KeyCode.ANSI_Q) {
                 continue // Close all apps and quit
             }
-            pressOneKeyAndAwaitEvent(keyCode, typed = letter, key = letter, keyWithModifiers = letter, modifiers = modifiers)
+            withModifiersPressed(modifiers = modifiers) {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+            }
+            assertKeyDown(
+                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                keyCode,
+                typed = letter,
+                key = letter,
+                keyWithModifiers = letter,
+                modifiers = modifiers
+            )
+            assertKeyUp(
+                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                keyCode,
+                typed = letter,
+                key = letter,
+                keyWithModifiers = letter,
+                modifiers = modifiers
+            )
         }
     }
 
@@ -168,12 +299,25 @@ class KeyboardTest : KDTApplicationTestBase() {
                 continue // Quit session
             }
             val keyWithModifiers: String = controlLayer[keyCode]!!
-            pressOneKeyAndAwaitEvent(
+            withModifiersPressed(modifiers = modifiers) {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+            }
+            assertKeyDown(
+                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                 keyCode,
                 typed = keyWithModifiers,
                 key = letter,
                 keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers,
+                modifiers = modifiers
+            )
+            assertKeyUp(
+                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                keyCode,
+                typed = keyWithModifiers,
+                key = letter,
+                keyWithModifiers = keyWithModifiers,
+                modifiers = modifiers
             )
         }
     }
@@ -185,12 +329,25 @@ class KeyboardTest : KDTApplicationTestBase() {
         val modifiers = setOf(KeyCode.Control)
         ansiLetters.forEach { (keyCode, letter) ->
             val keyWithModifiers: String = controlLayer[keyCode]!!
-            pressOneKeyAndAwaitEvent(
+            withModifiersPressed(modifiers = modifiers) {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+            }
+            assertKeyDown(
+                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                 keyCode,
                 typed = keyWithModifiers,
                 key = letter,
                 keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers,
+                modifiers = modifiers
+            )
+            assertKeyUp(
+                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                keyCode,
+                typed = keyWithModifiers,
+                key = letter,
+                keyWithModifiers = keyWithModifiers,
+                modifiers = modifiers
             )
         }
     }
@@ -202,12 +359,25 @@ class KeyboardTest : KDTApplicationTestBase() {
         val modifiers = setOf(KeyCode.Control, KeyCode.Shift)
         ansiLetters.forEach { (keyCode, letter) ->
             val keyWithModifiers: String = controlLayer[keyCode]!!
-            pressOneKeyAndAwaitEvent(
+            withModifiersPressed(modifiers = modifiers) {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+            }
+            assertKeyDown(
+                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                 keyCode,
                 typed = keyWithModifiers,
                 key = letter,
                 keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers,
+                modifiers = modifiers
+            )
+            assertKeyUp(
+                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                keyCode,
+                typed = keyWithModifiers,
+                key = letter,
+                keyWithModifiers = keyWithModifiers,
+                modifiers = modifiers
             )
         }
     }
@@ -226,7 +396,26 @@ class KeyboardTest : KDTApplicationTestBase() {
             } else {
                 optionLayerLetter
             }
-            pressOneKeyAndAwaitEvent(keyCode, typed = typed, key = letter, keyWithModifiers = optionLayerLetter, modifiers = modifiers)
+            withModifiersPressed(modifiers = modifiers) {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+            }
+            assertKeyDown(
+                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                keyCode,
+                typed = typed,
+                key = letter,
+                keyWithModifiers = optionLayerLetter,
+                modifiers = modifiers
+            )
+            assertKeyUp(
+                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                keyCode,
+                typed = typed,
+                key = letter,
+                keyWithModifiers = optionLayerLetter,
+                modifiers = modifiers
+            )
         }
     }
 
@@ -244,7 +433,26 @@ class KeyboardTest : KDTApplicationTestBase() {
             } else {
                 optionLayerLetter
             }
-            pressOneKeyAndAwaitEvent(keyCode, typed = typed, key = letter, keyWithModifiers = optionLayerLetter, modifiers = modifiers)
+            withModifiersPressed(modifiers = modifiers) {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+            }
+            assertKeyDown(
+                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                keyCode,
+                typed = typed,
+                key = letter,
+                keyWithModifiers = optionLayerLetter,
+                modifiers = modifiers
+            )
+            assertKeyUp(
+                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                keyCode,
+                typed = typed,
+                key = letter,
+                keyWithModifiers = optionLayerLetter,
+                modifiers = modifiers
+            )
         }
     }
 
@@ -267,12 +475,25 @@ class KeyboardTest : KDTApplicationTestBase() {
             } else {
                 optionLayerLetter
             }
-            pressOneKeyAndAwaitEvent(
+            withModifiersPressed(modifiers = modifiers) {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+            }
+            assertKeyDown(
+                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                 keyCode,
                 typed = keyWithModifiers,
                 key = letter,
                 keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers,
+                modifiers = modifiers
+            )
+            assertKeyUp(
+                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                keyCode,
+                typed = keyWithModifiers,
+                key = letter,
+                keyWithModifiers = keyWithModifiers,
+                modifiers = modifiers
             )
         }
     }
@@ -285,12 +506,25 @@ class KeyboardTest : KDTApplicationTestBase() {
         val modifiers = setOf(KeyCode.Control, KeyCode.Option)
         ansiLetters.forEach { (keyCode, letter) ->
             val keyWithModifiers: String = controlLayer[keyCode]!!
-            pressOneKeyAndAwaitEvent(
+            withModifiersPressed(modifiers = modifiers) {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+            }
+            assertKeyDown(
+                awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                 keyCode,
                 typed = keyWithModifiers,
                 key = letter,
                 keyWithModifiers = keyWithModifiers,
-                modifiers = modifiers,
+                modifiers = modifiers
+            )
+            assertKeyUp(
+                awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                keyCode,
+                typed = keyWithModifiers,
+                key = letter,
+                keyWithModifiers = keyWithModifiers,
+                modifiers = modifiers
             )
         }
     }

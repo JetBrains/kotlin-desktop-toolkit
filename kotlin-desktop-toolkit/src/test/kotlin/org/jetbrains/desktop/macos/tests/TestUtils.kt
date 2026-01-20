@@ -73,6 +73,16 @@ open class KDTApplicationTestBase : KDTTestBase() {
             return window
         }
 
+        fun withInputSource(inputSource: String, body: () -> Unit) {
+            val previousInputSource = ui { Application.currentInputSource()!! }
+            assert(ui { Application.chooseInputSource(inputSource) })
+            try {
+                body()
+            } finally {
+                ui { Application.chooseInputSource(previousInputSource) }
+            }
+        }
+
         val eventQueue = LinkedBlockingQueue<Event>()
 
         fun awaitEvent(predicate: (Event) -> Boolean): Event {
