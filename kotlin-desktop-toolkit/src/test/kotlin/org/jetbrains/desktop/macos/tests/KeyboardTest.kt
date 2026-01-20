@@ -16,7 +16,6 @@ import java.util.Locale.getDefault
 import java.util.concurrent.TimeUnit
 import kotlin.collections.emptySet
 import kotlin.test.Test
-import kotlin.test.assertEquals
 
 @EnabledOnOs(OS.MAC)
 class KeyboardTest : KDTApplicationTestBase() {
@@ -49,29 +48,22 @@ class KeyboardTest : KDTApplicationTestBase() {
         typed: String,
         key: String,
         keyWithModifiers: String,
-        modifiers: Set<KeyCode>
+        modifiers: Set<KeyCode>,
     ) {
         val isKeyDownExpected = event.typedCharacters == typed &&
-                event.key == key &&
-                event.keyWithModifiers == keyWithModifiers &&
-                event.modifiers == modifiers.toModifiersSet()
+            event.key == key &&
+            event.keyWithModifiers == keyWithModifiers &&
+            event.modifiers == modifiers.toModifiersSet()
         assert(isKeyDownExpected) {
             "Expected keyDown event with keyCode=$keyCode, typed=$typed, key=$key, keyWithModifiers=$keyWithModifiers, modifiers=$modifiers, but got $event"
         }
     }
 
-    fun assertKeyUp(
-        event: Event.KeyUp,
-        keyCode: KeyCode,
-        typed: String,
-        key: String,
-        keyWithModifiers: String,
-        modifiers: Set<KeyCode>
-    ) {
+    fun assertKeyUp(event: Event.KeyUp, keyCode: KeyCode, typed: String, key: String, keyWithModifiers: String, modifiers: Set<KeyCode>) {
         val isKeyDownExpected = event.typedCharacters == typed &&
-                event.key == key &&
-                event.keyWithModifiers == keyWithModifiers &&
-                event.modifiers == modifiers.toModifiersSet()
+            event.key == key &&
+            event.keyWithModifiers == keyWithModifiers &&
+            event.modifiers == modifiers.toModifiersSet()
         assert(isKeyDownExpected) {
             "Expected keyUp event with keyCode=$keyCode, typed=$typed, key=$key, keyWithModifiers=$keyWithModifiers, modifiers=$modifiers, but got $event"
         }
@@ -123,7 +115,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = letter,
                     key = letter,
                     keyWithModifiers = letter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -131,7 +123,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = letter,
                     key = letter,
                     keyWithModifiers = letter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
@@ -167,8 +159,8 @@ class KeyboardTest : KDTApplicationTestBase() {
                 KeyData(KeyCode.ANSI_V, "v"),
                 KeyData(KeyCode.ANSI_W, "w"),
                 KeyData(KeyCode.ANSI_X, "x"),
-                KeyData(KeyCode.ANSI_Y, "z"),  // Y key produces z in German layout
-                KeyData(KeyCode.ANSI_Z, "y"),  // Z key produces y in German layout
+                KeyData(KeyCode.ANSI_Y, "z"), // Y key produces z in German layout
+                KeyData(KeyCode.ANSI_Z, "y"), // Z key produces y in German layout
             )
 
             germanLetters.forEach { (keyCode, expectedLetter) ->
@@ -181,7 +173,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = expectedLetter,
                     key = expectedLetter,
                     keyWithModifiers = expectedLetter,
-                    modifiers = emptySet()
+                    modifiers = emptySet(),
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -189,7 +181,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = expectedLetter,
                     key = expectedLetter,
                     keyWithModifiers = expectedLetter,
-                    modifiers = emptySet()
+                    modifiers = emptySet(),
                 )
             }
         }
@@ -212,7 +204,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = uppercaseLetter,
                     key = letter,
                     keyWithModifiers = uppercaseLetter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -220,7 +212,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = uppercaseLetter,
                     key = letter,
                     keyWithModifiers = uppercaseLetter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
@@ -242,7 +234,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = letter,
                     key = letter,
                     keyWithModifiers = letter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -250,7 +242,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = letter,
                     key = letter,
                     keyWithModifiers = letter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
@@ -275,7 +267,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = letter,
                     key = letter,
                     keyWithModifiers = letter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -283,7 +275,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = letter,
                     key = letter,
                     keyWithModifiers = letter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
@@ -312,7 +304,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = keyWithModifiers,
                     key = letter,
                     keyWithModifiers = keyWithModifiers,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -320,7 +312,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = keyWithModifiers,
                     key = letter,
                     keyWithModifiers = keyWithModifiers,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
@@ -343,7 +335,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = keyWithModifiers,
                     key = letter,
                     keyWithModifiers = keyWithModifiers,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -351,7 +343,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = keyWithModifiers,
                     key = letter,
                     keyWithModifiers = keyWithModifiers,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
@@ -374,7 +366,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = keyWithModifiers,
                     key = letter,
                     keyWithModifiers = keyWithModifiers,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -382,7 +374,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = keyWithModifiers,
                     key = letter,
                     keyWithModifiers = keyWithModifiers,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
@@ -412,7 +404,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = typed,
                     key = letter,
                     keyWithModifiers = optionLayerLetter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -420,7 +412,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = typed,
                     key = letter,
                     keyWithModifiers = optionLayerLetter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
@@ -450,7 +442,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = typed,
                     key = letter,
                     keyWithModifiers = optionLayerLetter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -458,7 +450,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = typed,
                     key = letter,
                     keyWithModifiers = optionLayerLetter,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
@@ -493,7 +485,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = keyWithModifiers,
                     key = letter,
                     keyWithModifiers = keyWithModifiers,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -501,7 +493,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = keyWithModifiers,
                     key = letter,
                     keyWithModifiers = keyWithModifiers,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
@@ -525,7 +517,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = keyWithModifiers,
                     key = letter,
                     keyWithModifiers = keyWithModifiers,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
                 assertKeyUp(
                     awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
@@ -533,7 +525,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                     typed = keyWithModifiers,
                     key = letter,
                     keyWithModifiers = keyWithModifiers,
-                    modifiers = modifiers
+                    modifiers = modifiers,
                 )
             }
         }
