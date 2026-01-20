@@ -17,9 +17,9 @@ public object Pasteboard {
     public const val PNG_IMAGE_TYPE: String = "public.png"
     public const val TIFF_IMAGE_TYPE: String = "public.tiff"
 
-    public data class Element(
-        val type: String,
-        val content: ByteArray,
+    public class Element(
+        public val type: String,
+        public val content: ByteArray,
     ) {
         public companion object {
             public fun ofString(type: String, content: String): Element {
@@ -133,6 +133,28 @@ public object Pasteboard {
                 desktop_macos_h.pasteboard_read_file_items(
                     arena,
                     pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                )
+            }
+            val items = NativePasteboardContentResult.items(nativeResult)
+            val result = listOfByteArraysFromNative(items).map { String(it) }
+            ffiDownCall {
+                desktop_macos_h.pasteboard_content_drop(nativeResult)
+            }
+            result
+        }
+    }
+
+    /**
+     * Returns the list of available UTIs for the item at the given index.
+     * When pasteboardName is null general clipboard is used.
+     */
+    public fun readItemTypes(itemIndex: Int, pasteboardName: String? = null): List<String> {
+        return Arena.ofConfined().use { arena ->
+            val nativeResult = ffiDownCall {
+                desktop_macos_h.pasteboard_read_item_types(
+                    arena,
+                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    itemIndex.toLong(),
                 )
             }
             val items = NativePasteboardContentResult.items(nativeResult)

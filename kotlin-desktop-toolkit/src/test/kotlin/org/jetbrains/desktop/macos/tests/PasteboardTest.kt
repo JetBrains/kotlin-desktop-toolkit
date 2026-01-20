@@ -211,4 +211,43 @@ class PasteboardTest : KDTApplicationTestBase() {
         }
         assertContentEquals(imageBytes, result)
     }
+
+    @Test
+    fun `readItemTypes returns expected types`() {
+        val testPasteboard = "org.jetbrains.kdt.test-pasteboard"
+        Pasteboard.clear(testPasteboard)
+        Pasteboard.writeObjects(
+            Pasteboard.Item(
+                Element.ofString(Pasteboard.STRING_TYPE, "Hello"),
+                Element.ofString(Pasteboard.HTML_TYPE, "<b>Hello</b>"),
+            ),
+            pasteboardName = testPasteboard,
+        )
+
+        val types = Pasteboard.readItemTypes(0, testPasteboard)
+        assertTrue(types.contains(Pasteboard.STRING_TYPE))
+        assertTrue(types.contains(Pasteboard.HTML_TYPE))
+        assertEquals(2, types.size)
+    }
+
+    @Test
+    fun `readItemTypes for multiple items`() {
+        val testPasteboard = "org.jetbrains.kdt.test-pasteboard2"
+        Pasteboard.clear(testPasteboard)
+        Pasteboard.writeObjects(
+            listOf(
+                Pasteboard.Item.ofString(Pasteboard.STRING_TYPE, "First"),
+                Pasteboard.Item.ofString(Pasteboard.HTML_TYPE, "<b>Second</b>"),
+            ),
+            pasteboardName = testPasteboard,
+        )
+
+        assertEquals(2, Pasteboard.itemCount(testPasteboard))
+
+        val types0 = Pasteboard.readItemTypes(0, testPasteboard)
+        assertTrue(types0.contains(Pasteboard.STRING_TYPE))
+
+        val types1 = Pasteboard.readItemTypes(1, testPasteboard)
+        assertTrue(types1.contains(Pasteboard.HTML_TYPE))
+    }
 }

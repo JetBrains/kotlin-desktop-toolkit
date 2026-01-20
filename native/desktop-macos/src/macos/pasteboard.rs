@@ -126,7 +126,7 @@ impl PanicDefault for PasteboardContentResult {
 #[unsafe(no_mangle)]
 pub extern "C" fn pasteboard_read_change_count(pasteboard_name: BorrowedStrPtr) -> isize {
     ffi_boundary("pasteboard_read_change_count", || {
-        let result = with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| pasteboard.changeCount());
+        let result = with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), NSPasteboard::changeCount);
         Ok(result)
     })
 }
@@ -186,6 +186,28 @@ pub extern "C" fn pasteboard_read_file_items(pasteboard_name: BorrowedStrPtr) ->
 
             Ok(PasteboardContentResult {
                 items: AutoDropArray::new(urls),
+            })
+        })
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pasteboard_read_item_types(pasteboard_name: BorrowedStrPtr, item_index: usize) -> PasteboardContentResult {
+    ffi_boundary("pasteboard_read_item_types", || {
+        with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
+            let items = pasteboard.pasteboardItems().context("Can't retrieve items")?;
+            anyhow::ensure!(item_index < items.count(), "Item index out of bounds");
+            let item = items.objectAtIndex(item_index);
+            let types = item.types();
+            let types: Box<[_]> = types
+                .iter()
+                .map(|t: Retained<NSString>| {
+                    let c_str = unsafe { CStr::from_ptr(t.UTF8String()) };
+                    AutoDropArray::new(Box::<[u8]>::from(c_str.to_bytes()))
+                })
+                .collect();
+            Ok(PasteboardContentResult {
+                items: AutoDropArray::new(types),
             })
         })
     })
