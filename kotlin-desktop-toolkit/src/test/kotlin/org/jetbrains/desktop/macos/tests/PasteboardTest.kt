@@ -54,7 +54,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         assert(counter > 0L)
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.Combined(
+                Pasteboard.Item(
                     Element.ofString(
                         type = Pasteboard.STRING_TYPE,
                         content = "Hello World!!!",
@@ -114,8 +114,8 @@ class PasteboardTest : KDTApplicationTestBase() {
         val content2 = "Hello2"
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.File(file1.absolutePathString()),
-                Pasteboard.Item.File(file2.absolutePathString()),
+                Pasteboard.Item(Element.ofString(Pasteboard.FILE_URL_TYPE, file1.toUri().toString())),
+                Pasteboard.Item(Element.ofString(Pasteboard.FILE_URL_TYPE, file2.toUri().toString())),
                 Pasteboard.Item.ofString(type = Pasteboard.STRING_TYPE, content = content1),
                 Pasteboard.Item.ofString(type = Pasteboard.STRING_TYPE, content = content2),
             )
@@ -140,7 +140,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         val file = createTempFile(suffix = "File name with spaces.txt")
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.File(file.absolutePathString()),
+                Pasteboard.Item(Element.ofString(Pasteboard.FILE_URL_TYPE, file.toUri().toString())),
             )
         }
         assertTrue(success)
@@ -159,7 +159,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         assert(counter > 0L)
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.Url(url),
+                Pasteboard.Item(Element.ofString(Pasteboard.URL_TYPE, url)),
             )
         }
         assertTrue(success)

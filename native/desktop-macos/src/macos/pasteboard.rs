@@ -69,47 +69,20 @@ pub struct CombinedItemElement<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub enum PasteboardItem<'a> {
-    // NSURL
-    URLItem {
-        url: BorrowedStrPtr<'a>,
-    },
-    FSPathItem {
-        path: BorrowedStrPtr<'a>,
-    },
-    // todo we could add some more NS* classes that implements NSPasteboardWriting protocol
-    CombinedItem {
-        elements: BorrowedArray<'a, CombinedItemElement<'a>>,
-    },
+pub struct PasteboardItem<'a> {
+    elements: BorrowedArray<'a, CombinedItemElement<'a>>,
 }
 
 impl PasteboardItem<'_> {
     pub(crate) fn to_ns_pasteboard_item(&self) -> anyhow::Result<Retained<ProtocolObject<dyn NSPasteboardWriting>>> {
-        let pasteboard_writing = match self {
-            PasteboardItem::URLItem { url } => {
-                let url = copy_to_ns_string(url)?;
-                let ns_url = NSURL::URLWithString(&url).with_context(|| format!("Malformed URL: {url:?}"))?;
-                debug!("is file url: {:?}", ns_url.isFileURL());
-                ProtocolObject::from_retained(ns_url)
-            }
-            PasteboardItem::FSPathItem { path } => {
-                debug!("FSPathItem added: {path:?}");
-                let path = copy_to_ns_string(path)?;
-                let ns_url = NSURL::fileURLWithPath(&path);
-                ProtocolObject::from_retained(ns_url)
-            }
-            PasteboardItem::CombinedItem { elements } => {
-                let elements = elements.as_slice()?;
-                let item = NSPasteboardItem::new();
-                for element in elements {
-                    let uti = copy_to_ns_string(&element.uniform_type_identifier)?;
-                    let data = NSData::with_bytes(element.content.as_slice()?);
-                    assert!(item.setData_forType(&data, &uti));
-                }
-                ProtocolObject::from_retained(item)
-            }
-        };
-        Ok(pasteboard_writing)
+        let elements = self.elements.as_slice()?;
+        let item = NSPasteboardItem::new();
+        for element in elements {
+            let uti = copy_to_ns_string(&element.uniform_type_identifier)?;
+            let data = NSData::with_bytes(element.content.as_slice()?);
+            assert!(item.setData_forType(&data, &uti));
+        }
+        Ok(ProtocolObject::from_retained(item))
     }
 
     fn copy_to_ns_array(items: &[Self]) -> anyhow::Result<Retained<NSArray<ProtocolObject<dyn NSPasteboardWriting>>>> {
