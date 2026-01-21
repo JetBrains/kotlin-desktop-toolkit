@@ -51,30 +51,12 @@ public object Pasteboard {
         }
     }
 
+    // Pasteboard writing API:
+
     public fun clear(pasteboard: PasteboardType = PasteboardType.General): Long {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.pasteboard_clear(
-                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
-                )
-            }
-        }
-    }
-
-    public fun changeCount(pasteboard: PasteboardType = PasteboardType.General): Long {
-        return Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                desktop_macos_h.pasteboard_read_change_count(
-                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
-                )
-            }
-        }
-    }
-
-    public fun itemCount(pasteboard: PasteboardType = PasteboardType.General): Long {
-        return Arena.ofConfined().use { arena ->
-            ffiDownCall {
-                desktop_macos_h.pasteboard_read_items_count(
                     pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
                 )
             }
@@ -95,6 +77,8 @@ public object Pasteboard {
             }
         }
     }
+
+    // Pasteboard reading API:
 
     public fun readItemsOfType(type: String, pasteboard: PasteboardType = PasteboardType.General): List<ByteArray> {
         return Arena.ofConfined().use { arena ->
@@ -117,6 +101,28 @@ public object Pasteboard {
     public fun readFileItemPaths(pasteboard: PasteboardType = PasteboardType.General): List<Path> {
         return readItemsOfType(FILE_URL_TYPE, pasteboard).mapNotNull { bytes ->
             UrlUtils.urlToFilePath(String(bytes))?.let { Path.of(it) }
+        }
+    }
+
+    // Low-level pasteboard reading API:
+
+    public fun changeCount(pasteboard: PasteboardType = PasteboardType.General): Long {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_macos_h.pasteboard_read_change_count(
+                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                )
+            }
+        }
+    }
+
+    public fun itemCount(pasteboard: PasteboardType = PasteboardType.General): Long {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_macos_h.pasteboard_read_items_count(
+                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                )
+            }
         }
     }
 
