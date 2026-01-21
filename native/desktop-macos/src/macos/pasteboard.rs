@@ -5,7 +5,7 @@ use crate::macos::string::copy_to_ns_string_if_not_null;
 use anyhow::Context;
 use desktop_common::{
     ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr},
-    logger::{PanicDefault, ffi_boundary},
+    logger::{ffi_boundary, PanicDefault},
 };
 use log::debug;
 use objc2::{rc::Retained, runtime::ProtocolObject};
@@ -183,7 +183,12 @@ pub extern "C" fn pasteboard_read_item_data(
         with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
             let uti = copy_to_ns_string(&uniform_type_identifier)?;
             let items = pasteboard.pasteboardItems().context("Can't retrieve items")?;
-            anyhow::ensure!(item_index < items.count(), "Item index out of bounds");
+            if item_index >= items.count() {
+                return Ok(PasteboardItemDataResult {
+                    data: AutoDropArray::new(Box::new([])),
+                    found: false,
+                });
+            }
             let item = items.objectAtIndex(item_index);
             Ok(match item.dataForType(&uti) {
                 Some(data) => PasteboardItemDataResult {
@@ -212,7 +217,11 @@ pub extern "C" fn pasteboard_read_item_types(pasteboard_name: BorrowedStrPtr, it
     ffi_boundary("pasteboard_read_item_types", || {
         with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
             let items = pasteboard.pasteboardItems().context("Can't retrieve items")?;
-            anyhow::ensure!(item_index < items.count(), "Item index out of bounds");
+            if item_index >= items.count() {
+                return Ok(PasteboardContentResult {
+                    items: AutoDropArray::new(Box::new([])),
+                })
+            };
             let item = items.objectAtIndex(item_index);
             let types = item.types();
             let types: Box<[_]> = types
@@ -245,9 +254,9 @@ mod tests {
     use log::info;
     use objc2::runtime::ProtocolObject;
     use objc2_app_kit::{NSPasteboardItem, NSPasteboardTypeString, NSURLNSPasteboardSupport};
-    use objc2_foundation::{NSArray, NSObjectNSComparisonMethods, NSString, NSURL, ns_string};
+    use objc2_foundation::{ns_string, NSArray, NSObjectNSComparisonMethods, NSString, NSURL};
 
-    use crate::macos::pasteboard::{PasteboardType, with_pasteboard};
+    use crate::macos::pasteboard::{with_pasteboard, PasteboardType};
 
     #[test]
     fn test_pasteboard_can_store_and_return_string() {
