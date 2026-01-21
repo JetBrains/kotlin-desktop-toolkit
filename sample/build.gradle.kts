@@ -159,6 +159,8 @@ tasks.register<JavaExec>("runSkikoSampleWin32") {
         "--enable-preview",
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
+        "-Dstdout.encoding=UTF-8",
+        "-Dstderr.encoding=UTF-8",
     )
     setUpLoggingAndLibraryPath()
     setUpCrashDumpPath()
