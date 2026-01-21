@@ -333,8 +333,8 @@ impl Window {
 
 impl DraggingItem<'_> {
     fn to_ns_dragging_item(&self, mtm: MainThreadMarker, window_height: LogicalPixels) -> anyhow::Result<Retained<NSDraggingItem>> {
-        let pasteboard_writer: Retained<ProtocolObject<dyn NSPasteboardWriting>> = self.pasteboard_item.to_ns_pasteboard_item()?;
-        let item = NSDraggingItem::initWithPasteboardWriter(NSDraggingItem::alloc(), &pasteboard_writer);
+        let pasteboard_writing: Retained<ProtocolObject<dyn NSPasteboardWriting>> = self.pasteboard_item.to_ns_pasteboard_item()?;
+        let item = NSDraggingItem::initWithPasteboardWriter(NSDraggingItem::alloc(), &pasteboard_writing);
         let frame = self.rect.as_macos_coords(window_height);
         let image = self.image.to_ns_image(mtm)?;
         unsafe { item.setDraggingFrame_contents(frame, Some(image.as_ref())) }

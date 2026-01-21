@@ -53,7 +53,7 @@ public data class DragInfo(
     val locationInWindow: LogicalPoint,
     val allowedOperations: DragOperationsSet,
     val sequenceNumber: Long,
-    val pasteboardName: String,
+    val pasteboard: PasteboardType,
 ) {
     internal companion object {
         fun fromNative(segment: MemorySegment): DragInfo {
@@ -67,7 +67,7 @@ public data class DragInfo(
                 locationInWindow,
                 allowedOperations,
                 sequenceNumber,
-                pasteboardName,
+                PasteboardType.named(pasteboardName),
             )
         }
     }

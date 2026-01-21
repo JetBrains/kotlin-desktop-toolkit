@@ -2,13 +2,14 @@ package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.Pasteboard.Element
+import org.jetbrains.desktop.macos.PasteboardType
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
-import kotlin.io.path.absolutePathString
 import kotlin.io.path.createTempFile
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @EnabledOnOs(OS.MAC)
@@ -54,7 +55,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         assert(counter > 0L)
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.Combined(
+                Pasteboard.Item(
                     Element.ofString(
                         type = Pasteboard.STRING_TYPE,
                         content = "Hello World!!!",
@@ -114,20 +115,20 @@ class PasteboardTest : KDTApplicationTestBase() {
         val content2 = "Hello2"
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.File(file1.absolutePathString()),
-                Pasteboard.Item.File(file2.absolutePathString()),
+                Pasteboard.Item(Element.ofFilePath(file1)),
+                Pasteboard.Item(Element.ofFilePath(file2)),
                 Pasteboard.Item.ofString(type = Pasteboard.STRING_TYPE, content = content1),
                 Pasteboard.Item.ofString(type = Pasteboard.STRING_TYPE, content = content2),
             )
         }
         assertTrue(success)
         val files = ui {
-            Pasteboard.readFileItemPaths()
+            Pasteboard.readFileItemPaths().map { it.toString() }
         }
         val strings = ui {
             Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE).toStringsList()
         }
-        assertEquals(listOf(file1.absolutePathString(), file2.absolutePathString()), files)
+        assertEquals(listOf(file1.toRealPath().toString(), file2.toRealPath().toString()), files)
         assertEquals(listOf(content1, content2), strings)
     }
 
@@ -140,14 +141,14 @@ class PasteboardTest : KDTApplicationTestBase() {
         val file = createTempFile(suffix = "File name with spaces.txt")
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.File(file.absolutePathString()),
+                Pasteboard.Item(Element.ofFilePath(file)),
             )
         }
         assertTrue(success)
         val files = ui {
-            Pasteboard.readFileItemPaths()
+            Pasteboard.readFileItemPaths().map { it.toString() }
         }
-        assertEquals(listOf(file.absolutePathString()), files)
+        assertEquals(listOf(file.toRealPath().toString()), files)
     }
 
     @Test
@@ -159,7 +160,7 @@ class PasteboardTest : KDTApplicationTestBase() {
         assert(counter > 0L)
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item.Url(url),
+                Pasteboard.Item(Element.ofString(Pasteboard.URL_TYPE, url)),
             )
         }
         assertTrue(success)
@@ -210,5 +211,72 @@ class PasteboardTest : KDTApplicationTestBase() {
             Pasteboard.readItemsOfType(type = Pasteboard.PNG_IMAGE_TYPE).single()
         }
         assertContentEquals(imageBytes, result)
+    }
+
+    @Test
+    fun `readItemTypes returns expected types`() {
+        val testPasteboard = PasteboardType.named("org.jetbrains.kdt.test-pasteboard")
+        Pasteboard.clear(testPasteboard)
+        Pasteboard.writeObjects(
+            Pasteboard.Item(
+                Element.ofString(Pasteboard.STRING_TYPE, "Hello"),
+                Element.ofString(Pasteboard.HTML_TYPE, "<b>Hello</b>"),
+            ),
+            pasteboard = testPasteboard,
+        )
+
+        val types = Pasteboard.readItemTypes(0, testPasteboard)
+        assertTrue(types.contains(Pasteboard.STRING_TYPE))
+        assertTrue(types.contains(Pasteboard.HTML_TYPE))
+        assertEquals(2, types.size)
+    }
+
+    @Test
+    fun `readItemTypes for multiple items`() {
+        val testPasteboard = PasteboardType.named("org.jetbrains.kdt.test-pasteboard2")
+        Pasteboard.clear(testPasteboard)
+        Pasteboard.writeObjects(
+            listOf(
+                Pasteboard.Item.ofString(Pasteboard.STRING_TYPE, "First"),
+                Pasteboard.Item.ofString(Pasteboard.HTML_TYPE, "<b>Second</b>"),
+            ),
+            pasteboard = testPasteboard,
+        )
+
+        assertEquals(2, Pasteboard.itemCount(testPasteboard))
+
+        val types0 = Pasteboard.readItemTypes(0, testPasteboard)
+        assertTrue(types0.contains(Pasteboard.STRING_TYPE))
+
+        val types1 = Pasteboard.readItemTypes(1, testPasteboard)
+        assertTrue(types1.contains(Pasteboard.HTML_TYPE))
+    }
+
+    @Test
+    fun `readItemData returns data for specific item and type`() {
+        val testPasteboard = PasteboardType.named("org.jetbrains.kdt.test-pasteboard3")
+        Pasteboard.clear(testPasteboard)
+        Pasteboard.writeObjects(
+            listOf(
+                Pasteboard.Item(
+                    Element.ofString(Pasteboard.STRING_TYPE, "First String"),
+                    Element.ofString(Pasteboard.HTML_TYPE, "<b>First HTML</b>"),
+                ),
+                Pasteboard.Item.ofString(Pasteboard.STRING_TYPE, "Second String"),
+            ),
+            pasteboard = testPasteboard,
+        )
+
+        val item0String = Pasteboard.readItemData(0, Pasteboard.STRING_TYPE, testPasteboard)
+        assertEquals("First String", item0String?.decodeToString())
+
+        val item0Html = Pasteboard.readItemData(0, Pasteboard.HTML_TYPE, testPasteboard)
+        assertEquals("<b>First HTML</b>", item0Html?.decodeToString())
+
+        val item1String = Pasteboard.readItemData(1, Pasteboard.STRING_TYPE, testPasteboard)
+        assertEquals("Second String", item1String?.decodeToString())
+
+        val item1Html = Pasteboard.readItemData(1, Pasteboard.HTML_TYPE, testPasteboard)
+        assertNull(item1Html)
     }
 }

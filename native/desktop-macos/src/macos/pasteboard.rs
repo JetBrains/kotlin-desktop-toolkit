@@ -1,6 +1,6 @@
 use std::{ffi::CStr, sync::Mutex};
 
-use super::{string::copy_to_ns_string, url::url_to_file_path_string};
+use super::string::copy_to_ns_string;
 use crate::macos::string::copy_to_ns_string_if_not_null;
 use anyhow::Context;
 use desktop_common::{
@@ -8,13 +8,9 @@ use desktop_common::{
     logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
-use objc2::{
-    ClassType,
-    rc::Retained,
-    runtime::{AnyObject, ProtocolObject},
-};
-use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardURLReadingFileURLsOnlyKey, NSPasteboardWriting};
-use objc2_foundation::{NSArray, NSData, NSDictionary, NSMutableArray, NSNumber, NSString, NSURL};
+use objc2::{rc::Retained, runtime::ProtocolObject};
+use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardWriting};
+use objc2_foundation::{NSArray, NSData, NSMutableArray, NSString};
 
 /// cbindgen:ignore
 static GENERAL_PASTEBOARD_SHARED_TOKEN: Mutex<()> = Mutex::new(());
@@ -51,10 +47,14 @@ fn with_pasteboard<R, F: FnOnce(&NSPasteboard) -> R>(pasteboard_type: &Pasteboar
     }
 }
 
+fn pasteboard_type_by_str_ptr(pasteboard_name: &BorrowedStrPtr) -> PasteboardType {
+    copy_to_ns_string_if_not_null(pasteboard_name).map_or(PasteboardType::Global, PasteboardType::WithName)
+}
+
 #[unsafe(no_mangle)]
-pub extern "C" fn pasteboard_clear() -> isize {
+pub extern "C" fn pasteboard_clear(pasteboard_name: BorrowedStrPtr) -> isize {
     ffi_boundary("pasteboard_clear", || {
-        let result = with_pasteboard(&PasteboardType::Global, NSPasteboard::clearContents);
+        let result = with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), NSPasteboard::clearContents);
         Ok(result)
     })
 }
@@ -69,47 +69,20 @@ pub struct CombinedItemElement<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub enum PasteboardItem<'a> {
-    // NSURL
-    URLItem {
-        url: BorrowedStrPtr<'a>,
-    },
-    FSPathItem {
-        path: BorrowedStrPtr<'a>,
-    },
-    // todo we could add some more NS* classes that implements NSPasteboardWriting protocol
-    CombinedItem {
-        elements: BorrowedArray<'a, CombinedItemElement<'a>>,
-    },
+pub struct PasteboardItem<'a> {
+    elements: BorrowedArray<'a, CombinedItemElement<'a>>,
 }
 
 impl PasteboardItem<'_> {
     pub(crate) fn to_ns_pasteboard_item(&self) -> anyhow::Result<Retained<ProtocolObject<dyn NSPasteboardWriting>>> {
-        let pasteboard_writing = match self {
-            PasteboardItem::URLItem { url } => {
-                let url = copy_to_ns_string(url)?;
-                let ns_url = NSURL::URLWithString(&url).with_context(|| format!("Malformed URL: {url:?}"))?;
-                debug!("is file url: {:?}", ns_url.isFileURL());
-                ProtocolObject::from_retained(ns_url)
-            }
-            PasteboardItem::FSPathItem { path } => {
-                debug!("FSPathItem added: {path:?}");
-                let path = copy_to_ns_string(path)?;
-                let ns_url = NSURL::fileURLWithPath(&path);
-                ProtocolObject::from_retained(ns_url)
-            }
-            PasteboardItem::CombinedItem { elements } => {
-                let elements = elements.as_slice()?;
-                let item = NSPasteboardItem::new();
-                for element in elements {
-                    let uti = copy_to_ns_string(&element.uniform_type_identifier)?;
-                    let data = NSData::with_bytes(element.content.as_slice()?);
-                    assert!(item.setData_forType(&data, &uti));
-                }
-                ProtocolObject::from_retained(item)
-            }
-        };
-        Ok(pasteboard_writing)
+        let elements = self.elements.as_slice()?;
+        let item = NSPasteboardItem::new();
+        for element in elements {
+            let uti = copy_to_ns_string(&element.uniform_type_identifier)?;
+            let data = NSData::with_bytes(element.content.as_slice()?);
+            assert!(item.setData_forType(&data, &uti));
+        }
+        Ok(ProtocolObject::from_retained(item))
     }
 
     fn copy_to_ns_array(items: &[Self]) -> anyhow::Result<Retained<NSArray<ProtocolObject<dyn NSPasteboardWriting>>>> {
@@ -123,9 +96,9 @@ impl PasteboardItem<'_> {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn pasteboard_write_objects(items: BorrowedArray<PasteboardItem>) -> bool {
+pub extern "C" fn pasteboard_write_objects(pasteboard_name: BorrowedStrPtr, items: BorrowedArray<PasteboardItem>) -> bool {
     ffi_boundary("pasteboard_write_objects", || {
-        with_pasteboard(&PasteboardType::Global, |pasteboard| {
+        with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
             debug!("pasteboard_write_objects: {items:?}");
             let objects = PasteboardItem::copy_to_ns_array(items.as_slice()?)?;
             Ok(pasteboard.writeObjects(&objects))
@@ -146,8 +119,22 @@ impl PanicDefault for PasteboardContentResult {
     }
 }
 
-fn pasteboard_type_by_str_ptr(pasteboard_name: &BorrowedStrPtr) -> PasteboardType {
-    copy_to_ns_string_if_not_null(pasteboard_name).map_or(PasteboardType::Global, PasteboardType::WithName)
+#[unsafe(no_mangle)]
+pub extern "C" fn pasteboard_read_change_count(pasteboard_name: BorrowedStrPtr) -> isize {
+    ffi_boundary("pasteboard_read_change_count", || {
+        let result = with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), NSPasteboard::changeCount);
+        Ok(result)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn pasteboard_read_items_count(pasteboard_name: BorrowedStrPtr) -> isize {
+    ffi_boundary("pasteboard_read_items_count", || {
+        let result = with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
+            pasteboard.pasteboardItems().map_or(0, |items| items.count()) as isize
+        });
+        Ok(result)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -171,30 +158,81 @@ pub extern "C" fn pasteboard_read_items_of_type(
     })
 }
 
+#[repr(C)]
+pub struct PasteboardItemDataResult {
+    data: AutoDropArray<u8>,
+    found: bool,
+}
+
+impl PanicDefault for PasteboardItemDataResult {
+    fn default() -> Self {
+        Self {
+            data: AutoDropArray::new(Box::new([])),
+            found: false,
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
-pub extern "C" fn pasteboard_read_file_items(pasteboard_name: BorrowedStrPtr) -> PasteboardContentResult {
-    ffi_boundary("pasteboard_read_file_items", || {
+pub extern "C" fn pasteboard_read_item_data(
+    pasteboard_name: BorrowedStrPtr,
+    item_index: usize,
+    uniform_type_identifier: BorrowedStrPtr,
+) -> PasteboardItemDataResult {
+    ffi_boundary("pasteboard_read_item_data", || {
         with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
-            let class_array = NSArray::from_slice(&[NSURL::class()]);
+            let uti = copy_to_ns_string(&uniform_type_identifier)?;
+            let items = pasteboard.pasteboardItems().context("Can't retrieve items")?;
+            if item_index >= items.count() {
+                return Ok(PasteboardItemDataResult {
+                    data: AutoDropArray::new(Box::new([])),
+                    found: false,
+                });
+            }
+            let item = items.objectAtIndex(item_index);
+            Ok(match item.dataForType(&uti) {
+                Some(data) => PasteboardItemDataResult {
+                    data: AutoDropArray::new(data.to_vec().into_boxed_slice()),
+                    found: true,
+                },
+                None => PasteboardItemDataResult {
+                    data: AutoDropArray::new(Box::new([])),
+                    found: false,
+                },
+            })
+        })
+    })
+}
 
-            let options = NSDictionary::from_slices(
-                &[unsafe { NSPasteboardURLReadingFileURLsOnlyKey }],
-                &[&*Retained::<AnyObject>::from(NSNumber::numberWithBool(true))],
-            );
-            let urls = unsafe { pasteboard.readObjectsForClasses_options(&class_array, Some(&*options)) }.context("No items")?;
+#[unsafe(no_mangle)]
+pub extern "C" fn pasteboard_item_data_drop(result: PasteboardItemDataResult) {
+    ffi_boundary("pasteboard_item_data_drop", || {
+        drop(result);
+        Ok(())
+    });
+}
 
-            let urls: Box<_> = urls
+#[unsafe(no_mangle)]
+pub extern "C" fn pasteboard_read_item_types(pasteboard_name: BorrowedStrPtr, item_index: usize) -> PasteboardContentResult {
+    ffi_boundary("pasteboard_read_item_types", || {
+        with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
+            let items = pasteboard.pasteboardItems().context("Can't retrieve items")?;
+            if item_index >= items.count() {
+                return Ok(PasteboardContentResult {
+                    items: AutoDropArray::new(Box::new([])),
+                });
+            }
+            let item = items.objectAtIndex(item_index);
+            let types = item.types();
+            let types: Box<[_]> = types
                 .iter()
-                .map(|url| url.downcast::<NSURL>().expect("It must be NSURL"))
-                .filter_map(|url| url_to_file_path_string(&url))
-                .map(|url_ns_str| {
-                    let c_str = unsafe { CStr::from_ptr(url_ns_str.UTF8String()) };
+                .map(|t: Retained<NSString>| {
+                    let c_str = unsafe { CStr::from_ptr(t.UTF8String()) };
                     AutoDropArray::new(Box::<[u8]>::from(c_str.to_bytes()))
                 })
                 .collect();
-
             Ok(PasteboardContentResult {
-                items: AutoDropArray::new(urls),
+                items: AutoDropArray::new(types),
             })
         })
     })
