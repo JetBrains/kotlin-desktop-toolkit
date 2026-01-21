@@ -43,76 +43,57 @@ public object Pasteboard {
         }
     }
 
-    /**
-     * When pasteboardName is null general clipboard is used
-     */
-    public fun clear(pasteboardName: String? = null): Long {
+    public fun clear(pasteboard: PasteboardType = PasteboardType.General): Long {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.pasteboard_clear(
-                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
                 )
             }
         }
     }
 
-    /**
-     * When pasteboardName is null general clipboard is used
-     */
-    public fun changeCount(pasteboardName: String? = null): Long {
+    public fun changeCount(pasteboard: PasteboardType = PasteboardType.General): Long {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.pasteboard_read_change_count(
-                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
                 )
             }
         }
     }
 
-    /**
-     * When pasteboardName is null general clipboard is used
-     */
-    public fun itemCount(pasteboardName: String? = null): Long {
+    public fun itemCount(pasteboard: PasteboardType = PasteboardType.General): Long {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.pasteboard_read_items_count(
-                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
                 )
             }
         }
     }
 
-    /**
-     * Order plays role here, items at the beginning have preference over others.
-     * When pasteboardName is null general clipboard is used
-     */
-    public fun writeObjects(vararg items: Item, pasteboardName: String? = null): Boolean {
-        return writeObjects(items.toList(), pasteboardName)
+    public fun writeObjects(vararg items: Item, pasteboard: PasteboardType = PasteboardType.General): Boolean {
+        return writeObjects(items.toList(), pasteboard)
     }
 
-    /**
-     * When pasteboardName is null general clipboard is used
-     */
-    public fun writeObjects(items: List<Item>, pasteboardName: String? = null): Boolean {
+    public fun writeObjects(items: List<Item>, pasteboard: PasteboardType = PasteboardType.General): Boolean {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.pasteboard_write_objects(
-                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
                     items.toNative(arena),
                 )
             }
         }
     }
 
-    /**
-     * When pasteboardName is null general clipboard is used
-     */
-    public fun readItemsOfType(type: String, pasteboardName: String? = null): List<ByteArray> {
+    public fun readItemsOfType(type: String, pasteboard: PasteboardType = PasteboardType.General): List<ByteArray> {
         return Arena.ofConfined().use { arena ->
             val nativeResult = ffiDownCall {
                 desktop_macos_h.pasteboard_read_items_of_type(
                     arena,
-                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
                     arena.allocateUtf8String(type),
                 )
             }
@@ -125,15 +106,12 @@ public object Pasteboard {
         }
     }
 
-    /**
-     * When pasteboardName is null general clipboard is used
-     */
-    public fun readFileItemPaths(pasteboardName: String? = null): List<String> {
+    public fun readFileItemPaths(pasteboard: PasteboardType = PasteboardType.General): List<String> {
         return Arena.ofConfined().use { arena ->
             val nativeResult = ffiDownCall {
                 desktop_macos_h.pasteboard_read_file_items(
                     arena,
-                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
                 )
             }
             val items = NativePasteboardContentResult.items(nativeResult)
@@ -145,16 +123,12 @@ public object Pasteboard {
         }
     }
 
-    /**
-     * Returns the list of available UTIs for the item at the given index.
-     * When pasteboardName is null general clipboard is used.
-     */
-    public fun readItemTypes(itemIndex: Int, pasteboardName: String? = null): List<String> {
+    public fun readItemTypes(itemIndex: Int, pasteboard: PasteboardType = PasteboardType.General): List<String> {
         return Arena.ofConfined().use { arena ->
             val nativeResult = ffiDownCall {
                 desktop_macos_h.pasteboard_read_item_types(
                     arena,
-                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
                     itemIndex.toLong(),
                 )
             }
@@ -169,15 +143,14 @@ public object Pasteboard {
 
     /**
      * Returns the data for a specific item at the given index and type.
-     * When pasteboardName is null general clipboard is used.
      * Returns null if the item doesn't have data for the given type.
      */
-    public fun readItemData(itemIndex: Int, type: String, pasteboardName: String? = null): ByteArray? {
+    public fun readItemData(itemIndex: Int, type: String, pasteboard: PasteboardType = PasteboardType.General): ByteArray? {
         return Arena.ofConfined().use { arena ->
             val nativeResult = ffiDownCall {
                 desktop_macos_h.pasteboard_read_item_data(
                     arena,
-                    pasteboardName?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
                     itemIndex.toLong(),
                     arena.allocateUtf8String(type),
                 )
@@ -194,6 +167,16 @@ public object Pasteboard {
             result
         }
     }
+}
+
+@JvmInline
+public value class PasteboardType internal constructor(internal val name: String?) {
+    public companion object {
+        public val General: PasteboardType = PasteboardType(null)
+        public fun named(name: String): PasteboardType = PasteboardType(name)
+    }
+
+    internal fun toNameOrNull(): String? = name
 }
 
 // IMPL:

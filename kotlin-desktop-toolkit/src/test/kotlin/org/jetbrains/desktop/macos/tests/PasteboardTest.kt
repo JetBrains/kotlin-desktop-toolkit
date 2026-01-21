@@ -2,6 +2,7 @@ package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.Pasteboard.Element
+import org.jetbrains.desktop.macos.PasteboardType
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import kotlin.io.path.absolutePathString
@@ -215,14 +216,14 @@ class PasteboardTest : KDTApplicationTestBase() {
 
     @Test
     fun `readItemTypes returns expected types`() {
-        val testPasteboard = "org.jetbrains.kdt.test-pasteboard"
+        val testPasteboard = PasteboardType.named("org.jetbrains.kdt.test-pasteboard")
         Pasteboard.clear(testPasteboard)
         Pasteboard.writeObjects(
             Pasteboard.Item(
                 Element.ofString(Pasteboard.STRING_TYPE, "Hello"),
                 Element.ofString(Pasteboard.HTML_TYPE, "<b>Hello</b>"),
             ),
-            pasteboardName = testPasteboard,
+            pasteboard = testPasteboard,
         )
 
         val types = Pasteboard.readItemTypes(0, testPasteboard)
@@ -233,14 +234,14 @@ class PasteboardTest : KDTApplicationTestBase() {
 
     @Test
     fun `readItemTypes for multiple items`() {
-        val testPasteboard = "org.jetbrains.kdt.test-pasteboard2"
+        val testPasteboard = PasteboardType.named("org.jetbrains.kdt.test-pasteboard2")
         Pasteboard.clear(testPasteboard)
         Pasteboard.writeObjects(
             listOf(
                 Pasteboard.Item.ofString(Pasteboard.STRING_TYPE, "First"),
                 Pasteboard.Item.ofString(Pasteboard.HTML_TYPE, "<b>Second</b>"),
             ),
-            pasteboardName = testPasteboard,
+            pasteboard = testPasteboard,
         )
 
         assertEquals(2, Pasteboard.itemCount(testPasteboard))
@@ -254,7 +255,7 @@ class PasteboardTest : KDTApplicationTestBase() {
 
     @Test
     fun `readItemData returns data for specific item and type`() {
-        val testPasteboard = "org.jetbrains.kdt.test-pasteboard3"
+        val testPasteboard = PasteboardType.named("org.jetbrains.kdt.test-pasteboard3")
         Pasteboard.clear(testPasteboard)
         Pasteboard.writeObjects(
             listOf(
@@ -264,7 +265,7 @@ class PasteboardTest : KDTApplicationTestBase() {
                 ),
                 Pasteboard.Item.ofString(Pasteboard.STRING_TYPE, "Second String"),
             ),
-            pasteboardName = testPasteboard,
+            pasteboard = testPasteboard,
         )
 
         val item0String = Pasteboard.readItemData(0, Pasteboard.STRING_TYPE, testPasteboard)
