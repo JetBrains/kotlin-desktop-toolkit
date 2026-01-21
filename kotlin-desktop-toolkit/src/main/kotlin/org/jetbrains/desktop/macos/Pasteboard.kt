@@ -29,7 +29,9 @@ public object Pasteboard {
             }
 
             public fun ofFilePath(path: Path): Element {
-                val urlString = UrlUtils.filePathToFileReferenceUrl(path.toAbsolutePath().toString()) ?: error("File should exist to be placed in clipboard $path")
+                val urlString =
+                    UrlUtils.filePathToFileReferenceUrl(path.toAbsolutePath().toString())
+                        ?: error("File should exist to be placed in clipboard $path")
                 return Element(FILE_URL_TYPE, urlString.encodeToByteArray())
             }
         }

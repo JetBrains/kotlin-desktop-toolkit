@@ -1,5 +1,5 @@
-use anyhow::bail;
 use crate::macos::string::{copy_to_c_string, copy_to_ns_string};
+use anyhow::bail;
 use desktop_common::ffi_utils::{BorrowedStrPtr, RustAllocatedStrPtr};
 use desktop_common::logger::ffi_boundary;
 use log::debug;

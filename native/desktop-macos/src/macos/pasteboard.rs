@@ -1,6 +1,6 @@
 use std::{ffi::CStr, sync::Mutex};
 
-use super::{string::copy_to_ns_string, url::url_to_file_path_string};
+use super::string::copy_to_ns_string;
 use crate::macos::string::copy_to_ns_string_if_not_null;
 use anyhow::Context;
 use desktop_common::{
@@ -8,13 +8,9 @@ use desktop_common::{
     logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
-use objc2::{
-    ClassType,
-    rc::Retained,
-    runtime::{AnyObject, ProtocolObject},
-};
-use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardURLReadingFileURLsOnlyKey, NSPasteboardWriting};
-use objc2_foundation::{NSArray, NSData, NSDictionary, NSMutableArray, NSNumber, NSString, NSURL};
+use objc2::{rc::Retained, runtime::ProtocolObject};
+use objc2_app_kit::{NSPasteboard, NSPasteboardItem, NSPasteboardWriting};
+use objc2_foundation::{NSArray, NSData, NSMutableArray, NSString};
 
 /// cbindgen:ignore
 static GENERAL_PASTEBOARD_SHARED_TOKEN: Mutex<()> = Mutex::new(());
