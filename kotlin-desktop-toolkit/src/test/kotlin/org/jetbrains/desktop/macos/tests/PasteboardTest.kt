@@ -5,7 +5,6 @@ import org.jetbrains.desktop.macos.Pasteboard.Element
 import org.jetbrains.desktop.macos.PasteboardType
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
-import kotlin.io.path.absolutePathString
 import kotlin.io.path.createTempFile
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -116,20 +115,20 @@ class PasteboardTest : KDTApplicationTestBase() {
         val content2 = "Hello2"
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item(Element.ofString(Pasteboard.FILE_URL_TYPE, file1.toUri().toString())),
-                Pasteboard.Item(Element.ofString(Pasteboard.FILE_URL_TYPE, file2.toUri().toString())),
+                Pasteboard.Item(Element.ofFilePath(file1)),
+                Pasteboard.Item(Element.ofFilePath(file2)),
                 Pasteboard.Item.ofString(type = Pasteboard.STRING_TYPE, content = content1),
                 Pasteboard.Item.ofString(type = Pasteboard.STRING_TYPE, content = content2),
             )
         }
         assertTrue(success)
         val files = ui {
-            Pasteboard.readFileItemPaths()
+            Pasteboard.readFileItemPaths().map { it.toString() }
         }
         val strings = ui {
             Pasteboard.readItemsOfType(type = Pasteboard.STRING_TYPE).toStringsList()
         }
-        assertEquals(listOf(file1.absolutePathString(), file2.absolutePathString()), files)
+        assertEquals(listOf(file1.toRealPath().toString(), file2.toRealPath().toString()), files)
         assertEquals(listOf(content1, content2), strings)
     }
 
@@ -142,14 +141,14 @@ class PasteboardTest : KDTApplicationTestBase() {
         val file = createTempFile(suffix = "File name with spaces.txt")
         val success = ui {
             Pasteboard.writeObjects(
-                Pasteboard.Item(Element.ofString(Pasteboard.FILE_URL_TYPE, file.toUri().toString())),
+                Pasteboard.Item(Element.ofFilePath(file)),
             )
         }
         assertTrue(success)
         val files = ui {
-            Pasteboard.readFileItemPaths()
+            Pasteboard.readFileItemPaths().map { it.toString() }
         }
-        assertEquals(listOf(file.absolutePathString()), files)
+        assertEquals(listOf(file.toRealPath().toString()), files)
     }
 
     @Test

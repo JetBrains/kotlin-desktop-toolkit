@@ -114,9 +114,9 @@ public object Pasteboard {
         }
     }
 
-    public fun readFileItemPaths(pasteboard: PasteboardType = PasteboardType.General): List<String> {
+    public fun readFileItemPaths(pasteboard: PasteboardType = PasteboardType.General): List<Path> {
         return readItemsOfType(FILE_URL_TYPE, pasteboard).mapNotNull { bytes ->
-            UrlUtils.urlToFilePath(String(bytes))
+            UrlUtils.urlToFilePath(String(bytes))?.let { Path.of(it) }
         }
     }
 
