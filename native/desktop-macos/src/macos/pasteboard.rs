@@ -162,35 +162,6 @@ pub extern "C" fn pasteboard_read_items_of_type(
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn pasteboard_read_file_items(pasteboard_name: BorrowedStrPtr) -> PasteboardContentResult {
-    ffi_boundary("pasteboard_read_file_items", || {
-        with_pasteboard(&pasteboard_type_by_str_ptr(&pasteboard_name), |pasteboard| {
-            let class_array = NSArray::from_slice(&[NSURL::class()]);
-
-            let options = NSDictionary::from_slices(
-                &[unsafe { NSPasteboardURLReadingFileURLsOnlyKey }],
-                &[&*Retained::<AnyObject>::from(NSNumber::numberWithBool(true))],
-            );
-            let urls = unsafe { pasteboard.readObjectsForClasses_options(&class_array, Some(&*options)) }.context("No items")?;
-
-            let urls: Box<_> = urls
-                .iter()
-                .map(|url| url.downcast::<NSURL>().expect("It must be NSURL"))
-                .filter_map(|url| url_to_file_path_string(&url))
-                .map(|url_ns_str| {
-                    let c_str = unsafe { CStr::from_ptr(url_ns_str.UTF8String()) };
-                    AutoDropArray::new(Box::<[u8]>::from(c_str.to_bytes()))
-                })
-                .collect();
-
-            Ok(PasteboardContentResult {
-                items: AutoDropArray::new(urls),
-            })
-        })
-    })
-}
-
 #[repr(C)]
 pub struct PasteboardItemDataResult {
     data: AutoDropArray<u8>,

@@ -9,6 +9,7 @@ import org.jetbrains.desktop.macos.generated.NativePasteboardItemDataResult
 import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
+import java.nio.file.Path
 
 public object Pasteboard {
     public const val STRING_TYPE: String = "public.utf8-plain-text"
@@ -25,6 +26,11 @@ public object Pasteboard {
         public companion object {
             public fun ofString(type: String, content: String): Element {
                 return Element(type, content.encodeToByteArray())
+            }
+
+            public fun ofFilePath(path: Path): Element {
+                val urlString = UrlUtils.filePathToFileReferenceUrl(path.toAbsolutePath().toString()) ?: error("File should exist to be placed in clipboard $path")
+                return Element(FILE_URL_TYPE, urlString.encodeToByteArray())
             }
         }
     }
@@ -107,19 +113,8 @@ public object Pasteboard {
     }
 
     public fun readFileItemPaths(pasteboard: PasteboardType = PasteboardType.General): List<String> {
-        return Arena.ofConfined().use { arena ->
-            val nativeResult = ffiDownCall {
-                desktop_macos_h.pasteboard_read_file_items(
-                    arena,
-                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
-                )
-            }
-            val items = NativePasteboardContentResult.items(nativeResult)
-            val result = listOfByteArraysFromNative(items).map { String(it) }
-            ffiDownCall {
-                desktop_macos_h.pasteboard_content_drop(nativeResult)
-            }
-            result
+        return readItemsOfType(FILE_URL_TYPE, pasteboard).mapNotNull { bytes ->
+            UrlUtils.urlToFilePath(String(bytes))
         }
     }
 
