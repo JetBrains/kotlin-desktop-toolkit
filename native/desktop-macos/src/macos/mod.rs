@@ -26,5 +26,6 @@ pub mod text_direction;
 pub mod text_input_client;
 pub mod titlebar;
 pub mod url;
+pub mod url_api;
 pub mod window;
 pub mod window_api;
