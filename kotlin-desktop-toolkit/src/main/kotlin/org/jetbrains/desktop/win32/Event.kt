@@ -42,7 +42,8 @@ public typealias EventHandler = (WindowId, Event) -> EventHandlerResult
 public sealed class Event {
     internal companion object;
 
-    public data class CharacterReceived(
+    @ConsistentCopyVisibility
+    public data class CharacterReceived internal constructor(
         val character: Char,
         val keyStatus: PhysicalKeyStatus,
         val isDeadChar: Boolean,
@@ -56,7 +57,8 @@ public sealed class Event {
         }
     }
 
-    public data class KeyDown(
+    @ConsistentCopyVisibility
+    public data class KeyDown internal constructor(
         val isSystemKey: Boolean,
         val keyStatus: PhysicalKeyStatus,
         val virtualKey: VirtualKey,
@@ -68,7 +70,8 @@ public sealed class Event {
         }.getUtf8String(0)
     }
 
-    public data class KeyUp(
+    @ConsistentCopyVisibility
+    public data class KeyUp internal constructor(
         val isSystemKey: Boolean,
         val keyStatus: PhysicalKeyStatus,
         val virtualKey: VirtualKey,
@@ -76,18 +79,21 @@ public sealed class Event {
         override val originalMsg: MemorySegment,
     ) : KeyEvent()
 
-    public data class NCCalcSize(
+    @ConsistentCopyVisibility
+    public data class NCCalcSize internal constructor(
         val origin: PhysicalPoint,
         val size: PhysicalSize,
         val scale: Float,
     ) : Event()
 
-    public data class NCHitTest(
+    @ConsistentCopyVisibility
+    public data class NCHitTest internal constructor(
         val mouseX: Int,
         val mouseY: Int,
     ) : Event()
 
-    public data class PointerDown(
+    @ConsistentCopyVisibility
+    public data class PointerDown internal constructor(
         val button: PointerButton,
         val clickCount: Int,
         val locationInWindow: LogicalPoint,
@@ -96,26 +102,30 @@ public sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class PointerEntered(
+    @ConsistentCopyVisibility
+    public data class PointerEntered internal constructor(
         val locationInWindow: LogicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class PointerExited(
+    @ConsistentCopyVisibility
+    public data class PointerExited internal constructor(
         val locationInWindow: LogicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class PointerUpdated(
+    @ConsistentCopyVisibility
+    public data class PointerUpdated internal constructor(
         val locationInWindow: LogicalPoint,
         val nonClientArea: Boolean,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class PointerUp(
+    @ConsistentCopyVisibility
+    public data class PointerUp internal constructor(
         val button: PointerButton,
         val locationInWindow: LogicalPoint,
         val nonClientArea: Boolean,
@@ -123,25 +133,29 @@ public sealed class Event {
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class ScrollWheelX(
+    @ConsistentCopyVisibility
+    public data class ScrollWheelX internal constructor(
         val scrollingDelta: Int,
         val locationInWindow: LogicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class ScrollWheelY(
+    @ConsistentCopyVisibility
+    public data class ScrollWheelY internal constructor(
         val scrollingDelta: Int,
         val locationInWindow: LogicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class SystemAppearanceChange(public val newAppearance: Appearance) : Event()
+    @ConsistentCopyVisibility
+    public data class SystemAppearanceChange internal constructor(public val newAppearance: Appearance) : Event()
 
     public data object WindowCloseRequest : Event()
 
-    public data class WindowDraw(
+    @ConsistentCopyVisibility
+    public data class WindowDraw internal constructor(
         val size: PhysicalSize,
         val scale: Float,
     ) : Event()
@@ -150,23 +164,27 @@ public sealed class Event {
 
     public data object WindowKeyboardLeave : Event()
 
-    public data class WindowMove(
+    @ConsistentCopyVisibility
+    public data class WindowMove internal constructor(
         val origin: PhysicalPoint,
         val scale: Float,
     ) : Event()
 
-    public data class WindowResize(
+    @ConsistentCopyVisibility
+    public data class WindowResize internal constructor(
         val size: PhysicalSize,
         val scale: Float,
     ) : Event()
 
-    public data class WindowScaleChanged(
+    @ConsistentCopyVisibility
+    public data class WindowScaleChanged internal constructor(
         val origin: PhysicalPoint,
         val size: PhysicalSize,
         val scale: Float,
     ) : Event()
 
-    public data class WindowTitleChanged(val title: String) : Event()
+    @ConsistentCopyVisibility
+    public data class WindowTitleChanged internal constructor(val title: String) : Event()
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
