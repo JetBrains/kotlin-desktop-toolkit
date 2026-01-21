@@ -22,14 +22,19 @@ import java.nio.file.Path
 public object Pasteboard {
     /** UTI for plain UTF-8 text content. */
     public const val STRING_TYPE: String = "public.utf8-plain-text"
+
     /** UTI for HTML content. */
     public const val HTML_TYPE: String = "public.html"
+
     /** UTI for URL content. */
     public const val URL_TYPE: String = "public.url"
+
     /** UTI for file URL content (local file references). */
     public const val FILE_URL_TYPE: String = "public.file-url"
+
     /** UTI for PNG image data. */
     public const val PNG_IMAGE_TYPE: String = "public.png"
+
     /** UTI for TIFF image data. */
     public const val TIFF_IMAGE_TYPE: String = "public.tiff"
 

@@ -5,7 +5,7 @@ use crate::macos::string::copy_to_ns_string_if_not_null;
 use anyhow::Context;
 use desktop_common::{
     ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr},
-    logger::{ffi_boundary, PanicDefault},
+    logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
 use objc2::{rc::Retained, runtime::ProtocolObject};
@@ -220,8 +220,8 @@ pub extern "C" fn pasteboard_read_item_types(pasteboard_name: BorrowedStrPtr, it
             if item_index >= items.count() {
                 return Ok(PasteboardContentResult {
                     items: AutoDropArray::new(Box::new([])),
-                })
-            };
+                });
+            }
             let item = items.objectAtIndex(item_index);
             let types = item.types();
             let types: Box<[_]> = types
@@ -254,9 +254,9 @@ mod tests {
     use log::info;
     use objc2::runtime::ProtocolObject;
     use objc2_app_kit::{NSPasteboardItem, NSPasteboardTypeString, NSURLNSPasteboardSupport};
-    use objc2_foundation::{ns_string, NSArray, NSObjectNSComparisonMethods, NSString, NSURL};
+    use objc2_foundation::{NSArray, NSObjectNSComparisonMethods, NSString, NSURL, ns_string};
 
-    use crate::macos::pasteboard::{with_pasteboard, PasteboardType};
+    use crate::macos::pasteboard::{PasteboardType, with_pasteboard};
 
     #[test]
     fn test_pasteboard_can_store_and_return_string() {
