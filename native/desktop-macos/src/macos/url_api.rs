@@ -30,9 +30,6 @@ pub extern "C" fn url_to_file_path(url: BorrowedStrPtr) -> RustAllocatedStrPtr {
     ffi_boundary("url_to_file_path", || {
         let url_str = url.as_str()?;
         let ns_url_string = copy_to_ns_string(&url)?;
-        if url_str.contains("not a valid url") {
-            bail!("Exception just to check that exceptions work");
-        }
         let ns_url =
             NSURL::URLWithString(&ns_url_string).ok_or_else(|| anyhow::format_err!("url_to_file_path: invalid URL string '{url_str}'"))?;
         let Some(file_path_url) = ns_url.filePathURL() else {
