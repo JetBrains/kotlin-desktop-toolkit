@@ -8,13 +8,13 @@ import java.lang.foreign.MemorySegment
 
 public object Keyboard {
     public fun getKeyState(key: VirtualKey): KeyState = ffiDownCall {
-        val nativeKeyState = Arena.ofConfined().use { arena ->
-            desktop_win32_h.keyboard_get_key_state(arena, key.value)
+        Arena.ofConfined().use { arena ->
+            val nativeKeyState = desktop_win32_h.keyboard_get_key_state(arena, key.value)
+            KeyState(
+                isDown = NativeKeyState.is_down(nativeKeyState),
+                isToggled = NativeKeyState.is_toggled(nativeKeyState),
+            )
         }
-        KeyState(
-            isDown = NativeKeyState.is_down(nativeKeyState),
-            isToggled = NativeKeyState.is_toggled(nativeKeyState),
-        )
     }
 }
 
