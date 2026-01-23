@@ -1,16 +1,23 @@
 [![internal JetBrains project](https://jb.gg/badges/internal.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
 # Kotlin Window Management library
 
+Kotlin Window Management is a library that wraps OS-specific window management APIs into an idiomatic Kotlin interface.
+
+The library serves as a foundation for the UI framework used in [Air](https://air.dev/) and will later provide
+an OS integration layer for Compose for Desktop.
 
 ## Goals
-* Provide a simple enough Kotlin API for interacting with OS
-* Support all major desktop platforms: Linux, MacOS and Windows for now
-* Make it Kotlin Multiplatform in future
+* Provide a simple Kotlin API for OS features needed to build desktop applications
+* Support all major desktop platforms: Linux (both X11 and Wayland), macOS and Windows
+* Flatten OS quirks or at least document them
+* Provide a safe API. Incorrect usage of the API should lead to Kotlin exceptions but not crashes
+* Provide rendering contexts compatible with Skia, e.g., via [skiko](https://github.com/jetbrains/skiko)
+* Make it Kotlin Multiplatform in the future
 
 ## Non-Goals
-* Providing bindings for Android or iOS. It's too different from Desktop
-* Bindings for browser API
-* API alignment across platforms. Desktop platforms are different and provide different capabilities, we are not going to hide this difference. Though for some common APIs we could provide a layer that simplifies usage of it across the platforms
+* Providing bindings for Android or iOS, they are too different from desktop
+* Bindings for browser APIs
+* API alignment across platforms. Desktop platforms differ in their capabilities; we do not intend to hide these differences
 
 ## Status
 
@@ -91,7 +98,7 @@
 | ApplicationAppearanceChange   | ✅    | ✅      | ✅      |     |
 | ApplicationDidFinishLaunching | ✅    | ✅      | ✅*     |     |
 
-\* Currently on Windows, we can enqueue a callback before starting the event loop. We probably want to replace this logic with an `ApplicationDidFinishLaunching` event.
+\* On Windows, a callback is currently enqueued before starting the event loop. This may be replaced with an `ApplicationDidFinishLaunching` event in the future.
 
 #### Theme
 
@@ -113,7 +120,7 @@
 | ------------------------------- | ----- | ------- | ------- | --- |
 | Simple text copy/paste          | ✅    | ✅      | 🚧      |     |
 | Copy files                      | ✅    | ✅      | 🚧      |     |
-| System defined clipboard types  | 🚧    | ➖      | ❌      |     |
+| System defined clipboard types  | ✅    | ➖      | ❌      |     |
 | Custom binary clipboard content | ✅    | ✅      | ❌      |     |
 | Lazy fetch of clipboard content | ❌    | ✅      | ❌      |     |
 
