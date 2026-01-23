@@ -4,31 +4,32 @@ use windows::Win32::UI::{
     WindowsAndMessaging::MSG,
 };
 
-use desktop_common::{
-    ffi_utils::{BorrowedOpaquePtr, RustAllocatedStrPtr},
-    logger::ffi_boundary,
+use desktop_common::{ffi_utils::RustAllocatedStrPtr, logger::ffi_boundary};
+
+use super::{
+    event_loop::EventLoop,
+    keyboard::{PhysicalKeyStatus, VirtualKey},
 };
 
-use super::keyboard::{PhysicalKeyStatus, VirtualKey};
-
 #[unsafe(no_mangle)]
-pub extern "C" fn keyevent_translate_message(msg: BorrowedOpaquePtr) -> bool {
+pub extern "C" fn keyevent_translate_message(msg_id: u64) -> bool {
     ffi_boundary("keyevent_translate_message", || {
-        unsafe { msg.borrow::<MSG>() }.context("MSG is null").map(|msg| {
+        EventLoop::with_keyevent_message(msg_id, |msg| {
             // https://learn.microsoft.com/en-us/windows/win32/winmsg/translatemessageex
             // If bit 0 is set, a menu is active. In this mode Alt+Numeric keypad key combinations are not handled.
             // If bit 1 is set, TranslateMessageEx will return FALSE when it does not post WM_CHAR or WM_SYSCHAR to the message loop.
             // If bit 2 is set, keyboard state is not changed (Windows 10, version 1607 and newer)
             let flags = 1 << 1;
-            unsafe { TranslateMessageEx(msg, flags) }.as_bool()
+            let result = unsafe { TranslateMessageEx(msg, flags) };
+            Ok(result.as_bool())
         })
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn keydown_to_unicode(msg: BorrowedOpaquePtr) -> RustAllocatedStrPtr {
+pub extern "C" fn keydown_to_unicode(msg_id: u64) -> RustAllocatedStrPtr {
     ffi_boundary("keydown_to_unicode", || {
-        unsafe { msg.borrow::<MSG>() }.context("MSG is null").and_then(|msg| {
+        EventLoop::with_keyevent_message(msg_id, |msg| {
             // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-tounicodeex
             // If bit 0 is set, a menu is active. In this mode Alt+Numeric keypad key combinations are not handled.
             // If bit 1 is set, ToUnicodeEx will translate scancodes marked as key break events in addition to its usual treatment of key make events.
