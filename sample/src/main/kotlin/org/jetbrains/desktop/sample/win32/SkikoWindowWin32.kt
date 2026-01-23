@@ -74,8 +74,9 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                         window.setCursor(CursorIcon.Hand)
                     }
                     else -> {
+                        val unicode = event.toUnicode()
                         val translated = event.translate()
-                        Logger.debug { "WM_KEYDOWN translated: $translated" }
+                        Logger.debug { "WM_KEYDOWN translated: $translated, ToUnicode: $unicode" }
                     }
                 }
                 EventHandlerResult.Continue

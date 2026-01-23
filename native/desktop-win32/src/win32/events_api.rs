@@ -55,7 +55,7 @@ pub extern "C" fn keydown_to_unicode(msg: BorrowedOpaquePtr) -> RustAllocatedStr
             };
 
             #[allow(clippy::cast_sign_loss)]
-            let unicode_str = String::from_utf16(&unicode_buf[..char_count as usize])?;
+            let unicode_str = String::from_utf16(&unicode_buf[..char_count.unsigned_abs() as usize])?;
             RustAllocatedStrPtr::allocate(unicode_str).context("Failed to allocate a Rust string")
         })
     })
