@@ -1,5 +1,8 @@
-use desktop_common::ffi_utils::{BorrowedOpaquePtr, RustAllocatedStrPtr};
+use std::{cell::RefCell, collections::HashMap};
 
+use desktop_common::ffi_utils::RustAllocatedStrPtr;
+
+use anyhow::Context;
 use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::{
@@ -36,6 +39,11 @@ use super::{
     window::Window,
 };
 
+thread_local! {
+    static KEYEVENT_MESSAGES: RefCell<HashMap<u64, MSG>> = RefCell::new(HashMap::new());
+    static LAST_KEYEVENT_MESSAGE_ID: RefCell<u64> = const { RefCell::new(0) };
+}
+
 pub struct EventLoop {
     event_handler: EventHandler,
 }
@@ -57,6 +65,13 @@ impl EventLoop {
             }
         }
         log::trace!("Event loop has finished");
+    }
+
+    pub fn with_keyevent_message<F, R>(msg_id: u64, f: F) -> anyhow::Result<R>
+    where
+        F: FnOnce(&MSG) -> anyhow::Result<R>,
+    {
+        KEYEVENT_MESSAGES.with_borrow(|map| map.get(&msg_id).context("unknown message id").and_then(f))
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -345,30 +360,41 @@ fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM
     let virtual_key = VirtualKey::from(wparam);
     let timestamp = unsafe { GetMessageTime() } as u32;
     let pos = unsafe { GetMessagePos() };
-    let message = MSG {
-        hwnd: window.hwnd(),
-        message: msg,
-        wParam: wparam,
-        lParam: lparam,
-        time: timestamp,
-        pt: POINT {
-            x: GET_X_LPARAM!(pos),
-            y: GET_Y_LPARAM!(pos),
-        },
-    };
+    let original_msg_id = LAST_KEYEVENT_MESSAGE_ID.with_borrow_mut(|msg_id| {
+        *msg_id = msg_id.wrapping_add(1);
+        *msg_id
+    });
+    KEYEVENT_MESSAGES.with_borrow_mut(|map| {
+        map.insert(
+            original_msg_id,
+            MSG {
+                hwnd: window.hwnd(),
+                message: msg,
+                wParam: wparam,
+                lParam: lparam,
+                time: timestamp,
+                pt: POINT {
+                    x: GET_X_LPARAM!(pos),
+                    y: GET_Y_LPARAM!(pos),
+                },
+            },
+        )
+    });
     let key_event = KeyEvent {
         is_system_key: matches!(msg, WM_SYSKEYDOWN | WM_SYSKEYUP),
         key_status: PhysicalKeyStatus::from(lparam),
         virtual_key,
         timestamp: Timestamp(u64::from(timestamp) * 1000),
-        original_msg: BorrowedOpaquePtr::new(Some(&message)),
+        original_msg_id,
     };
     let event = match msg {
         WM_KEYDOWN | WM_SYSKEYDOWN => Event::KeyDown(key_event),
         WM_KEYUP | WM_SYSKEYUP => Event::KeyUp(key_event),
         _ => unreachable!("unknown key event"),
     };
-    event_loop.handle_event(window, event)
+    let result = event_loop.handle_event(window, event);
+    KEYEVENT_MESSAGES.with_borrow_mut(|map| map.remove(&original_msg_id));
+    result
 }
 
 fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {

@@ -51,9 +51,9 @@ public sealed class Event {
     ) : Event()
 
     public abstract class KeyEvent : Event() {
-        protected abstract val originalMsg: MemorySegment
+        protected abstract val originalMsgId: Long
         public fun translate(): Boolean = ffiDownCall {
-            desktop_win32_h.keyevent_translate_message(originalMsg)
+            desktop_win32_h.keyevent_translate_message(originalMsgId)
         }
     }
 
@@ -63,10 +63,10 @@ public sealed class Event {
         val keyStatus: PhysicalKeyStatus,
         val virtualKey: VirtualKey,
         val timestamp: Timestamp,
-        override val originalMsg: MemorySegment,
+        override val originalMsgId: Long,
     ) : KeyEvent() {
         public fun toUnicode(): String = ffiDownCall {
-            desktop_win32_h.keydown_to_unicode(originalMsg)
+            desktop_win32_h.keydown_to_unicode(originalMsgId)
         }.getUtf8String(0)
     }
 
@@ -76,7 +76,7 @@ public sealed class Event {
         val keyStatus: PhysicalKeyStatus,
         val virtualKey: VirtualKey,
         val timestamp: Timestamp,
-        override val originalMsg: MemorySegment,
+        override val originalMsgId: Long,
     ) : KeyEvent()
 
     @ConsistentCopyVisibility
@@ -229,7 +229,7 @@ private fun keyDown(s: MemorySegment): Event {
         keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
         virtualKey = VirtualKey.fromNative(NativeKeyEvent.virtual_key(nativeEvent)),
         timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
-        originalMsg = NativeKeyEvent.original_msg(nativeEvent),
+        originalMsgId = NativeKeyEvent.original_msg_id(nativeEvent),
     )
 }
 
@@ -240,7 +240,7 @@ private fun keyUp(s: MemorySegment): Event {
         keyStatus = PhysicalKeyStatus.fromNative(NativeKeyEvent.key_status(nativeEvent)),
         virtualKey = VirtualKey.fromNative(NativeKeyEvent.virtual_key(nativeEvent)),
         timestamp = Timestamp(NativeKeyEvent.timestamp(nativeEvent)),
-        originalMsg = NativeKeyEvent.original_msg(nativeEvent),
+        originalMsgId = NativeKeyEvent.original_msg_id(nativeEvent),
     )
 }
 
