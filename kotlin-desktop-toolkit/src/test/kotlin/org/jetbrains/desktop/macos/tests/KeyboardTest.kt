@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
-import java.util.Locale.getDefault
 import java.util.concurrent.TimeUnit
 import kotlin.collections.emptySet
 import kotlin.test.Test
@@ -55,7 +54,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Timeout(value = 10, unit = TimeUnit.SECONDS)
     fun ansiButtonsNoModifiersTest() {
         withInputSource("com.apple.keylayout.ABC") {
-            ansiButtons.forEach { (keyCode, key, _, _) ->
+            ansiButtons.forEach { (keyCode, key) ->
                 val modifiers = emptySet<KeyCode>()
                 withModifiersPressed(modifiers = modifiers) {
                     ui { robot.emulateKeyboardEvent(keyCode, true) }
@@ -202,7 +201,8 @@ class KeyboardTest : KDTApplicationTestBase() {
     fun latinButtonsWithShiftTest() {
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Shift)
-            ansiButtons.forEach { (keyCode, key, shiftedKey, _) ->
+            ansiButtons.forEach { (keyCode, key) ->
+                val shiftedKey = shiftedLayer[keyCode]!!
                 withModifiersPressed(modifiers = modifiers) {
                     ui { robot.emulateKeyboardEvent(keyCode, true) }
                     ui { robot.emulateKeyboardEvent(keyCode, false) }
@@ -232,7 +232,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     fun ansiButtonsWithCommandTest() {
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Command)
-            ansiButtons.forEach { (keyCode, key, _, _) ->
+            ansiButtons.forEach { (keyCode, key) ->
                 withModifiersPressed(modifiers = modifiers) {
                     ui { robot.emulateKeyboardEvent(keyCode, true) }
                     ui { robot.emulateKeyboardEvent(keyCode, false) }
@@ -262,7 +262,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     fun latinButtonsWithCommandShiftTest() {
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Command, KeyCode.Shift)
-            for ((keyCode, key, _, _) in ansiButtons) {
+            for ((keyCode, key) in ansiButtons) {
                 if (keyCode == KeyCode.ANSI_Q) {
                     continue // Close all apps and quit
                 }
@@ -301,7 +301,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     fun latinLettersWithCommandControlTest() {
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Command, KeyCode.Control)
-            for ((keyCode, key, _, _) in ansiLetters) {
+            for ((keyCode, key) in ansiLetters) {
                 if (keyCode == KeyCode.ANSI_D) {
                     continue // Reserved by Dictionary.app
                 }
@@ -338,7 +338,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     fun latinLettersWithControlTest() {
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Control)
-            ansiLetters.forEach { (keyCode, key, _, _) ->
+            ansiLetters.forEach { (keyCode, key) ->
                 val keyWithModifiers: String = controlLayer[keyCode]!!
                 withModifiersPressed(modifiers = modifiers) {
                     ui { robot.emulateKeyboardEvent(keyCode, true) }
@@ -369,7 +369,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     fun latinLettersWithControlShiftTest() {
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Control, KeyCode.Shift)
-            ansiLetters.forEach { (keyCode, key, _, _) ->
+            ansiLetters.forEach { (keyCode, key) ->
                 val keyWithModifiers: String = controlLayer[keyCode]!!
                 withModifiersPressed(modifiers = modifiers) {
                     ui { robot.emulateKeyboardEvent(keyCode, true) }
@@ -401,7 +401,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Option)
 
-            ansiLetters.forEach { (keyCode, key, _, _) ->
+            ansiLetters.forEach { (keyCode, key) ->
                 val keyData = optionLayer[keyCode]!!
                 val optionLayerLetter = keyData.letter
                 val typed = if (keyData.isDeadKey) {
@@ -439,7 +439,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Option, KeyCode.Shift)
 
-            ansiLetters.forEach { (keyCode, key, _, _) ->
+            ansiLetters.forEach { (keyCode, key) ->
                 val keyData = optionLayerShifted[keyCode]!!
                 val optionLayerLetter = keyData.letter
                 val typed = if (keyData.isDeadKey) {
@@ -476,7 +476,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     fun latinLettersWithOptionCommandTest() {
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Command, KeyCode.Option)
-            for ((keyCode, key, _, _) in ansiLetters) {
+            for ((keyCode, key) in ansiLetters) {
                 if (keyCode == KeyCode.ANSI_D) {
                     continue // Is not reported on CI
                 }
@@ -520,7 +520,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     fun latinLettersWithOptionControlTest() {
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Control, KeyCode.Option)
-            ansiLetters.forEach { (keyCode, key, _, _) ->
+            ansiLetters.forEach { (keyCode, key) ->
                 val keyWithModifiers: String = controlLayer[keyCode]!!
                 withModifiersPressed(modifiers = modifiers) {
                     ui { robot.emulateKeyboardEvent(keyCode, true) }
@@ -549,7 +549,6 @@ class KeyboardTest : KDTApplicationTestBase() {
     data class KeyData(
         val keyCode: KeyCode,
         val key: String,
-        val shiftedKey: String = key.uppercase(getDefault()),
         val isLetter: Boolean = false,
     )
 
@@ -582,31 +581,84 @@ class KeyboardTest : KDTApplicationTestBase() {
         KeyData(KeyCode.ANSI_Y, "y", isLetter = true),
         KeyData(KeyCode.ANSI_Z, "z", isLetter = true),
         // Digits
-        KeyData(KeyCode.ANSI_1, "1", "!"),
-        KeyData(KeyCode.ANSI_2, "2", "@"),
-        KeyData(KeyCode.ANSI_3, "3", "#"),
-        KeyData(KeyCode.ANSI_4, "4", "$"),
-        KeyData(KeyCode.ANSI_5, "5", "%"),
-        KeyData(KeyCode.ANSI_6, "6", "^"),
-        KeyData(KeyCode.ANSI_7, "7", "&"),
-        KeyData(KeyCode.ANSI_8, "8", "*"),
-        KeyData(KeyCode.ANSI_9, "9", "("),
-        KeyData(KeyCode.ANSI_0, "0", ")"),
+        KeyData(KeyCode.ANSI_1, "1"),
+        KeyData(KeyCode.ANSI_2, "2"),
+        KeyData(KeyCode.ANSI_3, "3"),
+        KeyData(KeyCode.ANSI_4, "4"),
+        KeyData(KeyCode.ANSI_5, "5"),
+        KeyData(KeyCode.ANSI_6, "6"),
+        KeyData(KeyCode.ANSI_7, "7"),
+        KeyData(KeyCode.ANSI_8, "8"),
+        KeyData(KeyCode.ANSI_9, "9"),
+        KeyData(KeyCode.ANSI_0, "0"),
         // Symbols
-        KeyData(KeyCode.ANSI_Minus, "-", "_"),
-        KeyData(KeyCode.ANSI_Equal, "=", "+"),
-        KeyData(KeyCode.ANSI_LeftBracket, "[", "{"),
-        KeyData(KeyCode.ANSI_RightBracket, "]", "}"),
-        KeyData(KeyCode.ANSI_Backslash, "\\", "|"),
-        KeyData(KeyCode.ANSI_Semicolon, ";", ":"),
-        KeyData(KeyCode.ANSI_Quote, "'", "\""),
-        KeyData(KeyCode.ANSI_Comma, ",", "<"),
-        KeyData(KeyCode.ANSI_Period, ".", ">"),
-        KeyData(KeyCode.ANSI_Slash, "/", "?"),
-        KeyData(KeyCode.ANSI_Grave, "`", "~"),
+        KeyData(KeyCode.ANSI_Minus, "-"),
+        KeyData(KeyCode.ANSI_Equal, "="),
+        KeyData(KeyCode.ANSI_LeftBracket, "["),
+        KeyData(KeyCode.ANSI_RightBracket, "]"),
+        KeyData(KeyCode.ANSI_Backslash, "\\"),
+        KeyData(KeyCode.ANSI_Semicolon, ";"),
+        KeyData(KeyCode.ANSI_Quote, "'"),
+        KeyData(KeyCode.ANSI_Comma, ","),
+        KeyData(KeyCode.ANSI_Period, "."),
+        KeyData(KeyCode.ANSI_Slash, "/"),
+        KeyData(KeyCode.ANSI_Grave, "`"),
     )
 
     val ansiLetters = ansiButtons.filter { it.isLetter }
+
+    val shiftedLayer = mapOf(
+        // Letters
+        Pair(KeyCode.ANSI_A, "A"),
+        Pair(KeyCode.ANSI_B, "B"),
+        Pair(KeyCode.ANSI_C, "C"),
+        Pair(KeyCode.ANSI_D, "D"),
+        Pair(KeyCode.ANSI_E, "E"),
+        Pair(KeyCode.ANSI_F, "F"),
+        Pair(KeyCode.ANSI_G, "G"),
+        Pair(KeyCode.ANSI_H, "H"),
+        Pair(KeyCode.ANSI_I, "I"),
+        Pair(KeyCode.ANSI_J, "J"),
+        Pair(KeyCode.ANSI_K, "K"),
+        Pair(KeyCode.ANSI_L, "L"),
+        Pair(KeyCode.ANSI_M, "M"),
+        Pair(KeyCode.ANSI_N, "N"),
+        Pair(KeyCode.ANSI_O, "O"),
+        Pair(KeyCode.ANSI_P, "P"),
+        Pair(KeyCode.ANSI_Q, "Q"),
+        Pair(KeyCode.ANSI_R, "R"),
+        Pair(KeyCode.ANSI_S, "S"),
+        Pair(KeyCode.ANSI_T, "T"),
+        Pair(KeyCode.ANSI_U, "U"),
+        Pair(KeyCode.ANSI_V, "V"),
+        Pair(KeyCode.ANSI_W, "W"),
+        Pair(KeyCode.ANSI_X, "X"),
+        Pair(KeyCode.ANSI_Y, "Y"),
+        Pair(KeyCode.ANSI_Z, "Z"),
+        // Digits
+        Pair(KeyCode.ANSI_1, "!"),
+        Pair(KeyCode.ANSI_2, "@"),
+        Pair(KeyCode.ANSI_3, "#"),
+        Pair(KeyCode.ANSI_4, "$"),
+        Pair(KeyCode.ANSI_5, "%"),
+        Pair(KeyCode.ANSI_6, "^"),
+        Pair(KeyCode.ANSI_7, "&"),
+        Pair(KeyCode.ANSI_8, "*"),
+        Pair(KeyCode.ANSI_9, "("),
+        Pair(KeyCode.ANSI_0, ")"),
+        // Symbols
+        Pair(KeyCode.ANSI_Minus, "_"),
+        Pair(KeyCode.ANSI_Equal, "+"),
+        Pair(KeyCode.ANSI_LeftBracket, "{"),
+        Pair(KeyCode.ANSI_RightBracket, "}"),
+        Pair(KeyCode.ANSI_Backslash, "|"),
+        Pair(KeyCode.ANSI_Semicolon, ":"),
+        Pair(KeyCode.ANSI_Quote, "\""),
+        Pair(KeyCode.ANSI_Comma, "<"),
+        Pair(KeyCode.ANSI_Period, ">"),
+        Pair(KeyCode.ANSI_Slash, "?"),
+        Pair(KeyCode.ANSI_Grave, "~"),
+    )
 
     data class OptionLayerKeyData(
         val letter: String,
