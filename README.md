@@ -150,3 +150,15 @@ an OS integration layer for Compose for Desktop.
 | Drag exited           | ✅    | ✅      | ❌      |     |
 | Drag performed        | ✅    | ✅      | ❌      |     |
 | Drag source           | ✅    | ✅      | ❌      |     |
+
+## Acknowledgements
+Many libraries tackle the same problem from different angles, but each makes slightly different trade-offs compared to KDT.
+
+To name a few:
+* [AWT](https://docs.oracle.com/javase/8/docs/api/java/awt/package-summary.html)
+* [gpui.rs](https://www.gpui.rs/)
+* [JWM](https://github.com/humbleui/jwm)
+* [JavaFX](https://openjfx.io/)
+* [GLFW](https://www.glfw.org/)
+* [SDL](https://www.libsdl.org/)
+* [Electron](https://www.electronjs.org/)
