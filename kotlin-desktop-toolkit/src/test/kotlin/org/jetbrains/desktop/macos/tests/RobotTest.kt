@@ -7,6 +7,8 @@ import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.Window
+import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyDown
+import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyUp
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.condition.EnabledOnOs
@@ -189,10 +191,60 @@ class RobotTest : KDTApplicationTestBase() {
 
     @Test
     fun `swedish test`() {
-        val layoutId = "com.apple.keylayout.Swedish-Pro"
-        assert(ui { Application.chooseInputSource(layoutId) })
-        ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, true) }
-        ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, false) }
-        awaitEventOfType<Event.KeyDown> { it.typedCharacters == "ö" }
+        withInputSource("com.apple.keylayout.Swedish-Pro") {
+            ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, true) }
+            ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, false) }
+            awaitEventOfType<Event.KeyDown> { it.typedCharacters == "ö" }
+        }
+    }
+
+    @Test
+    fun `switch layout works fast`() {
+        repeat(10) {
+            val keyCode = KeyCode.ANSI_A
+            val englishLetter = "a"
+            val russianLetter = "ф"
+            withInputSource("com.apple.keylayout.ABC") {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = englishLetter,
+                    key = englishLetter,
+                    keyWithModifiers = englishLetter,
+                    modifiers = emptySet(),
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = englishLetter,
+                    key = englishLetter,
+                    keyWithModifiers = englishLetter,
+                    modifiers = emptySet(),
+                )
+            }
+
+            withInputSource("com.apple.keylayout.Russian") {
+                ui { robot.emulateKeyboardEvent(keyCode, true) }
+                ui { robot.emulateKeyboardEvent(keyCode, false) }
+                assertKeyDown(
+                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = russianLetter,
+                    key = russianLetter,
+                    keyWithModifiers = russianLetter,
+                    modifiers = emptySet(),
+                )
+                assertKeyUp(
+                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+                    keyCode,
+                    typed = russianLetter,
+                    key = russianLetter,
+                    keyWithModifiers = russianLetter,
+                    modifiers = emptySet(),
+                )
+            }
+        }
     }
 }

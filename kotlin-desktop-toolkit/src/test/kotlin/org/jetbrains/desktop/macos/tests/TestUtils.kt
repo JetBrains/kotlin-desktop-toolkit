@@ -13,6 +13,7 @@ import org.jetbrains.desktop.macos.tests.KeyboardTest.Companion.window
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
+import java.lang.Thread.sleep
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -74,15 +75,18 @@ open class KDTApplicationTestBase : KDTTestBase() {
         }
 
         fun withInputSource(inputSource: String, body: () -> Unit) {
+            val delayAfterSwitch = 10L
             val previousInputSource = ui { Application.currentInputSource()!! }
             if (previousInputSource != inputSource) {
                 assert(ui { Application.chooseInputSource(inputSource) })
-                assert(ui { Application.currentInputSource()!! } == inputSource)
+                sleep(delayAfterSwitch)
             }
             try {
+                assert(ui { Application.currentInputSource()!! } == inputSource)
                 body()
             } finally {
-                ui { Application.chooseInputSource(previousInputSource) }
+                assert(ui { Application.chooseInputSource(previousInputSource) })
+                sleep(delayAfterSwitch)
             }
         }
 
