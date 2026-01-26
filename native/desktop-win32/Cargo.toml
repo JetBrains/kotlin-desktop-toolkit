@@ -18,7 +18,7 @@ desktop-common = { path = "../desktop-common" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-numerics = "0.3.0"
-windows = { version = "0.62.0", features = [
+windows = { version = "0.62.2", features = [
     "System",
     "UI_Composition",
     "UI_Composition_Desktop",
