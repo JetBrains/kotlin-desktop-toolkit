@@ -24,6 +24,8 @@ import org.jetbrains.skia.Surface
 import org.jetbrains.skia.SurfaceColorFormat
 import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
+import java.util.Timer
+import kotlin.concurrent.schedule
 import kotlin.time.TimeSource
 
 abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
@@ -74,18 +76,22 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                             Logger.debug { "Current screen: $currentScreen" }
                         }
                     }
+
                     VirtualKey.T -> {
                         window.setTitle("New Title")
                     }
+
                     VirtualKey.C -> {
                         window.setCursor(CursorIcon.Hand)
                     }
+
                     VirtualKey.O -> {
                         if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
                             val results = FileDialog.showOpenFileDialog(window)
                             Logger.debug { "Open file dialog results: $results" }
                         }
                     }
+
                     else -> {
                         val unicode = event.toUnicode()
                         val translated = event.translate()
@@ -145,6 +151,9 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                 surface.flushAndSubmit()
                 angleRenderer.swapBuffers(waitForVsync = !doResizeSurface)
             }
+        }
+        Timer(true).schedule(1000L / 60) {
+            window.requestRedraw()
         }
     }
 
