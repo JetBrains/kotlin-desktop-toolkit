@@ -6,6 +6,8 @@ import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.CursorIcon
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
+import org.jetbrains.desktop.win32.FileDialog
+import org.jetbrains.desktop.win32.Keyboard
 import org.jetbrains.desktop.win32.Logger
 import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.Screen
@@ -60,18 +62,29 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
             is Event.KeyDown -> {
                 when (event.virtualKey) {
                     VirtualKey.S -> {
-                        val screens = Screen.allScreens()
-                        for (screen in screens) {
-                            Logger.debug { "Screen: $screen" }
+                        if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
+                            val result = FileDialog.showSaveFileDialog(window)
+                            Logger.debug { "Save file dialog result: $result" }
+                        } else {
+                            val screens = Screen.allScreens()
+                            for (screen in screens) {
+                                Logger.debug { "Screen: $screen" }
+                            }
+                            val currentScreen = window.getScreen()
+                            Logger.debug { "Current screen: $currentScreen" }
                         }
-                        val currentScreen = window.getScreen()
-                        Logger.debug { "Current screen: $currentScreen" }
                     }
                     VirtualKey.T -> {
                         window.setTitle("New Title")
                     }
                     VirtualKey.C -> {
                         window.setCursor(CursorIcon.Hand)
+                    }
+                    VirtualKey.O -> {
+                        if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
+                            val results = FileDialog.showOpenFileDialog(window)
+                            Logger.debug { "Open file dialog results: $results" }
+                        }
                     }
                     else -> {
                         val unicode = event.toUnicode()
