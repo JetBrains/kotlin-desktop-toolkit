@@ -13,13 +13,14 @@ use windows::Win32::{
         HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow, GetSystemMetricsForDpi, SetThreadDpiAwarenessContext},
         Input::Pointer::EnableMouseInPointer,
         WindowsAndMessaging::{
-            DefWindowProcW, DispatchMessageW, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW, GetWindowRect, HTCAPTION,
-            HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED,
-            SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE,
-            WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE,
-            WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN,
-            WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT,
-            WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
+            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS,
+            SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
+            USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR,
+            WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST,
+            WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
+            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
+            WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
 };
@@ -286,11 +287,25 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         return None;
     }
     let calcsize_params = unsafe { (lparam.0 as *mut NCCALCSIZE_PARAMS).as_mut() }?;
-    let top = calcsize_params.rgrc[0].top;
-    let result = unsafe { DefWindowProcW(window.hwnd(), WM_NCCALCSIZE, wparam, lparam) };
-    if window.has_custom_title_bar() && result.0 == 0 {
-        // the top inset should be 0 otherwise Windows will draw full native title bar
-        calcsize_params.rgrc[0].top = top;
+    let hwnd = window.hwnd();
+    let mut rc = RECT::default();
+    // https://devblogs.microsoft.com/oldnewthing/20131017-00/?p=2903
+    unsafe {
+        AdjustWindowRectEx(
+            &raw mut rc,
+            WINDOW_STYLE(GetWindowLongPtrW(hwnd, GWL_STYLE).try_into().unwrap()),
+            false,
+            WINDOW_EX_STYLE(GetWindowLongPtrW(hwnd, GWL_EXSTYLE).try_into().unwrap()),
+        )
+    }
+    .inspect_err(|err| log::error!("failed to adjust window size: {err}"))
+    .ok()?;
+    calcsize_params.rgrc[0].left -= rc.left;
+    calcsize_params.rgrc[0].right -= rc.right;
+    calcsize_params.rgrc[0].bottom -= rc.bottom;
+    // for custom title bar, the top inset should be 0 otherwise Windows will draw full native title bar
+    if !window.has_custom_title_bar() {
+        calcsize_params.rgrc[0].top -= rc.top;
     }
     let origin = PhysicalPoint::new(calcsize_params.rgrc[0].left, calcsize_params.rgrc[0].top);
     let size = PhysicalSize::new(
@@ -300,7 +315,7 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let scale = window.get_scale();
     let event = NCCalcSizeEvent { origin, size, scale };
     event_loop.handle_event(window, event.into());
-    Some(result)
+    Some(LRESULT(0))
 }
 
 fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
