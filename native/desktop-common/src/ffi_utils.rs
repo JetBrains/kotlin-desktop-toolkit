@@ -392,15 +392,6 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
 #[repr(transparent)]
 pub struct RustAllocatedRcPtr<'a>(GenericRawPtr<'a, std::ffi::c_void>);
 
-impl Clone for RustAllocatedRcPtr<'_> {
-    fn clone(&self) -> Self {
-        Self(GenericRawPtr {
-            ptr: self.0.ptr,
-            phantom: PhantomData,
-        })
-    }
-}
-
 impl RustAllocatedRcPtr<'_> {
     #[must_use]
     pub fn from_rc<R>(value: Option<Rc<R>>) -> Self {

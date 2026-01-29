@@ -4,8 +4,10 @@ use desktop_common::{
 };
 
 use super::{
+    application_api::{AppPtr, with_app},
     renderer_angle::AngleDevice,
-    window_api::{WindowPtr, with_window},
+    window::Window,
+    window_api::WindowPtr,
 };
 
 pub type AngleDevicePtr<'a> = RustAllocatedRawPtr<'a>;
@@ -45,18 +47,19 @@ pub extern "C" fn renderer_angle_get_egl_get_proc_func(angle_device_ptr: AngleDe
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn renderer_angle_device_create(window_ptr: WindowPtr) -> AngleDevicePtr {
-    let angle_device = with_window(&window_ptr, "renderer_angle_device_create", |window| {
-        let angle_device = AngleDevice::create_for_window(window)?;
+pub extern "C" fn renderer_angle_device_create<'a>(app_ptr: AppPtr, window_ptr: WindowPtr) -> AngleDevicePtr<'a> {
+    let angle_device = with_app(&app_ptr, "renderer_angle_device_create", |app| {
+        let window = unsafe { window_ptr.borrow::<Window>() };
+        let angle_device = app.create_angle_device(window)?;
         Ok(Some(angle_device))
     });
     AngleDevicePtr::from_value(angle_device)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn renderer_angle_resize_surface(mut angle_device_ptr: AngleDevicePtr, width: i32, height: i32) -> EglSurfaceData {
+pub extern "C" fn renderer_angle_resize_surface(angle_device_ptr: AngleDevicePtr, width: i32, height: i32) -> EglSurfaceData {
     ffi_boundary("renderer_angle_resize_surface", || {
-        let angle_device = unsafe { angle_device_ptr.borrow_mut::<AngleDevice>() };
+        let angle_device = unsafe { angle_device_ptr.borrow::<AngleDevice>() };
         angle_device.resize_surface(width, height)
     })
 }
@@ -70,10 +73,10 @@ pub extern "C" fn renderer_angle_make_current(angle_device_ptr: AngleDevicePtr) 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn renderer_angle_swap_buffers(angle_device_ptr: AngleDevicePtr, wait_for_vsync: bool) {
+pub extern "C" fn renderer_angle_swap_buffers(angle_device_ptr: AngleDevicePtr) {
     ffi_boundary("renderer_angle_swap_buffers", || {
         let angle_device = unsafe { angle_device_ptr.borrow::<AngleDevice>() };
-        angle_device.swap_buffers(wait_for_vsync)
+        angle_device.swap_buffers()
     });
 }
 
