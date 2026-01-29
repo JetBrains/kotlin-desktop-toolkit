@@ -7,7 +7,14 @@ use khronos_egl as egl;
 pub(crate) type EglInstance = egl::DynamicInstance<egl::EGL1_5>;
 
 /// cbindgen:ignore
+pub(crate) type GrGLsizei = core::ffi::c_int;
+
+/// cbindgen:ignore
 pub(crate) type GrGLGetIntegervFn = unsafe extern "system" fn(pname: egl::Enum, params: *mut egl::Int) -> ();
+/// cbindgen:ignore
+pub(crate) type GrGLViewportFn = unsafe extern "system" fn(x: egl::Int, y: egl::Int, width: GrGLsizei, height: GrGLsizei) -> ();
+/// cbindgen:ignore
+pub(crate) type GrGLFinishFn = unsafe extern "system" fn() -> ();
 
 /// cbindgen:ignore
 pub(crate) type PostSubBufferNVFn = unsafe extern "system" fn(
@@ -18,20 +25,6 @@ pub(crate) type PostSubBufferNVFn = unsafe extern "system" fn(
     width: egl::Int,
     height: egl::Int,
 ) -> egl::Boolean;
-
-/// cbindgen:ignore
-pub(crate) type EGLDeviceEXT = *mut core::ffi::c_void;
-
-/// cbindgen:ignore
-pub(crate) type QueryDisplayAttribEXTFn =
-    unsafe extern "system" fn(display: egl::EGLDisplay, attribute: egl::Int, value: *mut egl::Attrib) -> egl::Boolean;
-
-/// cbindgen:ignore
-pub(crate) type QueryDeviceAttribEXTFn =
-    unsafe extern "system" fn(device: EGLDeviceEXT, attribute: egl::Int, value: *mut egl::Attrib) -> egl::Boolean;
-
-/// cbindgen:ignore
-pub(crate) const EGL_DEVICE_EXT: egl::Int = 0x322C;
 
 /// cbindgen:ignore
 pub(crate) const GR_GL_FRAMEBUFFER_BINDING: egl::Enum = 0x8CA6;
@@ -49,12 +42,16 @@ pub(crate) use get_egl_proc;
 #[allow(non_snake_case)]
 pub(crate) struct GrGLFunctions {
     pub fGetIntegerv: GrGLGetIntegervFn,
+    pub fViewport: GrGLViewportFn,
+    pub fFinish: GrGLFinishFn,
 }
 
 impl GrGLFunctions {
     pub fn init(egl_instance: &EglInstance) -> anyhow::Result<Self> {
         Ok(Self {
             fGetIntegerv: get_egl_proc!(egl_instance, "glGetIntegerv")?,
+            fViewport: get_egl_proc!(egl_instance, "glViewport")?,
+            fFinish: get_egl_proc!(egl_instance, "glFinish")?,
         })
     }
 }

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use windows::{
     Foundation::TypedEventHandler,
     System::{DispatcherQueueController, DispatcherQueueHandler},
-    UI::Composition::Compositor,
+    UI::Composition::Core::CompositorController,
     Win32::{
         System::{
             Com::{COINIT_APARTMENTTHREADED, CoInitializeEx},
@@ -17,13 +17,14 @@ use windows::{
 use super::{
     event_loop::EventLoop,
     events::EventHandler,
+    renderer_angle::AngleDevice,
     window::{Window, WindowId},
 };
 
 pub struct Application {
     dispatcher_queue_controller: DispatcherQueueController,
     event_loop: Rc<EventLoop>,
-    compositor: Compositor,
+    compositor_controller: CompositorController,
 }
 
 impl Application {
@@ -36,11 +37,11 @@ impl Application {
     pub fn new(event_handler: EventHandler) -> WinResult<Self> {
         let dispatcher_queue_controller = create_dispatcher_queue()?;
         let event_loop = EventLoop::new(event_handler)?;
-        let compositor = Compositor::new()?;
+        let compositor_controller = CompositorController::new()?;
         Ok(Self {
             dispatcher_queue_controller,
             event_loop: Rc::new(event_loop),
-            compositor,
+            compositor_controller,
         })
     }
 
@@ -70,7 +71,11 @@ impl Application {
     }
 
     pub(crate) fn new_window(&self, window_id: WindowId) -> WinResult<Window> {
-        Window::new(window_id, Rc::downgrade(&self.event_loop), self.compositor.clone())
+        Window::new(window_id, Rc::downgrade(&self.event_loop), self.compositor_controller.Compositor()?)
+    }
+
+    pub(crate) fn create_angle_device(&self, window: &Window) -> anyhow::Result<AngleDevice> {
+        AngleDevice::create_for_window(window, self.compositor_controller.clone())
     }
 }
 

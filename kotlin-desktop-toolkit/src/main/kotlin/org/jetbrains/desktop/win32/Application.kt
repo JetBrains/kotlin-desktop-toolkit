@@ -74,6 +74,16 @@ public class Application : AutoCloseable {
 
     public fun newWindow(): Window = Window.new(appPtr)
 
+    public fun createAngleRenderer(window: Window): AngleRenderer {
+        return AngleRenderer(
+            ffiDownCall {
+                window.withPointer { windowPtr ->
+                    desktop_win32_h.renderer_angle_device_create(appPtr, windowPtr)
+                }
+            },
+        )
+    }
+
     private fun runEventHandler(windowId: WindowId, event: Event): EventHandlerResult {
         return eventHandler?.let { eventHandler ->
             eventHandler(windowId, event)

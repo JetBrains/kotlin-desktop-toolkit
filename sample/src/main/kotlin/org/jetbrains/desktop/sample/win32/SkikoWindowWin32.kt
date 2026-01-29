@@ -24,13 +24,11 @@ import org.jetbrains.skia.Surface
 import org.jetbrains.skia.SurfaceColorFormat
 import org.jetbrains.skia.SurfaceOrigin
 import org.jetbrains.skia.makeGLWithInterface
-import java.util.Timer
-import kotlin.concurrent.schedule
 import kotlin.time.TimeSource
 
 abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
     private val angleRenderer: AngleRenderer by lazy {
-        AngleRenderer.create(window)
+        app.createAngleRenderer(window)
     }
 
     private val directContext: DirectContext by lazy {
@@ -124,8 +122,7 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
 
     private fun performDrawing(size: PhysicalSize, scale: Float) {
         angleRenderer.makeCurrent()
-        val doResizeSurface = isSizeChanged(size)
-        if (doResizeSurface) {
+        if (isSizeChanged(size)) {
             currentSize = size
             surfaceParams = angleRenderer.resizeSurface(size.width, size.height)
         }
@@ -149,11 +146,8 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                 surface.canvas.clear(Color.TRANSPARENT)
                 surface.canvas.draw(size, scale, time)
                 surface.flushAndSubmit()
-                angleRenderer.swapBuffers(waitForVsync = !doResizeSurface)
+                angleRenderer.swapBuffers()
             }
-        }
-        Timer(true).schedule(1000L / 60) {
-            window.requestRedraw()
         }
     }
 
