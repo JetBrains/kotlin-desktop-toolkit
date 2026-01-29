@@ -7,18 +7,6 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
 public class AngleRenderer internal constructor(private val angleDevicePtr: MemorySegment) : AutoCloseable {
-    public companion object {
-        public fun create(window: Window): AngleRenderer {
-            return AngleRenderer(
-                ffiDownCall {
-                    window.withPointer { windowPtr ->
-                        desktop_win32_h.renderer_angle_device_create(windowPtr)
-                    }
-                },
-            )
-        }
-    }
-
     public data class EglGetProcFunc(
         val fPtr: Long,
         val ctxPtr: Long,
@@ -51,9 +39,9 @@ public class AngleRenderer internal constructor(private val angleDevicePtr: Memo
         }
     }
 
-    public fun swapBuffers(waitForVsync: Boolean) {
+    public fun swapBuffers() {
         ffiDownCall {
-            desktop_win32_h.renderer_angle_swap_buffers(angleDevicePtr, waitForVsync)
+            desktop_win32_h.renderer_angle_swap_buffers(angleDevicePtr)
         }
     }
 

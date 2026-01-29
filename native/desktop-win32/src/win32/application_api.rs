@@ -1,6 +1,6 @@
 use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedRawPtr},
-    logger::ffi_boundary,
+    logger::{PanicDefault, ffi_boundary},
 };
 use windows::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
 
@@ -12,6 +12,13 @@ pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
 #[derive(Debug)]
 pub struct ApplicationCallbacks {
     pub event_handler: EventHandler,
+}
+
+pub(crate) fn with_app<R: PanicDefault>(app_ptr: &AppPtr, name: &str, f: impl FnOnce(&Application) -> anyhow::Result<R>) -> R {
+    ffi_boundary(name, || {
+        let w = unsafe { app_ptr.borrow::<Application>() };
+        f(w)
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -30,24 +37,19 @@ pub extern "C" fn application_init(callbacks: ApplicationCallbacks) -> AppPtr<'s
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_is_dispatcher_thread(app_ptr: AppPtr) -> bool {
-    ffi_boundary("application_is_dispatcher_thread", || {
-        let app = unsafe { app_ptr.borrow::<Application>() };
-        Ok(app.is_dispatcher_thread()?)
-    })
+    with_app(&app_ptr, "application_is_dispatcher_thread", |app| Ok(app.is_dispatcher_thread()?))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_dispatcher_invoke(app_ptr: AppPtr, callback: extern "C" fn()) -> bool {
-    ffi_boundary("application_dispatcher_invoke", || {
-        let app = unsafe { app_ptr.borrow::<Application>() };
+    with_app(&app_ptr, "application_dispatcher_invoke", |app| {
         Ok(app.invoke_on_dispatcher_queue(callback)?)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_run_event_loop(app_ptr: AppPtr) {
-    ffi_boundary("application_run_event_loop", || {
-        let app = unsafe { app_ptr.borrow::<Application>() };
+    with_app(&app_ptr, "application_run_event_loop", |app| {
         app.run_event_loop();
         Ok(())
     });
@@ -55,11 +57,7 @@ pub extern "C" fn application_run_event_loop(app_ptr: AppPtr) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_stop_event_loop(app_ptr: AppPtr) {
-    ffi_boundary("application_stop_event_loop", || {
-        let app = unsafe { app_ptr.borrow::<Application>() };
-        app.shutdown()?;
-        Ok(())
-    });
+    with_app(&app_ptr, "application_stop_event_loop", |app| Ok(app.shutdown()?));
 }
 
 #[unsafe(no_mangle)]

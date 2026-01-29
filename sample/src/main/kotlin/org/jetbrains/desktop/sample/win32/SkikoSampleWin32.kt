@@ -22,10 +22,13 @@ import org.jetbrains.skia.RRect
 import org.jetbrains.skia.skottie.Animation
 import org.jetbrains.skia.skottie.AnimationBuilder
 import java.lang.AutoCloseable
+import java.util.Timer
 import kotlin.Array
 import kotlin.Float
 import kotlin.Long
 import kotlin.String
+import kotlin.concurrent.schedule
+import kotlin.math.floor
 import kotlin.use
 
 fun legoAnimation(): String {
@@ -65,6 +68,9 @@ class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
         val frame = (time.toFloat() % animationDuration) / animation.fPS
         animation.seekFrame(frame)
         animation.render(canvas, (size.width.toFloat() / 2) - (animation.width / 2), (size.height.toFloat() / 2) - (animation.height / 2))
+        Timer(true).schedule(floor(1000f / animation.fPS).toLong()) {
+            window.requestRedraw()
+        }
     }
 
     override fun close() {
