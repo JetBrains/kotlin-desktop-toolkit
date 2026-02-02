@@ -476,7 +476,11 @@ impl MyNSApplication {
     // modifiers are down, but swallows the key up if the modifiers include
     // command.  This one makes all modifiers consistent by always sending key ups.
     fn send_event_impl(&self, event: &NSEvent) {
-        if event.r#type() == NSEventType::KeyUp {
+        let isKeyUp = event.r#type() == NSEventType::KeyUp;
+        let isEisuDown = event.r#type() == NSEventType::KeyDown && event.keyCode() == 102;
+        let isKanaDown = event.r#type() == NSEventType::KeyDown && event.keyCode() == 104;
+
+        if isKeyUp || isEisuDown || isKanaDown {
             let mtm: MainThreadMarker = self.mtm();
             if let Some(window) = event.window(mtm) {
                 window.sendEvent(event);
