@@ -507,6 +507,17 @@ extern "C" fn events_pressed_modifiers() -> KeyModifiersSet {
 }
 
 #[unsafe(no_mangle)]
+extern "C" fn events_characters_by_applying_modifiers(modifiers: KeyModifiersSet) -> RustAllocatedStrPtr {
+    ffi_boundary("events_characters_by_applying_modifiers", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = super::application_api::MyNSApplication::sharedApplication(mtm);
+        let event = app.currentEvent().ok_or_else(|| anyhow::anyhow!("Must be called from event handler"))?;
+        let characters = event.charactersByApplyingModifiers(modifiers.into()).ok_or_else(|| anyhow::anyhow!("Can be called only when KeyUp or KeyDown are handled"))?;
+        copy_to_c_string(&characters)
+    })
+}
+
+#[unsafe(no_mangle)]
 extern "C" fn events_cursor_location_in_screen() -> LogicalPoint {
     ffi_boundary("events_cursor_location_in_screen", || {
         let mtm = MainThreadMarker::new().unwrap();
