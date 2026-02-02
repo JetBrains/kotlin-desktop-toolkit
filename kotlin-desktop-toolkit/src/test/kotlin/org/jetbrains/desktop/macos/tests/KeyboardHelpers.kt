@@ -38,7 +38,7 @@ object KeyboardHelpers {
         keyWithModifiers: String,
         modifiers: Set<KeyCode>,
     ) {
-        val isKeyDownExpected = event.typedCharacters == typed &&
+        val isKeyDownExpected = event.characters == typed &&
             event.key == key &&
             event.keyWithModifiers == keyWithModifiers &&
             event.modifiers == modifiers.toModifiersSet()
@@ -48,7 +48,7 @@ object KeyboardHelpers {
     }
 
     fun assertKeyUp(event: Event.KeyUp, keyCode: KeyCode, typed: String, key: String, keyWithModifiers: String, modifiers: Set<KeyCode>) {
-        val isKeyDownExpected = event.typedCharacters == typed &&
+        val isKeyDownExpected = event.characters == typed &&
             event.key == key &&
             event.keyWithModifiers == keyWithModifiers &&
             event.modifiers == modifiers.toModifiersSet()

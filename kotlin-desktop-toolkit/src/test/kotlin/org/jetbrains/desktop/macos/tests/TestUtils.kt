@@ -117,7 +117,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
                 GrandCentralDispatch.startOnMainThread {
                     Application.init()
                     Application.runEventLoop { event ->
-                        Logger.info { "Event: $event" }
+                        Logger.debug { "Event: $event" }
                         assert(eventQueue.offer(event), { "Event queue overflow" })
                         eventHandler?.invoke(event) ?: EventHandlerResult.Continue
                     }

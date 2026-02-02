@@ -206,7 +206,7 @@ public object Application {
     /**
      * macOS has race conditions in input source switching
      * immediately after you can observe some weird key events (even if [currentInputSource] reports expected value), for example,
-     * [Event.KeyDown.typedCharacters] corresponds to new layout [Event.KeyDown.key] and [Event.KeyDown.keyWithModifiers] to old layout.
+     * [Event.KeyDown.characters] corresponds to new layout [Event.KeyDown.key] and [Event.KeyDown.keyWithModifiers] to old layout.
      * This function is usually used in tests, and as a workaround you can wait for 10 ms.
      * See: [KDTApplicationTestBase.withInputSource]
      */

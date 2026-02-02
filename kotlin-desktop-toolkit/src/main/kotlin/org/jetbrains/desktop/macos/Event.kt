@@ -92,42 +92,31 @@ public sealed class Event {
         }
     }
 
-    /**
-     * A key press event.
-     *
-     * @property windowId The window that received this event.
-     * @property keyCode Physical key code (layout-independent).
-     * @property typedCharacters Characters produced by the key press.
-     * @property key Character for the key without modifiers, based on current keyboard layout.
-     * @property keyWithModifiers Character for the key with all modifiers applied.
-     * @property modifiers Currently pressed modifier keys.
-     * @property isRepeat True if this is a key repeat event.
-     * @property mightHaveKeyEquivalent True if this key combination might match a menu shortcut.
-     * @property timestamp When the event occurred.
-     */
     public data class KeyDown(
         override val windowId: WindowId,
         val keyCode: KeyCode,
-        val typedCharacters: String,
-        val key: String,
-        val keyWithModifiers: String,
+        val characters: String,
         val charactersIgnoringModifiers: String,
         val modifiers: KeyModifiersSet,
         val isRepeat: Boolean,
         val mightHaveKeyEquivalent: Boolean,
         val timestamp: Timestamp,
+
+        val key: String,
+        val keyWithModifiers: String,
     ) : Event(),
         WindowEvent
 
     public data class KeyUp(
         override val windowId: WindowId,
         val keyCode: KeyCode,
-        val typedCharacters: String,
-        val key: String,
-        val keyWithModifiers: String,
+        val characters: String,
         val charactersIgnoringModifiers: String,
         val modifiers: KeyModifiersSet,
         val timestamp: Timestamp,
+
+        val key: String,
+        val keyWithModifiers: String,
     ) : Event(),
         WindowEvent
 
@@ -251,14 +240,15 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
     return when (NativeEvent.tag(s)) {
         desktop_macos_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
+            val modifiers = KeyModifiersSet(NativeKeyDownEvent.modifiers(nativeEvent))
             Event.KeyDown(
                 windowId = NativeKeyDownEvent.window_id(nativeEvent),
                 keyCode = KeyCode.fromNative(NativeKeyDownEvent.code(nativeEvent)),
-                typedCharacters = NativeKeyDownEvent.characters(nativeEvent).getUtf8String(0),
-                key = NativeKeyDownEvent.key(nativeEvent).getUtf8String(0),
-                keyWithModifiers = NativeKeyDownEvent.key_with_modifiers(nativeEvent).getUtf8String(0),
+                characters = NativeKeyDownEvent.characters(nativeEvent).getUtf8String(0),
+                key = Event.charactersByApplyingModifiersForCurrentEvent(KeyModifiersSet.create()),
+                keyWithModifiers = Event.charactersByApplyingModifiersForCurrentEvent(modifiers),
                 charactersIgnoringModifiers = NativeKeyDownEvent.characters_ignoring_modifiers(nativeEvent).getUtf8String(0),
-                modifiers = KeyModifiersSet(NativeKeyDownEvent.modifiers(nativeEvent)),
+                modifiers = modifiers,
                 isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
                 mightHaveKeyEquivalent = NativeKeyDownEvent.might_have_key_equivalent(nativeEvent),
                 timestamp = Timestamp(NativeKeyDownEvent.timestamp(nativeEvent)),
@@ -266,13 +256,14 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
         }
         desktop_macos_h.NativeEvent_KeyUp() -> {
             val nativeEvent = NativeEvent.key_up(s)
+            val modifiers = KeyModifiersSet(NativeKeyUpEvent.modifiers(nativeEvent))
             Event.KeyUp(
                 windowId = NativeKeyUpEvent.window_id(nativeEvent),
-                typedCharacters = NativeKeyUpEvent.characters(nativeEvent).getUtf8String(0),
-                key = NativeKeyUpEvent.key(nativeEvent).getUtf8String(0),
-                keyWithModifiers = NativeKeyUpEvent.key_with_modifiers(nativeEvent).getUtf8String(0),
+                characters = NativeKeyUpEvent.characters(nativeEvent).getUtf8String(0),
+                key = Event.charactersByApplyingModifiersForCurrentEvent(KeyModifiersSet.create()),
+                keyWithModifiers = Event.charactersByApplyingModifiersForCurrentEvent(modifiers),
                 charactersIgnoringModifiers = NativeKeyUpEvent.characters_ignoring_modifiers(nativeEvent).getUtf8String(0),
-                modifiers = KeyModifiersSet(NativeKeyUpEvent.modifiers(nativeEvent)),
+                modifiers = modifiers,
                 keyCode = KeyCode.fromNative(NativeKeyUpEvent.code(nativeEvent)),
                 timestamp = Timestamp(NativeKeyUpEvent.timestamp(nativeEvent)),
             )
