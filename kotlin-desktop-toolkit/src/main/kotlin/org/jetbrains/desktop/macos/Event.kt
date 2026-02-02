@@ -71,6 +71,19 @@ public sealed class Event {
         }
     }
 
+    /**
+     * A key press event.
+     *
+     * @property windowId The window that received this event.
+     * @property keyCode Physical key code (layout-independent).
+     * @property typedCharacters Characters produced by the key press.
+     * @property key Character for the key without modifiers, based on current keyboard layout.
+     * @property keyWithModifiers Character for the key with all modifiers applied.
+     * @property modifiers Currently pressed modifier keys.
+     * @property isRepeat True if this is a key repeat event.
+     * @property mightHaveKeyEquivalent True if this key combination might match a menu shortcut.
+     * @property timestamp When the event occurred.
+     */
     public data class KeyDown(
         override val windowId: WindowId,
         val keyCode: KeyCode,
