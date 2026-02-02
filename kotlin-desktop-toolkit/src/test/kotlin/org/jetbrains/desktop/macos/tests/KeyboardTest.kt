@@ -3,6 +3,7 @@ package org.jetbrains.desktop.macos.tests
 import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.KeyCode
+import org.jetbrains.desktop.macos.KeyboardType
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.Window
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.TimeUnit
 import kotlin.collections.emptySet
+import kotlin.streams.toList
 import kotlin.test.Test
 
 @EnabledOnOs(OS.MAC)
@@ -546,10 +548,177 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    internal fun String.toHexCodePoints(): List<String> = codePoints().toList().map { it.toHexString() }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    fun `all keys`() {
+        withInputSource("com.apple.keylayout.ABC") {
+            // todo val modifiers = setOf(KeyCode.Control, KeyCode.Option) application crashes
+            val modifiers = emptySet<KeyCode>()
+            ui { robot.setKeyboardType(KeyboardType.Jis) }
+            allButtons.forEach { keyCode ->
+                withModifiersPressed(modifiers = modifiers) {
+                    ui { robot.emulateKeyboardEvent(keyCode, true) }
+                    ui { robot.emulateKeyboardEvent(keyCode, false) }
+                }
+                val downEvent = awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode }
+                val upEvent = awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode }
+                assert(downEvent.key == upEvent.key) { "Codepoints down and up are different for $keyCode" }
+                assert(downEvent.charactersIgnoringModifiers == upEvent.charactersIgnoringModifiers) { "charactersIgnoringModifiers down and up are different for $keyCode" }
+                Logger.info { "$keyCode -> key: ${downEvent.key.toHexCodePoints()} charactersIgnoringModifiers: ${downEvent.charactersIgnoringModifiers.toHexCodePoints()}" }
+
+//                assertKeyDown(
+//                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
+//                    keyCode,
+//                    typed = keyWithModifiers,
+//                    key = key,
+//                    keyWithModifiers = keyWithModifiers,
+//                    modifiers = modifiers,
+//                )
+//                assertKeyUp(
+//                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
+//                    keyCode,
+//                    typed = keyWithModifiers,
+//                    key = key,
+//                    keyWithModifiers = keyWithModifiers,
+//                    modifiers = modifiers,
+//                )
+            }
+        }
+    }
+
     data class KeyData(
         val keyCode: KeyCode,
         val key: String,
         val isLetter: Boolean = false,
+    )
+
+    val allButtons = listOf(
+        KeyCode.ANSI_A,
+                KeyCode.ANSI_S,
+                KeyCode.ANSI_D,
+                KeyCode.ANSI_F,
+                KeyCode.ANSI_H,
+                KeyCode.ANSI_G,
+                KeyCode.ANSI_Z,
+                KeyCode.ANSI_X,
+                KeyCode.ANSI_C,
+                KeyCode.ANSI_V,
+                KeyCode.ANSI_B,
+                KeyCode.ANSI_Q,
+                KeyCode.ANSI_W,
+                KeyCode.ANSI_E,
+                KeyCode.ANSI_R,
+                KeyCode.ANSI_Y,
+                KeyCode.ANSI_T,
+                KeyCode.ANSI_1,
+                KeyCode.ANSI_2,
+                KeyCode.ANSI_3,
+                KeyCode.ANSI_4,
+                KeyCode.ANSI_6,
+                KeyCode.ANSI_5,
+                KeyCode.ANSI_Equal,
+                KeyCode.ANSI_9,
+                KeyCode.ANSI_7,
+                KeyCode.ANSI_Minus,
+                KeyCode.ANSI_8,
+                KeyCode.ANSI_0,
+                KeyCode.ANSI_RightBracket,
+                KeyCode.ANSI_O,
+                KeyCode.ANSI_U,
+                KeyCode.ANSI_LeftBracket,
+                KeyCode.ANSI_I,
+                KeyCode.ANSI_P,
+                KeyCode.ANSI_L,
+                KeyCode.ANSI_J,
+                KeyCode.ANSI_Quote,
+                KeyCode.ANSI_K,
+                KeyCode.ANSI_Semicolon,
+                KeyCode.ANSI_Backslash,
+                KeyCode.ANSI_Comma,
+                KeyCode.ANSI_Slash,
+                KeyCode.ANSI_N,
+                KeyCode.ANSI_M,
+                KeyCode.ANSI_Period,
+                KeyCode.ANSI_Grave,
+                KeyCode.ANSI_KeypadDecimal,
+                KeyCode.ANSI_KeypadMultiply,
+                KeyCode.ANSI_KeypadPlus,
+                KeyCode.ANSI_KeypadClear,
+                KeyCode.ANSI_KeypadDivide,
+                KeyCode.ANSI_KeypadEnter,
+                KeyCode.ANSI_KeypadMinus,
+                KeyCode.ANSI_KeypadEquals,
+                KeyCode.ANSI_Keypad0,
+                KeyCode.ANSI_Keypad1,
+                KeyCode.ANSI_Keypad2,
+                KeyCode.ANSI_Keypad3,
+                KeyCode.ANSI_Keypad4,
+                KeyCode.ANSI_Keypad5,
+                KeyCode.ANSI_Keypad6,
+                KeyCode.ANSI_Keypad7,
+                KeyCode.ANSI_Keypad8,
+                KeyCode.ANSI_Keypad9,
+                KeyCode.Return,
+                KeyCode.Tab,
+                KeyCode.Space,
+                KeyCode.Delete,
+                KeyCode.Escape,
+
+//                KeyCode.Command,
+//                KeyCode.Shift,
+//                KeyCode.CapsLock,
+//                KeyCode.Option,
+//                KeyCode.Control,
+//                KeyCode.RightCommand,
+//                KeyCode.RightShift,
+//                KeyCode.RightOption,
+//                KeyCode.RightControl,
+//                KeyCode.Function,
+
+                KeyCode.F17,
+//                KeyCode.VolumeUp,
+//                KeyCode.VolumeDown,
+//                KeyCode.Mute,
+                KeyCode.F18,
+                KeyCode.F19,
+                KeyCode.F20,
+                KeyCode.F5,
+                KeyCode.F6,
+                KeyCode.F7,
+                KeyCode.F3,
+                KeyCode.F8,
+                KeyCode.F9,
+//                KeyCode.F11,
+                KeyCode.F13,
+                KeyCode.F16,
+//                KeyCode.F14,
+                KeyCode.F10,
+                KeyCode.ContextualMenu,
+//                KeyCode.F12,
+//                KeyCode.F15,
+//                KeyCode.Help,
+                KeyCode.Home,
+                KeyCode.PageUp,
+                KeyCode.ForwardDelete,
+                KeyCode.F4,
+                KeyCode.End,
+                KeyCode.F2,
+                KeyCode.PageDown,
+                KeyCode.F1,
+                KeyCode.LeftArrow,
+                KeyCode.RightArrow,
+                KeyCode.DownArrow,
+                KeyCode.UpArrow,
+                KeyCode.ISO_Section,
+
+                KeyCode.JIS_Yen,
+                KeyCode.JIS_Underscore,
+                KeyCode.JIS_KeypadComma,
+
+                KeyCode.JIS_Eisu,
+                KeyCode.JIS_Kana,
     )
 
     val ansiButtons = listOf(
