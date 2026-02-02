@@ -32,6 +32,9 @@ pub(crate) struct KeyEventInfo {
     // The same as `key` but also takes pressed modifiers into account
     pub(crate) key_with_modifiers: Retained<NSString>,
 
+    // Characters ignoring modifiers (except Shift and Option)
+    pub(crate) characters_ignoring_modifiers: Retained<NSString>,
+
     pub(crate) modifiers: KeyModifiersSet,
 }
 
@@ -57,6 +60,10 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
         .charactersByApplyingModifiers(ns_event.modifierFlags())
         .with_context(|| format!("Event contains invalid data: {ns_event:?}"))?;
 
+    let characters_ignoring_modifiers = ns_event
+        .charactersIgnoringModifiers()
+        .with_context(|| format!("No charactersIgnoringModifiers in {ns_event:?}"))?;
+
     let modifiers = ns_event.modifierFlags().into();
 
     let key_info = KeyEventInfo {
@@ -65,6 +72,7 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
         typed_chars,
         key,
         key_with_modifiers,
+        characters_ignoring_modifiers,
         modifiers,
     };
     Ok(key_info)

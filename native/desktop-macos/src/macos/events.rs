@@ -39,6 +39,7 @@ pub struct KeyDownEvent<'a> {
     pub characters: BorrowedStrPtr<'a>,
     pub key: BorrowedStrPtr<'a>,
     pub key_with_modifiers: BorrowedStrPtr<'a>,
+    pub characters_ignoring_modifiers: BorrowedStrPtr<'a>,
     pub is_repeat: bool,
     pub might_have_key_equivalent: bool,
     pub timestamp: Timestamp,
@@ -53,6 +54,7 @@ pub struct KeyUpEvent<'a> {
     pub characters: BorrowedStrPtr<'a>,
     pub key: BorrowedStrPtr<'a>,
     pub key_with_modifiers: BorrowedStrPtr<'a>,
+    pub characters_ignoring_modifiers: BorrowedStrPtr<'a>,
     pub timestamp: Timestamp,
 }
 
@@ -228,6 +230,7 @@ pub(crate) fn handle_key_down_event(ns_event: &NSEvent, might_have_key_equivalen
                 characters: borrow_ns_string(&key_info.typed_chars),
                 key: borrow_ns_string(&key_info.key),
                 key_with_modifiers: borrow_ns_string(&key_info.key_with_modifiers),
+                characters_ignoring_modifiers: borrow_ns_string(&key_info.characters_ignoring_modifiers),
                 modifiers: key_info.modifiers,
                 timestamp: ns_event.timestamp(),
                 might_have_key_equivalent,
@@ -249,6 +252,7 @@ pub(crate) fn handle_key_up_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
                 characters: borrow_ns_string(&key_info.typed_chars),
                 key: borrow_ns_string(&key_info.key),
                 key_with_modifiers: borrow_ns_string(&key_info.key_with_modifiers),
+                characters_ignoring_modifiers: borrow_ns_string(&key_info.characters_ignoring_modifiers),
                 modifiers: key_info.modifiers,
                 timestamp: ns_event.timestamp(),
             });
