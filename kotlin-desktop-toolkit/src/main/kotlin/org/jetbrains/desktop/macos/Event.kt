@@ -95,28 +95,28 @@ public sealed class Event {
     public data class KeyDown(
         override val windowId: WindowId,
         val keyCode: KeyCode,
-        val characters: String,
-        val charactersIgnoringModifiers: String,
+        val characters: Characters,
+        val charactersIgnoringModifiers: Characters,
         val modifiers: KeyModifiersSet,
         val isRepeat: Boolean,
         val mightHaveKeyEquivalent: Boolean,
         val timestamp: Timestamp,
 
-        val key: String,
-        val keyWithModifiers: String,
+        val key: Characters,
+        val keyWithModifiers: Characters,
     ) : Event(),
         WindowEvent
 
     public data class KeyUp(
         override val windowId: WindowId,
         val keyCode: KeyCode,
-        val characters: String,
-        val charactersIgnoringModifiers: String,
+        val characters: Characters,
+        val charactersIgnoringModifiers: Characters,
         val modifiers: KeyModifiersSet,
         val timestamp: Timestamp,
 
-        val key: String,
-        val keyWithModifiers: String,
+        val key: Characters,
+        val keyWithModifiers: Characters,
     ) : Event(),
         WindowEvent
 
@@ -244,10 +244,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             Event.KeyDown(
                 windowId = NativeKeyDownEvent.window_id(nativeEvent),
                 keyCode = KeyCode.fromNative(NativeKeyDownEvent.code(nativeEvent)),
-                characters = NativeKeyDownEvent.characters(nativeEvent).getUtf8String(0),
-                key = Event.charactersByApplyingModifiersForCurrentEvent(KeyModifiersSet.create()),
-                keyWithModifiers = Event.charactersByApplyingModifiersForCurrentEvent(modifiers),
-                charactersIgnoringModifiers = NativeKeyDownEvent.characters_ignoring_modifiers(nativeEvent).getUtf8String(0),
+                characters = Characters(NativeKeyDownEvent.characters(nativeEvent).getUtf8String(0)),
+                key = Characters(Event.charactersByApplyingModifiersForCurrentEvent(KeyModifiersSet.create())),
+                keyWithModifiers = Characters(Event.charactersByApplyingModifiersForCurrentEvent(modifiers)),
+                charactersIgnoringModifiers = Characters(NativeKeyDownEvent.characters_ignoring_modifiers(nativeEvent).getUtf8String(0)),
                 modifiers = modifiers,
                 isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
                 mightHaveKeyEquivalent = NativeKeyDownEvent.might_have_key_equivalent(nativeEvent),
@@ -259,10 +259,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event {
             val modifiers = KeyModifiersSet(NativeKeyUpEvent.modifiers(nativeEvent))
             Event.KeyUp(
                 windowId = NativeKeyUpEvent.window_id(nativeEvent),
-                characters = NativeKeyUpEvent.characters(nativeEvent).getUtf8String(0),
-                key = Event.charactersByApplyingModifiersForCurrentEvent(KeyModifiersSet.create()),
-                keyWithModifiers = Event.charactersByApplyingModifiersForCurrentEvent(modifiers),
-                charactersIgnoringModifiers = NativeKeyUpEvent.characters_ignoring_modifiers(nativeEvent).getUtf8String(0),
+                characters = Characters(NativeKeyUpEvent.characters(nativeEvent).getUtf8String(0)),
+                key = Characters(Event.charactersByApplyingModifiersForCurrentEvent(KeyModifiersSet.create())),
+                keyWithModifiers = Characters(Event.charactersByApplyingModifiersForCurrentEvent(modifiers)),
+                charactersIgnoringModifiers = Characters(NativeKeyUpEvent.characters_ignoring_modifiers(nativeEvent).getUtf8String(0)),
                 modifiers = modifiers,
                 keyCode = KeyCode.fromNative(NativeKeyUpEvent.code(nativeEvent)),
                 timestamp = Timestamp(NativeKeyUpEvent.timestamp(nativeEvent)),

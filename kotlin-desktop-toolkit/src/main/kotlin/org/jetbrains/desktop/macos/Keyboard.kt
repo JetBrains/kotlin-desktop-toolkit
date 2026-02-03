@@ -16,7 +16,7 @@ package org.jetbrains.desktop.macos
 *    keycode.
 */
 @JvmInline
-public value class KeyCode internal constructor(internal val value: Short) {
+public value class KeyCode private constructor(internal val value: Short) {
     @Suppress("MemberVisibilityCanBePrivate")
     public companion object {
         public val ANSI_A: KeyCode = KeyCode(0)
@@ -339,6 +339,296 @@ public value class KeyModifiersSet internal constructor(internal val value: Long
             if (function) add("Function")
         }
         return "KeyModifiersSet($modifiers)"
+    }
+}
+
+@JvmInline
+public value class Characters internal constructor(public val text: String) {
+    public val specialKey: SpecialKey?
+        get() {
+            val codepoints = text.codePoints().toArray()
+            if (codepoints.size == 1) {
+                return SpecialKey.fromCodepoint(codepoints[0])
+            }
+            return null
+        }
+
+    public fun toCodepointsString(): String {
+        return text.codePoints().toArray().joinToString(prefix = "[", postfix = "]") { "U+${it.toString(16).uppercase().padStart(4, '0')}" }
+    }
+
+    override fun toString(): String {
+        val specialKey = this.specialKey
+        return specialKey?.toString()
+            ?: "$text|${toCodepointsString()}"
+    }
+}
+
+@JvmInline
+public value class SpecialKey private constructor(public val codepoint: Int) {
+    public companion object {
+        public val EnterCharacter: SpecialKey = SpecialKey(0x0003)
+        public val BackspaceCharacter: SpecialKey = SpecialKey(0x0008)
+        public val TabCharacter: SpecialKey = SpecialKey(0x0009)
+        public val NewlineCharacter: SpecialKey = SpecialKey(0x000a)
+        public val FormFeedCharacter: SpecialKey = SpecialKey(0x000c)
+        public val CarriageReturnCharacter: SpecialKey = SpecialKey(0x000d)
+        public val BackTabCharacter: SpecialKey = SpecialKey(0x0019)
+        public val DeleteCharacter: SpecialKey = SpecialKey(0x007f)
+        public val LineSeparatorCharacter: SpecialKey = SpecialKey(0x2028)
+        public val ParagraphSeparatorCharacter: SpecialKey = SpecialKey(0x2029)
+
+        // Unicode private use area
+        public val UpArrowFunctionKey: SpecialKey = SpecialKey(0xF700)
+        public val DownArrowFunctionKey: SpecialKey = SpecialKey(0xF701)
+        public val LeftArrowFunctionKey: SpecialKey = SpecialKey(0xF702)
+        public val RightArrowFunctionKey: SpecialKey = SpecialKey(0xF703)
+        public val F1FunctionKey: SpecialKey = SpecialKey(0xF704)
+        public val F2FunctionKey: SpecialKey = SpecialKey(0xF705)
+        public val F3FunctionKey: SpecialKey = SpecialKey(0xF706)
+        public val F4FunctionKey: SpecialKey = SpecialKey(0xF707)
+        public val F5FunctionKey: SpecialKey = SpecialKey(0xF708)
+        public val F6FunctionKey: SpecialKey = SpecialKey(0xF709)
+        public val F7FunctionKey: SpecialKey = SpecialKey(0xF70A)
+        public val F8FunctionKey: SpecialKey = SpecialKey(0xF70B)
+        public val F9FunctionKey: SpecialKey = SpecialKey(0xF70C)
+        public val F10FunctionKey: SpecialKey = SpecialKey(0xF70D)
+        public val F11FunctionKey: SpecialKey = SpecialKey(0xF70E)
+        public val F12FunctionKey: SpecialKey = SpecialKey(0xF70F)
+        public val F13FunctionKey: SpecialKey = SpecialKey(0xF710)
+        public val F14FunctionKey: SpecialKey = SpecialKey(0xF711)
+        public val F15FunctionKey: SpecialKey = SpecialKey(0xF712)
+        public val F16FunctionKey: SpecialKey = SpecialKey(0xF713)
+        public val F17FunctionKey: SpecialKey = SpecialKey(0xF714)
+        public val F18FunctionKey: SpecialKey = SpecialKey(0xF715)
+        public val F19FunctionKey: SpecialKey = SpecialKey(0xF716)
+        public val F20FunctionKey: SpecialKey = SpecialKey(0xF717)
+        public val F21FunctionKey: SpecialKey = SpecialKey(0xF718)
+        public val F22FunctionKey: SpecialKey = SpecialKey(0xF719)
+        public val F23FunctionKey: SpecialKey = SpecialKey(0xF71A)
+        public val F24FunctionKey: SpecialKey = SpecialKey(0xF71B)
+        public val F25FunctionKey: SpecialKey = SpecialKey(0xF71C)
+        public val F26FunctionKey: SpecialKey = SpecialKey(0xF71D)
+        public val F27FunctionKey: SpecialKey = SpecialKey(0xF71E)
+        public val F28FunctionKey: SpecialKey = SpecialKey(0xF71F)
+        public val F29FunctionKey: SpecialKey = SpecialKey(0xF720)
+        public val F30FunctionKey: SpecialKey = SpecialKey(0xF721)
+        public val F31FunctionKey: SpecialKey = SpecialKey(0xF722)
+        public val F32FunctionKey: SpecialKey = SpecialKey(0xF723)
+        public val F33FunctionKey: SpecialKey = SpecialKey(0xF724)
+        public val F34FunctionKey: SpecialKey = SpecialKey(0xF725)
+        public val F35FunctionKey: SpecialKey = SpecialKey(0xF726)
+        public val InsertFunctionKey: SpecialKey = SpecialKey(0xF727)
+        public val DeleteFunctionKey: SpecialKey = SpecialKey(0xF728)
+        public val HomeFunctionKey: SpecialKey = SpecialKey(0xF729)
+        public val BeginFunctionKey: SpecialKey = SpecialKey(0xF72A)
+        public val EndFunctionKey: SpecialKey = SpecialKey(0xF72B)
+        public val PageUpFunctionKey: SpecialKey = SpecialKey(0xF72C)
+        public val PageDownFunctionKey: SpecialKey = SpecialKey(0xF72D)
+        public val PrintScreenFunctionKey: SpecialKey = SpecialKey(0xF72E)
+        public val ScrollLockFunctionKey: SpecialKey = SpecialKey(0xF72F)
+        public val PauseFunctionKey: SpecialKey = SpecialKey(0xF730)
+        public val SysReqFunctionKey: SpecialKey = SpecialKey(0xF731)
+        public val BreakFunctionKey: SpecialKey = SpecialKey(0xF732)
+        public val ResetFunctionKey: SpecialKey = SpecialKey(0xF733)
+        public val StopFunctionKey: SpecialKey = SpecialKey(0xF734)
+        public val MenuFunctionKey: SpecialKey = SpecialKey(0xF735)
+        public val UserFunctionKey: SpecialKey = SpecialKey(0xF736)
+        public val SystemFunctionKey: SpecialKey = SpecialKey(0xF737)
+        public val PrintFunctionKey: SpecialKey = SpecialKey(0xF738)
+        public val ClearLineFunctionKey: SpecialKey = SpecialKey(0xF739)
+        public val ClearDisplayFunctionKey: SpecialKey = SpecialKey(0xF73A)
+        public val InsertLineFunctionKey: SpecialKey = SpecialKey(0xF73B)
+        public val DeleteLineFunctionKey: SpecialKey = SpecialKey(0xF73C)
+        public val InsertCharFunctionKey: SpecialKey = SpecialKey(0xF73D)
+        public val DeleteCharFunctionKey: SpecialKey = SpecialKey(0xF73E)
+        public val PrevFunctionKey: SpecialKey = SpecialKey(0xF73F)
+        public val NextFunctionKey: SpecialKey = SpecialKey(0xF740)
+        public val SelectFunctionKey: SpecialKey = SpecialKey(0xF741)
+        public val ExecuteFunctionKey: SpecialKey = SpecialKey(0xF742)
+        public val UndoFunctionKey: SpecialKey = SpecialKey(0xF743)
+        public val RedoFunctionKey: SpecialKey = SpecialKey(0xF744)
+        public val FindFunctionKey: SpecialKey = SpecialKey(0xF745)
+        public val HelpFunctionKey: SpecialKey = SpecialKey(0xF746)
+        public val ModeSwitchFunctionKey: SpecialKey = SpecialKey(0xF747)
+
+        public fun fromCodepoint(codepoint: Int): SpecialKey? {
+            return when (codepoint) {
+                EnterCharacter.codepoint -> EnterCharacter
+                BackspaceCharacter.codepoint -> BackspaceCharacter
+                TabCharacter.codepoint -> TabCharacter
+                NewlineCharacter.codepoint -> NewlineCharacter
+                FormFeedCharacter.codepoint -> FormFeedCharacter
+                CarriageReturnCharacter.codepoint -> CarriageReturnCharacter
+                BackTabCharacter.codepoint -> BackTabCharacter
+                DeleteCharacter.codepoint -> DeleteCharacter
+                LineSeparatorCharacter.codepoint -> LineSeparatorCharacter
+                ParagraphSeparatorCharacter.codepoint -> ParagraphSeparatorCharacter
+                UpArrowFunctionKey.codepoint -> UpArrowFunctionKey
+                DownArrowFunctionKey.codepoint -> DownArrowFunctionKey
+                LeftArrowFunctionKey.codepoint -> LeftArrowFunctionKey
+                RightArrowFunctionKey.codepoint -> RightArrowFunctionKey
+                F1FunctionKey.codepoint -> F1FunctionKey
+                F2FunctionKey.codepoint -> F2FunctionKey
+                F3FunctionKey.codepoint -> F3FunctionKey
+                F4FunctionKey.codepoint -> F4FunctionKey
+                F5FunctionKey.codepoint -> F5FunctionKey
+                F6FunctionKey.codepoint -> F6FunctionKey
+                F7FunctionKey.codepoint -> F7FunctionKey
+                F8FunctionKey.codepoint -> F8FunctionKey
+                F9FunctionKey.codepoint -> F9FunctionKey
+                F10FunctionKey.codepoint -> F10FunctionKey
+                F11FunctionKey.codepoint -> F11FunctionKey
+                F12FunctionKey.codepoint -> F12FunctionKey
+                F13FunctionKey.codepoint -> F13FunctionKey
+                F14FunctionKey.codepoint -> F14FunctionKey
+                F15FunctionKey.codepoint -> F15FunctionKey
+                F16FunctionKey.codepoint -> F16FunctionKey
+                F17FunctionKey.codepoint -> F17FunctionKey
+                F18FunctionKey.codepoint -> F18FunctionKey
+                F19FunctionKey.codepoint -> F19FunctionKey
+                F20FunctionKey.codepoint -> F20FunctionKey
+                F21FunctionKey.codepoint -> F21FunctionKey
+                F22FunctionKey.codepoint -> F22FunctionKey
+                F23FunctionKey.codepoint -> F23FunctionKey
+                F24FunctionKey.codepoint -> F24FunctionKey
+                F25FunctionKey.codepoint -> F25FunctionKey
+                F26FunctionKey.codepoint -> F26FunctionKey
+                F27FunctionKey.codepoint -> F27FunctionKey
+                F28FunctionKey.codepoint -> F28FunctionKey
+                F29FunctionKey.codepoint -> F29FunctionKey
+                F30FunctionKey.codepoint -> F30FunctionKey
+                F31FunctionKey.codepoint -> F31FunctionKey
+                F32FunctionKey.codepoint -> F32FunctionKey
+                F33FunctionKey.codepoint -> F33FunctionKey
+                F34FunctionKey.codepoint -> F34FunctionKey
+                F35FunctionKey.codepoint -> F35FunctionKey
+                InsertFunctionKey.codepoint -> InsertFunctionKey
+                DeleteFunctionKey.codepoint -> DeleteFunctionKey
+                HomeFunctionKey.codepoint -> HomeFunctionKey
+                BeginFunctionKey.codepoint -> BeginFunctionKey
+                EndFunctionKey.codepoint -> EndFunctionKey
+                PageUpFunctionKey.codepoint -> PageUpFunctionKey
+                PageDownFunctionKey.codepoint -> PageDownFunctionKey
+                PrintScreenFunctionKey.codepoint -> PrintScreenFunctionKey
+                ScrollLockFunctionKey.codepoint -> ScrollLockFunctionKey
+                PauseFunctionKey.codepoint -> PauseFunctionKey
+                SysReqFunctionKey.codepoint -> SysReqFunctionKey
+                BreakFunctionKey.codepoint -> BreakFunctionKey
+                ResetFunctionKey.codepoint -> ResetFunctionKey
+                StopFunctionKey.codepoint -> StopFunctionKey
+                MenuFunctionKey.codepoint -> MenuFunctionKey
+                UserFunctionKey.codepoint -> UserFunctionKey
+                SystemFunctionKey.codepoint -> SystemFunctionKey
+                PrintFunctionKey.codepoint -> PrintFunctionKey
+                ClearLineFunctionKey.codepoint -> ClearLineFunctionKey
+                ClearDisplayFunctionKey.codepoint -> ClearDisplayFunctionKey
+                InsertLineFunctionKey.codepoint -> InsertLineFunctionKey
+                DeleteLineFunctionKey.codepoint -> DeleteLineFunctionKey
+                InsertCharFunctionKey.codepoint -> InsertCharFunctionKey
+                DeleteCharFunctionKey.codepoint -> DeleteCharFunctionKey
+                PrevFunctionKey.codepoint -> PrevFunctionKey
+                NextFunctionKey.codepoint -> NextFunctionKey
+                SelectFunctionKey.codepoint -> SelectFunctionKey
+                ExecuteFunctionKey.codepoint -> ExecuteFunctionKey
+                UndoFunctionKey.codepoint -> UndoFunctionKey
+                RedoFunctionKey.codepoint -> RedoFunctionKey
+                FindFunctionKey.codepoint -> FindFunctionKey
+                HelpFunctionKey.codepoint -> HelpFunctionKey
+                ModeSwitchFunctionKey.codepoint -> ModeSwitchFunctionKey
+                else -> null
+            }
+        }
+    }
+
+    override fun toString(): String {
+        return when (this) {
+            EnterCharacter -> "EnterCharacter"
+            BackspaceCharacter -> "BackspaceCharacter"
+            TabCharacter -> "TabCharacter"
+            NewlineCharacter -> "NewlineCharacter"
+            FormFeedCharacter -> "FormFeedCharacter"
+            CarriageReturnCharacter -> "CarriageReturnCharacter"
+            BackTabCharacter -> "BackTabCharacter"
+            DeleteCharacter -> "DeleteCharacter"
+            LineSeparatorCharacter -> "LineSeparatorCharacter"
+            ParagraphSeparatorCharacter -> "ParagraphSeparatorCharacter"
+            UpArrowFunctionKey -> "UpArrowFunctionKey"
+            DownArrowFunctionKey -> "DownArrowFunctionKey"
+            LeftArrowFunctionKey -> "LeftArrowFunctionKey"
+            RightArrowFunctionKey -> "RightArrowFunctionKey"
+            F1FunctionKey -> "F1FunctionKey"
+            F2FunctionKey -> "F2FunctionKey"
+            F3FunctionKey -> "F3FunctionKey"
+            F4FunctionKey -> "F4FunctionKey"
+            F5FunctionKey -> "F5FunctionKey"
+            F6FunctionKey -> "F6FunctionKey"
+            F7FunctionKey -> "F7FunctionKey"
+            F8FunctionKey -> "F8FunctionKey"
+            F9FunctionKey -> "F9FunctionKey"
+            F10FunctionKey -> "F10FunctionKey"
+            F11FunctionKey -> "F11FunctionKey"
+            F12FunctionKey -> "F12FunctionKey"
+            F13FunctionKey -> "F13FunctionKey"
+            F14FunctionKey -> "F14FunctionKey"
+            F15FunctionKey -> "F15FunctionKey"
+            F16FunctionKey -> "F16FunctionKey"
+            F17FunctionKey -> "F17FunctionKey"
+            F18FunctionKey -> "F18FunctionKey"
+            F19FunctionKey -> "F19FunctionKey"
+            F20FunctionKey -> "F20FunctionKey"
+            F21FunctionKey -> "F21FunctionKey"
+            F22FunctionKey -> "F22FunctionKey"
+            F23FunctionKey -> "F23FunctionKey"
+            F24FunctionKey -> "F24FunctionKey"
+            F25FunctionKey -> "F25FunctionKey"
+            F26FunctionKey -> "F26FunctionKey"
+            F27FunctionKey -> "F27FunctionKey"
+            F28FunctionKey -> "F28FunctionKey"
+            F29FunctionKey -> "F29FunctionKey"
+            F30FunctionKey -> "F30FunctionKey"
+            F31FunctionKey -> "F31FunctionKey"
+            F32FunctionKey -> "F32FunctionKey"
+            F33FunctionKey -> "F33FunctionKey"
+            F34FunctionKey -> "F34FunctionKey"
+            F35FunctionKey -> "F35FunctionKey"
+            InsertFunctionKey -> "InsertFunctionKey"
+            DeleteFunctionKey -> "DeleteFunctionKey"
+            HomeFunctionKey -> "HomeFunctionKey"
+            BeginFunctionKey -> "BeginFunctionKey"
+            EndFunctionKey -> "EndFunctionKey"
+            PageUpFunctionKey -> "PageUpFunctionKey"
+            PageDownFunctionKey -> "PageDownFunctionKey"
+            PrintScreenFunctionKey -> "PrintScreenFunctionKey"
+            ScrollLockFunctionKey -> "ScrollLockFunctionKey"
+            PauseFunctionKey -> "PauseFunctionKey"
+            SysReqFunctionKey -> "SysReqFunctionKey"
+            BreakFunctionKey -> "BreakFunctionKey"
+            ResetFunctionKey -> "ResetFunctionKey"
+            StopFunctionKey -> "StopFunctionKey"
+            MenuFunctionKey -> "MenuFunctionKey"
+            UserFunctionKey -> "UserFunctionKey"
+            SystemFunctionKey -> "SystemFunctionKey"
+            PrintFunctionKey -> "PrintFunctionKey"
+            ClearLineFunctionKey -> "ClearLineFunctionKey"
+            ClearDisplayFunctionKey -> "ClearDisplayFunctionKey"
+            InsertLineFunctionKey -> "InsertLineFunctionKey"
+            DeleteLineFunctionKey -> "DeleteLineFunctionKey"
+            InsertCharFunctionKey -> "InsertCharFunctionKey"
+            DeleteCharFunctionKey -> "DeleteCharFunctionKey"
+            PrevFunctionKey -> "PrevFunctionKey"
+            NextFunctionKey -> "NextFunctionKey"
+            SelectFunctionKey -> "SelectFunctionKey"
+            ExecuteFunctionKey -> "ExecuteFunctionKey"
+            UndoFunctionKey -> "UndoFunctionKey"
+            RedoFunctionKey -> "RedoFunctionKey"
+            FindFunctionKey -> "FindFunctionKey"
+            HelpFunctionKey -> "HelpFunctionKey"
+            ModeSwitchFunctionKey -> "ModeSwitchFunctionKey"
+            else -> {
+                "UNKNOWN"
+            }
+        }
     }
 }
 

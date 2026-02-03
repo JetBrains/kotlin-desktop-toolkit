@@ -54,7 +54,7 @@ class RobotTest : KDTApplicationTestBase() {
         repeat(100) {
             val hadCapitalA = java.util.concurrent.atomic.AtomicBoolean(false)
             withEventHandler(handler = {
-                if (it is Event.KeyDown && it.keyCode == KeyCode.ANSI_A && it.characters == "A") {
+                if (it is Event.KeyDown && it.keyCode == KeyCode.ANSI_A && it.characters.text == "A") {
                     hadCapitalA.set(true)
                 }
                 EventHandlerResult.Continue
@@ -194,7 +194,7 @@ class RobotTest : KDTApplicationTestBase() {
         withInputSource("com.apple.keylayout.Swedish-Pro") {
             ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, true) }
             ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, false) }
-            awaitEventOfType<Event.KeyDown> { it.characters == "ö" }
+            awaitEventOfType<Event.KeyDown> { it.characters.text == "ö" }
         }
     }
 
