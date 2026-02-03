@@ -17,6 +17,7 @@ import java.lang.Thread.sleep
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+import kotlin.test.assertEquals
 
 /**
  * We expect that every test class will be executed with a separate JVM instance, without parallel forks.
@@ -82,7 +83,8 @@ open class KDTApplicationTestBase : KDTTestBase() {
                 sleep(delayAfterSwitch)
             }
             try {
-                assert(ui { Application.currentInputSource()!! } == inputSource)
+                val currentInputSource = ui { Application.currentInputSource()!! }
+                assertEquals(expected = inputSource, actual = currentInputSource)
                 body()
             } finally {
                 assert(ui { Application.chooseInputSource(previousInputSource) })
