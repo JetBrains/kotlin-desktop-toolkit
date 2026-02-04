@@ -218,6 +218,14 @@ public object Application {
         }
     }
 
+    public fun inputSourceIsAsciiCapable(sourceId: String): Boolean {
+        return ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_macos_h.application_input_source_is_ascii_capable(arena.allocateUtf8String(sourceId))
+            }
+        }
+    }
+
     private var isSafeToQuit: () -> Boolean = { true }
 
     // called from native

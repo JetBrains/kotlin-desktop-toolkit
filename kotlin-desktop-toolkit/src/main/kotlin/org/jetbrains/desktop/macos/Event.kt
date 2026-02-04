@@ -102,6 +102,11 @@ public sealed class Event {
         val mightHaveKeyEquivalent: Boolean,
         val timestamp: Timestamp,
 
+        // Can be considered as a name of the key
+        // Depends on keyboard layout but ignores modifiers
+        // For keys that depend on keyboard layout it will be the symbol typed for default layer
+        // For functional keys it will try to produce some meaningful codepoint, but different from for `characters`
+        // For dead keys it will produce text from the default layer
         val key: Characters,
         val keyWithModifiers: Characters,
     ) : Event(),

@@ -141,6 +141,10 @@ class RobotTest : KDTApplicationTestBase() {
     @Test
     fun `check that all required input sources are installed`() {
         val inputSources = ui { Application.listInputSources() }
+//        inputSources.forEach {
+//            val isAsciiCapable = ui { Application.inputSourceIsAsciiCapable(it) }
+//            Logger.info { "$it isAsciiCapable: $isAsciiCapable" }
+//        }
         assertContains(inputSources, "com.apple.keylayout.ABC")
         assertContains(inputSources, "com.apple.keylayout.Russian")
         assertContains(inputSources, "com.apple.keylayout.Swedish-Pro")
@@ -210,7 +214,7 @@ class RobotTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = englishLetter,
+                    characters = englishLetter,
                     key = englishLetter,
                     keyWithModifiers = englishLetter,
                     modifiers = emptySet(),
@@ -231,7 +235,7 @@ class RobotTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = russianLetter,
+                    characters = russianLetter,
                     key = russianLetter,
                     keyWithModifiers = russianLetter,
                     modifiers = emptySet(),

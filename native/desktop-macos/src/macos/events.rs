@@ -221,9 +221,9 @@ pub(crate) fn handle_key_down_event(ns_event: &NSEvent, might_have_key_equivalen
             let key_info = unpack_key_event(ns_event)?;
             let event = Event::KeyDown(KeyDownEvent {
                 window_id: ns_event.window_id(),
-                code: key_info.code,
+                code: key_info.key_code,
                 is_repeat: key_info.is_repeat,
-                characters: borrow_ns_string(&key_info.typed_chars),
+                characters: borrow_ns_string(&key_info.characters),
                 characters_ignoring_modifiers: borrow_ns_string(&key_info.characters_ignoring_modifiers),
                 modifiers: key_info.modifiers,
                 timestamp: ns_event.timestamp(),
@@ -242,8 +242,8 @@ pub(crate) fn handle_key_up_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
             let key_info = unpack_key_event(ns_event)?;
             let event = Event::KeyUp(KeyUpEvent {
                 window_id: ns_event.window_id(),
-                code: key_info.code,
-                characters: borrow_ns_string(&key_info.typed_chars),
+                code: key_info.key_code,
+                characters: borrow_ns_string(&key_info.characters),
                 characters_ignoring_modifiers: borrow_ns_string(&key_info.characters_ignoring_modifiers),
                 modifiers: key_info.modifiers,
                 timestamp: ns_event.timestamp(),

@@ -33,17 +33,17 @@ object KeyboardHelpers {
     fun assertKeyDown(
         event: Event.KeyDown,
         keyCode: KeyCode,
-        typed: String,
+        characters: String,
         key: String,
         keyWithModifiers: String,
         modifiers: Set<KeyCode>,
     ) {
-        val isKeyDownExpected = event.characters.text == typed &&
+        val isKeyDownExpected = event.characters.text == characters &&
             event.key.text == key &&
             event.keyWithModifiers.text == keyWithModifiers &&
             event.modifiers == modifiers.toModifiersSet()
         assert(isKeyDownExpected) {
-            "Expected keyDown event with keyCode=$keyCode, typed=$typed, key=$key, keyWithModifiers=$keyWithModifiers, modifiers=$modifiers, but got $event"
+            "Expected keyDown event with keyCode=$keyCode, typed=$characters, key=$key, keyWithModifiers=$keyWithModifiers, modifiers=$modifiers, but got $event"
         }
     }
 

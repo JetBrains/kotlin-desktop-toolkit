@@ -373,10 +373,12 @@ public value class SpecialKey private constructor(public val codepoint: Int) {
         public val NewlineCharacter: SpecialKey = SpecialKey(0x000a)
         public val FormFeedCharacter: SpecialKey = SpecialKey(0x000c)
         public val CarriageReturnCharacter: SpecialKey = SpecialKey(0x000d)
-        public val BackTabCharacter: SpecialKey = SpecialKey(0x0019)
+        public val BackTabCharacter: SpecialKey = SpecialKey(0x0019) // Tab with Shift
         public val DeleteCharacter: SpecialKey = SpecialKey(0x007f)
         public val LineSeparatorCharacter: SpecialKey = SpecialKey(0x2028)
         public val ParagraphSeparatorCharacter: SpecialKey = SpecialKey(0x2029)
+        public val SpaceCharacter: SpecialKey = SpecialKey(0x0020)
+        public val EscapeCharacter: SpecialKey = SpecialKey(0x001b)
 
         // Unicode private use area
         public val UpArrowFunctionKey: SpecialKey = SpecialKey(0xF700)

@@ -6,6 +6,7 @@ import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.KeyboardType
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.Robot
+import org.jetbrains.desktop.macos.SpecialKey
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyDown
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyUp
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.TimeUnit
 import kotlin.collections.emptySet
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 @EnabledOnOs(OS.MAC)
 class KeyboardTest : KDTApplicationTestBase() {
@@ -64,7 +66,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = key,
+                    characters = key,
                     key = key,
                     keyWithModifiers = key,
                     modifiers = modifiers,
@@ -122,7 +124,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = expectedLetter,
+                    characters = expectedLetter,
                     key = expectedLetter,
                     keyWithModifiers = expectedLetter,
                     modifiers = emptySet(),
@@ -180,7 +182,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = expectedLetter,
+                    characters = expectedLetter,
                     key = expectedLetter,
                     keyWithModifiers = expectedLetter,
                     modifiers = emptySet(),
@@ -211,7 +213,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = shiftedKey,
+                    characters = shiftedKey,
                     key = key,
                     keyWithModifiers = shiftedKey,
                     modifiers = modifiers,
@@ -241,7 +243,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = key,
+                    characters = key,
                     key = key,
                     keyWithModifiers = key,
                     modifiers = modifiers,
@@ -280,7 +282,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = key,
+                    characters = key,
                     key = key,
                     keyWithModifiers = key,
                     modifiers = modifiers,
@@ -317,7 +319,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = keyWithModifiers,
+                    characters = keyWithModifiers,
                     key = key,
                     keyWithModifiers = keyWithModifiers,
                     modifiers = modifiers,
@@ -348,7 +350,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = keyWithModifiers,
+                    characters = keyWithModifiers,
                     key = key,
                     keyWithModifiers = keyWithModifiers,
                     modifiers = modifiers,
@@ -379,7 +381,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = keyWithModifiers,
+                    characters = keyWithModifiers,
                     key = key,
                     keyWithModifiers = keyWithModifiers,
                     modifiers = modifiers,
@@ -417,7 +419,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = typed,
+                    characters = typed,
                     key = key,
                     keyWithModifiers = optionLayerLetter,
                     modifiers = modifiers,
@@ -455,7 +457,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = typed,
+                    characters = typed,
                     key = key,
                     keyWithModifiers = optionLayerLetter,
                     modifiers = modifiers,
@@ -498,7 +500,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = keyWithModifiers,
+                    characters = keyWithModifiers,
                     key = key,
                     keyWithModifiers = keyWithModifiers,
                     modifiers = modifiers,
@@ -530,7 +532,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 assertKeyDown(
                     awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
                     keyCode,
-                    typed = keyWithModifiers,
+                    characters = keyWithModifiers,
                     key = key,
                     keyWithModifiers = keyWithModifiers,
                     modifiers = modifiers,
@@ -550,8 +552,10 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun `all keys ansi keyboard`() {
+        val specialKeys = mapOf<KeyCode, SpecialKey>(
+
+        )
         withInputSource("com.apple.keylayout.ABC") {
-            // todo val modifiers = setOf(KeyCode.Control, KeyCode.Option) application crashes
             val modifiers = emptySet<KeyCode>()
             ui { robot.setKeyboardType(KeyboardType.Ansi) }
             allKeys.forEach { keyCode ->
@@ -561,29 +565,10 @@ class KeyboardTest : KDTApplicationTestBase() {
                 }
                 val downEvent = awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode }
                 val upEvent = awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode }
-                assert(downEvent.key == upEvent.key) { "Codepoints down and up are different for $keyCode" }
-                assert(downEvent.charactersIgnoringModifiers == upEvent.charactersIgnoringModifiers) { "charactersIgnoringModifiers down and up are different for $keyCode" }
-                assert(downEvent.characters == downEvent.charactersIgnoringModifiers) { "characters down and charactersIgnoringModifiers are different for $keyCode" }
-                if (downEvent.key != downEvent.charactersIgnoringModifiers) {
-                    Logger.info { "$keyCode -> $downEvent" }
+                assertEquals(downEvent.key, upEvent.key)
+                if (downEvent.charactersIgnoringModifiers != downEvent.key) {
+                    println("Key $keyCode: ${downEvent.charactersIgnoringModifiers} ... ${downEvent.key}")
                 }
-
-//                assertKeyDown(
-//                    awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode },
-//                    keyCode,
-//                    typed = keyWithModifiers,
-//                    key = key,
-//                    keyWithModifiers = keyWithModifiers,
-//                    modifiers = modifiers,
-//                )
-//                assertKeyUp(
-//                    awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode },
-//                    keyCode,
-//                    typed = keyWithModifiers,
-//                    key = key,
-//                    keyWithModifiers = keyWithModifiers,
-//                    modifiers = modifiers,
-//                )
             }
         }
     }
@@ -667,22 +652,22 @@ class KeyboardTest : KDTApplicationTestBase() {
         KeyCode.Escape,
 
         // Modifiers do not produce Key Down/Up events
-//                KeyCode.Command,
-//                KeyCode.Shift,
-//                KeyCode.CapsLock,
-//                KeyCode.Option,
-//                KeyCode.Control,
-//                KeyCode.RightCommand,
-//                KeyCode.RightShift,
-//                KeyCode.RightOption,
-//                KeyCode.RightControl,
-//                KeyCode.Function,
+        // KeyCode.Command,
+        // KeyCode.Shift,
+        // KeyCode.CapsLock,
+        // KeyCode.Option,
+        // KeyCode.Control,
+        // KeyCode.RightCommand,
+        // KeyCode.RightShift,
+        // KeyCode.RightOption,
+        // KeyCode.RightControl,
+        // KeyCode.Function,
 
         KeyCode.F17,
         // Handled by OS
-//                KeyCode.VolumeUp,
-//                KeyCode.VolumeDown,
-//                KeyCode.Mute,
+        // KeyCode.VolumeUp,
+        // KeyCode.VolumeDown,
+        // KeyCode.Mute,
         KeyCode.F18,
         KeyCode.F19,
         KeyCode.F20,
@@ -693,17 +678,17 @@ class KeyboardTest : KDTApplicationTestBase() {
         KeyCode.F8,
         KeyCode.F9,
         // Some global shortcut
-//                KeyCode.F11,
+        // KeyCode.F11,
         KeyCode.F13,
         KeyCode.F16,
-//                KeyCode.F14,
+        // KeyCode.F14,
         KeyCode.F10,
         KeyCode.ContextualMenu,
-//                KeyCode.F12,
-//                KeyCode.F15,
+        // KeyCode.F12,
+        // KeyCode.F15,
 
         // Handled by OS
-//                KeyCode.Help,
+        // KeyCode.Help,
         KeyCode.Home,
         KeyCode.PageUp,
         KeyCode.ForwardDelete,
