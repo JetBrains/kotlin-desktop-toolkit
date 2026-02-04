@@ -376,7 +376,7 @@ public value class Characters internal constructor(public val text: String) {
 }
 
 /**
- * Those Unicode characters are used by [Event.KeyDown.characters] [Event.KeyDown.charactersIgnoringModifiers], 
+ * Those Unicode characters are used by [Event.KeyDown.characters] [Event.KeyDown.charactersIgnoringModifiers],
  * [Event.KeyDown.key] [Event.KeyDown.keyWithModifiers] or [Event.charactersByApplyingModifiersForCurrentEvent]
  * but be aware that the same button might produce different values for [Event.KeyDown.charactersIgnoringModifiers]
  * and [Event.KeyDown.key]
@@ -433,12 +433,11 @@ public value class SpecialCharacter private constructor(public val codepoint: In
             else -> throw IllegalStateException()
         }
     }
-
 }
 
 /**
  * It's Unicode codepoints from a private plane reserved by apple to represent some non-typing keys on the keyboard.
- * It's used by [Event.KeyDown.characters] and [Event.KeyDown.charactersIgnoringModifiers], 
+ * It's used by [Event.KeyDown.characters] and [Event.KeyDown.charactersIgnoringModifiers],
  * but not by [Event.KeyDown.key] and [Event.KeyDown.keyWithModifiers] or [Event.charactersByApplyingModifiersForCurrentEvent]
  */
 @JvmInline

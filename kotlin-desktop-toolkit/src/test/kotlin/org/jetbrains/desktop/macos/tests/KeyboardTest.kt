@@ -2,10 +2,8 @@ package org.jetbrains.desktop.macos.tests
 
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.KeyCode
-import org.jetbrains.desktop.macos.KeyboardType
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.Robot
-import org.jetbrains.desktop.macos.SpecialKey
 import org.jetbrains.desktop.macos.TextInputSource
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyDown
