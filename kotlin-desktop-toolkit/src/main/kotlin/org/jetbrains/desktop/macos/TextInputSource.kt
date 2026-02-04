@@ -4,6 +4,10 @@ import org.jetbrains.desktop.macos.generated.desktop_macos_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
+/**
+ * For description of Apple Text input source API see:
+ * https://leopard-adc.pepas.com/documentation/TextFonts/Reference/TextInputSourcesReference/TextInputSourcesReference.pdf
+ */
 public object TextInputSource {
     public fun current(): String? {
         val layout = ffiDownCall {
