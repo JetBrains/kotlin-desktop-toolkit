@@ -550,14 +550,13 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
-    @Ignore("Sometimes it triggers function and NumericPad Modifiers")
+    @Ignore("By some weird reason when robot presses F-key it leads to stuck of Function modifier")
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun `all keys ansi keyboard`() {
-        val specialKeys = mapOf<KeyCode, SpecialKey>()
         withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = emptySet<KeyCode>()
-            ui { robot.setKeyboardType(KeyboardType.Ansi) }
+//            ui { robot.setKeyboardType(KeyboardType.Ansi) }
             allKeys.forEach { keyCode ->
                 withModifiersPressed(modifiers = modifiers) {
                     ui { robot.emulateKeyboardEvent(keyCode, true) }
@@ -566,6 +565,7 @@ class KeyboardTest : KDTApplicationTestBase() {
                 val downEvent = awaitEventOfType<Event.KeyDown> { it.keyCode == keyCode }
                 val upEvent = awaitEventOfType<Event.KeyUp> { it.keyCode == keyCode }
                 assertEquals(downEvent.key, upEvent.key)
+//                downEvent.key.specialKey?.let { println(downEvent) }
                 if (downEvent.charactersIgnoringModifiers != downEvent.key) {
                     println("Key $keyCode: ${downEvent.charactersIgnoringModifiers} ... ${downEvent.key}")
                 }

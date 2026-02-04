@@ -342,6 +342,10 @@ public value class KeyModifiersSet internal constructor(internal val value: Long
     }
 }
 
+private fun String.toCodepointsString(): String {
+    return codePoints().toArray().joinToString(prefix = "[", postfix = "]") { "U+${it.toString(16).uppercase().padStart(4, '0')}" }
+}
+
 @JvmInline
 public value class Characters internal constructor(public val text: String) {
     public val specialKey: SpecialKey?
@@ -353,33 +357,82 @@ public value class Characters internal constructor(public val text: String) {
             return null
         }
 
-    public fun toCodepointsString(): String {
-        return text.codePoints().toArray().joinToString(prefix = "[", postfix = "]") { "U+${it.toString(16).uppercase().padStart(4, '0')}" }
-    }
+    public val specialCharacter: SpecialCharacter?
+        get() {
+            val codepoints = text.codePoints().toArray()
+            if (codepoints.size == 1) {
+                return SpecialCharacter.fromCodepoint(codepoints[0])
+            }
+            return null
+        }
 
     override fun toString(): String {
         val specialKey = this.specialKey
+        val specialCharacter = this.specialCharacter
         return specialKey?.toString()
-            ?: "$text|${toCodepointsString()}"
+            ?: specialCharacter?.toString()
+            ?: "$text|${text.toCodepointsString()}"
     }
+}
+
+@JvmInline
+public value class SpecialCharacter private constructor(public val codepoint: Int) {
+    public companion object {
+        public val EnterCharacter: SpecialCharacter = SpecialCharacter(0x0003)
+        public val BackspaceCharacter: SpecialCharacter = SpecialCharacter(0x0008)
+        public val TabCharacter: SpecialCharacter = SpecialCharacter(0x0009)
+        public val NewlineCharacter: SpecialCharacter = SpecialCharacter(0x000a)
+        public val FormFeedCharacter: SpecialCharacter = SpecialCharacter(0x000c)
+        public val CarriageReturnCharacter: SpecialCharacter = SpecialCharacter(0x000d)
+        public val BackTabCharacter: SpecialCharacter = SpecialCharacter(0x0019) // Tab with Shift
+        public val DeleteCharacter: SpecialCharacter = SpecialCharacter(0x007f)
+        public val LineSeparatorCharacter: SpecialCharacter = SpecialCharacter(0x2028)
+        public val ParagraphSeparatorCharacter: SpecialCharacter = SpecialCharacter(0x2029)
+        public val SpaceCharacter: SpecialCharacter = SpecialCharacter(0x0020)
+        public val EscapeCharacter: SpecialCharacter = SpecialCharacter(0x001b)
+
+        internal fun fromCodepoint(codepoint: Int): SpecialCharacter? {
+            return when (codepoint) {
+                EnterCharacter.codepoint -> EnterCharacter
+                BackspaceCharacter.codepoint -> BackspaceCharacter
+                TabCharacter.codepoint -> TabCharacter
+                NewlineCharacter.codepoint -> NewlineCharacter
+                FormFeedCharacter.codepoint -> FormFeedCharacter
+                CarriageReturnCharacter.codepoint -> CarriageReturnCharacter
+                BackTabCharacter.codepoint -> BackTabCharacter
+                DeleteCharacter.codepoint -> DeleteCharacter
+                LineSeparatorCharacter.codepoint -> LineSeparatorCharacter
+                ParagraphSeparatorCharacter.codepoint -> ParagraphSeparatorCharacter
+                SpaceCharacter.codepoint -> SpaceCharacter
+                EscapeCharacter.codepoint -> EscapeCharacter
+                else -> null
+            }
+        }
+    }
+
+    override fun toString(): String {
+        return when (this) {
+            EnterCharacter -> "EnterCharacter"
+            BackspaceCharacter -> "BackspaceCharacter"
+            TabCharacter -> "TabCharacter"
+            NewlineCharacter -> "NewlineCharacter"
+            FormFeedCharacter -> "FormFeedCharacter"
+            CarriageReturnCharacter -> "CarriageReturnCharacter"
+            BackTabCharacter -> "BackTabCharacter"
+            DeleteCharacter -> "DeleteCharacter"
+            LineSeparatorCharacter -> "LineSeparatorCharacter"
+            ParagraphSeparatorCharacter -> "ParagraphSeparatorCharacter"
+            SpaceCharacter -> "SpaceCharacter"
+            EscapeCharacter -> "EscapeCharacter"
+            else -> throw IllegalStateException()
+        }
+    }
+
 }
 
 @JvmInline
 public value class SpecialKey private constructor(public val codepoint: Int) {
     public companion object {
-        public val EnterCharacter: SpecialKey = SpecialKey(0x0003)
-        public val BackspaceCharacter: SpecialKey = SpecialKey(0x0008)
-        public val TabCharacter: SpecialKey = SpecialKey(0x0009)
-        public val NewlineCharacter: SpecialKey = SpecialKey(0x000a)
-        public val FormFeedCharacter: SpecialKey = SpecialKey(0x000c)
-        public val CarriageReturnCharacter: SpecialKey = SpecialKey(0x000d)
-        public val BackTabCharacter: SpecialKey = SpecialKey(0x0019) // Tab with Shift
-        public val DeleteCharacter: SpecialKey = SpecialKey(0x007f)
-        public val LineSeparatorCharacter: SpecialKey = SpecialKey(0x2028)
-        public val ParagraphSeparatorCharacter: SpecialKey = SpecialKey(0x2029)
-        public val SpaceCharacter: SpecialKey = SpecialKey(0x0020)
-        public val EscapeCharacter: SpecialKey = SpecialKey(0x001b)
-
         // Unicode private use area
         public val UpArrowFunctionKey: SpecialKey = SpecialKey(0xF700)
         public val DownArrowFunctionKey: SpecialKey = SpecialKey(0xF701)
@@ -456,16 +509,6 @@ public value class SpecialKey private constructor(public val codepoint: Int) {
 
         public fun fromCodepoint(codepoint: Int): SpecialKey? {
             return when (codepoint) {
-                EnterCharacter.codepoint -> EnterCharacter
-                BackspaceCharacter.codepoint -> BackspaceCharacter
-                TabCharacter.codepoint -> TabCharacter
-                NewlineCharacter.codepoint -> NewlineCharacter
-                FormFeedCharacter.codepoint -> FormFeedCharacter
-                CarriageReturnCharacter.codepoint -> CarriageReturnCharacter
-                BackTabCharacter.codepoint -> BackTabCharacter
-                DeleteCharacter.codepoint -> DeleteCharacter
-                LineSeparatorCharacter.codepoint -> LineSeparatorCharacter
-                ParagraphSeparatorCharacter.codepoint -> ParagraphSeparatorCharacter
                 UpArrowFunctionKey.codepoint -> UpArrowFunctionKey
                 DownArrowFunctionKey.codepoint -> DownArrowFunctionKey
                 LeftArrowFunctionKey.codepoint -> LeftArrowFunctionKey
@@ -545,16 +588,6 @@ public value class SpecialKey private constructor(public val codepoint: Int) {
 
     override fun toString(): String {
         return when (this) {
-            EnterCharacter -> "EnterCharacter"
-            BackspaceCharacter -> "BackspaceCharacter"
-            TabCharacter -> "TabCharacter"
-            NewlineCharacter -> "NewlineCharacter"
-            FormFeedCharacter -> "FormFeedCharacter"
-            CarriageReturnCharacter -> "CarriageReturnCharacter"
-            BackTabCharacter -> "BackTabCharacter"
-            DeleteCharacter -> "DeleteCharacter"
-            LineSeparatorCharacter -> "LineSeparatorCharacter"
-            ParagraphSeparatorCharacter -> "ParagraphSeparatorCharacter"
             UpArrowFunctionKey -> "UpArrowFunctionKey"
             DownArrowFunctionKey -> "DownArrowFunctionKey"
             LeftArrowFunctionKey -> "LeftArrowFunctionKey"
@@ -627,184 +660,7 @@ public value class SpecialKey private constructor(public val codepoint: Int) {
             FindFunctionKey -> "FindFunctionKey"
             HelpFunctionKey -> "HelpFunctionKey"
             ModeSwitchFunctionKey -> "ModeSwitchFunctionKey"
-            else -> {
-                "UNKNOWN"
-            }
+            else -> throw IllegalStateException()
         }
-    }
-}
-
-@Suppress("ConstPropertyName", "ktlint:standard:property-naming")
-public object CodepointConstants {
-    public const val EnterCharacter: Int = 0x0003
-    public const val BackspaceCharacter: Int = 0x0008
-    public const val TabCharacter: Int = 0x0009
-    public const val NewlineCharacter: Int = 0x000a
-    public const val FormFeedCharacter: Int = 0x000c
-    public const val CarriageReturnCharacter: Int = 0x000d
-    public const val BackTabCharacter: Int = 0x0019
-    public const val DeleteCharacter: Int = 0x007f
-    public const val LineSeparatorCharacter: Int = 0x2028
-    public const val ParagraphSeparatorCharacter: Int = 0x2029
-
-    // Unicode private use area
-    public const val UpArrowFunctionKey: Int = 0xF700
-    public const val DownArrowFunctionKey: Int = 0xF701
-    public const val LeftArrowFunctionKey: Int = 0xF702
-    public const val RightArrowFunctionKey: Int = 0xF703
-    public const val F1FunctionKey: Int = 0xF704
-    public const val F2FunctionKey: Int = 0xF705
-    public const val F3FunctionKey: Int = 0xF706
-    public const val F4FunctionKey: Int = 0xF707
-    public const val F5FunctionKey: Int = 0xF708
-    public const val F6FunctionKey: Int = 0xF709
-    public const val F7FunctionKey: Int = 0xF70A
-    public const val F8FunctionKey: Int = 0xF70B
-    public const val F9FunctionKey: Int = 0xF70C
-    public const val F10FunctionKey: Int = 0xF70D
-    public const val F11FunctionKey: Int = 0xF70E
-    public const val F12FunctionKey: Int = 0xF70F
-    public const val F13FunctionKey: Int = 0xF710
-    public const val F14FunctionKey: Int = 0xF711
-    public const val F15FunctionKey: Int = 0xF712
-    public const val F16FunctionKey: Int = 0xF713
-    public const val F17FunctionKey: Int = 0xF714
-    public const val F18FunctionKey: Int = 0xF715
-    public const val F19FunctionKey: Int = 0xF716
-    public const val F20FunctionKey: Int = 0xF717
-    public const val F21FunctionKey: Int = 0xF718
-    public const val F22FunctionKey: Int = 0xF719
-    public const val F23FunctionKey: Int = 0xF71A
-    public const val F24FunctionKey: Int = 0xF71B
-    public const val F25FunctionKey: Int = 0xF71C
-    public const val F26FunctionKey: Int = 0xF71D
-    public const val F27FunctionKey: Int = 0xF71E
-    public const val F28FunctionKey: Int = 0xF71F
-    public const val F29FunctionKey: Int = 0xF720
-    public const val F30FunctionKey: Int = 0xF721
-    public const val F31FunctionKey: Int = 0xF722
-    public const val F32FunctionKey: Int = 0xF723
-    public const val F33FunctionKey: Int = 0xF724
-    public const val F34FunctionKey: Int = 0xF725
-    public const val F35FunctionKey: Int = 0xF726
-    public const val InsertFunctionKey: Int = 0xF727
-    public const val DeleteFunctionKey: Int = 0xF728
-    public const val HomeFunctionKey: Int = 0xF729
-    public const val BeginFunctionKey: Int = 0xF72A
-    public const val EndFunctionKey: Int = 0xF72B
-    public const val PageUpFunctionKey: Int = 0xF72C
-    public const val PageDownFunctionKey: Int = 0xF72D
-    public const val PrintScreenFunctionKey: Int = 0xF72E
-    public const val ScrollLockFunctionKey: Int = 0xF72F
-    public const val PauseFunctionKey: Int = 0xF730
-    public const val SysReqFunctionKey: Int = 0xF731
-    public const val BreakFunctionKey: Int = 0xF732
-    public const val ResetFunctionKey: Int = 0xF733
-    public const val StopFunctionKey: Int = 0xF734
-    public const val MenuFunctionKey: Int = 0xF735
-    public const val UserFunctionKey: Int = 0xF736
-    public const val SystemFunctionKey: Int = 0xF737
-    public const val PrintFunctionKey: Int = 0xF738
-    public const val ClearLineFunctionKey: Int = 0xF739
-    public const val ClearDisplayFunctionKey: Int = 0xF73A
-    public const val InsertLineFunctionKey: Int = 0xF73B
-    public const val DeleteLineFunctionKey: Int = 0xF73C
-    public const val InsertCharFunctionKey: Int = 0xF73D
-    public const val DeleteCharFunctionKey: Int = 0xF73E
-    public const val PrevFunctionKey: Int = 0xF73F
-    public const val NextFunctionKey: Int = 0xF740
-    public const val SelectFunctionKey: Int = 0xF741
-    public const val ExecuteFunctionKey: Int = 0xF742
-    public const val UndoFunctionKey: Int = 0xF743
-    public const val RedoFunctionKey: Int = 0xF744
-    public const val FindFunctionKey: Int = 0xF745
-    public const val HelpFunctionKey: Int = 0xF746
-    public const val ModeSwitchFunctionKey: Int = 0xF747
-
-    public val allConstants: Set<Int> by lazy {
-        setOf(
-            EnterCharacter,
-            BackspaceCharacter,
-            TabCharacter,
-            NewlineCharacter,
-            FormFeedCharacter,
-            CarriageReturnCharacter,
-            BackTabCharacter,
-            DeleteCharacter,
-            LineSeparatorCharacter,
-            ParagraphSeparatorCharacter,
-            UpArrowFunctionKey,
-            DownArrowFunctionKey,
-            LeftArrowFunctionKey,
-            RightArrowFunctionKey,
-            F1FunctionKey,
-            F2FunctionKey,
-            F3FunctionKey,
-            F4FunctionKey,
-            F5FunctionKey,
-            F6FunctionKey,
-            F7FunctionKey,
-            F8FunctionKey,
-            F9FunctionKey,
-            F10FunctionKey,
-            F11FunctionKey,
-            F12FunctionKey,
-            F13FunctionKey,
-            F14FunctionKey,
-            F15FunctionKey,
-            F16FunctionKey,
-            F17FunctionKey,
-            F18FunctionKey,
-            F19FunctionKey,
-            F20FunctionKey,
-            F21FunctionKey,
-            F22FunctionKey,
-            F23FunctionKey,
-            F24FunctionKey,
-            F25FunctionKey,
-            F26FunctionKey,
-            F27FunctionKey,
-            F28FunctionKey,
-            F29FunctionKey,
-            F30FunctionKey,
-            F31FunctionKey,
-            F32FunctionKey,
-            F33FunctionKey,
-            F34FunctionKey,
-            F35FunctionKey,
-            InsertFunctionKey,
-            DeleteFunctionKey,
-            HomeFunctionKey,
-            BeginFunctionKey,
-            EndFunctionKey,
-            PageUpFunctionKey,
-            PageDownFunctionKey,
-            PrintScreenFunctionKey,
-            ScrollLockFunctionKey,
-            PauseFunctionKey,
-            SysReqFunctionKey,
-            BreakFunctionKey,
-            ResetFunctionKey,
-            StopFunctionKey,
-            MenuFunctionKey,
-            UserFunctionKey,
-            SystemFunctionKey,
-            PrintFunctionKey,
-            ClearLineFunctionKey,
-            ClearDisplayFunctionKey,
-            InsertLineFunctionKey,
-            DeleteLineFunctionKey,
-            InsertCharFunctionKey,
-            DeleteCharFunctionKey,
-            PrevFunctionKey,
-            NextFunctionKey,
-            SelectFunctionKey,
-            ExecuteFunctionKey,
-            UndoFunctionKey,
-            RedoFunctionKey,
-            FindFunctionKey,
-            HelpFunctionKey,
-            ModeSwitchFunctionKey,
-        )
     }
 }
