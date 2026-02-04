@@ -76,27 +76,30 @@ open class KDTApplicationTestBase : KDTTestBase() {
             return window
         }
 
+        private const val DELAY_AFTER_INPUT_SOURCE_CHANGE = 100L // milliseconds
+
         fun <T> withInputSourceEnabled(inputSource: String, body: () -> T): T {
             val wasEnabled = ui { TextInputSource.list().contains(inputSource) }
             return try {
                 if (!wasEnabled) {
                     ui { TextInputSource.setEnabled(inputSource, true) }
+                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
                 }
                 body()
             } finally {
                 if (!wasEnabled) {
                     ui { TextInputSource.setEnabled(inputSource, false) }
+                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
                 }
             }
         }
 
         fun <T> withInputSourceSelected(inputSource: String, body: () -> T): T {
             return withInputSourceEnabled(inputSource) {
-                val delayAfterSwitch = 100L
                 val previousInputSource = ui { TextInputSource.current()!! }
                 if (previousInputSource != inputSource) {
                     assert(ui { TextInputSource.select(inputSource) })
-                    sleep(delayAfterSwitch)
+                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
                 }
                 try {
                     val currentInputSource = ui { TextInputSource.current()!! }
@@ -104,7 +107,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
                     body()
                 } finally {
                     assert(ui { TextInputSource.select(previousInputSource) })
-                    sleep(delayAfterSwitch)
+                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
                 }
             }
         }
