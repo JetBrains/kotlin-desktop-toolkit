@@ -197,29 +197,29 @@ pub extern "C" fn text_input_source_is_ascii_capable(source_id: BorrowedStrPtr) 
         let _mtm = MainThreadMarker::new().unwrap();
         let source_id_str = source_id.as_str()?;
         unsafe {
-            let source_list = TISCreateInputSourceList(std::ptr::null(), true);
+            let source_id_ns = NSString::from_str(source_id_str);
+            let key: &NSString = &*kTISPropertyInputSourceID.cast::<NSString>();
+            let search_params = NSDictionary::from_slices(&[key], &[&*source_id_ns]);
+
+            let dict_ptr: *const NSDictionary<NSString, NSString> = &raw const *search_params;
+            let source_list = TISCreateInputSourceList(dict_ptr.cast(), true);
             if source_list.is_null() {
                 return Ok(false);
             }
 
-            #[allow(clippy::cast_sign_loss)]
-            let count = CFArrayGetCount(source_list) as usize;
-            let mut result = false;
-
-            for i in 0..count {
-                let input_source = CFArrayGetValueAtIndex(source_list, i as isize);
-                let id_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceID);
-                if !id_ptr.is_null() {
-                    let ns_string: &NSString = &*id_ptr.cast::<NSString>();
-                    if ns_string.to_string() == source_id_str {
-                        let is_ascii_capable_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceIsASCIICapable);
-                        if !is_ascii_capable_ptr.is_null() {
-                            result = CFBooleanGetValue(is_ascii_capable_ptr);
-                        }
-                        break;
-                    }
-                }
+            let count = CFArrayGetCount(source_list);
+            if count == 0 {
+                CFRelease(source_list);
+                return Ok(false);
             }
+
+            let input_source = CFArrayGetValueAtIndex(source_list, 0);
+            let is_ascii_capable_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceIsASCIICapable);
+            let result = if is_ascii_capable_ptr.is_null() {
+                false
+            } else {
+                CFBooleanGetValue(is_ascii_capable_ptr)
+            };
 
             CFRelease(source_list);
             Ok(result)

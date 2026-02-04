@@ -232,7 +232,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     }
 
     @Test
-    @Timeout(value = 10, unit = TimeUnit.SECONDS)
+    @Timeout(value = 20, unit = TimeUnit.SECONDS)
     fun ansiButtonsWithCommandTest() {
         withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Command)

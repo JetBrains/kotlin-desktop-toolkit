@@ -217,6 +217,28 @@ class RobotTest : KDTApplicationTestBase() {
     }
 
     @Test
+    fun `ascii capable test`() {
+        val asciiCapableLayouts = listOf(
+            "com.apple.keylayout.ABC",
+            "com.apple.keylayout.Dvorak",
+        )
+        val nonAsciiCapableLayouts = listOf(
+            "com.apple.keylayout.Russian",
+            "com.apple.keylayout.Serbian",
+        )
+        asciiCapableLayouts.forEach { layout ->
+            assert(ui { TextInputSource.isAsciiCapable(layout) }) {
+                "$layout should be ASCII capable"
+            }
+        }
+        nonAsciiCapableLayouts.forEach { layout ->
+            assert(!ui { TextInputSource.isAsciiCapable(layout) }) {
+                "$layout should NOT be ASCII capable"
+            }
+        }
+    }
+
+    @Test
     fun `swedish test`() {
         withInputSourceSelected("com.apple.keylayout.Swedish-Pro") {
             ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, true) }
