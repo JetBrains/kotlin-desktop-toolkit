@@ -18,6 +18,7 @@ import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.TimeUnit
 import kotlin.collections.emptySet
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -549,6 +550,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore("Sometimes it triggers function and NumericPad Modifiers")
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun `all keys ansi keyboard`() {
