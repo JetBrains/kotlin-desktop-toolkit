@@ -140,23 +140,46 @@ class RobotTest : KDTApplicationTestBase() {
 
     @Test
     fun `check that all required input sources are installed`() {
-        val inputSources = ui { TextInputSource.list() }
-//        inputSources.forEach {
-//            val isAsciiCapable = ui { Application.inputSourceIsAsciiCapable(it) }
-//            Logger.info { "$it isAsciiCapable: $isAsciiCapable" }
-//        }
-        assertContains(inputSources, "com.apple.keylayout.ABC")
-        assertContains(inputSources, "com.apple.keylayout.Russian")
-        assertContains(inputSources, "com.apple.keylayout.Swedish-Pro")
-        assertContains(inputSources, "com.apple.keylayout.USInternational-PC")
-        assertContains(inputSources, "com.apple.keylayout.German")
-        assertContains(inputSources, "com.apple.keylayout.Serbian-Latin")
-        assertContains(inputSources, "com.apple.keylayout.Serbian")
-        assertContains(inputSources, "com.apple.keylayout.Dvorak")
-        assertContains(inputSources, "com.apple.keylayout.DVORAK-QWERTYCMD")
-        assertContains(inputSources, "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese")
-        assertContains(inputSources, "com.apple.inputmethod.TCIM.Pinyin")
-        assertContains(inputSources, "com.apple.inputmethod.Korean.2SetKorean")
+        val layouts = listOf(
+            "com.apple.keylayout.ABC",
+            "com.apple.keylayout.Russian",
+            "com.apple.keylayout.Swedish-Pro",
+            "com.apple.keylayout.USInternational-PC",
+            "com.apple.keylayout.German",
+            "com.apple.keylayout.Serbian-Latin",
+            "com.apple.keylayout.Serbian",
+            "com.apple.keylayout.Dvorak",
+            "com.apple.keylayout.DVORAK-QWERTYCMD",
+            "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese",
+            "com.apple.inputmethod.TCIM.Pinyin",
+            "com.apple.inputmethod.Korean.2SetKorean",
+        )
+        val inputSources = ui { TextInputSource.list(includeAll = true) }
+        layouts.forEach { assertContains(inputSources, it) }
+    }
+
+    @Test
+    fun `check that all required input sources might be enabled`() {
+        val inputSourceNames = listOf(
+            "com.apple.keylayout.ABC",
+            "com.apple.keylayout.Russian",
+            "com.apple.keylayout.Swedish-Pro",
+            "com.apple.keylayout.USInternational-PC",
+            "com.apple.keylayout.German",
+            "com.apple.keylayout.Serbian-Latin",
+            "com.apple.keylayout.Serbian",
+            "com.apple.keylayout.Dvorak",
+            "com.apple.keylayout.DVORAK-QWERTYCMD",
+            "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese",
+            "com.apple.inputmethod.TCIM.Pinyin",
+            "com.apple.inputmethod.Korean.2SetKorean",
+        )
+        inputSourceNames.forEach { inputSourceName ->
+            withInputSourceEnabled(inputSourceName) {
+                val inputSources = ui { TextInputSource.list(includeAll = false) }
+                assertContains(inputSources, inputSourceName)
+            }
+        }
     }
 
     @Test
@@ -195,7 +218,7 @@ class RobotTest : KDTApplicationTestBase() {
 
     @Test
     fun `swedish test`() {
-        withInputSource("com.apple.keylayout.Swedish-Pro") {
+        withInputSourceSelected("com.apple.keylayout.Swedish-Pro") {
             ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, true) }
             ui { robot.emulateKeyboardEvent(KeyCode.ANSI_Semicolon, false) }
             awaitEventOfType<Event.KeyDown> { it.characters.text == "ö" }
@@ -208,7 +231,7 @@ class RobotTest : KDTApplicationTestBase() {
             val keyCode = KeyCode.ANSI_A
             val englishLetter = "a"
             val russianLetter = "ф"
-            withInputSource("com.apple.keylayout.ABC") {
+            withInputSourceSelected("com.apple.keylayout.ABC") {
                 ui { robot.emulateKeyboardEvent(keyCode, true) }
                 ui { robot.emulateKeyboardEvent(keyCode, false) }
                 assertKeyDown(
@@ -229,7 +252,7 @@ class RobotTest : KDTApplicationTestBase() {
                 )
             }
 
-            withInputSource("com.apple.keylayout.Russian") {
+            withInputSourceSelected("com.apple.keylayout.Russian") {
                 ui { robot.emulateKeyboardEvent(keyCode, true) }
                 ui { robot.emulateKeyboardEvent(keyCode, false) }
                 assertKeyDown(

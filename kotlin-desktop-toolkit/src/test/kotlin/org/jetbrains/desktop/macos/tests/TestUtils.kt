@@ -76,20 +76,36 @@ open class KDTApplicationTestBase : KDTTestBase() {
             return window
         }
 
-        fun withInputSource(inputSource: String, body: () -> Unit) {
-            val delayAfterSwitch = 100L
-            val previousInputSource = ui { TextInputSource.current()!! }
-            if (previousInputSource != inputSource) {
-                assert(ui { TextInputSource.select(inputSource) })
-                sleep(delayAfterSwitch)
-            }
-            try {
-                val currentInputSource = ui { TextInputSource.current()!! }
-                assertEquals(expected = inputSource, actual = currentInputSource)
+        fun <T> withInputSourceEnabled(inputSource: String, body: () -> T): T {
+            val wasEnabled = ui { TextInputSource.list().contains(inputSource) }
+            return try {
+                if (!wasEnabled) {
+                    ui { TextInputSource.setEnabled(inputSource, true) }
+                }
                 body()
             } finally {
-                assert(ui { TextInputSource.select(previousInputSource) })
-                sleep(delayAfterSwitch)
+                if (!wasEnabled) {
+                    ui { TextInputSource.setEnabled(inputSource, false) }
+                }
+            }
+        }
+
+        fun <T> withInputSourceSelected(inputSource: String, body: () -> T): T {
+            return withInputSourceEnabled(inputSource) {
+                val delayAfterSwitch = 100L
+                val previousInputSource = ui { TextInputSource.current()!! }
+                if (previousInputSource != inputSource) {
+                    assert(ui { TextInputSource.select(inputSource) })
+                    sleep(delayAfterSwitch)
+                }
+                try {
+                    val currentInputSource = ui { TextInputSource.current()!! }
+                    assertEquals(expected = inputSource, actual = currentInputSource)
+                    body()
+                } finally {
+                    assert(ui { TextInputSource.select(previousInputSource) })
+                    sleep(delayAfterSwitch)
+                }
             }
         }
 

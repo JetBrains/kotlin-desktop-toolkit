@@ -17,10 +17,10 @@ public object TextInputSource {
         }
     }
 
-    public fun list(): List<String> {
+    public fun list(includeAll: Boolean = false): List<String> {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                val result = desktop_macos_h.text_input_source_list(arena)
+                val result = desktop_macos_h.text_input_source_list(arena, includeAll)
                 try {
                     listOfStringsFromNative(result)
                 } finally {
@@ -49,6 +49,14 @@ public object TextInputSource {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
                 desktop_macos_h.text_input_source_is_ascii_capable(arena.allocateUtf8String(sourceId))
+            }
+        }
+    }
+
+    public fun setEnabled(sourceId: String, enabled: Boolean): Boolean {
+        return ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_macos_h.text_input_source_set_enable(arena.allocateUtf8String(sourceId), enabled)
             }
         }
     }

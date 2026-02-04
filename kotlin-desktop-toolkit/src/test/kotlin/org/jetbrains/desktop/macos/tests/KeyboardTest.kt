@@ -57,7 +57,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 10, unit = TimeUnit.SECONDS)
     fun ansiButtonsNoModifiersTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             ansiButtons.forEach { (keyCode, key) ->
                 val modifiers = emptySet<KeyCode>()
                 withModifiersPressed(modifiers = modifiers) {
@@ -87,7 +87,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 10, unit = TimeUnit.SECONDS)
     fun germanLayoutNoModifiersTest() {
-        withInputSource("com.apple.keylayout.German") {
+        withInputSourceSelected("com.apple.keylayout.German") {
             // In German layout, Y and Z physical keys are swapped
             val germanLetters = listOf(
                 KeyData(KeyCode.ANSI_A, "a"),
@@ -145,7 +145,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 10, unit = TimeUnit.SECONDS)
     fun cyrillicLayoutNoModifiersTest() {
-        withInputSource("com.apple.keylayout.Russian") {
+        withInputSourceSelected("com.apple.keylayout.Russian") {
             // Physical ANSI keys mapped to Cyrillic letters in Russian layout
             val cyrillicLetters = listOf(
                 KeyData(KeyCode.ANSI_A, "ф"),
@@ -203,7 +203,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 10, unit = TimeUnit.SECONDS)
     fun latinButtonsWithShiftTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Shift)
             ansiButtons.forEach { (keyCode, key) ->
                 val shiftedKey = shiftedLayer[keyCode]!!
@@ -234,7 +234,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 10, unit = TimeUnit.SECONDS)
     fun ansiButtonsWithCommandTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Command)
             ansiButtons.forEach { (keyCode, key) ->
                 withModifiersPressed(modifiers = modifiers) {
@@ -264,7 +264,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 10, unit = TimeUnit.SECONDS)
     fun latinButtonsWithCommandShiftTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Command, KeyCode.Shift)
             for ((keyCode, key) in ansiButtons) {
                 if (keyCode == KeyCode.ANSI_Q) {
@@ -303,7 +303,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithCommandControlTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Command, KeyCode.Control)
             for ((keyCode, key) in ansiLetters) {
                 if (keyCode == KeyCode.ANSI_D) {
@@ -340,7 +340,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithControlTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Control)
             ansiLetters.forEach { (keyCode, key) ->
                 val keyWithModifiers: String = controlLayer[keyCode]!!
@@ -371,7 +371,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithControlShiftTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Control, KeyCode.Shift)
             ansiLetters.forEach { (keyCode, key) ->
                 val keyWithModifiers: String = controlLayer[keyCode]!!
@@ -402,7 +402,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Option)
 
             ansiLetters.forEach { (keyCode, key) ->
@@ -440,7 +440,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionShiftTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Option, KeyCode.Shift)
 
             ansiLetters.forEach { (keyCode, key) ->
@@ -478,7 +478,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionCommandTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Command, KeyCode.Option)
             for ((keyCode, key) in ansiLetters) {
                 if (keyCode == KeyCode.ANSI_D) {
@@ -522,7 +522,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun latinLettersWithOptionControlTest() {
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = setOf(KeyCode.Control, KeyCode.Option)
             ansiLetters.forEach { (keyCode, key) ->
                 val keyWithModifiers: String = controlLayer[keyCode]!!
@@ -555,7 +555,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun `all keys ansi keyboard`() {
         val specialKeys = mapOf<KeyCode, SpecialKey>()
-        withInputSource("com.apple.keylayout.ABC") {
+        withInputSourceSelected("com.apple.keylayout.ABC") {
             val modifiers = emptySet<KeyCode>()
             ui { robot.setKeyboardType(KeyboardType.Ansi) }
             allKeys.forEach { keyCode ->
