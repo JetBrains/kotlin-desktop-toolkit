@@ -1,11 +1,11 @@
 package org.jetbrains.desktop.macos.tests
 
-import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.Robot
+import org.jetbrains.desktop.macos.TextInputSource
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyDown
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyUp
@@ -30,7 +30,7 @@ class RobotTest : KDTApplicationTestBase() {
         @JvmStatic
         fun init() {
             Logger.info { "RobotTest INIT STARTED" }
-            inputSourceBeforeTest = ui { Application.currentInputSource()!! }
+            inputSourceBeforeTest = ui { TextInputSource.current()!! }
             robot = ui { Robot() }
             window = createWindowAndEnsureItsFocused(name = "RobotTest Window")
             Logger.info { "RobotTest INIT FINISHED" }
@@ -44,7 +44,7 @@ class RobotTest : KDTApplicationTestBase() {
             ui {
                 window.close()
             }
-            ui { Application.chooseInputSource(inputSourceBeforeTest) }
+            ui { TextInputSource.select(inputSourceBeforeTest) }
             Logger.info { "RobotTest DESTROY FINISHED" }
         }
     }
@@ -122,7 +122,7 @@ class RobotTest : KDTApplicationTestBase() {
 
     @Test
     fun `input source test`() {
-        val inputSource = ui { Application.currentInputSource() }
+        val inputSource = ui { TextInputSource.current() }
         assert(inputSource?.startsWith("com.apple.keylayout") == true) {
             "$inputSource should start with 'com.apple.keylayout'"
         }
@@ -130,7 +130,7 @@ class RobotTest : KDTApplicationTestBase() {
 
     @Test
     fun `list input sources test`() {
-        val inputSources = ui { Application.listInputSources() }
+        val inputSources = ui { TextInputSource.list() }
         Logger.info { "Input sources: $inputSources" }
         assert(inputSources.isNotEmpty()) { "Input sources list should not be empty" }
         assert(inputSources.any { it.startsWith("com.apple.keylayout.") }) {
@@ -140,7 +140,7 @@ class RobotTest : KDTApplicationTestBase() {
 
     @Test
     fun `check that all required input sources are installed`() {
-        val inputSources = ui { Application.listInputSources() }
+        val inputSources = ui { TextInputSource.list() }
 //        inputSources.forEach {
 //            val isAsciiCapable = ui { Application.inputSourceIsAsciiCapable(it) }
 //            Logger.info { "$it isAsciiCapable: $isAsciiCapable" }
@@ -161,32 +161,32 @@ class RobotTest : KDTApplicationTestBase() {
 
     @Test
     fun `current input source is in the list of input sources`() {
-        val currentLayout = ui { Application.currentInputSource() }
-        val inputSources = ui { Application.listInputSources() }
+        val currentLayout = ui { TextInputSource.current() }
+        val inputSources = ui { TextInputSource.list() }
         assert(currentLayout != null) { "Current keyboard layout should not be null" }
         assertContains(inputSources, currentLayout, "Current keyboard layout should be in the list of input sources")
     }
 
     @Test
     fun `choose input source and restore`() {
-        val originalLayout = ui { Application.currentInputSource() }
+        val originalLayout = ui { TextInputSource.current() }
         assertNotNull(originalLayout)
 
-        val inputSources = ui { Application.listInputSources() }
+        val inputSources = ui { TextInputSource.list() }
         val anotherLayout = inputSources.firstOrNull { it != originalLayout && it.startsWith("com.apple.keylayout.") }
 
         if (anotherLayout != null) {
-            val switched = ui { Application.chooseInputSource(anotherLayout) }
+            val switched = ui { TextInputSource.select(anotherLayout) }
             assert(switched) { "Failed to switch to $anotherLayout" }
 
-            val currentAfterSwitch = ui { Application.currentInputSource() }
+            val currentAfterSwitch = ui { TextInputSource.current() }
             assertEquals(anotherLayout, currentAfterSwitch)
 
             // Restore original layout
-            val restored = ui { Application.chooseInputSource(originalLayout) }
+            val restored = ui { TextInputSource.select(originalLayout) }
             assert(restored) { "Failed to restore to $originalLayout" }
 
-            val currentAfterRestore = ui { Application.currentInputSource() }
+            val currentAfterRestore = ui { TextInputSource.current() }
             assertEquals(originalLayout, currentAfterRestore)
         } else {
             println("Only one keyboard layout available, skipping switch test")

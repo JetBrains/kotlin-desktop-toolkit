@@ -1,14 +1,17 @@
 use crate::macos::keyboard::KeyCode;
+use crate::macos::robot_api::KeyboardType;
 use anyhow::Context;
 use objc2_core_foundation::{CFMachPort, CFRetained, CFRunLoop, CFRunLoopSource, kCFRunLoopDefaultMode};
-use objc2_core_graphics::{CGEvent, CGEventField, CGEventMask, CGEventSource, CGEventSourceStateID, CGEventTapCallBack, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventTapProxy, CGEventType};
+use objc2_core_graphics::{
+    CGEvent, CGEventField, CGEventMask, CGEventSource, CGEventSourceStateID, CGEventTapCallBack, CGEventTapLocation, CGEventTapOptions,
+    CGEventTapPlacement, CGEventTapProxy, CGEventType,
+};
 use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::sync::mpsc::SyncSender;
 use std::thread;
 use std::thread::JoinHandle;
-use crate::macos::robot_api::KeyboardType;
 
 #[allow(clippy::struct_field_names)]
 pub struct Robot {

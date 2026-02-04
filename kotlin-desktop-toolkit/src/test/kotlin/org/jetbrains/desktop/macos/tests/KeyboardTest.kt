@@ -1,12 +1,12 @@
 package org.jetbrains.desktop.macos.tests
 
-import org.jetbrains.desktop.macos.Application
 import org.jetbrains.desktop.macos.Event
 import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.KeyboardType
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.SpecialKey
+import org.jetbrains.desktop.macos.TextInputSource
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyDown
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyUp
@@ -34,7 +34,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         @Timeout(value = 15, unit = TimeUnit.SECONDS)
         fun init() {
             Logger.info { "KeyboardTest INIT STARTED" }
-            inputSourceBeforeTest = ui { Application.currentInputSource()!! }
+            inputSourceBeforeTest = ui { TextInputSource.current()!! }
             robot = ui { Robot() }
             window = createWindowAndEnsureItsFocused(name = "KeyboardTest Window")
             Logger.info { "KeyboardTest INIT FINISHED" }
@@ -49,7 +49,7 @@ class KeyboardTest : KDTApplicationTestBase() {
             ui {
                 window.close()
             }
-            ui { Application.chooseInputSource(inputSourceBeforeTest) }
+            ui { TextInputSource.select(inputSourceBeforeTest) }
             Logger.info { "KeyboardTest DESTROY FINISHED" }
         }
     }
@@ -554,9 +554,7 @@ class KeyboardTest : KDTApplicationTestBase() {
     @Test
     @Timeout(value = 5, unit = TimeUnit.SECONDS)
     fun `all keys ansi keyboard`() {
-        val specialKeys = mapOf<KeyCode, SpecialKey>(
-
-        )
+        val specialKeys = mapOf<KeyCode, SpecialKey>()
         withInputSource("com.apple.keylayout.ABC") {
             val modifiers = emptySet<KeyCode>()
             ui { robot.setKeyboardType(KeyboardType.Ansi) }
@@ -712,7 +710,7 @@ class KeyboardTest : KDTApplicationTestBase() {
         KeyCode.JIS_KeypadComma,
 
         KeyCode.JIS_Eisu,
-        KeyCode.JIS_Kana
+        KeyCode.JIS_Kana,
     )
 
     val ansiButtons = listOf(

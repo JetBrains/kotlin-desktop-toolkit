@@ -8,6 +8,7 @@ import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.LogLevel
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.LogicalPoint
+import org.jetbrains.desktop.macos.TextInputSource
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardTest.Companion.window
 import org.junit.jupiter.api.AfterAll
@@ -76,18 +77,18 @@ open class KDTApplicationTestBase : KDTTestBase() {
         }
 
         fun withInputSource(inputSource: String, body: () -> Unit) {
-            val delayAfterSwitch = 10L
-            val previousInputSource = ui { Application.currentInputSource()!! }
+            val delayAfterSwitch = 100L
+            val previousInputSource = ui { TextInputSource.current()!! }
             if (previousInputSource != inputSource) {
-                assert(ui { Application.chooseInputSource(inputSource) })
+                assert(ui { TextInputSource.select(inputSource) })
                 sleep(delayAfterSwitch)
             }
             try {
-                val currentInputSource = ui { Application.currentInputSource()!! }
+                val currentInputSource = ui { TextInputSource.current()!! }
                 assertEquals(expected = inputSource, actual = currentInputSource)
                 body()
             } finally {
-                assert(ui { Application.chooseInputSource(previousInputSource) })
+                assert(ui { TextInputSource.select(previousInputSource) })
                 sleep(delayAfterSwitch)
             }
         }

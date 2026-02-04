@@ -503,8 +503,12 @@ extern "C" fn events_characters_by_applying_modifiers(modifiers: KeyModifiersSet
     ffi_boundary("events_characters_by_applying_modifiers", || {
         let mtm = MainThreadMarker::new().unwrap();
         let app = super::application_api::MyNSApplication::sharedApplication(mtm);
-        let event = app.currentEvent().ok_or_else(|| anyhow::anyhow!("Must be called from event handler"))?;
-        let characters = event.charactersByApplyingModifiers(modifiers.into()).ok_or_else(|| anyhow::anyhow!("Can be called only when KeyUp or KeyDown are handled"))?;
+        let event = app
+            .currentEvent()
+            .ok_or_else(|| anyhow::anyhow!("Must be called from event handler"))?;
+        let characters = event
+            .charactersByApplyingModifiers(modifiers.into())
+            .ok_or_else(|| anyhow::anyhow!("Can be called only when KeyUp or KeyDown are handled"))?;
         copy_to_c_string(&characters)
     })
 }

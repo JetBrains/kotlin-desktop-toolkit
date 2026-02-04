@@ -178,54 +178,6 @@ public object Application {
         }
     }
 
-    public fun currentInputSource(): String? {
-        val layout = ffiDownCall {
-            desktop_macos_h.application_current_input_source()
-        }
-        if (layout == MemorySegment.NULL) return null
-        return try {
-            layout.getUtf8String(0)
-        } finally {
-            ffiDownCall { desktop_macos_h.string_drop(layout) }
-        }
-    }
-
-    public fun listInputSources(): List<String> {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                val result = desktop_macos_h.application_list_input_sources(arena)
-                try {
-                    listOfStringsFromNative(result)
-                } finally {
-                    ffiDownCall { desktop_macos_h.string_array_drop(result) }
-                }
-            }
-        }
-    }
-
-    /**
-     * macOS has race conditions in input source switching
-     * immediately after you can observe some weird key events (even if [currentInputSource] reports expected value), for example,
-     * [Event.KeyDown.characters] corresponds to new layout [Event.KeyDown.key] and [Event.KeyDown.keyWithModifiers] to old layout.
-     * This function is usually used in tests, and as a workaround you can wait for 10 ms.
-     * See: [KDTApplicationTestBase.withInputSource]
-     */
-    public fun chooseInputSource(sourceId: String): Boolean {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                desktop_macos_h.application_choose_input_source(arena.allocateUtf8String(sourceId))
-            }
-        }
-    }
-
-    public fun inputSourceIsAsciiCapable(sourceId: String): Boolean {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                desktop_macos_h.application_input_source_is_ascii_capable(arena.allocateUtf8String(sourceId))
-            }
-        }
-    }
-
     private var isSafeToQuit: () -> Boolean = { true }
 
     // called from native
