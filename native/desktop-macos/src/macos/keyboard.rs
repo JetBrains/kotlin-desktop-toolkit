@@ -36,10 +36,6 @@ pub(crate) fn unpack_key_event(ns_event: &NSEvent) -> anyhow::Result<KeyEventInf
         .characters()
         .with_context(|| format!("No characters field in {ns_event:?}"))?;
 
-    let key = ns_event
-        .charactersByApplyingModifiers(NSEventModifierFlags::empty())
-        .with_context(|| format!("Event contains invalid data: {ns_event:?}"))?;
-
     // `charactersByApplyingModifiers(ns_event.modifierFlags())` though we apply the same modifiers, it's different from characters
     // there are number of differences:
     // * for dead keys `characters` will be empty, but this string will contain symbol representing the key

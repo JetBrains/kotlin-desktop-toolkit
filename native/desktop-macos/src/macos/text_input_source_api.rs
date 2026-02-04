@@ -74,10 +74,10 @@ pub extern "C" fn text_input_source_select(source_id: BorrowedStrPtr) -> bool {
         let source_id_str = source_id.as_str()?;
         unsafe {
             let source_id_ns = NSString::from_str(source_id_str);
-            let key: &NSString = &*(kTISPropertyInputSourceID as *const NSString);
+            let key: &NSString = &*kTISPropertyInputSourceID.cast::<NSString>();
             let search_params = NSDictionary::from_slices(&[key], &[&*source_id_ns]);
 
-            let dict_ptr: *const NSDictionary<NSString, NSString> = &*search_params;
+            let dict_ptr: *const NSDictionary<NSString, NSString> = &raw const *search_params;
             let source_list = TISCreateInputSourceList(dict_ptr.cast(), false);
             if source_list.is_null() {
                 return Ok(false);
@@ -162,10 +162,10 @@ pub extern "C" fn text_input_source_set_enable(source_id: BorrowedStrPtr, enable
         let source_id_str = source_id.as_str()?;
         unsafe {
             let source_id_ns = NSString::from_str(source_id_str);
-            let key: &NSString = &*(kTISPropertyInputSourceID as *const NSString);
+            let key: &NSString = &*kTISPropertyInputSourceID.cast::<NSString>();
             let search_params = NSDictionary::from_slices(&[key], &[&*source_id_ns]);
 
-            let dict_ptr: *const NSDictionary<NSString, NSString> = &*search_params;
+            let dict_ptr: *const NSDictionary<NSString, NSString> = &raw const *search_params;
             let source_list = TISCreateInputSourceList(dict_ptr.cast(), true);
             if source_list.is_null() {
                 return Ok(false);
