@@ -13,7 +13,6 @@ use crate::macos::events::{
 };
 use crate::macos::image::Image;
 use anyhow::{Context, anyhow};
-use desktop_common::ffi_utils::AutoDropArray;
 use desktop_common::{
     ffi_utils::{BorrowedStrPtr, RustAllocatedStrPtr},
     logger::{catch_panic, ffi_boundary},
@@ -322,129 +321,6 @@ pub extern "C" fn application_open_url(url: BorrowedStrPtr) -> bool {
     })
 }
 
-#[allow(unused_doc_comments)]
-/// cbindgen:ignore
-#[link(name = "Carbon", kind = "framework")]
-unsafe extern "C" {
-    pub(super) fn TISCopyCurrentKeyboardLayoutInputSource() -> *const c_void;
-    // Note: TISGetInputSourceProperty returns a borrowed reference, NOT an owned one
-    pub(super) fn TISGetInputSourceProperty(inputSource: *const c_void, propertyKey: *const c_void) -> *const c_void;
-    pub(super) fn TISCreateInputSourceList(properties: *const c_void, include_all_installed: bool) -> *const c_void;
-    pub(super) fn TISSelectInputSource(inputSource: *const c_void) -> i32;
-    #[allow(dead_code)]
-    pub(super) static kTISPropertyUnicodeKeyLayoutData: *const c_void;
-    pub(super) static kTISPropertyInputSourceID: *const c_void;
-    #[allow(dead_code)]
-    pub(super) static kTISPropertyLocalizedName: *const c_void;
-}
-
-#[allow(unused_doc_comments)]
-/// cbindgen:ignore
-#[link(name = "CoreFoundation", kind = "framework")]
-unsafe extern "C" {
-    fn CFRelease(cf: *const c_void);
-    fn CFArrayGetCount(array: *const c_void) -> isize;
-    fn CFArrayGetValueAtIndex(array: *const c_void, index: isize) -> *const c_void;
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn application_current_input_source() -> RustAllocatedStrPtr {
-    ffi_boundary("application_current_input_source", || {
-        let _mtm = MainThreadMarker::new().unwrap();
-        unsafe {
-            let input_source = TISCopyCurrentKeyboardLayoutInputSource();
-            if input_source.is_null() {
-                log::warn!("Can't get current keyboard layout");
-                return Ok(RustAllocatedStrPtr::null());
-            }
-
-            let source_id_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceID);
-
-            let result = if source_id_ptr.is_null() {
-                Ok(RustAllocatedStrPtr::null())
-            } else {
-                // source_id is a CFStringRef (borrowed), toll-free bridged to NSString
-                let ns_string: &NSString = &*source_id_ptr.cast::<NSString>();
-                copy_to_c_string(ns_string)
-            };
-
-            // Release the input source we got from TISCopyCurrentKeyboardLayoutInputSource
-            CFRelease(input_source);
-
-            result
-        }
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn application_list_input_sources() -> AutoDropArray<RustAllocatedStrPtr> {
-    ffi_boundary("application_list_input_sources", || {
-        unsafe {
-            let source_list = TISCreateInputSourceList(std::ptr::null(), false);
-            if source_list.is_null() {
-                return Ok(AutoDropArray::new(Box::new([])));
-            }
-
-            #[allow(clippy::cast_sign_loss)]
-            let count = CFArrayGetCount(source_list) as usize;
-
-            if count == 0 {
-                CFRelease(source_list);
-                return Ok(AutoDropArray::new(Box::new([])));
-            }
-
-            let mut source_ids: Vec<RustAllocatedStrPtr> = Vec::with_capacity(count);
-
-            for i in 0..count {
-                let input_source = CFArrayGetValueAtIndex(source_list, i as isize);
-                let source_id_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceID);
-                if !source_id_ptr.is_null() {
-                    // source_id is a CFStringRef (borrowed), toll-free bridged to NSString
-                    let ns_string: &NSString = &*source_id_ptr.cast::<NSString>();
-                    source_ids.push(copy_to_c_string(ns_string)?);
-                }
-            }
-
-            CFRelease(source_list);
-
-            Ok(AutoDropArray::new(source_ids.into_boxed_slice()))
-        }
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn application_choose_input_source(source_id: BorrowedStrPtr) -> bool {
-    ffi_boundary("application_choose_input_source", || {
-        let source_id_str = source_id.as_str()?;
-        unsafe {
-            let source_list = TISCreateInputSourceList(std::ptr::null(), true);
-            if source_list.is_null() {
-                return Ok(false);
-            }
-
-            #[allow(clippy::cast_sign_loss)]
-            let count = CFArrayGetCount(source_list) as usize;
-            let mut result = false;
-
-            for i in 0..count {
-                let input_source = CFArrayGetValueAtIndex(source_list, i as isize);
-                let prop_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceID);
-                if !prop_ptr.is_null() {
-                    let ns_string: &NSString = &*prop_ptr.cast::<NSString>();
-                    if ns_string.to_string() == source_id_str {
-                        let status = TISSelectInputSource(input_source);
-                        result = status == 0; // noErr
-                        break;
-                    }
-                }
-            }
-
-            CFRelease(source_list);
-            Ok(result)
-        }
-    })
-}
-
 define_class!(
     #[unsafe(super(NSApplication))]
     #[name = "MyNSApplication"]
@@ -476,7 +352,11 @@ impl MyNSApplication {
     // modifiers are down, but swallows the key up if the modifiers include
     // command.  This one makes all modifiers consistent by always sending key ups.
     fn send_event_impl(&self, event: &NSEvent) {
-        if event.r#type() == NSEventType::KeyUp {
+        let is_key_up = event.r#type() == NSEventType::KeyUp;
+        let is_eisu_down = event.r#type() == NSEventType::KeyDown && event.keyCode() == 102;
+        let is_kana_down = event.r#type() == NSEventType::KeyDown && event.keyCode() == 104;
+
+        if is_key_up || is_eisu_down || is_kana_down {
             let mtm: MainThreadMarker = self.mtm();
             if let Some(window) = event.window(mtm) {
                 window.sendEvent(event);

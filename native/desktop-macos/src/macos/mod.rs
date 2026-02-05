@@ -24,6 +24,7 @@ pub mod sound_api;
 pub mod string;
 pub mod text_direction;
 pub mod text_input_client;
+pub mod text_input_source_api;
 pub mod titlebar;
 pub mod url;
 pub mod url_api;

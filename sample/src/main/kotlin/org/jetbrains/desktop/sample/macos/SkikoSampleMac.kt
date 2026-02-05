@@ -34,6 +34,7 @@ import org.jetbrains.desktop.macos.Pasteboard
 import org.jetbrains.desktop.macos.PhysicalPoint
 import org.jetbrains.desktop.macos.PhysicalSize
 import org.jetbrains.desktop.macos.Screen
+import org.jetbrains.desktop.macos.TextInputSource
 import org.jetbrains.desktop.macos.TitlebarConfiguration
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.WindowBackground
@@ -519,29 +520,29 @@ class ApplicationState : AutoCloseable {
                 Logger.info { "$event" }
             }
 
-            is Event.MouseEntered -> {
-                Logger.info { "$event" }
-            }
-
-            is Event.MouseExited -> {
-                Logger.info { "$event" }
-            }
-
-            is Event.MouseMoved -> {
-                Logger.info { "$event" }
-            }
-
-            is Event.MouseDragged -> {
-                Logger.info { "$event" }
-            }
-
-            is Event.MouseDown -> {
-                Logger.info { "$event" }
-            }
-
-            is Event.MouseUp -> {
-                Logger.info { "$event" }
-            }
+//            is Event.MouseEntered -> {
+//                Logger.info { "$event" }
+//            }
+//
+//            is Event.MouseExited -> {
+//                Logger.info { "$event" }
+//            }
+//
+//            is Event.MouseMoved -> {
+//                Logger.info { "$event" }
+//            }
+//
+//            is Event.MouseDragged -> {
+//                Logger.info { "$event" }
+//            }
+//
+//            is Event.MouseDown -> {
+//                Logger.info { "$event" }
+//            }
+//
+//            is Event.MouseUp -> {
+//                Logger.info { "$event" }
+//            }
 
             else -> {}
         }
@@ -550,7 +551,7 @@ class ApplicationState : AutoCloseable {
     var lockedWindowId: WindowId? = null
 
     fun handleEvent(event: Event): EventHandlerResult {
-//        logEvents(event)
+        logEvents(event)
 
         val result = when (event) {
             is Event.WindowCloseRequest -> {
@@ -652,7 +653,7 @@ class ApplicationState : AutoCloseable {
                     keystroke = Keystroke(key = "x", modifiers = KeyModifiersSet.create(command = true)),
                     specialTag = AppMenuItem.Action.SpecialTag.Cut,
                     perform = {
-                        Logger.info { "Current input source: ${Application.currentInputSource()}" }
+                        Logger.info { "Current input source: ${TextInputSource.current()}" }
                     },
                 ),
                 AppMenuItem.Action(

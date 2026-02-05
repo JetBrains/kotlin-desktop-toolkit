@@ -52,3 +52,23 @@ pub extern "C" fn emulate_keyboard_event(keycode: KeyCode, key_down: bool) {
         })
     });
 }
+
+#[repr(u32)]
+#[derive(Debug, Clone, Copy)]
+pub enum KeyboardType {
+    Ansi = 40,
+    Iso = 41,
+    Jis = 42,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn robot_set_keyboard_type(keyboard_type: KeyboardType) {
+    ffi_boundary("robot_set_keyboard_type", || {
+        let _mtm = MainThreadMarker::new().context("Robot can be initialized only from the main thread")?;
+        ROBOT.with_borrow_mut(|robot| {
+            let robot = robot.as_mut().context("Robot is not initialized")?;
+            robot.set_keyboard_type(keyboard_type);
+            Ok(())
+        })
+    });
+}

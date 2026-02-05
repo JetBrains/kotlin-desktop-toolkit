@@ -37,8 +37,7 @@ pub struct KeyDownEvent<'a> {
     pub modifiers: KeyModifiersSet,
     pub code: KeyCode,
     pub characters: BorrowedStrPtr<'a>,
-    pub key: BorrowedStrPtr<'a>,
-    pub key_with_modifiers: BorrowedStrPtr<'a>,
+    pub characters_ignoring_modifiers: BorrowedStrPtr<'a>,
     pub is_repeat: bool,
     pub might_have_key_equivalent: bool,
     pub timestamp: Timestamp,
@@ -51,8 +50,7 @@ pub struct KeyUpEvent<'a> {
     pub modifiers: KeyModifiersSet,
     pub code: KeyCode,
     pub characters: BorrowedStrPtr<'a>,
-    pub key: BorrowedStrPtr<'a>,
-    pub key_with_modifiers: BorrowedStrPtr<'a>,
+    pub characters_ignoring_modifiers: BorrowedStrPtr<'a>,
     pub timestamp: Timestamp,
 }
 
@@ -223,11 +221,10 @@ pub(crate) fn handle_key_down_event(ns_event: &NSEvent, might_have_key_equivalen
             let key_info = unpack_key_event(ns_event)?;
             let event = Event::KeyDown(KeyDownEvent {
                 window_id: ns_event.window_id(),
-                code: key_info.code,
+                code: key_info.key_code,
                 is_repeat: key_info.is_repeat,
-                characters: borrow_ns_string(&key_info.typed_chars),
-                key: borrow_ns_string(&key_info.key),
-                key_with_modifiers: borrow_ns_string(&key_info.key_with_modifiers),
+                characters: borrow_ns_string(&key_info.characters),
+                characters_ignoring_modifiers: borrow_ns_string(&key_info.characters_ignoring_modifiers),
                 modifiers: key_info.modifiers,
                 timestamp: ns_event.timestamp(),
                 might_have_key_equivalent,
@@ -245,10 +242,9 @@ pub(crate) fn handle_key_up_event(ns_event: &NSEvent) -> anyhow::Result<bool> {
             let key_info = unpack_key_event(ns_event)?;
             let event = Event::KeyUp(KeyUpEvent {
                 window_id: ns_event.window_id(),
-                code: key_info.code,
-                characters: borrow_ns_string(&key_info.typed_chars),
-                key: borrow_ns_string(&key_info.key),
-                key_with_modifiers: borrow_ns_string(&key_info.key_with_modifiers),
+                code: key_info.key_code,
+                characters: borrow_ns_string(&key_info.characters),
+                characters_ignoring_modifiers: borrow_ns_string(&key_info.characters_ignoring_modifiers),
                 modifiers: key_info.modifiers,
                 timestamp: ns_event.timestamp(),
             });
@@ -500,6 +496,21 @@ impl PanicDefault for KeyModifiersSet {
 #[unsafe(no_mangle)]
 extern "C" fn events_pressed_modifiers() -> KeyModifiersSet {
     ffi_boundary("events_pressed_modifiers", || Ok(NSEvent::pressed_modifiers()))
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn events_characters_by_applying_modifiers(modifiers: KeyModifiersSet) -> RustAllocatedStrPtr {
+    ffi_boundary("events_characters_by_applying_modifiers", || {
+        let mtm = MainThreadMarker::new().unwrap();
+        let app = super::application_api::MyNSApplication::sharedApplication(mtm);
+        let event = app
+            .currentEvent()
+            .ok_or_else(|| anyhow::anyhow!("Must be called from event handler"))?;
+        let characters = event
+            .charactersByApplyingModifiers(modifiers.into())
+            .ok_or_else(|| anyhow::anyhow!("Can be called only when KeyUp or KeyDown are handled"))?;
+        copy_to_c_string(&characters)
+    })
 }
 
 #[unsafe(no_mangle)]

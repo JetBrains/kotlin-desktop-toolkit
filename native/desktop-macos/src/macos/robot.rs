@@ -1,4 +1,5 @@
 use crate::macos::keyboard::KeyCode;
+use crate::macos::robot_api::KeyboardType;
 use anyhow::Context;
 use objc2_core_foundation::{CFMachPort, CFRetained, CFRunLoop, CFRunLoopSource, kCFRunLoopDefaultMode};
 use objc2_core_graphics::{
@@ -51,6 +52,10 @@ impl Robot {
         CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&key_event));
         self.event_tap_thread.wait_for_event(event_id);
         Ok(())
+    }
+
+    pub(crate) fn set_keyboard_type(&self, keyboard_type: KeyboardType) {
+        CGEventSource::set_keyboard_type(Some(&self.event_source), keyboard_type as u32);
     }
 
     pub(crate) fn shutdown(&mut self) -> anyhow::Result<()> {

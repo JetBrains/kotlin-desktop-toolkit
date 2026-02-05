@@ -7,12 +7,18 @@ import org.jetbrains.desktop.macos.GrandCentralDispatch
 import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.LogLevel
 import org.jetbrains.desktop.macos.Logger
+import org.jetbrains.desktop.macos.LogicalPoint
+import org.jetbrains.desktop.macos.TextInputSource
+import org.jetbrains.desktop.macos.Window
+import org.jetbrains.desktop.macos.tests.KeyboardTest.Companion.window
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
+import java.lang.Thread.sleep
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+import kotlin.test.assertEquals
 
 /**
  * We expect that every test class will be executed with a separate JVM instance, without parallel forks.
@@ -48,6 +54,64 @@ open class KDTApplicationTestBase : KDTTestBase() {
 
         fun <T> ui(body: () -> T): T = GrandCentralDispatch.dispatchOnMainSync(highPriority = false, body)
 
+        fun createWindowAndEnsureItsFocused(name: String): Window {
+            window = ui {
+                val window = Window.create(origin = LogicalPoint(100.0, 200.0), title = name)
+                Logger.info { "$name create with ID: ${window.windowId()}" }
+                window
+            }
+            ui {
+                window.makeKeyAndOrderFront()
+            }
+            awaitEventOfType<Event.WindowChangedOcclusionState> { it.windowId == window.windowId() && it.isVisible }
+
+            if (!window.isKey) {
+                ui {
+                    window.makeKeyAndOrderFront()
+                }
+                Logger.info { "$name before Window focused" }
+                awaitEventOfType<Event.WindowFocusChange> { it.isKeyWindow }
+                Logger.info { "$name Window focused" }
+            }
+            return window
+        }
+
+        private const val DELAY_AFTER_INPUT_SOURCE_CHANGE = 100L // milliseconds
+
+        fun <T> withInputSourceEnabled(inputSource: String, body: () -> T): T {
+            val wasEnabled = ui { TextInputSource.list().contains(inputSource) }
+            return try {
+                if (!wasEnabled) {
+                    ui { TextInputSource.setEnabled(inputSource, true) }
+                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
+                }
+                body()
+            } finally {
+                if (!wasEnabled) {
+                    ui { TextInputSource.setEnabled(inputSource, false) }
+                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
+                }
+            }
+        }
+
+        fun <T> withInputSourceSelected(inputSource: String, body: () -> T): T {
+            return withInputSourceEnabled(inputSource) {
+                val previousInputSource = ui { TextInputSource.current()!! }
+                if (previousInputSource != inputSource) {
+                    assert(ui { TextInputSource.select(inputSource) })
+                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
+                }
+                try {
+                    val currentInputSource = ui { TextInputSource.current()!! }
+                    assertEquals(expected = inputSource, actual = currentInputSource)
+                    body()
+                } finally {
+                    assert(ui { TextInputSource.select(previousInputSource) })
+                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
+                }
+            }
+        }
+
         val eventQueue = LinkedBlockingQueue<Event>()
 
         fun awaitEvent(predicate: (Event) -> Boolean): Event {
@@ -75,7 +139,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
                 GrandCentralDispatch.startOnMainThread {
                     Application.init()
                     Application.runEventLoop { event ->
-                        Logger.info { "Event: $event" }
+                        Logger.debug { "Event: $event" }
                         assert(eventQueue.offer(event), { "Event queue overflow" })
                         eventHandler?.invoke(event) ?: EventHandlerResult.Continue
                     }
