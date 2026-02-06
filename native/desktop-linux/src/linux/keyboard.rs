@@ -19,7 +19,7 @@ use crate::linux::{
 
 pub fn send_key_down_event(state: &ApplicationState, event: KeyEvent, is_repeat: bool) {
     let characters = event.utf8.and_then(|s| CString::new(s).ok());
-    let code = KeyCode(event.raw_code);
+    let code = KeyCode(event.raw_code + 8);
     state.send_event(KeyDownEvent::new(code, event.keysym.raw(), characters.as_ref(), is_repeat));
 }
 
@@ -65,7 +65,7 @@ impl KeyboardHandler for ApplicationState {
         self.last_keyboard_event_serial = Some(serial);
         debug!("KeyboardHandler::release_key");
         self.send_event(KeyUpEvent {
-            code: KeyCode(event.raw_code),
+            code: KeyCode(event.raw_code + 8),
             key: event.keysym.raw(),
         });
     }

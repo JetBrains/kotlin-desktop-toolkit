@@ -47,6 +47,19 @@ impl<'a> BorrowedOpaquePtr<'a> {
     }
 
     #[must_use]
+    pub const fn null() -> Self {
+        Self(GenericRawPtr {
+            ptr: std::ptr::null(),
+            phantom: PhantomData,
+        })
+    }
+
+    #[must_use]
+    pub const fn is_null(&self) -> bool {
+        self.0.ptr.is_null()
+    }
+
+    #[must_use]
     pub const unsafe fn borrow<R>(&self) -> Option<&'a R> {
         let p: *const R = self.0.ptr.cast();
         unsafe { p.as_ref() }
@@ -147,6 +160,11 @@ impl<'a> BorrowedStrPtr<'a> {
             ptr: s.as_ptr(),
             phantom: PhantomData,
         })
+    }
+
+    #[must_use]
+    pub const fn from_ptr(ptr: *const std::ffi::c_char) -> Self {
+        Self(GenericRawPtr { ptr, phantom: PhantomData })
     }
 
     #[must_use]

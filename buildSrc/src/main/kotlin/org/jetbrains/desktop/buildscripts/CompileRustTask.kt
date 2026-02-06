@@ -13,6 +13,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.TaskAction
+import org.gradle.kotlin.dsl.listProperty
 import org.gradle.kotlin.dsl.property
 import org.gradle.process.ExecOperations
 import java.nio.file.Path
@@ -46,6 +47,9 @@ abstract class CompileRustTask @Inject constructor(
 
     @get:Input
     val rustProfile = objectFactory.property<String>()
+
+    @get:Input
+    val additionalCargoArgs = objectFactory.listProperty<String>()
 
     @Internal
     val outputDirectory =
@@ -81,7 +85,7 @@ abstract class CompileRustTask @Inject constructor(
         val debugSuffix = if (rustProfile == "debug" || rustProfile == "dev") "+debug" else ""
 
         val crateName = crateName.get().replace('-', '_')
-        val libName = "${crateName}_${targetSuffix}$debugSuffix"
+        val libName = "${crateName}_${targetPlatform.os.normalizedName}_${targetSuffix}$debugSuffix"
 
         /**
          * See `KotlinDesktopToolkit.kt` if you would like to change this logic.
@@ -103,6 +107,7 @@ abstract class CompileRustTask @Inject constructor(
             rustTarget = rustTarget.get(),
             targetPlatform = targetPlatform.get(),
             rustProfile = rustProfile.get(),
+            additionalCargoArgs = additionalCargoArgs.get(),
         )
 
         val libraryFile = libraryFile.get()
@@ -131,6 +136,7 @@ private fun ExecOperations.compileRust(
     rustTarget: String,
     targetPlatform: Platform,
     rustProfile: String,
+    additionalCargoArgs: List<String>,
 ) {
     exec {
         workingDir = nativeDirectory.toFile()
@@ -144,6 +150,6 @@ private fun ExecOperations.compileRust(
             "--profile=$rustProfile",
             "--target=$rustTarget",
             "--color=always",
-        )
+        ) + additionalCargoArgs
     }
 }
