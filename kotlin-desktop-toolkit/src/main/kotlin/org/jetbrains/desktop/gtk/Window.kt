@@ -1,0 +1,226 @@
+package org.jetbrains.desktop.gtk
+
+import org.jetbrains.desktop.gtk.generated.desktop_gtk_h
+import java.lang.foreign.Arena
+import java.lang.foreign.MemorySegment
+
+public typealias WindowId = Long
+
+public class DragIconParams(
+    public val renderingMode: RenderingMode,
+    public val size: LogicalSize,
+) {
+    init {
+        check(size.width > 0 && size.height > 0) {
+            "Invalid size (both width and height must be greater than zero)"
+        }
+    }
+}
+
+public class StartDragAndDropParams(
+    public val mimeTypes: List<String>,
+    public val actions: Set<DragAndDropAction>,
+    public val dragIconParams: DragIconParams?,
+)
+
+public class Window internal constructor(
+    private val appPtr: MemorySegment,
+    params: WindowParams,
+) : AutoCloseable {
+    public val windowId: WindowId = params.windowId
+
+    init {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_gtk_h.window_create(appPtr, params.toNative(arena))
+            }
+        }
+    }
+
+    override fun toString(): String {
+        return "${javaClass.typeName}(windowId=$windowId, appPtr=0x${appPtr.address().toString(16)})"
+    }
+
+    public fun requestRedraw() {
+        ffiDownCall { desktop_gtk_h.window_request_redraw(appPtr, windowId) }
+    }
+
+    public fun setTitle(title: String) {
+        Arena.ofConfined().use { arena ->
+            val nativeTitle = arena.allocateUtf8String(title)
+            ffiDownCall { desktop_gtk_h.window_set_title(appPtr, windowId, nativeTitle) }
+        }
+    }
+
+    public fun setFullScreen() {
+        ffiDownCall {
+            desktop_gtk_h.window_set_fullscreen(appPtr, windowId)
+        }
+    }
+
+    public fun unsetFullScreen() {
+        ffiDownCall {
+            desktop_gtk_h.window_unset_fullscreen(appPtr, windowId)
+        }
+    }
+
+    public fun maximize() {
+        ffiDownCall {
+            desktop_gtk_h.window_maximize(appPtr, windowId)
+        }
+    }
+
+    public fun unmaximize() {
+        ffiDownCall {
+            desktop_gtk_h.window_unmaximize(appPtr, windowId)
+        }
+    }
+
+    public fun minimize() {
+        ffiDownCall {
+            desktop_gtk_h.window_minimize(appPtr, windowId)
+        }
+    }
+
+    public fun startMove() {
+        ffiDownCall {
+            desktop_gtk_h.window_start_move(appPtr, windowId)
+        }
+    }
+
+    public fun startResize(edge: WindowResizeEdge) {
+        ffiDownCall {
+            desktop_gtk_h.window_start_resize(appPtr, windowId, edge.toNative())
+        }
+    }
+
+    public fun showMenu() {
+        ffiDownCall {
+            desktop_gtk_h.window_show_menu(appPtr, windowId)
+        }
+    }
+
+    public fun setMinSize(size: LogicalSize) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_gtk_h.window_set_min_size(appPtr, windowId, size.toNative(arena))
+            }
+        }
+    }
+
+    public fun setPointerShape(shape: PointerShape) {
+        ffiDownCall {
+            desktop_gtk_h.window_set_pointer_shape(appPtr, windowId, shape.toNative())
+        }
+    }
+
+    public fun requestDecorationMode(decorationMode: WindowDecorationMode) {
+        ffiDownCall {
+            desktop_gtk_h.window_request_decoration_mode(appPtr, windowId, decorationMode.toNative())
+        }
+    }
+
+    public fun unsetDecorationMode() {
+        ffiDownCall {
+            desktop_gtk_h.window_unset_decoration_mode(appPtr, windowId)
+        }
+    }
+
+    /**
+     * Start a drag&drop action with the data that can be interpreted in any of the provided MIME type formats.
+     * Later, [ApplicationConfig.getDataTransferData] may be called, with [DataSource.DragAndDrop] argument,
+     * to actually get the data with the specified MIME type.
+     */
+    public fun startDragAndDrop(params: StartDragAndDropParams) {
+        Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                desktop_gtk_h.window_start_drag_and_drop(
+                    appPtr,
+                    windowId,
+                    mimeTypesToNative(arena, params.mimeTypes),
+                    params.actions.toNative(),
+                    (params.dragIconParams?.renderingMode ?: RenderingMode.Auto).toNative(),
+                    (params.dragIconParams?.size ?: LogicalSize(0, 0)).toNative(arena),
+                )
+            }
+        }
+    }
+
+    /**
+     * Will produce [Event.FileChooserResponse] event if there is clipboard content,
+     * with the [Event.FileChooserResponse.requestId] field same as this function's return value.
+     */
+    public fun showOpenFileDialog(commonParams: FileDialog.CommonDialogParams, openParams: FileDialog.OpenDialogParams): RequestId? {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                val requestIdVal = desktop_gtk_h.window_show_open_file_dialog(
+                    appPtr,
+                    windowId,
+                    commonParams.toNative(arena),
+                    openParams.toNative(arena),
+                )
+                RequestId.fromNativeResponse(requestIdVal)
+            }
+        }
+    }
+
+    /**
+     * Will produce [Event.FileChooserResponse] event if there is clipboard content,
+     * with the [Event.FileChooserResponse.requestId] field same as this function's return value.
+     */
+    public fun showSaveFileDialog(commonParams: FileDialog.CommonDialogParams, saveParams: FileDialog.SaveDialogParams): RequestId? {
+        return Arena.ofConfined().use { arena ->
+            ffiDownCall {
+                val requestIdVal = desktop_gtk_h.window_show_save_file_dialog(
+                    appPtr,
+                    windowId,
+                    commonParams.toNative(arena),
+                    saveParams.toNative(arena),
+                )
+                RequestId.fromNativeResponse(requestIdVal)
+            }
+        }
+    }
+
+    public fun activate(token: String?) {
+        Arena.ofConfined().use { arena ->
+            val nativeToken = token?.let { token -> arena.allocateUtf8String(token) } ?: run { MemorySegment.NULL }
+            ffiDownCall {
+                desktop_gtk_h.window_activate(appPtr, windowId, nativeToken)
+            }
+        }
+    }
+
+    /** Should be called after [Event.TextInputAvailability] reports `true`, if Text Input support is needed. */
+    public fun textInputEnable(context: TextInputContext) {
+        ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_gtk_h.window_text_input_enable(appPtr, windowId, context.toNative(arena))
+            }
+        }
+    }
+
+    /** Should be called after any data in [TextInputContext] is changed, but only if [textInputEnable] was called beforehand. */
+    public fun textInputUpdate(context: TextInputContext) {
+        ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_gtk_h.window_text_input_update(appPtr, windowId, context.toNative(arena))
+            }
+        }
+    }
+
+    /** Disable Text Input support, if [textInputEnable] was called beforehand. */
+    public fun textInputDisable() {
+        ffiDownCall {
+            desktop_gtk_h.window_text_input_disable(appPtr, windowId)
+        }
+    }
+
+    override fun close() {
+        Logger.trace { "Window: closing window with id $windowId" }
+        ffiDownCall {
+            desktop_gtk_h.window_close(appPtr, windowId)
+        }
+        Logger.trace { "Window: closed window with id $windowId" }
+    }
+}

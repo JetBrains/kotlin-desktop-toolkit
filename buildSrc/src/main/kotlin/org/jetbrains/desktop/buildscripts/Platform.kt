@@ -22,8 +22,6 @@ enum class Os(val normalizedName: String) {
     MACOS("macos"),
     WINDOWS("windows"),
     ;
-
-    fun titlecase(): String = normalizedName.replaceFirstChar { it.uppercase() }
 }
 
 @Suppress("EnumEntryName")

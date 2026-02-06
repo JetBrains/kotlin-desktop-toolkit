@@ -9,7 +9,7 @@ import org.jetbrains.desktop.buildscripts.targetArch
 import org.panteleyev.jpackage.ImageType
 
 plugins {
-    alias(libs.plugins.kotlin.jvm)
+    `kotlin-dsl`
     alias(libs.plugins.ktlint)
     alias(libs.plugins.jpackage)
 }
@@ -26,7 +26,7 @@ val skikoTargetArch = when (targetArch(project) ?: hostArch()) {
     Arch.x86_64 -> "x64"
 }
 
-val skikoVersion = "0.9.30"
+val skikoVersion = "0.9.37.3"
 val skikoTarget = "$skikoTargetOs-$skikoTargetArch"
 dependencies {
     implementation(project(":kotlin-desktop-toolkit"))
@@ -56,9 +56,9 @@ val nativeLib = configurations.resolvable("nativeParts") {
     }
 }
 
-fun JavaExec.setUpLoggingAndLibraryPath() {
+fun JavaExec.setUpLoggingAndLibraryPath(backend: String) {
     val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample.log").map { it.asFile.absolutePath }
-    val nativeLibPath = nativeLib.map { it.singleFile.absolutePath }
+    val nativeLibPath = nativeLib.map { it.first { it.name.startsWith("native-$backend-") }.absolutePath }
     jvmArgumentProviders.add(
         CommandLineArgumentProvider {
             listOf(
@@ -85,7 +85,7 @@ tasks.register<JavaExec>("runSkikoSampleMac") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
-    setUpLoggingAndLibraryPath()
+    setUpLoggingAndLibraryPath("macos")
 
     environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
@@ -106,7 +106,7 @@ tasks.register<JavaExec>("runApplicationMenuSampleMac") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
-    setUpLoggingAndLibraryPath()
+    setUpLoggingAndLibraryPath("macos")
 
     environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
@@ -127,7 +127,25 @@ tasks.register<JavaExec>("runSkikoSampleLinux") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
-    setUpLoggingAndLibraryPath()
+    setUpLoggingAndLibraryPath("linux")
+}
+
+tasks.register<JavaExec>("runSkikoSampleGtk") {
+    group = "application"
+    description = "Runs example of integration with Skiko on GTK"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.jetbrains.desktop.sample.gtk.SkikoSampleGtkKt")
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(21))
+        },
+    )
+    jvmArgs = listOf(
+        "--enable-preview",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Djextract.trace.downcalls=false",
+    )
+    setUpLoggingAndLibraryPath("gtk")
 }
 
 fun JavaExec.setUpCrashDumpPath() {
@@ -162,7 +180,7 @@ tasks.register<JavaExec>("runSkikoSampleWin32") {
         "-Dstdout.encoding=UTF-8",
         "-Dstderr.encoding=UTF-8",
     )
-    setUpLoggingAndLibraryPath()
+    setUpLoggingAndLibraryPath("win32")
     setUpCrashDumpPath()
 }
 
