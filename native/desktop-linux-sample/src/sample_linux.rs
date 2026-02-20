@@ -367,14 +367,14 @@ const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBit
 
 #[allow(clippy::too_many_lines)]
 fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> bool {
-    const KEYCODE_BACKSPACE: u32 = 14;
-    const KEYCODE_TAB: u32 = 15;
-    const KEYCODE_C: u32 = 46;
-    const KEYCODE_N: u32 = 49;
-    const KEYCODE_O: u32 = 24;
-    const KEYCODE_P: u32 = 25;
-    const KEYCODE_S: u32 = 31;
-    const KEYCODE_V: u32 = 47;
+    const KEYCODE_BACKSPACE: u32 = 22;
+    const KEYCODE_TAB: u32 = 23;
+    const KEYCODE_C: u32 = 54;
+    const KEYCODE_N: u32 = 57;
+    const KEYCODE_O: u32 = 32;
+    const KEYCODE_P: u32 = 33;
+    const KEYCODE_S: u32 = 39;
+    const KEYCODE_V: u32 = 55;
     const KEY_MODIFIER_CTRL: u8 = KeyModifier::Ctrl as u8;
 
     let modifiers: KeyModifierBitflag = shortcut_modifiers(state.key_modifiers);

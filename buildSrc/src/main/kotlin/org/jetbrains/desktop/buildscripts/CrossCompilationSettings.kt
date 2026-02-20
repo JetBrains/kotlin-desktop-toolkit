@@ -4,12 +4,12 @@ import org.gradle.api.Project
 
 // `rustup target add --toolchain 1.91.0 x86_64-apple-darwin`
 
+fun getBooleanProperty(project: Project, name: String): Boolean {
+    return (project.property(name) as String).toBooleanStrict()
+}
+
 data class CrossCompilationSettings(private val platforms: List<Platform>) {
     companion object {
-        private fun getBooleanProperty(project: Project, name: String): Boolean {
-            return (project.property(name) as String).toBooleanStrict()
-        }
-
         private fun enabled(targetPlatform: Platform, host: Platform, project: Project): Boolean {
             if (targetPlatform == host) {
                 return true
@@ -51,5 +51,5 @@ data class CrossCompilationSettings(private val platforms: List<Platform>) {
         }
     }
 
-    fun enabled(targetPlatform: Platform): Boolean = platforms.contains(targetPlatform)
+    fun enabled(): List<Platform> = platforms
 }
