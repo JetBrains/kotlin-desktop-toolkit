@@ -76,7 +76,7 @@ impl LogicalPoint {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub(crate) fn to_physical(self, scale: f32) -> PhysicalPoint {
+    pub(crate) const fn to_physical(self, scale: f32) -> PhysicalPoint {
         PhysicalPoint::new(
             f32::floor(self.x.0.mul_add(scale, 0.5_f32)) as i32,
             f32::floor(self.y.0.mul_add(scale, 0.5_f32)) as i32,
@@ -109,7 +109,7 @@ impl LogicalSize {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    pub(crate) fn to_physical(self, scale: f32) -> PhysicalSize {
+    pub(crate) const fn to_physical(self, scale: f32) -> PhysicalSize {
         PhysicalSize::new(
             f32::floor(self.width.0.mul_add(scale, 0.5_f32)) as i32,
             f32::floor(self.height.0.mul_add(scale, 0.5_f32)) as i32,
