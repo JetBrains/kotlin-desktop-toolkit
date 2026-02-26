@@ -37,7 +37,6 @@ macro_rules! get_egl_proc {
             .map(|f| unsafe { core::mem::transmute(f) })
     };
 }
-pub(crate) use get_egl_proc;
 
 #[allow(non_snake_case)]
 pub(crate) struct GrGLFunctions {
