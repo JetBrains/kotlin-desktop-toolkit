@@ -16,8 +16,8 @@ use windows::Win32::{
             AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
             GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS,
             SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
-            USER_DEFAULT_SCREEN_DPI, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR,
-            WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST,
+            USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE,
+            WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST,
             WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
             WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
             WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
@@ -29,8 +29,8 @@ use super::{
     appearance::Appearance,
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
-        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent, Timestamp, WindowDrawEvent,
-        WindowMoveEvent, WindowResizeEvent, WindowScaleChangedEvent, WindowTitleChangedEvent,
+        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent, Timestamp,
+        WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent, WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
@@ -113,7 +113,7 @@ impl EventLoop {
 
             WM_POINTERLEAVE => on_pointerleave(self, window, wparam),
 
-            WM_ACTIVATE => on_activate(window),
+            WM_ACTIVATE => on_activate(self, window, wparam),
 
             WM_NCCALCSIZE => on_nccalcsize(self, window, wparam, lparam),
 
@@ -268,16 +268,20 @@ fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lpa
     None
 }
 
-#[allow(clippy::unnecessary_wraps)]
-fn on_activate(window: &Window) -> Option<LRESULT> {
+fn on_activate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
+    let is_active = u32::from(LOWORD!(wparam.0)) != WA_INACTIVE;
+    let is_minimized = HIWORD!(wparam.0) != 0;
     window.with_mut_pointer_click_counter(PointerClickCounter::reset);
-    let _ = window
-        .extend_content_into_titlebar()
-        .inspect_err(|err| log::error!("failed to extend content into the title bar: {err}"));
-    let _ = window
-        .apply_system_backdrop()
-        .inspect_err(|err| log::error!("failed to apply the requested system backdrop: {err}"));
-    Some(LRESULT(0))
+    if is_active && !is_minimized {
+        let _ = window
+            .extend_content_into_titlebar()
+            .inspect_err(|err| log::error!("failed to extend content into the title bar: {err}"));
+        let _ = window
+            .apply_system_backdrop()
+            .inspect_err(|err| log::error!("failed to apply the requested system backdrop: {err}"));
+    }
+    let event = WindowActivatedEvent { is_active, is_minimized };
+    event_loop.handle_event(window, event.into())
 }
 
 fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {

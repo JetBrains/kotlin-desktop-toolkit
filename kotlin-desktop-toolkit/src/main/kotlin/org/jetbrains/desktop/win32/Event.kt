@@ -12,6 +12,7 @@ import org.jetbrains.desktop.win32.generated.NativePointerUpEvent
 import org.jetbrains.desktop.win32.generated.NativePointerUpdatedEvent
 import org.jetbrains.desktop.win32.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.win32.generated.NativeSystemAppearanceChangeEvent
+import org.jetbrains.desktop.win32.generated.NativeWindowActivatedEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowMoveEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowResizeEvent
@@ -150,7 +151,13 @@ public sealed class Event {
     ) : Event()
 
     @ConsistentCopyVisibility
-    public data class SystemAppearanceChange internal constructor(public val newAppearance: Appearance) : Event()
+    public data class SystemAppearanceChange internal constructor(val newAppearance: Appearance) : Event()
+
+    @ConsistentCopyVisibility
+    public data class WindowActivated internal constructor(
+        val active: Boolean,
+        val minimized: Boolean,
+    ) : Event()
 
     public data object WindowCloseRequest : Event()
 
@@ -201,6 +208,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_ScrollWheelX() -> scrollWheelX(s)
     desktop_win32_h.NativeEvent_ScrollWheelY() -> scrollWheelY(s)
     desktop_win32_h.NativeEvent_SystemAppearanceChange() -> systemAppearanceChange(s)
+    desktop_win32_h.NativeEvent_WindowActivated() -> windowActivated(s)
     desktop_win32_h.NativeEvent_WindowCloseRequest() -> Event.WindowCloseRequest
     desktop_win32_h.NativeEvent_WindowDraw() -> windowDraw(s)
     desktop_win32_h.NativeEvent_WindowKeyboardEnter() -> Event.WindowKeyboardEnter
@@ -336,6 +344,14 @@ private fun systemAppearanceChange(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.system_appearance_change(s)
     return Event.SystemAppearanceChange(
         newAppearance = Appearance.fromNative(NativeSystemAppearanceChangeEvent.new_appearance(nativeEvent)),
+    )
+}
+
+private fun windowActivated(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.window_activated(s)
+    return Event.WindowActivated(
+        active = NativeWindowActivatedEvent.is_active(nativeEvent),
+        minimized = NativeWindowActivatedEvent.is_minimized(nativeEvent),
     )
 }
 
