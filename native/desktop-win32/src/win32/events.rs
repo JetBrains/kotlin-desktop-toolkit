@@ -25,6 +25,7 @@ pub enum Event {
     ScrollWheelX(ScrollWheelEvent),
     ScrollWheelY(ScrollWheelEvent),
     SystemAppearanceChange(SystemAppearanceChangeEvent),
+    WindowActivated(WindowActivatedEvent),
     WindowCloseRequest,
     WindowDraw(WindowDrawEvent),
     //WindowFocusChange(WindowFocusChangeEvent),
@@ -166,6 +167,19 @@ pub struct SystemAppearanceChangeEvent {
 impl From<SystemAppearanceChangeEvent> for Event {
     fn from(value: SystemAppearanceChangeEvent) -> Self {
         Self::SystemAppearanceChange(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct WindowActivatedEvent {
+    pub is_active: bool,
+    pub is_minimized: bool,
+}
+
+impl From<WindowActivatedEvent> for Event {
+    fn from(value: WindowActivatedEvent) -> Self {
+        Self::WindowActivated(value)
     }
 }
 
