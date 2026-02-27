@@ -5,8 +5,8 @@ use windows::{
         Foundation::{ERROR_INVALID_DATA, ERROR_SUCCESS, GetLastError, HANDLE, HGLOBAL},
         System::{
             DataExchange::{
-                CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
-                RegisterClipboardFormatW, SetClipboardData,
+                CloseClipboard, CountClipboardFormats, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardSequenceNumber,
+                IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
             },
             Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock},
             Ole::CF_UNICODETEXT,
@@ -40,7 +40,18 @@ impl Clipboard {
         Ok(unsafe { RegisterClipboardFormatW(format_name) })
     }
 
-    pub fn list_available_formats(&self) -> anyhow::Result<Vec<u32>> {
+    #[must_use]
+    pub fn get_sequence_number() -> u32 {
+        unsafe { GetClipboardSequenceNumber() }
+    }
+
+    pub fn count_available_formats(&self) -> anyhow::Result<i32> {
+        let count = unsafe { CountClipboardFormats() };
+        anyhow::ensure!(count != 0, windows::core::Error::from_thread());
+        Ok(count)
+    }
+
+    pub fn enum_available_formats(&self) -> anyhow::Result<Vec<u32>> {
         anyhow::ensure!(self.is_open, "Clipboard has been closed.");
         let mut formats = vec![];
         let mut next_format = unsafe { EnumClipboardFormats(0) };
@@ -49,9 +60,7 @@ impl Clipboard {
             next_format = unsafe { EnumClipboardFormats(next_format) };
         }
         let err = unsafe { GetLastError() };
-        if err != ERROR_SUCCESS {
-            anyhow::bail!(windows::core::Error::from(err));
-        }
+        anyhow::ensure!(err == ERROR_SUCCESS, windows::core::Error::from(err));
         Ok(formats)
     }
 

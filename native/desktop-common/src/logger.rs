@@ -270,6 +270,12 @@ impl PanicDefault for isize {
     }
 }
 
+impl PanicDefault for i32 {
+    fn default() -> Self {
+        0
+    }
+}
+
 impl PanicDefault for u32 {
     fn default() -> Self {
         0
