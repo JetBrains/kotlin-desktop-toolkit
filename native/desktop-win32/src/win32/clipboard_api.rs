@@ -13,6 +13,37 @@ type AutoDropByteArray = AutoDropArray<u8>;
 type AutoDropUInt32Array = AutoDropArray<u32>;
 
 #[unsafe(no_mangle)]
+pub extern "C" fn clipboard_count_formats(owner: WindowPtr) -> i32 {
+    with_window(&owner, "clipboard_count_formats", |window| {
+        let clipboard = Clipboard::open_for_window(window)?;
+        let count = clipboard.count_available_formats()?;
+        Ok(count)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_enum_formats(owner: WindowPtr) -> AutoDropUInt32Array {
+    with_window(&owner, "clipboard_enum_formats", |window| {
+        let clipboard = Clipboard::open_for_window(window)?;
+        let formats = clipboard.enum_available_formats()?;
+        Ok(AutoDropArray::new(formats.into_boxed_slice()))
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_empty(owner: WindowPtr) {
+    with_window(&owner, "clipboard_empty", |window| {
+        let clipboard = Clipboard::open_for_window(window)?;
+        clipboard.empty()
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_get_sequence_number() -> u32 {
+    ffi_boundary("clipboard_get_sequence_number", || Ok(Clipboard::get_sequence_number()))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn clipboard_get_data(owner: WindowPtr, data_format: u32) -> AutoDropByteArray {
     with_window(&owner, "clipboard_get_text", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
@@ -30,14 +61,6 @@ pub extern "C" fn clipboard_get_text(owner: WindowPtr) -> RustAllocatedStrPtr {
         let text = data.get_text()?;
         Ok(RustAllocatedStrPtr::from_c_string(text))
     })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_empty(owner: WindowPtr) {
-    with_window(&owner, "clipboard_empty", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        clipboard.empty()
-    });
 }
 
 #[unsafe(no_mangle)]
@@ -63,15 +86,6 @@ pub extern "C" fn clipboard_register_format(name: BorrowedStrPtr) -> u32 {
     ffi_boundary("clipboard_register_format", || {
         let format_name = copy_from_utf8_string(&name)?;
         Clipboard::register_format(&format_name)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_list_formats(owner: WindowPtr) -> AutoDropUInt32Array {
-    with_window(&owner, "clipboard_list_formats", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let formats = clipboard.list_available_formats()?;
-        Ok(AutoDropArray::new(formats.into_boxed_slice()))
     })
 }
 

@@ -4,7 +4,7 @@ import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 
 public object Clipboard {
-    public fun empty(owner: Window) {
+    public fun clear(owner: Window) {
         ffiDownCall {
             owner.withPointer { windowPtr ->
                 desktop_win32_h.clipboard_empty(windowPtr)
@@ -12,7 +12,42 @@ public object Clipboard {
         }
     }
 
-    public fun getData(owner: Window, format: ClipboardFormat): ByteArray {
+    public fun changeCount(): UInt {
+        return ffiDownCall {
+            desktop_win32_h.clipboard_get_sequence_number().toUInt()
+        }
+    }
+
+    public fun itemCount(owner: Window): Int {
+        return ffiDownCall {
+            owner.withPointer { windowPtr ->
+                desktop_win32_h.clipboard_count_formats(windowPtr)
+            }
+        }
+    }
+
+    public fun listItemFormats(owner: Window): List<ClipboardFormat> {
+        val formatIds = ffiDownCall {
+            owner.withPointer { windowPtr ->
+                Arena.ofConfined().use { arena ->
+                    val formatsPtr = desktop_win32_h.clipboard_enum_formats(arena, windowPtr)
+                    try {
+                        intArrayFromNative(formatsPtr)
+                    } finally {
+                        desktop_win32_h.native_u32_array_drop(formatsPtr)
+                    }
+                }
+            }
+        }
+        return formatIds.map { formatId ->
+            when (formatId) {
+                ClipboardFormat.Text.id -> ClipboardFormat.Text
+                else -> ClipboardFormat(formatId)
+            }
+        }
+    }
+
+    public fun readItemOfType(owner: Window, format: ClipboardFormat): ByteArray {
         return ffiDownCall {
             owner.withPointer { windowPtr ->
                 Arena.ofConfined().use { arena ->
@@ -27,7 +62,7 @@ public object Clipboard {
         }
     }
 
-    public fun getText(owner: Window): String {
+    public fun readTextItem(owner: Window): String {
         return ffiDownCall {
             val strPtr = owner.withPointer { windowPtr ->
                 desktop_win32_h.clipboard_get_text(windowPtr)
@@ -40,7 +75,7 @@ public object Clipboard {
         }
     }
 
-    public fun setData(owner: Window, format: ClipboardFormat, data: ByteArray) {
+    public fun writeItemOfType(owner: Window, format: ClipboardFormat, data: ByteArray) {
         ffiDownCall {
             owner.withPointer { windowPtr ->
                 Arena.ofConfined().use { arena ->
@@ -51,34 +86,13 @@ public object Clipboard {
         }
     }
 
-    public fun setText(owner: Window, text: String) {
+    public fun writeTextItem(owner: Window, text: String) {
         ffiDownCall {
             owner.withPointer { windowPtr ->
                 Arena.ofConfined().use { arena ->
                     val strPtr = arena.allocateUtf8String(text)
                     desktop_win32_h.clipboard_set_text(windowPtr, strPtr)
                 }
-            }
-        }
-    }
-
-    public fun listAvailableFormats(owner: Window): List<ClipboardFormat> {
-        val formatIds = ffiDownCall {
-            owner.withPointer { windowPtr ->
-                Arena.ofConfined().use { arena ->
-                    val formatsPtr = desktop_win32_h.clipboard_list_formats(arena, windowPtr)
-                    try {
-                        intArrayFromNative(formatsPtr)
-                    } finally {
-                        desktop_win32_h.native_u32_array_drop(formatsPtr)
-                    }
-                }
-            }
-        }
-        return formatIds.map { formatId ->
-            when (formatId) {
-                ClipboardFormat.Text.id -> ClipboardFormat.Text
-                else -> ClipboardFormat(formatId)
             }
         }
     }
