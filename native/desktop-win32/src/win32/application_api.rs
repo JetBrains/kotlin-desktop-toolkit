@@ -23,27 +23,24 @@ pub(crate) fn with_app<R: PanicDefault>(app_ptr: &AppPtr, name: &str, f: impl Fn
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_init_apartment() {
-    ffi_boundary("application_init_apartment", || {
-        Application::init_apartment()?;
-        Ok(())
-    });
+    ffi_boundary("application_init_apartment", Application::init_apartment);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_init(callbacks: ApplicationCallbacks) -> AppPtr<'static> {
-    let app = ffi_boundary("application_init", || Ok(Some(Application::new(callbacks.event_handler)?)));
+    let app = ffi_boundary("application_init", || Application::new(callbacks.event_handler).map(Some));
     AppPtr::from_value(app)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_is_dispatcher_thread(app_ptr: AppPtr) -> bool {
-    with_app(&app_ptr, "application_is_dispatcher_thread", |app| Ok(app.is_dispatcher_thread()?))
+    with_app(&app_ptr, "application_is_dispatcher_thread", Application::is_dispatcher_thread)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_dispatcher_invoke(app_ptr: AppPtr, callback: extern "C" fn()) -> bool {
     with_app(&app_ptr, "application_dispatcher_invoke", |app| {
-        Ok(app.invoke_on_dispatcher_queue(callback)?)
+        app.invoke_on_dispatcher_queue(callback)
     })
 }
 
@@ -54,7 +51,7 @@ pub extern "C" fn application_run_event_loop(app_ptr: AppPtr) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_stop_event_loop(app_ptr: AppPtr) {
-    with_app(&app_ptr, "application_stop_event_loop", |app| Ok(app.shutdown()?));
+    with_app(&app_ptr, "application_stop_event_loop", Application::shutdown);
 }
 
 #[unsafe(no_mangle)]
@@ -63,9 +60,7 @@ pub extern "C" fn application_open_url(url: BorrowedStrPtr) {
         let url = copy_from_utf8_string(&url)?;
         let result = unsafe { ShellExecuteW(None, windows::core::w!("open"), &url, None, None, SW_SHOWNORMAL) };
         // https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew
-        if result.0 as isize <= 32 {
-            return Err(windows::core::Error::from_thread().into());
-        }
+        anyhow::ensure!(result.0 as isize > 32, windows::core::Error::from_thread());
         Ok(())
     });
 }

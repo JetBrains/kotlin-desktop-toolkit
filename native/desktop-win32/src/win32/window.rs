@@ -74,7 +74,7 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor: Compositor) -> WinResult<Self> {
+    pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor: Compositor) -> anyhow::Result<Self> {
         static WNDCLASS_INIT: OnceLock<u16> = OnceLock::new();
         if WNDCLASS_INIT.get().is_none() {
             let wndclass = WNDCLASSEXW {

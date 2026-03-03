@@ -11,7 +11,6 @@ use windows::{
         },
         UI::WindowsAndMessaging::PostQuitMessage,
     },
-    core::Result as WinResult,
 };
 
 use super::{
@@ -28,13 +27,12 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn init_apartment() -> WinResult<()> {
-        unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
-            .ok()
-            .inspect_err(|err| log::error!("failed to initialize COM apartment: {err:?}"))
+    pub fn init_apartment() -> anyhow::Result<()> {
+        unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.ok()?;
+        Ok(())
     }
 
-    pub fn new(event_handler: EventHandler) -> WinResult<Self> {
+    pub fn new(event_handler: EventHandler) -> anyhow::Result<Self> {
         let dispatcher_queue_controller = create_dispatcher_queue()?;
         let event_loop = EventLoop::new(event_handler)?;
         let compositor_controller = CompositorController::new()?;
@@ -45,7 +43,7 @@ impl Application {
         })
     }
 
-    pub fn invoke_on_dispatcher_queue(&self, callback: extern "C" fn()) -> WinResult<bool> {
+    pub fn invoke_on_dispatcher_queue(&self, callback: extern "C" fn()) -> anyhow::Result<bool> {
         self.dispatcher_queue_controller
             .DispatcherQueue()?
             .TryEnqueue(&DispatcherQueueHandler::new(move || {
@@ -53,24 +51,23 @@ impl Application {
                 callback();
                 Ok(())
             }))
+            .map_err(Into::into)
     }
 
-    pub fn is_dispatcher_thread(&self) -> WinResult<bool> {
-        self.dispatcher_queue_controller.DispatcherQueue()?.HasThreadAccess()
+    pub fn is_dispatcher_thread(&self) -> anyhow::Result<bool> {
+        Ok(self.dispatcher_queue_controller.DispatcherQueue()?.HasThreadAccess()?)
     }
 
     pub fn run_event_loop(&self) -> anyhow::Result<()> {
         self.event_loop.run()
     }
 
-    pub fn shutdown(&self) -> WinResult<()> {
-        self.dispatcher_queue_controller
-            .ShutdownQueueAsync()
-            .map(|_async| ())
-            .inspect_err(|err| log::error!("Failed to shut down the dispatcher queue: {err:?}"))
+    pub fn shutdown(&self) -> anyhow::Result<()> {
+        let _ = self.dispatcher_queue_controller.ShutdownQueueAsync()?;
+        Ok(())
     }
 
-    pub(crate) fn new_window(&self, window_id: WindowId) -> WinResult<Window> {
+    pub(crate) fn new_window(&self, window_id: WindowId) -> anyhow::Result<Window> {
         Window::new(window_id, Rc::downgrade(&self.event_loop), self.compositor_controller.Compositor()?)
     }
 
@@ -80,7 +77,7 @@ impl Application {
 }
 
 #[inline]
-fn create_dispatcher_queue() -> WinResult<DispatcherQueueController> {
+fn create_dispatcher_queue() -> anyhow::Result<DispatcherQueueController> {
     let dispatcher_queue_controller = unsafe {
         CreateDispatcherQueueController(DispatcherQueueOptions {
             dwSize: size_of::<DispatcherQueueOptions>().try_into()?,
