@@ -2,7 +2,7 @@ use std::ffi::CString;
 
 use windows::{
     Win32::{
-        Foundation::{ERROR_INVALID_DATA, ERROR_SUCCESS, GetLastError, HANDLE, HGLOBAL},
+        Foundation::{ERROR_INVALID_DATA, ERROR_INVALID_PARAMETER, ERROR_SUCCESS, GetLastError, HANDLE, HGLOBAL},
         System::{
             DataExchange::{
                 CloseClipboard, CountClipboardFormats, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardSequenceNumber,
@@ -12,7 +12,7 @@ use windows::{
             Ole::CF_UNICODETEXT,
         },
     },
-    core::Result as WinResult,
+    core::{Error as WinError, Result as WinResult},
 };
 
 use super::{strings::copy_from_wide_string, window::Window};
@@ -23,8 +23,6 @@ pub enum ClipboardFormat {
     Text,
     Other(u32),
 }
-
-pub const CLIPBOARD_TEXT_FORMAT: u32 = CF_UNICODETEXT.0 as u32;
 
 pub struct Clipboard {
     is_open: bool,
@@ -47,7 +45,7 @@ impl Clipboard {
 
     pub fn count_available_formats(&self) -> anyhow::Result<i32> {
         let count = unsafe { CountClipboardFormats() };
-        anyhow::ensure!(count != 0, windows::core::Error::from_thread());
+        anyhow::ensure!(count != 0, WinError::from_thread());
         Ok(count)
     }
 
@@ -60,8 +58,16 @@ impl Clipboard {
             next_format = unsafe { EnumClipboardFormats(next_format) };
         }
         let err = unsafe { GetLastError() };
-        anyhow::ensure!(err == ERROR_SUCCESS, windows::core::Error::from(err));
+        anyhow::ensure!(err == ERROR_SUCCESS, WinError::from(err));
         Ok(formats)
+    }
+
+    pub fn is_format_available(&self, format_id: u32) -> anyhow::Result<bool> {
+        match unsafe { IsClipboardFormatAvailable(format_id) } {
+            Ok(()) => Ok(true),
+            Err(err) if err.code().is_ok() => Ok(false),
+            Err(err) => Err(err.into()),
+        }
     }
 
     pub fn empty(&self) -> anyhow::Result<()> {
@@ -73,10 +79,10 @@ impl Clipboard {
     pub fn get_data(&self, format: ClipboardFormat) -> anyhow::Result<ClipboardData> {
         anyhow::ensure!(self.is_open, "Clipboard has been closed.");
         let format_id = match format {
-            ClipboardFormat::Text => CLIPBOARD_TEXT_FORMAT,
+            ClipboardFormat::Text => u32::from(CF_UNICODETEXT.0),
             ClipboardFormat::Other(format_id) => format_id,
         };
-        unsafe { IsClipboardFormatAvailable(format_id)? };
+        anyhow::ensure!(self.is_format_available(format_id)?, WinError::from(ERROR_INVALID_PARAMETER));
         let mem = unsafe { GetClipboardData(format_id)? };
         Ok(ClipboardData { format_id, content: mem })
     }
@@ -105,7 +111,7 @@ pub struct ClipboardData {
 impl ClipboardData {
     pub fn new_text(text: &str) -> WinResult<Self> {
         let content: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
-        Self::new(content.as_slice(), CLIPBOARD_TEXT_FORMAT)
+        Self::new(content.as_slice(), u32::from(CF_UNICODETEXT.0))
     }
 
     pub fn new_bytes(content: &[u8], format_id: u32) -> WinResult<Self> {

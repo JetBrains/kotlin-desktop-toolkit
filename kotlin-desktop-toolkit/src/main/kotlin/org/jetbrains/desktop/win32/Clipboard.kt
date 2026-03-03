@@ -26,6 +26,14 @@ public object Clipboard {
         }
     }
 
+    public fun isFormatAvailable(owner: Window, format: ClipboardFormat): Boolean {
+        return ffiDownCall {
+            owner.withPointer { windowPtr ->
+                desktop_win32_h.clipboard_is_format_available(windowPtr, format.id)
+            }
+        }
+    }
+
     public fun listItemFormats(owner: Window): List<ClipboardFormat> {
         val formatIds = ffiDownCall {
             owner.withPointer { windowPtr ->
