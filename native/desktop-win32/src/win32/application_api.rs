@@ -49,10 +49,7 @@ pub extern "C" fn application_dispatcher_invoke(app_ptr: AppPtr, callback: exter
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_run_event_loop(app_ptr: AppPtr) {
-    with_app(&app_ptr, "application_run_event_loop", |app| {
-        app.run_event_loop();
-        Ok(())
-    });
+    with_app(&app_ptr, "application_run_event_loop", Application::run_event_loop);
 }
 
 #[unsafe(no_mangle)]

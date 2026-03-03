@@ -59,8 +59,8 @@ impl Application {
         self.dispatcher_queue_controller.DispatcherQueue()?.HasThreadAccess()
     }
 
-    pub fn run_event_loop(&self) {
-        self.event_loop.run();
+    pub fn run_event_loop(&self) -> anyhow::Result<()> {
+        self.event_loop.run()
     }
 
     pub fn shutdown(&self) -> WinResult<()> {

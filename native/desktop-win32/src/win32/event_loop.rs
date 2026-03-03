@@ -57,15 +57,18 @@ impl EventLoop {
     }
 
     #[allow(clippy::unused_self)]
-    pub fn run(&self) {
+    pub fn run(&self) -> anyhow::Result<()> {
         log::trace!("Event loop is starting");
         let mut msg = MSG::default();
-        unsafe {
-            while GetMessageW(&raw mut msg, None, 0, 0).as_bool() {
-                DispatchMessageW(&raw const msg);
-            }
+        loop {
+            match unsafe { GetMessageW(&raw mut msg, None, 0, 0).0 } {
+                -1 => anyhow::bail!("Event loop has exited with an error: {}", windows::core::Error::from_thread()),
+                0 => break,
+                _ => unsafe { DispatchMessageW(&raw const msg) },
+            };
         }
         log::trace!("Event loop has finished");
+        Ok(())
     }
 
     pub fn with_keyevent_message<F, R>(msg_id: u64, f: F) -> anyhow::Result<R>
