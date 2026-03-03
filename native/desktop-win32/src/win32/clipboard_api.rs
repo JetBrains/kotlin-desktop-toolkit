@@ -31,6 +31,14 @@ pub extern "C" fn clipboard_enum_formats(owner: WindowPtr) -> AutoDropUInt32Arra
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn clipboard_is_format_available(owner: WindowPtr, data_format: u32) -> bool {
+    with_window(&owner, "clipboard_is_format_available", |window| {
+        let clipboard = Clipboard::open_for_window(window)?;
+        clipboard.is_format_available(data_format)
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn clipboard_empty(owner: WindowPtr) {
     with_window(&owner, "clipboard_empty", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
