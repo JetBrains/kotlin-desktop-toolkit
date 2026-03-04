@@ -62,6 +62,16 @@ pub extern "C" fn clipboard_get_data(owner: WindowPtr, data_format: u32) -> Auto
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn clipboard_get_file_list(owner: WindowPtr) -> AutoDropArray<RustAllocatedStrPtr> {
+    with_window(&owner, "clipboard_get_file_list", |window| {
+        let clipboard = Clipboard::open_for_window(window)?;
+        let data = clipboard.get_data(ClipboardFormat::FileList)?;
+        let content = data.get_file_list()?.into_iter().map(RustAllocatedStrPtr::from_c_string).collect();
+        Ok(AutoDropArray::new(content))
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn clipboard_get_text(owner: WindowPtr) -> RustAllocatedStrPtr {
     with_window(&owner, "clipboard_get_text", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
@@ -76,6 +86,16 @@ pub extern "C" fn clipboard_set_data(owner: WindowPtr, data_format: u32, content
     with_window(&owner, "clipboard_set_data", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
         let data = ClipboardData::new_bytes(content.as_slice()?, data_format)?;
+        clipboard.set_data(&data)
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_set_file_list(owner: WindowPtr, content: BorrowedArray<BorrowedStrPtr>) {
+    with_window(&owner, "clipboard_set_data", |window| {
+        let clipboard = Clipboard::open_for_window(window)?;
+        let files: anyhow::Result<Vec<&str>> = content.as_slice()?.iter().map(|str_ptr| str_ptr.as_str()).collect();
+        let data = ClipboardData::new_file_list(&files?)?;
         clipboard.set_data(&data)
     });
 }
