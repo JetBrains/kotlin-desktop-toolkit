@@ -70,6 +70,21 @@ public object Clipboard {
         }
     }
 
+    public fun readListOfFiles(owner: Window): List<String> {
+        return ffiDownCall {
+            owner.withPointer { windowPtr ->
+                Arena.ofConfined().use { arena ->
+                    val arrayPtr = desktop_win32_h.clipboard_get_file_list(arena, windowPtr)
+                    try {
+                        listOfStringsFromNative(arrayPtr)
+                    } finally {
+                        desktop_win32_h.native_string_array_drop(arrayPtr)
+                    }
+                }
+            }
+        }
+    }
+
     public fun readTextItem(owner: Window): String {
         return ffiDownCall {
             val strPtr = owner.withPointer { windowPtr ->
@@ -94,6 +109,17 @@ public object Clipboard {
         }
     }
 
+    public fun writeListOfFiles(owner: Window, fileNames: List<String>) {
+        ffiDownCall {
+            owner.withPointer { windowPtr ->
+                Arena.ofConfined().use { arena ->
+                    val dataPtr = listOfStringsToNative(arena, fileNames)
+                    desktop_win32_h.clipboard_set_file_list(windowPtr, dataPtr)
+                }
+            }
+        }
+    }
+
     public fun writeTextItem(owner: Window, text: String) {
         ffiDownCall {
             owner.withPointer { windowPtr ->
@@ -110,6 +136,7 @@ public object Clipboard {
 public value class ClipboardFormat internal constructor(internal val id: Int) {
     public companion object {
         public val Text: ClipboardFormat = ClipboardFormat(13) // CF_UNICODETEXT
+        public val FileList: ClipboardFormat = ClipboardFormat(15) // CF_HDROP
 
         public fun register(formatName: String): ClipboardFormat {
             val formatId = ffiDownCall {
