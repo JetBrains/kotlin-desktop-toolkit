@@ -44,7 +44,7 @@ jobs:
         if: "${{ matrix.targets.package_manager == 'apt' }}"
         run: |
           sudo apt update
-          sudo apt install libwayland-dev libxkbcommon-dev
+          sudo apt install libwayland-dev libxkbcommon-dev libgtk-4-dev
         shell: bash
 
       - name: Setup Rust
@@ -65,6 +65,7 @@ jobs:
       - name: Publish with Gradle
         run: |
           ./gradlew :kotlin-desktop-toolkit:publish \
+               -PenableGtkBackend="${{ matrix.targets.package_manager == 'apt' }}" \
                -PenableCrossCompileToMacosX86_64="${{ matrix.targets.os == 'macos-15' }}" \
                -PpublishCommon=${{ matrix.targets.publish_common }} \
                -PspaceUsername=${{ secrets.SPACE_USERNAME }} \

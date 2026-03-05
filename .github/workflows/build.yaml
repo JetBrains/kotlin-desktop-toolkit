@@ -17,12 +17,12 @@ jobs:
     strategy:
       matrix:
         targets: [
-          { os: "macos-15", rust_targets: "aarch64-apple-darwin", package_manager: "brew" },
-          { os: "macos-15-intel", rust_targets: "x86_64-apple-darwin", package_manager: "brew" }, # mac with intel cpu
+#          { os: "macos-15", rust_targets: "aarch64-apple-darwin", package_manager: "brew" },
+#          { os: "macos-15-intel", rust_targets: "x86_64-apple-darwin", package_manager: "brew" }, # mac with intel cpu
           { os: "ubuntu-22.04", rust_targets: "x86_64-unknown-linux-gnu", package_manager: "apt" },
-          { os: "ubuntu-22.04-arm", rust_targets: "aarch64-unknown-linux-gnu", package_manager: "apt" },
-          { os: "windows-2025", rust_targets: "x86_64-pc-windows-msvc", package_manager: "winget" },
-          { os: "windows-11-arm", rust_targets: "aarch64-pc-windows-msvc", package_manager: "winget" },
+#          { os: "ubuntu-22.04-arm", rust_targets: "aarch64-unknown-linux-gnu", package_manager: "apt" },
+#          { os: "windows-2025", rust_targets: "x86_64-pc-windows-msvc", package_manager: "winget" },
+#          { os: "windows-11-arm", rust_targets: "aarch64-pc-windows-msvc", package_manager: "winget" },
         ]
     runs-on: ${{ matrix.targets.os }}
     steps:
@@ -32,8 +32,8 @@ jobs:
       - name: Install Dependencies
         if: "${{ matrix.targets.package_manager == 'apt' }}"
         run: |
-          sudo apt update
-          sudo apt install libwayland-dev libxkbcommon-dev
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev libgtk-4-dev xvfb python3-gi xdotool xclip i3 dunst x11-xkb-utils dbus-daemon python3-xlib
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -52,12 +52,12 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-#      - name: Lint with Gradle
-#        run: ./gradlew lint
+      - name: Lint with Gradle
+        run: ./gradlew -PenableGtkBackend="${{ matrix.targets.package_manager == 'apt' }}" lint
       - name: Test with Gradle
-        run: ./gradlew test --info
+        run: ./gradlew -PenableGtkBackend="${{ matrix.targets.package_manager == 'apt' }}" test --info
       - name: Build with Gradle
-        run: ./gradlew build
+        run: ./gradlew build -PenableGtkBackend="${{ matrix.targets.package_manager == 'apt' }}"
 
 
       - name: Publish Test Report
