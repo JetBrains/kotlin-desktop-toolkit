@@ -1,6 +1,7 @@
-use std::ffi::CString;
+use std::{ffi::CString, sync::LazyLock};
 
 use windows::{
+    ApplicationModel::DataTransfer::HtmlFormatHelper,
     Win32::{
         Foundation::{ERROR_INVALID_PARAMETER, ERROR_SUCCESS, GetLastError, HANDLE, HGLOBAL, POINT},
         System::{
@@ -13,24 +14,34 @@ use windows::{
         },
         UI::Shell::{DROPFILES, DragQueryFileW, HDROP},
     },
-    core::Error as WinError,
+    core::{Error as WinError, w},
 };
 
-use super::{strings::copy_from_wide_string, window::Window};
+use super::{
+    strings::{copy_from_utf8_bytes, copy_from_wide_string},
+    window::Window,
+};
+
+/// cbindgen:ignore
+static HTML_FORMAT: LazyLock<u32> = LazyLock::new(|| unsafe { RegisterClipboardFormatW(w!("HTML Format")) });
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClipboardFormat {
     Text,
     FileList,
+    HtmlFragment,
     Other(u32),
 }
 
 impl ClipboardFormat {
-    fn id(self) -> u32 {
+    #[inline]
+    #[must_use]
+    pub fn id(self) -> u32 {
         match self {
             Self::Text => u32::from(CF_UNICODETEXT.0),
             Self::FileList => u32::from(CF_HDROP.0),
+            Self::HtmlFragment => *HTML_FORMAT,
             Self::Other(fmt) => fmt,
         }
     }
@@ -123,8 +134,8 @@ impl ClipboardData {
         Self::new(content.as_slice(), ClipboardFormat::Text.id())
     }
 
-    pub fn new_bytes(content: &[u8], format_id: u32) -> anyhow::Result<Self> {
-        Self::new(content, format_id)
+    pub fn new_bytes(content: &[u8], format: ClipboardFormat) -> anyhow::Result<Self> {
+        Self::new(content, format.id())
     }
 
     pub fn new_file_list(file_names: &Vec<&str>) -> anyhow::Result<Self> {
@@ -148,6 +159,12 @@ impl ClipboardData {
             format_id: ClipboardFormat::FileList.id(),
             content: HANDLE(mem.0),
         })
+    }
+
+    pub fn new_html(content: &windows::core::HSTRING) -> anyhow::Result<Self> {
+        let html_format = HtmlFormatHelper::CreateHtmlFormat(content)?;
+        let cstr = copy_from_wide_string(&html_format)?;
+        Self::new(cstr.to_bytes_with_nul(), ClipboardFormat::HtmlFragment.id())
     }
 
     fn new<T: Copy>(content: &[T], format_id: u32) -> anyhow::Result<Self> {
@@ -198,6 +215,14 @@ impl ClipboardData {
         }
         global_unlock(hglob)?;
         Ok(files)
+    }
+
+    pub fn get_html(&self) -> anyhow::Result<CString> {
+        anyhow::ensure!(self.format_id == ClipboardFormat::HtmlFragment.id(), "Unexpected data format");
+        let utf8_bytes = self.get_bytes()?;
+        let html_format = copy_from_utf8_bytes(utf8_bytes.as_slice())?;
+        let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)?;
+        Ok(copy_from_wide_string(&fragment)?)
     }
 }
 
