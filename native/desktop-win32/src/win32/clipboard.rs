@@ -8,7 +8,7 @@ use windows::{
                 CloseClipboard, CountClipboardFormats, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardSequenceNumber,
                 IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
             },
-            Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock},
+            Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize},
             Ole::{CF_HDROP, CF_UNICODETEXT},
         },
         UI::Shell::{DROPFILES, DragQueryFileW, HDROP},
@@ -142,8 +142,8 @@ impl ClipboardData {
             data.cast::<DROPFILES>().write(header);
             std::slice::from_raw_parts_mut(data.add(size_of::<DROPFILES>()).cast::<u16>(), files_data.len())
                 .copy_from_slice(files_data.as_slice());
-            GlobalUnlock(mem)?;
         }
+        global_unlock(mem)?;
         Ok(Self {
             format_id: ClipboardFormat::FileList.id(),
             content: HANDLE(mem.0),
@@ -155,8 +155,8 @@ impl ClipboardData {
         unsafe {
             let data: *mut T = GlobalLock(mem).cast();
             std::slice::from_raw_parts_mut(data, content.len()).copy_from_slice(content);
-            GlobalUnlock(mem)?;
         }
+        global_unlock(mem)?;
         Ok(Self {
             format_id,
             content: HANDLE(mem.0),
@@ -168,7 +168,7 @@ impl ClipboardData {
         let hglob = HGLOBAL(self.content.0);
         let content = unsafe { windows::core::PWSTR(GlobalLock(hglob).cast()) };
         let cstr = copy_from_wide_string(unsafe { content.as_wide() })?;
-        unsafe { GlobalUnlock(hglob)? };
+        global_unlock(hglob)?;
         Ok(cstr)
     }
 
@@ -177,7 +177,7 @@ impl ClipboardData {
         let content = unsafe { GlobalLock(hglob) };
         let len = unsafe { GlobalSize(hglob) };
         let vec = unsafe { std::slice::from_raw_parts(content.cast(), len) }.to_vec();
-        unsafe { GlobalUnlock(hglob)? };
+        global_unlock(hglob)?;
         Ok(vec)
     }
 
@@ -196,7 +196,11 @@ impl ClipboardData {
             anyhow::ensure!(file_name_len != 0, windows::core::Error::from_thread());
             files.push(copy_from_wide_string(buffer.as_slice())?);
         }
-        unsafe { GlobalUnlock(hglob)? };
+        global_unlock(hglob)?;
         Ok(files)
     }
+}
+
+fn global_unlock(mem: HGLOBAL) -> windows::core::Result<()> {
+    unsafe { windows::Win32::System::Memory::GlobalUnlock(mem) }.or_else(|err| if err.code().is_ok() { Ok(()) } else { Err(err) })
 }
