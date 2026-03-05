@@ -70,6 +70,19 @@ public object Clipboard {
         }
     }
 
+    public fun readHtmlFragment(owner: Window): String {
+        return ffiDownCall {
+            val strPtr = owner.withPointer { windowPtr ->
+                desktop_win32_h.clipboard_get_html_fragment(windowPtr)
+            }
+            try {
+                strPtr.getUtf8String(0)
+            } finally {
+                desktop_win32_h.native_string_drop(strPtr)
+            }
+        }
+    }
+
     public fun readListOfFiles(owner: Window): List<String> {
         return ffiDownCall {
             owner.withPointer { windowPtr ->
@@ -109,6 +122,17 @@ public object Clipboard {
         }
     }
 
+    public fun writeHtmlFragment(owner: Window, fragment: String) {
+        ffiDownCall {
+            owner.withPointer { windowPtr ->
+                Arena.ofConfined().use { arena ->
+                    val strPtr = arena.allocateUtf8String(fragment)
+                    desktop_win32_h.clipboard_set_html_fragment(windowPtr, strPtr)
+                }
+            }
+        }
+    }
+
     public fun writeListOfFiles(owner: Window, fileNames: List<String>) {
         ffiDownCall {
             owner.withPointer { windowPtr ->
@@ -137,6 +161,10 @@ public value class ClipboardFormat internal constructor(internal val id: Int) {
     public companion object {
         public val Text: ClipboardFormat = ClipboardFormat(13) // CF_UNICODETEXT
         public val FileList: ClipboardFormat = ClipboardFormat(15) // CF_HDROP
+
+        public val Html: ClipboardFormat by lazy {
+            ClipboardFormat(desktop_win32_h.clipboard_get_html_format())
+        }
 
         public fun register(formatName: String): ClipboardFormat {
             val formatId = ffiDownCall {

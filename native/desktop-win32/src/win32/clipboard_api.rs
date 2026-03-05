@@ -72,6 +72,16 @@ pub extern "C" fn clipboard_get_file_list(owner: WindowPtr) -> AutoDropArray<Rus
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn clipboard_get_html_fragment(owner: WindowPtr) -> RustAllocatedStrPtr {
+    with_window(&owner, "clipboard_get_html_fragment", |window| {
+        let clipboard = Clipboard::open_for_window(window)?;
+        let data = clipboard.get_data(ClipboardFormat::HtmlFragment)?;
+        let fragment = data.get_html()?;
+        Ok(RustAllocatedStrPtr::from_c_string(fragment))
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn clipboard_get_text(owner: WindowPtr) -> RustAllocatedStrPtr {
     with_window(&owner, "clipboard_get_text", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
@@ -85,7 +95,7 @@ pub extern "C" fn clipboard_get_text(owner: WindowPtr) -> RustAllocatedStrPtr {
 pub extern "C" fn clipboard_set_data(owner: WindowPtr, data_format: u32, content: BorrowedArray<u8>) {
     with_window(&owner, "clipboard_set_data", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
-        let data = ClipboardData::new_bytes(content.as_slice()?, data_format)?;
+        let data = ClipboardData::new_bytes(content.as_slice()?, ClipboardFormat::Other(data_format))?;
         clipboard.set_data(&data)
     });
 }
@@ -96,6 +106,16 @@ pub extern "C" fn clipboard_set_file_list(owner: WindowPtr, content: BorrowedArr
         let clipboard = Clipboard::open_for_window(window)?;
         let files: anyhow::Result<Vec<&str>> = content.as_slice()?.iter().map(|str_ptr| str_ptr.as_str()).collect();
         let data = ClipboardData::new_file_list(&files?)?;
+        clipboard.set_data(&data)
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_set_html_fragment(owner: WindowPtr, content: BorrowedStrPtr) {
+    with_window(&owner, "clipboard_set_html_fragment", |window| {
+        let clipboard = Clipboard::open_for_window(window)?;
+        let fragment = copy_from_utf8_string(&content)?;
+        let data = ClipboardData::new_html(&fragment)?;
         clipboard.set_data(&data)
     });
 }
@@ -115,6 +135,11 @@ pub extern "C" fn clipboard_register_format(name: BorrowedStrPtr) -> u32 {
         let format_name = copy_from_utf8_string(&name)?;
         Clipboard::register_format(&format_name)
     })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_get_html_format() -> u32 {
+    ffi_boundary("clipboard_get_html_format", || Ok(ClipboardFormat::HtmlFragment.id()))
 }
 
 #[unsafe(no_mangle)]
