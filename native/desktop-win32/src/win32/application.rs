@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use windows::{
     Foundation::TypedEventHandler,
     System::{DispatcherQueueController, DispatcherQueueHandler},
@@ -22,7 +20,6 @@ use super::{
 
 pub struct Application {
     dispatcher_queue_controller: DispatcherQueueController,
-    event_loop: Rc<EventLoop>,
     compositor_controller: CompositorController,
 }
 
@@ -34,11 +31,10 @@ impl Application {
 
     pub fn new(event_handler: EventHandler) -> anyhow::Result<Self> {
         let dispatcher_queue_controller = create_dispatcher_queue()?;
-        let event_loop = EventLoop::new(event_handler)?;
+        EventLoop::init(event_handler)?;
         let compositor_controller = CompositorController::new()?;
         Ok(Self {
             dispatcher_queue_controller,
-            event_loop: Rc::new(event_loop),
             compositor_controller,
         })
     }
@@ -59,7 +55,7 @@ impl Application {
     }
 
     pub fn run_event_loop(&self) -> anyhow::Result<()> {
-        self.event_loop.run()
+        EventLoop::run()
     }
 
     pub fn shutdown(&self) -> anyhow::Result<()> {
@@ -68,7 +64,7 @@ impl Application {
     }
 
     pub(crate) fn new_window(&self, window_id: WindowId) -> anyhow::Result<Window> {
-        Window::new(window_id, Rc::downgrade(&self.event_loop), self.compositor_controller.Compositor()?)
+        Window::new(window_id, self.compositor_controller.Compositor()?)
     }
 
     pub(crate) fn create_angle_device(&self, window: &Window) -> anyhow::Result<AngleDevice> {

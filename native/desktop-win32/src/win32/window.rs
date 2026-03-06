@@ -70,11 +70,10 @@ pub struct Window {
     pointer_in_window: AtomicBool,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
-    event_loop: Weak<EventLoop>,
 }
 
 impl Window {
-    pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor: Compositor) -> anyhow::Result<Self> {
+    pub fn new(window_id: WindowId, compositor: Compositor) -> anyhow::Result<Self> {
         static WNDCLASS_INIT: OnceLock<u16> = OnceLock::new();
         if WNDCLASS_INIT.get().is_none() {
             let wndclass = WNDCLASSEXW {
@@ -101,7 +100,6 @@ impl Window {
             pointer_in_window: AtomicBool::new(false),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
-            event_loop,
         };
         Ok(window)
     }
@@ -363,7 +361,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     }
 
-    // WM_NCCREATE is sent before CreateWindowEx returns and is used to setup the new window
+    // WM_NCCREATE is sent before CreateWindowEx returns and is used to set up the new window
     if msg == WM_NCCREATE {
         return match on_nccreate(hwnd, lparam) {
             Ok(()) => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
@@ -390,10 +388,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     // we reuse the weak reference on every iteration of the event loop, so we don't drop it here (see above)
     let this = ManuallyDrop::new(unsafe { Weak::from_raw(raw) });
     match this.upgrade() {
-        Some(window) if hwnd == window.hwnd() => {
-            let event_loop = window.event_loop.upgrade().expect("event loop has been dropped");
-            event_loop.window_proc(&window, msg, wparam, lparam)
-        }
+        Some(window) if hwnd == window.hwnd() => EventLoop::with(|event_loop| event_loop.window_proc(&window, msg, wparam, lparam)),
         _ => {
             log::error!("the window pointer was incorrect");
             unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
