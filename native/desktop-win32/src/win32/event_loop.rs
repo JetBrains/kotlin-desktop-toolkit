@@ -17,11 +17,11 @@ use windows::Win32::{
         Input::Pointer::EnableMouseInPointer,
         WindowsAndMessaging::{
             AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
-            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS,
+            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, PostMessageW,
             SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
             USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE,
             WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST,
-            WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
+            WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NULL, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
             WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
             WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
@@ -49,8 +49,31 @@ thread_local! {
     static LAST_KEYEVENT_MESSAGE_ID: RefCell<u64> = const { RefCell::new(0) };
 }
 
+struct TaskQueue {
+    sender: std::sync::mpsc::Sender<async_task::Runnable>,
+    receiver: std::sync::mpsc::Receiver<async_task::Runnable>,
+}
+
+impl TaskQueue {
+    pub fn new() -> Self {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        Self { sender, receiver }
+    }
+
+    pub fn enqueue(&self, runnable: async_task::Runnable) {
+        self.sender
+            .send(runnable)
+            .expect("TaskQueue: enqueue failed, the channel has been closed.");
+    }
+
+    pub fn drain(&self) -> Vec<async_task::Runnable> {
+        self.receiver.try_iter().collect()
+    }
+}
+
 pub struct EventLoop {
     event_handler: EventHandler,
+    task_queue: TaskQueue,
 }
 
 impl EventLoop {
@@ -59,8 +82,9 @@ impl EventLoop {
             anyhow::ensure!(event_loop.get().is_none(), "event loop has already been initialized");
             unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
             unsafe { EnableMouseInPointer(true)? };
+            let task_queue = TaskQueue::new();
             event_loop
-                .set(Self { event_handler })
+                .set(Self { event_handler, task_queue })
                 .map_err(|_| anyhow::anyhow!("event loop has already been initialized"))
         })
     }
@@ -73,17 +97,39 @@ impl EventLoop {
     }
 
     pub fn run() -> anyhow::Result<()> {
-        log::trace!("Event loop is starting");
-        let mut msg = MSG::default();
-        loop {
-            match unsafe { GetMessageW(&raw mut msg, None, 0, 0).0 } {
-                -1 => anyhow::bail!("Event loop has exited with an error: {}", windows::core::Error::from_thread()),
-                0 => break,
-                _ => unsafe { DispatchMessageW(&raw const msg) },
+        Self::with(|event_loop| {
+            log::trace!("Event loop is starting");
+            let mut msg = MSG::default();
+            loop {
+                for runnable in event_loop.task_queue.drain() {
+                    runnable.run();
+                }
+                match unsafe { GetMessageW(&raw mut msg, None, 0, 0).0 } {
+                    -1 => anyhow::bail!("Event loop has exited with an error: {}", windows::core::Error::from_thread()),
+                    0 => break,
+                    _ => unsafe { DispatchMessageW(&raw const msg) },
+                };
+            }
+            log::trace!("Event loop has finished");
+            Ok(())
+        })
+    }
+
+    pub fn spawn<T, F>(future: F) -> async_task::Task<anyhow::Result<T>>
+    where
+        F: Future<Output = anyhow::Result<T>> + 'static,
+    {
+        Self::with(|event_loop| {
+            let schedule = move |runnable| {
+                event_loop.task_queue.enqueue(runnable);
+                // Wake the event loop if it's waiting for the next message
+                let _ = unsafe { PostMessageW(None, WM_NULL, WPARAM::default(), LPARAM::default()) };
             };
-        }
-        log::trace!("Event loop has finished");
-        Ok(())
+            // SAFETY: All tasks scheduled on the event loop are polled on the event loop's thread.
+            let (runnable, task) = unsafe { async_task::spawn_unchecked(future, schedule) };
+            runnable.schedule();
+            task
+        })
     }
 
     pub fn with_keyevent_message<F, R>(msg_id: u64, f: F) -> anyhow::Result<R>

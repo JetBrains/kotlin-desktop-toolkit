@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-task = "4.7"
 khronos-egl = { version = "6.0", features = ["dynamic"] }
 log.workspace = true
 desktop-common = { path = "../desktop-common" }
