@@ -27,8 +27,8 @@ private val nativeDir = layout.projectDirectory.dir("../native")
 private val runTestsWithPlatform = Platform(hostOs(), targetArch(project) ?: hostArch())
 
 plugins {
-    alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.ktlint)
+    kotlin("jvm")
+    id("org.jlleitschuh.gradle.ktlint")
 
     `maven-publish`
 }

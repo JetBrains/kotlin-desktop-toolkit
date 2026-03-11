@@ -8,6 +8,8 @@
 plugins {
     // Apply the foojay-resolver plugin to allow automatic download of JDKs
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
+    id("org.jlleitschuh.gradle.ktlint") version "14.0.1" apply false
+    id("org.jetbrains.kotlin.jvm") version "2.2.20" apply false
 }
 
 rootProject.name = "kotlin-desktop-toolkit"

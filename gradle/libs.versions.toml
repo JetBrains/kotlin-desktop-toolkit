@@ -3,13 +3,10 @@
 
 [versions]
 junit-jupiter-engine = "5.13.4"
-ktlint = "13.0.0"
 jpackage = "1.7.3"
 
 [libraries]
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-jupiter-engine" }
 
 [plugins]
-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version = "2.2.0" }
-ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
 jpackage = { id = "org.panteleyev.jpackageplugin", version.ref = "jpackage" }
