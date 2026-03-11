@@ -116,7 +116,7 @@ pub struct ApplicationState {
 
     registry_state: RegistryState,
     seat_state: SeatState,
-    pub loop_handle: LoopHandle<'static, ApplicationState>,
+    pub loop_handle: LoopHandle<'static, Self>,
     pub output_state: OutputState,
     pub compositor_state: CompositorState,
     pub shm_state: Shm,

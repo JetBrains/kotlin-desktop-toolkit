@@ -106,7 +106,7 @@ enum AppMenuItemSafe {
     SubMenu {
         title: Retained<NSString>,
         special_tag: SubMenuItemSpecialTag,
-        items: Vec<AppMenuItemSafe>,
+        items: Vec<Self>,
     },
 }
 
