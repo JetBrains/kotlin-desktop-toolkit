@@ -72,7 +72,7 @@ pub enum AppMenuItem<'a> {
     SubMenuItem {
         title: BorrowedStrPtr<'a>,
         special_tag: SubMenuItemSpecialTag,
-        items: *const AppMenuItem<'a>,
+        items: *const Self,
         items_count: ArraySize,
     },
 }
