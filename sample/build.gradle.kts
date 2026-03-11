@@ -9,8 +9,8 @@ import org.jetbrains.desktop.buildscripts.targetArch
 import org.panteleyev.jpackage.ImageType
 
 plugins {
-    alias(libs.plugins.kotlin.jvm)
-    alias(libs.plugins.ktlint)
+    kotlin("jvm")
+    id("org.jlleitschuh.gradle.ktlint")
     alias(libs.plugins.jpackage)
 }
 
