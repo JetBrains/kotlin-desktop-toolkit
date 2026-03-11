@@ -90,14 +90,8 @@ use smithay_client_toolkit::{
 pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
 
 /// cbindgen:ignore
-static EGL: LazyLock<Option<EglInstance>> = LazyLock::new(|| match unsafe { libloading::Library::new("libEGL.so.1") } {
-    Ok(egl_lib) => match unsafe { EglInstance::load_required_from(egl_lib) } {
-        Ok(egl) => Some(egl),
-        Err(e) => {
-            warn!("Failed to load the required symbols from the EGL library: {e}");
-            None
-        }
-    },
+static EGL: LazyLock<Option<EglInstance>> = LazyLock::new(|| match unsafe { EglInstance::load_required() } {
+    Ok(egl_lib) => Some(egl_lib),
     Err(e) => {
         warn!("Failed to load EGL: {e}");
         None

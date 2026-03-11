@@ -504,7 +504,7 @@ impl Application {
 
     pub fn open_url(&mut self, url_string: &str) -> anyhow::Result<()> {
         debug!("application_open_url");
-        let uri = ashpd::url::Url::parse(url_string)?;
+        let uri = ashpd::Uri::parse(url_string)?;
 
         self.run_async(|request_id| async move {
             let request = ashpd::desktop::open_uri::OpenFileRequest::default().ask(false);

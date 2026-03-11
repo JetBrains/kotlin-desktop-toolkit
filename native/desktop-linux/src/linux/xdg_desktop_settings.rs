@@ -249,7 +249,7 @@ fn send(v: Option<InternalXdgDesktopSetting>, sender: &dyn Fn(InternalXdgDesktop
 }
 
 async fn read_initial_xdg_desktop_settings(
-    settings: &Settings<'_>,
+    settings: &Settings,
     sender: &(dyn Fn(InternalXdgDesktopSetting) -> anyhow::Result<()> + Send + Sync),
 ) -> anyhow::Result<()> {
     let proxy = settings;

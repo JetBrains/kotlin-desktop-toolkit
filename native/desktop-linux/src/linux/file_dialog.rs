@@ -54,7 +54,7 @@ impl CommonFileDialogParams<'_> {
 
 fn convert_file_chooser_response(response: Result<file_chooser::SelectedFiles, ashpd::Error>) -> anyhow::Result<CString> {
     let files = response?;
-    let newline_separated_files = join_str_iter(files.uris().iter().map(ashpd::url::Url::as_str), "\r\n");
+    let newline_separated_files = join_str_iter(files.uris().iter().map(ashpd::Uri::as_str), "\r\n");
     Ok(CString::new(newline_separated_files)?)
 }
 
