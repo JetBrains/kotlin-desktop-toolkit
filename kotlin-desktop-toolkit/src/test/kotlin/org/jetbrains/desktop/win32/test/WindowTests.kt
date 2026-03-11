@@ -11,12 +11,15 @@ import org.jetbrains.desktop.win32.WindowParams
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
+import java.nio.file.Path
 
 @EnabledOnOs(OS.WINDOWS)
 class WindowTests {
     @Test
     fun smokeTest() {
-        KotlinDesktopToolkit.init()
+        KotlinDesktopToolkit.init(
+            libraryFolderPath = Path.of(System.getProperty("kdt.win32.library.folder.path")!!),
+        )
         Application().use { app ->
             val windows = mutableMapOf<WindowId, Window>()
             app.onStartup {

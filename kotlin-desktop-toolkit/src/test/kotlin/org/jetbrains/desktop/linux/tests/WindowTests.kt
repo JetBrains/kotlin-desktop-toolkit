@@ -2,20 +2,34 @@ package org.jetbrains.desktop.linux.tests
 
 import org.jetbrains.desktop.linux.Application
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
+import org.jetbrains.desktop.linux.LogLevel
 import org.jetbrains.desktop.linux.LogicalSize
 import org.jetbrains.desktop.linux.RenderingMode
 import org.jetbrains.desktop.linux.WindowParams
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
+import java.nio.file.Path
 
 @EnabledOnOs(OS.LINUX)
 @EnabledIfEnvironmentVariable(named = "WAYLAND_DISPLAY", matches = ".*")
 class WindowTests {
+    companion object {
+        @BeforeAll
+        @JvmStatic
+        fun initAll() {
+            org.jetbrains.desktop.gtk.KotlinDesktopToolkit.init(
+                libraryFolderPath = Path.of(System.getProperty("kdt.linux.library.folder.path")!!),
+                consoleLogLevel = org.jetbrains.desktop.gtk.LogLevel.Info,
+                useDebugBuild = true,
+            )
+        }
+    }
+
     @Test
     fun smokeTest() {
-        KotlinDesktopToolkit.init()
         val app = Application()
         val window1 = app.createWindow(WindowParams(windowId = 0, appId = "org.jetbrains.desktop.linux.tests", title = "Test Hello1"))
         val window2 = app.createWindow(

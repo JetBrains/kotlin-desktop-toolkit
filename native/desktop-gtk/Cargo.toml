@@ -1,0 +1,36 @@
+[package]
+name = "desktop-gtk"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+name = "desktop_gtk"
+
+[lints]
+workspace = true
+
+[features]
+skia = ['dep:skia-safe']
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+desktop-common = { path = "../desktop-common" }
+
+[target.'cfg(target_os="linux")'.dependencies]
+enumflags2 = "0.7.12"
+futures-lite = "2.6.0"
+keycode = "1.0.0"
+khronos-egl = { version = "6.0.0", features = ["dynamic"] }
+libloading = "0.9.0"
+tokio = { version = "1.46.1", features = ["rt-multi-thread"] }
+zbus = { version = "5.12.0", default-features = false, features = ["tokio"] }
+gtk4 = { version = "0.11.0", features = ["v4_2"] }
+glib-unix =  { version = "0.22.0" }
+ashpd = { version = "0.13.2", default-features = false, features = ["file_chooser", "gtk4", "open_uri", "tokio"] }
+skia-safe = { optional = true, version = "0.93.0", default-features = true, features = ["gl"] }
+
+[target.'cfg(target_os="linux")'.dev-dependencies]
+url = "2.5.8"
+gles30 = { version = "0.5.2", features = ["struct_loader"] }

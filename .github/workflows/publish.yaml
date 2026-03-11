@@ -43,8 +43,8 @@ jobs:
       - name: Install Dependencies
         if: "${{ matrix.targets.package_manager == 'apt' }}"
         run: |
-          sudo apt update
-          sudo apt install libwayland-dev libxkbcommon-dev
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev libgtk-4-dev
         shell: bash
 
       - name: Setup Rust
