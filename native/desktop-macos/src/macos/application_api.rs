@@ -356,7 +356,7 @@ impl MyNSApplication {
         let is_eisu_down = event.r#type() == NSEventType::KeyDown && event.keyCode() == 102;
         let is_kana_down = event.r#type() == NSEventType::KeyDown && event.keyCode() == 104;
 
-        if is_key_up || is_eisu_down || is_kana_down {
+        if is_key_up && !is_eisu_down && !is_kana_down {
             let mtm: MainThreadMarker = self.mtm();
             if let Some(window) = event.window(mtm) {
                 window.sendEvent(event);
