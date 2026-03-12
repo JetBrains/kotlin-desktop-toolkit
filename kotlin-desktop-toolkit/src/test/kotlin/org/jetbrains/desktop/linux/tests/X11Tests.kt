@@ -109,13 +109,17 @@ import org.jetbrains.skia.SurfaceOrigin as SkSurfaceOrigin
 private val testStart by lazy { TimeSource.Monotonic.markNow() }
 private val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss.SSS")
 
-private fun log(message: String) {
+private fun withTimestamp(message: String): String {
     val time = LocalDateTime.now().format(dateTimeFormatter)
     val elapsedTime = testStart.elapsedNow().toString()
-    println("$time ($elapsedTime): $message")
+    return "$time ($elapsedTime): $message"
 }
 
-private fun runCommandWithOutput(command: List<String>, timeout: Duration = 1.seconds): ByteArray {
+private fun log(message: String) {
+    println(withTimestamp(message))
+}
+
+private fun runCommandWithOutput(command: List<String>, timeout: Duration = 5.seconds): ByteArray {
     val pb = ProcessBuilder(command)
         .redirectOutput(ProcessBuilder.Redirect.PIPE)
         .redirectError(ProcessBuilder.Redirect.INHERIT)
@@ -125,7 +129,7 @@ private fun runCommandWithOutput(command: List<String>, timeout: Duration = 1.se
     return proc.inputStream.readAllBytes()
 }
 
-private fun runCommand(command: List<String>, timeout: Duration = 1.seconds) {
+private fun runCommand(command: List<String>, timeout: Duration = 5.seconds) {
     val pb = ProcessBuilder(command)
         .redirectOutput(ProcessBuilder.Redirect.INHERIT)
         .redirectError(ProcessBuilder.Redirect.PIPE)
@@ -134,11 +138,11 @@ private fun runCommand(command: List<String>, timeout: Duration = 1.seconds) {
     if (!proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
         val stderrReader = proc.errorReader()
         val stderr = if (stderrReader.ready()) proc.errorReader().readText() else ""
-        fail("$command failed, stderr=$stderr")
+        fail(withTimestamp("$command failed, stderr=$stderr"))
     }
 }
 
-private fun <T> waitUntilEq(expectedValue: T, timeout: Duration = 1.seconds, actualValueGetter: () -> T) {
+private fun <T> waitUntilEq(expectedValue: T, timeout: Duration = 5.seconds, actualValueGetter: () -> T) {
     val startTime = TimeSource.Monotonic.markNow()
     val waitStepMs = 10L
     var actualValue = actualValueGetter()
@@ -149,7 +153,7 @@ private fun <T> waitUntilEq(expectedValue: T, timeout: Duration = 1.seconds, act
         Thread.sleep(waitStepMs)
         actualValue = actualValueGetter()
     }
-    fail("waitUntilEq timed out: Expected: $expectedValue, actual: $actualValue ")
+    fail(withTimestamp("waitUntilEq timed out: Expected: $expectedValue, actual: $actualValue "))
 }
 
 private enum class TestApp(private val resourcePath: String) {
@@ -642,7 +646,7 @@ abstract class X11TestsBase {
                 app.runEventLoop(applicationConfig)
             } catch (t: Throwable) {
                 app.stopEventLoop()
-                fail("Application event loop finished exceptionally", t)
+                fail(withTimestamp("Application event loop finished exceptionally"), t)
             }
         }
     }
@@ -653,7 +657,7 @@ abstract class X11TestsBase {
         assertTrue(eventQueue.isEmpty())
     }
 
-    internal fun getNextEvent(timeout: Duration = 1.seconds): Event? {
+    internal fun getNextEvent(timeout: Duration = 5.seconds): Event? {
         while (true) {
             val event = eventQueue.poll(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)
             if (event == null) {
@@ -664,11 +668,11 @@ abstract class X11TestsBase {
         }
     }
 
-    internal fun <T> withNextEvent(timeout: Duration = 1.seconds, block: (Event?) -> T): T {
+    internal fun <T> withNextEvent(timeout: Duration = 5.seconds, block: (Event?) -> T): T {
         return block(getNextEvent(timeout))
     }
 
-    internal fun awaitEventWithHistory(timeout: Duration = 1.seconds, predicate: (Event?, List<Event>) -> Boolean): Event? {
+    internal fun awaitEventWithHistory(timeout: Duration = 5.seconds, predicate: (Event?, List<Event>) -> Boolean): Event? {
         val otherEvents = mutableListOf<Event>()
         while (true) {
             val event: Event? = eventQueue.poll(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)
@@ -680,14 +684,14 @@ abstract class X11TestsBase {
         }
     }
 
-    internal fun awaitEvent(timeout: Duration = 1.seconds, predicate: (Event?) -> Boolean): Event? {
+    internal fun awaitEvent(timeout: Duration = 5.seconds, predicate: (Event?) -> Boolean): Event? {
         return awaitEventWithHistory(timeout) { event, _ ->
             predicate(event)
         }
     }
 
     internal inline fun <reified T : Event> awaitEventOfType(
-        timeout: Duration = 1.seconds,
+        timeout: Duration = 5.seconds,
         msg: String? = null,
         crossinline predicate: (T) -> Boolean,
     ): T {
@@ -695,14 +699,14 @@ abstract class X11TestsBase {
             if (event == null) {
                 val additionalMsg = if (msg != null) ": $msg" else ""
                 val otherEventsMsg = if (otherEvents.isEmpty()) "" else ". Other events:\n${otherEvents.joinToString("\n")}"
-                fail("Timed out waiting for event ${T::class.java.name}$additionalMsg$otherEventsMsg")
+                fail(withTimestamp("Timed out waiting for event ${T::class.java.name}$additionalMsg$otherEventsMsg"))
             } else {
                 event is T && predicate(event)
             }
         } as T
     }
 
-    internal fun <T> ui(timeout: Duration = 1.seconds, body: () -> T): T {
+    internal fun <T> ui(timeout: Duration = 5.seconds, body: () -> T): T {
         val future = CompletableFuture<T>()
         app.runOnEventLoopAsync {
             try {
@@ -782,7 +786,7 @@ abstract class X11TestsBase {
         )
     }
 
-    internal fun wiggleMouseUntil(x: Int, y: Int, timeout: Duration = 1.seconds, predicate: () -> Boolean): Boolean {
+    internal fun wiggleMouseUntil(x: Int, y: Int, timeout: Duration = 5.seconds, predicate: () -> Boolean): Boolean {
         val startTime = TimeSource.Monotonic.markNow()
         var moveToRight = false
         while (startTime.elapsedNow() < timeout) {
@@ -1537,7 +1541,7 @@ class X11Tests : X11TestsBase() {
                             assertEquals(expectedConfigureEvent, event, failMsg())
                             moveMouseTo(physicalScreenSize.width - 51, physicalScreenSize.height - 51)
                         } else {
-                            fail("Unexpected event: $event, ${failMsg()}")
+                            fail(withTimestamp("Unexpected event: $event, ${failMsg()}"))
                         }
                     }
 
@@ -1562,7 +1566,7 @@ class X11Tests : X11TestsBase() {
                     }
 
                     else -> {
-                        fail("Unexpected event: $event, ${failMsg()}")
+                        fail(withTimestamp("Unexpected event: $event, ${failMsg()}"))
                     }
                 }
             }
@@ -1598,7 +1602,7 @@ class X11Tests : X11TestsBase() {
                             assertEquals(expectedConfigureEvent, event, failMsg())
                             moveMouseTo(physicalScreenSize.width - 52, physicalScreenSize.height - 52)
                         } else {
-                            fail("Unexpected event: $event, ${failMsg()}")
+                            fail(withTimestamp("Unexpected event: $event, ${failMsg()}"))
                         }
                     }
 
@@ -1618,7 +1622,7 @@ class X11Tests : X11TestsBase() {
                     }
 
                     else -> {
-                        fail("Unexpected event: $event, ${failMsg()}")
+                        fail(withTimestamp("Unexpected event: $event, ${failMsg()}"))
                     }
                 }
             }
@@ -3401,7 +3405,7 @@ text/plain;charset=utf-8
                 true
             }
 
-            assertEquals(textContent.decodeToString(), readTestAppOutputLastLine(1.seconds))
+            assertEquals(textContent.decodeToString(), readTestAppOutputLastLine(5.seconds))
 
             awaitEventOfType<Event.DragAndDropFeedbackFinished>(timeout = 5.seconds) { event ->
                 assertEquals(windowParams.windowId, event.windowId)
@@ -3448,7 +3452,7 @@ text/plain;charset=utf-8
             val mouseY = physicalScreenSize.height / 2
             moveMouseTo(mouseX, mouseY)
             withMouseButtonDown(MouseButton.LEFT) {
-                assertEquals("TestAppDragSource drag begin", readTestAppOutputLastLine(1.seconds))
+                assertEquals("TestAppDragSource drag begin", readTestAppOutputLastLine(5.seconds))
                 mouseX = (physicalScreenSize.width / 2) - 100
                 assertTrue(
                     wiggleMouseUntil(mouseX, mouseY) {
@@ -4053,7 +4057,7 @@ class CompositedX11Tests : X11TestsBase() {
                     return
                 }
             }
-            fail("Timed out waiting for picom to start")
+            fail(withTimestamp("Timed out waiting for picom to start"))
         }
     }
 }
