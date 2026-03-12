@@ -15,6 +15,7 @@ import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
 import java.lang.Thread.sleep
+import java.nio.file.Path
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -33,6 +34,7 @@ open class KDTTestBase {
         @JvmStatic
         fun loadLibrary() {
             KotlinDesktopToolkit.init(
+                libraryFolderPath = Path.of(System.getProperty("kdt.macos.library.folder.path")!!),
                 consoleLogLevel = LogLevel.Info,
                 useDebugBuild = true,
             )

@@ -1,3 +1,5 @@
+@file:Suppress("DuplicatedCode")
+
 package org.jetbrains.desktop.sample.linux
 
 import org.jetbrains.desktop.linux.Application

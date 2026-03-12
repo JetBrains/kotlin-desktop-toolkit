@@ -32,8 +32,8 @@ jobs:
       - name: Install Dependencies
         if: "${{ matrix.targets.package_manager == 'apt' }}"
         run: |
-          sudo apt update
-          sudo apt install libwayland-dev libxkbcommon-dev
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev libgtk-4-dev xvfb python3-gi xdotool xclip i3 dunst x11-xkb-utils dbus-daemon maim ibus ibus-gtk4 phinger-cursor-theme adwaita-icon-theme-full xsettingsd picom
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1

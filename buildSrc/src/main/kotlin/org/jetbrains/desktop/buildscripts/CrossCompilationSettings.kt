@@ -51,5 +51,5 @@ data class CrossCompilationSettings(private val platforms: List<Platform>) {
         }
     }
 
-    fun enabled(targetPlatform: Platform): Boolean = platforms.contains(targetPlatform)
+    fun enabled(): List<Platform> = platforms
 }

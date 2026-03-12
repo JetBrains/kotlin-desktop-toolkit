@@ -1,0 +1,8 @@
+# i3 config file (v4)
+font pango:monospace 8
+focus_follows_mouse no
+new_window none
+new_float none
+default_border none
+for_window [class="^.*"] border pixel 0, floating disable
+#bindsym Mod1+Return exec xterm

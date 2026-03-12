@@ -20,6 +20,18 @@ import org.jetbrains.desktop.buildscripts.hostArch
 import org.jetbrains.desktop.buildscripts.hostOs
 import org.jetbrains.desktop.buildscripts.hostPlatform
 import org.jetbrains.desktop.buildscripts.targetArch
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermissions
+import kotlin.io.path.absolutePathString
+import kotlin.io.path.copyTo
+import kotlin.io.path.createDirectory
+import kotlin.io.path.createFile
+import kotlin.io.path.deleteIfExists
+import kotlin.io.path.exists
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
+import java.time.Duration as JavaDuration
 
 private val crossCompilationSettings = CrossCompilationSettings.create(project)
 private val nativeDir = layout.projectDirectory.dir("../native")
@@ -39,12 +51,23 @@ repositories {
     mavenCentral()
 }
 
+val skikoTargetOs = runTestsWithPlatform.os.normalizedName
+
+val skikoTargetArch = when (runTestsWithPlatform.arch) {
+    Arch.aarch64 -> "arm64"
+    Arch.x86_64 -> "x64"
+}
+
 dependencies {
     // Use the Kotlin JUnit 5 integration.
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 
     // Use the JUnit 5 integration.
     testImplementation(libs.junit.jupiter.engine)
+
+    testImplementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTargetOs-$skikoTargetArch:0.9.37.3")
+    testImplementation("net.java.dev.jna:jna:5.18.1")
+    testImplementation("net.java.dev.jna:jna-platform:5.18.1")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
@@ -65,35 +88,57 @@ kotlin {
     explicitApi()
 }
 
+enum class Backend {
+    GTK,
+    MACOS,
+    WAYLAND,
+    WIN32,
+    ;
+
+    fun crateDirName(): String = when (this) {
+        GTK -> "desktop-gtk"
+        MACOS -> "desktop-macos"
+        WAYLAND -> "desktop-linux"
+        WIN32 -> "desktop-win32"
+    }
+
+    fun normalizedName(): String = when (this) {
+        GTK -> "gtk"
+        MACOS -> "macos"
+        WAYLAND -> "linux"
+        WIN32 -> "win32"
+    }
+
+    fun packageName(): String {
+        return "org.jetbrains.desktop.${normalizedName()}.generated"
+    }
+
+    fun taskName(): String = when (this) {
+        GTK -> "Gtk"
+        MACOS -> "MacOs"
+        WAYLAND -> "Wayland"
+        WIN32 -> "Win32"
+    }
+}
+
 @Serializable
 data class RustTarget(
     @get:Input val platform: Platform,
     @get:Input val profile: String,
+    @get:Input val backend: Backend,
 )
 
-val allPlatforms = listOf(
-    Platform(Os.MACOS, Arch.x86_64),
-    Platform(Os.MACOS, Arch.aarch64),
-    Platform(Os.LINUX, Arch.x86_64),
-    Platform(Os.LINUX, Arch.aarch64),
-    Platform(Os.WINDOWS, Arch.x86_64),
-    Platform(Os.WINDOWS, Arch.aarch64),
-)
-
-val enabledPlatforms = allPlatforms.filter { crossCompilationSettings.enabled(it) }
+val enabledPlatforms = crossCompilationSettings.enabled()
 
 val profiles = listOf("dev", "release")
 
-fun mainCrateForOS(os: Os): String {
-    return when (os) {
-        Os.MACOS -> "desktop-macos"
-        Os.WINDOWS -> "desktop-win32"
-        Os.LINUX -> "desktop-linux"
+private fun backendsForOS(os: Os): List<Backend> {
+    val backends = when (os) {
+        Os.MACOS -> mutableListOf(Backend.MACOS)
+        Os.WINDOWS -> mutableListOf(Backend.WIN32)
+        Os.LINUX -> mutableListOf(Backend.WAYLAND, Backend.GTK)
     }
-}
-
-fun List<Platform>.allOSes(): List<Os> {
-    return this.map { it.os }.distinct()
+    return backends
 }
 
 private fun ProviderFactory.cargoCommand(): Provider<String> {
@@ -186,17 +231,21 @@ val installRustTaskByPlatform = buildMap {
 val compileNativeTaskByTarget = buildMap {
     for ((platform, installRustTask) in installRustTaskByPlatform) {
         for (profile in profiles) {
-            val buildNativeTask = tasks.register<CompileRustTask>("compileNative-${buildPlatformRustTarget(platform)}-$profile") {
-                dependsOn(installRustTask)
-                cargoCommand = providers.cargoCommand().get()
-                crateName = mainCrateForOS(platform.os)
-                rustProfile = profile
-                rustTarget = buildPlatformRustTarget(platform)
-                targetPlatform = platform
-                workspaceRoot = nativeDir.asFile.path
-                workspaceFiles = nativeDir.rustWorkspaceFiles()
+            for (backend in backendsForOS(platform.os)) {
+                val buildNativeTask = tasks.register<CompileRustTask>(
+                    "compileNative${backend.taskName()}-${buildPlatformRustTarget(platform)}-$profile",
+                ) {
+                    dependsOn(installRustTask)
+                    cargoCommand = providers.cargoCommand().get()
+                    crateName = backend.crateDirName()
+                    rustProfile = profile
+                    rustTarget = buildPlatformRustTarget(platform)
+                    targetPlatform = platform
+                    workspaceRoot = nativeDir.asFile.path
+                    workspaceFiles = nativeDir.rustWorkspaceFiles()
+                }
+                put(RustTarget(platform, profile, backend), buildNativeTask)
             }
-            put(RustTarget(platform, profile), buildNativeTask)
         }
     }
 }
@@ -217,7 +266,7 @@ val downloadAngleTaskByPlatform = enabledPlatforms.filter { it.os == Os.WINDOWS 
 val collectNativeArtifactsTaskByTarget = compileNativeTaskByTarget.mapValues { (target, buildNativeTask) ->
     val downloadAngleTask = downloadAngleTaskByPlatform[target.platform]
     tasks.register<CollecNativeArtifactsTask>(
-        "collectNativeArtifactsFor${target.platform.name()}-${target.profile}",
+        "collectNativeArtifactsFor${target.backend.taskName()}-${target.platform.name()}-${target.profile}",
     ) {
         dependsOn(buildNativeTask)
         downloadAngleTask?.let {
@@ -225,19 +274,8 @@ val collectNativeArtifactsTaskByTarget = compileNativeTaskByTarget.mapValues { (
             angleBinaries.setFrom(downloadAngleTask.map { it.binaries })
         }
         nativeLibrary = buildNativeTask.flatMap { it.libraryFile }
-        targetDirectory = layout.buildDirectory.dir("native-${buildPlatformRustTarget(target.platform)}-${target.profile}")
+        targetDirectory = layout.buildDirectory.dir("native-${target.backend.normalizedName()}-${target.profile}")
     }
-}
-
-fun Os.getKdtName(): String {
-    return when (this) {
-        Os.WINDOWS -> "win32"
-        else -> this.normalizedName
-    }
-}
-
-fun packageNameForOS(os: Os): String {
-    return "org.jetbrains.desktop.${os.getKdtName()}.generated"
 }
 
 val installCbindgenTask = tasks.register<InstallCargoProgram>("installCbindgen") {
@@ -247,21 +285,21 @@ val installCbindgenTask = tasks.register<InstallCargoProgram>("installCbindgen")
     version = "0.29.0"
 }
 
-val generateBindingsTaskByOS = allPlatforms.allOSes().associateWith { os ->
-    tasks.register<GenerateJavaBindingsTask>("generateBindingsFor${os.titlecase()}") {
+val generateBindingsTasks = Backend.entries.map { backend ->
+    tasks.register<GenerateJavaBindingsTask>("generateBindingsFor${backend.taskName()}") {
         dependsOn(downloadJExtractTask)
         dependsOn(installCbindgenTask)
         cbindgenBinary = installCbindgenTask.flatMap { it.targetBinPath }
         jextractBinary = downloadJExtractTask.flatMap { it.jextractBinary }
-        packageName = packageNameForOS(os)
+        packageName = backend.packageName()
         workspaceFiles = nativeDir.rustWorkspaceFiles()
-        crateDirectory = nativeDir.dir(mainCrateForOS(os))
-        generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/${os.normalizedName}/main/java/")
+        crateDirectory = nativeDir.dir(backend.crateDirName())
+        generatedSourcesDirectory = layout.buildDirectory.dir("generated/sources/jextract/${backend.crateDirName()}/main/java/")
     }
 }
 
 sourceSets.main {
-    generateBindingsTaskByOS.values.forEach { task ->
+    generateBindingsTasks.forEach { task ->
         java.srcDir(task.flatMap { it.generatedSourcesDirectory })
     }
 }
@@ -278,8 +316,10 @@ tasks.withType<Jar>().configureEach {
 }
 
 // Same as in skiko, the Fleet build system breaks on _ in jar name
-fun jarSuffixForPlatform(platform: Platform): String {
-    val osName = platform.os.normalizedName
+fun jarSuffixForPlatform(platform: Platform, backend: Backend): String {
+    val osName = platform.os.normalizedName.let {
+        if (backend == Backend.GTK) "gtk-$it" else it
+    }
     val archName = when (platform.arch) {
         Arch.aarch64 -> "arm64"
         Arch.x86_64 -> "x64"
@@ -287,29 +327,32 @@ fun jarSuffixForPlatform(platform: Platform): String {
     return "$osName-$archName"
 }
 
-val nativeJarTasksByPlatform = enabledPlatforms.associateWith { platform ->
-    val jarSuffix = jarSuffixForPlatform(platform)
-    tasks.register<Jar>("package-jar-$jarSuffix") {
-        // every profile like dev and debug contains an identical copy of angle
-        // so we take only one of them
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-        archiveBaseName = "kotlin-desktop-toolkit-$jarSuffix"
-        for (profile in profiles) {
-            val collectArtifactsTasks = collectNativeArtifactsTaskByTarget[RustTarget(platform, profile)]!!
-            dependsOn(collectArtifactsTasks)
-            from(collectArtifactsTasks.flatMap { it.targetDirectory })
+val nativeJarTasksByTarget = enabledPlatforms
+    .flatMap { platform -> backendsForOS(platform.os).map { backend -> Pair(platform, backend) } }
+    .associateWith { (platform, backend) ->
+        val jarSuffix = jarSuffixForPlatform(platform, backend)
+        tasks.register<Jar>("package-jar-$jarSuffix") {
+            // every profile like dev and debug contains an identical copy of angle
+            // so we take only one of them
+            duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+            archiveBaseName = "kotlin-desktop-toolkit-$jarSuffix"
+            for ((rustTarget, collectArtifactsTasks) in collectNativeArtifactsTaskByTarget) {
+                if (rustTarget.platform == platform && rustTarget.backend == backend) {
+                    dependsOn(collectArtifactsTasks)
+                    from(collectArtifactsTasks.flatMap { it.targetDirectory })
+                }
+            }
         }
     }
-}
 
 tasks.compileJava {
-    dependsOn(nativeJarTasksByPlatform.values)
-    dependsOn(generateBindingsTaskByOS.values)
+    dependsOn(nativeJarTasksByTarget.values)
+    dependsOn(generateBindingsTasks)
 }
 
 tasks.compileKotlin {
-    dependsOn(nativeJarTasksByPlatform.values)
-    dependsOn(generateBindingsTaskByOS.values)
+    dependsOn(nativeJarTasksByTarget.values)
+    dependsOn(generateBindingsTasks)
 }
 
 val spaceUsername: String? by project
@@ -358,8 +401,8 @@ publishing {
             }
         }
 
-        nativeJarTasksByPlatform.forEach { (platform, jarTask) ->
-            val suffix = jarSuffixForPlatform(platform)
+        nativeJarTasksByTarget.forEach { (target, jarTask) ->
+            val suffix = jarSuffixForPlatform(target.first, target.second)
             create<MavenPublication>("Native-$suffix") {
                 artifactId = "kotlin-desktop-toolkit-$suffix"
                 artifact(jarTask)
@@ -387,9 +430,11 @@ val nativeConsumable = configurations.consumable("nativeParts") {
     }
 }
 
-collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]?.let { collectArtifactsTask ->
-    artifacts.add(nativeConsumable.name, collectArtifactsTask.flatMap { it.targetDirectory }) {
-        builtBy(collectArtifactsTask) // redundant because of the flatMap usage above, but if you want to be sure, you can specify that
+for (backend in backendsForOS(runTestsWithPlatform.os)) {
+    collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev", backend)]?.let { collectArtifactsTask ->
+        artifacts.add(nativeConsumable.name, collectArtifactsTask.flatMap { it.targetDirectory }) {
+            builtBy(collectArtifactsTask) // redundant because of the flatMap usage above, but if you want to be sure, you can specify that
+        }
     }
 }
 
@@ -442,34 +487,293 @@ tasks.register("autofix") {
 
 // Junit tests
 
+abstract class X11TestEnv :
+    BuildService<BuildServiceParameters.None>,
+    AutoCloseable {
+    private val testDisplay = ":65"
+    private var test: Test? = null
+
+    private var startedProcesses = mutableListOf<Pair<Process, String>>()
+
+    private val homeTempDir by lazy { Files.createTempDirectory("test_home") }
+
+    private val ibusTempDir by lazy { Files.createTempDirectory("test_ibus") }
+    private val ibusAddressFile by lazy {
+        ibusTempDir.resolve("ibus-addr").createFile() // suppress the IBus warning about the non-existing file
+    }
+    private val ibusSocketFile by lazy { ibusTempDir.resolve("ibus-socket") }
+    private val ibusEngineTmpCapsOutputFile by lazy { ibusTempDir.resolve("test-engine-caps-out.txt") }
+    private val ibusEngineTmpContentTypeOutputFile by lazy { ibusTempDir.resolve("test-engine-content-type-out.txt") }
+    private val ibusEngineTmpCursorLocationOutputFile by lazy { ibusTempDir.resolve("test-engine-cursor-location-out.txt") }
+
+    private var xSettingsDConfigFile: Path? = null
+
+    private val newEnv by lazy {
+        mutableMapOf(
+            "DISPLAY" to testDisplay,
+            "GDK_BACKEND" to "x11",
+            "GTK_A11Y" to "none",
+            "IBUS_ADDRESS_FILE" to ibusAddressFile.absolutePathString(),
+            "TEST_IBUS_ENGINE_CAPS_OUT_FILE" to ibusEngineTmpCapsOutputFile.absolutePathString(),
+            "TEST_IBUS_ENGINE_CONTENT_TYPE_OUT_FILE" to ibusEngineTmpContentTypeOutputFile.absolutePathString(),
+            "TEST_IBUS_ENGINE_CURSOR_LOCATION_OUT_FILE" to ibusEngineTmpCursorLocationOutputFile.absolutePathString(),
+            "LANG" to "en_US.UTF-8",
+            "HOME" to homeTempDir.absolutePathString(),
+            "XDG_RUNTIME_DIR" to homeTempDir.resolve("xdg_runtime_dir").createDirectory(
+                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")),
+            ).absolutePathString(),
+            "XDG_SESSION_TYPE" to "x11",
+        )
+    }
+
+    private fun newProcess(
+        vararg args: String,
+        getAdditionalEnvs: ((Map<String, String>) -> Map<String, String>)? = null,
+        afterStart: ((Process) -> Unit)? = null,
+    ) {
+        ProcessBuilder(*args).also { pb ->
+            val env = pb.environment()
+            val additionalEnvs = getAdditionalEnvs?.invoke(env)
+            env.clear()
+            env.putAll(newEnv)
+            additionalEnvs?.let { env.putAll(it) }
+        }.start().let {
+            check(it.isAlive)
+            afterStart?.invoke(it)
+            startedProcesses.add(Pair(it, args.first()))
+        }
+    }
+
+    fun run(
+        test: Test,
+        i3config: RegularFile,
+        dbusConfigFile: RegularFile,
+        dunstConfigFile: RegularFile,
+        baseXSettingsDConfigFile: RegularFile,
+        ibusTestEngineFile: RegularFile,
+        headless: Boolean,
+    ): Map<String, String> {
+        this.test = test
+
+        val xSettingsDConfigFilePathString = homeTempDir.resolve(".xsettingsd").also {
+            Path.of(baseXSettingsDConfigFile.asFile.absolutePath).copyTo(it)
+            xSettingsDConfigFile = it
+        }.absolutePathString()
+
+        if (headless) {
+            newProcess("Xvfb", testDisplay, "-ac", "-screen", "0", "3000x1500x24", "-dpi", "192")
+        } else {
+            newProcess("Xephyr", testDisplay, "-screen", "3000x1500x24", "-dpi", "192", "-sw-cursor", getAdditionalEnvs = {
+                mapOf("DISPLAY" to it["DISPLAY"]!!)
+            })
+        }
+
+        newProcess(
+            "dbus-daemon",
+            "--config-file=${dbusConfigFile.asFile.absolutePath}",
+            "--nofork",
+            "--nopidfile",
+            "--nosyslog",
+            "--print-address",
+        ) {
+            newEnv["DBUS_SESSION_BUS_ADDRESS"] = it.inputReader().readLine()
+        }
+
+        ProcessBuilder(
+            "setxkbmap",
+            "-layout",
+            "us",
+            // "-variant",
+            // "intl",
+        ).also { pb ->
+            val env = pb.environment()
+            env.clear()
+            env.putAll(newEnv)
+            val startTime = TimeSource.Monotonic.markNow()
+            while (true) {
+                val p = pb.start()
+                if (p.waitFor() == 0) {
+                    break
+                }
+                if (startTime.elapsedNow() > 3.seconds) {
+                    throw Error("Could not run setxkbmap: ${p.errorReader().readText()}")
+                }
+                Thread.sleep(10)
+            }
+        }
+
+        // `gsettings` works with dconf and XDG Desktop Portal, and GTK uses them only on Wayland.
+        // On X11, we need to have some xsettings daemon running.
+        // We're using `xsettingsd` as a desktop-agnostic xsettings daemon.
+        // E.g., Gnome used `gsd-xsettings` (gnome-settings-daemon) for this.
+        var xSettingsDPid: String? = null
+        newProcess("xsettingsd", "--config=$xSettingsDConfigFilePathString") { p ->
+            xSettingsDPid = p.pid().toString()
+
+            val startTime = TimeSource.Monotonic.markNow()
+            val errLines = mutableListOf<String>()
+            while (true) {
+                val line = p.errorReader().readLine()
+                check(line != null) { "Error reading xsettingsd output" }
+                if (line.contains("Took ownership of selection")) {
+                    break
+                }
+                errLines.add(line)
+                if (startTime.elapsedNow() > 10.seconds) {
+                    throw Error("Could not run xsettingsd: ${errLines.joinToString("\n")}")
+                }
+            }
+        }
+
+        newProcess("/usr/libexec/dconf-service")
+
+        newProcess(
+            "ibus-daemon",
+            "-a",
+            "unix:path=${ibusSocketFile.absolutePathString()}",
+            "--verbose",
+            "--panel",
+            "disable",
+            "--xim",
+        ) {
+            val aliveCheckIntervalMs = 10L
+            var aliveCheckTimeoutMs = 1000L
+            while (!ibusSocketFile.exists() && aliveCheckTimeoutMs > 0) {
+                Thread.sleep(aliveCheckTimeoutMs)
+                aliveCheckTimeoutMs -= aliveCheckIntervalMs
+            }
+            check(ibusSocketFile.exists()) { "${ibusSocketFile.absolutePathString()} does not exist" }
+        }
+
+        newProcess(ibusTestEngineFile.asFile.absolutePath)
+
+        newProcess("i3", "--shmlog-size=26214400", "-c", i3config.asFile.absolutePath)
+
+        newEnv["TEST_DUNST_CONFIG_FILE"] = dunstConfigFile.asFile.absolutePath
+        newEnv["TEST_XSETTINGSD_PID"] = xSettingsDPid!!
+        newEnv["TEST_XSETTINGSD_CONFIG_FILE"] = xSettingsDConfigFilePathString
+        return newEnv
+    }
+
+    override fun close() {
+        val testsFailed = try {
+            test?.state?.rethrowFailure()
+            false
+        } catch (_: Throwable) {
+            true
+        }
+        test = null
+
+        startedProcesses.reverse()
+        for ((p, name) in startedProcesses) {
+            val wasAlive = p.isAlive
+            if (!wasAlive) {
+                println("ERROR: $name is not alive")
+            }
+            if (name == "i3" && (!wasAlive || testsFailed)) {
+                val f = File.createTempFile("i3-out", ".log")
+                val p = ProcessBuilder("i3-dump-log").also { pb ->
+                    pb.redirectOutput(f)
+                    val env = pb.environment()
+                    env.clear()
+                    env.putAll(newEnv)
+                }.start()
+                p.waitFor()
+                println("i3-dump-log output: ${f.absolutePath}")
+            }
+
+            p.toHandle().destroy()
+            if (!wasAlive || testsFailed || name == "dbus-daemon") {
+                val stderr = p.errorReader().readText()
+                if (stderr.isNotBlank()) {
+                    println("\n$name stderr:\n$stderr")
+                }
+            }
+            p.destroy()
+            p.waitFor()
+        }
+        startedProcesses.clear()
+
+        ibusAddressFile.deleteIfExists()
+        ibusSocketFile.deleteIfExists()
+        ibusEngineTmpCapsOutputFile.deleteIfExists()
+        ibusEngineTmpContentTypeOutputFile.deleteIfExists()
+        ibusEngineTmpCursorLocationOutputFile.deleteIfExists()
+        ibusTempDir.deleteIfExists()
+
+        homeTempDir.toFile().deleteRecursively()
+    }
+}
+
 tasks.test {
     jvmArgs("--enable-preview", "--enable-native-access=ALL-UNNAMED")
     useJUnitPlatform()
 
-    val collectNativeArtifactsTask = collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev")]
-    if (collectNativeArtifactsTask == null) {
+    val getLibFolderForBackend: Map<Backend, Provider<Directory>> = buildMap {
+        for (backend in backendsForOS(runTestsWithPlatform.os)) {
+            val collectNativeArtifactsTask = collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev", backend)]
+            if (collectNativeArtifactsTask != null) {
+                dependsOn(collectNativeArtifactsTask)
+                put(backend, collectNativeArtifactsTask.flatMap { it.targetDirectory })
+            }
+        }
+    }
+
+    if (getLibFolderForBackend.isEmpty()) {
         enabled = false
     } else {
-        dependsOn(collectNativeArtifactsTask)
         val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
-        val libFolder = collectNativeArtifactsTask.flatMap { it.targetDirectory }
         jvmArgumentProviders.add(
             CommandLineArgumentProvider {
                 listOf(
-                    "-Dkdt.library.folder.path=${libFolder.get()}",
                     "-Dkdt.debug=true",
                     "-Dkdt.native.log.path=${logFile.get().asFile.absolutePath}",
-                )
+                ) + getLibFolderForBackend.map { (backend, libFolder) ->
+                    "-Dkdt.${backend.normalizedName()}.library.folder.path=${libFolder.get()}"
+                }
             },
         )
+
+        if (getLibFolderForBackend.containsKey(Backend.GTK)) {
+            val x11TestEnvProvider = gradle.sharedServices.registerIfAbsent("x11TestEnv", X11TestEnv::class)
+            usesService(x11TestEnvProvider)
+            val testConfigDir = layout.projectDirectory.dir("src/test/resources/linux")
+            doFirst {
+                val x11TestEnv = x11TestEnvProvider.get()
+                try {
+                    val newEnv = x11TestEnv.run(
+                        this@test,
+                        i3config = testConfigDir.file("i3_test_config"),
+                        dbusConfigFile = testConfigDir.file("dbus-session-conf.xml"),
+                        dunstConfigFile = testConfigDir.file("dunstrc.conf"),
+                        baseXSettingsDConfigFile = testConfigDir.file("xsettingsd.conf"),
+                        ibusTestEngineFile = testConfigDir.file("ibus_test_engine.py"),
+                        headless = true,
+                    )
+                    println(newEnv)
+                    setEnvironment(newEnv)
+                } catch (e: Throwable) {
+                    x11TestEnv.close()
+                    throw e
+                }
+            }
+        }
     }
 
+    systemProperty(
+        "java.util.logging.config.file",
+        layout.projectDirectory.file("src/test/resources/logging.properties").asFile.absolutePath,
+    )
+
     testLogging {
+        showStandardStreams = true
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
         events("failed")
         events("passed")
         events("skipped")
     }
+
+    timeout = JavaDuration.ofMinutes(10)
 
     // We run every test class in a separate JVM
     forkEvery = 1
