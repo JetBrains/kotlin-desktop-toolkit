@@ -6,9 +6,12 @@ import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout.JAVA_BYTE
 import java.lang.foreign.ValueLayout.JAVA_INT
 
-internal fun byteArrayFromNative(segment: MemorySegment): ByteArray {
+internal fun byteArrayFromNative(segment: MemorySegment): ByteArray? {
     val ptr = NativeAutoDropArray_u8.ptr(segment)
     val len = NativeAutoDropArray_u8.len(segment)
+    if (ptr == MemorySegment.NULL) {
+        return null
+    }
     val result = ByteArray(len.toInt())
     MemorySegment.copy(ptr, JAVA_BYTE, 0, result, 0, result.size)
     return result

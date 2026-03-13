@@ -61,7 +61,7 @@ public object Clipboard {
                 Arena.ofConfined().use { arena ->
                     val dataPtr = desktop_win32_h.clipboard_get_data(arena, windowPtr, format.id)
                     try {
-                        byteArrayFromNative(dataPtr)
+                        byteArrayFromNative(dataPtr) ?: ByteArray(0)
                     } finally {
                         desktop_win32_h.native_byte_array_drop(dataPtr)
                     }
@@ -107,6 +107,21 @@ public object Clipboard {
                 strPtr.getUtf8String(0)
             } finally {
                 desktop_win32_h.native_string_drop(strPtr)
+            }
+        }
+    }
+
+    public fun tryReadItemOfType(owner: Window, format: ClipboardFormat): ByteArray? {
+        return ffiDownCall {
+            owner.withPointer { windowPtr ->
+                Arena.ofConfined().use { arena ->
+                    val dataPtr = desktop_win32_h.clipboard_try_get_data(arena, windowPtr, format.id)
+                    try {
+                        byteArrayFromNative(dataPtr)
+                    } finally {
+                        desktop_win32_h.native_byte_array_drop(dataPtr)
+                    }
+                }
             }
         }
     }
