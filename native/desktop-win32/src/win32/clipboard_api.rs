@@ -138,8 +138,8 @@ pub extern "C" fn clipboard_register_format(name: BorrowedStrPtr) -> u32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_get_html_format() -> u32 {
-    ffi_boundary("clipboard_get_html_format", || Ok(ClipboardFormat::HtmlFragment.id()))
+pub extern "C" fn clipboard_get_html_format_id() -> u32 {
+    ffi_boundary("clipboard_get_html_format_id", || Ok(ClipboardFormat::HtmlFragment.id()))
 }
 
 #[unsafe(no_mangle)]

@@ -78,10 +78,9 @@ impl EventLoop {
         KEYEVENT_MESSAGES.with_borrow(|map| map.get(&msg_id).context("unknown message id").and_then(f))
     }
 
-    #[allow(clippy::needless_pass_by_value)]
     #[inline]
-    fn handle_event(&self, window: &Window, event: Event) -> Option<LRESULT> {
-        (self.event_handler)(window.id(), &event).then_some(LRESULT(0))
+    fn handle_event<T: Into<Event>>(&self, window: &Window, event: T) -> Option<LRESULT> {
+        (self.event_handler)(window.id(), &event.into()).then_some(LRESULT(0))
     }
 
     pub(crate) fn window_proc(&self, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -173,7 +172,7 @@ fn on_paint(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
         size: PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top),
         scale: window.get_scale(),
     };
-    let handled = event_loop.handle_event(window, event.into());
+    let handled = event_loop.handle_event(window, event);
     let _ = unsafe { EndPaint(hwnd, &raw const paint) };
     handled
 }
@@ -193,7 +192,7 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         size: PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top),
         scale,
     };
-    event_loop.handle_event(window, event.into())
+    event_loop.handle_event(window, event)
 }
 
 fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
@@ -203,14 +202,14 @@ fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) 
             origin: PhysicalPoint::new(windowpos.x, windowpos.y),
             scale: window.get_scale(),
         };
-        event_loop.handle_event(window, event.into());
+        event_loop.handle_event(window, event);
     }
     if windowpos.flags.0 & SWP_NOSIZE.0 == 0 {
         let event = WindowResizeEvent {
             size: PhysicalSize::new(windowpos.cx, windowpos.cy),
             scale: window.get_scale(),
         };
-        event_loop.handle_event(window, event.into());
+        event_loop.handle_event(window, event);
     }
     Some(LRESULT(0))
 }
@@ -251,7 +250,7 @@ fn on_settext(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: L
             }
         };
         let event = WindowTitleChangedEvent { title };
-        event_loop.handle_event(window, event.into());
+        event_loop.handle_event(window, event);
     }
     Some(result)
 }
@@ -265,7 +264,7 @@ fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lpa
                 .inspect_err(|err| log::error!("failed to get current system appearance: {err}"))
                 .ok()?;
             let event = SystemAppearanceChangeEvent { new_appearance };
-            event_loop.handle_event(window, event.into());
+            event_loop.handle_event(window, event);
         }
     }
     None
@@ -284,7 +283,7 @@ fn on_activate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Optio
             .inspect_err(|err| log::error!("failed to apply the requested system backdrop: {err}"));
     }
     let event = WindowActivatedEvent { is_active, is_minimized };
-    event_loop.handle_event(window, event.into())
+    event_loop.handle_event(window, event)
 }
 
 fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
@@ -321,7 +320,7 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     );
     let scale = window.get_scale();
     let event = NCCalcSizeEvent { origin, size, scale };
-    event_loop.handle_event(window, event.into());
+    event_loop.handle_event(window, event);
     Some(LRESULT(0))
 }
 
@@ -344,7 +343,7 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     let mouse_x = GET_X_LPARAM!(lparam.0);
     let mouse_y = GET_Y_LPARAM!(lparam.0);
     let event = NCHitTestEvent { mouse_x, mouse_y };
-    let handled = event_loop.handle_event(window, event.into());
+    let handled = event_loop.handle_event(window, event);
     if handled.is_some() {
         return Some(LRESULT(HTCLIENT as _));
     }
@@ -427,7 +426,7 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
         is_dead_char: matches!(msg, WM_DEADCHAR | WM_SYSDEADCHAR),
         is_system_key: matches!(msg, WM_SYSCHAR | WM_SYSDEADCHAR),
     };
-    event_loop.handle_event(window, event.into())
+    event_loop.handle_event(window, event)
 }
 
 fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
@@ -542,5 +541,5 @@ fn on_pointerleave(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> O
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
     };
-    event_loop.handle_event(window, event.into())
+    event_loop.handle_event(window, event)
 }

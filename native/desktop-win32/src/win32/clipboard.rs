@@ -3,7 +3,7 @@ use std::{ffi::CString, sync::LazyLock};
 use windows::{
     ApplicationModel::DataTransfer::HtmlFormatHelper,
     Win32::{
-        Foundation::{ERROR_INVALID_PARAMETER, ERROR_SUCCESS, GetLastError, HANDLE, HGLOBAL, POINT},
+        Foundation::{ERROR_SUCCESS, GetLastError, HANDLE, HGLOBAL, POINT},
         System::{
             DataExchange::{
                 CloseClipboard, CountClipboardFormats, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardSequenceNumber,
@@ -102,7 +102,7 @@ impl Clipboard {
     pub fn get_data(&self, format: ClipboardFormat) -> anyhow::Result<ClipboardData> {
         anyhow::ensure!(self.is_open, "Clipboard has been closed.");
         let format_id = format.id();
-        anyhow::ensure!(self.is_format_available(format_id)?, WinError::from(ERROR_INVALID_PARAMETER));
+        anyhow::ensure!(self.is_format_available(format_id)?, "specified Clipboard format is unavailable");
         let mem = unsafe { GetClipboardData(format_id)? };
         Ok(ClipboardData { format_id, content: mem })
     }
