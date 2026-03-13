@@ -53,7 +53,7 @@ pub extern "C" fn clipboard_get_sequence_number() -> u32 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn clipboard_get_data(owner: WindowPtr, data_format: u32) -> AutoDropByteArray {
-    with_window(&owner, "clipboard_get_text", |window| {
+    with_window(&owner, "clipboard_get_data", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
         let data = clipboard.get_data(ClipboardFormat::Other(data_format))?;
         let content = data.get_bytes()?;
@@ -127,6 +127,23 @@ pub extern "C" fn clipboard_set_text(owner: WindowPtr, content: BorrowedStrPtr) 
         let clipboard_data = ClipboardData::new_text(content.as_str()?)?;
         clipboard.set_data(&clipboard_data)
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_try_get_data(owner: WindowPtr, data_format: u32) -> AutoDropByteArray {
+    with_window(&owner, "clipboard_try_get_data", |window| {
+        let clipboard = Clipboard::open_for_window(window)?;
+        match clipboard
+            .get_data(ClipboardFormat::Other(data_format))
+            .and_then(|data| data.get_bytes())
+        {
+            Ok(bytes) => Ok(AutoDropArray::new(bytes.into_boxed_slice())),
+            Err(err) => {
+                log::error!("failed to get data from Clipboard: {err}");
+                Ok(AutoDropArray::null())
+            }
+        }
+    })
 }
 
 #[unsafe(no_mangle)]
