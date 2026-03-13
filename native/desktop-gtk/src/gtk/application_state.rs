@@ -20,15 +20,17 @@ use crate::gtk::notifications::{close_notification_async, notifications_receiver
 use crate::gtk::window::SimpleWindow;
 use crate::gtk::window_api::WindowParams;
 use anyhow::{Context, anyhow, bail};
+use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::{
-    ActionMapExtManual, ApplicationExt, ApplicationExtManual, DisplayExt, DragExt, GtkApplicationExt, GtkWindowExt, ObjectExt, WidgetExt,
-    WidgetExtManual,
+    ActionMapExtManual, ApplicationExt, ApplicationExtManual, DisplayExt, DragExt, GtkApplicationExt, GtkWindowExt, ObjectExt, ObjectType,
+    WidgetExt, WidgetExtManual,
 };
 use gtk4::{gdk as gdk4, gio, glib};
 use log::{debug, warn};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{CString, OsStr};
+use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::atomic::AtomicU32;
 use std::sync::{LazyLock, OnceLock, atomic};
@@ -171,6 +173,18 @@ impl ApplicationState {
         let event_handler = callbacks.event_handler;
         let ffi_dealloc = callbacks.obj_dealloc;
         let display = gdk4::DisplayManager::get().default_display().context("Unable to open display")?;
+
+        // If GSK decides to use Vulkan renderer, the OpenGL texture needs to be passed via DMA-BUF,
+        // which is available only since GTK 4.14, and is an additional overhead.
+        // Instead, force GTK to use OpenGL.
+        // https://github.com/GNOME/gtk/blob/4.22.1/gsk/gskrenderer.c#L545
+        unsafe {
+            glib::gobject_ffi::g_object_set_qdata(
+                display.as_object_ref().to_glib_none().0,
+                glib::ffi::g_quark_from_string(c"gsk-renderer".as_ptr()),
+                NonNull::from(c"opengl").as_ptr().cast(),
+            );
+        };
 
         let transfer_data_getter = TransferDataGetter {
             ffi_get: callbacks.get_data_transfer_data,

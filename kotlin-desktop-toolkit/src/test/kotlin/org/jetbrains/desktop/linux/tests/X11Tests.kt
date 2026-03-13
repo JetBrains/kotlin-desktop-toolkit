@@ -174,9 +174,11 @@ private enum class TestApp(private val resourcePath: String) {
         log("Running test app: $this")
         val appSource = readResourceTextFile(resourcePath)
         return ProcessBuilder("python3", "-c", appSource, *args).redirectError(ProcessBuilder.Redirect.INHERIT).also {
-            it.environment().remove("GTK_DEBUG")
-            it.environment().remove("GDK_DEBUG")
-            it.environment().remove("LD_LIBRARY_PATH")
+            val env = it.environment()
+            env.remove("GTK_DEBUG")
+            env.remove("GDK_DEBUG")
+            env.remove("LD_LIBRARY_PATH")
+            env["GSK_RENDERER"] = "cairo"
         }
     }
 

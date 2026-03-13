@@ -625,7 +625,14 @@ abstract class X11TestEnv :
             }
         }
 
-        newProcess("/usr/libexec/dconf-service")
+        val dconfServicePath = "/usr/libexec/dconf-service".let {
+            if (Path.of(it).exists()) {
+                it
+            } else {
+                "/usr/lib/dconf-service"
+            }
+        }
+        newProcess(dconfServicePath)
 
         newProcess(
             "ibus-daemon",
@@ -649,6 +656,7 @@ abstract class X11TestEnv :
 
         newProcess("i3", "--shmlog-size=26214400", "-c", i3config.asFile.absolutePath)
 
+        newEnv["GSK_RENDERER"] = "vulkan"
         newEnv["TEST_DUNST_CONFIG_FILE"] = dunstConfigFile.asFile.absolutePath
         newEnv["TEST_XSETTINGSD_PID"] = xSettingsDPid!!
         newEnv["TEST_XSETTINGSD_CONFIG_FILE"] = xSettingsDConfigFilePathString
