@@ -163,7 +163,7 @@ public value class ClipboardFormat internal constructor(internal val id: Int) {
         public val FileList: ClipboardFormat = ClipboardFormat(15) // CF_HDROP
 
         public val Html: ClipboardFormat by lazy {
-            ClipboardFormat(desktop_win32_h.clipboard_get_html_format())
+            ClipboardFormat(desktop_win32_h.clipboard_get_html_format_id())
         }
 
         public fun register(formatName: String): ClipboardFormat {
