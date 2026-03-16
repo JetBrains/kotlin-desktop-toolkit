@@ -6,7 +6,7 @@ use desktop_common::logger::catch_panic;
 use gtk4::glib;
 use gtk4::prelude::ApplicationExtManual;
 use log::debug;
-use std::cell::{OnceCell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::sync::OnceLock;
 use std::thread::ThreadId;
 
@@ -19,6 +19,7 @@ pub struct Application {
 static EVENT_LOOP_THREAD_ID: OnceLock<ThreadId> = OnceLock::new();
 
 thread_local! {
+    static RUNNING: Cell<bool> = const { Cell::new(false) };
     static APP_INSTANCE: OnceCell<Application> = const { OnceCell::new() };
 }
 
@@ -51,6 +52,9 @@ pub fn with_app_state<T>(f: impl FnOnce(&ApplicationState) -> anyhow::Result<T>)
 
 #[allow(clippy::needless_pass_by_value)]
 pub fn send_event<'a, T: Into<Event<'a>>>(event_handler: EventHandler, event_data: T) -> bool {
+    if !RUNNING.get() {
+        return false;
+    }
     let event: Event = event_data.into();
     match event {
         Event::MouseMoved(_) | Event::WindowFrameTick(_) | Event::WindowDraw(_) | Event::DragIconDraw(_) | Event::DragIconFrameTick => {}
@@ -79,8 +83,11 @@ impl Application {
     pub fn run_event_loop(callbacks: &ApplicationCallbacks) -> anyhow::Result<()> {
         APP_INSTANCE.with(|app_cell| {
             let app = app_cell.get().with_context(app_not_initialized_error)?;
+            RUNNING.set(true);
             app.run(callbacks)
-        })
+        })?;
+        RUNNING.set(false);
+        Ok(())
     }
 
     fn run(&self, callbacks: &ApplicationCallbacks) -> anyhow::Result<()> {

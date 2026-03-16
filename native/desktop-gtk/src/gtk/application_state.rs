@@ -144,13 +144,13 @@ impl ApplicationState {
             gtk_app.add_action_entries([quit]);
 
             let initial_settings = with_app_state_mut(Self::read_and_subscribe_to_desktop_settings).unwrap();
+
+            send_event(event_handler, Event::ApplicationStarted);
+            debug!("After ApplicationStarted");
+
             for initial_setting in initial_settings {
                 send_event(event_handler, Event::DesktopSettingChange(initial_setting));
             }
-
-            send_event(event_handler, Event::ApplicationStarted);
-
-            debug!("After ApplicationStarted");
         });
         gtk_app.connect_shutdown(move |_gtk_app| {
             debug!("App Shutdown");

@@ -579,6 +579,27 @@ private fun defaultWindowParams(): WindowParams {
     )
 }
 
+internal data class InitialSettings(
+    var accentColor: DesktopSetting.AccentColor? = null,
+    var audibleBell: DesktopSetting.AudibleBell? = null,
+    var colorScheme: DesktopSetting.ColorScheme? = null,
+    var cursorBlink: DesktopSetting.CursorBlink? = null,
+    var cursorBlinkTime: DesktopSetting.CursorBlinkTime? = null,
+    var cursorBlinkTimeout: DesktopSetting.CursorBlinkTimeout? = null,
+    var doubleClickInterval: DesktopSetting.DoubleClickInterval? = null,
+    var dragAndDropDragThresholdPixels: DesktopSetting.DragAndDropDragThresholdPixels? = null,
+    var fontHinting: DesktopSetting.FontHinting? = null,
+    var fontRgbaOrder: DesktopSetting.FontRgbaOrder? = null,
+    var isComposited: DesktopSetting.IsComposited? = null,
+    var middleClickPaste: DesktopSetting.MiddleClickPaste? = null,
+    var overlayScrolling: DesktopSetting.OverlayScrolling? = null,
+    var doubleClickDistancePixels: DesktopSetting.DoubleClickDistancePixels? = null,
+    var enableAnimations: DesktopSetting.EnableAnimations? = null,
+    var primaryButtonWarpsSlider: DesktopSetting.PrimaryButtonWarpsSlider? = null,
+    var recentFilesEnabled: DesktopSetting.RecentFilesEnabled? = null,
+    var recentFilesMaxAgeDays: DesktopSetting.RecentFilesMaxAgeDays? = null,
+)
+
 abstract class X11TestsBase {
     companion object {
         private const val APP_ID = "org.jetbrains.desktop.linux.tests"
@@ -640,7 +661,7 @@ abstract class X11TestsBase {
         )
     }
 
-    internal fun runWithoutWaitingForStart(applicationConfig: ApplicationConfig) {
+    internal fun run(applicationConfig: ApplicationConfig): InitialSettings {
         // Reset the mouse position
         moveMouseTo(50, 50)
         appExecutingResult = appExecutor.add {
@@ -651,12 +672,39 @@ abstract class X11TestsBase {
                 fail(withTimestamp("Application event loop finished exceptionally"), t)
             }
         }
-    }
+        assertIs<Event.ApplicationStarted>(getNextEvent())
 
-    internal fun run(applicationConfig: ApplicationConfig) {
-        runWithoutWaitingForStart(applicationConfig)
-        assertNotNull(awaitEvent { it == Event.ApplicationStarted })
+        val initialSettings = InitialSettings()
+
+        var remainingSettingsReceived = 18
+        while (remainingSettingsReceived > 0) {
+            val event = getNextEvent()
+            assertIs<Event.DesktopSettingChange>(event, "Remaining: $remainingSettingsReceived")
+            when (event.setting) {
+                is DesktopSetting.AccentColor -> initialSettings.accentColor = event.setting
+                is DesktopSetting.AudibleBell -> initialSettings.audibleBell = event.setting
+                is DesktopSetting.ColorScheme -> initialSettings.colorScheme = event.setting
+                is DesktopSetting.CursorBlink -> initialSettings.cursorBlink = event.setting
+                is DesktopSetting.CursorBlinkTime -> initialSettings.cursorBlinkTime = event.setting
+                is DesktopSetting.CursorBlinkTimeout -> initialSettings.cursorBlinkTimeout = event.setting
+                is DesktopSetting.DoubleClickInterval -> initialSettings.doubleClickInterval = event.setting
+                is DesktopSetting.DragAndDropDragThresholdPixels -> initialSettings.dragAndDropDragThresholdPixels = event.setting
+                is DesktopSetting.FontHinting -> initialSettings.fontHinting = event.setting
+                is DesktopSetting.FontRgbaOrder -> initialSettings.fontRgbaOrder = event.setting
+                is DesktopSetting.IsComposited -> initialSettings.isComposited = event.setting
+                is DesktopSetting.MiddleClickPaste -> initialSettings.middleClickPaste = event.setting
+                is DesktopSetting.OverlayScrolling -> initialSettings.overlayScrolling = event.setting
+                is DesktopSetting.DoubleClickDistancePixels -> initialSettings.doubleClickDistancePixels = event.setting
+                is DesktopSetting.EnableAnimations -> initialSettings.enableAnimations = event.setting
+                is DesktopSetting.PrimaryButtonWarpsSlider -> initialSettings.primaryButtonWarpsSlider = event.setting
+                is DesktopSetting.RecentFilesEnabled -> initialSettings.recentFilesEnabled = event.setting
+                is DesktopSetting.RecentFilesMaxAgeDays -> initialSettings.recentFilesMaxAgeDays = event.setting
+            }
+            remainingSettingsReceived -= 1
+        }
+
         assertTrue(eventQueue.isEmpty())
+        return initialSettings
     }
 
     internal fun getNextEvent(timeout: Duration = 5.seconds): Event? {
@@ -1026,54 +1074,26 @@ class X11Tests : X11TestsBase() {
 
     @Test
     fun testSettings() {
-        runWithoutWaitingForStart(defaultApplicationConfig())
+        val initialSettings = run(defaultApplicationConfig())
 
-        lateinit var initialAccentColor: DesktopSetting.AccentColor
-        lateinit var initialAudibleBell: DesktopSetting.AudibleBell
-        lateinit var initialColorScheme: DesktopSetting.ColorScheme
-        lateinit var initialCursorBlink: DesktopSetting.CursorBlink
-        lateinit var initialCursorBlinkTime: DesktopSetting.CursorBlinkTime
-        lateinit var initialCursorBlinkTimeout: DesktopSetting.CursorBlinkTimeout
-        lateinit var initialDoubleClickInterval: DesktopSetting.DoubleClickInterval
-        lateinit var initialDragAndDropDragThresholdPixels: DesktopSetting.DragAndDropDragThresholdPixels
-        lateinit var initialFontHinting: DesktopSetting.FontHinting
-        lateinit var initialFontRgbaOrder: DesktopSetting.FontRgbaOrder
-        lateinit var initialIsComposited: DesktopSetting.IsComposited
-        lateinit var initialMiddleClickPaste: DesktopSetting.MiddleClickPaste
-        lateinit var initialOverlayScrolling: DesktopSetting.OverlayScrolling
-        lateinit var initialDoubleClickDistancePixels: DesktopSetting.DoubleClickDistancePixels
-        lateinit var initialEnableAnimations: DesktopSetting.EnableAnimations
-        lateinit var initialPrimaryButtonWarpsSlider: DesktopSetting.PrimaryButtonWarpsSlider
-        lateinit var initialRecentFilesEnabled: DesktopSetting.RecentFilesEnabled
-        lateinit var initialRecentFilesMaxAgeDays: DesktopSetting.RecentFilesMaxAgeDays
-
-        var remainingSettingsReceived = 18
-        while (remainingSettingsReceived > 0) {
-            val event = getNextEvent()
-            assertIs<Event.DesktopSettingChange>(event, "Remaining: $remainingSettingsReceived")
-            when (event.setting) {
-                is DesktopSetting.AccentColor -> initialAccentColor = event.setting
-                is DesktopSetting.AudibleBell -> initialAudibleBell = event.setting
-                is DesktopSetting.ColorScheme -> initialColorScheme = event.setting
-                is DesktopSetting.CursorBlink -> initialCursorBlink = event.setting
-                is DesktopSetting.CursorBlinkTime -> initialCursorBlinkTime = event.setting
-                is DesktopSetting.CursorBlinkTimeout -> initialCursorBlinkTimeout = event.setting
-                is DesktopSetting.DoubleClickInterval -> initialDoubleClickInterval = event.setting
-                is DesktopSetting.DragAndDropDragThresholdPixels -> initialDragAndDropDragThresholdPixels = event.setting
-                is DesktopSetting.FontHinting -> initialFontHinting = event.setting
-                is DesktopSetting.FontRgbaOrder -> initialFontRgbaOrder = event.setting
-                is DesktopSetting.IsComposited -> initialIsComposited = event.setting
-                is DesktopSetting.MiddleClickPaste -> initialMiddleClickPaste = event.setting
-                is DesktopSetting.OverlayScrolling -> initialOverlayScrolling = event.setting
-                is DesktopSetting.DoubleClickDistancePixels -> initialDoubleClickDistancePixels = event.setting
-                is DesktopSetting.EnableAnimations -> initialEnableAnimations = event.setting
-                is DesktopSetting.PrimaryButtonWarpsSlider -> initialPrimaryButtonWarpsSlider = event.setting
-                is DesktopSetting.RecentFilesEnabled -> initialRecentFilesEnabled = event.setting
-                is DesktopSetting.RecentFilesMaxAgeDays -> initialRecentFilesMaxAgeDays = event.setting
-            }
-            remainingSettingsReceived -= 1
-        }
-        assertIs<Event.ApplicationStarted>(getNextEvent())
+        val initialAccentColor = initialSettings.accentColor!!
+        val initialAudibleBell = initialSettings.audibleBell!!
+        val initialColorScheme = initialSettings.colorScheme!!
+        val initialCursorBlink = initialSettings.cursorBlink!!
+        val initialCursorBlinkTime = initialSettings.cursorBlinkTime!!
+        val initialCursorBlinkTimeout = initialSettings.cursorBlinkTimeout!!
+        val initialDoubleClickInterval = initialSettings.doubleClickInterval!!
+        val initialDragAndDropDragThresholdPixels = initialSettings.dragAndDropDragThresholdPixels!!
+        val initialFontHinting = initialSettings.fontHinting!!
+        val initialFontRgbaOrder = initialSettings.fontRgbaOrder!!
+        val initialIsComposited = initialSettings.isComposited!!
+        val initialMiddleClickPaste = initialSettings.middleClickPaste!!
+        val initialOverlayScrolling = initialSettings.overlayScrolling!!
+        val initialDoubleClickDistancePixels = initialSettings.doubleClickDistancePixels!!
+        val initialEnableAnimations = initialSettings.enableAnimations!!
+        val initialPrimaryButtonWarpsSlider = initialSettings.primaryButtonWarpsSlider!!
+        val initialRecentFilesEnabled = initialSettings.recentFilesEnabled!!
+        val initialRecentFilesMaxAgeDays = initialSettings.recentFilesMaxAgeDays!!
 
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
@@ -4051,11 +4071,8 @@ class CompositedX11Tests : X11TestsBase() {
             while (startTime.elapsedNow() < 10.seconds) {
                 val line = process.errorReader().readLine()
                 if (line.contains("Screen redirected.")) {
-                    runWithoutWaitingForStart(defaultApplicationConfig())
-                    awaitEventOfType<Event.DesktopSettingChange> {
-                        it.setting == DesktopSetting.IsComposited(true)
-                    }
-                    assertNotNull(awaitEvent { it == Event.ApplicationStarted })
+                    val initialSettings = run(defaultApplicationConfig())
+                    assertEquals(initialSettings.isComposited, DesktopSetting.IsComposited(true))
                     return
                 }
             }
