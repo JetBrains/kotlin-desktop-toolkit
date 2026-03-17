@@ -274,7 +274,7 @@ val collectNativeArtifactsTaskByTarget = compileNativeTaskByTarget.mapValues { (
             angleBinaries.setFrom(downloadAngleTask.map { it.binaries })
         }
         nativeLibrary = buildNativeTask.flatMap { it.libraryFile }
-        targetDirectory = layout.buildDirectory.dir("native-${target.backend.normalizedName()}-${target.profile}")
+        targetDirectory = layout.buildDirectory.dir("native-${jarSuffixForPlatform(target.platform, target.backend)}-${target.profile}")
     }
 }
 
