@@ -192,6 +192,7 @@ impl gtk4::subclass::widget::WidgetImpl for GlWidgetImpl {
         };
         context.set_use_es(use_es);
         context.realize().expect("Failed to realize GTK OpenGL context");
+        context.make_current();
         debug!("Uses GL ES: {}", context.uses_es());
 
         let gl_gen_textures: extern "C" fn(c_int, *mut c_uint) = get_egl_f("glGenTextures").unwrap();
@@ -263,7 +264,7 @@ impl gtk4::subclass::widget::WidgetImpl for GlWidgetImpl {
 
             let framebuffer_status = (gl.CheckFramebufferStatus)(GL_FRAMEBUFFER);
             if framebuffer_status != GL_FRAMEBUFFER_COMPLETE {
-                warn!("framebuffer_status = {framebuffer_status}");
+                warn!("framebuffer_status = {framebuffer_status:#x}");
                 return;
             }
             OpenGlDrawData {
