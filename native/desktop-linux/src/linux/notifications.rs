@@ -151,6 +151,7 @@ pub async fn close_notification_async(conn: &zbus::Connection, notification_id: 
 
 pub struct NotificationData {
     pub id: u32,
+    pub action: Option<String>,
     pub activation_token: Option<String>,
 }
 
@@ -158,6 +159,7 @@ impl NotificationData {
     const fn new(id: u32) -> Self {
         Self {
             id,
+            action: None,
             activation_token: None,
         }
     }
@@ -183,6 +185,7 @@ pub async fn notifications_receiver(
 
                 current_notification_data = Some(NotificationData {
                     id: args.id,
+                    action: None,
                     activation_token: Some(activation_token),
                 });
             }
@@ -193,8 +196,9 @@ pub async fn notifications_receiver(
                 let id = args.id;
                 let action_key = args.action_key;
                 debug!("Notification action invoked: id={id}, action_key={action_key}");
-                let data = current_notification_data.take().unwrap_or_else(|| NotificationData::new(args.id));
+                let mut data = current_notification_data.take().unwrap_or_else(|| NotificationData::new(args.id));
                 assert_eq!(data.id, args.id);
+                data.action = Some(action_key);
                 last_sent_notification = args.id;
                 sender(data)?;
             }

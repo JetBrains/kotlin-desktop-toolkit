@@ -649,15 +649,19 @@ impl From<NotificationShownEvent> for Event<'_> {
 pub struct NotificationClosedEvent<'a> {
     pub notification_id: u32,
 
+    /// Optional. Present only if notification was activated. By default, it has a value `"default"`.
+    pub action: BorrowedStrPtr<'a>,
+
     /// Optional. Present only if notification was activated, and the application has an associated `.desktop` file.
     pub activation_token: BorrowedStrPtr<'a>,
 }
 
 impl<'a> NotificationClosedEvent<'a> {
     #[must_use]
-    pub fn new(notification_id: u32, activation_token: Option<&'a CString>) -> Self {
+    pub fn new(notification_id: u32, action: Option<&'a CString>, activation_token: Option<&'a CString>) -> Self {
         Self {
             notification_id,
+            action: BorrowedStrPtr::new_optional(action),
             activation_token: BorrowedStrPtr::new_optional(activation_token),
         }
     }

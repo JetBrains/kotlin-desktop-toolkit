@@ -225,6 +225,9 @@ public sealed class Event {
     public data class NotificationClosed(
         val notificationId: UInt,
 
+        /** Present only if notification was activated. By default, it has a value `"default"` */
+        val action: String?,
+
         /** Present only if notification was activated, and the application has an associated `.desktop` file. */
         val activationToken: String?,
     ) : Event()
