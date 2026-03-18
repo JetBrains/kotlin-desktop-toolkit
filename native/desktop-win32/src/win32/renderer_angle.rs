@@ -143,6 +143,7 @@ impl AngleDevice {
     #[allow(clippy::bool_to_int_with_if)]
     pub fn swap_buffers(&self) -> anyhow::Result<()> {
         unsafe { (self.functions.fFinish)() };
+        unsafe { windows::Win32::Graphics::Dwm::DwmFlush()? };
         self.egl_instance.swap_interval(self.display, 0)?;
         self.egl_instance.swap_buffers(self.display, self.surface)?;
         self.compositor_controller.Commit()?;
