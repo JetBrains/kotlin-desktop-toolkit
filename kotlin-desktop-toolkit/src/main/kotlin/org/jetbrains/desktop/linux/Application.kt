@@ -315,11 +315,15 @@ public class Application : AutoCloseable {
     }
 
     public fun clipboardGetAvailableMimeTypes(): List<String> {
-        val csvMimetypes = ffiDownCall { desktop_linux_h.application_clipboard_get_available_mimetypes(appPtr) }
+        val ffiCsvMimetypes = ffiDownCall { desktop_linux_h.application_clipboard_get_available_mimetypes(appPtr) }
         return try {
-            csvMimetypes.getUtf8String(0).split(",")
+            if (ffiCsvMimetypes == MemorySegment.NULL) {
+                emptyList()
+            } else {
+                splitCsv(ffiCsvMimetypes.getUtf8String(0))
+            }
         } finally {
-            ffiDownCall { desktop_linux_h.string_drop(csvMimetypes) }
+            ffiDownCall { desktop_linux_h.string_drop(ffiCsvMimetypes) }
         }
     }
 
@@ -346,11 +350,15 @@ public class Application : AutoCloseable {
     }
 
     public fun primarySelectionGetAvailableMimeTypes(): List<String> {
-        val csvMimetypes = ffiDownCall { desktop_linux_h.application_primary_selection_get_available_mimetypes(appPtr) }
+        val ffiCsvMimetypes = ffiDownCall { desktop_linux_h.application_primary_selection_get_available_mimetypes(appPtr) }
         return try {
-            csvMimetypes.getUtf8String(0).split(",")
+            if (ffiCsvMimetypes == MemorySegment.NULL) {
+                emptyList()
+            } else {
+                splitCsv(ffiCsvMimetypes.getUtf8String(0))
+            }
         } finally {
-            ffiDownCall { desktop_linux_h.string_drop(csvMimetypes) }
+            ffiDownCall { desktop_linux_h.string_drop(ffiCsvMimetypes) }
         }
     }
 

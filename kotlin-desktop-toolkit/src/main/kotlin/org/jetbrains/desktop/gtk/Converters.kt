@@ -94,7 +94,7 @@ public fun utf8OffsetToUtf16Offset(string: CharSequence, offset: UInt): Int {
     return utf16Offset
 }
 
-public fun splitCsv(s: String): List<String> {
+internal fun splitCsv(s: String): List<String> {
     return if (s.isEmpty()) {
         emptyList()
     } else {

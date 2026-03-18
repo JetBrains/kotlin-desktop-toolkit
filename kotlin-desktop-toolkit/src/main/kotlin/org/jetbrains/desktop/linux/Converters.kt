@@ -96,6 +96,14 @@ public fun utf8OffsetToUtf16Offset(string: CharSequence, offset: Long): Int {
     return utf16Offset
 }
 
+internal fun splitCsv(s: String): List<String> {
+    return if (s.isEmpty()) {
+        emptyList()
+    } else {
+        s.split(",")
+    }
+}
+
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
     width = NativeLogicalSize.width(s),
     height = NativeLogicalSize.height(s),
