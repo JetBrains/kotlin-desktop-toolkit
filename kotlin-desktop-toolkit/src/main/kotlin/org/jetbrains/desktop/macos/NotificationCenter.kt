@@ -243,7 +243,6 @@ public object NotificationCenter : AutoCloseable {
                     val borrowedActionsArray = arena.allocate(NativeBorrowedArray_NotificationAction.layout())
                     NativeBorrowedArray_NotificationAction.ptr(borrowedActionsArray, actionsArray)
                     NativeBorrowedArray_NotificationAction.len(borrowedActionsArray, category.actions.size.toLong())
-                    NativeBorrowedArray_NotificationAction.deinit(borrowedActionsArray, MemorySegment.NULL)
 
                     // Set the actions array on the category
                     NativeNotificationCategory.actions(categorySegment, borrowedActionsArray)
@@ -253,7 +252,6 @@ public object NotificationCenter : AutoCloseable {
                 val borrowedCategoriesArray = arena.allocate(NativeBorrowedArray_NotificationCategory.layout())
                 NativeBorrowedArray_NotificationCategory.ptr(borrowedCategoriesArray, categoriesArray)
                 NativeBorrowedArray_NotificationCategory.len(borrowedCategoriesArray, categories.size.toLong())
-                NativeBorrowedArray_NotificationCategory.deinit(borrowedCategoriesArray, MemorySegment.NULL)
 
                 // Register the categories
                 desktop_macos_h.register_notification_categories(borrowedCategoriesArray)

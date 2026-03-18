@@ -2,6 +2,9 @@ package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeApplicationCallbacks
 import org.jetbrains.desktop.linux.generated.NativeEventHandler
+import org.jetbrains.desktop.linux.generated.NativeFfiObjDealloc
+import org.jetbrains.desktop.linux.generated.NativeFfiQueryDragAndDropTarget
+import org.jetbrains.desktop.linux.generated.NativeFfiTransferDataGetter
 import org.jetbrains.desktop.linux.generated.NativeGetEglProcFuncData
 import org.jetbrains.desktop.linux.generated.NativeScreenInfo
 import org.jetbrains.desktop.linux.generated.NativeScreenInfoArray
@@ -82,6 +85,7 @@ public class ShowNotificationParams(
 public class Application : AutoCloseable {
     private var applicationConfig: ApplicationConfig? = null
 
+    private val activeArenas = mutableMapOf<Long, Arena>()
     private val runOnEventLoopAsyncQueue = ConcurrentLinkedQueue<() -> Unit>()
     private val runOnEventLoopAsyncFunc: MemorySegment = `application_run_on_event_loop_async$f`.allocate({
         ffiUpCall {
@@ -100,6 +104,18 @@ public class Application : AutoCloseable {
 
     override fun toString(): String {
         return "${javaClass.typeName}(ptr=0x${appPtr?.address()?.toString(16)})"
+    }
+
+    private fun newPersistentArena(): Pair<Arena, Long> {
+        val arena = Arena.ofConfined()
+        val objId = (activeArenas.keys.maxOrNull() ?: 0) + 1
+        activeArenas[objId] = arena
+        return Pair(arena, objId)
+    }
+
+    // called from native
+    private fun onObjDealloc(objId: Long) {
+        activeArenas[objId]!!.close()
     }
 
     // called from native
@@ -126,7 +142,8 @@ public class Application : AutoCloseable {
         val dataSource = DataSource.fromNative(nativeDataSource)
         val mimeType = nativeMimeType.getUtf8String(0)
         val result = applicationConfig?.getDataTransferData(dataSource, mimeType)
-        return result.toNative()
+        val (arena, objId) = newPersistentArena()
+        return result.toNativeTransferDataResponse(arena, objId)
     }
 
     // called from native
@@ -135,7 +152,8 @@ public class Application : AutoCloseable {
         val result = applicationConfig?.queryDragAndDropTarget(queryData) ?: DragAndDropQueryResponse(
             supportedActionsPerMime = emptyList(),
         )
-        return result.toNative()
+        val (arena, objId) = newPersistentArena()
+        return result.toNative(arena, objId)
     }
 
     public fun runEventLoop(applicationConfig: ApplicationConfig) {
@@ -168,14 +186,15 @@ public class Application : AutoCloseable {
     private fun applicationCallbacks(): MemorySegment {
         val arena = Arena.global()
         val callbacks = NativeApplicationCallbacks.allocate(arena)
+        NativeApplicationCallbacks.obj_dealloc(callbacks, NativeFfiObjDealloc.allocate(::onObjDealloc, arena))
         NativeApplicationCallbacks.event_handler(callbacks, NativeEventHandler.allocate(::onEvent, arena))
         NativeApplicationCallbacks.query_drag_and_drop_target(
             callbacks,
-            NativeApplicationCallbacks.query_drag_and_drop_target.allocate(::onQueryDragAndDropTarget, arena),
+            NativeFfiQueryDragAndDropTarget.allocate(::onQueryDragAndDropTarget, arena),
         )
         NativeApplicationCallbacks.get_data_transfer_data(
             callbacks,
-            NativeApplicationCallbacks.get_data_transfer_data.allocate(::onGetDataTransferData, arena),
+            NativeFfiTransferDataGetter.allocate(::onGetDataTransferData, arena),
         )
         return callbacks
     }
