@@ -61,9 +61,24 @@ public object Clipboard {
                 Arena.ofConfined().use { arena ->
                     val dataPtr = desktop_win32_h.clipboard_get_data(arena, windowPtr, format.id)
                     try {
-                        byteArrayFromNative(dataPtr) ?: ByteArray(0)
+                        byteArrayFromNative(dataPtr)
                     } finally {
                         desktop_win32_h.native_byte_array_drop(dataPtr)
+                    }
+                }
+            }
+        }
+    }
+
+    public fun tryReadItemOfType(owner: Window, format: ClipboardFormat): ByteArray? {
+        return ffiDownCall {
+            owner.withPointer { windowPtr ->
+                Arena.ofConfined().use { arena ->
+                    val dataPtr = desktop_win32_h.clipboard_try_get_data(arena, windowPtr, format.id)
+                    try {
+                        optionalByteArrayFromNative(dataPtr)
+                    } finally {
+                        desktop_win32_h.native_optional_byte_array_drop(dataPtr)
                     }
                 }
             }
@@ -75,10 +90,17 @@ public object Clipboard {
             val strPtr = owner.withPointer { windowPtr ->
                 desktop_win32_h.clipboard_get_html_fragment(windowPtr)
             }
-            try {
-                strPtr.getUtf8String(0)
-            } finally {
-                desktop_win32_h.native_string_drop(strPtr)
+            stringFromNative(strPtr)
+        }
+    }
+
+    public fun tryReadHtmlFragment(owner: Window): String? {
+        return ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                val optionalPtr = owner.withPointer { windowPtr ->
+                    desktop_win32_h.clipboard_try_get_html_fragment(arena, windowPtr)
+                }
+                optionalStringFromNative(optionalPtr)
             }
         }
     }
@@ -88,11 +110,18 @@ public object Clipboard {
             owner.withPointer { windowPtr ->
                 Arena.ofConfined().use { arena ->
                     val arrayPtr = desktop_win32_h.clipboard_get_file_list(arena, windowPtr)
-                    try {
-                        listOfStringsFromNative(arrayPtr)
-                    } finally {
-                        desktop_win32_h.native_string_array_drop(arrayPtr)
-                    }
+                    listOfStringsFromNative(arrayPtr)
+                }
+            }
+        }
+    }
+
+    public fun tryReadListOfFiles(owner: Window): List<String> {
+        return ffiDownCall {
+            owner.withPointer { windowPtr ->
+                Arena.ofConfined().use { arena ->
+                    val arrayPtr = desktop_win32_h.clipboard_try_get_file_list(arena, windowPtr)
+                    listOfStringsFromNative(arrayPtr)
                 }
             }
         }
@@ -103,25 +132,17 @@ public object Clipboard {
             val strPtr = owner.withPointer { windowPtr ->
                 desktop_win32_h.clipboard_get_text(windowPtr)
             }
-            try {
-                strPtr.getUtf8String(0)
-            } finally {
-                desktop_win32_h.native_string_drop(strPtr)
-            }
+            stringFromNative(strPtr)
         }
     }
 
-    public fun tryReadItemOfType(owner: Window, format: ClipboardFormat): ByteArray? {
+    public fun tryReadTextItem(owner: Window): String? {
         return ffiDownCall {
-            owner.withPointer { windowPtr ->
-                Arena.ofConfined().use { arena ->
-                    val dataPtr = desktop_win32_h.clipboard_try_get_data(arena, windowPtr, format.id)
-                    try {
-                        byteArrayFromNative(dataPtr)
-                    } finally {
-                        desktop_win32_h.native_byte_array_drop(dataPtr)
-                    }
+            Arena.ofConfined().use { arena ->
+                val strPtr = owner.withPointer { windowPtr ->
+                    desktop_win32_h.clipboard_try_get_text(arena, windowPtr)
                 }
+                optionalStringFromNative(strPtr)
             }
         }
     }

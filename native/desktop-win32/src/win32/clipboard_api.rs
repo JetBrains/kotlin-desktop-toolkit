@@ -1,16 +1,38 @@
 use desktop_common::{
-    ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr, RustAllocatedStrPtr},
+    ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr, FfiOption, RustAllocatedStrPtr},
     logger::ffi_boundary,
 };
 
 use super::{
     clipboard::{Clipboard, ClipboardData, ClipboardFormat},
     strings::copy_from_utf8_string,
+    window::Window,
     window_api::{WindowPtr, with_window},
 };
 
 type AutoDropByteArray = AutoDropArray<u8>;
 type AutoDropUInt32Array = AutoDropArray<u32>;
+
+trait IntoFfiOption<T> {
+    fn into_ffi_option(self) -> anyhow::Result<FfiOption<T>>
+    where
+        T: desktop_common::logger::PanicDefault;
+}
+
+impl<T> IntoFfiOption<T> for anyhow::Result<T> {
+    fn into_ffi_option(self) -> anyhow::Result<FfiOption<T>>
+    where
+        T: desktop_common::logger::PanicDefault,
+    {
+        match self {
+            Ok(ok) => Ok(FfiOption::some(ok)),
+            Err(err) => {
+                log::trace!("failed to get data from Clipboard: {err}");
+                Ok(FfiOption::none())
+            }
+        }
+    }
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn clipboard_count_formats(owner: WindowPtr) -> i32 {
@@ -53,42 +75,88 @@ pub extern "C" fn clipboard_get_sequence_number() -> u32 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn clipboard_get_data(owner: WindowPtr, data_format: u32) -> AutoDropByteArray {
-    with_window(&owner, "clipboard_get_data", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let data = clipboard.get_data(ClipboardFormat::Other(data_format))?;
-        let content = data.get_bytes()?;
-        Ok(AutoDropArray::new(content.into_boxed_slice()))
+    with_window(&owner, "clipboard_get_data", |window| clipboard_get_data_impl(window, data_format))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_try_get_data(owner: WindowPtr, data_format: u32) -> FfiOption<AutoDropByteArray> {
+    with_window(&owner, "clipboard_try_get_data", |window| {
+        clipboard_get_data_impl(window, data_format).into_ffi_option()
     })
+}
+
+fn clipboard_get_data_impl(owner: &Window, data_format: u32) -> anyhow::Result<AutoDropByteArray> {
+    let clipboard = Clipboard::open_for_window(owner)?;
+    clipboard
+        .get_data(ClipboardFormat::Other(data_format))
+        .and_then(|data| data.get_bytes())
+        .map(|bytes| AutoDropArray::new(bytes.into_boxed_slice()))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn clipboard_get_file_list(owner: WindowPtr) -> AutoDropArray<RustAllocatedStrPtr> {
-    with_window(&owner, "clipboard_get_file_list", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let data = clipboard.get_data(ClipboardFormat::FileList)?;
-        let content = data.get_file_list()?.into_iter().map(RustAllocatedStrPtr::from_c_string).collect();
-        Ok(AutoDropArray::new(content))
+    with_window(&owner, "clipboard_get_file_list", clipboard_get_file_list_impl)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_try_get_file_list(owner: WindowPtr) -> AutoDropArray<RustAllocatedStrPtr> {
+    with_window(&owner, "clipboard_try_get_file_list", |window| {
+        clipboard_get_file_list_impl(window).or_else(|err| {
+            log::trace!("failed to get data from Clipboard: {err}");
+            Ok(AutoDropArray::null())
+        })
     })
+}
+
+fn clipboard_get_file_list_impl(owner: &Window) -> anyhow::Result<AutoDropArray<RustAllocatedStrPtr>> {
+    let clipboard = Clipboard::open_for_window(owner)?;
+    clipboard
+        .get_data(ClipboardFormat::FileList)
+        .and_then(|data| data.get_file_list())
+        .map(|file_list| file_list.into_iter().map(RustAllocatedStrPtr::from_c_string).collect())
+        .map(AutoDropArray::new)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn clipboard_get_html_fragment(owner: WindowPtr) -> RustAllocatedStrPtr {
     with_window(&owner, "clipboard_get_html_fragment", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let data = clipboard.get_data(ClipboardFormat::HtmlFragment)?;
-        let fragment = data.get_html()?;
-        Ok(RustAllocatedStrPtr::from_c_string(fragment))
+        clipboard_get_html_fragment_impl(window)
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_get_text(owner: WindowPtr) -> RustAllocatedStrPtr {
-    with_window(&owner, "clipboard_get_text", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let data = clipboard.get_data(ClipboardFormat::Text)?;
-        let text = data.get_text()?;
-        Ok(RustAllocatedStrPtr::from_c_string(text))
+pub extern "C" fn clipboard_try_get_html_fragment(owner: WindowPtr) -> FfiOption<RustAllocatedStrPtr> {
+    with_window(&owner, "clipboard_try_get_html_fragment", |window| {
+        clipboard_get_html_fragment_impl(window).into_ffi_option()
     })
+}
+
+fn clipboard_get_html_fragment_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr> {
+    let clipboard = Clipboard::open_for_window(owner)?;
+    clipboard
+        .get_data(ClipboardFormat::HtmlFragment)
+        .and_then(|data| data.get_html())
+        .map(RustAllocatedStrPtr::from_c_string)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_get_text(owner: WindowPtr) -> RustAllocatedStrPtr {
+    with_window(&owner, "clipboard_get_text", clipboard_get_text_impl)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_try_get_text(owner: WindowPtr) -> FfiOption<RustAllocatedStrPtr> {
+    with_window(&owner, "clipboard_try_get_text", |window| {
+        clipboard_get_text_impl(window).into_ffi_option()
+    })
+}
+
+fn clipboard_get_text_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr> {
+    let clipboard = Clipboard::open_for_window(owner)?;
+    clipboard
+        .get_data(ClipboardFormat::Text)
+        .and_then(|data| data.get_text())
+        .map(RustAllocatedStrPtr::from_c_string)
 }
 
 #[unsafe(no_mangle)]
@@ -130,23 +198,6 @@ pub extern "C" fn clipboard_set_text(owner: WindowPtr, content: BorrowedStrPtr) 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_try_get_data(owner: WindowPtr, data_format: u32) -> AutoDropByteArray {
-    with_window(&owner, "clipboard_try_get_data", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        match clipboard
-            .get_data(ClipboardFormat::Other(data_format))
-            .and_then(|data| data.get_bytes())
-        {
-            Ok(bytes) => Ok(AutoDropArray::new(bytes.into_boxed_slice())),
-            Err(err) => {
-                log::error!("failed to get data from Clipboard: {err}");
-                Ok(AutoDropArray::null())
-            }
-        }
-    })
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn clipboard_register_format(name: BorrowedStrPtr) -> u32 {
     ffi_boundary("clipboard_register_format", || {
         let format_name = copy_from_utf8_string(&name)?;
@@ -163,6 +214,14 @@ pub extern "C" fn clipboard_get_html_format_id() -> u32 {
 pub extern "C" fn native_byte_array_drop(array: AutoDropByteArray) {
     ffi_boundary("native_byte_array_drop", || {
         drop(array);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn native_optional_byte_array_drop(optional: FfiOption<AutoDropByteArray>) {
+    ffi_boundary("native_optional_byte_array_drop", || {
+        drop(optional);
         Ok(())
     });
 }

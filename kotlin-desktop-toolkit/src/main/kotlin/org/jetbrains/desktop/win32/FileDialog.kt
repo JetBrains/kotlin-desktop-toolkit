@@ -55,11 +55,7 @@ public object FileDialog {
                     desktop_win32_h.open_file_dialog_run_modal(arena, windowPtr, nativeCommonDialogParams, nativeOpenFileDialogParams)
                 }
                 if (result != MemorySegment.NULL) {
-                    try {
-                        listOfStringsFromNative(result)
-                    } finally {
-                        ffiDownCall { desktop_win32_h.native_string_array_drop(result) }
-                    }
+                    listOfStringsFromNative(result)
                 } else {
                     emptyList()
                 }

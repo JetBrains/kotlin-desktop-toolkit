@@ -1,6 +1,5 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.win32.generated.NativeLogicalPoint
 import org.jetbrains.desktop.win32.generated.NativeLogicalRect
 import org.jetbrains.desktop.win32.generated.NativeLogicalSize
@@ -8,7 +7,6 @@ import org.jetbrains.desktop.win32.generated.NativePhysicalPoint
 import org.jetbrains.desktop.win32.generated.NativePhysicalSize
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
-import java.lang.foreign.ValueLayout.JAVA_BYTE
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
     width = NativeLogicalSize.width(s),
@@ -53,11 +51,4 @@ internal fun PhysicalSize.toNative(arena: Arena): MemorySegment = NativePhysical
 internal fun PhysicalPoint.toNative(arena: Arena): MemorySegment = NativePhysicalPoint.allocate(arena).also { result ->
     NativePhysicalPoint.x(result, x)
     NativePhysicalPoint.y(result, y)
-}
-
-internal fun ByteArray.toNative(arena: Arena): MemorySegment = let { bytes ->
-    val result = NativeBorrowedArray_u8.allocate(arena)
-    NativeBorrowedArray_u8.ptr(result, arena.allocateArray(JAVA_BYTE, *bytes))
-    NativeBorrowedArray_u8.len(result, bytes.count().toLong())
-    result
 }

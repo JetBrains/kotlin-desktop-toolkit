@@ -12,6 +12,8 @@ use std::{
 use anyhow::{Context, bail};
 use log::{debug, trace};
 
+use crate::logger::PanicDefault;
+
 #[derive(Debug, Copy)]
 #[repr(transparent)]
 struct GenericRawPtr<'a, T> {
@@ -436,6 +438,45 @@ impl RustAllocatedRcPtr<'_> {
         unsafe {
             let rc = self.to_rc();
             &*Rc::into_raw(rc)
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct FfiOption<T: PanicDefault> {
+    value: T,
+    is_some: bool,
+}
+
+impl<T: PanicDefault> FfiOption<T> {
+    pub const fn some(value: T) -> Self {
+        Self { value, is_some: true }
+    }
+
+    #[must_use]
+    pub fn none() -> Self {
+        Self {
+            value: T::default(),
+            is_some: false,
+        }
+    }
+
+    pub fn try_take(&mut self) -> Option<T> {
+        if !self.is_some {
+            return None;
+        }
+        let value = std::mem::replace(&mut self.value, T::default());
+        self.is_some = false;
+        Some(value)
+    }
+}
+
+impl<T: PanicDefault> PanicDefault for FfiOption<T> {
+    fn default() -> Self {
+        Self {
+            value: T::default(),
+            is_some: false,
         }
     }
 }
