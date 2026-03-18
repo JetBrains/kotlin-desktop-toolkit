@@ -37,7 +37,7 @@ class WindowTests {
                 windowId = 1,
                 appId = "org.jetbrains.desktop.linux.tests",
                 title = "Hello2",
-                size = LogicalSize(200.0f, 300.0f),
+                size = LogicalSize(200, 300),
                 preferClientSideDecoration = true,
                 renderingMode = RenderingMode.Auto,
             ),

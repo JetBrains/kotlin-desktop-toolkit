@@ -22,7 +22,7 @@ use crate::linux::{
     application_api::RenderingMode,
     application_state::{ApplicationState, EglInstance},
     events::{SoftwareDrawData, WindowDecorationMode, WindowDrawEvent, WindowId},
-    geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
+    geometry::{LogicalPoint, LogicalSize, PhysicalSize},
     pointer_shapes_api::PointerShape,
     rendering_egl::EglRendering,
     rendering_software::SoftwareRendering,
@@ -98,7 +98,7 @@ impl SimpleWindow {
         window.set_title(params.title.as_str().unwrap());
         window.set_app_id(app_id.clone());
 
-        let size = if params.size.width.0 == 0.0 { None } else { Some(params.size) };
+        let size = if params.size.width == 0 { None } else { Some(params.size) };
 
         // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
         // For more info, see WaylandSurface::commit
@@ -137,8 +137,8 @@ impl SimpleWindow {
         configure: &WindowConfigure,
         egl: Option<&'static EglInstance>,
     ) -> bool {
-        const DEFAULT_WIDTH: LogicalPixels = LogicalPixels(640.);
-        const DEFAULT_HEIGHT: LogicalPixels = LogicalPixels(480.);
+        const DEFAULT_WIDTH: i32 = 640;
+        const DEFAULT_HEIGHT: i32 = 480;
         debug!("SimpleWindow::configure start: {configure:?}");
 
         self.decoration_mode = configure.decoration_mode;
@@ -146,27 +146,27 @@ impl SimpleWindow {
         let width = configure
             .new_size
             .0
-            .map(|w| LogicalPixels(w.get().into()))
+            .and_then(|w| i32::try_from(w.get()).ok())
             .or_else(|| self.size.map(|s| s.width))
-            .or_else(|| configure.suggested_bounds.map(|(w, _h)| LogicalPixels(w.into())))
+            .or_else(|| configure.suggested_bounds.and_then(|(w, _h)| i32::try_from(w).ok()))
             .unwrap_or(DEFAULT_WIDTH);
         let height = configure
             .new_size
             .1
-            .map(|h| LogicalPixels(h.get().into()))
+            .and_then(|h| i32::try_from(h.get()).ok())
             .or_else(|| self.size.map(|s| s.height))
-            .or_else(|| configure.suggested_bounds.map(|(_w, h)| LogicalPixels(h.into())))
+            .or_else(|| configure.suggested_bounds.and_then(|(_w, h)| i32::try_from(h).ok()))
             .unwrap_or(DEFAULT_HEIGHT);
         let size = LogicalSize { width, height };
         self.size = Some(size);
 
-        window.xdg_surface().set_window_geometry(0, 0, width.round(), height.round());
+        window.xdg_surface().set_window_geometry(0, 0, width, height);
         // TODO: wl_surface::set_opaque_region?
 
         let physical_size = size.to_physical(self.current_scale);
         debug!("SimpleWindow::configure: size={size:?}, physical_size={physical_size:?}");
 
-        self.on_resize(&size, physical_size, shm);
+        self.on_resize(size, physical_size, shm);
 
         let is_first_configure = self.rendering_data.is_none();
         if is_first_configure {
@@ -242,10 +242,10 @@ impl SimpleWindow {
         surface.commit();
     }
 
-    fn on_resize(&mut self, size: &LogicalSize, physical_size: PhysicalSize, shm: &Shm) {
+    fn on_resize(&mut self, size: LogicalSize, physical_size: PhysicalSize, shm: &Shm) {
         if let Some(viewport) = &self.viewport {
-            debug!("viewport.set_destination({}, {})", size.width.round(), size.height.round());
-            viewport.set_destination(size.width.round(), size.height.round());
+            debug!("viewport.set_destination({}, {})", size.width, size.height);
+            viewport.set_destination(size.width, size.height);
         } else {
             let surface = self.window.wl_surface();
             assert!(self.current_scale % 1.0 < 0.0001);
@@ -271,7 +271,7 @@ impl SimpleWindow {
         self.current_scale = new_scale;
 
         if let Some(size) = self.size {
-            self.on_resize(&size, size.to_physical(self.current_scale), shm);
+            self.on_resize(size, size.to_physical(self.current_scale), shm);
         }
     }
 
