@@ -1,5 +1,6 @@
 use std::{collections::HashMap, ffi::CString, sync::LazyLock};
 
+use crate::linux::ffi_return_conversions::{QueryDragAndDropTarget, TransferDataGetter};
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
     drag_icon::DragIcon,
@@ -106,6 +107,8 @@ pub fn get_egl() -> Option<&'static EglInstance> {
 }
 
 pub struct ApplicationState {
+    pub transfer_data_getter: TransferDataGetter,
+    pub query_drag_and_drop_target: QueryDragAndDropTarget,
     pub callbacks: ApplicationCallbacks,
 
     registry_state: RegistryState,
@@ -162,7 +165,17 @@ impl ApplicationState {
         let data_device_manager_state = DataDeviceManagerState::bind(globals, qh).expect("wl_data_device not available");
         let xdg_activation = ActivationState::bind(globals, qh).ok();
 
+        let ffi_dealloc = callbacks.obj_dealloc;
+
         Self {
+            transfer_data_getter: TransferDataGetter {
+                ffi_get: callbacks.get_data_transfer_data,
+                ffi_dealloc,
+            },
+            query_drag_and_drop_target: QueryDragAndDropTarget {
+                ffi_get: callbacks.query_drag_and_drop_target,
+                ffi_dealloc,
+            },
             callbacks,
             registry_state,
             seat_state,

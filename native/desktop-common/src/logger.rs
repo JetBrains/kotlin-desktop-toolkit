@@ -129,12 +129,10 @@ impl LoggerConfiguration<'_> {
         let archive_pattern = file_path.with_file_name(format!("{file_name}{{}}.log"));
 
         let trigger = SizeTrigger::new(TRIGGER_FILE_SIZE);
-        let roller = FixedWindowRoller::builder()
-            .build(
-                archive_pattern.to_str().context("file_path contains invalid unicode")?,
-                LOG_FILE_COUNT,
-            )
-            .unwrap();
+        let roller = FixedWindowRoller::builder().build(
+            archive_pattern.to_str().context("file_path contains invalid unicode")?,
+            LOG_FILE_COUNT,
+        )?;
         let policy = CompoundPolicy::new(Box::new(trigger), Box::new(roller));
 
         RollingFileAppender::builder()

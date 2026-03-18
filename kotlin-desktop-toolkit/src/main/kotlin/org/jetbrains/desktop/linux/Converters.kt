@@ -1,7 +1,7 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeActivationTokenResponse
-import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_SupportedActionsForMime
+import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_FfiSupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.linux.generated.NativeColor
@@ -13,10 +13,12 @@ import org.jetbrains.desktop.linux.generated.NativeDataTransferEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropFinishedEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
-import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryResponse
 import org.jetbrains.desktop.linux.generated.NativeDragIconDrawEvent
 import org.jetbrains.desktop.linux.generated.NativeDropPerformedEvent
 import org.jetbrains.desktop.linux.generated.NativeEvent
+import org.jetbrains.desktop.linux.generated.NativeFfiDragAndDropQueryResponse
+import org.jetbrains.desktop.linux.generated.NativeFfiSupportedActionsForMime
+import org.jetbrains.desktop.linux.generated.NativeFfiTransferDataResponse
 import org.jetbrains.desktop.linux.generated.NativeFileChooserResponse
 import org.jetbrains.desktop.linux.generated.NativeKeyDownEvent
 import org.jetbrains.desktop.linux.generated.NativeKeyUpEvent
@@ -37,7 +39,6 @@ import org.jetbrains.desktop.linux.generated.NativeSaveFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeScrollData
 import org.jetbrains.desktop.linux.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.linux.generated.NativeSoftwareDrawData
-import org.jetbrains.desktop.linux.generated.NativeSupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeTextInputAvailabilityEvent
 import org.jetbrains.desktop.linux.generated.NativeTextInputContext
 import org.jetbrains.desktop.linux.generated.NativeTextInputDeleteSurroundingTextData
@@ -431,8 +432,7 @@ internal fun mimeTypesToNative(arena: Arena, mimeTypes: List<String>): MemorySeg
     return arena.allocateUtf8String(mimeTypes.joinToString(","))
 }
 
-internal fun ByteArray?.toNative(): MemorySegment {
-    val arena = Arena.ofConfined()
+private fun ByteArray?.toNative(arena: Arena): MemorySegment {
     val nativeDataArray = NativeBorrowedArray_u8.allocate(arena)
     if (this == null) {
         NativeBorrowedArray_u8.len(nativeDataArray, 0)
@@ -445,16 +445,16 @@ internal fun ByteArray?.toNative(): MemorySegment {
         }
 
         NativeBorrowedArray_u8.ptr(nativeDataArray, nativeArray)
-
-        NativeBorrowedArray_u8.deinit(
-            nativeDataArray,
-            NativeBorrowedArray_u8.deinit.allocate({ _, _ ->
-                arena.close()
-            }, arena),
-        )
     }
 
     return nativeDataArray
+}
+
+internal fun ByteArray?.toNativeTransferDataResponse(arena: Arena, objId: Long): MemorySegment {
+    val result = NativeFfiTransferDataResponse.allocate(arena)
+    NativeFfiTransferDataResponse.obj_id(result, objId)
+    NativeFfiTransferDataResponse.data(result, this.toNative(arena))
+    return result
 }
 
 internal fun DragAndDropQueryData.Companion.fromNative(s: MemorySegment): DragAndDropQueryData {
@@ -486,32 +486,24 @@ internal fun Set<DragAndDropAction>.toNative(): Byte {
 }
 
 internal fun SupportedActionsForMime.toNative(result: MemorySegment, arena: Arena) {
-    NativeSupportedActionsForMime.supported_mime_type(result, arena.allocateUtf8String(supportedMimeType))
-    NativeSupportedActionsForMime.supported_actions(result, supportedActions.toNative())
-    NativeSupportedActionsForMime.preferred_action(result, preferredAction.toNative())
+    NativeFfiSupportedActionsForMime.supported_mime_type(result, arena.allocateUtf8String(supportedMimeType))
+    NativeFfiSupportedActionsForMime.supported_actions(result, supportedActions.toNative())
+    NativeFfiSupportedActionsForMime.preferred_action(result, preferredAction.toNative())
 }
 
-internal fun DragAndDropQueryResponse.toNative(): MemorySegment {
-    val arena = Arena.ofConfined()
-    val result = NativeDragAndDropQueryResponse.allocate(arena)
-
-    val nativeDataArray = NativeBorrowedArray_SupportedActionsForMime.allocate(arena)
-    NativeBorrowedArray_SupportedActionsForMime.len(nativeDataArray, supportedActionsPerMime.size.toLong())
-    val nativeArray = NativeSupportedActionsForMime.allocateArray(supportedActionsPerMime.size.toLong(), arena)
+internal fun DragAndDropQueryResponse.toNative(arena: Arena, objId: Long): MemorySegment {
+    val nativeArray = NativeFfiSupportedActionsForMime.allocateArray(supportedActionsPerMime.size.toLong(), arena)
     supportedActionsPerMime.forEachIndexed { i, element ->
-        element.toNative(NativeSupportedActionsForMime.asSlice(nativeArray, i.toLong()), arena)
+        element.toNative(NativeFfiSupportedActionsForMime.asSlice(nativeArray, i.toLong()), arena)
     }
 
-    NativeBorrowedArray_SupportedActionsForMime.ptr(nativeDataArray, nativeArray)
+    val nativeBorrowedArray = NativeBorrowedArray_FfiSupportedActionsForMime.allocate(arena)
+    NativeBorrowedArray_FfiSupportedActionsForMime.len(nativeBorrowedArray, supportedActionsPerMime.size.toLong())
+    NativeBorrowedArray_FfiSupportedActionsForMime.ptr(nativeBorrowedArray, nativeArray)
 
-    NativeBorrowedArray_SupportedActionsForMime.deinit(
-        nativeDataArray,
-        NativeBorrowedArray_SupportedActionsForMime.deinit.allocate({ _, _ ->
-            arena.close()
-        }, arena),
-    )
-
-    NativeDragAndDropQueryResponse.supported_actions_per_mime(result, nativeDataArray)
+    val result = NativeFfiDragAndDropQueryResponse.allocate(arena)
+    NativeFfiDragAndDropQueryResponse.supported_actions_per_mime(result, nativeBorrowedArray)
+    NativeFfiDragAndDropQueryResponse.obj_id(result, objId)
 
     return result
 }

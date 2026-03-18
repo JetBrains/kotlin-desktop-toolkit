@@ -11,9 +11,10 @@ use crate::gl_sys::{
     GL_VERTEX_SHADER, GLchar, GLenum, GLint, GLuint, OpenGlFuncs,
 };
 use desktop_common::{
-    ffi_utils::{ArraySize, BorrowedArray, BorrowedStrPtr},
+    ffi_utils::{BorrowedArray, BorrowedStrPtr},
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
+use desktop_linux::linux::application_api::{FfiDragAndDropQueryResponse, FfiSupportedActionsForMime, FfiTransferDataResponse};
 use desktop_linux::linux::{
     application_api::{
         AppPtr,
@@ -22,9 +23,7 @@ use desktop_linux::linux::{
         DragAndDropAction,
         DragAndDropActions,
         DragAndDropQueryData,
-        DragAndDropQueryResponse,
         RenderingMode,
-        SupportedActionsForMime,
         application_clipboard_paste,
         application_clipboard_put,
         application_close_notification,
@@ -130,6 +129,7 @@ struct State {
 
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::default());
+    static OBJ_ID_TO_DEALLOC: RefCell<HashMap<i64, Box<dyn FnOnce()>>> = RefCell::default();
 }
 
 const V_POSITION: GLuint = 0;
@@ -825,47 +825,66 @@ fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting, state: &mut State) {
     }
 }
 
-extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> DragAndDropQueryResponse<'_> {
+extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDragAndDropQueryResponse {
     STATE.with_borrow_mut(|state| {
         let window_state = state.windows.get_mut(&data.window_id).unwrap();
         window_state.drag_and_drop_target = true;
     });
     if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF {
-        const SUPPORTED_ACTIONS_PER_MIME: [SupportedActionsForMime; 2] = [
-            SupportedActionsForMime {
+        const SUPPORTED_ACTIONS_PER_MIME: [FfiSupportedActionsForMime; 2] = [
+            FfiSupportedActionsForMime {
                 supported_mime_type: BorrowedStrPtr::new(URI_LIST_MIME_TYPE),
                 supported_actions: DragAndDropActions(DragAndDropAction::Copy as u8),
                 preferred_action: DragAndDropAction::Copy,
             },
-            SupportedActionsForMime {
+            FfiSupportedActionsForMime {
                 supported_mime_type: BorrowedStrPtr::new(TEXT_MIME_TYPE),
                 supported_actions: DragAndDropActions(DragAndDropAction::Move as u8 | DragAndDropAction::Copy as u8),
                 preferred_action: DragAndDropAction::Copy,
             },
         ];
 
-        DragAndDropQueryResponse {
+        FfiDragAndDropQueryResponse {
+            obj_id: 0,
             supported_actions_per_mime: BorrowedArray::from_slice(&SUPPORTED_ACTIONS_PER_MIME),
         }
     } else {
-        DragAndDropQueryResponse {
+        FfiDragAndDropQueryResponse {
+            obj_id: 0,
             supported_actions_per_mime: BorrowedArray::from_slice(&[]),
         }
     }
 }
 
-extern "C" fn deinit_u8_vec(ptr: *const u8, len: ArraySize) {
-    let _ = unsafe {
+extern "C" fn obj_dealloc(obj_id: i64) {
+    if obj_id != 0 {
+        OBJ_ID_TO_DEALLOC.with_borrow_mut(|cache| {
+            let f = cache.remove(&obj_id).unwrap();
+            f();
+        });
+    }
+}
+
+fn new_dealloc(f: impl FnOnce() + 'static) -> i64 {
+    OBJ_ID_TO_DEALLOC.with_borrow_mut(|cache| {
+        let obj_id = cache.keys().max().copied().unwrap_or_default() + 1;
+        cache.insert(obj_id, Box::new(f));
+        obj_id
+    })
+}
+
+fn leak_string_data(s: String) -> (&'static [u8], i64) {
+    let static_str = Box::leak(s.into_boxed_str().into_boxed_bytes());
+    let ptr = static_str.as_ptr();
+    let len = static_str.len();
+    let obj_id = new_dealloc(move || unsafe {
         let s = std::slice::from_raw_parts_mut(ptr.cast_mut(), len);
-        Box::from_raw(s)
-    };
+        drop(Box::from_raw(s));
+    });
+    (static_str, obj_id)
 }
 
-fn leaked_string_data(s: &str) -> &'static [u8] {
-    Box::leak(s.to_owned().into_boxed_str().into_boxed_bytes())
-}
-
-extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedStrPtr) -> BorrowedArray<'static, u8> {
+extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedStrPtr) -> FfiTransferDataResponse {
     let mime_type_cstr = mime_type.as_optional_cstr().unwrap();
     let v = if mime_type_cstr == URI_LIST_MIME_TYPE {
         match source {
@@ -883,9 +902,9 @@ extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedStrP
         mime_type_cstr.to_str().unwrap()
     };
 
-    let mut a = BorrowedArray::from_slice(leaked_string_data(v));
-    a.deinit = Some(deinit_u8_vec);
-    a
+    let (static_str, obj_id) = leak_string_data(v.to_owned());
+    let data = BorrowedArray::from_slice(static_str);
+    FfiTransferDataResponse { obj_id, data }
 }
 
 pub fn main() {
@@ -895,6 +914,7 @@ pub fn main() {
         file_level: LogLevel::Error,
     });
     let app_ptr = application_init(ApplicationCallbacks {
+        obj_dealloc,
         event_handler,
         query_drag_and_drop_target,
         get_data_transfer_data,

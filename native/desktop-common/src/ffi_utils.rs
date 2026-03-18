@@ -360,7 +360,7 @@ impl<T> Drop for AutoDropArray<T> {
                 let s = slice::from_raw_parts_mut(self.ptr.cast_mut(), self.len);
                 Box::from_raw(s)
             };
-            std::mem::drop(array);
+            drop(array);
         }
     }
 }
@@ -370,17 +370,7 @@ impl<T> Drop for AutoDropArray<T> {
 pub struct BorrowedArray<'a, T> {
     ptr: *const T,
     len: ArraySize,
-    pub deinit: Option<extern "C" fn(*const T, ArraySize)>,
     phantom: PhantomData<&'a T>,
-}
-
-impl<T> Drop for BorrowedArray<'_, T> {
-    fn drop(&mut self) {
-        if let Some(d) = self.deinit {
-            debug!("BorrowedArray::drop: addr={}, len={}", self.ptr.addr(), self.len);
-            d(self.ptr, self.len);
-        }
-    }
 }
 
 impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
@@ -389,17 +379,15 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
         Self {
             ptr: s.as_ptr(),
             len: s.len(),
-            deinit: None,
             phantom: PhantomData,
         }
     }
 
     #[must_use]
-    pub fn null() -> Self {
+    pub const fn null() -> Self {
         Self {
             ptr: std::ptr::null(),
             len: 0,
-            deinit: None,
             phantom: PhantomData,
         }
     }

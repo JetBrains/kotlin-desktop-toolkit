@@ -3,8 +3,7 @@ use std::{
     io::{Read, Write},
 };
 
-use desktop_common::ffi_utils::BorrowedStrPtr;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use smithay_client_toolkit::{
     data_device_manager::{
         self, WritePipe,
@@ -126,30 +125,27 @@ impl ApplicationState {
                 window_id,
                 location_in_window: (x, y).into(),
             };
-            let target_info = (self.callbacks.query_drag_and_drop_target)(&drag_and_drop_query_data);
+            self.query_drag_and_drop_target.with(&drag_and_drop_query_data, |target_info| {
+                let supported_mime_with_actions = target_info
+                    .iter()
+                    .find(|&e| mime_types.iter().any(|s| s == e.supported_mime_type.as_str().unwrap()));
 
-            let supported_mime_with_actions = target_info
-                .supported_actions_per_mime
-                .as_slice()
-                .unwrap()
-                .iter()
-                .find(|&e| mime_types.iter().any(|s| s == e.supported_mime_type.as_str().unwrap()));
+                debug!("query_drag_and_drop_target -> {target_info:?}, supported_mime_with_actions={supported_mime_with_actions:?}");
 
-            debug!("query_drag_and_drop_target -> {target_info:?}, supported_mime_with_actions={supported_mime_with_actions:?}");
-
-            if let Some(v) = supported_mime_with_actions {
-                DragOfferMimetypeAndActions {
-                    mime_type: Some(v.supported_mime_type.as_str().unwrap().to_owned()),
-                    supported_actions: v.supported_actions.into(),
-                    preferred_action: v.preferred_action.into(),
+                if let Some(v) = supported_mime_with_actions {
+                    DragOfferMimetypeAndActions {
+                        mime_type: Some(v.supported_mime_type.as_str().unwrap().to_owned()),
+                        supported_actions: v.supported_actions.into(),
+                        preferred_action: v.preferred_action.into(),
+                    }
+                } else {
+                    DragOfferMimetypeAndActions {
+                        mime_type: None,
+                        supported_actions: DndAction::None,
+                        preferred_action: DndAction::None,
+                    }
                 }
-            } else {
-                DragOfferMimetypeAndActions {
-                    mime_type: None,
-                    supported_actions: DndAction::None,
-                    preferred_action: DndAction::None,
-                }
-            }
+            })
         })
     }
 
@@ -288,13 +284,12 @@ impl DataSourceHandler for ApplicationState {
         } else {
             return;
         };
-        let mime_cstr = CString::new(mime).unwrap();
-        let data = (self.callbacks.get_data_transfer_data)(data_type, BorrowedStrPtr::new(&mime_cstr));
-        match data.as_slice() {
-            Ok(slice) => {
-                fd.write_all(slice).expect("Write to data source failed");
+        if let Some(data) = self.transfer_data_getter.get(data_type, mime.as_str()) {
+            if fd.write_all(data.as_slice()).is_err() {
+                warn!("Write of {data_type:?} data failed");
             }
-            Err(e) => error!("Error sending clipboard data: {e}"),
+        } else {
+            warn!("Don't have any {data_type:?} data");
         }
     }
 
@@ -375,13 +370,12 @@ impl PrimarySelectionSourceHandler for ApplicationState {
         mut write_pipe: WritePipe,
     ) {
         debug!("PrimarySelectionSourceHandler::send_request: mime={mime}");
-        let mime_cstr = CString::new(mime).unwrap();
-        let data = (self.callbacks.get_data_transfer_data)(DataSource::PrimarySelection, BorrowedStrPtr::new(&mime_cstr));
-        match data.as_slice() {
-            Ok(slice) => {
-                write_pipe.write_all(slice).expect("Write to data source failed");
+        if let Some(data) = self.transfer_data_getter.get(DataSource::PrimarySelection, mime.as_str()) {
+            if write_pipe.write_all(data.as_slice()).is_err() {
+                warn!("Write of primary selection data failed");
             }
-            Err(e) => error!("Error sending clipboard data: {e}"),
+        } else {
+            warn!("Don't have any primary selection data");
         }
     }
 

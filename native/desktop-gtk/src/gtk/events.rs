@@ -130,7 +130,7 @@ impl<'a> DataTransferContent<'a> {
     }
 
     #[must_use]
-    pub fn null() -> Self {
+    pub const fn null() -> Self {
         Self {
             mime_type: BorrowedStrPtr::null(),
             data: BorrowedArray::null(),

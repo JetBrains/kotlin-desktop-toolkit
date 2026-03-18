@@ -46,7 +46,7 @@ pub struct DragAndDropQueryData {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct SupportedActionsForMime<'a> {
+pub struct FfiSupportedActionsForMime<'a> {
     pub supported_mime_type: BorrowedStrPtr<'a>,
     pub supported_actions: DragAndDropActions,
     pub preferred_action: DragAndDropAction,
@@ -54,24 +54,37 @@ pub struct SupportedActionsForMime<'a> {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct DragAndDropQueryResponse<'a> {
-    pub supported_actions_per_mime: BorrowedArray<'a, SupportedActionsForMime<'a>>,
+pub struct FfiDragAndDropQueryResponse {
+    pub obj_id: i64,
+    pub supported_actions_per_mime: BorrowedArray<'static, FfiSupportedActionsForMime<'static>>,
 }
 
 #[repr(C)]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
+pub struct FfiTransferDataResponse {
+    pub obj_id: i64,
+    pub data: BorrowedArray<'static, u8>,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DataSource {
     Clipboard,
     DragAndDrop,
     PrimarySelection,
 }
 
+pub type FfiObjDealloc = extern "C" fn(i64);
+pub type FfiQueryDragAndDropTarget = extern "C" fn(&DragAndDropQueryData) -> FfiDragAndDropQueryResponse;
+pub type FfiTransferDataGetter = extern "C" fn(DataSource, BorrowedStrPtr) -> FfiTransferDataResponse;
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct ApplicationCallbacks {
+    pub obj_dealloc: FfiObjDealloc,
     pub event_handler: EventHandler,
-    pub query_drag_and_drop_target: extern "C" fn(&DragAndDropQueryData) -> DragAndDropQueryResponse,
-    pub get_data_transfer_data: extern "C" fn(DataSource, BorrowedStrPtr) -> BorrowedArray<'_, u8>,
+    pub query_drag_and_drop_target: FfiQueryDragAndDropTarget,
+    pub get_data_transfer_data: FfiTransferDataGetter,
 }
 
 pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
