@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.linux
 
+import org.jetbrains.desktop.gtk.fromOptionalNativeString
 import org.jetbrains.desktop.linux.generated.NativeActivationTokenResponse
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_FfiSupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
@@ -712,6 +713,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.notification_closed(s)
             Event.NotificationClosed(
                 notificationId = NativeNotificationClosedEvent.notification_id(nativeEvent).toUInt(),
+                action = fromOptionalNativeString(NativeNotificationClosedEvent.action(nativeEvent)),
                 activationToken = fromOptionalNativeString(NativeNotificationClosedEvent.activation_token(nativeEvent)),
             )
         }
