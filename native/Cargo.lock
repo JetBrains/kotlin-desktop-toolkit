@@ -447,19 +447,9 @@ dependencies = [
  "log4rs",
  "smithay-client-toolkit",
  "tokio",
+ "url",
  "wayland-egl",
  "zbus",
-]
-
-[[package]]
-name = "desktop-linux-sample"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "desktop-common",
- "desktop-linux",
- "log",
- "url",
 ]
 
 [[package]]

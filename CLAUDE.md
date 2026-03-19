@@ -38,7 +38,6 @@ This is a Kotlin/Rust hybrid project providing desktop window management APIs fo
   - `desktop-macos/` - macOS native implementation
   - `desktop-linux/` - Linux/Wayland native implementation
   - `desktop-win32/` - Windows native implementation
-  - `desktop-linux-sample/` - Sample Linux application
 
 ### Platform Bindings
 - Uses JExtract to generate Java bindings from Rust C headers
