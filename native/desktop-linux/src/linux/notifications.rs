@@ -119,7 +119,14 @@ pub trait Notifications {
     fn activation_token(&self, id: u32, activation_token: String) -> zbus::Result<()>;
 }
 
-pub async fn show_notification_async(
+pub struct NewNotificationData {
+    pub summary: String,
+    pub body: String,
+    pub sound_file_path: Option<String>,
+    pub result_reporter: Box<dyn FnOnce(anyhow::Result<u32>) + 'static + Send + Sync>,
+}
+
+async fn show_notification_async(
     conn: &zbus::Connection,
     summary: &str,
     body: &str,
@@ -143,7 +150,7 @@ pub async fn show_notification_async(
     Ok(notification_id)
 }
 
-pub async fn close_notification_async(conn: &zbus::Connection, notification_id: u32) -> anyhow::Result<()> {
+async fn close_notification_async(conn: &zbus::Connection, notification_id: u32) -> anyhow::Result<()> {
     let proxy = NotificationsProxy::new(conn).await?;
     proxy.close_notification(notification_id).await?;
     Ok(())
@@ -163,6 +170,11 @@ impl NotificationData {
             activation_token: None,
         }
     }
+}
+
+pub enum NotificationAction {
+    Show(NewNotificationData),
+    Close(u32),
 }
 
 pub async fn notifications_receiver(
@@ -221,5 +233,20 @@ pub async fn notifications_receiver(
         }
     }
 
+    Ok(())
+}
+
+pub async fn notification_action_receiver_task(
+    conn: zbus::Connection,
+    mut notification_action_receiver: tokio::sync::mpsc::Receiver<NotificationAction>,
+) -> anyhow::Result<()> {
+    while let Some(action) = notification_action_receiver.recv().await {
+        match action {
+            NotificationAction::Show(data) => {
+                (data.result_reporter)(show_notification_async(&conn, &data.summary, &data.body, data.sound_file_path).await);
+            }
+            NotificationAction::Close(notification_id) => close_notification_async(&conn, notification_id).await?,
+        }
+    }
     Ok(())
 }

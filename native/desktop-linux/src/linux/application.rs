@@ -1,11 +1,11 @@
 use std::{ffi::CString, thread::ThreadId, time::Duration};
 
-use anyhow::{Context, anyhow};
+use anyhow::{Context, anyhow, bail};
 use log::{debug, warn};
 use smithay_client_toolkit::{
     reexports::{
         calloop::{
-            Dispatcher, EventLoop,
+            EventLoop,
             channel::{self, Sender},
         },
         calloop_wayland_source::WaylandSource,
@@ -19,6 +19,7 @@ use smithay_client_toolkit::{
 };
 use tokio::spawn;
 
+use crate::linux::notifications::{NewNotificationData, NotificationAction, notification_action_receiver_task};
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
     application_state::{ApplicationState, get_egl},
@@ -29,7 +30,7 @@ use crate::linux::{
     file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
-    notifications::{NotificationData, close_notification_async, notifications_receiver, show_notification_async},
+    notifications::{NotificationData, notifications_receiver},
     window::SimpleWindow,
     window_api::WindowParams,
     window_resize_edge_api::WindowResizeEdge,
@@ -564,19 +565,10 @@ impl Application {
         }))
     }
 
-    pub fn init_notifications(&self) {
-        let (sender, c) = channel::channel();
+    pub fn init_notifications(&mut self) {
+        let (notification_action_sender, notification_action_receiver) = tokio::sync::mpsc::channel(100);
 
-        let dispatcher = Dispatcher::new(
-            c,
-            move |event: channel::Event<zbus::Connection>, (), state: &mut ApplicationState| {
-                if let channel::Event::Msg(c) = event {
-                    state.notifications_connection = Some(c);
-                }
-            },
-        );
-        self.event_loop.handle().register_dispatcher(dispatcher).unwrap();
-
+        self.state.notification_action_sender = Some(notification_action_sender);
         let (event_sender, event_c) = channel::channel();
         self.event_loop
             .handle()
@@ -584,11 +576,7 @@ impl Application {
                 if let channel::Event::Msg(notification_data) = event {
                     let action_cstring = notification_data.action.map(|v| CString::new(v).unwrap());
                     let activation_token_cstring = notification_data.activation_token.map(|v| CString::new(v).unwrap());
-                    let e = NotificationClosedEvent::new(
-                        notification_data.id,
-                        action_cstring.as_ref(),
-                        activation_token_cstring.as_ref(),
-                    );
+                    let e = NotificationClosedEvent::new(notification_data.id, action_cstring.as_ref(), activation_token_cstring.as_ref());
                     state.send_event(e);
                 }
             })
@@ -596,8 +584,10 @@ impl Application {
         self.rt.spawn(async move {
             match zbus::Connection::session().await {
                 Ok(c) => {
-                    sender.send(c.clone()).unwrap();
-                    spawn(notifications_receiver(c, move |s| event_sender.send(s).map_err(Into::into)));
+                    spawn(notifications_receiver(c.clone(), move |notification_data| {
+                        event_sender.send(notification_data).map_err(Into::into)
+                    }));
+                    spawn(notification_action_receiver_task(c, notification_action_receiver));
                 }
                 Err(e) => warn!("Error initializing notifications: {e}"),
             }
@@ -610,26 +600,38 @@ impl Application {
         body: String,
         sound_file_path: Option<String>,
     ) -> anyhow::Result<RequestId> {
-        let Some(conn) = &self.state.notifications_connection else {
-            return Err(anyhow!("Cannot interact with notifications"));
+        let Some(action_sender) = self.state.notification_action_sender.clone() else {
+            bail!("Notifications not initialized");
         };
-        let conn = conn.clone();
 
-        Ok(self.run_async(|request_id| async move {
-            let result = show_notification_async(&conn, &summary, &body, sound_file_path).await;
-            AsyncEventResult::NotificationShown { request_id, result }
-        }))
+        self.async_request_counter = self.async_request_counter.wrapping_add(1);
+        let request_id = RequestId(self.async_request_counter);
+        let result_sender = self.run_async_sender.clone();
+        self.rt.spawn(async move {
+            let new_notification_data = NewNotificationData {
+                body,
+                summary,
+                sound_file_path,
+                result_reporter: Box::new(move |result| {
+                    result_sender
+                        .send(AsyncEventResult::NotificationShown { request_id, result })
+                        .unwrap();
+                }),
+            };
+            if let Err(e) = action_sender.send(NotificationAction::Show(new_notification_data)).await {
+                warn!("Error requesting notification: {e}");
+            }
+        });
+        Ok(request_id)
     }
 
     pub fn request_close_notification(&mut self, notification_id: u32) -> anyhow::Result<()> {
-        let Some(conn) = &self.state.notifications_connection else {
-            return Err(anyhow!("Cannot interact with notifications"));
+        let Some(action_sender) = self.state.notification_action_sender.clone() else {
+            bail!("Notifications not initialized");
         };
-        let conn = conn.clone();
-
         self.run_async(|_request_id| async move {
-            if let Err(e) = close_notification_async(&conn, notification_id).await {
-                warn!("Error closing notification {notification_id}: {e}");
+            if let Err(e) = action_sender.send(NotificationAction::Close(notification_id)).await {
+                warn!("Error closing notification: {e}");
             }
             AsyncEventResult::NotificationClosed {}
         });
