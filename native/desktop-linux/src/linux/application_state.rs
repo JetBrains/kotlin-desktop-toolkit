@@ -1,6 +1,7 @@
 use std::{collections::HashMap, ffi::CString, sync::LazyLock};
 
 use crate::linux::ffi_return_conversions::{QueryDragAndDropTarget, TransferDataGetter};
+use crate::linux::notifications::NotificationAction;
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
     drag_icon::DragIcon,
@@ -144,7 +145,7 @@ pub struct ApplicationState {
     pub last_keyboard_event_serial: Option<u32>,
     pub active_text_input: Option<ZwpTextInputV3>,
     pub pending_text_input_event: PendingTextInputEvent,
-    pub notifications_connection: Option<zbus::Connection>,
+    pub notification_action_sender: Option<tokio::sync::mpsc::Sender<NotificationAction>>,
 }
 
 impl ApplicationState {
@@ -209,7 +210,7 @@ impl ApplicationState {
             last_keyboard_event_serial: None,
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
-            notifications_connection: None,
+            notification_action_sender: None,
         }
     }
 
