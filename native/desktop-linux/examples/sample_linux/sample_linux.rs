@@ -15,6 +15,7 @@ use desktop_common::{
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::application_api::{FfiDragAndDropQueryResponse, FfiSupportedActionsForMime, FfiTransferDataResponse};
+use desktop_linux::linux::screen::screen_list;
 use desktop_linux::linux::{
     application_api::{
         AppPtr,
@@ -639,6 +640,12 @@ extern "C" fn event_handler(event: &Event) -> bool {
             Event::ApplicationStarted => {
                 on_application_started(state);
                 true
+            }
+            Event::DisplayConfigurationChange => {
+                let ffi_screens = screen_list(app_ptr);
+                let screen_infos = unsafe { std::slice::from_raw_parts_mut(ffi_screens.ptr.cast_mut(), ffi_screens.len) };
+                println!("DisplayConfigurationChange: {screen_infos:?}");
+                false
             }
             Event::XdgDesktopSettingChange(data) => {
                 on_xdg_desktop_settings_change(data, state);
