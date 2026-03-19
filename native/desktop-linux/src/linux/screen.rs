@@ -13,12 +13,12 @@ use crate::linux::{
 pub type ScreenId = u32;
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct ScreenInfo {
     pub screen_id: ScreenId,
     pub name: AutoDropStrPtr,
     pub origin: LogicalPoint,
     pub size: LogicalSize,
-    pub scale: f64,
     pub maximum_frames_per_second: i32,
     // todo color space?
     // todo stable uuid?
@@ -47,7 +47,6 @@ impl ScreenInfo {
                     height: size.1,
                 })
                 .unwrap_or_default(),
-            scale: info.scale_factor.into(),
             maximum_frames_per_second: current_mode.map(Self::get_refresh_rate_fps).unwrap_or_default(),
         }
     }

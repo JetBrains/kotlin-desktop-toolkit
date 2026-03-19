@@ -10,7 +10,6 @@ public data class Screen(
     val name: String?,
     val origin: LogicalPoint,
     val size: LogicalSize,
-    val scale: Double,
     val maximumFramesPerSecond: Int,
 ) {
     public companion object {
@@ -25,7 +24,6 @@ public data class Screen(
                 },
                 origin = LogicalPoint.fromNative(NativeScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(NativeScreenInfo.size(s)),
-                scale = NativeScreenInfo.scale(s),
                 maximumFramesPerSecond = NativeScreenInfo.maximum_frames_per_second(s),
             )
         }
