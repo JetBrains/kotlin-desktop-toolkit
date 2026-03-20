@@ -12,7 +12,10 @@ use smithay_client_toolkit::{
         data_source::{CopyPasteSource, DataSourceHandler, DragSource},
     },
     delegate_data_device, delegate_primary_selection,
-    primary_selection::{device::PrimarySelectionDeviceHandler, selection::PrimarySelectionSourceHandler},
+    primary_selection::{
+        device::{PrimarySelectionDeviceData, PrimarySelectionDeviceHandler},
+        selection::PrimarySelectionSourceHandler,
+    },
     reexports::{
         calloop::{LoopHandle, PostAction},
         client::{
@@ -349,7 +352,10 @@ impl MimeTypes {
 impl PrimarySelectionDeviceHandler for ApplicationState {
     fn selection(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, primary_selection_device: &ZwpPrimarySelectionDeviceV1) {
         debug!("PrimarySelectionDeviceHandler::selection");
-        let Some(selection_offer) = primary_selection_device.data().and_then(DataDeviceData::selection_offer) else {
+        let Some(selection_offer) = primary_selection_device
+            .data()
+            .and_then(PrimarySelectionDeviceData::selection_offer)
+        else {
             return;
         };
         selection_offer.with_mime_types(|mime_types| {
