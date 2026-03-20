@@ -299,7 +299,7 @@ public class Application(public val appId: String) {
         }
     }
 
-    /** Will produce [Event.DataTransfer] event if there is clipboard content. */
+    /** Will produce [Event.DataTransfer] event with a matching serial. */
     public fun clipboardPaste(serial: Int, supportedMimeTypes: List<String>) {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
@@ -330,7 +330,7 @@ public class Application(public val appId: String) {
         }
     }
 
-    /** Will produce [Event.DataTransfer] event if there is primary selection content. */
+    /** Will produce [Event.DataTransfer] event with a matching serial. */
     public fun primarySelectionPaste(serial: Int, supportedMimeTypes: List<String>) {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {

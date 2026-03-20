@@ -227,13 +227,14 @@ pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr, mime_types: Bor
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedStrPtr) -> bool {
+pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedStrPtr) {
     let t = std::thread::current();
     debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
     ffi_boundary("application_clipboard_paste", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        Ok(app.clipboard_paste(serial, supported_mime_types.as_str()?))
-    })
+        app.clipboard_paste(serial, supported_mime_types.as_str()?);
+        Ok(())
+    });
 }
 
 #[unsafe(no_mangle)]
@@ -247,13 +248,14 @@ pub extern "C" fn application_primary_selection_put(mut app_ptr: AppPtr, mime_ty
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_primary_selection_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedStrPtr) -> bool {
+pub extern "C" fn application_primary_selection_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedStrPtr) {
     let t = std::thread::current();
     debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
     ffi_boundary("application_clipboard_paste", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        Ok(app.primary_selection_paste(serial, supported_mime_types.as_str()?))
-    })
+        app.primary_selection_paste(serial, supported_mime_types.as_str()?);
+        Ok(())
+    });
 }
 
 #[unsafe(no_mangle)]
