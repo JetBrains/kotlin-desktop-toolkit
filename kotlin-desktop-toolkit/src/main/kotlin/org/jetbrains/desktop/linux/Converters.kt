@@ -413,16 +413,8 @@ internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
 
 internal fun DataTransferContent.Companion.fromNative(s: MemorySegment): DataTransferContent? {
     val nativeU8Array = NativeDataTransferContent.data(s)
-    if (nativeU8Array == MemorySegment.NULL) {
-        return null
-    }
+    val buf = readNativeU8Array(nativeU8Array) ?: return null
     val mimeType = NativeDataTransferContent.mime_type(s).getUtf8String(0)
-    val len = NativeBorrowedArray_u8.len(nativeU8Array)
-    val buf = ByteArray(len.toInt())
-    val dataPtr = NativeBorrowedArray_u8.ptr(nativeU8Array)
-    for (i in 0 until len) {
-        buf[i.toInt()] = dataPtr.getAtIndex(desktop_linux_h.C_CHAR, i)
-    }
     return DataTransferContent(mimeType = mimeType, data = buf)
 }
 
@@ -520,6 +512,19 @@ internal fun ScrollData.Companion.fromNative(s: MemorySegment): ScrollData {
         isInverted = NativeScrollData.is_inverted(s),
         isStop = NativeScrollData.is_stop(s),
     )
+}
+
+private fun readNativeU8Array(nativeU8Array: MemorySegment): ByteArray? {
+    val dataPtr = NativeBorrowedArray_u8.ptr(nativeU8Array)
+    if (dataPtr == MemorySegment.NULL) {
+        return null
+    }
+    val len = NativeBorrowedArray_u8.len(nativeU8Array)
+    val buf = ByteArray(len.toInt())
+    for (i in 0 until len) {
+        buf[i.toInt()] = dataPtr.getAtIndex(desktop_linux_h.C_CHAR, i)
+    }
+    return buf
 }
 
 private fun readNativeU32Array(nativeU32Array: MemorySegment): List<UInt> {

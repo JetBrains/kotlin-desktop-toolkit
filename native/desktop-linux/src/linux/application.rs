@@ -19,6 +19,7 @@ use smithay_client_toolkit::{
 };
 use tokio::spawn;
 
+use crate::linux::events::DataTransferContent;
 use crate::linux::notifications::{NewNotificationData, NotificationAction, notification_action_receiver_task};
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
@@ -284,7 +285,7 @@ impl Application {
         }
     }
 
-    pub fn primary_selection_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
+    fn primary_selection_paste_impl(&self, serial: i32, supported_mime_types: &str) -> bool {
         let Some(device) = self.state.primary_selection_device.as_ref() else {
             return false;
         };
@@ -322,7 +323,16 @@ impl Application {
         )
     }
 
-    pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) -> bool {
+    pub fn primary_selection_paste(&self, serial: i32, supported_mime_types: &str) {
+        if !self.primary_selection_paste_impl(serial, supported_mime_types) {
+            self.state.send_event(DataTransferEvent {
+                serial,
+                content: DataTransferContent::null(),
+            });
+        }
+    }
+
+    fn clipboard_paste_impl(&self, serial: i32, supported_mime_types: &str) -> bool {
         let Some(device) = self.state.data_device.as_ref() else {
             warn!("application_clipboard_paste: No data device available");
             return false;
@@ -359,6 +369,15 @@ impl Application {
                 state.send_event(DataTransferEvent { serial, content });
             },
         )
+    }
+
+    pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) {
+        if !self.clipboard_paste_impl(serial, supported_mime_types) {
+            self.state.send_event(DataTransferEvent {
+                serial,
+                content: DataTransferContent::null(),
+            });
+        }
     }
 
     pub fn start_drag(

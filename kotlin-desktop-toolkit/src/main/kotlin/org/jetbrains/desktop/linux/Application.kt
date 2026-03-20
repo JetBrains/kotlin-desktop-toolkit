@@ -292,8 +292,8 @@ public class Application : AutoCloseable {
         }
     }
 
-    /** Will produce [Event.DataTransfer] event if there is clipboard content. */
-    public fun clipboardPaste(serial: Int, supportedMimeTypes: List<String>): Boolean {
+    /** Will produce [Event.DataTransfer] event with a matching serial. */
+    public fun clipboardPaste(serial: Int, supportedMimeTypes: List<String>) {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_linux_h.application_clipboard_paste(appPtr, serial, mimeTypesToNative(arena, supportedMimeTypes))
@@ -323,8 +323,8 @@ public class Application : AutoCloseable {
         }
     }
 
-    /** Will produce [Event.DataTransfer] event if there is primary selection content. */
-    public fun primarySelectionPaste(serial: Int, supportedMimeTypes: List<String>): Boolean {
+    /** Will produce [Event.DataTransfer] event with a matching serial. */
+    public fun primarySelectionPaste(serial: Int, supportedMimeTypes: List<String>) {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_linux_h.application_primary_selection_paste(appPtr, serial, mimeTypesToNative(arena, supportedMimeTypes))
