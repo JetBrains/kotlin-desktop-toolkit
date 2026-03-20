@@ -152,6 +152,13 @@ public class Window internal constructor(
         }
     }
 
+    public fun setIcon(icon: ByteArray) {
+        Arena.ofConfined().use { arena ->
+            val nativeIcon = icon.toNative(arena)
+            ffiDownCall { desktop_win32_h.window_set_icon(ptr, nativeIcon) }
+        }
+    }
+
     public fun setImmersiveDarkMode(enabled: Boolean) {
         ffiDownCall {
             desktop_win32_h.window_set_immersive_dark_mode(ptr, enabled)

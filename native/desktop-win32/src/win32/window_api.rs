@@ -1,9 +1,10 @@
 use std::{mem::ManuallyDrop, rc::Rc};
 
 use desktop_common::{
-    ffi_utils::{BorrowedStrPtr, RustAllocatedRcPtr},
+    ffi_utils::{BorrowedArray, BorrowedStrPtr, RustAllocatedRcPtr},
     logger::{PanicDefault, ffi_boundary},
 };
+
 use windows::Win32::{
     Graphics::Dwm::{DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW},
     UI::WindowsAndMessaging::{WINDOW_STYLE, WS_CAPTION, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME},
@@ -189,6 +190,11 @@ pub extern "C" fn window_set_cursor_from_system(window_ptr: WindowPtr, cursor_ic
         window.set_cursor(cursor);
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_icon(window_ptr: WindowPtr, icon: BorrowedArray<u8>) {
+    with_window(&window_ptr, "window_set_icon", |window| window.set_icon(icon.as_slice()?));
 }
 
 #[unsafe(no_mangle)]

@@ -25,11 +25,11 @@ use windows::{
             Controls::MARGINS,
             HiDpi::GetDpiForWindow,
             WindowsAndMessaging::{
-                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE, GetClientRect, GetPropW,
-                IsIconic, IsZoomed, PostMessageW, RegisterClassExW, RemovePropW, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED,
-                SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
-                ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WNDCLASSEXW,
-                WS_EX_NOREDIRECTIONBITMAP,
+                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
+                GetClientRect, GetPropW, ICON_BIG, IsIconic, IsZoomed, LR_DEFAULTSIZE, PostMessageW, RegisterClassExW, RemovePropW,
+                SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor,
+                SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE,
+                WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
@@ -349,6 +349,13 @@ impl Window {
 
     pub fn destroy(&self) -> WinResult<()> {
         unsafe { DestroyWindow(self.hwnd()) }
+    }
+
+    pub fn set_icon(&self, bytes: &[u8]) -> anyhow::Result<()> {
+        const ICON_VER: u32 = 0x0003_0000;
+        let icon = unsafe { CreateIconFromResourceEx(bytes, true, ICON_VER, 0, 0, LR_DEFAULTSIZE)? };
+        unsafe { SendMessageW(self.hwnd(), WM_SETICON, Some(WPARAM(ICON_BIG as _)), Some(LPARAM(icon.0 as _))) };
+        Ok(())
     }
 }
 
