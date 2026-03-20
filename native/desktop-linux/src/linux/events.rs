@@ -478,6 +478,18 @@ impl From<WindowCloseRequestEvent> for Event<'_> {
 
 #[repr(C)]
 #[derive(Debug)]
+pub struct WindowClosedEvent {
+    pub window_id: WindowId,
+}
+
+impl From<WindowClosedEvent> for Event<'_> {
+    fn from(value: WindowClosedEvent) -> Self {
+        Self::WindowClosed(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
 pub struct WindowConfigureEvent {
     pub window_id: WindowId,
     pub size: LogicalSize,
@@ -730,6 +742,7 @@ pub enum Event<'a> {
     TextInputAvailability(TextInputAvailabilityEvent),
     TextInput(TextInputEvent<'a>),
     WindowCloseRequest(WindowCloseRequestEvent),
+    WindowClosed(WindowClosedEvent),
     WindowConfigure(WindowConfigureEvent),
     WindowDraw(WindowDrawEvent),
     WindowKeyboardEnter(WindowKeyboardEnterEvent<'a>),

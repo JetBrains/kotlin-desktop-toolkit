@@ -1368,6 +1368,10 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 val windowId = event.windowId
                 val window = windows[windowId] ?: return EventHandlerResult.Continue
                 window.close()
+                EventHandlerResult.Stop
+            }
+            is Event.WindowClosed -> {
+                val windowId = event.windowId
                 windows.remove(windowId)
                 windowClipboardHandlers.remove(windowId)
 

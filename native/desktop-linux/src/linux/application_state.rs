@@ -1,5 +1,6 @@
 use std::{collections::HashMap, ffi::CString, sync::LazyLock};
 
+use crate::linux::application::send_event;
 use crate::linux::ffi_return_conversions::{QueryDragAndDropTarget, TransferDataGetter};
 use crate::linux::notifications::NotificationAction;
 use crate::linux::{
@@ -22,7 +23,6 @@ use crate::linux::{
     text_input::PendingTextInputEvent,
     window::SimpleWindow,
 };
-use desktop_common::logger::catch_panic;
 use khronos_egl;
 use log::{debug, info, warn};
 use smithay_client_toolkit::{
@@ -253,7 +253,7 @@ impl ApplicationState {
 
     pub fn send_event<'a, T: Into<Event<'a>>>(&self, event_data: T) -> bool {
         let event: Event = event_data.into();
-        self.callbacks.send_event(event)
+        send_event(self.callbacks.event_handler, event)
     }
 
     pub fn get_latest_pointer_button_seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
@@ -280,18 +280,6 @@ impl ApplicationState {
             debug!("Using pointer event serial");
             pointer_event_seat_and_serial
         }
-    }
-}
-
-impl ApplicationCallbacks {
-    #[allow(clippy::needless_pass_by_value)]
-    #[must_use]
-    pub fn send_event(&self, event: Event) -> bool {
-        match event {
-            Event::MouseMoved(_) | Event::WindowDraw(_) | Event::DragIconDraw(_) => {}
-            _ => debug!("Sending event: {event:?}"),
-        }
-        catch_panic(|| Ok((self.event_handler)(&event))).unwrap_or(false)
     }
 }
 
@@ -409,12 +397,12 @@ impl CompositorHandler for ApplicationState {
             let new_scale: f64 = new_factor.into();
             window.scale_changed(new_scale, &self.shm_state);
 
-            _ = self.callbacks.send_event(
+            _ = send_event(
+                self.callbacks.event_handler,
                 WindowScaleChangedEvent {
                     window_id: window.window_id,
                     new_scale,
-                }
-                .into(),
+                },
             );
         }
     }
@@ -427,12 +415,12 @@ impl CompositorHandler for ApplicationState {
     fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, _time: u32) {
         if let Some(window) = self.windows.get_mut(&surface.id()) {
             window.draw(conn, qh, self.themed_pointer.as_mut(), &|e: WindowDrawEvent| {
-                self.callbacks.send_event(e.into())
+                send_event(self.callbacks.event_handler, e)
             });
         } else if let Some(drag_icon) = &mut self.drag_icon
             && drag_icon.surface.wl_surface() == surface
         {
-            drag_icon.draw(qh, &|e| self.callbacks.send_event(e.into()));
+            drag_icon.draw(qh, &|e| send_event(self.callbacks.event_handler, e));
         } else {
             warn!("Draw surface {} is neither a window nor a drag icon", surface.id());
         }
@@ -472,7 +460,8 @@ impl WindowHandler for ApplicationState {
             };
             let is_first_configure = w.configure(&self.wl_display, &self.shm_state, window, &configure, egl);
 
-            _ = self.callbacks.send_event(
+            _ = send_event(
+                self.callbacks.event_handler,
                 WindowConfigureEvent {
                     window_id: w.window_id,
                     size: w.size.unwrap(),
@@ -486,14 +475,13 @@ impl WindowHandler for ApplicationState {
                         fullscreen: configure.capabilities.contains(WindowManagerCapabilities::FULLSCREEN),
                         minimize: configure.capabilities.contains(WindowManagerCapabilities::MINIMIZE),
                     },
-                }
-                .into(),
+                },
             );
 
             if is_first_configure {
                 // Initiate the first draw.
                 w.draw(conn, qh, self.themed_pointer.as_mut(), &|e: WindowDrawEvent| {
-                    self.callbacks.send_event(e.into())
+                    send_event(self.callbacks.event_handler, e)
                 });
             }
         }
@@ -526,12 +514,12 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
             if let Some(window) = state.windows.get_mut(surface_id) {
                 window.scale_changed(new_scale, &state.shm_state);
 
-                _ = state.callbacks.send_event(
+                _ = send_event(
+                    state.callbacks.event_handler,
                     WindowScaleChangedEvent {
                         window_id: window.window_id,
                         new_scale,
-                    }
-                    .into(),
+                    },
                 );
             } else if let Some(drag_icon) = &mut state.drag_icon
                 && drag_icon.surface.wl_surface().id() == *surface_id
