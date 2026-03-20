@@ -254,6 +254,7 @@ impl PointerClickCounter {
             || !unsafe { PtInRect(&raw const self.last_click_rect, pt) }.as_bool()
             || tm_click - self.last_click_time > unsafe { GetDoubleClickTime() }
         {
+            self.button = button;
             self.clicks = 0;
         }
 
@@ -272,7 +273,10 @@ impl PointerClickCounter {
         self.clicks
     }
 
-    pub const fn reset(&mut self) {
+    pub fn reset(&mut self) {
+        self.button = PointerButton::None;
         self.clicks = 0;
+        self.last_click_time = 0;
+        self.last_click_rect = RECT::default();
     }
 }
