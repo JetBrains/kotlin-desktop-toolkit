@@ -628,7 +628,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_ActivationTokenResponse() -> {
             val nativeEvent = NativeEvent.activation_token_response(s)
             Event.ActivationTokenResponse(
-                requestId = NativeActivationTokenResponse.request_id(nativeEvent).toUInt(),
+                requestId = RequestId.fromNativeField(NativeActivationTokenResponse.request_id(nativeEvent)),
                 token = NativeActivationTokenResponse.token(nativeEvent).getUtf8String(0),
             )
         }
@@ -756,6 +756,12 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.WindowScreenChange(
                 windowId = NativeWindowScreenChangeEvent.window_id(nativeEvent),
                 newScreenId = NativeWindowScreenChangeEvent.new_screen_id(nativeEvent),
+            )
+        }
+        desktop_linux_h.NativeEvent_WindowClosed() -> {
+            val nativeEvent = NativeEvent.window_closed(s)
+            Event.WindowClosed(
+                windowId = NativeWindowConfigureEvent.window_id(nativeEvent),
             )
         }
         desktop_linux_h.NativeEvent_WindowConfigure() -> {

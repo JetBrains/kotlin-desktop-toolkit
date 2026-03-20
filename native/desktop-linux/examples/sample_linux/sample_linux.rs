@@ -678,6 +678,9 @@ extern "C" fn event_handler(event: &Event) -> bool {
             }
             Event::WindowCloseRequest(data) => {
                 window_close(app_ptr.clone(), data.window_id);
+                true
+            }
+            Event::WindowClosed(data) => {
                 state.windows.retain(|&k, _v| k != data.window_id);
                 state.request_sources.retain(|_k, &mut v| v != data.window_id);
                 for (notification_id, _window_id) in state.notification_sources.extract_if(|_k, &mut v| v != data.window_id) {

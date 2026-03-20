@@ -1,25 +1,6 @@
 use std::{ffi::CString, thread::ThreadId, time::Duration};
 
-use anyhow::{Context, anyhow, bail};
-use log::{debug, warn};
-use smithay_client_toolkit::{
-    reexports::{
-        calloop::{
-            EventLoop,
-            channel::{self, Sender},
-        },
-        calloop_wayland_source::WaylandSource,
-        client::{
-            Connection, Proxy as _, QueueHandle,
-            globals::registry_queue_init,
-            protocol::{wl_data_device_manager::DndAction, wl_surface::WlSurface},
-        },
-    },
-    shell::WaylandSurface,
-};
-use tokio::spawn;
-
-use crate::linux::events::DataTransferContent;
+use crate::linux::events::{DataTransferContent, EventHandler, WindowClosedEvent};
 use crate::linux::notifications::{NewNotificationData, NotificationAction, notification_action_receiver_task};
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
@@ -38,6 +19,25 @@ use crate::linux::{
     xdg_desktop_settings::xdg_desktop_settings_notifier,
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
+use anyhow::{Context, anyhow, bail};
+use desktop_common::logger::catch_panic;
+use log::{debug, warn};
+use smithay_client_toolkit::{
+    reexports::{
+        calloop::{
+            EventLoop,
+            channel::{self, Sender},
+        },
+        calloop_wayland_source::WaylandSource,
+        client::{
+            Connection, Proxy as _, QueueHandle,
+            globals::registry_queue_init,
+            protocol::{wl_data_device_manager::DndAction, wl_surface::WlSurface},
+        },
+    },
+    shell::WaylandSurface,
+};
+use tokio::spawn;
 
 pub struct Application {
     pub event_loop: EventLoop<'static, ApplicationState>,
@@ -64,6 +64,16 @@ fn create_run_async_sender(event_loop: &EventLoop<'static, ApplicationState>) ->
         .unwrap();
 
     sender
+}
+
+#[allow(clippy::needless_pass_by_value)]
+pub fn send_event<'a, T: Into<Event<'a>>>(event_handler: EventHandler, event_data: T) -> bool {
+    let event: Event = event_data.into();
+    match event {
+        Event::MouseMoved(_) | Event::WindowDraw(_) | Event::DragIconDraw(_) => {}
+        _ => debug!("Sending event: {event:?}"),
+    }
+    catch_panic(|| Ok(event_handler(&event))).unwrap_or(false)
 }
 
 impl Application {
@@ -152,15 +162,20 @@ impl Application {
     pub fn event_loop_iteration(&mut self) -> Result<bool, anyhow::Error> {
         self.event_loop.dispatch(Duration::from_millis(16), &mut self.state)?;
 
+        let event_handler = self.state.callbacks.event_handler;
         for (k, v) in self.state.windows.extract_if(|_, v| v.close) {
             debug!("Closing window {:?} ({k})", v.window_id);
             self.state.window_id_to_surface_id.remove(&v.window_id);
+            send_event(event_handler, WindowClosedEvent { window_id: v.window_id });
         }
 
-        if self.exit && !self.state.send_event(Event::ApplicationWantsToTerminate) {
+        if self.exit && !send_event(event_handler, Event::ApplicationWantsToTerminate) {
             debug!("Exiting");
-            self.state.send_event(Event::ApplicationWillTerminate);
+            send_event(event_handler, Event::ApplicationWillTerminate);
             self.state.windows.clear();
+            self.state.window_id_to_surface_id.clear();
+            // Actually close the windows before stopping the event loop
+            self.event_loop.dispatch(Duration::from_millis(16), &mut self.state)?;
             Ok(false)
         } else {
             Ok(true)

@@ -174,7 +174,7 @@ public sealed class Event {
     ) : Event()
 
     public data class ActivationTokenResponse(
-        val requestId: UInt,
+        val requestId: RequestId,
         val token: String,
     ) : Event()
 
@@ -274,6 +274,8 @@ public sealed class Event {
     ) : Event()
 
     public data class WindowCloseRequest(val windowId: WindowId) : Event()
+
+    public data class WindowClosed(val windowId: WindowId) : Event()
 
     public data class WindowConfigure(
         val windowId: WindowId,
