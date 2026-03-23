@@ -56,9 +56,15 @@ val nativeLib = configurations.resolvable("nativeParts") {
     }
 }
 
-fun JavaExec.setUpLoggingAndLibraryPath(backend: String) {
+fun JavaExec.setUpLoggingAndLibraryPath(backend: String? = null) {
     val logFilePath = layout.buildDirectory.file("sample-logs/skiko_sample.log").map { it.asFile.absolutePath }
-    val nativeLibPath = nativeLib.map { it.first { it.name.startsWith("native-$backend-") }.absolutePath }
+    val nativeLibPath = nativeLib.map {
+        if (backend == null) {
+            it.singleFile
+        } else {
+            it.first { file -> file.name.startsWith("native-$backend-") }
+        }.absolutePath
+    }
     jvmArgumentProviders.add(
         CommandLineArgumentProvider {
             listOf(
@@ -85,7 +91,7 @@ tasks.register<JavaExec>("runSkikoSampleMac") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
-    setUpLoggingAndLibraryPath("macos")
+    setUpLoggingAndLibraryPath()
 
     environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
@@ -106,7 +112,7 @@ tasks.register<JavaExec>("runApplicationMenuSampleMac") {
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
-    setUpLoggingAndLibraryPath("macos")
+    setUpLoggingAndLibraryPath()
 
     environment("MTL_HUD_ENABLED", 1)
 //    environment("MallocStackLogging", "1")
@@ -180,7 +186,7 @@ tasks.register<JavaExec>("runSkikoSampleWin32") {
         "-Dstdout.encoding=UTF-8",
         "-Dstderr.encoding=UTF-8",
     )
-    setUpLoggingAndLibraryPath("win32")
+    setUpLoggingAndLibraryPath()
     setUpCrashDumpPath()
 }
 
