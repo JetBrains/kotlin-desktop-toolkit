@@ -156,7 +156,7 @@ impl PointerInfo {
 
     pub(crate) fn get_timestamp(&self) -> Timestamp {
         let native_pointer_info = self.get_native_pointer_info();
-        Timestamp(u64::from(native_pointer_info.dwTime) * 1000)
+        Timestamp::from_millis(native_pointer_info.dwTime.into())
     }
 
     #[allow(clippy::cast_precision_loss)]
