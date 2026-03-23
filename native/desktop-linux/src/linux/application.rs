@@ -232,9 +232,9 @@ impl Application {
     }
 
     pub fn clipboard_put(&mut self, mime_types: MimeTypes) {
+        debug!("application_clipboard_put: mime_types = {:?}", mime_types.val);
         if mime_types.val.is_empty() {
             self.state.copy_paste_source = None;
-            warn!("application_clipboard_put: Passed mime_types are empty");
             return;
         }
         let Some(device) = self.state.data_device.as_ref() else {
