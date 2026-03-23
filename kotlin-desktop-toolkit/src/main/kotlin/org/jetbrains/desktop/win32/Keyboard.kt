@@ -1,5 +1,6 @@
 package org.jetbrains.desktop.win32
 
+import org.jetbrains.desktop.macos.byteArrayFromNative
 import org.jetbrains.desktop.win32.generated.NativeKeyState
 import org.jetbrains.desktop.win32.generated.NativePhysicalKeyStatus
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
@@ -16,12 +17,29 @@ public object Keyboard {
             )
         }
     }
+
+    public fun getState(): KeyboardState = ffiDownCall {
+        Arena.ofConfined().use { arena ->
+            val nativeState = desktop_win32_h.keyboard_get_state(arena)
+            KeyboardState(byteArrayFromNative(nativeState))
+        }
+    }
 }
 
 public data class KeyState(
     val isDown: Boolean,
     val isToggled: Boolean,
 )
+
+public class KeyboardState(private val keyboardState: ByteArray) {
+    public fun isKeyDown(virtualKey: VirtualKey): Boolean {
+        return keyboardState[virtualKey.value].toInt() and 0b10000000 != 0
+    }
+
+    public fun isKeyToggled(virtualKey: VirtualKey): Boolean {
+        return keyboardState[virtualKey.value].toInt() and 0b00000001 != 0
+    }
+}
 
 @JvmInline
 public value class VirtualKey internal constructor(internal val value: Int) {
