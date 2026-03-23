@@ -41,9 +41,17 @@ pub enum Event {
 // return true if event was handled
 pub type EventHandler = extern "C" fn(WindowId, &Event) -> bool;
 
+/// Count of 100-nanosecond intervals since some fixed but arbitrary moment in the past (typically system start time).
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
-pub struct Timestamp(pub u64);
+pub struct Timestamp(u64);
+
+impl Timestamp {
+    #[must_use]
+    pub const fn from_millis(ms: u64) -> Self {
+        Self(ms * 10_000) // 100-nanosecond intervals
+    }
+}
 
 #[repr(C)]
 #[derive(Debug)]

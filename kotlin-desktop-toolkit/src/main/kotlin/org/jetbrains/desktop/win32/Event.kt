@@ -21,15 +21,15 @@ import org.jetbrains.desktop.win32.generated.NativeWindowTitleChangedEvent
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.MemorySegment
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.nanoseconds
 
 @JvmInline
 public value class Timestamp(
-    /** Count of milliseconds since some fixed but arbitrary moment in the past */
+    /** Count of 100-nanosecond intervals since some fixed but arbitrary moment in the past (typically system start time) */
     private val value: Long,
 ) {
     public fun toDuration(): Duration {
-        return value.milliseconds
+        return (value * 100).nanoseconds
     }
 }
 

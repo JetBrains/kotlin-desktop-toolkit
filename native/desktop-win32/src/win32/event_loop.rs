@@ -376,10 +376,9 @@ fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LR
     }
 }
 
-#[allow(clippy::cast_sign_loss)]
 fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let virtual_key = VirtualKey::from(wparam);
-    let timestamp = unsafe { GetMessageTime() } as u32;
+    let timestamp = unsafe { GetMessageTime() }.cast_unsigned();
     let pos = unsafe { GetMessagePos() };
     let original_msg_id = LAST_KEYEVENT_MESSAGE_ID.with_borrow_mut(|msg_id| {
         *msg_id = msg_id.wrapping_add(1);
@@ -405,7 +404,7 @@ fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM
         is_system_key: matches!(msg, WM_SYSKEYDOWN | WM_SYSKEYUP),
         key_status: PhysicalKeyStatus::from(lparam),
         virtual_key,
-        timestamp: Timestamp(u64::from(timestamp) * 1000),
+        timestamp: Timestamp::from_millis(timestamp.into()),
         original_msg_id,
     };
     let event = match msg {
