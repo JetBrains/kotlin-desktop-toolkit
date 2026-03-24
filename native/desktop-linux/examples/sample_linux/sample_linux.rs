@@ -503,9 +503,9 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             true
         }
         (_, _) => {
-            if let Some(s) = event.characters.as_optional_str().unwrap() {
+            if let Some(s) = event.characters.as_optional_slice() {
                 let window_state = state.windows.get_mut(&window_id).unwrap();
-                window_state.text += s;
+                window_state.text += str::from_utf8(s).unwrap();
             }
             false
         }

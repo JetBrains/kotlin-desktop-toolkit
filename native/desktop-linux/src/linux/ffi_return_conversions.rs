@@ -14,7 +14,7 @@ impl TransferDataGetter {
     pub fn get(&self, clipboard_type: DataSource, mime_type: &str) -> Option<Vec<u8>> {
         let mime_type_cstr = CString::new(mime_type).unwrap();
         let ffi_response = (self.ffi_get)(clipboard_type, BorrowedStrPtr::new(&mime_type_cstr));
-        let ret = ffi_response.data.as_slice().ok().map(Into::into);
+        let ret = ffi_response.data.as_optional_slice().map(Into::into);
         (self.ffi_dealloc)(ffi_response.obj_id);
         ret
     }

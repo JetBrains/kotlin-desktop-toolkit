@@ -1,6 +1,5 @@
 package org.jetbrains.desktop.linux
 
-import org.jetbrains.desktop.gtk.fromOptionalNativeString
 import org.jetbrains.desktop.linux.generated.NativeActivationTokenResponse
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_FfiSupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
@@ -634,9 +633,11 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         }
         desktop_linux_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
+            val nativeU8Array = NativeKeyDownEvent.characters(nativeEvent)
+            val characters = readNativeU8Array(nativeU8Array)?.decodeToString()
             Event.KeyDown(
                 keyCode = KeyCode(NativeKeyDownEvent.code(nativeEvent).toUInt()),
-                characters = fromOptionalNativeString(NativeKeyDownEvent.characters(nativeEvent)),
+                characters = characters,
                 key = KeySym(NativeKeyDownEvent.key(nativeEvent).toUInt()),
                 isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
             )
