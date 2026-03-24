@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.linux
 
-public data class TextInputPreeditStringData(
+@ConsistentCopyVisibility
+public data class TextInputPreeditStringData internal constructor(
     public val text: String?,
     public val cursorBeginBytePos: Int,
     public val cursorEndBytePos: Int,
@@ -8,11 +9,13 @@ public data class TextInputPreeditStringData(
     internal companion object
 }
 
-public data class TextInputCommitStringData(public val text: String?) {
+@ConsistentCopyVisibility
+public data class TextInputCommitStringData internal constructor(public val text: String?) {
     internal companion object
 }
 
-public data class TextInputDeleteSurroundingTextData(
+@ConsistentCopyVisibility
+public data class TextInputDeleteSurroundingTextData internal constructor(
     public val beforeLengthInBytes: UInt,
     public val afterLengthInBytes: UInt,
 ) {

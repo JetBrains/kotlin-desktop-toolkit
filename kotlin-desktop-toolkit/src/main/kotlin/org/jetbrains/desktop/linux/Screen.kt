@@ -5,7 +5,8 @@ import java.lang.foreign.MemorySegment
 
 public typealias ScreenId = Int
 
-public data class Screen(
+@ConsistentCopyVisibility
+public data class Screen internal constructor(
     val screenId: ScreenId,
     val name: String?,
     val origin: LogicalPoint,

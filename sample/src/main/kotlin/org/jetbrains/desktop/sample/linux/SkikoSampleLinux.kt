@@ -961,12 +961,11 @@ private class WindowContainer(
     var customBorders: CustomBorders?,
     val contentArea: ContentArea,
     private var xdgDesktopSettings: XdgDesktopSettings,
-    private val requestClose: () -> Unit,
 ) {
     companion object {
-        fun create(windowContentSize: LogicalSize, xdgDesktopSettings: XdgDesktopSettings, requestClose: () -> Unit): WindowContainer {
+        fun create(windowContentSize: LogicalSize, xdgDesktopSettings: XdgDesktopSettings): WindowContainer {
             val contentArea = ContentArea(LogicalPoint.Zero, windowContentSize)
-            return WindowContainer(null, customBorders = null, contentArea, xdgDesktopSettings, requestClose)
+            return WindowContainer(null, customBorders = null, contentArea, xdgDesktopSettings)
         }
 
         private fun filterUnsupportedButtons(buttons: List<WindowButtonType>, capabilities: WindowCapabilities): List<WindowButtonType> {
@@ -998,7 +997,7 @@ private class WindowContainer(
         }
     }
 
-    fun configure(event: Event.WindowConfigure) {
+    fun configure(event: Event.WindowConfigure, window: Window) {
         val shouldUseCustomTitlebar = when (event.decorationMode) {
             WindowDecorationMode.Client -> !event.fullscreen
             WindowDecorationMode.Server -> false
@@ -1012,7 +1011,7 @@ private class WindowContainer(
             val titlebar = customTitlebar ?: SkikoCustomTitlebarLinux(
                 size = titlebarSize,
                 titlebarLayout,
-                requestClose,
+                { window.close() },
             ).also {
                 customTitlebar = it
             }
@@ -1137,15 +1136,10 @@ private class RotatingBallWindow(
     private var windowState = WindowState()
 
     companion object {
-        fun createWindow(
-            app: Application,
-            windowParams: WindowParams,
-            xdgDesktopSettings: XdgDesktopSettings,
-            requestClose: () -> Unit,
-        ): RotatingBallWindow {
+        fun createWindow(app: Application, windowParams: WindowParams, xdgDesktopSettings: XdgDesktopSettings): RotatingBallWindow {
             val windowSize = LogicalSize(640, 480)
             val windowContentSize = windowSize // todo it's incorrect
-            val container = WindowContainer.create(windowContentSize, xdgDesktopSettings, requestClose)
+            val container = WindowContainer.create(windowContentSize, xdgDesktopSettings)
 
             return RotatingBallWindow(container, app, windowParams)
         }
@@ -1198,7 +1192,7 @@ private class RotatingBallWindow(
 
     fun configure(event: Event.WindowConfigure): EventHandlerResult {
         windowState.configure(event)
-        windowContainer.configure(event)
+        windowContainer.configure(event, window)
         // performDrawing(syncWithCA = true)
         return EventHandlerResult.Stop
     }
@@ -1313,9 +1307,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             app,
             windowParams,
             xdgDesktopSettings,
-        ) {
-            handleEvent(Event.WindowCloseRequest(windowId))
-        }
+        )
         windows[windowId] = window
         windowClipboardHandlers[windowId] = object : ClipboardHandler {
             override fun copy(content: DataTransferContentType) {
