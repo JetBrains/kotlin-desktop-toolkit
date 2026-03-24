@@ -204,7 +204,7 @@ impl Application {
         if self.state.window_id_to_surface_id.contains_key(&window_id) {
             return Err(anyhow!("Window with ID {window_id:?} already exists"));
         }
-        let w = SimpleWindow::new(window_id, &self.state, &self.qh, params);
+        let w = SimpleWindow::new(window_id, &self.state, &self.qh, params)?;
         let surface_id = w.window.wl_surface().id();
         self.state.windows.insert(surface_id.clone(), w);
         self.state.window_id_to_surface_id.insert(window_id, surface_id);

@@ -472,6 +472,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
                 WindowParams {
                     window_id: new_window_id,
                     size: LogicalSize { width: 300, height: 200 },
+                    min_size: LogicalSize { width: 0, height: 0 },
                     title: BorrowedStrPtr::new(c"Window N"),
                     app_id: BorrowedStrPtr::new(APP_ID),
                     prefer_client_side_decoration: true,
@@ -596,6 +597,7 @@ fn on_application_started(state: &mut State) {
         WindowParams {
             window_id: window_1_id,
             size: LogicalSize { width: 200, height: 300 },
+            min_size: LogicalSize { width: 100, height: 200 },
             title: BorrowedStrPtr::new(c"Window 1"),
             app_id: BorrowedStrPtr::new(APP_ID),
             prefer_client_side_decoration: false,
@@ -610,6 +612,7 @@ fn on_application_started(state: &mut State) {
         WindowParams {
             window_id: window_2_id,
             size: LogicalSize { width: 300, height: 200 },
+            min_size: LogicalSize { width: 200, height: 100 },
             title: BorrowedStrPtr::new(c"Window 2"),
             app_id: BorrowedStrPtr::new(APP_ID),
             prefer_client_side_decoration: true,

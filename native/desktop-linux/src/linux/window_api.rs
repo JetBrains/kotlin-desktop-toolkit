@@ -4,6 +4,7 @@ use desktop_common::{
     logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
+use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::xdg::window::DecorationMode;
 
 use super::window::SimpleWindow;
@@ -53,6 +54,8 @@ pub struct WindowParams<'a> {
     pub window_id: WindowId,
 
     pub size: LogicalSize,
+
+    pub min_size: LogicalSize,
 
     pub title: BorrowedStrPtr<'a>,
 
@@ -167,6 +170,7 @@ pub extern "C" fn window_set_min_size(app_ptr: AppPtr, window_id: WindowId, size
         let width = u32::try_from(size.width)?;
         let height = u32::try_from(size.height)?;
         w.window.set_min_size(Some((width, height)));
+        w.window.commit();
         Ok(())
     });
 }

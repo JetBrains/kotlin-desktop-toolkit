@@ -74,8 +74,12 @@ pub struct SimpleWindow {
 }
 
 impl SimpleWindow {
-    #[must_use]
-    pub fn new(window_id: WindowId, app_state: &ApplicationState, qh: &QueueHandle<ApplicationState>, params: &WindowParams) -> Self {
+    pub fn new(
+        window_id: WindowId,
+        app_state: &ApplicationState,
+        qh: &QueueHandle<ApplicationState>,
+        params: &WindowParams,
+    ) -> anyhow::Result<Self> {
         let state = app_state;
 
         let window_surface = state.compositor_state.create_surface(qh);
@@ -93,12 +97,27 @@ impl SimpleWindow {
         } else {
             WindowDecorations::ServerDefault
         };
+
         let window = state.xdg_shell_state.create_window(window_surface, decorations, qh);
-        let app_id = params.app_id.as_str().unwrap().to_owned();
-        window.set_title(params.title.as_str().unwrap());
+        let app_id = params.app_id.as_str()?.to_owned();
+        window.set_title(params.title.as_str()?);
         window.set_app_id(app_id.clone());
 
-        let size = if params.size.width == 0 { None } else { Some(params.size) };
+        let mut size = if params.size.width == 0 { None } else { Some(params.size) };
+
+        if params.min_size.width > 0 && params.min_size.height > 0 {
+            let min_width = u32::try_from(params.min_size.width)?;
+            let min_height = u32::try_from(params.min_size.height)?;
+            window.set_min_size(Some((min_width, min_height)));
+            if let Some(size) = &mut size {
+                if size.width < params.min_size.width {
+                    size.width = params.min_size.width;
+                }
+                if size.height < params.min_size.height {
+                    size.height = params.min_size.height;
+                }
+            }
+        }
 
         // In order for the window to be mapped, we need to perform an initial commit with no attached buffer.
         // For more info, see WaylandSurface::commit
@@ -108,7 +127,7 @@ impl SimpleWindow {
         window.commit();
 
         debug!("Creating new window with id={:?} and surface_id={surface_id}", params.window_id);
-        Self {
+        Ok(Self {
             window_id,
             app_id,
             close: false,
@@ -122,7 +141,7 @@ impl SimpleWindow {
             rendering_data: None,
             rendering_mode: params.rendering_mode,
             num_pointer_buttons_down: 0,
-        }
+        })
     }
 
     pub const fn close(&mut self) {

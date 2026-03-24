@@ -35,6 +35,7 @@ public data class WindowParams(
     val appId: String,
     val title: String,
     val size: LogicalSize? = null,
+    val minSize: LogicalSize? = null,
     val preferClientSideDecoration: Boolean = false,
     val renderingMode: RenderingMode = RenderingMode.Auto,
 ) {
@@ -44,11 +45,17 @@ public data class WindowParams(
                 "Invalid size (both width and height must be greater than zero)"
             }
         }
+        minSize?.let {
+            check(it.width > 0 && it.height > 0) {
+                "Invalid min size (both width and height must be greater than zero)"
+            }
+        }
     }
 
     internal fun toNative(arena: Arena): MemorySegment {
         val nativeWindowParams = NativeWindowParams.allocate(arena)
         NativeWindowParams.size(nativeWindowParams, (size ?: LogicalSize(0, 0)).toNative(arena))
+        NativeWindowParams.min_size(nativeWindowParams, LogicalSize(minSize?.width ?: 0, minSize?.height ?: 0).toNative(arena))
         NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
         NativeWindowParams.app_id(nativeWindowParams, arena.allocateUtf8String(appId))
         NativeWindowParams.prefer_client_side_decoration(nativeWindowParams, preferClientSideDecoration)
