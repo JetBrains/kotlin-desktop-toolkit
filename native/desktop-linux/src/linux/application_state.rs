@@ -312,7 +312,7 @@ impl SeatHandler for ApplicationState {
                         // Since wl_keyboard version 10, [smithay_client_toolkit::seat::keyboard::KeyboardHandler::repeat_key]
                         // is used instead.
                         if wl_kbd.version() < 10 {
-                            send_key_down_event(state, event, true);
+                            send_key_down_event(state, &event, true);
                         }
                     }),
                 )

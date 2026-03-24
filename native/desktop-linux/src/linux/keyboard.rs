@@ -1,5 +1,3 @@
-use std::ffi::CString;
-
 use enumflags2::BitFlags;
 use log::debug;
 use smithay_client_toolkit::{
@@ -17,10 +15,9 @@ use crate::linux::{
     events::{KeyCode, KeyDownEvent, KeyModifier, KeyModifierBitflag, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent},
 };
 
-pub fn send_key_down_event(state: &ApplicationState, event: KeyEvent, is_repeat: bool) {
-    let characters = event.utf8.and_then(|s| CString::new(s).ok());
+pub fn send_key_down_event(state: &ApplicationState, event: &KeyEvent, is_repeat: bool) {
     let code = KeyCode(event.raw_code + 8);
-    state.send_event(KeyDownEvent::new(code, event.keysym.raw(), characters.as_ref(), is_repeat));
+    state.send_event(KeyDownEvent::new(code, event.keysym.raw(), event.utf8.as_ref(), is_repeat));
 }
 
 impl KeyboardHandler for ApplicationState {
@@ -54,11 +51,11 @@ impl KeyboardHandler for ApplicationState {
             let seat = keyboard_data.seat();
             debug!("KeyboardHandler::press_key: setting last_implicit_grab_seat to {seat:?}");
         }
-        send_key_down_event(self, event, false);
+        send_key_down_event(self, &event, false);
     }
 
     fn repeat_key(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _keyboard: &WlKeyboard, _serial: u32, event: KeyEvent) {
-        send_key_down_event(self, event, true);
+        send_key_down_event(self, &event, true);
     }
 
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &WlKeyboard, serial: u32, event: KeyEvent) {

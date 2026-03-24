@@ -1,14 +1,14 @@
 use core::f64;
-use std::{
-    ffi::{CStr, CString},
-    fmt::Write,
-};
-
 use desktop_common::{
     ffi_utils::{BorrowedArray, BorrowedStrPtr},
     logger::PanicDefault,
 };
 use enumflags2::{BitFlag, BitFlags, bitflags};
+use std::fmt::{Debug, Formatter};
+use std::{
+    ffi::{CStr, CString},
+    fmt::Write,
+};
 
 use crate::linux::{
     application_api::{DataSource, DragAndDropAction},
@@ -74,8 +74,8 @@ pub enum KeyModifier {
 #[repr(transparent)]
 pub struct KeyModifierBitflag(pub u8);
 
-impl std::fmt::Debug for KeyModifierBitflag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Debug for KeyModifierBitflag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "KeyModifierBitflag({:#08b}, ", &self.0)?;
         let bitflags = KeyModifier::from_bits(self.0).unwrap();
 
@@ -237,10 +237,9 @@ impl From<DataTransferCancelledEvent> for Event<'_> {
 }
 
 #[repr(C)]
-#[derive(Debug)]
 pub struct KeyDownEvent<'a> {
+    pub characters: BorrowedArray<'a, u8>,
     pub code: KeyCode,
-    pub characters: BorrowedStrPtr<'a>,
     pub key: u32,
     pub is_repeat: bool,
 }
@@ -251,11 +250,25 @@ impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
     }
 }
 
+impl Debug for KeyDownEvent<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let code = self.code;
+        let characters = &self.characters;
+        let characters_str = characters.as_optional_slice().and_then(|s| str::from_utf8(s).ok());
+        let key = self.key;
+        let is_repeat = self.is_repeat;
+        write!(
+            f,
+            "KeyDownEvent {{ code: {code:?}, characters: {characters_str:?}, key: {key}, is_repeat: {is_repeat} }}"
+        )
+    }
+}
+
 impl<'a> KeyDownEvent<'a> {
-    pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a CString>, is_repeat: bool) -> Self {
+    pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a String>, is_repeat: bool) -> Self {
         Self {
             code,
-            characters: BorrowedStrPtr::new_optional(characters),
+            characters: BorrowedArray::new_optional(characters.map(String::as_bytes)),
             key,
             is_repeat,
         }

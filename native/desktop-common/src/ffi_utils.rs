@@ -179,14 +179,7 @@ impl<'a> BorrowedStrPtr<'a> {
 
     #[must_use]
     pub fn new_optional(s: Option<&'a CString>) -> Self {
-        if let Some(s) = s {
-            BorrowedStrPtr::new(s.as_c_str())
-        } else {
-            Self(GenericRawPtr {
-                ptr: std::ptr::null(),
-                phantom: PhantomData,
-            })
-        }
+        if let Some(s) = s { Self::new(s.as_c_str()) } else { Self::null() }
     }
 
     #[must_use]
@@ -398,6 +391,21 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
         }
         let slice = unsafe { slice::from_raw_parts(self.ptr, self.len) };
         Ok(slice)
+    }
+
+    #[must_use]
+    pub fn new_optional(s: Option<&'a [T]>) -> Self {
+        if let Some(s) = s { Self::from_slice(s) } else { Self::null() }
+    }
+
+    #[must_use]
+    pub const fn as_optional_slice(&'a self) -> Option<&'a [T]> {
+        if self.ptr.is_null() {
+            None
+        } else {
+            let slice = unsafe { slice::from_raw_parts(self.ptr, self.len) };
+            Some(slice)
+        }
     }
 }
 
