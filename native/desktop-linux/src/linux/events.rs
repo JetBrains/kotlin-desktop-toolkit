@@ -268,7 +268,7 @@ impl<'a> KeyDownEvent<'a> {
     pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a String>, is_repeat: bool) -> Self {
         Self {
             code,
-            characters: BorrowedArray::new_optional(characters.map(String::as_bytes)),
+            characters: BorrowedArray::new_optional(characters.and_then(|s| if s.is_empty() { None } else { Some(s.as_bytes()) })),
             key,
             is_repeat,
         }
