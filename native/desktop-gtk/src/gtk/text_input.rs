@@ -5,10 +5,9 @@ use crate::gtk::events::{
     TextInputPreeditUnderlineType, WindowId,
 };
 use crate::gtk::ffi_return_conversions::RetrieveSurroundingText;
-use crate::gtk::text_input_api::{TextInputContentPurpose, TextInputContextHint, TextInputContextHintBitflag};
-use anyhow::anyhow;
+use crate::gtk::text_input_api::{TextInputContentPurpose, TextInputContextHints};
+use anyhow::bail;
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedStrPtr};
-use enumflags2::BitFlags;
 use gtk4::glib::translate::FromGlib;
 use gtk4::pango;
 use gtk4::prelude::IMContextExt;
@@ -34,26 +33,26 @@ impl From<TextInputContentPurpose> for gtk4::InputPurpose {
     }
 }
 
-impl TryFrom<TextInputContextHintBitflag> for gtk4::InputHints {
+impl TryFrom<TextInputContextHints> for gtk4::InputHints {
     type Error = anyhow::Error;
 
-    fn try_from(value: TextInputContextHintBitflag) -> Result<Self, Self::Error> {
-        let hints = BitFlags::<TextInputContextHint>::from_bits(value.0).map_err(|e| anyhow!(e))?;
+    fn try_from(value: TextInputContextHints) -> Result<Self, Self::Error> {
         let mut gtk_hints = Self::NONE;
-        for hint in hints {
+        for hint in value {
             match hint {
-                TextInputContextHint::Spellcheck => gtk_hints.set(Self::SPELLCHECK, true),
-                TextInputContextHint::NoSpellcheck => gtk_hints.set(Self::NO_SPELLCHECK, true),
-                TextInputContextHint::WordCompletion => gtk_hints.set(Self::WORD_COMPLETION, true),
-                TextInputContextHint::Lowercase => gtk_hints.set(Self::LOWERCASE, true),
-                TextInputContextHint::UppercaseChars => gtk_hints.set(Self::UPPERCASE_CHARS, true),
-                TextInputContextHint::UppercaseWords => gtk_hints.set(Self::UPPERCASE_WORDS, true),
-                TextInputContextHint::UppercaseSentences => gtk_hints.set(Self::UPPERCASE_SENTENCES, true),
-                TextInputContextHint::InhibitOsk => gtk_hints.set(Self::INHIBIT_OSK, true),
-                TextInputContextHint::VerticalWriting => gtk_hints.set(Self::VERTICAL_WRITING, true),
-                TextInputContextHint::Emoji => gtk_hints.set(Self::EMOJI, true),
-                TextInputContextHint::NoEmoji => gtk_hints.set(Self::NO_EMOJI, true),
-                TextInputContextHint::Private => gtk_hints.set(Self::PRIVATE, true),
+                TextInputContextHints::Spellcheck => gtk_hints.set(Self::SPELLCHECK, true),
+                TextInputContextHints::NoSpellcheck => gtk_hints.set(Self::NO_SPELLCHECK, true),
+                TextInputContextHints::WordCompletion => gtk_hints.set(Self::WORD_COMPLETION, true),
+                TextInputContextHints::Lowercase => gtk_hints.set(Self::LOWERCASE, true),
+                TextInputContextHints::UppercaseChars => gtk_hints.set(Self::UPPERCASE_CHARS, true),
+                TextInputContextHints::UppercaseWords => gtk_hints.set(Self::UPPERCASE_WORDS, true),
+                TextInputContextHints::UppercaseSentences => gtk_hints.set(Self::UPPERCASE_SENTENCES, true),
+                TextInputContextHints::InhibitOsk => gtk_hints.set(Self::INHIBIT_OSK, true),
+                TextInputContextHints::VerticalWriting => gtk_hints.set(Self::VERTICAL_WRITING, true),
+                TextInputContextHints::Emoji => gtk_hints.set(Self::EMOJI, true),
+                TextInputContextHints::NoEmoji => gtk_hints.set(Self::NO_EMOJI, true),
+                TextInputContextHints::Private => gtk_hints.set(Self::PRIVATE, true),
+                _ => bail!("Unknown hint: {hint:?}"),
             }
         }
         Ok(gtk_hints)

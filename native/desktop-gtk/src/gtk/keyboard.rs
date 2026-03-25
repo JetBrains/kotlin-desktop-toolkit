@@ -1,40 +1,40 @@
 use crate::gtk::application::send_event;
-use crate::gtk::events::{
-    EventHandler, KeyCode, KeyDownEvent, KeyModifier, KeyModifierBitflag, KeyUpEvent, ModifiersChangedEvent, WindowId,
-};
-use enumflags2::BitFlags;
+use crate::gtk::events::{EventHandler, KeyCode, KeyDownEvent, KeyModifiers, KeyUpEvent, ModifiersChangedEvent, WindowId};
 use gtk4::glib::translate::IntoGlib;
 use gtk4::{gdk as gdk4, glib};
 use log::{debug, warn};
 
 #[must_use]
-fn key_modifiers_from_gdk(modifiers: gdk4::ModifierType) -> BitFlags<KeyModifier> {
-    let mut key_modifiers = BitFlags::<KeyModifier>::EMPTY;
-    key_modifiers.set(KeyModifier::Ctrl, modifiers.contains(gdk4::ModifierType::CONTROL_MASK));
-    key_modifiers.set(KeyModifier::Alt, modifiers.contains(gdk4::ModifierType::ALT_MASK));
-    key_modifiers.set(KeyModifier::Shift, modifiers.contains(gdk4::ModifierType::SHIFT_MASK));
-    key_modifiers.set(KeyModifier::CapsLock, modifiers.contains(gdk4::ModifierType::LOCK_MASK));
-    key_modifiers.set(KeyModifier::Logo, modifiers.contains(gdk4::ModifierType::SUPER_MASK));
+fn key_modifiers_from_gdk(modifiers: gdk4::ModifierType) -> KeyModifiers {
+    let mut key_modifiers = KeyModifiers::empty();
+    if modifiers.contains(gdk4::ModifierType::CONTROL_MASK) {
+        key_modifiers |= KeyModifiers::Ctrl;
+    }
+    if modifiers.contains(gdk4::ModifierType::ALT_MASK) {
+        key_modifiers |= KeyModifiers::Alt;
+    }
+    if modifiers.contains(gdk4::ModifierType::SHIFT_MASK) {
+        key_modifiers |= KeyModifiers::Shift;
+    }
+    if modifiers.contains(gdk4::ModifierType::LOCK_MASK) {
+        key_modifiers |= KeyModifiers::CapsLock;
+    }
+    if modifiers.contains(gdk4::ModifierType::SUPER_MASK) {
+        key_modifiers |= KeyModifiers::Logo;
+    }
 
     key_modifiers
 }
 
 #[must_use]
-const fn key_modifier_from_gdk(key: gdk4::Key) -> Option<KeyModifier> {
+const fn key_modifier_from_gdk(key: gdk4::Key) -> Option<KeyModifiers> {
     match key {
-        gdk4::Key::Control_L | gdk4::Key::Control_R => Some(KeyModifier::Ctrl),
-        gdk4::Key::Alt_L | gdk4::Key::Alt_R => Some(KeyModifier::Alt),
-        gdk4::Key::Shift_L | gdk4::Key::Shift_R => Some(KeyModifier::Shift),
-        gdk4::Key::Caps_Lock => Some(KeyModifier::CapsLock),
-        gdk4::Key::Super_L | gdk4::Key::Super_R => Some(KeyModifier::Logo),
+        gdk4::Key::Control_L | gdk4::Key::Control_R => Some(KeyModifiers::Ctrl),
+        gdk4::Key::Alt_L | gdk4::Key::Alt_R => Some(KeyModifiers::Alt),
+        gdk4::Key::Shift_L | gdk4::Key::Shift_R => Some(KeyModifiers::Shift),
+        gdk4::Key::Caps_Lock => Some(KeyModifiers::CapsLock),
+        gdk4::Key::Super_L | gdk4::Key::Super_R => Some(KeyModifiers::Logo),
         _ => None,
-    }
-}
-
-impl KeyModifierBitflag {
-    #[must_use]
-    pub const fn new(key_modifiers: BitFlags<KeyModifier>) -> Self {
-        Self(key_modifiers.bits_c())
     }
 }
 
@@ -74,10 +74,10 @@ pub fn set_keyboard_event_handlers(window_id: WindowId, event_handler: EventHand
         let mut key_modifiers = key_modifiers_from_gdk(modifiers);
         // Cannot use the "modifiers" signal, see https://gitlab.gnome.org/GNOME/gtk/-/issues/5139
         if let Some(modifier) = key_modifier_from_gdk(keyval) {
-            key_modifiers.set(modifier, true);
+            key_modifiers |= modifier;
             let event = ModifiersChangedEvent {
                 window_id,
-                modifiers: KeyModifierBitflag::new(key_modifiers),
+                modifiers: key_modifiers,
             };
             send_event(event_handler, event);
         }
@@ -92,7 +92,7 @@ pub fn set_keyboard_event_handlers(window_id: WindowId, event_handler: EventHand
             character: char.unwrap_or_default(),
             key,
             // key_without_modifiers,
-            modifiers: KeyModifierBitflag::new(key_modifiers),
+            modifiers: key_modifiers,
         };
         send_event(event_handler, event);
         glib::Propagation::Proceed
@@ -103,11 +103,10 @@ pub fn set_keyboard_event_handlers(window_id: WindowId, event_handler: EventHand
 
         // Cannot use the "modifiers" signal, see https://gitlab.gnome.org/GNOME/gtk/-/issues/5139
         if let Some(modifier) = key_modifier_from_gdk(keyval) {
-            let mut key_modifiers = key_modifiers_from_gdk(modifiers);
-            key_modifiers.set(modifier, false);
+            let key_modifiers = key_modifiers_from_gdk(modifiers) & !modifier;
             let event = ModifiersChangedEvent {
                 window_id,
-                modifiers: KeyModifierBitflag::new(key_modifiers),
+                modifiers: key_modifiers,
             };
             send_event(event_handler, event);
         }

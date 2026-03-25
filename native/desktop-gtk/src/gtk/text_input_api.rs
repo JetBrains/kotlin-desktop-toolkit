@@ -1,10 +1,10 @@
 use crate::gtk::geometry::LogicalRect;
-use enumflags2::{BitFlags, bitflags};
+use bitflag_attr::bitflag;
 
-#[bitflags]
-#[repr(u32)]
+#[repr(C)]
+#[bitflag(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum TextInputContextHint {
+pub enum TextInputContextHints {
     Spellcheck = 1 << 0,
     NoSpellcheck = 1 << 1,
     WordCompletion = 1 << 2,
@@ -19,20 +19,10 @@ pub enum TextInputContextHint {
     Private = 1 << 11,
 }
 
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
-#[repr(transparent)]
-pub struct TextInputContextHintBitflag(pub u32);
-
-impl From<TextInputContextHint> for TextInputContextHintBitflag {
-    fn from(value: TextInputContextHint) -> Self {
-        Self(BitFlags::from_flag(value).bits_c())
-    }
-}
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct TextInputContext {
-    pub hints: TextInputContextHintBitflag,
+    pub hints: TextInputContextHints,
     pub content_purpose: TextInputContentPurpose,
     pub cursor_rectangle: LogicalRect,
 }
