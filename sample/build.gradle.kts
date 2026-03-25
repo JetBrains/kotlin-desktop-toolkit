@@ -31,6 +31,7 @@ val skikoTarget = "$skikoTargetOs-$skikoTargetArch"
 dependencies {
     implementation(project(":kotlin-desktop-toolkit"))
     implementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTarget:$skikoVersion")
+    implementation(kotlin("stdlib"))
 }
 
 java {

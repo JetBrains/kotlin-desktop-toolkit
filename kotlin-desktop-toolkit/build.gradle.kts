@@ -70,6 +70,7 @@ dependencies {
     testImplementation("net.java.dev.jna:jna-platform:5.18.1")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    implementation(kotlin("stdlib"))
 }
 
 tasks.compileJava {
