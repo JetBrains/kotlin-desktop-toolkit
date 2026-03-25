@@ -57,7 +57,6 @@ import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemoryLayout
 import java.lang.foreign.MemorySegment
-import kotlin.experimental.and
 import kotlin.experimental.or
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
@@ -141,24 +140,24 @@ internal fun PhysicalSize.Companion.fromNative(s: MemorySegment) = PhysicalSize(
     height = NativePhysicalSize.height(s),
 )
 
-private fun keyModifiersFromNative(nativeModifiers: Byte): Set<KeyModifiers> {
+private fun keyModifiersFromNative(nativeModifiers: Int): Set<KeyModifiers> {
     val modifiers = buildSet {
-        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_Ctrl().toByte() > 0) {
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifiers_Ctrl() > 0) {
             add(KeyModifiers.Control)
         }
-        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_Alt().toByte() > 0) {
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifiers_Alt() > 0) {
             add(KeyModifiers.Alt)
         }
-        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_Shift().toByte() > 0) {
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifiers_Shift() > 0) {
             add(KeyModifiers.Shift)
         }
-        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_CapsLock().toByte() > 0) {
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifiers_CapsLock() > 0) {
             add(KeyModifiers.CapsLock)
         }
-        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_Logo().toByte() > 0) {
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifiers_Logo() > 0) {
             add(KeyModifiers.Logo)
         }
-        if (nativeModifiers and desktop_linux_h.NativeKeyModifier_NumLock().toByte() > 0) {
+        if (nativeModifiers and desktop_linux_h.NativeKeyModifiers_NumLock() > 0) {
             add(KeyModifiers.NumLock)
         }
     }
@@ -395,16 +394,16 @@ internal fun Set<TextInputContentHint>.toNative(): Int {
     var nativeHints = 0
     for (hint in this) {
         nativeHints += when (hint) {
-            TextInputContentHint.Completion -> desktop_linux_h.NativeTextInputContentHint_Completion()
-            TextInputContentHint.Spellcheck -> desktop_linux_h.NativeTextInputContentHint_Spellcheck()
-            TextInputContentHint.AutoCapitalization -> desktop_linux_h.NativeTextInputContentHint_AutoCapitalization()
-            TextInputContentHint.Lowercase -> desktop_linux_h.NativeTextInputContentHint_Lowercase()
-            TextInputContentHint.Uppercase -> desktop_linux_h.NativeTextInputContentHint_Uppercase()
-            TextInputContentHint.Titlecase -> desktop_linux_h.NativeTextInputContentHint_Titlecase()
-            TextInputContentHint.HiddenText -> desktop_linux_h.NativeTextInputContentHint_HiddenText()
-            TextInputContentHint.SensitiveData -> desktop_linux_h.NativeTextInputContentHint_SensitiveData()
-            TextInputContentHint.Latin -> desktop_linux_h.NativeTextInputContentHint_Latin()
-            TextInputContentHint.Multiline -> desktop_linux_h.NativeTextInputContentHint_Multiline()
+            TextInputContentHint.Completion -> desktop_linux_h.NativeTextInputContentHints_Completion()
+            TextInputContentHint.Spellcheck -> desktop_linux_h.NativeTextInputContentHints_Spellcheck()
+            TextInputContentHint.AutoCapitalization -> desktop_linux_h.NativeTextInputContentHints_AutoCapitalization()
+            TextInputContentHint.Lowercase -> desktop_linux_h.NativeTextInputContentHints_Lowercase()
+            TextInputContentHint.Uppercase -> desktop_linux_h.NativeTextInputContentHints_Uppercase()
+            TextInputContentHint.Titlecase -> desktop_linux_h.NativeTextInputContentHints_Titlecase()
+            TextInputContentHint.HiddenText -> desktop_linux_h.NativeTextInputContentHints_HiddenText()
+            TextInputContentHint.SensitiveData -> desktop_linux_h.NativeTextInputContentHints_SensitiveData()
+            TextInputContentHint.Latin -> desktop_linux_h.NativeTextInputContentHints_Latin()
+            TextInputContentHint.Multiline -> desktop_linux_h.NativeTextInputContentHints_Multiline()
         }
     }
     return nativeHints

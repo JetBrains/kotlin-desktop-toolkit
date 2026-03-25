@@ -10,10 +10,7 @@ use smithay_client_toolkit::{
     seat::pointer::{CursorIcon, ThemedPointer},
     shell::{
         WaylandSurface,
-        xdg::{
-            XdgSurface,
-            window::{DecorationMode, Window, WindowConfigure, WindowDecorations},
-        },
+        xdg::window::{DecorationMode, Window, WindowConfigure, WindowDecorations},
     },
     shm::Shm,
 };
@@ -156,14 +153,14 @@ impl SimpleWindow {
     ) -> bool {
         const DEFAULT_WIDTH: u32 = 640;
         const DEFAULT_HEIGHT: u32 = 480;
-        debug!("SimpleWindow::configure start: {configure:?}");
+        debug!("SimpleWindow::configure start for {:?}: {configure:?}", self.window_id);
 
         self.decoration_mode = configure.decoration_mode;
 
         let width = configure
             .new_size
             .0
-            .map(|w| w.get())
+            .map(std::num::NonZero::get)
             .or_else(|| self.size.map(|s| s.width))
             .or_else(|| configure.suggested_bounds.map(|(w, _h)| w))
             .unwrap_or(DEFAULT_WIDTH);
@@ -177,11 +174,14 @@ impl SimpleWindow {
         let size = LogicalSize { width, height };
         self.size = Some(size);
 
-        window.set_window_geometry(0, 0, width, height);
+        // window.set_window_geometry(0, 0, width, height);
         // TODO: wl_surface::set_opaque_region?
 
         let physical_size = size.to_physical(self.current_scale);
-        debug!("SimpleWindow::configure: size={size:?}, physical_size={physical_size:?}");
+        debug!(
+            "SimpleWindow::configure for {:?}: size={size:?}, physical_size={physical_size:?}",
+            self.window_id
+        );
 
         self.on_resize(size, physical_size, shm);
 
@@ -265,12 +265,12 @@ impl SimpleWindow {
 
     fn on_resize(&mut self, size: LogicalSize, physical_size: PhysicalSize, shm: &Shm) {
         if let Some(viewport) = &self.viewport {
-            debug!("viewport.set_destination({}, {})", size.width, size.height);
+            debug!("viewport.set_destination({}, {}) for {:?}", size.width, size.height, self.window_id);
             viewport.set_destination(i32::try_from(size.width).unwrap(), i32::try_from(size.height).unwrap());
         } else {
             let surface = self.window.wl_surface();
             assert!(self.current_scale % 1.0 < 0.0001);
-            debug!("surface.set_buffer_scale({})", self.current_scale);
+            debug!("surface.set_buffer_scale({}) for {:?}", self.current_scale, self.window_id);
             #[allow(clippy::cast_possible_truncation)]
             surface.set_buffer_scale(self.current_scale as i32);
         }
@@ -288,7 +288,7 @@ impl SimpleWindow {
     }
 
     pub fn scale_changed(&mut self, new_scale: f64, shm: &Shm) {
-        debug!("scale_changed: {new_scale}");
+        debug!("scale_changed: {new_scale} for {:?}", self.window_id);
         self.current_scale = new_scale;
 
         if let Some(size) = self.size {

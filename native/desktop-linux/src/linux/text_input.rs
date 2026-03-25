@@ -1,6 +1,10 @@
-use anyhow::anyhow;
+use crate::linux::text_input_api::{TextInputContentHints, TextInputContentPurpose, TextInputContext};
+use crate::linux::{
+    application_state::ApplicationState,
+    events::{TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData},
+};
+use anyhow::bail;
 use desktop_common::ffi_utils::BorrowedStrPtr;
-use enumflags2::BitFlags;
 use log::{debug, warn};
 use smithay_client_toolkit::reexports::{
     client::{Connection, Dispatch, Proxy, QueueHandle, delegate_noop},
@@ -10,12 +14,6 @@ use smithay_client_toolkit::reexports::{
     },
 };
 use std::ffi::CString;
-
-use crate::linux::text_input_api::{TextInputContentHint, TextInputContentHintBitflag, TextInputContentPurpose, TextInputContext};
-use crate::linux::{
-    application_state::ApplicationState,
-    events::{TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData},
-};
 
 delegate_noop!(ApplicationState: ignore ZwpTextInputManagerV3);
 
@@ -40,22 +38,22 @@ impl TextInputContentPurpose {
     }
 }
 
-impl TextInputContentHintBitflag {
+impl TextInputContentHints {
     fn to_system(self) -> anyhow::Result<zwp_text_input_v3::ContentHint> {
-        let hints = BitFlags::<TextInputContentHint>::from_bits(self.0).map_err(|e| anyhow!(e))?;
         let mut system_hints = zwp_text_input_v3::ContentHint::None;
-        for hint in hints {
+        for hint in self {
             match hint {
-                TextInputContentHint::Completion => system_hints.set(zwp_text_input_v3::ContentHint::Completion, true),
-                TextInputContentHint::Spellcheck => system_hints.set(zwp_text_input_v3::ContentHint::Spellcheck, true),
-                TextInputContentHint::AutoCapitalization => system_hints.set(zwp_text_input_v3::ContentHint::AutoCapitalization, true),
-                TextInputContentHint::Lowercase => system_hints.set(zwp_text_input_v3::ContentHint::Lowercase, true),
-                TextInputContentHint::Uppercase => system_hints.set(zwp_text_input_v3::ContentHint::Uppercase, true),
-                TextInputContentHint::Titlecase => system_hints.set(zwp_text_input_v3::ContentHint::Titlecase, true),
-                TextInputContentHint::HiddenText => system_hints.set(zwp_text_input_v3::ContentHint::HiddenText, true),
-                TextInputContentHint::SensitiveData => system_hints.set(zwp_text_input_v3::ContentHint::SensitiveData, true),
-                TextInputContentHint::Latin => system_hints.set(zwp_text_input_v3::ContentHint::Latin, true),
-                TextInputContentHint::Multiline => system_hints.set(zwp_text_input_v3::ContentHint::Multiline, true),
+                Self::Completion => system_hints.set(zwp_text_input_v3::ContentHint::Completion, true),
+                Self::Spellcheck => system_hints.set(zwp_text_input_v3::ContentHint::Spellcheck, true),
+                Self::AutoCapitalization => system_hints.set(zwp_text_input_v3::ContentHint::AutoCapitalization, true),
+                Self::Lowercase => system_hints.set(zwp_text_input_v3::ContentHint::Lowercase, true),
+                Self::Uppercase => system_hints.set(zwp_text_input_v3::ContentHint::Uppercase, true),
+                Self::Titlecase => system_hints.set(zwp_text_input_v3::ContentHint::Titlecase, true),
+                Self::HiddenText => system_hints.set(zwp_text_input_v3::ContentHint::HiddenText, true),
+                Self::SensitiveData => system_hints.set(zwp_text_input_v3::ContentHint::SensitiveData, true),
+                Self::Latin => system_hints.set(zwp_text_input_v3::ContentHint::Latin, true),
+                Self::Multiline => system_hints.set(zwp_text_input_v3::ContentHint::Multiline, true),
+                _ => bail!("Unknown hint: {hint:?}"),
             }
         }
         Ok(system_hints)
