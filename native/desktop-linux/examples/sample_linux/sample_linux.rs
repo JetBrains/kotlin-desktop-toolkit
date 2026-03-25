@@ -1,18 +1,14 @@
-use core::str;
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    ffi::{CStr, CString},
-    str::FromStr,
-};
-
 use crate::sample_linux_draw::{OpenglState, draw_opengl_triangle_with_init, draw_software, draw_software_drag_icon};
+use core::str;
 use desktop_common::{
     ffi_utils::{BorrowedArray, BorrowedStrPtr},
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::application_api::{FfiDragAndDropQueryResponse, FfiSupportedActionsForMime, FfiTransferDataResponse};
 use desktop_linux::linux::screen::screen_list;
+use desktop_linux::linux::window_api::{
+    window_maximize, window_minimize, window_set_fullscreen, window_unmaximize, window_unset_fullscreen,
+};
 use desktop_linux::linux::{
     application_api::{
         AppPtr,
@@ -58,6 +54,12 @@ use desktop_linux::linux::{
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use log::{debug, error, info, warn};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    ffi::{CStr, CString},
+    str::FromStr,
+};
 use url::Url;
 
 const APP_ID: &CStr = c"org.jetbrains.desktop.linux.native.sample1";
@@ -181,7 +183,9 @@ const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBit
 
 #[allow(clippy::too_many_lines)]
 fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> bool {
-    const KEY_MODIFIER_CTRL: u8 = KeyModifier::Ctrl as u8;
+    const KEY_MODIFIER_NONE: KeyModifierBitflag = KeyModifierBitflag::EMPTY;
+    const KEY_MODIFIER_CTRL: KeyModifierBitflag = KeyModifierBitflag(KeyModifier::Ctrl as _);
+    const KEY_MODIFIER_CTRL_SHIFT: KeyModifierBitflag = KeyModifierBitflag(KeyModifier::Ctrl as u8 | KeyModifier::Shift as u8);
 
     let modifiers: KeyModifierBitflag = shortcut_modifiers(state.key_modifiers);
     let window_id = state.key_window_id.expect("Key window not found");
@@ -189,8 +193,8 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
         return false;
     };
 
-    match (modifiers.0, key_code) {
-        (0, keycode::KeyMappingCode::Backspace) => {
+    match (modifiers, key_code) {
+        (KEY_MODIFIER_NONE, keycode::KeyMappingCode::Backspace) => {
             let window_state = state.windows.get_mut(&window_id).unwrap();
             window_state.text.pop();
             if window_state.text_input_available {
@@ -206,6 +210,30 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
                     .activation_token_action
                     .insert(request_id, ActivationTokenAction::ActivateWindow);
             }
+            true
+        }
+        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyQ) => {
+            window_close(app_ptr, window_id);
+            true
+        }
+        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyF) => {
+            window_set_fullscreen(app_ptr, window_id);
+            true
+        }
+        (KEY_MODIFIER_CTRL_SHIFT, keycode::KeyMappingCode::KeyF) => {
+            window_unset_fullscreen(app_ptr, window_id);
+            true
+        }
+        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyM) => {
+            window_maximize(app_ptr, window_id);
+            true
+        }
+        (KEY_MODIFIER_CTRL_SHIFT, keycode::KeyMappingCode::KeyM) => {
+            window_unmaximize(app_ptr, window_id);
+            true
+        }
+        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyH) => {
+            window_minimize(app_ptr, window_id);
             true
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyV) => {
