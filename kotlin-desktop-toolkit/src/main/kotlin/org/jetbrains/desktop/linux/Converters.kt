@@ -391,6 +391,25 @@ internal fun TextInputContentPurpose.toNative(): Int {
     }
 }
 
+internal fun Set<TextInputContentHint>.toNative(): Int {
+    var nativeHints = 0
+    for (hint in this) {
+        nativeHints += when (hint) {
+            TextInputContentHint.Completion -> desktop_linux_h.NativeTextInputContentHint_Completion()
+            TextInputContentHint.Spellcheck -> desktop_linux_h.NativeTextInputContentHint_Spellcheck()
+            TextInputContentHint.AutoCapitalization -> desktop_linux_h.NativeTextInputContentHint_AutoCapitalization()
+            TextInputContentHint.Lowercase -> desktop_linux_h.NativeTextInputContentHint_Lowercase()
+            TextInputContentHint.Uppercase -> desktop_linux_h.NativeTextInputContentHint_Uppercase()
+            TextInputContentHint.Titlecase -> desktop_linux_h.NativeTextInputContentHint_Titlecase()
+            TextInputContentHint.HiddenText -> desktop_linux_h.NativeTextInputContentHint_HiddenText()
+            TextInputContentHint.SensitiveData -> desktop_linux_h.NativeTextInputContentHint_SensitiveData()
+            TextInputContentHint.Latin -> desktop_linux_h.NativeTextInputContentHint_Latin()
+            TextInputContentHint.Multiline -> desktop_linux_h.NativeTextInputContentHint_Multiline()
+        }
+    }
+    return nativeHints
+}
+
 internal fun TextInputPreeditStringData.Companion.fromNative(s: MemorySegment): TextInputPreeditStringData {
     return TextInputPreeditStringData(
         text = fromOptionalNativeString(NativeTextInputPreeditStringData.text(s)),
@@ -411,7 +430,7 @@ internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
     NativeTextInputContext.surrounding_text(result, arena.allocateUtf8String(surroundingText))
     NativeTextInputContext.cursor_codepoint_offset(result, cursorCodepointOffset.toShort())
     NativeTextInputContext.selection_start_codepoint_offset(result, selectionStartCodepointOffset.toShort())
-    NativeTextInputContext.is_multiline(result, isMultiline)
+    NativeTextInputContext.hints(result, hints.toNative())
     NativeTextInputContext.content_purpose(result, contentPurpose.toNative())
     NativeTextInputContext.cursor_rectangle(result, cursorRectangle.toNative(arena))
     NativeTextInputContext.change_caused_by_input_method(result, changeCausedByInputMethod)

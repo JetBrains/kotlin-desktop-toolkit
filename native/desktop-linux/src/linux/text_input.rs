@@ -1,6 +1,6 @@
-use std::ffi::CString;
-
+use anyhow::anyhow;
 use desktop_common::ffi_utils::BorrowedStrPtr;
+use enumflags2::BitFlags;
 use log::{debug, warn};
 use smithay_client_toolkit::reexports::{
     client::{Connection, Dispatch, Proxy, QueueHandle, delegate_noop},
@@ -9,13 +9,104 @@ use smithay_client_toolkit::reexports::{
         zwp_text_input_v3::{self, ZwpTextInputV3},
     },
 };
+use std::ffi::CString;
 
+use crate::linux::text_input_api::{TextInputContentHint, TextInputContentHintBitflag, TextInputContentPurpose, TextInputContext};
 use crate::linux::{
     application_state::ApplicationState,
     events::{TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData},
 };
 
 delegate_noop!(ApplicationState: ignore ZwpTextInputManagerV3);
+
+impl TextInputContentPurpose {
+    const fn to_system(&self) -> zwp_text_input_v3::ContentPurpose {
+        match self {
+            Self::Normal => zwp_text_input_v3::ContentPurpose::Normal,
+            Self::Alpha => zwp_text_input_v3::ContentPurpose::Alpha,
+            Self::Digits => zwp_text_input_v3::ContentPurpose::Digits,
+            Self::Number => zwp_text_input_v3::ContentPurpose::Number,
+            Self::Phone => zwp_text_input_v3::ContentPurpose::Phone,
+            Self::Url => zwp_text_input_v3::ContentPurpose::Url,
+            Self::Email => zwp_text_input_v3::ContentPurpose::Email,
+            Self::Name => zwp_text_input_v3::ContentPurpose::Name,
+            Self::Password => zwp_text_input_v3::ContentPurpose::Password,
+            Self::Pin => zwp_text_input_v3::ContentPurpose::Pin,
+            Self::Date => zwp_text_input_v3::ContentPurpose::Date,
+            Self::Time => zwp_text_input_v3::ContentPurpose::Time,
+            Self::Datetime => zwp_text_input_v3::ContentPurpose::Datetime,
+            Self::Terminal => zwp_text_input_v3::ContentPurpose::Terminal,
+        }
+    }
+}
+
+impl TextInputContentHintBitflag {
+    fn to_system(self) -> anyhow::Result<zwp_text_input_v3::ContentHint> {
+        let hints = BitFlags::<TextInputContentHint>::from_bits(self.0).map_err(|e| anyhow!(e))?;
+        let mut system_hints = zwp_text_input_v3::ContentHint::None;
+        for hint in hints {
+            match hint {
+                TextInputContentHint::Completion => system_hints.set(zwp_text_input_v3::ContentHint::Completion, true),
+                TextInputContentHint::Spellcheck => system_hints.set(zwp_text_input_v3::ContentHint::Spellcheck, true),
+                TextInputContentHint::AutoCapitalization => system_hints.set(zwp_text_input_v3::ContentHint::AutoCapitalization, true),
+                TextInputContentHint::Lowercase => system_hints.set(zwp_text_input_v3::ContentHint::Lowercase, true),
+                TextInputContentHint::Uppercase => system_hints.set(zwp_text_input_v3::ContentHint::Uppercase, true),
+                TextInputContentHint::Titlecase => system_hints.set(zwp_text_input_v3::ContentHint::Titlecase, true),
+                TextInputContentHint::HiddenText => system_hints.set(zwp_text_input_v3::ContentHint::HiddenText, true),
+                TextInputContentHint::SensitiveData => system_hints.set(zwp_text_input_v3::ContentHint::SensitiveData, true),
+                TextInputContentHint::Latin => system_hints.set(zwp_text_input_v3::ContentHint::Latin, true),
+                TextInputContentHint::Multiline => system_hints.set(zwp_text_input_v3::ContentHint::Multiline, true),
+            }
+        }
+        Ok(system_hints)
+    }
+}
+
+impl TextInputContext<'_> {
+    fn get_byte_offset(text: &str, offset: u16) -> usize {
+        let mut it = text.char_indices();
+        for _ in 0..offset {
+            it.next();
+        }
+        it.offset()
+    }
+
+    pub fn apply(&self, text_input: &zwp_text_input_v3::ZwpTextInputV3) -> anyhow::Result<()> {
+        let surrounding_text = self.surrounding_text.as_str()?;
+
+        let cursor_pos_bytes = Self::get_byte_offset(surrounding_text, self.cursor_codepoint_offset);
+
+        let selection_start_pos_bytes = if self.selection_start_codepoint_offset == self.cursor_codepoint_offset {
+            cursor_pos_bytes
+        } else {
+            Self::get_byte_offset(surrounding_text, self.selection_start_codepoint_offset)
+        };
+
+        debug!(
+            "Calling set_surrounding_text with cursor_pos_bytes={cursor_pos_bytes}, selection_start_pos_bytes={selection_start_pos_bytes}, surrounding_text={surrounding_text}"
+        );
+        #[allow(clippy::cast_possible_truncation)]
+        text_input.set_surrounding_text(
+            surrounding_text.to_owned(),
+            cursor_pos_bytes as i32,
+            selection_start_pos_bytes as i32,
+        );
+        text_input.set_content_type(self.hints.to_system()?, self.content_purpose.to_system());
+        text_input.set_text_change_cause(if self.change_caused_by_input_method {
+            zwp_text_input_v3::ChangeCause::InputMethod
+        } else {
+            zwp_text_input_v3::ChangeCause::Other
+        });
+        text_input.set_cursor_rectangle(
+            self.cursor_rectangle.x,
+            self.cursor_rectangle.y,
+            self.cursor_rectangle.width,
+            self.cursor_rectangle.height,
+        );
+        text_input.commit();
+        Ok(())
+    }
+}
 
 #[derive(Default)]
 pub struct PendingTextInputEvent {
