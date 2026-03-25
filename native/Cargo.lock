@@ -442,6 +442,8 @@ dependencies = [
  "desktop-common",
  "enumflags2",
  "futures-lite",
+ "gles30",
+ "keycode",
  "khronos-egl",
  "log",
  "log4rs",

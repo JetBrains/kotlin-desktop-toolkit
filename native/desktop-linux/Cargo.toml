@@ -27,4 +27,6 @@ tokio = { version = "1.49.0", features = ["rt-multi-thread"] }
 zbus = { version = "5.12.0", default-features = false, features = ["tokio"] }
 
 [target.'cfg(target_os="linux")'.dev-dependencies]
+gles30 = { version = "0.5.2", features = ["struct_loader"] }
+keycode = "1.0.0"
 url = "2.5.8"
