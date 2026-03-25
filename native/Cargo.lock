@@ -187,10 +187,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitflag-attr"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e14a6783c9eb99ed428b4707d61e91782236ad234616bd70b4360f0e2988363a"
+dependencies = [
+ "bitflags-attr-macros",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843867be96c8daad0d758b57df9392b6d8d271134fce549de6ce169ff98a92af"
+
+[[package]]
+name = "bitflags-attr-macros"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c849ea68e125e003ca4101434368da536f640e636e6aa85fdb653e6bf75faec5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "block2"
@@ -439,8 +459,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ashpd",
+ "bitflag-attr",
  "desktop-common",
- "enumflags2",
  "futures-lite",
  "gles30",
  "keycode",

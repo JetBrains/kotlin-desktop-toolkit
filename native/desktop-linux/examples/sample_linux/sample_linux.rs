@@ -36,10 +36,10 @@ use desktop_linux::linux::{
         application_text_input_update,
         //
     },
-    events::{DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, RequestId, TextInputEvent, WindowId},
+    events::{DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, TextInputEvent, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalRect, LogicalSize},
-    text_input_api::{TextInputContentHint, TextInputContentPurpose, TextInputContext},
+    text_input_api::{TextInputContentHints, TextInputContentPurpose, TextInputContext},
     window_api::{
         WindowParams,
         window_activate,
@@ -118,7 +118,7 @@ enum ActivationTokenAction {
 struct State {
     app_ptr: OptionalAppPtr,
     key_window_id: Option<WindowId>,
-    key_modifiers: KeyModifierBitflag,
+    key_modifiers: KeyModifiers,
     windows: HashMap<WindowId, WindowState>,
     settings: Settings,
     request_sources: HashMap<RequestId, WindowId>,
@@ -139,7 +139,7 @@ fn create_text_input_context<'a>(text: &str, text_cstring: &'a CString, change_c
         surrounding_text: BorrowedStrPtr::new(text_cstring),
         cursor_codepoint_offset: codepoints_count,
         selection_start_codepoint_offset: codepoints_count,
-        hints: TextInputContentHint::Multiline.into(),
+        hints: TextInputContentHints::Multiline,
         content_purpose: TextInputContentPurpose::Normal,
         cursor_rectangle: LogicalRect {
             x: (codepoints_count * 10).into(),
@@ -177,17 +177,17 @@ fn decode_key_code(raw: u32) -> Option<keycode::KeyMappingCode> {
     }
 }
 
-const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBitflag {
-    KeyModifierBitflag(all_modifiers.0 & !(KeyModifier::CapsLock as u8) & !(KeyModifier::NumLock as u8))
+const fn shortcut_modifiers(all_modifiers: KeyModifiers) -> KeyModifiers {
+    all_modifiers.and(KeyModifiers::CapsLock.not()).and(KeyModifiers::NumLock.not())
 }
 
 #[allow(clippy::too_many_lines)]
 fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> bool {
-    const KEY_MODIFIER_NONE: KeyModifierBitflag = KeyModifierBitflag::EMPTY;
-    const KEY_MODIFIER_CTRL: KeyModifierBitflag = KeyModifierBitflag(KeyModifier::Ctrl as _);
-    const KEY_MODIFIER_CTRL_SHIFT: KeyModifierBitflag = KeyModifierBitflag(KeyModifier::Ctrl as u8 | KeyModifier::Shift as u8);
+    const KEY_MODIFIER_NONE: KeyModifiers = KeyModifiers::empty();
+    const KEY_MODIFIER_CTRL: KeyModifiers = KeyModifiers::Ctrl;
+    const KEY_MODIFIER_CTRL_SHIFT: KeyModifiers = KeyModifiers::Ctrl.and(KeyModifiers::Shift);
 
-    let modifiers: KeyModifierBitflag = shortcut_modifiers(state.key_modifiers);
+    let modifiers = shortcut_modifiers(state.key_modifiers);
     let window_id = state.key_window_id.expect("Key window not found");
     let Some(key_code) = decode_key_code(event.code.0) else {
         return false;
@@ -529,7 +529,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
             Event::MouseDown(data) => match data.button.0 {
                 MOUSE_BUTTON_LEFT => {
                     if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF {
-                        let mime_types = if state.key_modifiers.0 == KeyModifier::Shift as u8 {
+                        let mime_types = if state.key_modifiers == KeyModifiers::Shift {
                             ALL_MIMES
                         } else {
                             TEXT_MIME_TYPE

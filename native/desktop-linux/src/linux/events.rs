@@ -1,20 +1,16 @@
-use core::f64;
-use desktop_common::{
-    ffi_utils::{BorrowedArray, BorrowedStrPtr},
-    logger::PanicDefault,
-};
-use enumflags2::{BitFlag, bitflags};
-use std::fmt::{Debug, Formatter};
-use std::{
-    ffi::{CStr, CString},
-    fmt::Write,
-};
-
 use crate::linux::{
     application_api::{DataSource, DragAndDropAction},
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
     xdg_desktop_settings_api::XdgDesktopSetting,
 };
+use bitflag_attr::bitflag;
+use core::f64;
+use desktop_common::{
+    ffi_utils::{BorrowedArray, BorrowedStrPtr},
+    logger::PanicDefault,
+};
+use std::ffi::{CStr, CString};
+use std::fmt::{Debug, Formatter};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
@@ -45,10 +41,10 @@ impl PanicDefault for RequestId {
 #[repr(transparent)]
 pub struct MouseButton(pub u32);
 
-#[bitflags]
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum KeyModifier {
+#[repr(C)]
+#[bitflag(u8)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum KeyModifiers {
     /// The "control" key
     Ctrl = 0b0000_0001,
 
@@ -68,30 +64,6 @@ pub enum KeyModifier {
 
     /// The "Num lock" key
     NumLock = 0b0010_0000,
-}
-
-#[derive(Default, Clone, Copy, Eq, PartialEq)]
-#[repr(transparent)]
-pub struct KeyModifierBitflag(pub u8);
-
-impl Debug for KeyModifierBitflag {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "KeyModifierBitflag({:#08b}, ", &self.0)?;
-        let bitflags = KeyModifier::from_bits(self.0).unwrap();
-
-        for (i, field) in bitflags.into_iter().enumerate() {
-            if i > 0 {
-                f.write_char('|')?;
-            }
-            field.fmt(f)?;
-        }
-
-        f.write_char(')')
-    }
-}
-
-impl KeyModifierBitflag {
-    pub const EMPTY: Self = Self(0);
 }
 
 #[repr(transparent)]
@@ -279,7 +251,7 @@ impl From<KeyUpEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ModifiersChangedEvent {
-    pub modifiers: KeyModifierBitflag,
+    pub modifiers: KeyModifiers,
 }
 
 impl From<ModifiersChangedEvent> for Event<'_> {

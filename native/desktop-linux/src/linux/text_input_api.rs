@@ -1,5 +1,5 @@
+use bitflag_attr::bitflag;
 use desktop_common::ffi_utils::BorrowedStrPtr;
-use enumflags2::{BitFlags, bitflags};
 
 use crate::linux::geometry::LogicalRect;
 
@@ -9,7 +9,7 @@ pub struct TextInputContext<'a> {
     pub surrounding_text: BorrowedStrPtr<'a>,
     pub cursor_codepoint_offset: u16,
     pub selection_start_codepoint_offset: u16,
-    pub hints: TextInputContentHintBitflag,
+    pub hints: TextInputContentHints,
     pub content_purpose: TextInputContentPurpose,
     pub cursor_rectangle: LogicalRect,
     pub change_caused_by_input_method: bool,
@@ -45,10 +45,10 @@ pub enum TextInputContentPurpose {
     Terminal,
 }
 
-#[bitflags]
-#[repr(u32)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum TextInputContentHint {
+#[repr(C)]
+#[bitflag(u32)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum TextInputContentHints {
     Completion = 1 << 0,
     Spellcheck = 1 << 1,
     AutoCapitalization = 1 << 2,
@@ -59,14 +59,4 @@ pub enum TextInputContentHint {
     SensitiveData = 1 << 7,
     Latin = 1 << 8,
     Multiline = 1 << 9,
-}
-
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
-#[repr(transparent)]
-pub struct TextInputContentHintBitflag(pub u32);
-
-impl From<TextInputContentHint> for TextInputContentHintBitflag {
-    fn from(value: TextInputContentHint) -> Self {
-        Self(BitFlags::from_flag(value).bits_c())
-    }
 }

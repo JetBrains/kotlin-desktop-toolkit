@@ -1,4 +1,3 @@
-use enumflags2::BitFlags;
 use log::debug;
 use smithay_client_toolkit::{
     delegate_keyboard,
@@ -9,10 +8,9 @@ use smithay_client_toolkit::{
     seat::keyboard::{KeyEvent, KeyboardData, KeyboardHandler, Keysym, Modifiers, RawModifiers},
 };
 
-use super::events::{KeyUpEvent, ModifiersChangedEvent};
 use crate::linux::{
     application_state::ApplicationState,
-    events::{KeyCode, KeyDownEvent, KeyModifier, KeyModifierBitflag, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent},
+    events::{KeyCode, KeyDownEvent, KeyModifiers, KeyUpEvent, ModifiersChangedEvent, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent},
 };
 
 pub fn send_key_down_event(state: &ApplicationState, event: &KeyEvent, is_repeat: bool) {
@@ -79,16 +77,26 @@ impl KeyboardHandler for ApplicationState {
     ) {
         self.last_keyboard_event_serial = Some(serial);
         let event = {
-            let mut key_modifiers = BitFlags::<KeyModifier>::EMPTY;
-            key_modifiers.set(KeyModifier::Ctrl, modifiers.ctrl);
-            key_modifiers.set(KeyModifier::Alt, modifiers.alt);
-            key_modifiers.set(KeyModifier::Shift, modifiers.shift);
-            key_modifiers.set(KeyModifier::CapsLock, modifiers.caps_lock);
-            key_modifiers.set(KeyModifier::Logo, modifiers.logo);
-            key_modifiers.set(KeyModifier::NumLock, modifiers.num_lock);
-            ModifiersChangedEvent {
-                modifiers: KeyModifierBitflag(key_modifiers.bits_c()),
+            let mut key_modifiers = KeyModifiers::empty();
+            if modifiers.ctrl {
+                key_modifiers |= KeyModifiers::Ctrl;
             }
+            if modifiers.alt {
+                key_modifiers |= KeyModifiers::Alt;
+            }
+            if modifiers.shift {
+                key_modifiers |= KeyModifiers::Shift;
+            }
+            if modifiers.caps_lock {
+                key_modifiers |= KeyModifiers::CapsLock;
+            }
+            if modifiers.logo {
+                key_modifiers |= KeyModifiers::Logo;
+            }
+            if modifiers.num_lock {
+                key_modifiers |= KeyModifiers::NumLock;
+            }
+            ModifiersChangedEvent { modifiers: key_modifiers }
         };
         self.send_event(event);
     }
