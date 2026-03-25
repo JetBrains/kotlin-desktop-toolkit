@@ -43,7 +43,7 @@ use desktop_linux::linux::{
     events::{DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, RequestId, TextInputEvent, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalRect, LogicalSize},
-    text_input_api::{TextInputContentPurpose, TextInputContext},
+    text_input_api::{TextInputContentHint, TextInputContentPurpose, TextInputContext},
     window_api::{
         WindowParams,
         window_activate,
@@ -137,7 +137,7 @@ fn create_text_input_context<'a>(text: &str, text_cstring: &'a CString, change_c
         surrounding_text: BorrowedStrPtr::new(text_cstring),
         cursor_codepoint_offset: codepoints_count,
         selection_start_codepoint_offset: codepoints_count,
-        is_multiline: true,
+        hints: TextInputContentHint::Multiline.into(),
         content_purpose: TextInputContentPurpose::Normal,
         cursor_rectangle: LogicalRect {
             x: (codepoints_count * 10).into(),

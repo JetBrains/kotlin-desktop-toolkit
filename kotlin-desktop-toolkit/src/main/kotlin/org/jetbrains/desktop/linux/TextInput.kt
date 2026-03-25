@@ -22,6 +22,19 @@ public data class TextInputDeleteSurroundingTextData internal constructor(
     internal companion object
 }
 
+public enum class TextInputContentHint {
+    Completion,
+    Spellcheck,
+    AutoCapitalization,
+    Lowercase,
+    Uppercase,
+    Titlecase,
+    HiddenText,
+    SensitiveData,
+    Latin,
+    Multiline,
+}
+
 public enum class TextInputContentPurpose {
     /** default input, allowing all characters */
     Normal,
@@ -67,7 +80,7 @@ public class TextInputContext(
     public val surroundingText: String,
     public val cursorCodepointOffset: UShort,
     public val selectionStartCodepointOffset: UShort,
-    public val isMultiline: Boolean,
+    public val hints: Set<TextInputContentHint>,
     public val contentPurpose: TextInputContentPurpose,
     public val cursorRectangle: LogicalRect,
     public val changeCausedByInputMethod: Boolean,

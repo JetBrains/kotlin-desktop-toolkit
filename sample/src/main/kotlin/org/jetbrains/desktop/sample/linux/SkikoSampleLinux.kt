@@ -35,6 +35,7 @@ import org.jetbrains.desktop.linux.RequestId
 import org.jetbrains.desktop.linux.ShowNotificationParams
 import org.jetbrains.desktop.linux.StartDragAndDropParams
 import org.jetbrains.desktop.linux.SupportedActionsForMime
+import org.jetbrains.desktop.linux.TextInputContentHint
 import org.jetbrains.desktop.linux.TextInputContentPurpose
 import org.jetbrains.desktop.linux.TextInputContext
 import org.jetbrains.desktop.linux.Window
@@ -273,7 +274,7 @@ private class EditorState {
             surroundingText = text.toString(),
             cursorCodepointOffset = cursorCodepoint,
             selectionStartCodepointOffset = selectionStartOffset?.let { codepointFromOffset(text, it) } ?: cursorCodepoint,
-            isMultiline = true,
+            hints = setOf(TextInputContentHint.Multiline),
             contentPurpose = TextInputContentPurpose.Normal,
             cursorRectangle = cursorRectangle,
             changeCausedByInputMethod = changeCausedByInputMethod,
