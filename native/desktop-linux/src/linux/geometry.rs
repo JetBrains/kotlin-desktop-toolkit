@@ -40,12 +40,12 @@ impl<T: Into<f64>> From<(T, T)> for LogicalPoint {
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct LogicalSize {
-    pub width: i32,
-    pub height: i32,
+    pub width: u32,
+    pub height: u32,
 }
 
 #[must_use]
-fn to_physical_value(value: i32, scale: f64) -> PhysicalPixels {
+fn to_physical_value(value: u32, scale: f64) -> PhysicalPixels {
     #[allow(clippy::cast_possible_truncation)]
     PhysicalPixels((f64::from(value) * scale).round() as i32)
 }

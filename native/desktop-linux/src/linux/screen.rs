@@ -43,8 +43,8 @@ impl ScreenInfo {
             size: info
                 .logical_size
                 .map(|size| LogicalSize {
-                    width: size.0,
-                    height: size.1,
+                    width: u32::try_from(size.0).unwrap(),
+                    height: u32::try_from(size.1).unwrap(),
                 })
                 .unwrap_or_default(),
             maximum_frames_per_second: current_mode.map(Self::get_refresh_rate_fps).unwrap_or_default(),
