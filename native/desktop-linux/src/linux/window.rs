@@ -202,18 +202,11 @@ impl SimpleWindow {
         is_first_configure
     }
 
-    pub fn draw(
-        &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<ApplicationState>,
-        themed_pointer: Option<&mut ThemedPointer>,
-        callback: &dyn Fn(WindowDrawEvent) -> bool,
-    ) {
-        let surface = self.window.wl_surface();
+    pub fn update_pointer(&mut self, conn: &Connection, themed_pointer: Option<&mut ThemedPointer>) {
         if self.set_cursor
             && let Some(themed_pointer) = themed_pointer
         {
-            debug!("Updating cursor to {:?} for {}", self.decorations_cursor, surface.id());
+            debug!("Updating cursor to {:?} for {:?}", self.decorations_cursor, self.window_id);
             if let Some(decorations_cursor) = self.decorations_cursor {
                 match themed_pointer.set_cursor(conn, decorations_cursor) {
                     Ok(()) => {
@@ -229,6 +222,17 @@ impl SimpleWindow {
                 self.set_cursor = false;
             }
         }
+    }
+
+    pub fn draw(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<ApplicationState>,
+        themed_pointer: Option<&mut ThemedPointer>,
+        callback: &dyn Fn(WindowDrawEvent) -> bool,
+    ) {
+        self.update_pointer(conn, themed_pointer);
+        let surface = self.window.wl_surface();
 
         let physical_size = self.size.unwrap().to_physical(self.current_scale);
 

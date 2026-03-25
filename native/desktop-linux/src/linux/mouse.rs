@@ -54,7 +54,7 @@ impl PointerHandler for ApplicationState {
             let scale = window.current_scale;
             let window_id = window.window_id;
 
-            _ = match event.kind {
+            let res = match event.kind {
                 PointerEventKind::Enter { .. } => {
                     window.num_pointer_buttons_down = 0;
                     window.set_cursor = true;
@@ -135,6 +135,9 @@ impl PointerHandler for ApplicationState {
                     })
                 }
             };
+            if res && let Some(window) = self.windows.get_mut(&event.surface.id()) {
+                window.update_pointer(conn, self.themed_pointer.as_mut());
+            }
         }
     }
 }
