@@ -18,7 +18,7 @@ use desktop_gtk::gtk::application_api::{
 use desktop_gtk::gtk::desktop_settings_api::{FfiDesktopSetting, XdgDesktopColorScheme};
 use desktop_gtk::gtk::events::{OpenGlDrawData, WindowDecorationMode};
 use desktop_gtk::gtk::file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams};
-use desktop_gtk::gtk::text_input_api::{TextInputContentPurpose, TextInputContext, TextInputContextHint, TextInputContextHintBitflag};
+use desktop_gtk::gtk::text_input_api::{TextInputContentPurpose, TextInputContext, TextInputContextHints};
 use desktop_gtk::gtk::{
     application_api::{
         ApplicationCallbacks,
@@ -34,7 +34,7 @@ use desktop_gtk::gtk::{
         application_run_event_loop,
         //
     },
-    events::{DataTransferContent, Event, KeyDownEvent, KeyModifier, KeyModifierBitflag, RequestId, TextInputEvent, WindowId},
+    events::{DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, TextInputEvent, WindowId},
     geometry::{LogicalRect, LogicalSize, PhysicalSize},
     window_api::{
         window_request_redraw,
@@ -95,7 +95,7 @@ impl WindowState {
 
 #[derive(Default)]
 struct State {
-    key_modifiers: KeyModifierBitflag,
+    key_modifiers: KeyModifiers,
     windows: HashMap<WindowId, WindowState>,
     drag_icon: Option<WindowState>,
     request_sources: HashMap<RequestId, WindowId>,
@@ -137,7 +137,7 @@ fn draw_with_init(draw_data: &OpenGlDrawData, physical_size: PhysicalSize, scale
 fn create_text_input_context(text: &str) -> TextInputContext {
     let codepoints_count = u16::try_from(text.chars().count()).unwrap();
     TextInputContext {
-        hints: TextInputContextHintBitflag((TextInputContextHint::WordCompletion | TextInputContextHint::Spellcheck).bits()),
+        hints: TextInputContextHints::WordCompletion | TextInputContextHints::Spellcheck,
         content_purpose: TextInputContentPurpose::Normal,
         cursor_rectangle: LogicalRect {
             x: (codepoints_count * 10).into(),
@@ -148,8 +148,8 @@ fn create_text_input_context(text: &str) -> TextInputContext {
     }
 }
 
-const fn shortcut_modifiers(all_modifiers: KeyModifierBitflag) -> KeyModifierBitflag {
-    KeyModifierBitflag(all_modifiers.0 & !(KeyModifier::CapsLock as u8) & !(KeyModifier::NumLock as u8))
+const fn shortcut_modifiers(all_modifiers: KeyModifiers) -> KeyModifiers {
+    all_modifiers.and(KeyModifiers::CapsLock.not()).and(KeyModifiers::NumLock.not())
 }
 
 fn decode_key_code(raw: u32) -> Option<keycode::KeyMappingCode> {
@@ -172,17 +172,17 @@ fn decode_key_code(raw: u32) -> Option<keycode::KeyMappingCode> {
 
 #[allow(clippy::too_many_lines)]
 fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> Option<Action> {
-    const KEY_MODIFIER_CTRL: u8 = KeyModifier::Ctrl as u8;
+    const KEY_MODIFIER_NONE: KeyModifiers = KeyModifiers::empty();
 
-    let modifiers: KeyModifierBitflag = shortcut_modifiers(state.key_modifiers);
+    let modifiers = shortcut_modifiers(state.key_modifiers);
     let key_code = decode_key_code(event.code.0)?;
 
     let window_state = state.windows.get_mut(&window_id).unwrap();
 
     #[allow(clippy::single_match_else)]
-    match (modifiers.0, key_code) {
-        (0, keycode::KeyMappingCode::Escape) => Some(Action::ApplicationStopDragAndDrop),
-        (0, keycode::KeyMappingCode::Backspace) => {
+    match (modifiers, key_code) {
+        (KEY_MODIFIER_NONE, keycode::KeyMappingCode::Escape) => Some(Action::ApplicationStopDragAndDrop),
+        (KEY_MODIFIER_NONE, keycode::KeyMappingCode::Backspace) => {
             window_state.text.pop();
             if window_state.text_input_available {
                 window_text_input_update(window_id, create_text_input_context(&window_state.text));
@@ -190,14 +190,14 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
             debug!("{window_id:?} : {} : {}", window_state.text.len(), window_state.text);
             Some(Action::Dummy)
         }
-        (0, keycode::KeyMappingCode::F11) => {
+        (KEY_MODIFIER_NONE, keycode::KeyMappingCode::F11) => {
             if window_state.fullscreen {
                 Some(Action::WindowUnsetFullscreen(window_id))
             } else {
                 Some(Action::WindowSetFullscreen(window_id))
             }
         }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::Tab) => {
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::Tab) => {
             state
                 .windows
                 .keys()
@@ -207,21 +207,21 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
                     token: None,
                 })
         }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyQ) => Some(Action::WindowClose(window_id)),
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyM) => {
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyQ) => Some(Action::WindowClose(window_id)),
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyM) => {
             if window_state.maximized {
                 Some(Action::WindowUnmaximize(window_id))
             } else {
                 Some(Action::WindowMaximize(window_id))
             }
         }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyV) => Some(Action::ApplicationClipboardPaste {
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyV) => Some(Action::ApplicationClipboardPaste {
             serial: 0,
             supported_mime_types: TEXT_MIME_TYPE,
         }),
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyC) => Some(Action::ApplicationClipboardPut(ALL_MIMES)),
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyF) => Some(Action::ApplicationClipboardPut(c"")),
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyP) => {
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyC) => Some(Action::ApplicationClipboardPut(ALL_MIMES)),
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyF) => Some(Action::ApplicationClipboardPut(c"")),
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyP) => {
             let title = format!("Notification from window {}", window_id.0);
             let body = format!("Clicking this notification will activate window {}", window_id.0);
             let title_cstr = CString::new(title).unwrap();
@@ -236,7 +236,7 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
             }
             Some(Action::Dummy)
         }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyO) => {
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyO) => {
             let common_params = CommonFileDialogParams {
                 modal: false,
                 title: c"Open File for GTK Native Sample App test".into(),
@@ -252,7 +252,7 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
             Some(Action::Dummy)
         }
 
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyS) => {
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyS) => {
             let common_params = CommonFileDialogParams {
                 modal: false,
                 title: c"Save File for GTK Native Sample App test".into(),
@@ -266,7 +266,7 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
             debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
             Some(Action::Dummy)
         }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyN) => {
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyN) => {
             let new_window_id = state.next_window_id();
             state.windows.insert(new_window_id, WindowState::default());
             Some(Action::WindowCreate {
@@ -278,11 +278,11 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
                 rendering_mode: RenderingMode::Auto,
             })
         }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyL) => {
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyL) => {
             application_open_url(BorrowedStrPtr::new(c"https://jetbrains.com"), BorrowedStrPtr::null());
             Some(Action::Dummy)
         }
-        (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyU) => {
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyU) => {
             if let Some(path) = window_state.last_received_path.clone() {
                 application_open_file_manager(BorrowedStrPtr::new(&path), BorrowedStrPtr::null());
             }
@@ -474,7 +474,7 @@ fn event_handler_impl(event: &Event) -> Vec<Action> {
                 match data.button.0 {
                     MOUSE_BUTTON_LEFT => {
                         if x < DRAG_AND_DROP_LEFT_OF && y > f64::from(window_state.inset_start.height) {
-                            let mime_types = if state.key_modifiers.0 == KeyModifier::Shift as u8 {
+                            let mime_types = if state.key_modifiers == KeyModifiers::Shift {
                                 ALL_MIMES
                             } else {
                                 TEXT_MIME_TYPE

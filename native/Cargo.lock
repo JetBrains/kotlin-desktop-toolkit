@@ -437,8 +437,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "ashpd",
+ "bitflag-attr",
  "desktop-common",
- "enumflags2",
  "futures-lite",
  "gles30",
  "glib-unix",
