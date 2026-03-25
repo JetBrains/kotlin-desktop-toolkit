@@ -106,9 +106,7 @@ impl SimpleWindow {
         let mut size = if params.size.width == 0 { None } else { Some(params.size) };
 
         if params.min_size.width > 0 && params.min_size.height > 0 {
-            let min_width = u32::try_from(params.min_size.width)?;
-            let min_height = u32::try_from(params.min_size.height)?;
-            window.set_min_size(Some((min_width, min_height)));
+            window.set_min_size(Some((params.min_size.width, params.min_size.height)));
             if let Some(size) = &mut size {
                 if size.width < params.min_size.width {
                     size.width = params.min_size.width;
@@ -156,8 +154,8 @@ impl SimpleWindow {
         configure: &WindowConfigure,
         egl: Option<&'static EglInstance>,
     ) -> bool {
-        const DEFAULT_WIDTH: i32 = 640;
-        const DEFAULT_HEIGHT: i32 = 480;
+        const DEFAULT_WIDTH: u32 = 640;
+        const DEFAULT_HEIGHT: u32 = 480;
         debug!("SimpleWindow::configure start: {configure:?}");
 
         self.decoration_mode = configure.decoration_mode;
@@ -165,21 +163,21 @@ impl SimpleWindow {
         let width = configure
             .new_size
             .0
-            .and_then(|w| i32::try_from(w.get()).ok())
+            .map(|w| w.get())
             .or_else(|| self.size.map(|s| s.width))
-            .or_else(|| configure.suggested_bounds.and_then(|(w, _h)| i32::try_from(w).ok()))
+            .or_else(|| configure.suggested_bounds.map(|(w, _h)| w))
             .unwrap_or(DEFAULT_WIDTH);
         let height = configure
             .new_size
             .1
-            .and_then(|h| i32::try_from(h.get()).ok())
+            .map(std::num::NonZero::get)
             .or_else(|| self.size.map(|s| s.height))
-            .or_else(|| configure.suggested_bounds.and_then(|(_w, h)| i32::try_from(h).ok()))
+            .or_else(|| configure.suggested_bounds.map(|(_w, h)| h))
             .unwrap_or(DEFAULT_HEIGHT);
         let size = LogicalSize { width, height };
         self.size = Some(size);
 
-        window.xdg_surface().set_window_geometry(0, 0, width, height);
+        window.set_window_geometry(0, 0, width, height);
         // TODO: wl_surface::set_opaque_region?
 
         let physical_size = size.to_physical(self.current_scale);
@@ -264,7 +262,7 @@ impl SimpleWindow {
     fn on_resize(&mut self, size: LogicalSize, physical_size: PhysicalSize, shm: &Shm) {
         if let Some(viewport) = &self.viewport {
             debug!("viewport.set_destination({}, {})", size.width, size.height);
-            viewport.set_destination(size.width, size.height);
+            viewport.set_destination(i32::try_from(size.width).unwrap(), i32::try_from(size.height).unwrap());
         } else {
             let surface = self.window.wl_surface();
             assert!(self.current_scale % 1.0 < 0.0001);

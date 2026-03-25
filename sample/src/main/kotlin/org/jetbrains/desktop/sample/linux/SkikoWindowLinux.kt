@@ -69,7 +69,7 @@ abstract class SkikoWindowLinux(
     private val creationTime = TimeSource.Monotonic.markNow()
 
     init {
-        window.setMinSize(LogicalSize(320, 240))
+        window.setMinSize(LogicalSize(320U, 240U))
     }
 
     fun performDrawing(event: Event.WindowDraw): Boolean {

@@ -26,6 +26,13 @@ private fun LogicalPoint.isInsideCircle(center: LogicalPoint, radius: LogicalPix
     return xDiff.pow(2) + yDiff.pow(2) <= radius.pow(2)
 }
 
+fun LogicalRect.contains(p: LogicalPoint): Boolean {
+    return p.x > x.toDouble() &&
+        p.x < (x + width).toDouble() &&
+        p.y > y.toDouble() &&
+        p.y < (y + height).toDouble()
+}
+
 internal class SkikoCustomTitlebarLinux(
     var size: LogicalSize,
     var buttonLayout: TitlebarLayout,
@@ -40,7 +47,7 @@ internal class SkikoCustomTitlebarLinux(
     private var titleTextLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
 
     companion object {
-        const val CUSTOM_TITLEBAR_HEIGHT = 55
+        const val CUSTOM_TITLEBAR_HEIGHT = 55U
         const val BUTTON_LINE_WIDTH: LogicalPixels = 5.0
         const val MOVE_RADIUS: LogicalPixels = 3.0
         val COLOR_DARK_GRAY = Color.makeRGB(128, 128, 128)
@@ -67,23 +74,23 @@ internal class SkikoCustomTitlebarLinux(
         buttonLayout = layout
         rectangles.clear()
         buttonLayout.let {
-            val buttonsLeftWidth = it.layoutLeft.size * BUTTON_SIZE.width
-            val buttonsRightWidth = it.layoutRight.size * BUTTON_SIZE.width
+            val buttonsLeftWidth = it.layoutLeft.size.toUInt() * BUTTON_SIZE.width
+            val buttonsRightWidth = it.layoutRight.size.toUInt() * BUTTON_SIZE.width
             val rect = LogicalRect(
                 x = buttonsLeftWidth,
-                y = 0,
+                y = 0U,
                 width = size.width - buttonsRightWidth - buttonsLeftWidth,
                 height = CUSTOM_TITLEBAR_HEIGHT,
             )
             rectangles.add(Pair(rect, WindowButtonType.Title))
             for ((i, button) in it.layoutLeft.withIndex()) {
-                val rect = LogicalRect(x = i * BUTTON_SIZE.height, y = 0, width = BUTTON_SIZE.width, height = BUTTON_SIZE.height)
+                val rect = LogicalRect(x = i.toUInt() * BUTTON_SIZE.height, y = 0U, width = BUTTON_SIZE.width, height = BUTTON_SIZE.height)
                 rectangles.add(Pair(rect, button))
             }
             for ((i, button) in it.layoutRight.withIndex()) {
                 val rect = LogicalRect(
-                    x = size.width - ((it.layoutRight.size - i) * BUTTON_SIZE.width),
-                    y = 0,
+                    x = size.width - ((it.layoutRight.size.toUInt() - i.toUInt()) * BUTTON_SIZE.width),
+                    y = 0U,
                     width = BUTTON_SIZE.width,
                     height = BUTTON_SIZE.height,
                 )
@@ -169,7 +176,7 @@ internal class SkikoCustomTitlebarLinux(
     }
 
     fun onMouseDown(event: Event.MouseDown): EventHandlerResult {
-        val headerRect = LogicalRect(x = 0, y = 0, width = size.width, height = size.height)
+        val headerRect = LogicalRect(x = 0U, y = 0U, width = size.width, height = size.height)
         return if (headerRect.contains(event.locationInWindow) && event.button == MouseButton.LEFT) {
             leftClickStartLocation = event.locationInWindow
             isDragging = false
@@ -185,7 +192,7 @@ internal class SkikoCustomTitlebarLinux(
         window: Window,
         windowState: WindowState,
     ): EventHandlerResult {
-        val headerRect = LogicalRect(x = 0, y = 0, width = size.width, height = size.height)
+        val headerRect = LogicalRect(x = 0U, y = 0U, width = size.width, height = size.height)
         val leftClickStartWindowButton = leftClickStartLocation?.let { leftClickStartLocation ->
             rectangles.firstOrNull { it.first.contains(leftClickStartLocation) }?.second
         }
@@ -228,7 +235,7 @@ internal class SkikoCustomTitlebarLinux(
     }
 
     fun onMouseMoved(locationInWindow: LogicalPoint, window: Window): EventHandlerResult {
-        val headerRect = LogicalRect(x = 0, y = 0, width = size.width, height = size.height)
+        val headerRect = LogicalRect(x = 0U, y = 0U, width = size.width, height = size.height)
         lastMouseLocation = locationInWindow
         return if (headerRect.contains(locationInWindow) &&
             !isDragging &&
@@ -271,10 +278,10 @@ internal class SkikoCustomTitlebarLinux(
         title: String,
         windowState: WindowState,
     ) {
-        val w = rect.width * scale
-        val h = rect.height * scale
-        val xOffset = rect.x * scale
-        val yOffset = rect.y * scale
+        val w = rect.width.toFloat() * scale
+        val h = rect.height.toFloat() * scale
+        val xOffset = rect.x.toFloat() * scale
+        val yOffset = rect.y.toFloat() * scale
 
         when (button) {
             WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close, WindowButtonType.AppMenu -> {
@@ -333,7 +340,7 @@ internal class SkikoCustomTitlebarLinux(
                 WindowButtonType.Title -> {
                     paint.color = if (windowState.active) Color.WHITE else COLOR_LIGHT_GRAY
                     canvas.drawTextLine(
-                        titleTextLineCreator.makeTextLine(title, (CUSTOM_TITLEBAR_HEIGHT * scale).toFloat()),
+                        titleTextLineCreator.makeTextLine(title, (CUSTOM_TITLEBAR_HEIGHT.toFloat() * scale)),
                         xOffset,
                         yBottom,
                         paint,

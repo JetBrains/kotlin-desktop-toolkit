@@ -113,7 +113,7 @@ impl DragIcon {
         let size = self.size;
         if let Some(viewport) = &self.viewport {
             debug!("viewport.set_destination({}, {})", size.width, size.height);
-            viewport.set_destination(size.width, size.height);
+            viewport.set_destination(i32::try_from(size.width).unwrap(), i32::try_from(size.height).unwrap());
         } else {
             let surface = self.surface.wl_surface();
             assert!(self.current_scale % 1.0 < 0.0001);

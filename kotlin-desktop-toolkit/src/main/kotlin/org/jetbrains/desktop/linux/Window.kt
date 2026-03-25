@@ -9,13 +9,7 @@ public typealias WindowId = Long
 public class DragIconParams(
     public val renderingMode: RenderingMode,
     public val size: LogicalSize,
-) {
-    init {
-        check(size.width > 0 && size.height > 0) {
-            "Invalid size (both width and height must be greater than zero)"
-        }
-    }
-}
+)
 
 public class StartDragAndDropParams(
     public val mimeTypes: List<String>,
@@ -152,7 +146,7 @@ public class Window internal constructor(
                     mimeTypesToNative(arena, params.mimeTypes),
                     params.actions.toNative(),
                     (params.dragIconParams?.renderingMode ?: RenderingMode.Auto).toNative(),
-                    (params.dragIconParams?.size ?: LogicalSize(0, 0)).toNative(arena),
+                    (params.dragIconParams?.size ?: LogicalSize(0U, 0U)).toNative(arena),
                 )
             }
         }
