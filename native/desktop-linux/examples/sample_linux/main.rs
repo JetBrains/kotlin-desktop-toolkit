@@ -2,7 +2,7 @@
 mod sample_linux;
 
 #[cfg(target_os = "linux")]
-mod gl_sys;
+mod sample_linux_draw;
 
 #[cfg(target_os = "linux")]
 pub fn main() {
