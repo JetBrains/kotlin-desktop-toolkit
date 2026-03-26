@@ -1,7 +1,6 @@
 use std::{collections::HashMap, ffi::CStr};
 
 use crate::sample_linux::WindowState;
-use desktop_common::ffi_utils::BorrowedStrPtr;
 use desktop_linux::linux::application_api::application_get_egl_proc_func;
 use desktop_linux::linux::events::{SoftwareDrawData, WindowId};
 use desktop_linux::linux::geometry::PhysicalSize;
@@ -108,15 +107,7 @@ fn draw_opengl_triangle(gl: &GlFns, program: GLuint, physical_size: PhysicalSize
 pub fn draw_opengl_triangle_with_init(physical_size: PhysicalSize, window_id: WindowId, window_state: &mut WindowState) {
     let opengl_state = window_state.opengl.get_or_insert_with(|| {
         let egl_lib = application_get_egl_proc_func();
-        let gl = unsafe {
-            GlFns::load_with(|c| {
-                if let Some(f) = (egl_lib.f)(egl_lib.ctx.clone(), BorrowedStrPtr::from_ptr(c)) {
-                    f as _
-                } else {
-                    std::ptr::null_mut()
-                }
-            })
-        };
+        let gl = unsafe { GlFns::load_with(|name| (egl_lib.f)(egl_lib.ctx, name)) };
         let program = create_opengl_program(&gl).unwrap();
         debug!("draw_opengl_triangle_with_init, program = {program}");
         let mut programs = HashMap::new();
