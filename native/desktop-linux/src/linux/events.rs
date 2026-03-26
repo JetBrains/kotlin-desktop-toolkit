@@ -149,6 +149,7 @@ pub struct DropPerformedEvent<'a> {
     pub window_id: WindowId,
     pub content: DataTransferContent<'a>,
     pub action: DragAndDropAction,
+    pub location_in_window: LogicalPoint,
 }
 
 impl<'a> From<DropPerformedEvent<'a>> for Event<'a> {

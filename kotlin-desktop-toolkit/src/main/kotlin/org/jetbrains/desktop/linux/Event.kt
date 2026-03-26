@@ -163,6 +163,7 @@ public sealed class Event {
         val windowId: WindowId,
         val content: DataTransferContent?,
         val action: DragAndDropAction?,
+        val locationInWindow: LogicalPoint,
     ) : Event()
 
     @ConsistentCopyVisibility

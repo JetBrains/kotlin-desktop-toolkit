@@ -617,6 +617,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 windowId = NativeDropPerformedEvent.window_id(nativeEvent),
                 content = DataTransferContent.fromNative(NativeDropPerformedEvent.content(nativeEvent)),
                 action = DragAndDropAction.fromNative(NativeDropPerformedEvent.action(nativeEvent).toInt()),
+                locationInWindow = LogicalPoint.fromNative(NativeDropPerformedEvent.location_in_window(nativeEvent)),
             )
         }
         desktop_linux_h.NativeEvent_DragIconDraw() -> {

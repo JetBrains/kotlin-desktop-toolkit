@@ -177,7 +177,7 @@ pub fn handle_drop_target_drop(
                                 window_id,
                                 content,
                                 action: action.into(),
-                                location_in_window: (x, y).into(),
+                                location_in_window,
                             },
                         );
                     } else {

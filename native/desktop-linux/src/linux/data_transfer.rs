@@ -27,6 +27,7 @@ use smithay_client_toolkit::{
     },
 };
 
+use crate::linux::geometry::{LogicalPixels, LogicalPoint};
 use crate::linux::{
     application_api::{DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData},
     application_state::ApplicationState,
@@ -211,6 +212,11 @@ impl DataDeviceHandler for ApplicationState {
             return;
         };
 
+        let location_in_window = LogicalPoint {
+            x: LogicalPixels(x),
+            y: LogicalPixels(y),
+        };
+
         let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, x, y, window_id);
         let Some(mime_type) = mime_type_and_actions.mime_type else {
             debug!("DataDeviceHandler::drop_performed: no matching MIME type");
@@ -218,6 +224,7 @@ impl DataDeviceHandler for ApplicationState {
                 window_id,
                 content: DataTransferContent::null(),
                 action: DragAndDropAction::None,
+                location_in_window,
             });
             return;
         };
@@ -230,6 +237,7 @@ impl DataDeviceHandler for ApplicationState {
                     window_id,
                     content: DataTransferContent::null(),
                     action: DragAndDropAction::None,
+                    location_in_window,
                 });
                 return;
             }
@@ -247,6 +255,7 @@ impl DataDeviceHandler for ApplicationState {
                     window_id,
                     content,
                     action: action.into(),
+                    location_in_window,
                 });
             },
         ) {
@@ -254,6 +263,7 @@ impl DataDeviceHandler for ApplicationState {
                 window_id,
                 content: DataTransferContent::null(),
                 action: DragAndDropAction::None,
+                location_in_window,
             });
         }
     }
