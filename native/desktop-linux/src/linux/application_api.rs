@@ -1,18 +1,19 @@
 use crate::linux::{
     application::Application,
-    application_state::{EglInstance, get_egl},
+    application_state::get_egl,
     data_transfer::MimeTypes,
     events::{EventHandler, RequestId, WindowId},
     geometry::LogicalPoint,
     text_input_api::TextInputContext,
 };
 use anyhow::{Context, bail};
-use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
+use desktop_common::ffi_utils::AutoDropArray;
 use desktop_common::{
-    ffi_utils::{BorrowedArray, BorrowedOpaquePtr, RustAllocatedRawPtr},
+    ffi_utils::{BorrowedArray, RustAllocatedRawPtr},
     logger::ffi_boundary,
 };
 use log::debug;
+use std::mem::ManuallyDrop;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -125,27 +126,32 @@ pub extern "C" fn application_shutdown(app_ptr: AppPtr) {
     });
 }
 
+type EglGetProcAddress = extern "C" fn(name: *const core::ffi::c_char) -> *mut core::ffi::c_void;
+
 #[derive(Debug)]
 #[repr(C)]
-pub struct GetEglProcFuncData<'a> {
-    pub f: extern "C" fn(ctx: BorrowedOpaquePtr<'a>, name: BorrowedStrPtr) -> Option<extern "system" fn()>,
-    pub ctx: BorrowedOpaquePtr<'a>,
+pub struct GetEglProcFuncData {
+    pub f: extern "C" fn(ctx: EglGetProcAddress, name: *const core::ffi::c_char) -> *mut core::ffi::c_void,
+    pub ctx: EglGetProcAddress,
 }
 
 /// cbindgen:ignore
-extern "C" fn egl_get_proc_address(ctx_ptr: BorrowedOpaquePtr<'_>, name_ptr: BorrowedStrPtr) -> Option<extern "system" fn()> {
-    let name = name_ptr.as_str().unwrap();
-    // debug!("egl_get_gl_proc for {name}");
-    let egl = unsafe { ctx_ptr.borrow::<EglInstance>() }.expect("egl_get_proc_address: EGL Library not loaded");
-    egl.get_proc_address(name)
+extern "C" fn egl_get_proc_address(ctx: EglGetProcAddress, name: *const core::ffi::c_char) -> *mut core::ffi::c_void {
+    ctx(name)
+}
+
+const unsafe fn cast_f<T, S>(t: T) -> S {
+    unsafe { std::mem::transmute_copy::<ManuallyDrop<T>, S>(&ManuallyDrop::new(t)) }
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_get_egl_proc_func() -> GetEglProcFuncData<'static> {
+pub extern "C" fn application_get_egl_proc_func() -> GetEglProcFuncData {
     debug!("application_get_egl_proc_func");
+    let egl = get_egl().unwrap();
+    let raw_f = egl.get_proc_address("eglGetProcAddress").unwrap();
     GetEglProcFuncData {
         f: egl_get_proc_address,
-        ctx: BorrowedOpaquePtr::new(get_egl()),
+        ctx: unsafe { cast_f(raw_f) },
     }
 }
 
