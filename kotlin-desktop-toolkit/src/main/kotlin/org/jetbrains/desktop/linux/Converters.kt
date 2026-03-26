@@ -56,8 +56,8 @@ import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
 import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
 import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
-import java.lang.foreign.MemoryLayout
 import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 import kotlin.experimental.or
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
@@ -458,11 +458,8 @@ internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
         NativeBorrowedArray_u8.ptr(nativeDataArray, MemorySegment.NULL)
     } else {
         NativeBorrowedArray_u8.len(nativeDataArray, size.toLong())
-        val nativeArray = arena.allocate(MemoryLayout.sequenceLayout(size.toLong(), desktop_linux_h.C_CHAR))
-        this.forEachIndexed { i, b ->
-            nativeArray.setAtIndex(desktop_linux_h.C_CHAR, i.toLong(), b)
-        }
 
+        val nativeArray = arena.allocateArray(ValueLayout.JAVA_BYTE, *this)
         NativeBorrowedArray_u8.ptr(nativeDataArray, nativeArray)
     }
 
@@ -542,11 +539,7 @@ internal fun readNativeAutoDropU8Array(nativeU8Array: MemorySegment): ByteArray?
         return null
     }
     val len = NativeAutoDropArray_u8.len(nativeU8Array)
-    val buf = ByteArray(len.toInt())
-    for (i in 0 until len) {
-        buf[i.toInt()] = dataPtr.getAtIndex(desktop_linux_h.C_CHAR, i)
-    }
-    return buf
+    return dataPtr.asSlice(0, len).toArray(ValueLayout.JAVA_BYTE)
 }
 
 private fun readNativeU8Array(nativeU8Array: MemorySegment): ByteArray? {
@@ -555,27 +548,20 @@ private fun readNativeU8Array(nativeU8Array: MemorySegment): ByteArray? {
         return null
     }
     val len = NativeBorrowedArray_u8.len(nativeU8Array)
-    val buf = ByteArray(len.toInt())
-    for (i in 0 until len) {
-        buf[i.toInt()] = dataPtr.getAtIndex(desktop_linux_h.C_CHAR, i)
-    }
-    return buf
+    return dataPtr.asSlice(0, len).toArray(ValueLayout.JAVA_BYTE)
 }
 
 internal fun readStringFromNativeU8Array(nativeU8Array: MemorySegment): String? {
     return readNativeU8Array(nativeU8Array)?.decodeToString()
 }
 
-private fun readNativeU32Array(nativeU32Array: MemorySegment): List<UInt> {
-    val len = NativeBorrowedArray_u32.len(nativeU32Array)
+private fun readNativeU32Array(nativeU32Array: MemorySegment): IntArray? {
     val dataPtr = NativeBorrowedArray_u32.ptr(nativeU32Array)
-    val values = mutableListOf<UInt>()
-    for (i in 0 until len) {
-        val raw = dataPtr.getAtIndex(desktop_linux_h.C_INT, i)
-        Logger.debug { "readNativeU32ArrayFor: len=$len : dataPtr=$dataPtr, value of index $i : $raw" }
-        values.add(raw.toUInt())
+    if (dataPtr == MemorySegment.NULL) {
+        return null
     }
-    return values
+    val len = NativeBorrowedArray_u32.len(nativeU32Array)
+    return dataPtr.asSlice(0, len * 4).toArray(ValueLayout.JAVA_INT)
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Event {
@@ -812,8 +798,8 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_WindowKeyboardEnter() -> {
             val nativeEvent = NativeEvent.window_keyboard_enter(s)
 
-            val keyCodes = readNativeU32Array(NativeWindowKeyboardEnterEvent.raw(nativeEvent)).map { KeyCode(it) }
-            val keySyms = readNativeU32Array(NativeWindowKeyboardEnterEvent.keysyms(nativeEvent)).map { KeySym(it) }
+            val keyCodes = readNativeU32Array(NativeWindowKeyboardEnterEvent.raw(nativeEvent))!!.map { KeyCode(it.toUInt()) }
+            val keySyms = readNativeU32Array(NativeWindowKeyboardEnterEvent.keysyms(nativeEvent))!!.map { KeySym(it.toUInt()) }
 
             Event.WindowKeyboardEnter(
                 windowId = NativeWindowKeyboardEnterEvent.window_id(nativeEvent),
