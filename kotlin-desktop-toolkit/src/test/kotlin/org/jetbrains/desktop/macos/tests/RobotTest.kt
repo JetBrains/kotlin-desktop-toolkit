@@ -10,6 +10,7 @@ import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyDown
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyUp
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
@@ -50,6 +51,11 @@ class RobotTest : KDTApplicationTestBase() {
     }
 
     @Test
+    fun `accessibility permission is granted`() {
+        assertTrue(ui { robot.isAccessibilityAllowed() })
+    }
+
+    @Test
     fun `robot waits until the event is delivered to os`() {
         repeat(100) {
             val hadCapitalA = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -71,7 +77,7 @@ class RobotTest : KDTApplicationTestBase() {
                 ui { robot.emulateKeyboardEvent(KeyCode.ANSI_X, isKeyDown = false) }
                 awaitEventOfType<Event.KeyUp> { it.keyCode == KeyCode.ANSI_X }
             }
-            assertNotNull(hadCapitalA.get())
+            assertTrue(hadCapitalA.get())
         }
     }
 

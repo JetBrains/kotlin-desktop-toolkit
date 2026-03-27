@@ -19,6 +19,20 @@ public class Robot : AutoCloseable {
         }
     }
 
+    /**
+     * Returns `true` if accessibility is allowed on the current process.
+     * Accessibility permissions are required to use the [Robot].
+     * To enable accessibility, go to System Preferences > Security & Privacy > Accessibility.
+     * Or use the tool like https://github.com/jacobsalmela/tccutil
+     * Accessibility permissions are inherited from parent processes.
+     * E.g., you might grant the permissions to IJ if you run tests from its terminal
+     */
+    public fun isAccessibilityAllowed(): Boolean {
+        return ffiDownCall {
+            desktop_macos_h.robot_is_accessibility_allowed()
+        }
+    }
+
     public fun emulateKeyboardEvent(key: KeyCode, isKeyDown: Boolean) {
         ffiDownCall {
             desktop_macos_h.emulate_keyboard_event(key.value, isKeyDown)
