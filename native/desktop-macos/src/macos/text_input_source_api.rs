@@ -115,6 +115,12 @@ pub extern "C" fn text_input_source_select(source_id: BorrowedStrPtr) -> bool {
                 return Ok(false);
             };
 
+            let prop_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceIsSelectCapable);
+            let is_select_capable = if prop_ptr.is_null() { false } else { CFBooleanGetValue(prop_ptr) };
+            if !is_select_capable {
+                log::warn!("Input source '{source_id_str}' is not select capable");
+            }
+
             let status = TISSelectInputSource(input_source);
             let result = status == 0; // noErr
 
@@ -134,6 +140,12 @@ pub extern "C" fn text_input_source_set_enable(source_id: BorrowedStrPtr, enable
                 log::warn!("Can't find input source with id {source_id_str}");
                 return Ok(false);
             };
+
+            let prop_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceIsEnableCapable);
+            let is_enable_capable = if prop_ptr.is_null() { false } else { CFBooleanGetValue(prop_ptr) };
+            if !is_enable_capable {
+                log::warn!("Input source '{source_id_str}' is not enable capable");
+            }
 
             let status = if enabled {
                 TISEnableInputSource(input_source)
