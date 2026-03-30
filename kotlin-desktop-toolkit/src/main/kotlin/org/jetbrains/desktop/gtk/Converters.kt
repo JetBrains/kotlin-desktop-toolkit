@@ -559,7 +559,7 @@ private fun readNativeU8Array(nativeU8Array: MemorySegment): ByteArray? {
 internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Event {
     return when (NativeEvent.tag(s)) {
         desktop_gtk_h.NativeEvent_ApplicationStarted() -> {
-            Event.ApplicationStarted
+            Event.ApplicationStarted()
         }
         desktop_gtk_h.NativeEvent_DisplayConfigurationChange() -> {
             Event.DisplayConfigurationChange(screens = app.allScreens())
@@ -794,7 +794,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             )
         }
         desktop_gtk_h.NativeEvent_DragIconFrameTick() -> {
-            Event.DragIconFrameTick
+            Event.DragIconFrameTick()
         }
         desktop_gtk_h.NativeEvent_WindowDraw() -> {
             val nativeEvent = NativeEvent.window_draw(s)

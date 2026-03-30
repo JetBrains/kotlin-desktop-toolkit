@@ -11,7 +11,8 @@ public enum class TextInputPreeditUnderlineType {
     internal companion object
 }
 
-public data class TextInputPreeditAttribute(
+@ConsistentCopyVisibility
+public data class TextInputPreeditAttribute internal constructor(
     val beginBytePos: UInt,
     val endBytePos: UInt,
     val underline: TextInputPreeditUnderlineType,
@@ -24,7 +25,8 @@ public data class TextInputPreeditAttribute(
     internal companion object
 }
 
-public data class TextInputPreeditStringData(
+@ConsistentCopyVisibility
+public data class TextInputPreeditStringData internal constructor(
     public val text: String?,
     public val cursorBytePos: Int,
     public val attributes: List<TextInputPreeditAttribute>,
@@ -32,11 +34,13 @@ public data class TextInputPreeditStringData(
     internal companion object
 }
 
-public data class TextInputCommitStringData(public val text: String?) {
+@ConsistentCopyVisibility
+public data class TextInputCommitStringData internal constructor(public val text: String?) {
     internal companion object
 }
 
-public data class TextInputDeleteSurroundingTextData(
+@ConsistentCopyVisibility
+public data class TextInputDeleteSurroundingTextData internal constructor(
     public val beforeLengthInBytes: UInt,
     public val afterLengthInBytes: UInt,
 ) {

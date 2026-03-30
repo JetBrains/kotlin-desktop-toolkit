@@ -19,14 +19,15 @@ public value class Timestamp private constructor(
     }
 }
 
-public data class OpenGlDrawData(
+@ConsistentCopyVisibility
+public data class OpenGlDrawData internal constructor(
     val framebuffer: Int,
     val isEs: Boolean,
 ) {
     internal companion object;
 }
 
-public class DataTransferContent(
+public class DataTransferContent internal constructor(
     public val mimeType: String,
     public val data: ByteArray,
 ) {
@@ -37,7 +38,8 @@ public class DataTransferContent(
     }
 }
 
-public data class DragAndDropQueryData(
+@ConsistentCopyVisibility
+public data class DragAndDropQueryData internal constructor(
     public val windowId: WindowId,
     public val locationInWindow: LogicalPoint,
 ) {
@@ -91,62 +93,74 @@ public value class RequestId private constructor(private val id: Int) {
 public sealed class Event {
     internal companion object;
 
-    public data object ApplicationStarted : Event()
+    public class ApplicationStarted internal constructor() : Event()
 
-    public data class DesktopSettingChange(val setting: DesktopSetting) : Event()
+    @ConsistentCopyVisibility
+    public data class DesktopSettingChange internal constructor(val setting: DesktopSetting) : Event()
 
-    public data class DataTransferAvailable(
+    @ConsistentCopyVisibility
+    public data class DataTransferAvailable internal constructor(
         val dataSource: DataSource,
         val mimeTypes: List<String>,
     ) : Event()
 
+    @ConsistentCopyVisibility
     /** Data received from clipboard or primary selection. For drag&drop, see [DropPerformed]. */
-    public data class DataTransfer(
+    public data class DataTransfer internal constructor(
         val serial: Int,
         val content: DataTransferContent?,
     ) : Event()
 
+    @ConsistentCopyVisibility
     /** Data transfer for data from our application was canceled */
-    public data class DataTransferCancelled(val dataSource: DataSource) : Event()
+    public data class DataTransferCancelled internal constructor(val dataSource: DataSource) : Event()
 
-    public data class DisplayConfigurationChange(val screens: AllScreens) : Event()
+    @ConsistentCopyVisibility
+    public data class DisplayConfigurationChange internal constructor(val screens: AllScreens) : Event()
 
+    @ConsistentCopyVisibility
     /** Drag&drop targeting our application left the specified window. */
-    public data class DragAndDropLeave(val windowId: WindowId) : Event()
+    public data class DragAndDropLeave internal constructor(val windowId: WindowId) : Event()
 
+    @ConsistentCopyVisibility
     /** Drag&drop targeting our window is finished, and we received data from it. */
-    public data class DropPerformed(
+    public data class DropPerformed internal constructor(
         val windowId: WindowId,
         val content: DataTransferContent?,
         val action: DragAndDropAction?,
         val locationInWindow: LogicalPoint,
     ) : Event()
 
+    @ConsistentCopyVisibility
     /** Drag&drop that was initiated from our window has finished. */
-    public data class DragAndDropFinished(
+    public data class DragAndDropFinished internal constructor(
         val windowId: WindowId,
         val action: DragAndDropAction?,
     ) : Event()
 
+    @ConsistentCopyVisibility
     /** The UI feedback for drag&drop that was initiated from our window has finished (e.g., the animation has finished). */
-    public data class DragAndDropFeedbackFinished(val windowId: WindowId) : Event()
+    public data class DragAndDropFeedbackFinished internal constructor(val windowId: WindowId) : Event()
 
-    public data object DragIconFrameTick : Event()
+    public class DragIconFrameTick internal constructor() : Event()
 
-    public data class DragIconDraw(
+    @ConsistentCopyVisibility
+    public data class DragIconDraw internal constructor(
         val openGlDrawData: OpenGlDrawData,
         val size: PhysicalSize,
         val scale: Double,
     ) : Event()
 
-    public data class FileChooserResponse(
+    @ConsistentCopyVisibility
+    public data class FileChooserResponse internal constructor(
         val requestId: RequestId,
 
         /** URL-encoded file paths */
         val files: List<String>,
     ) : Event()
 
-    public data class KeyDown(
+    @ConsistentCopyVisibility
+    public data class KeyDown internal constructor(
         val windowId: WindowId,
         val keyCode: KeyCode,
         val characters: String?,
@@ -154,45 +168,53 @@ public sealed class Event {
         val modifiers: Set<KeyModifiers>,
     ) : Event()
 
-    public data class KeyUp(
+    @ConsistentCopyVisibility
+    public data class KeyUp internal constructor(
         val windowId: WindowId,
         val keyCode: KeyCode,
         val key: KeySym,
     ) : Event()
 
-    public data class ModifiersChanged(
+    @ConsistentCopyVisibility
+    public data class ModifiersChanged internal constructor(
         val windowId: WindowId,
         val modifiers: Set<KeyModifiers>,
     ) : Event()
 
-    public data class MouseMoved(
+    @ConsistentCopyVisibility
+    public data class MouseMoved internal constructor(
         val windowId: WindowId,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class MouseEntered(
+    @ConsistentCopyVisibility
+    public data class MouseEntered internal constructor(
         val windowId: WindowId,
         val locationInWindow: LogicalPoint,
     ) : Event()
 
-    public data class MouseExited(val windowId: WindowId) : Event()
+    @ConsistentCopyVisibility
+    public data class MouseExited internal constructor(val windowId: WindowId) : Event()
 
-    public data class MouseUp(
+    @ConsistentCopyVisibility
+    public data class MouseUp internal constructor(
         val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class MouseDown(
+    @ConsistentCopyVisibility
+    public data class MouseDown internal constructor(
         val windowId: WindowId,
         val button: MouseButton,
         val locationInWindow: LogicalPoint,
         val timestamp: Timestamp,
     ) : Event()
 
-    public data class NotificationClosed(
+    @ConsistentCopyVisibility
+    public data class NotificationClosed internal constructor(
         val notificationId: UInt,
 
         /** Present only if notification was activated. By default, it has a value `"default"` */
@@ -202,14 +224,16 @@ public sealed class Event {
         val activationToken: String?,
     ) : Event()
 
-    public data class NotificationShown(
+    @ConsistentCopyVisibility
+    public data class NotificationShown internal constructor(
         val requestId: RequestId,
 
         /** Null if the request failed */
         val notificationId: UInt?,
     ) : Event()
 
-    public data class ScrollWheel(
+    @ConsistentCopyVisibility
+    public data class ScrollWheel internal constructor(
         val windowId: WindowId,
         val scrollingDeltaX: LogicalPixels,
         val scrollingDeltaY: LogicalPixels,
@@ -224,20 +248,24 @@ public sealed class Event {
      * 5. Insert the new preedit text in the cursor position.
      * 6. Place the cursor inside the preedit text.
      */
-    public data class TextInput(
+    @ConsistentCopyVisibility
+    public data class TextInput internal constructor(
         val windowId: WindowId,
         val preeditStringData: TextInputPreeditStringData?,
         val commitStringData: TextInputCommitStringData?,
         val deleteSurroundingTextData: TextInputDeleteSurroundingTextData?,
     ) : Event()
 
-    public data class WindowFrameTick(
+    @ConsistentCopyVisibility
+    public data class WindowFrameTick internal constructor(
         val windowId: WindowId,
         val frameTimeMicroseconds: Long,
     ) : Event()
 
-    public data class WindowClosed(val windowId: WindowId) : Event()
+    @ConsistentCopyVisibility
+    public data class WindowClosed internal constructor(val windowId: WindowId) : Event()
 
+    // TODO: Internal constructor
     public data class WindowConfigure(
         val windowId: WindowId,
         val size: LogicalSize,
@@ -249,22 +277,27 @@ public sealed class Event {
         val insetEnd: LogicalSize,
     ) : Event()
 
-    public data class WindowKeyboardEnter(val windowId: WindowId) : Event()
+    @ConsistentCopyVisibility
+    public data class WindowKeyboardEnter internal constructor(val windowId: WindowId) : Event()
 
-    public data class WindowKeyboardLeave(val windowId: WindowId) : Event()
+    @ConsistentCopyVisibility
+    public data class WindowKeyboardLeave internal constructor(val windowId: WindowId) : Event()
 
-    public data class WindowDraw(
+    @ConsistentCopyVisibility
+    public data class WindowDraw internal constructor(
         val windowId: WindowId,
         val openGlDrawData: OpenGlDrawData,
         val size: PhysicalSize,
     ) : Event()
 
-    public data class WindowScaleChanged(
+    @ConsistentCopyVisibility
+    public data class WindowScaleChanged internal constructor(
         val windowId: WindowId,
         val newScale: Double,
     ) : Event()
 
-    public data class WindowScreenChange(
+    @ConsistentCopyVisibility
+    public data class WindowScreenChange internal constructor(
         val windowId: WindowId,
         val newScreenId: ScreenId,
     ) : Event()

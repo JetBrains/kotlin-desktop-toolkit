@@ -37,7 +37,6 @@ import org.jetbrains.desktop.gtk.TextInputContentPurpose
 import org.jetbrains.desktop.gtk.TextInputContext
 import org.jetbrains.desktop.gtk.TextInputContextHint
 import org.jetbrains.desktop.gtk.TextInputPreeditAttribute
-import org.jetbrains.desktop.gtk.TextInputPreeditUnderlineType
 import org.jetbrains.desktop.gtk.TextInputSurroundingText
 import org.jetbrains.desktop.gtk.Window
 import org.jetbrains.desktop.gtk.WindowDecorationMode
@@ -609,36 +608,28 @@ private class EditorState {
             val textWithStyles: List<Pair<String, TextStyle?>> = buildList {
                 val preeditText = preeditStringData.text!!
                 var previousEndOffset: Int? = null
-                val utf8Len = preeditText.encodeToByteArray().size
-                val attributes = preeditStringData.attributes + listOf(
-                    TextInputPreeditAttribute(
-                        beginBytePos = utf8Len.toUInt(),
-                        endBytePos = utf8Len.toUInt(),
-                        underline = TextInputPreeditUnderlineType.None,
-                        foregroundHighlight = false,
-                        backgroundHighlight = false,
-                        strikethrough = false,
-                        bold = false,
-                        italic = false,
-                    ),
-                )
-                attributes.forEach {
-                    val startOffset = utf8OffsetToUtf16Offset(preeditText, it.beginBytePos)
-                    if ((previousEndOffset == null && it.beginBytePos != 0U) ||
-                        (previousEndOffset != null && startOffset > previousEndOffset)
+                val applyAttribute = { beginBytePos: UInt, endBytePos: UInt, attribute: TextInputPreeditAttribute? ->
+                    val startOffset = utf8OffsetToUtf16Offset(preeditText, beginBytePos)
+                    if ((previousEndOffset == null && beginBytePos != 0U) ||
+                        (previousEndOffset != null && startOffset > previousEndOffset!!)
                     ) {
                         val substring = preeditText.substring(previousEndOffset ?: 0, startOffset)
                         add(Pair(substring, null))
                     }
-                    val endOffset = utf8OffsetToUtf16Offset(preeditText, it.endBytePos)
+                    val endOffset = utf8OffsetToUtf16Offset(preeditText, endBytePos)
                     if (startOffset != endOffset) {
-                        val textStyle = TextLineCreator.preeditStyle(it)
+                        val textStyle = TextLineCreator.preeditStyle(attribute)
                         val substring = preeditText.substring(startOffset, endOffset)
-                        Logger.info { "Preedit style from $startOffset to $endOffset ($substring): $it" }
+                        Logger.info { "Preedit style from $startOffset to $endOffset ($substring): $attribute" }
                         add(Pair(substring, textStyle))
                     }
                     previousEndOffset = endOffset
                 }
+                preeditStringData.attributes.forEach {
+                    applyAttribute(it.beginBytePos, it.endBytePos, it)
+                }
+                val utf8Len = preeditText.encodeToByteArray().size
+                applyAttribute(utf8Len.toUInt(), utf8Len.toUInt(), null)
             }
 
             preedit = PreeditData(
@@ -1286,7 +1277,7 @@ private class ApplicationState(
         }
 
         return when (event) {
-            Event.ApplicationStarted -> {
+            is Event.ApplicationStarted -> {
                 createWindow(decorationMode = WindowDecorationMode.CustomTitlebar(50))
                 EventHandlerResult.Stop
             }
@@ -1444,7 +1435,7 @@ private class ApplicationState(
                 EventHandlerResult.Stop
             }
 
-            Event.DragIconFrameTick -> {
+            is Event.DragIconFrameTick -> {
                 app.requestRedrawDragIcon()
                 EventHandlerResult.Stop
             }
