@@ -17,6 +17,7 @@ import org.jetbrains.desktop.linux.generated.NativeDragAndDropQueryData
 import org.jetbrains.desktop.linux.generated.NativeDragIconDrawEvent
 import org.jetbrains.desktop.linux.generated.NativeDropPerformedEvent
 import org.jetbrains.desktop.linux.generated.NativeEvent
+import org.jetbrains.desktop.linux.generated.NativeFfiDesktopSetting
 import org.jetbrains.desktop.linux.generated.NativeFfiDragAndDropQueryResponse
 import org.jetbrains.desktop.linux.generated.NativeFfiSupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeFfiTransferDataResponse
@@ -53,7 +54,6 @@ import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardEnterEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowKeyboardLeaveEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.linux.generated.NativeWindowScreenChangeEvent
-import org.jetbrains.desktop.linux.generated.NativeXdgDesktopSetting
 import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
@@ -247,99 +247,99 @@ internal fun WindowDecorationMode.toNative(): Int {
     }
 }
 
-internal fun XdgDesktopSetting.Companion.fromNative(s: MemorySegment): XdgDesktopSetting {
-    return when (val nativeTag = NativeXdgDesktopSetting.tag(s)) {
-        desktop_linux_h.NativeXdgDesktopSetting_TitlebarLayout() -> {
-            XdgDesktopSetting.TitlebarLayout(readStringFromNativeU8Array(NativeXdgDesktopSetting.titlebar_layout(s))!!)
+internal fun DesktopSetting.Companion.fromNative(s: MemorySegment): DesktopSetting {
+    return when (val nativeTag = NativeFfiDesktopSetting.tag(s)) {
+        desktop_linux_h.NativeFfiDesktopSetting_TitlebarLayout() -> {
+            DesktopSetting.TitlebarLayout(readStringFromNativeU8Array(NativeFfiDesktopSetting.titlebar_layout(s))!!)
         }
 
-        desktop_linux_h.NativeXdgDesktopSetting_ActionDoubleClickTitlebar() -> {
-            XdgDesktopSetting.ActionDoubleClickTitlebar(
-                DesktopTitlebarAction.fromNative(NativeXdgDesktopSetting.action_double_click_titlebar(s)),
+        desktop_linux_h.NativeFfiDesktopSetting_ActionDoubleClickTitlebar() -> {
+            DesktopSetting.ActionDoubleClickTitlebar(
+                DesktopTitlebarAction.fromNative(NativeFfiDesktopSetting.action_double_click_titlebar(s)),
             )
         }
 
-        desktop_linux_h.NativeXdgDesktopSetting_ActionRightClickTitlebar() -> {
-            XdgDesktopSetting.ActionRightClickTitlebar(
-                DesktopTitlebarAction.fromNative(NativeXdgDesktopSetting.action_right_click_titlebar(s)),
+        desktop_linux_h.NativeFfiDesktopSetting_ActionRightClickTitlebar() -> {
+            DesktopSetting.ActionRightClickTitlebar(
+                DesktopTitlebarAction.fromNative(NativeFfiDesktopSetting.action_right_click_titlebar(s)),
             )
         }
 
-        desktop_linux_h.NativeXdgDesktopSetting_ActionMiddleClickTitlebar() -> {
-            XdgDesktopSetting.ActionMiddleClickTitlebar(
-                DesktopTitlebarAction.fromNative(NativeXdgDesktopSetting.action_middle_click_titlebar(s)),
+        desktop_linux_h.NativeFfiDesktopSetting_ActionMiddleClickTitlebar() -> {
+            DesktopSetting.ActionMiddleClickTitlebar(
+                DesktopTitlebarAction.fromNative(NativeFfiDesktopSetting.action_middle_click_titlebar(s)),
             )
         }
 
-        desktop_linux_h.NativeXdgDesktopSetting_DoubleClickIntervalMs() -> XdgDesktopSetting.DoubleClickInterval(
-            value = NativeXdgDesktopSetting.double_click_interval_ms(s).milliseconds,
+        desktop_linux_h.NativeFfiDesktopSetting_DoubleClickIntervalMs() -> DesktopSetting.DoubleClickInterval(
+            value = NativeFfiDesktopSetting.double_click_interval_ms(s).milliseconds,
         )
 
-        desktop_linux_h.NativeXdgDesktopSetting_ColorScheme() -> XdgDesktopSetting.ColorScheme(
-            when (NativeXdgDesktopSetting.color_scheme(s)) {
+        desktop_linux_h.NativeFfiDesktopSetting_ColorScheme() -> DesktopSetting.ColorScheme(
+            when (NativeFfiDesktopSetting.color_scheme(s)) {
                 desktop_linux_h.NativeXdgDesktopColorScheme_NoPreference() -> ColorSchemeValue.NoPreference
                 desktop_linux_h.NativeXdgDesktopColorScheme_PreferDark() -> ColorSchemeValue.PreferDark
                 desktop_linux_h.NativeXdgDesktopColorScheme_PreferLight() -> ColorSchemeValue.PreferLight
-                else -> error("Unexpected color scheme ${NativeXdgDesktopSetting.color_scheme(s)}")
+                else -> error("Unexpected color scheme ${NativeFfiDesktopSetting.color_scheme(s)}")
             },
         )
 
-        desktop_linux_h.NativeXdgDesktopSetting_AccentColor() -> XdgDesktopSetting.AccentColor(
-            Color.fromNative(NativeXdgDesktopSetting.accent_color(s)),
+        desktop_linux_h.NativeFfiDesktopSetting_AccentColor() -> DesktopSetting.AccentColor(
+            Color.fromNative(NativeFfiDesktopSetting.accent_color(s)),
         )
 
-        desktop_linux_h.NativeXdgDesktopSetting_FontAntialiasing() -> XdgDesktopSetting.FontAntialiasing(
-            when (NativeXdgDesktopSetting.font_antialiasing(s)) {
+        desktop_linux_h.NativeFfiDesktopSetting_FontAntialiasing() -> DesktopSetting.FontAntialiasing(
+            when (NativeFfiDesktopSetting.font_antialiasing(s)) {
                 desktop_linux_h.NativeFontAntialiasing_None() -> FontAntialiasingValue.None
                 desktop_linux_h.NativeFontAntialiasing_Grayscale() -> FontAntialiasingValue.Grayscale
                 desktop_linux_h.NativeFontAntialiasing_Rgba() -> FontAntialiasingValue.Rgba
-                else -> error("Unexpected font aliasing ${NativeXdgDesktopSetting.font_antialiasing(s)}")
+                else -> error("Unexpected font aliasing ${NativeFfiDesktopSetting.font_antialiasing(s)}")
             },
         )
 
-        desktop_linux_h.NativeXdgDesktopSetting_FontHinting() -> XdgDesktopSetting.FontHinting(
-            when (NativeXdgDesktopSetting.font_hinting(s)) {
+        desktop_linux_h.NativeFfiDesktopSetting_FontHinting() -> DesktopSetting.FontHinting(
+            when (NativeFfiDesktopSetting.font_hinting(s)) {
                 desktop_linux_h.NativeFontHinting_None() -> FontHintingValue.None
                 desktop_linux_h.NativeFontHinting_Slight() -> FontHintingValue.Slight
                 desktop_linux_h.NativeFontHinting_Medium() -> FontHintingValue.Medium
                 desktop_linux_h.NativeFontHinting_Full() -> FontHintingValue.Full
-                else -> error("Unexpected font hinting ${NativeXdgDesktopSetting.font_hinting(s)}")
+                else -> error("Unexpected font hinting ${NativeFfiDesktopSetting.font_hinting(s)}")
             },
         )
 
-        desktop_linux_h.NativeXdgDesktopSetting_FontRgbaOrder() -> XdgDesktopSetting.FontRgbaOrder(
-            when (NativeXdgDesktopSetting.font_rgba_order(s)) {
+        desktop_linux_h.NativeFfiDesktopSetting_FontRgbaOrder() -> DesktopSetting.FontRgbaOrder(
+            when (NativeFfiDesktopSetting.font_rgba_order(s)) {
                 desktop_linux_h.NativeFontRgbaOrder_Rgb() -> FontRgbaOrderValue.Rgb
                 desktop_linux_h.NativeFontRgbaOrder_Bgr() -> FontRgbaOrderValue.Bgr
                 desktop_linux_h.NativeFontRgbaOrder_Vrgb() -> FontRgbaOrderValue.Vrgb
                 desktop_linux_h.NativeFontRgbaOrder_Vbgr() -> FontRgbaOrderValue.Vbgr
-                else -> error("Unexpected font rgba order ${NativeXdgDesktopSetting.font_rgba_order(s)}")
+                else -> error("Unexpected font rgba order ${NativeFfiDesktopSetting.font_rgba_order(s)}")
             },
         )
 
-        desktop_linux_h.NativeXdgDesktopSetting_CursorBlink() -> XdgDesktopSetting.CursorBlink(NativeXdgDesktopSetting.cursor_blink(s))
-        desktop_linux_h.NativeXdgDesktopSetting_CursorSize() -> XdgDesktopSetting.CursorSize(
-            NativeXdgDesktopSetting.cursor_size(s).toUInt(),
+        desktop_linux_h.NativeFfiDesktopSetting_CursorBlink() -> DesktopSetting.CursorBlink(NativeFfiDesktopSetting.cursor_blink(s))
+        desktop_linux_h.NativeFfiDesktopSetting_CursorSize() -> DesktopSetting.CursorSize(
+            NativeFfiDesktopSetting.cursor_size(s).toUInt(),
         )
-        desktop_linux_h.NativeXdgDesktopSetting_CursorTheme() -> XdgDesktopSetting.CursorTheme(
-            readStringFromNativeU8Array(NativeXdgDesktopSetting.cursor_theme(s))!!,
-        )
-
-        desktop_linux_h.NativeXdgDesktopSetting_CursorBlinkTimeMs() -> XdgDesktopSetting.CursorBlinkTime(
-            NativeXdgDesktopSetting.cursor_blink_time_ms(s).toDuration(DurationUnit.MILLISECONDS),
+        desktop_linux_h.NativeFfiDesktopSetting_CursorTheme() -> DesktopSetting.CursorTheme(
+            readStringFromNativeU8Array(NativeFfiDesktopSetting.cursor_theme(s))!!,
         )
 
-        desktop_linux_h.NativeXdgDesktopSetting_CursorBlinkTimeoutMs() -> XdgDesktopSetting.CursorBlinkTimeout(
-            NativeXdgDesktopSetting.cursor_blink_timeout_ms(s).toDuration(DurationUnit.MILLISECONDS),
+        desktop_linux_h.NativeFfiDesktopSetting_CursorBlinkTimeMs() -> DesktopSetting.CursorBlinkTime(
+            NativeFfiDesktopSetting.cursor_blink_time_ms(s).toDuration(DurationUnit.MILLISECONDS),
         )
 
-        desktop_linux_h.NativeXdgDesktopSetting_OverlayScrolling() -> XdgDesktopSetting.OverlayScrolling(
-            NativeXdgDesktopSetting.overlay_scrolling(s),
+        desktop_linux_h.NativeFfiDesktopSetting_CursorBlinkTimeoutMs() -> DesktopSetting.CursorBlinkTimeout(
+            NativeFfiDesktopSetting.cursor_blink_timeout_ms(s).toDuration(DurationUnit.MILLISECONDS),
         )
 
-        desktop_linux_h.NativeXdgDesktopSetting_AudibleBell() -> XdgDesktopSetting.AudibleBell(NativeXdgDesktopSetting.audible_bell(s))
-        desktop_linux_h.NativeXdgDesktopSetting_MiddleClickPaste() -> XdgDesktopSetting.MiddleClickPaste(
-            NativeXdgDesktopSetting.middle_click_paste(s),
+        desktop_linux_h.NativeFfiDesktopSetting_OverlayScrolling() -> DesktopSetting.OverlayScrolling(
+            NativeFfiDesktopSetting.overlay_scrolling(s),
+        )
+
+        desktop_linux_h.NativeFfiDesktopSetting_AudibleBell() -> DesktopSetting.AudibleBell(NativeFfiDesktopSetting.audible_bell(s))
+        desktop_linux_h.NativeFfiDesktopSetting_MiddleClickPaste() -> DesktopSetting.MiddleClickPaste(
+            NativeFfiDesktopSetting.middle_click_paste(s),
         )
 
         else -> error("Unexpected setting $nativeTag")
@@ -578,10 +578,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_DisplayConfigurationChange() -> {
             Event.DisplayConfigurationChange(screens = app.allScreens())
         }
-        desktop_linux_h.NativeEvent_XdgDesktopSettingChange() -> {
-            val nativeEvent = NativeEvent.xdg_desktop_setting_change(s)
-            Event.XdgDesktopSettingChange(
-                setting = XdgDesktopSetting.fromNative(nativeEvent),
+        desktop_linux_h.NativeEvent_DesktopSettingChange() -> {
+            val nativeEvent = NativeEvent.desktop_setting_change(s)
+            Event.DesktopSettingChange(
+                setting = DesktopSetting.fromNative(nativeEvent),
             )
         }
 

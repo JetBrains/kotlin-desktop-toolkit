@@ -7,6 +7,8 @@ use crate::linux::{
     application_state::{ApplicationState, get_egl},
     async_event_result::AsyncEventResult,
     data_transfer::{MimeTypes, read_from_pipe},
+    desktop_settings::desktop_settings_notifier,
+    desktop_settings_api::FfiDesktopSetting,
     drag_icon::DragIcon,
     events::{DataTransferEvent, Event, NotificationClosedEvent, RequestId, WindowId},
     file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl},
@@ -16,8 +18,6 @@ use crate::linux::{
     window::SimpleWindow,
     window_api::WindowParams,
     window_resize_edge_api::WindowResizeEdge,
-    xdg_desktop_settings::xdg_desktop_settings_notifier,
-    xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use anyhow::{Context, anyhow, bail};
 use desktop_common::logger::catch_panic;
@@ -127,18 +127,18 @@ impl Application {
         request_id
     }
 
-    fn init_xdg_desktop_settings_notifier(&self) {
-        let (xdg_settings_sender, xdg_settings_channel) = channel::channel();
-        self.rt.spawn(xdg_desktop_settings_notifier(move |s| {
-            xdg_settings_sender.send(s).map_err(Into::into)
+    fn init_desktop_settings_notifier(&self) {
+        let (desktop_settings_sender, desktop_settings_channel) = channel::channel();
+        self.rt.spawn(desktop_settings_notifier(move |s| {
+            desktop_settings_sender.send(s).map_err(Into::into)
         }));
 
         self.event_loop
             .handle()
-            .insert_source(xdg_settings_channel, move |event, (), state| {
+            .insert_source(desktop_settings_channel, move |event, (), state| {
                 if let channel::Event::Msg(e) = event {
-                    XdgDesktopSetting::with(e, |s| {
-                        state.send_event(Event::XdgDesktopSettingChange(s));
+                    FfiDesktopSetting::with(e, |s| {
+                        state.send_event(Event::DesktopSettingChange(s));
                     });
                 }
             })
@@ -186,7 +186,7 @@ impl Application {
         debug!("Application event loop: starting");
 
         self.init_notifications();
-        self.init_xdg_desktop_settings_notifier();
+        self.init_desktop_settings_notifier();
         self.init_run_on_event_loop();
 
         self.event_loop_thread_id = Some(std::thread::current().id());

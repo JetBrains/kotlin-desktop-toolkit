@@ -57,7 +57,7 @@ pub struct Color {
 
 #[repr(C)]
 #[derive(Debug)]
-pub enum XdgDesktopSetting<'a> {
+pub enum FfiDesktopSetting<'a> {
     TitlebarLayout(BorrowedArray<'a, u8>),
     ActionDoubleClickTitlebar(DesktopTitlebarAction),
     ActionRightClickTitlebar(DesktopTitlebarAction),

@@ -7,6 +7,7 @@ import org.jetbrains.desktop.linux.ApplicationConfig
 import org.jetbrains.desktop.linux.ColorSchemeValue
 import org.jetbrains.desktop.linux.DataSource
 import org.jetbrains.desktop.linux.DataTransferContent
+import org.jetbrains.desktop.linux.DesktopSetting
 import org.jetbrains.desktop.linux.DesktopTitlebarAction
 import org.jetbrains.desktop.linux.DragAndDropAction
 import org.jetbrains.desktop.linux.DragAndDropQueryData
@@ -44,7 +45,6 @@ import org.jetbrains.desktop.linux.WindowDecorationMode
 import org.jetbrains.desktop.linux.WindowId
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
-import org.jetbrains.desktop.linux.XdgDesktopSetting
 import org.jetbrains.desktop.linux.utf8OffsetToUtf16Offset
 import org.jetbrains.desktop.sample.common.runtimeInfo
 import org.jetbrains.skia.Canvas
@@ -186,31 +186,31 @@ internal data class XdgDesktopSettings(
 ) {
     private fun colorDoubleToInt(v: Double): Int = (v * 255).roundToInt()
 
-    fun update(s: XdgDesktopSetting) {
+    fun update(s: DesktopSetting) {
         when (s) {
-            is XdgDesktopSetting.TitlebarLayout -> titlebarLayout = TitlebarLayout.fromString(s.value)
-            is XdgDesktopSetting.DoubleClickInterval -> doubleClickInterval = s.value
-            is XdgDesktopSetting.ColorScheme -> colorScheme = s.value
-            is XdgDesktopSetting.AccentColor -> accentColor = Color.makeARGB(
+            is DesktopSetting.TitlebarLayout -> titlebarLayout = TitlebarLayout.fromString(s.value)
+            is DesktopSetting.DoubleClickInterval -> doubleClickInterval = s.value
+            is DesktopSetting.ColorScheme -> colorScheme = s.value
+            is DesktopSetting.AccentColor -> accentColor = Color.makeARGB(
                 a = colorDoubleToInt(s.value.alpha),
                 r = colorDoubleToInt(s.value.red),
                 g = colorDoubleToInt(s.value.green),
                 b = colorDoubleToInt(s.value.blue),
             )
-            is XdgDesktopSetting.FontAntialiasing -> fontAntialiasing = s.value
-            is XdgDesktopSetting.FontHinting -> fontHinting = s.value
-            is XdgDesktopSetting.FontRgbaOrder -> fontRgbaOrder = s.value
-            is XdgDesktopSetting.AudibleBell -> audibleBell = s.value
-            is XdgDesktopSetting.CursorBlink -> cursorBlink = s.value
-            is XdgDesktopSetting.CursorBlinkTime -> cursorBlinkTime = s.value
-            is XdgDesktopSetting.CursorBlinkTimeout -> cursorBlinkTimeout = s.value
-            is XdgDesktopSetting.OverlayScrolling -> overlayScrolling = s.value
-            is XdgDesktopSetting.CursorSize -> cursorSize = s.value
-            is XdgDesktopSetting.CursorTheme -> cursorTheme = s.value
-            is XdgDesktopSetting.ActionDoubleClickTitlebar -> actionDoubleClickTitlebar = s.value
-            is XdgDesktopSetting.ActionMiddleClickTitlebar -> actionMiddleClickTitlebar = s.value
-            is XdgDesktopSetting.ActionRightClickTitlebar -> actionRightClickTitlebar = s.value
-            is XdgDesktopSetting.MiddleClickPaste -> middleClickPaste = s.value
+            is DesktopSetting.FontAntialiasing -> fontAntialiasing = s.value
+            is DesktopSetting.FontHinting -> fontHinting = s.value
+            is DesktopSetting.FontRgbaOrder -> fontRgbaOrder = s.value
+            is DesktopSetting.AudibleBell -> audibleBell = s.value
+            is DesktopSetting.CursorBlink -> cursorBlink = s.value
+            is DesktopSetting.CursorBlinkTime -> cursorBlinkTime = s.value
+            is DesktopSetting.CursorBlinkTimeout -> cursorBlinkTimeout = s.value
+            is DesktopSetting.OverlayScrolling -> overlayScrolling = s.value
+            is DesktopSetting.CursorSize -> cursorSize = s.value
+            is DesktopSetting.CursorTheme -> cursorTheme = s.value
+            is DesktopSetting.ActionDoubleClickTitlebar -> actionDoubleClickTitlebar = s.value
+            is DesktopSetting.ActionMiddleClickTitlebar -> actionMiddleClickTitlebar = s.value
+            is DesktopSetting.ActionRightClickTitlebar -> actionRightClickTitlebar = s.value
+            is DesktopSetting.MiddleClickPaste -> middleClickPaste = s.value
         }
     }
 }
@@ -1362,7 +1362,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
             Event.ApplicationWantsToTerminate -> EventHandlerResult.Continue
             Event.ApplicationWillTerminate -> EventHandlerResult.Continue
             is Event.DisplayConfigurationChange -> EventHandlerResult.Continue
-            is Event.XdgDesktopSettingChange -> {
+            is Event.DesktopSettingChange -> {
                 settingChanged(event.setting)
                 EventHandlerResult.Stop
             }
@@ -1536,7 +1536,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         }
     }
 
-    fun settingChanged(s: XdgDesktopSetting) {
+    fun settingChanged(s: DesktopSetting) {
         this.xdgDesktopSettings.update(s)
         xdgDesktopSettings.cursorTheme?.let { cursorTheme ->
             xdgDesktopSettings.cursorSize?.let { cursorSize ->
