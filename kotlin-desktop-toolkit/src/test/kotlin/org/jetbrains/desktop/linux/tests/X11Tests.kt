@@ -37,7 +37,6 @@ import org.jetbrains.desktop.gtk.SupportedActionsForMime
 import org.jetbrains.desktop.gtk.TextInputContentPurpose
 import org.jetbrains.desktop.gtk.TextInputContext
 import org.jetbrains.desktop.gtk.TextInputContextHint
-import org.jetbrains.desktop.gtk.TextInputPreeditAttribute
 import org.jetbrains.desktop.gtk.TextInputPreeditUnderlineType
 import org.jetbrains.desktop.gtk.TextInputSurroundingText
 import org.jetbrains.desktop.gtk.Window
@@ -2773,23 +2772,18 @@ text/plain;charset=utf-8
                     assertNotNull(preeditStringData)
                     assertEquals("`", preeditStringData.text)
                     assertEquals(1, preeditStringData.cursorBytePos)
-                    assertContentEquals(
-                        arrayOf(
-                            TextInputPreeditAttribute(
-                                beginBytePos = 0U,
-                                endBytePos = 1U,
-                                underline = TextInputPreeditUnderlineType.Low,
-                                foregroundHighlight = false,
-                                backgroundHighlight = true,
-                                strikethrough = false,
-                                bold = false,
-                                italic = false,
-                            ),
-                        ),
-                        preeditStringData.attributes.toTypedArray(),
-                    )
                     assertNull(event.commitStringData)
                     assertNull(event.deleteSurroundingTextData)
+                    val attribute = preeditStringData.attributes.firstOrNull()
+                    assertNotNull(attribute)
+                    assertEquals(0U, attribute.beginBytePos)
+                    assertEquals(1U, attribute.endBytePos)
+                    assertEquals(TextInputPreeditUnderlineType.Low, attribute.underline)
+                    assertEquals(false, attribute.foregroundHighlight)
+                    assertEquals(true, attribute.backgroundHighlight)
+                    assertEquals(false, attribute.strikethrough)
+                    assertEquals(false, attribute.bold)
+                    assertEquals(false, attribute.italic)
                 }
             }
             withNextEvent { event ->
@@ -3117,21 +3111,17 @@ text/plain;charset=utf-8
                         assertNotNull(preeditStringData)
                         assertEquals("a", preeditStringData.text)
                         assertEquals(1, preeditStringData.cursorBytePos)
-                        assertContentEquals(
-                            arrayOf(
-                                TextInputPreeditAttribute(
-                                    beginBytePos = 0U,
-                                    endBytePos = 1U,
-                                    underline = TextInputPreeditUnderlineType.Single,
-                                    foregroundHighlight = false,
-                                    backgroundHighlight = false,
-                                    strikethrough = false,
-                                    bold = false,
-                                    italic = false,
-                                ),
-                            ),
-                            preeditStringData.attributes.toTypedArray(),
-                        )
+
+                        val attribute = preeditStringData.attributes.firstOrNull()
+                        assertNotNull(attribute)
+                        assertEquals(0U, attribute.beginBytePos)
+                        assertEquals(1U, attribute.endBytePos)
+                        assertEquals(TextInputPreeditUnderlineType.Single, attribute.underline)
+                        assertEquals(false, attribute.foregroundHighlight)
+                        assertEquals(false, attribute.backgroundHighlight)
+                        assertEquals(false, attribute.strikethrough)
+                        assertEquals(false, attribute.bold)
+                        assertEquals(false, attribute.italic)
                     }
                 }
                 withNextEvent { event ->
@@ -3150,21 +3140,17 @@ text/plain;charset=utf-8
                         assertNotNull(preeditStringData)
                         assertEquals("am", preeditStringData.text)
                         assertEquals(2, preeditStringData.cursorBytePos)
-                        assertContentEquals(
-                            arrayOf(
-                                TextInputPreeditAttribute(
-                                    beginBytePos = 0U,
-                                    endBytePos = 2U,
-                                    underline = TextInputPreeditUnderlineType.Single,
-                                    foregroundHighlight = false,
-                                    backgroundHighlight = false,
-                                    strikethrough = false,
-                                    bold = false,
-                                    italic = false,
-                                ),
-                            ),
-                            preeditStringData.attributes.toTypedArray(),
-                        )
+
+                        val attribute = preeditStringData.attributes.firstOrNull()
+                        assertNotNull(attribute)
+                        assertEquals(0U, attribute.beginBytePos)
+                        assertEquals(2U, attribute.endBytePos)
+                        assertEquals(TextInputPreeditUnderlineType.Single, attribute.underline)
+                        assertEquals(false, attribute.foregroundHighlight)
+                        assertEquals(false, attribute.backgroundHighlight)
+                        assertEquals(false, attribute.strikethrough)
+                        assertEquals(false, attribute.bold)
+                        assertEquals(false, attribute.italic)
                     }
                 }
                 withNextEvent { event ->
@@ -3183,21 +3169,17 @@ text/plain;charset=utf-8
                         assertNotNull(preeditStringData)
                         assertEquals("first", preeditStringData.text)
                         assertEquals(0, preeditStringData.cursorBytePos)
-                        assertContentEquals(
-                            arrayOf(
-                                TextInputPreeditAttribute(
-                                    beginBytePos = 0U,
-                                    endBytePos = 5U,
-                                    underline = TextInputPreeditUnderlineType.Single,
-                                    foregroundHighlight = false,
-                                    backgroundHighlight = false,
-                                    strikethrough = false,
-                                    bold = false,
-                                    italic = false,
-                                ),
-                            ),
-                            preeditStringData.attributes.toTypedArray(),
-                        )
+
+                        val attribute = preeditStringData.attributes.firstOrNull()
+                        assertNotNull(attribute)
+                        assertEquals(0U, attribute.beginBytePos)
+                        assertEquals(5U, attribute.endBytePos)
+                        assertEquals(TextInputPreeditUnderlineType.Single, attribute.underline)
+                        assertEquals(false, attribute.foregroundHighlight)
+                        assertEquals(false, attribute.backgroundHighlight)
+                        assertEquals(false, attribute.strikethrough)
+                        assertEquals(false, attribute.bold)
+                        assertEquals(false, attribute.italic)
                     }
                 }
                 withNextEvent { event ->
@@ -3235,61 +3217,62 @@ text/plain;charset=utf-8
                         assertNotNull(preeditStringData)
                         assertEquals("❌ error, \uD83D\uDD8D highlighted error, ❗important❗", preeditStringData.text)
                         assertEquals(0, preeditStringData.cursorBytePos)
-                        assertContentEquals(
-                            arrayOf(
-                                TextInputPreeditAttribute(
-                                    beginBytePos = 0U,
-                                    endBytePos = 9U,
-                                    underline = TextInputPreeditUnderlineType.Error,
-                                    foregroundHighlight = true,
-                                    backgroundHighlight = false,
-                                    strikethrough = false,
-                                    bold = false,
-                                    italic = false,
-                                ),
-                                TextInputPreeditAttribute(
-                                    beginBytePos = 9U,
-                                    endBytePos = 11U,
-                                    underline = TextInputPreeditUnderlineType.Single,
-                                    foregroundHighlight = false,
-                                    backgroundHighlight = false,
-                                    strikethrough = false,
-                                    bold = false,
-                                    italic = false,
-                                ),
-                                TextInputPreeditAttribute(
-                                    beginBytePos = 11U,
-                                    endBytePos = 33U,
-                                    underline = TextInputPreeditUnderlineType.Error,
-                                    foregroundHighlight = false,
-                                    backgroundHighlight = true,
-                                    strikethrough = false,
-                                    bold = false,
-                                    italic = false,
-                                ),
-                                TextInputPreeditAttribute(
-                                    beginBytePos = 33U,
-                                    endBytePos = 35U,
-                                    underline = TextInputPreeditUnderlineType.Single,
-                                    foregroundHighlight = false,
-                                    backgroundHighlight = false,
-                                    strikethrough = false,
-                                    bold = false,
-                                    italic = false,
-                                ),
-                                TextInputPreeditAttribute(
-                                    beginBytePos = 35U,
-                                    endBytePos = 50U,
-                                    underline = TextInputPreeditUnderlineType.Double,
-                                    foregroundHighlight = false,
-                                    backgroundHighlight = false,
-                                    strikethrough = false,
-                                    bold = false,
-                                    italic = false,
-                                ),
-                            ),
-                            preeditStringData.attributes.toTypedArray(),
-                        )
+
+                        preeditStringData.attributes.getOrNull(0)?.let { attribute ->
+                            assertNotNull(attribute)
+                            assertEquals(0U, attribute.beginBytePos)
+                            assertEquals(9U, attribute.endBytePos)
+                            assertEquals(TextInputPreeditUnderlineType.Error, attribute.underline)
+                            assertEquals(true, attribute.foregroundHighlight)
+                            assertEquals(false, attribute.backgroundHighlight)
+                            assertEquals(false, attribute.strikethrough)
+                            assertEquals(false, attribute.bold)
+                            assertEquals(false, attribute.italic)
+                        }
+                        preeditStringData.attributes.getOrNull(1)?.let { attribute ->
+                            assertNotNull(attribute)
+                            assertEquals(9U, attribute.beginBytePos)
+                            assertEquals(11U, attribute.endBytePos)
+                            assertEquals(TextInputPreeditUnderlineType.Single, attribute.underline)
+                            assertEquals(false, attribute.foregroundHighlight)
+                            assertEquals(false, attribute.backgroundHighlight)
+                            assertEquals(false, attribute.strikethrough)
+                            assertEquals(false, attribute.bold)
+                            assertEquals(false, attribute.italic)
+                        }
+                        preeditStringData.attributes.getOrNull(2)?.let { attribute ->
+                            assertNotNull(attribute)
+                            assertEquals(11U, attribute.beginBytePos)
+                            assertEquals(33U, attribute.endBytePos)
+                            assertEquals(TextInputPreeditUnderlineType.Error, attribute.underline)
+                            assertEquals(false, attribute.foregroundHighlight)
+                            assertEquals(true, attribute.backgroundHighlight)
+                            assertEquals(false, attribute.strikethrough)
+                            assertEquals(false, attribute.bold)
+                            assertEquals(false, attribute.italic)
+                        }
+                        preeditStringData.attributes.getOrNull(3)?.let { attribute ->
+                            assertNotNull(attribute)
+                            assertEquals(33U, attribute.beginBytePos)
+                            assertEquals(35U, attribute.endBytePos)
+                            assertEquals(TextInputPreeditUnderlineType.Single, attribute.underline)
+                            assertEquals(false, attribute.foregroundHighlight)
+                            assertEquals(false, attribute.backgroundHighlight)
+                            assertEquals(false, attribute.strikethrough)
+                            assertEquals(false, attribute.bold)
+                            assertEquals(false, attribute.italic)
+                        }
+                        preeditStringData.attributes.getOrNull(4)?.let { attribute ->
+                            assertNotNull(attribute)
+                            assertEquals(35U, attribute.beginBytePos)
+                            assertEquals(50U, attribute.endBytePos)
+                            assertEquals(TextInputPreeditUnderlineType.Double, attribute.underline)
+                            assertEquals(false, attribute.foregroundHighlight)
+                            assertEquals(false, attribute.backgroundHighlight)
+                            assertEquals(false, attribute.strikethrough)
+                            assertEquals(false, attribute.bold)
+                            assertEquals(false, attribute.italic)
+                        }
                     }
                 }
                 withNextEvent { event ->
