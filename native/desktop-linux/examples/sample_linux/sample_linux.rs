@@ -37,6 +37,7 @@ use desktop_linux::linux::{
         application_text_input_update,
         //
     },
+    desktop_settings_api::FfiDesktopSetting,
     events::{DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, TextInputEvent, WindowId},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalRect, LogicalSize},
@@ -52,7 +53,6 @@ use desktop_linux::linux::{
         window_start_drag_and_drop,
         //
     },
-    xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use log::{debug, info, warn};
 use std::{cell::RefCell, collections::HashMap, str::FromStr};
@@ -464,8 +464,8 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 println!("DisplayConfigurationChange: {screen_infos:?}");
                 false
             }
-            Event::XdgDesktopSettingChange(data) => {
-                on_xdg_desktop_settings_change(data, state);
+            Event::DesktopSettingChange(data) => {
+                on_desktop_settings_change(data, state);
                 true
             }
             Event::WindowConfigure(data) => {
@@ -671,16 +671,16 @@ extern "C" fn event_handler(event: &Event) -> bool {
     })
 }
 
-fn on_xdg_desktop_settings_change(s: &XdgDesktopSetting, state: &mut State) {
+fn on_desktop_settings_change(s: &FfiDesktopSetting, state: &mut State) {
     match s {
-        XdgDesktopSetting::CursorSize(v) => {
+        FfiDesktopSetting::CursorSize(v) => {
             let size = (*v).try_into().unwrap();
             if let Some(name) = &state.settings.cursor_theme_name {
                 application_set_cursor_theme(state.app_ptr.get(), BorrowedArray::new_string(name), size);
             }
             state.settings.cursor_theme_size = Some(size);
         }
-        XdgDesktopSetting::CursorTheme(v) => {
+        FfiDesktopSetting::CursorTheme(v) => {
             let name = v.as_optional_str().unwrap().to_owned();
             if let Some(size) = state.settings.cursor_theme_size {
                 application_set_cursor_theme(state.app_ptr.get(), BorrowedArray::new_string(&name), size);

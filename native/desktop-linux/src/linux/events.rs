@@ -1,7 +1,7 @@
 use crate::linux::{
     application_api::{DataSource, DragAndDropAction},
+    desktop_settings_api::FfiDesktopSetting,
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
-    xdg_desktop_settings_api::XdgDesktopSetting,
 };
 use bitflag_attr::bitflag;
 use core::f64;
@@ -667,7 +667,7 @@ pub enum Event<'a> {
 
     DisplayConfigurationChange,
 
-    XdgDesktopSettingChange(XdgDesktopSetting<'a>),
+    DesktopSettingChange(FfiDesktopSetting<'a>),
 
     /// Data received from clipboard or primary selection. For drag&drop, see `DropPerformed`.
     DataTransfer(DataTransferEvent<'a>),

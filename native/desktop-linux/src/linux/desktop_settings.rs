@@ -7,8 +7,8 @@ use desktop_common::ffi_utils::BorrowedArray;
 use futures_lite::StreamExt;
 use log::{debug, error};
 
-use crate::linux::xdg_desktop_settings_api::{
-    Color, DesktopTitlebarAction, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme, XdgDesktopSetting,
+use crate::linux::desktop_settings_api::{
+    Color, DesktopTitlebarAction, FfiDesktopSetting, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme,
 };
 
 /// cbindgen:ignore
@@ -21,7 +21,7 @@ const GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE: &str = "org.gnome.desktop.perip
 const GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE: &str = "org.gnome.desktop.wm.preferences";
 
 #[derive(Debug)]
-pub enum InternalXdgDesktopSetting {
+pub enum InternalDesktopSetting {
     TitlebarLayout(String),
 
     ActionDoubleClickTitlebar(DesktopTitlebarAction),
@@ -99,38 +99,38 @@ impl DesktopTitlebarAction {
     }
 }
 
-impl XdgDesktopSetting<'_> {
-    pub fn with<F>(s: InternalXdgDesktopSetting, f: F)
+impl FfiDesktopSetting<'_> {
+    pub fn with<F>(s: InternalDesktopSetting, f: F)
     where
-        for<'a> F: Fn(XdgDesktopSetting<'a>),
+        for<'a> F: Fn(FfiDesktopSetting<'a>),
     {
         match s {
-            InternalXdgDesktopSetting::TitlebarLayout(v) => {
-                f(XdgDesktopSetting::TitlebarLayout(BorrowedArray::new_string(&v)));
+            InternalDesktopSetting::TitlebarLayout(v) => {
+                f(FfiDesktopSetting::TitlebarLayout(BorrowedArray::new_string(&v)));
             }
-            InternalXdgDesktopSetting::ActionDoubleClickTitlebar(v) => f(XdgDesktopSetting::ActionDoubleClickTitlebar(v)),
-            InternalXdgDesktopSetting::ActionRightClickTitlebar(v) => f(XdgDesktopSetting::ActionRightClickTitlebar(v)),
-            InternalXdgDesktopSetting::ActionMiddleClickTitlebar(v) => f(XdgDesktopSetting::ActionMiddleClickTitlebar(v)),
-            InternalXdgDesktopSetting::DoubleClickIntervalMs(v) => f(Self::DoubleClickIntervalMs(v)),
-            InternalXdgDesktopSetting::ColorScheme(v) => f(Self::ColorScheme(match v {
+            InternalDesktopSetting::ActionDoubleClickTitlebar(v) => f(FfiDesktopSetting::ActionDoubleClickTitlebar(v)),
+            InternalDesktopSetting::ActionRightClickTitlebar(v) => f(FfiDesktopSetting::ActionRightClickTitlebar(v)),
+            InternalDesktopSetting::ActionMiddleClickTitlebar(v) => f(FfiDesktopSetting::ActionMiddleClickTitlebar(v)),
+            InternalDesktopSetting::DoubleClickIntervalMs(v) => f(Self::DoubleClickIntervalMs(v)),
+            InternalDesktopSetting::ColorScheme(v) => f(Self::ColorScheme(match v {
                 ColorScheme::NoPreference => XdgDesktopColorScheme::NoPreference,
                 ColorScheme::PreferDark => XdgDesktopColorScheme::PreferDark,
                 ColorScheme::PreferLight => XdgDesktopColorScheme::PreferLight,
             })),
-            InternalXdgDesktopSetting::AccentColor(v) => f(Self::AccentColor(v)),
-            InternalXdgDesktopSetting::FontAntialiasing(v) => f(Self::FontAntialiasing(v)),
-            InternalXdgDesktopSetting::FontHinting(v) => f(Self::FontHinting(v)),
-            InternalXdgDesktopSetting::FontRgbaOrder(v) => f(Self::FontRgbaOrder(v)),
-            InternalXdgDesktopSetting::CursorBlink(v) => f(Self::CursorBlink(v)),
-            InternalXdgDesktopSetting::CursorBlinkTimeMs(v) => f(Self::CursorBlinkTimeMs(v)),
-            InternalXdgDesktopSetting::CursorBlinkTimeoutMs(v) => f(Self::CursorBlinkTimeoutMs(v)),
-            InternalXdgDesktopSetting::OverlayScrolling(v) => f(Self::OverlayScrolling(v)),
-            InternalXdgDesktopSetting::AudibleBell(v) => f(Self::AudibleBell(v)),
-            InternalXdgDesktopSetting::CursorSize(v) => f(Self::CursorSize(v)),
-            InternalXdgDesktopSetting::CursorTheme(v) => {
-                f(XdgDesktopSetting::CursorTheme(BorrowedArray::new_string(&v)));
+            InternalDesktopSetting::AccentColor(v) => f(Self::AccentColor(v)),
+            InternalDesktopSetting::FontAntialiasing(v) => f(Self::FontAntialiasing(v)),
+            InternalDesktopSetting::FontHinting(v) => f(Self::FontHinting(v)),
+            InternalDesktopSetting::FontRgbaOrder(v) => f(Self::FontRgbaOrder(v)),
+            InternalDesktopSetting::CursorBlink(v) => f(Self::CursorBlink(v)),
+            InternalDesktopSetting::CursorBlinkTimeMs(v) => f(Self::CursorBlinkTimeMs(v)),
+            InternalDesktopSetting::CursorBlinkTimeoutMs(v) => f(Self::CursorBlinkTimeoutMs(v)),
+            InternalDesktopSetting::OverlayScrolling(v) => f(Self::OverlayScrolling(v)),
+            InternalDesktopSetting::AudibleBell(v) => f(Self::AudibleBell(v)),
+            InternalDesktopSetting::CursorSize(v) => f(Self::CursorSize(v)),
+            InternalDesktopSetting::CursorTheme(v) => {
+                f(FfiDesktopSetting::CursorTheme(BorrowedArray::new_string(&v)));
             }
-            InternalXdgDesktopSetting::MiddleClickPaste(v) => f(Self::MiddleClickPaste(v)),
+            InternalDesktopSetting::MiddleClickPaste(v) => f(Self::MiddleClickPaste(v)),
         }
     }
 }
@@ -177,7 +177,7 @@ fn read_color(value: &OwnedValue) -> anyhow::Result<Color> {
     })
 }
 
-impl InternalXdgDesktopSetting {
+impl InternalDesktopSetting {
     pub fn new(namespace: &str, key: &str, value: &OwnedValue) -> Option<Self> {
         match Self::new_impl(namespace, key, value) {
             Ok(Some(v)) => Some(v),
@@ -236,17 +236,17 @@ impl InternalXdgDesktopSetting {
     }
 }
 
-fn send(v: Option<InternalXdgDesktopSetting>, sender: &dyn Fn(InternalXdgDesktopSetting) -> anyhow::Result<()>) -> anyhow::Result<()> {
+fn send(v: Option<InternalDesktopSetting>, sender: &dyn Fn(InternalDesktopSetting) -> anyhow::Result<()>) -> anyhow::Result<()> {
     if let Some(s) = v {
-        debug!("Notifying about XDG setting: {s:?}");
+        debug!("Notifying about desktop setting: {s:?}");
         sender(s)?;
     }
     Ok(())
 }
 
-async fn read_initial_xdg_desktop_settings(
+async fn read_initial_desktop_settings(
     settings: &Settings,
-    sender: &(dyn Fn(InternalXdgDesktopSetting) -> anyhow::Result<()> + Send + Sync),
+    sender: &(dyn Fn(InternalDesktopSetting) -> anyhow::Result<()> + Send + Sync),
 ) -> anyhow::Result<()> {
     let proxy = settings;
 
@@ -270,25 +270,23 @@ async fn read_initial_xdg_desktop_settings(
 
     for (namespace, kv) in all {
         for (key, value) in kv {
-            //debug!("Reading initial XDG settings from {namespace} : {key} = {value:?}");
-            send(InternalXdgDesktopSetting::new(&namespace, &key, &value), sender)?;
+            //debug!("Reading initial desktop settings from {namespace} : {key} = {value:?}");
+            send(InternalDesktopSetting::new(&namespace, &key, &value), sender)?;
         }
     }
     Ok(())
 }
 
-pub async fn xdg_desktop_settings_notifier(
-    sender: impl Fn(InternalXdgDesktopSetting) -> anyhow::Result<()> + Send + Sync,
-) -> anyhow::Result<()> {
-    let xdg_desktop_settings = Settings::new().await?;
-    read_initial_xdg_desktop_settings(&xdg_desktop_settings, &sender).await?;
+pub async fn desktop_settings_notifier(sender: impl Fn(InternalDesktopSetting) -> anyhow::Result<()> + Send + Sync) -> anyhow::Result<()> {
+    let desktop_settings = Settings::new().await?;
+    read_initial_desktop_settings(&desktop_settings, &sender).await?;
 
-    debug!("Listening to XDG settings changes");
-    let mut xdg_desktop_settings_signals = xdg_desktop_settings.receive_setting_changed().await?;
-    while let Some(s) = xdg_desktop_settings_signals.next().await {
-        debug!("XDG setting changed: {s:?}");
-        send(InternalXdgDesktopSetting::new(s.namespace(), s.key(), s.value()), &sender)?;
+    debug!("Listening to desktop settings changes");
+    let mut desktop_settings_signals = desktop_settings.receive_setting_changed().await?;
+    while let Some(s) = desktop_settings_signals.next().await {
+        debug!("Desktop setting changed: {s:?}");
+        send(InternalDesktopSetting::new(s.namespace(), s.key(), s.value()), &sender)?;
     }
-    debug!("Stopped listening to XDG settings changes");
+    debug!("Stopped listening to desktop settings changes");
     Ok(())
 }

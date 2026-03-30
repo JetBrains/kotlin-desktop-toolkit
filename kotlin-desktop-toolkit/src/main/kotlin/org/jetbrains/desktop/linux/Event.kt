@@ -131,7 +131,7 @@ public sealed class Event {
     public data object ApplicationWillTerminate : Event()
 
     @ConsistentCopyVisibility
-    public data class XdgDesktopSettingChange internal constructor(val setting: XdgDesktopSetting) : Event()
+    public data class DesktopSettingChange internal constructor(val setting: DesktopSetting) : Event()
 
     @ConsistentCopyVisibility
     public data class DataTransferAvailable internal constructor(
