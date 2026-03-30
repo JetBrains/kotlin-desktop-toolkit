@@ -21,9 +21,10 @@ unsafe extern "C" {
     #[allow(dead_code)]
     static kTISPropertyUnicodeKeyLayoutData: *const c_void;
     static kTISPropertyInputSourceID: *const c_void;
-    #[allow(dead_code)]
     static kTISPropertyLocalizedName: *const c_void;
     static kTISPropertyInputSourceIsASCIICapable: *const c_void;
+    static kTISPropertyInputSourceIsSelectCapable: *const c_void;
+    static kTISPropertyInputSourceIsEnableCapable: *const c_void;
 }
 
 #[allow(unused_doc_comments)]
@@ -67,33 +68,97 @@ pub extern "C" fn text_input_source_current() -> RustAllocatedStrPtr {
     })
 }
 
+/// Finds an input source by its string ID. Returns an owned (retained) input source pointer.
+/// The caller **must** call `CFRelease` on the returned pointer when done.
+///
+/// # Safety
+/// Must be called on the main thread.
+unsafe fn find_input_source_by_id(source_id_str: &str, include_all_installed: bool) -> Option<*const c_void> {
+    unsafe {
+        let source_id_ns = NSString::from_str(source_id_str);
+        let key: &NSString = &*kTISPropertyInputSourceID.cast::<NSString>();
+        let search_params = NSDictionary::from_slices(&[key], &[&*source_id_ns]);
+
+        let dict_ptr: *const NSDictionary<NSString, NSString> = &raw const *search_params;
+        let source_list = TISCreateInputSourceList(dict_ptr.cast(), include_all_installed);
+        if source_list.is_null() {
+            return None;
+        }
+
+        let count = CFArrayGetCount(source_list);
+        if count == 0 {
+            CFRelease(source_list);
+            return None;
+        }
+
+        let input_source = CFArrayGetValueAtIndex(source_list, 0);
+        CFRetain(input_source);
+        CFRelease(source_list);
+        Some(input_source)
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn text_input_source_select(source_id: BorrowedStrPtr) -> bool {
     ffi_boundary("text_input_source_select", || {
         let _mtm = MainThreadMarker::new().unwrap();
         let source_id_str = source_id.as_str()?;
         unsafe {
-            let source_id_ns = NSString::from_str(source_id_str);
-            let key: &NSString = &*kTISPropertyInputSourceID.cast::<NSString>();
-            let search_params = NSDictionary::from_slices(&[key], &[&*source_id_ns]);
-
-            let dict_ptr: *const NSDictionary<NSString, NSString> = &raw const *search_params;
-            let source_list = TISCreateInputSourceList(dict_ptr.cast(), false);
-            if source_list.is_null() {
+            let Some(input_source) = find_input_source_by_id(source_id_str, false) else {
                 return Ok(false);
-            }
+            };
 
-            let count = CFArrayGetCount(source_list);
-            if count == 0 {
-                CFRelease(source_list);
-                return Ok(false);
-            }
-
-            let input_source = CFArrayGetValueAtIndex(source_list, 0);
             let status = TISSelectInputSource(input_source);
             let result = status == 0; // noErr
 
-            CFRelease(source_list);
+            CFRelease(input_source);
+            Ok(result)
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_source_set_enable(source_id: BorrowedStrPtr, enabled: bool) -> bool {
+    ffi_boundary("text_input_source_set_enable", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let source_id_str = source_id.as_str()?;
+        unsafe {
+            let Some(input_source) = find_input_source_by_id(source_id_str, true) else {
+                log::warn!("Can't find input source with id {source_id_str}");
+                return Ok(false);
+            };
+
+            let status = if enabled {
+                TISEnableInputSource(input_source)
+            } else {
+                TISDisableInputSource(input_source)
+            };
+            let result = status == 0; // noErr
+
+            CFRelease(input_source);
+            Ok(result)
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_source_is_ascii_capable(source_id: BorrowedStrPtr) -> bool {
+    ffi_boundary("text_input_source_is_ascii_capable", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let source_id_str = source_id.as_str()?;
+        unsafe {
+            let Some(input_source) = find_input_source_by_id(source_id_str, true) else {
+                return Ok(false);
+            };
+
+            let is_ascii_capable_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceIsASCIICapable);
+            let result = if is_ascii_capable_ptr.is_null() {
+                false
+            } else {
+                CFBooleanGetValue(is_ascii_capable_ptr)
+            };
+
+            CFRelease(input_source);
             Ok(result)
         }
     })
@@ -132,97 +197,6 @@ pub extern "C" fn text_input_source_list(include_all: bool) -> AutoDropArray<Rus
             CFRelease(source_list);
 
             Ok(AutoDropArray::new(source_ids.into_boxed_slice()))
-        }
-    })
-}
-
-// NSDictionary* searchParam = @{ (NSString*)kTISPropertyInputSourceID : layoutId };
-// CFArrayRef sources = TISCreateInputSourceList((CFDictionaryRef)searchParam, YES);
-//
-// if (CFArrayGetCount(sources) == 0) {
-// NSLog(@"failed to set keyboard layout %@ enabled state: no such layout", layoutId);
-// CFRelease(sources);
-// return;
-// }
-//
-// TISInputSourceRef source = (TISInputSourceRef)CFArrayGetValueAtIndex(sources, 0);
-// OSStatus status = enabled ? TISEnableInputSource(source) : TISDisableInputSource(source);
-// if (status == noErr) {
-// success = true;
-// } else {
-// NSLog(@"failed to set keyboard layout %@ enabled state, error code %d", layoutId, status);
-// }
-//
-// CFRelease(sources);
-
-#[unsafe(no_mangle)]
-pub extern "C" fn text_input_source_set_enable(source_id: BorrowedStrPtr, enabled: bool) -> bool {
-    ffi_boundary("text_input_source_set_enable", || {
-        let _mtm = MainThreadMarker::new().unwrap();
-        let source_id_str = source_id.as_str()?;
-        unsafe {
-            let source_id_ns = NSString::from_str(source_id_str);
-            let key: &NSString = &*kTISPropertyInputSourceID.cast::<NSString>();
-            let search_params = NSDictionary::from_slices(&[key], &[&*source_id_ns]);
-
-            let dict_ptr: *const NSDictionary<NSString, NSString> = &raw const *search_params;
-            let source_list = TISCreateInputSourceList(dict_ptr.cast(), true);
-            if source_list.is_null() {
-                return Ok(false);
-            }
-
-            let count = CFArrayGetCount(source_list);
-            if count == 0 {
-                CFRelease(source_list);
-                return Ok(false);
-            }
-
-            let input_source = CFArrayGetValueAtIndex(source_list, 0);
-            let status = if enabled {
-                TISEnableInputSource(input_source)
-            } else {
-                TISDisableInputSource(input_source)
-            };
-            let result = status == 0; // noErr
-
-            CFRelease(source_list);
-            Ok(result)
-        }
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn text_input_source_is_ascii_capable(source_id: BorrowedStrPtr) -> bool {
-    ffi_boundary("text_input_source_is_ascii_capable", || {
-        let _mtm = MainThreadMarker::new().unwrap();
-        let source_id_str = source_id.as_str()?;
-        unsafe {
-            let source_id_ns = NSString::from_str(source_id_str);
-            let key: &NSString = &*kTISPropertyInputSourceID.cast::<NSString>();
-            let search_params = NSDictionary::from_slices(&[key], &[&*source_id_ns]);
-
-            let dict_ptr: *const NSDictionary<NSString, NSString> = &raw const *search_params;
-            let source_list = TISCreateInputSourceList(dict_ptr.cast(), true);
-            if source_list.is_null() {
-                return Ok(false);
-            }
-
-            let count = CFArrayGetCount(source_list);
-            if count == 0 {
-                CFRelease(source_list);
-                return Ok(false);
-            }
-
-            let input_source = CFArrayGetValueAtIndex(source_list, 0);
-            let is_ascii_capable_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceIsASCIICapable);
-            let result = if is_ascii_capable_ptr.is_null() {
-                false
-            } else {
-                CFBooleanGetValue(is_ascii_capable_ptr)
-            };
-
-            CFRelease(source_list);
-            Ok(result)
         }
     })
 }
