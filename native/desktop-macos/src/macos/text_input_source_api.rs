@@ -21,6 +21,7 @@ unsafe extern "C" {
     #[allow(dead_code)]
     static kTISPropertyUnicodeKeyLayoutData: *const c_void;
     static kTISPropertyInputSourceID: *const c_void;
+    #[allow(dead_code)]
     static kTISPropertyLocalizedName: *const c_void;
     static kTISPropertyInputSourceIsASCIICapable: *const c_void;
     static kTISPropertyInputSourceIsSelectCapable: *const c_void;
@@ -87,8 +88,14 @@ unsafe fn find_input_source_by_id(source_id_str: &str, include_all_installed: bo
 
         let count = CFArrayGetCount(source_list);
         if count == 0 {
+            log::warn!("No input source found for id '{source_id_str}' (include_all_installed={include_all_installed})");
             CFRelease(source_list);
             return None;
+        }
+        if count > 1 {
+            log::warn!(
+                "Multiple input sources ({count}) found for id '{source_id_str}', using the first one (include_all_installed={include_all_installed})"
+            );
         }
 
         let input_source = CFArrayGetValueAtIndex(source_list, 0);
@@ -157,6 +164,44 @@ pub extern "C" fn text_input_source_is_ascii_capable(source_id: BorrowedStrPtr) 
             } else {
                 CFBooleanGetValue(is_ascii_capable_ptr)
             };
+
+            CFRelease(input_source);
+            Ok(result)
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_source_is_select_capable(source_id: BorrowedStrPtr) -> bool {
+    ffi_boundary("text_input_source_is_select_capable", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let source_id_str = source_id.as_str()?;
+        unsafe {
+            let Some(input_source) = find_input_source_by_id(source_id_str, true) else {
+                return Ok(false);
+            };
+
+            let prop_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceIsSelectCapable);
+            let result = if prop_ptr.is_null() { false } else { CFBooleanGetValue(prop_ptr) };
+
+            CFRelease(input_source);
+            Ok(result)
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_source_is_enable_capable(source_id: BorrowedStrPtr) -> bool {
+    ffi_boundary("text_input_source_is_enable_capable", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let source_id_str = source_id.as_str()?;
+        unsafe {
+            let Some(input_source) = find_input_source_by_id(source_id_str, true) else {
+                return Ok(false);
+            };
+
+            let prop_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceIsEnableCapable);
+            let result = if prop_ptr.is_null() { false } else { CFBooleanGetValue(prop_ptr) };
 
             CFRelease(input_source);
             Ok(result)

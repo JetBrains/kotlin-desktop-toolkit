@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -188,6 +189,16 @@ class RobotTest : KDTApplicationTestBase() {
         }
     }
 
+    @Ignore("Can't activate IME without activating parent input method")
+    @Test
+    fun `switch to japanese`() {
+        withInputSourceSelected("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese") {
+            val inputSources = ui { TextInputSource.list(includeAll = false) }
+            assertContains(inputSources, "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese")
+            assertEquals("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", TextInputSource.current())
+        }
+    }
+
     @Test
     fun `current input source is in the list of input sources`() {
         val currentLayout = ui { TextInputSource.current() }
@@ -219,6 +230,30 @@ class RobotTest : KDTApplicationTestBase() {
             assertEquals(originalLayout, currentAfterRestore)
         } else {
             println("Only one keyboard layout available, skipping switch test")
+        }
+    }
+
+    @Test
+    fun `select capable test`() {
+        val selectCapableLayouts = listOf(
+            "com.apple.keylayout.ABC",
+        )
+        selectCapableLayouts.forEach { layout ->
+            assert(ui { TextInputSource.isSelectCapable(layout) }) {
+                "$layout should be select capable"
+            }
+        }
+    }
+
+    @Test
+    fun `enable capable test`() {
+        val enableCapableLayouts = listOf(
+            "com.apple.keylayout.ABC",
+        )
+        enableCapableLayouts.forEach { layout ->
+            assert(ui { TextInputSource.isEnableCapable(layout) }) {
+                "$layout should be enable capable"
+            }
         }
     }
 

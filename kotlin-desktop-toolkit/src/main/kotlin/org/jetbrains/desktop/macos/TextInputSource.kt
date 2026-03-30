@@ -57,6 +57,22 @@ public object TextInputSource {
         }
     }
 
+    public fun isSelectCapable(sourceId: String): Boolean {
+        return ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_macos_h.text_input_source_is_select_capable(arena.allocateUtf8String(sourceId))
+            }
+        }
+    }
+
+    public fun isEnableCapable(sourceId: String): Boolean {
+        return ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_macos_h.text_input_source_is_enable_capable(arena.allocateUtf8String(sourceId))
+            }
+        }
+    }
+
     public fun setEnabled(sourceId: String, enabled: Boolean): Boolean {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
