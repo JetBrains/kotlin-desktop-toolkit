@@ -79,7 +79,7 @@ open class KDTApplicationTestBase : KDTTestBase() {
             return window
         }
 
-        private const val DELAY_AFTER_INPUT_SOURCE_CHANGE = 100L // milliseconds
+        private const val DELAY_AFTER_INPUT_SOURCE_CHANGE = 200L // milliseconds
 
         fun <T> withInputSourceSelected(inputSource: String, body: () -> T): T {
             val sources = ui { TestInputSources() }
