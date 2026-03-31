@@ -246,16 +246,16 @@ impl Window {
         Ok(())
     }
 
-    pub fn maximize(&self) -> bool {
-        unsafe { ShowWindow(self.hwnd(), SW_SHOWMAXIMIZED) }.as_bool()
+    pub fn maximize(&self) {
+        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWMAXIMIZED) };
     }
 
-    pub fn minimize(&self) -> bool {
-        unsafe { ShowWindow(self.hwnd(), SW_SHOWMINIMIZED) }.as_bool()
+    pub fn minimize(&self) {
+        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWMINIMIZED) };
     }
 
-    pub fn show(&self) -> bool {
-        unsafe { ShowWindow(self.hwnd(), SW_SHOW) }.as_bool()
+    pub fn show(&self) {
+        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOW) };
     }
 
     pub fn set_cursor(&self, cursor: Cursor) {

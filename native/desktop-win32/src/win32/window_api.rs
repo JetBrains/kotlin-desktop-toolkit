@@ -164,13 +164,19 @@ pub extern "C" fn window_is_minimized(window_ptr: WindowPtr) -> bool {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_maximize(window_ptr: WindowPtr) -> bool {
-    with_window(&window_ptr, "window_maximize", |window| Ok(window.maximize()))
+pub extern "C" fn window_maximize(window_ptr: WindowPtr) {
+    with_window(&window_ptr, "window_maximize", |window| {
+        window.maximize();
+        Ok(())
+    });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_minimize(window_ptr: WindowPtr) -> bool {
-    with_window(&window_ptr, "window_minimize", |window| Ok(window.minimize()))
+pub extern "C" fn window_minimize(window_ptr: WindowPtr) {
+    with_window(&window_ptr, "window_minimize", |window| {
+        window.minimize();
+        Ok(())
+    });
 }
 
 #[unsafe(no_mangle)]
