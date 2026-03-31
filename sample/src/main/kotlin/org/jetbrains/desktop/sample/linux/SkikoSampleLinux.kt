@@ -16,9 +16,6 @@ import org.jetbrains.desktop.linux.DragIconParams
 import org.jetbrains.desktop.linux.Event
 import org.jetbrains.desktop.linux.EventHandlerResult
 import org.jetbrains.desktop.linux.FileDialog
-import org.jetbrains.desktop.linux.FontAntialiasingValue
-import org.jetbrains.desktop.linux.FontHintingValue
-import org.jetbrains.desktop.linux.FontRgbaOrderValue
 import org.jetbrains.desktop.linux.KeyCode
 import org.jetbrains.desktop.linux.KeyModifiers
 import org.jetbrains.desktop.linux.KotlinDesktopToolkit
@@ -71,8 +68,6 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.DurationUnit
-import kotlin.time.toDuration
 
 const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
 const val URI_LIST_MIME_TYPE = "text/uri-list"
@@ -169,16 +164,8 @@ internal data class XdgDesktopSettings(
     var doubleClickInterval: Duration = 500.milliseconds,
     var colorScheme: ColorSchemeValue = ColorSchemeValue.NoPreference,
     var accentColor: Int = Color.BLUE,
-    var fontAntialiasing: FontAntialiasingValue = FontAntialiasingValue.Grayscale,
-    var fontHinting: FontHintingValue = FontHintingValue.Medium,
-    var fontRgbaOrder: FontRgbaOrderValue = FontRgbaOrderValue.Rgb,
     var cursorSize: UInt? = null,
     var cursorTheme: String? = null,
-    var cursorBlink: Boolean = true,
-    var cursorBlinkTime: Duration = 1200.toDuration(DurationUnit.MILLISECONDS),
-    var cursorBlinkTimeout: Duration = 10.toDuration(DurationUnit.SECONDS),
-    var overlayScrolling: Boolean = false,
-    var audibleBell: Boolean = true,
     var actionDoubleClickTitlebar: DesktopTitlebarAction = DesktopTitlebarAction.ToggleMaximize,
     var actionMiddleClickTitlebar: DesktopTitlebarAction = DesktopTitlebarAction.None,
     var actionRightClickTitlebar: DesktopTitlebarAction = DesktopTitlebarAction.Menu,
@@ -197,20 +184,13 @@ internal data class XdgDesktopSettings(
                 g = colorDoubleToInt(s.value.green),
                 b = colorDoubleToInt(s.value.blue),
             )
-            is DesktopSetting.FontAntialiasing -> fontAntialiasing = s.value
-            is DesktopSetting.FontHinting -> fontHinting = s.value
-            is DesktopSetting.FontRgbaOrder -> fontRgbaOrder = s.value
-            is DesktopSetting.AudibleBell -> audibleBell = s.value
-            is DesktopSetting.CursorBlink -> cursorBlink = s.value
-            is DesktopSetting.CursorBlinkTime -> cursorBlinkTime = s.value
-            is DesktopSetting.CursorBlinkTimeout -> cursorBlinkTimeout = s.value
-            is DesktopSetting.OverlayScrolling -> overlayScrolling = s.value
             is DesktopSetting.CursorSize -> cursorSize = s.value
             is DesktopSetting.CursorTheme -> cursorTheme = s.value
             is DesktopSetting.ActionDoubleClickTitlebar -> actionDoubleClickTitlebar = s.value
             is DesktopSetting.ActionMiddleClickTitlebar -> actionMiddleClickTitlebar = s.value
             is DesktopSetting.ActionRightClickTitlebar -> actionRightClickTitlebar = s.value
             is DesktopSetting.MiddleClickPaste -> middleClickPaste = s.value
+            else -> {}
         }
     }
 }

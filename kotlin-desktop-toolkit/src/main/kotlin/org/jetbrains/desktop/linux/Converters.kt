@@ -341,6 +341,18 @@ internal fun DesktopSetting.Companion.fromNative(s: MemorySegment): DesktopSetti
         desktop_linux_h.NativeFfiDesktopSetting_MiddleClickPaste() -> DesktopSetting.MiddleClickPaste(
             NativeFfiDesktopSetting.middle_click_paste(s),
         )
+        desktop_linux_h.NativeFfiDesktopSetting_DragThresholdPixels() -> DesktopSetting.DragThresholdPixels(
+            NativeFfiDesktopSetting.drag_threshold_pixels(s),
+        )
+        desktop_linux_h.NativeFfiDesktopSetting_EnableAnimations() -> DesktopSetting.EnableAnimations(
+            NativeFfiDesktopSetting.enable_animations(s),
+        )
+        desktop_linux_h.NativeFfiDesktopSetting_RecentFilesEnabled() -> DesktopSetting.RecentFilesEnabled(
+            NativeFfiDesktopSetting.recent_files_enabled(s),
+        )
+        desktop_linux_h.NativeFfiDesktopSetting_RecentFilesMaxAgeDays() -> DesktopSetting.RecentFilesMaxAgeDays(
+            NativeFfiDesktopSetting.recent_files_max_age_days(s),
+        )
 
         else -> error("Unexpected setting $nativeTag")
     }

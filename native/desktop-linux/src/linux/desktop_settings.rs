@@ -18,38 +18,35 @@ const GNOME_DESKTOP_INTERFACE_NAMESPACE: &str = "org.gnome.desktop.interface";
 const GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE: &str = "org.gnome.desktop.peripherals.mouse";
 
 /// cbindgen:ignore
+const GNOME_DESKTOP_PRIVACY_NAMESPACE: &str = "org.gnome.desktop.privacy";
+
+/// cbindgen:ignore
 const GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE: &str = "org.gnome.desktop.wm.preferences";
 
 #[derive(Debug)]
 pub enum InternalDesktopSetting {
-    TitlebarLayout(String),
-
+    AccentColor(Color),
+    AudibleBell(bool),
     ActionDoubleClickTitlebar(DesktopTitlebarAction),
     ActionRightClickTitlebar(DesktopTitlebarAction),
     ActionMiddleClickTitlebar(DesktopTitlebarAction),
-
-    DoubleClickIntervalMs(i32),
     ColorScheme(ColorScheme),
-    AccentColor(Color),
+    CursorBlink(bool),
+    CursorBlinkTimeMs(i32),
+    CursorBlinkTimeoutMs(i32),
+    CursorSize(i32),
+    CursorTheme(String),
+    DoubleClickIntervalMs(i32),
+    DragThresholdPixels(i32),
+    EnableAnimations(bool),
     FontAntialiasing(FontAntialiasing),
     FontHinting(FontHinting),
     FontRgbaOrder(FontRgbaOrder),
-
-    CursorBlink(bool),
-    CursorSize(i32),
-    CursorTheme(String),
-
-    /// Length of the cursor blink cycle, in milliseconds.
-    CursorBlinkTimeMs(i32),
-
-    /// Time after which the cursor stops blinking.
-    CursorBlinkTimeoutMs(i32),
-
-    OverlayScrolling(bool),
-
-    AudibleBell(bool),
-
     MiddleClickPaste(bool),
+    OverlayScrolling(bool),
+    RecentFilesEnabled(bool),
+    RecentFilesMaxAgeDays(i32),
+    TitlebarLayout(String),
 }
 
 impl FontAntialiasing {
@@ -105,32 +102,36 @@ impl FfiDesktopSetting<'_> {
         for<'a> F: Fn(FfiDesktopSetting<'a>),
     {
         match s {
-            InternalDesktopSetting::TitlebarLayout(v) => {
-                f(FfiDesktopSetting::TitlebarLayout(BorrowedArray::new_string(&v)));
-            }
+            InternalDesktopSetting::AccentColor(v) => f(Self::AccentColor(v)),
             InternalDesktopSetting::ActionDoubleClickTitlebar(v) => f(FfiDesktopSetting::ActionDoubleClickTitlebar(v)),
             InternalDesktopSetting::ActionRightClickTitlebar(v) => f(FfiDesktopSetting::ActionRightClickTitlebar(v)),
             InternalDesktopSetting::ActionMiddleClickTitlebar(v) => f(FfiDesktopSetting::ActionMiddleClickTitlebar(v)),
-            InternalDesktopSetting::DoubleClickIntervalMs(v) => f(Self::DoubleClickIntervalMs(v)),
+            InternalDesktopSetting::AudibleBell(v) => f(Self::AudibleBell(v)),
             InternalDesktopSetting::ColorScheme(v) => f(Self::ColorScheme(match v {
                 ColorScheme::NoPreference => XdgDesktopColorScheme::NoPreference,
                 ColorScheme::PreferDark => XdgDesktopColorScheme::PreferDark,
                 ColorScheme::PreferLight => XdgDesktopColorScheme::PreferLight,
             })),
-            InternalDesktopSetting::AccentColor(v) => f(Self::AccentColor(v)),
-            InternalDesktopSetting::FontAntialiasing(v) => f(Self::FontAntialiasing(v)),
-            InternalDesktopSetting::FontHinting(v) => f(Self::FontHinting(v)),
-            InternalDesktopSetting::FontRgbaOrder(v) => f(Self::FontRgbaOrder(v)),
             InternalDesktopSetting::CursorBlink(v) => f(Self::CursorBlink(v)),
             InternalDesktopSetting::CursorBlinkTimeMs(v) => f(Self::CursorBlinkTimeMs(v)),
             InternalDesktopSetting::CursorBlinkTimeoutMs(v) => f(Self::CursorBlinkTimeoutMs(v)),
-            InternalDesktopSetting::OverlayScrolling(v) => f(Self::OverlayScrolling(v)),
-            InternalDesktopSetting::AudibleBell(v) => f(Self::AudibleBell(v)),
             InternalDesktopSetting::CursorSize(v) => f(Self::CursorSize(v)),
             InternalDesktopSetting::CursorTheme(v) => {
                 f(FfiDesktopSetting::CursorTheme(BorrowedArray::new_string(&v)));
             }
+            InternalDesktopSetting::EnableAnimations(v) => f(Self::EnableAnimations(v)),
+            InternalDesktopSetting::DoubleClickIntervalMs(v) => f(Self::DoubleClickIntervalMs(v)),
+            InternalDesktopSetting::DragThresholdPixels(v) => f(Self::DragThresholdPixels(v)),
+            InternalDesktopSetting::FontAntialiasing(v) => f(Self::FontAntialiasing(v)),
+            InternalDesktopSetting::FontHinting(v) => f(Self::FontHinting(v)),
+            InternalDesktopSetting::FontRgbaOrder(v) => f(Self::FontRgbaOrder(v)),
             InternalDesktopSetting::MiddleClickPaste(v) => f(Self::MiddleClickPaste(v)),
+            InternalDesktopSetting::OverlayScrolling(v) => f(Self::OverlayScrolling(v)),
+            InternalDesktopSetting::RecentFilesEnabled(v) => f(Self::RecentFilesEnabled(v)),
+            InternalDesktopSetting::RecentFilesMaxAgeDays(v) => f(Self::RecentFilesMaxAgeDays(v)),
+            InternalDesktopSetting::TitlebarLayout(v) => {
+                f(FfiDesktopSetting::TitlebarLayout(BorrowedArray::new_string(&v)));
+            }
         }
     }
 }
@@ -196,6 +197,8 @@ impl InternalDesktopSetting {
     }
 
     fn new_impl(namespace: &str, key: &str, value: &OwnedValue) -> anyhow::Result<Option<Self>> {
+        // We can only use entries from
+        // https://github.com/GNOME/gtk/blob/2b56fd9d0e40a36ab516f49f2efc90ea7e2eacde/gdk/wayland/gdksettings-wayland.c#L267
         Ok(match namespace {
             APPEARANCE_NAMESPACE => match key {
                 COLOR_SCHEME_KEY => Some(Self::ColorScheme(value.clone().try_into()?)),
@@ -208,6 +211,7 @@ impl InternalDesktopSetting {
                 "cursor-blink-timeout" => Some(Self::CursorBlinkTimeoutMs(read_i32(value)? * 1000)),
                 "cursor-theme" => Some(Self::CursorTheme(read_string(value)?)),
                 "cursor-size" => Some(Self::CursorSize(read_i32(value)?)),
+                "enable-animations" => Some(Self::EnableAnimations(read_bool(value)?)),
                 "overlay-scrolling" => Some(Self::OverlayScrolling(read_bool(value)?)),
                 "font-antialiasing" => Some(Self::FontAntialiasing(FontAntialiasing::parse(&read_string(value)?)?)),
                 "font-hinting" => Some(Self::FontHinting(FontHinting::parse(&read_string(value)?)?)),
@@ -217,6 +221,12 @@ impl InternalDesktopSetting {
             },
             GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE => match key {
                 "double-click" => Some(Self::DoubleClickIntervalMs(read_i32(value)?)),
+                "drag-threshold" => Some(Self::DragThresholdPixels(read_i32(value)?)),
+                _ => None,
+            },
+            GNOME_DESKTOP_PRIVACY_NAMESPACE => match key {
+                "recent-files-max-age" => Some(Self::RecentFilesMaxAgeDays(read_i32(value)?)),
+                "remember-recent-files" => Some(Self::RecentFilesEnabled(read_bool(value)?)),
                 _ => None,
             },
             GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE => match key {
@@ -257,6 +267,7 @@ async fn read_initial_desktop_settings(
                 APPEARANCE_NAMESPACE,
                 GNOME_DESKTOP_INTERFACE_NAMESPACE,
                 GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE,
+                GNOME_DESKTOP_PRIVACY_NAMESPACE,
                 GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE,
             ]
             .as_slice(),

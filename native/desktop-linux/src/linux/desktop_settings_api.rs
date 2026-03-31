@@ -58,20 +58,13 @@ pub struct Color {
 #[repr(C)]
 #[derive(Debug)]
 pub enum FfiDesktopSetting<'a> {
-    TitlebarLayout(BorrowedArray<'a, u8>),
+    AccentColor(Color),
+    AudibleBell(bool),
     ActionDoubleClickTitlebar(DesktopTitlebarAction),
     ActionRightClickTitlebar(DesktopTitlebarAction),
     ActionMiddleClickTitlebar(DesktopTitlebarAction),
-
-    DoubleClickIntervalMs(i32),
     ColorScheme(XdgDesktopColorScheme),
-    AccentColor(Color),
-    FontAntialiasing(FontAntialiasing),
-    FontHinting(FontHinting),
-    FontRgbaOrder(FontRgbaOrder),
     CursorBlink(bool),
-    CursorSize(i32),
-    CursorTheme(BorrowedArray<'a, u8>),
 
     /// Length of the cursor blink cycle, in milliseconds.
     CursorBlinkTimeMs(i32),
@@ -79,9 +72,17 @@ pub enum FfiDesktopSetting<'a> {
     /// Time after which the cursor stops blinking.
     CursorBlinkTimeoutMs(i32),
 
-    OverlayScrolling(bool),
-
-    AudibleBell(bool),
-
+    CursorSize(i32),
+    CursorTheme(BorrowedArray<'a, u8>),
+    DoubleClickIntervalMs(i32),
+    DragThresholdPixels(i32),
+    EnableAnimations(bool),
+    FontAntialiasing(FontAntialiasing),
+    FontHinting(FontHinting),
+    FontRgbaOrder(FontRgbaOrder),
     MiddleClickPaste(bool),
+    OverlayScrolling(bool),
+    RecentFilesEnabled(bool),
+    RecentFilesMaxAgeDays(i32),
+    TitlebarLayout(BorrowedArray<'a, u8>),
 }
