@@ -201,6 +201,21 @@ public object TextInputSource {
         }
     }
 
+    /**
+     * Enables or disables the input source identified by [sourceId], automatically
+     * targeting the parent input method when [sourceId] is an input mode.
+     *
+     * For example, calling `setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", true)`
+     * will enable the parent `"com.apple.inputmethod.Kotoeri.RomajiTyping"` instead,
+     * since input modes cannot be enabled directly without their parent.
+     *
+     * Use [setEnabledExact] if you need to enable/disable a specific source ID without
+     * parent resolution.
+     *
+     * @param sourceId the reverse-DNS identifier of the input source.
+     * @param enabled `true` to enable, `false` to disable.
+     * @return `true` if the operation succeeded, `false` otherwise.
+     */
     public fun setEnabled(sourceId: String, enabled: Boolean): Boolean {
         val sourceIdToEnable = getParent(sourceId) ?: sourceId
         return setEnabledExact(sourceIdToEnable, enabled)
