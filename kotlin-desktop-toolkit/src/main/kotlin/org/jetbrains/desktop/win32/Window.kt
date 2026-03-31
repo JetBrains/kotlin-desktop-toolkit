@@ -131,11 +131,11 @@ public class Window internal constructor(
         }
     }
 
-    public fun maximize(): Boolean {
+    public fun maximize() {
         return ffiDownCall { desktop_win32_h.window_maximize(ptr) }
     }
 
-    public fun minimize(): Boolean {
+    public fun minimize() {
         return ffiDownCall { desktop_win32_h.window_minimize(ptr) }
     }
 
