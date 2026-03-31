@@ -8,6 +8,7 @@ import org.jetbrains.desktop.macos.KotlinDesktopToolkit
 import org.jetbrains.desktop.macos.LogLevel
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.LogicalPoint
+import org.jetbrains.desktop.macos.TestInputSources
 import org.jetbrains.desktop.macos.TextInputSource
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardTest.Companion.window
@@ -80,37 +81,16 @@ open class KDTApplicationTestBase : KDTTestBase() {
 
         private const val DELAY_AFTER_INPUT_SOURCE_CHANGE = 100L // milliseconds
 
-        fun <T> withInputSourceEnabled(inputSource: String, body: () -> T): T {
-            val wasEnabled = ui { TextInputSource.list().contains(inputSource) }
+        fun <T> withInputSourceSelected(inputSource: String, body: () -> T): T {
+            val sources = ui { TestInputSources() }
             return try {
-                if (!wasEnabled) {
-                    ui { TextInputSource.setEnabled(inputSource, true) }
-                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
-                }
+                ui { sources.select(inputSource) }
+                sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
+                assertEquals(inputSource, ui { TextInputSource.current() })
                 body()
             } finally {
-                if (!wasEnabled) {
-                    ui { TextInputSource.setEnabled(inputSource, false) }
-                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
-                }
-            }
-        }
-
-        fun <T> withInputSourceSelected(inputSource: String, body: () -> T): T {
-            return withInputSourceEnabled(inputSource) {
-                val previousInputSource = ui { TextInputSource.current()!! }
-                if (previousInputSource != inputSource) {
-                    assert(ui { TextInputSource.select(inputSource) })
-                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
-                }
-                try {
-                    val currentInputSource = ui { TextInputSource.current()!! }
-                    assertEquals(expected = inputSource, actual = currentInputSource)
-                    body()
-                } finally {
-                    assert(ui { TextInputSource.select(previousInputSource) })
-                    sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
-                }
+                ui { sources.close() }
+                sleep(DELAY_AFTER_INPUT_SOURCE_CHANGE)
             }
         }
 

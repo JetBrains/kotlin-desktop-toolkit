@@ -5,6 +5,7 @@ import org.jetbrains.desktop.macos.EventHandlerResult
 import org.jetbrains.desktop.macos.KeyCode
 import org.jetbrains.desktop.macos.Logger
 import org.jetbrains.desktop.macos.Robot
+import org.jetbrains.desktop.macos.TestInputSources
 import org.jetbrains.desktop.macos.TextInputSource
 import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyDown
@@ -183,10 +184,13 @@ class RobotTest : KDTApplicationTestBase() {
 //            "com.apple.inputmethod.Korean.2SetKorean",
         )
         inputSourceNames.forEach { inputSourceName ->
-            withInputSourceEnabled(inputSourceName) {
-                ui { TextInputSource.select(inputSourceName) }
+            val sources = ui { TestInputSources() }
+            try {
+                ui { sources.select(inputSourceName) }
                 val inputSources = ui { TextInputSource.list(includeAll = false) }
                 assertContains(inputSources, inputSourceName)
+            } finally {
+                ui { sources.close() }
             }
         }
     }
@@ -195,8 +199,8 @@ class RobotTest : KDTApplicationTestBase() {
     fun `switch to japanese`() {
         val defaultInputSource = ui { TextInputSource.current() }!!
         try {
-            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", true) } }
-//            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", true) } }
+            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping", true) } }
+            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", true) } }
 
             assertTrue { ui { TextInputSource.select("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese") } }
             assertEquals("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", ui { TextInputSource.current() })
@@ -204,13 +208,13 @@ class RobotTest : KDTApplicationTestBase() {
             assertTrue { ui { TextInputSource.select(defaultInputSource) } }
             assertEquals(defaultInputSource, ui { TextInputSource.current() })
 
-            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", false) } }
-//            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) } }
+            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping", false) } }
+            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) } }
         } finally {
             // Cleanup after test
             ui { TextInputSource.select(defaultInputSource) }
-            ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", false) }
-            ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) }
+            ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping", false) }
+            ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) }
         }
     }
 

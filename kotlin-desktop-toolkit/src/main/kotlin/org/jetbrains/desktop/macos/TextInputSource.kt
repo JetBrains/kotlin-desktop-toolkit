@@ -5,6 +5,55 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
 /**
+ * High-level helper for temporarily enabling and selecting input sources,
+ * primarily intended for use in tests.
+ *
+ * On construction, captures the currently enabled input sources and the active
+ * input source. Any sources enabled via [enable], or [select]
+ * are tracked and automatically disabled when [close] is called, restoring
+ * the original input source selection.
+ *
+ * **Thread safety:** all methods must be called from the main thread.
+ */
+public class TestInputSources : AutoCloseable {
+    private val testSources = mutableListOf<String>()
+    private val enabledSourcesBeforeTest = TextInputSource.list(includeAll = false)
+    private val inputSourceBeforeTest = TextInputSource.current()!!
+
+    private fun enableExact(source: String) {
+        if (enabledSourcesBeforeTest.contains(source)) return
+        if (testSources.contains(source)) return
+
+        testSources.add(source)
+        assert(TextInputSource.setEnabled(source, true))
+    }
+
+    public fun enable(source: String) {
+        TextInputSource.getParent(source)?.let { parent ->
+            enableExact(parent)
+        }
+        enableExact(source)
+    }
+
+    public fun select(source: String) {
+        enable(source)
+        assert(TextInputSource.select(source))
+    }
+
+    override fun close() {
+        testSources.reversed().forEach {
+            TextInputSource.setEnabled(it, false)
+        }
+        TextInputSource.select(inputSourceBeforeTest)
+        // Sometimes [testSources] stuck even after test completion
+        // so we are trying to disable it twice
+        testSources.reversed().forEach {
+            TextInputSource.setEnabled(it, false)
+        }
+    }
+}
+
+/**
  * Kotlin wrapper around Apple's Text Input Source Services (`TISInputSource` API from Carbon/HIToolbox).
  *
  * Text input sources on macOS fall into three categories:
@@ -184,7 +233,7 @@ public object TextInputSource {
 
     /**
      * Returns whether the input source identified by [sourceId] can ever be programmatically
-     * enabled via [setEnabledExact].
+     * enabled via [setEnabled].
      *
      * Most input sources are enable-capable. Exceptions include input-method-private
      * keyboard layouts (used internally via `TISSetInputMethodKeyboardLayoutOverride`),
@@ -199,26 +248,6 @@ public object TextInputSource {
                 desktop_macos_h.text_input_source_is_enable_capable(arena.allocateUtf8String(sourceId))
             }
         }
-    }
-
-    /**
-     * Enables or disables the input source identified by [sourceId], automatically
-     * targeting the parent input method when [sourceId] is an input mode.
-     *
-     * For example, calling `setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", true)`
-     * will enable the parent `"com.apple.inputmethod.Kotoeri.RomajiTyping"` instead,
-     * since input modes cannot be enabled directly without their parent.
-     *
-     * Use [setEnabledExact] if you need to enable/disable a specific source ID without
-     * parent resolution.
-     *
-     * @param sourceId the reverse-DNS identifier of the input source.
-     * @param enabled `true` to enable, `false` to disable.
-     * @return `true` if the operation succeeded, `false` otherwise.
-     */
-    public fun setEnabled(sourceId: String, enabled: Boolean): Boolean {
-        val sourceIdToEnable = getParent(sourceId) ?: sourceId
-        return setEnabledExact(sourceIdToEnable, enabled)
     }
 
     /**
@@ -238,7 +267,7 @@ public object TextInputSource {
      *
      * Wraps `TISEnableInputSource` / `TISDisableInputSource`.
      */
-    public fun setEnabledExact(sourceId: String, enabled: Boolean): Boolean {
+    public fun setEnabled(sourceId: String, enabled: Boolean): Boolean {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
                 desktop_macos_h.text_input_source_set_enable(arena.allocateUtf8String(sourceId), enabled)
