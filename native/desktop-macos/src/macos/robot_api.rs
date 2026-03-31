@@ -62,6 +62,15 @@ pub enum KeyboardType {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn robot_is_accessibility_allowed() -> bool {
+    unsafe extern "C" {
+        fn AXIsProcessTrusted() -> bool;
+    }
+    // Safety: AXIsProcessTrusted is a safe system call with no parameters
+    unsafe { AXIsProcessTrusted() }
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn robot_set_keyboard_type(keyboard_type: KeyboardType) {
     ffi_boundary("robot_set_keyboard_type", || {
         let _mtm = MainThreadMarker::new().context("Robot can be initialized only from the main thread")?;

@@ -10,13 +10,16 @@ import org.jetbrains.desktop.macos.Window
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyDown
 import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyUp
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 @EnabledOnOs(OS.MAC)
 class RobotTest : KDTApplicationTestBase() {
@@ -50,6 +53,11 @@ class RobotTest : KDTApplicationTestBase() {
     }
 
     @Test
+    fun `accessibility permission is granted`() {
+        assertTrue(ui { robot.isAccessibilityAllowed() })
+    }
+
+    @Test
     fun `robot waits until the event is delivered to os`() {
         repeat(100) {
             val hadCapitalA = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -71,7 +79,7 @@ class RobotTest : KDTApplicationTestBase() {
                 ui { robot.emulateKeyboardEvent(KeyCode.ANSI_X, isKeyDown = false) }
                 awaitEventOfType<Event.KeyUp> { it.keyCode == KeyCode.ANSI_X }
             }
-            assertNotNull(hadCapitalA.get())
+            assertTrue(hadCapitalA.get())
         }
     }
 
@@ -171,14 +179,38 @@ class RobotTest : KDTApplicationTestBase() {
             "com.apple.keylayout.Dvorak",
             "com.apple.keylayout.DVORAK-QWERTYCMD",
             "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese",
-//            "com.apple.inputmethod.TCIM.Pinyin", // Fails on CI
+//            "com.apple.inputmethod.TCIM.Pinyin",
 //            "com.apple.inputmethod.Korean.2SetKorean",
         )
         inputSourceNames.forEach { inputSourceName ->
             withInputSourceEnabled(inputSourceName) {
+                ui { TextInputSource.select(inputSourceName) }
                 val inputSources = ui { TextInputSource.list(includeAll = false) }
                 assertContains(inputSources, inputSourceName)
             }
+        }
+    }
+
+    @Test
+    fun `switch to japanese`() {
+        val defaultInputSource = ui { TextInputSource.current() }!!
+        try {
+            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", true) } }
+//            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", true) } }
+
+            assertTrue { ui { TextInputSource.select("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese") } }
+            assertEquals("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", ui { TextInputSource.current() })
+
+            assertTrue { ui { TextInputSource.select(defaultInputSource) } }
+            assertEquals(defaultInputSource, ui { TextInputSource.current() })
+
+            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", false) } }
+//            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) } }
+        } finally {
+            // Cleanup after test
+            ui { TextInputSource.select(defaultInputSource) }
+            ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", false) }
+            ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) }
         }
     }
 
@@ -217,6 +249,30 @@ class RobotTest : KDTApplicationTestBase() {
     }
 
     @Test
+    fun `select capable test`() {
+        val selectCapableLayouts = listOf(
+            "com.apple.keylayout.ABC",
+        )
+        selectCapableLayouts.forEach { layout ->
+            assert(ui { TextInputSource.isSelectCapable(layout) }) {
+                "$layout should be select capable"
+            }
+        }
+    }
+
+    @Test
+    fun `enable capable test`() {
+        val enableCapableLayouts = listOf(
+            "com.apple.keylayout.ABC",
+        )
+        enableCapableLayouts.forEach { layout ->
+            assert(ui { TextInputSource.isEnableCapable(layout) }) {
+                "$layout should be enable capable"
+            }
+        }
+    }
+
+    @Test
     fun `ascii capable test`() {
         val asciiCapableLayouts = listOf(
             "com.apple.keylayout.ABC",
@@ -235,6 +291,30 @@ class RobotTest : KDTApplicationTestBase() {
             assert(!ui { TextInputSource.isAsciiCapable(layout) }) {
                 "$layout should NOT be ASCII capable"
             }
+        }
+    }
+
+    @Test
+    fun `getParent returns parent for input mode and null for keyboard layout`() {
+        val parent = ui { TextInputSource.getParent("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese") }
+        assertEquals("com.apple.inputmethod.Kotoeri.RomajiTyping", parent)
+
+        val noParent = ui { TextInputSource.getParent("com.apple.keylayout.ABC") }
+        assertNull(noParent, "Keyboard layout should not have a parent")
+    }
+
+    @Ignore("Only for debugging")
+    @Test
+    fun `dump all input source properties`() {
+        val allSources = ui { TextInputSource.list(includeAll = true) }
+        val enabledSources = ui { TextInputSource.list(includeAll = false) }.toSet()
+        allSources.forEach { sourceId ->
+            val type = ui { TextInputSource.type(sourceId) }
+            val asciiCapable = ui { TextInputSource.isAsciiCapable(sourceId) }
+            val selectCapable = ui { TextInputSource.isSelectCapable(sourceId) }
+            val enableCapable = ui { TextInputSource.isEnableCapable(sourceId) }
+            val enabled = sourceId in enabledSources
+            println("$sourceId | type=$type | ascii=$asciiCapable | select=$selectCapable | enable=$enableCapable | enabled=$enabled")
         }
     }
 
