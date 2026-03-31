@@ -87,7 +87,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
             size = LogicalSize(width = 640f, height = 480f),
             title = "Sample Window",
             style = WindowStyle(
-                systemBackdropType = WindowSystemBackdropType.MicaAlt,
+                systemBackdropType = WindowSystemBackdropType.Mica,
                 titleBarKind = WindowTitleBarKind.Custom,
             ),
         )
@@ -101,6 +101,9 @@ class ApplicationState(private val app: Application) : AutoCloseable {
 
         val appearance = Appearance.getCurrent()
         Logger.debug { "Current appearance: $appearance" }
+        if (appearance == Appearance.Dark) {
+            window.window.setImmersiveDarkMode(true)
+        }
     }
 
     fun handleEvent(event: Event, windowId: WindowId): EventHandlerResult {

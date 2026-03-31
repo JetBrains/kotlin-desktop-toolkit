@@ -77,6 +77,11 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
 
                     VirtualKey.T -> {
                         window.setTitle("New Title")
+                        window.setBackdropTint(0x5FFF7F00, 1.0f)
+                    }
+
+                    VirtualKey.H -> {
+                        window.removeBackdropTint()
                     }
 
                     VirtualKey.C -> {

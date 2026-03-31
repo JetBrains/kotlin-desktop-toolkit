@@ -139,6 +139,16 @@ public class Window internal constructor(
         return ffiDownCall { desktop_win32_h.window_minimize(ptr) }
     }
 
+    public fun removeBackdropTint() {
+        ffiDownCall { desktop_win32_h.window_remove_backdrop_tint(ptr) }
+    }
+
+    public fun setBackdropTint(color: Int, opacity: Float) {
+        ffiDownCall {
+            desktop_win32_h.window_set_backdrop_tint(ptr, color, opacity)
+        }
+    }
+
     public fun setCursor(cursorIcon: CursorIcon) {
         ffiDownCall {
             desktop_win32_h.window_set_cursor_from_system(ptr, cursorIcon.toNative())
