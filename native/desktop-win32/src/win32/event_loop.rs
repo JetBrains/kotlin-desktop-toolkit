@@ -89,7 +89,7 @@ impl EventLoop {
 
             WM_PAINT => on_paint(self, window),
 
-            WM_ERASEBKGND => Some(LRESULT(0)),
+            WM_ERASEBKGND => Some(LRESULT(1)),
 
             WM_DPICHANGED => on_dpichanged(self, window, wparam, lparam),
 
