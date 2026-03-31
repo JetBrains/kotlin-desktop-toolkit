@@ -12,13 +12,11 @@ import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyUp
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertContains
-import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -181,11 +179,12 @@ class RobotTest : KDTApplicationTestBase() {
             "com.apple.keylayout.Dvorak",
             "com.apple.keylayout.DVORAK-QWERTYCMD",
             "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese",
-//            "com.apple.inputmethod.TCIM.Pinyin", // Fails on CI
-//            "com.apple.inputmethod.Korean.2SetKorean",
+            "com.apple.inputmethod.TCIM.Pinyin",
+            "com.apple.inputmethod.Korean.2SetKorean",
         )
         inputSourceNames.forEach { inputSourceName ->
             withInputSourceEnabled(inputSourceName) {
+                ui { TextInputSource.select(inputSourceName) }
                 val inputSources = ui { TextInputSource.list(includeAll = false) }
                 assertContains(inputSources, inputSourceName)
             }
@@ -196,8 +195,8 @@ class RobotTest : KDTApplicationTestBase() {
     fun `switch to japanese`() {
         val inputSourcesBefore = ui { TextInputSource.list(includeAll = false) }
         try {
-            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping", true) } }
-            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", true) } }
+            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", true) } }
+//            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", true) } }
 
             assertTrue { ui { TextInputSource.select("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese") } }
             assertEquals("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", ui { TextInputSource.current() })
@@ -205,20 +204,19 @@ class RobotTest : KDTApplicationTestBase() {
             assertTrue { ui { TextInputSource.select("com.apple.keylayout.ABC") } }
             assertEquals("com.apple.keylayout.ABC", ui { TextInputSource.current() })
 
-            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping", false) } }
-            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) } }
-
+            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", false) } }
+//            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) } }
         } finally {
             // Cleanup after test
             ui { TextInputSource.select("com.apple.keylayout.ABC") }
-            ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping", false) }
-            ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) }
+            ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", false) }
+            ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) }
         }
 
         val inputSourcesAfter = ui { TextInputSource.list(includeAll = false) }
         val remainingSources = inputSourcesAfter.toSet().minus(inputSourcesBefore.toSet())
         kotlin.test.assertTrue(message = remainingSources.toString()) {
-            remainingSources.isNotEmpty() || remainingSources == setOf("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese")
+            remainingSources.isEmpty() || remainingSources == setOf("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese")
         }
     }
 

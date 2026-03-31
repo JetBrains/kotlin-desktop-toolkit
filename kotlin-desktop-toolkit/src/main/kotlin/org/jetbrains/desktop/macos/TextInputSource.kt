@@ -184,7 +184,7 @@ public object TextInputSource {
 
     /**
      * Returns whether the input source identified by [sourceId] can ever be programmatically
-     * enabled via [setEnabled].
+     * enabled via [setEnabledExact].
      *
      * Most input sources are enable-capable. Exceptions include input-method-private
      * keyboard layouts (used internally via `TISSetInputMethodKeyboardLayoutOverride`),
@@ -199,6 +199,11 @@ public object TextInputSource {
                 desktop_macos_h.text_input_source_is_enable_capable(arena.allocateUtf8String(sourceId))
             }
         }
+    }
+
+    public fun setEnabled(sourceId: String, enabled: Boolean): Boolean {
+        val sourceIdToEnable = getParent(sourceId) ?: sourceId
+        return setEnabledExact(sourceIdToEnable, enabled)
     }
 
     /**
@@ -218,7 +223,7 @@ public object TextInputSource {
      *
      * Wraps `TISEnableInputSource` / `TISDisableInputSource`.
      */
-    public fun setEnabled(sourceId: String, enabled: Boolean): Boolean {
+    public fun setEnabledExact(sourceId: String, enabled: Boolean): Boolean {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
                 desktop_macos_h.text_input_source_set_enable(arena.allocateUtf8String(sourceId), enabled)
