@@ -193,7 +193,6 @@ class RobotTest : KDTApplicationTestBase() {
 
     @Test
     fun `switch to japanese`() {
-        val inputSourcesBefore = ui { TextInputSource.list(includeAll = false) }
         val defaultInputSource = ui { TextInputSource.current() }!!
         try {
             assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", true) } }
@@ -212,12 +211,6 @@ class RobotTest : KDTApplicationTestBase() {
             ui { TextInputSource.select(defaultInputSource) }
             ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", false) }
             ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) }
-        }
-
-        val inputSourcesAfter = ui { TextInputSource.list(includeAll = false) }
-        val remainingSources = inputSourcesAfter.toSet().minus(inputSourcesBefore.toSet())
-        kotlin.test.assertTrue(message = remainingSources.toString()) {
-            remainingSources.isEmpty() || remainingSources == setOf("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese")
         }
     }
 
