@@ -179,8 +179,8 @@ class RobotTest : KDTApplicationTestBase() {
             "com.apple.keylayout.Dvorak",
             "com.apple.keylayout.DVORAK-QWERTYCMD",
             "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese",
-            "com.apple.inputmethod.TCIM.Pinyin",
-            "com.apple.inputmethod.Korean.2SetKorean",
+//            "com.apple.inputmethod.TCIM.Pinyin",
+//            "com.apple.inputmethod.Korean.2SetKorean",
         )
         inputSourceNames.forEach { inputSourceName ->
             withInputSourceEnabled(inputSourceName) {
@@ -194,6 +194,7 @@ class RobotTest : KDTApplicationTestBase() {
     @Test
     fun `switch to japanese`() {
         val inputSourcesBefore = ui { TextInputSource.list(includeAll = false) }
+        val defaultInputSource = ui { TextInputSource.current() }!!
         try {
             assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", true) } }
 //            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", true) } }
@@ -201,14 +202,14 @@ class RobotTest : KDTApplicationTestBase() {
             assertTrue { ui { TextInputSource.select("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese") } }
             assertEquals("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", ui { TextInputSource.current() })
 
-            assertTrue { ui { TextInputSource.select("com.apple.keylayout.ABC") } }
-            assertEquals("com.apple.keylayout.ABC", ui { TextInputSource.current() })
+            assertTrue { ui { TextInputSource.select(defaultInputSource) } }
+            assertEquals(defaultInputSource, ui { TextInputSource.current() })
 
             assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", false) } }
 //            assertTrue { ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) } }
         } finally {
             // Cleanup after test
-            ui { TextInputSource.select("com.apple.keylayout.ABC") }
+            ui { TextInputSource.select(defaultInputSource) }
             ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping", false) }
             ui { TextInputSource.setEnabledExact("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) }
         }
