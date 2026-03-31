@@ -70,7 +70,9 @@ public enum class DesktopTitlebarAction {
 }
 
 public sealed class DesktopSetting {
-    public data class TitlebarLayout(val value: String) : DesktopSetting()
+    public data class ColorScheme(val value: ColorSchemeValue) : DesktopSetting()
+
+    public data class AccentColor(val value: Color) : DesktopSetting()
 
     public data class ActionDoubleClickTitlebar(val value: DesktopTitlebarAction) : DesktopSetting()
 
@@ -78,21 +80,7 @@ public sealed class DesktopSetting {
 
     public data class ActionMiddleClickTitlebar(val value: DesktopTitlebarAction) : DesktopSetting()
 
-    public data class DoubleClickInterval(val value: Duration) : DesktopSetting()
-
-    public data class ColorScheme(val value: ColorSchemeValue) : DesktopSetting()
-
-    public data class AccentColor(val value: Color) : DesktopSetting()
-
-    public data class FontAntialiasing(val value: FontAntialiasingValue) : DesktopSetting()
-
-    public data class FontHinting(val value: FontHintingValue) : DesktopSetting()
-
-    public data class FontRgbaOrder(val value: FontRgbaOrderValue) : DesktopSetting()
-
-    public data class CursorSize(val value: UInt) : DesktopSetting()
-
-    public data class CursorTheme(val value: String) : DesktopSetting()
+    public data class AudibleBell(val value: Boolean) : DesktopSetting()
 
     public data class CursorBlink(val value: Boolean) : DesktopSetting()
 
@@ -102,11 +90,30 @@ public sealed class DesktopSetting {
     /** Time after which the cursor stops blinking. */
     public data class CursorBlinkTimeout(val value: Duration) : DesktopSetting()
 
-    public data class OverlayScrolling(val value: Boolean) : DesktopSetting()
+    public data class CursorSize(val value: UInt) : DesktopSetting()
 
-    public data class AudibleBell(val value: Boolean) : DesktopSetting()
+    public data class CursorTheme(val value: String) : DesktopSetting()
+
+    public data class DragThresholdPixels(val value: Int) : DesktopSetting()
+
+    public data class DoubleClickInterval(val value: Duration) : DesktopSetting()
+
+    public data class EnableAnimations(val value: Boolean) : DesktopSetting()
+
+    public data class FontAntialiasing(val value: FontAntialiasingValue) : DesktopSetting()
+
+    public data class FontHinting(val value: FontHintingValue) : DesktopSetting()
+
+    public data class FontRgbaOrder(val value: FontRgbaOrderValue) : DesktopSetting()
 
     public data class MiddleClickPaste(val value: Boolean) : DesktopSetting()
+
+    public data class OverlayScrolling(val value: Boolean) : DesktopSetting()
+
+    public data class RecentFilesEnabled(val value: Boolean) : DesktopSetting()
+    public data class RecentFilesMaxAgeDays(val value: Int) : DesktopSetting()
+
+    public data class TitlebarLayout(val value: String) : DesktopSetting()
 
     internal companion object;
 }
