@@ -321,6 +321,7 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let scale = window.get_scale();
     let event = NCCalcSizeEvent { origin, size, scale };
     event_loop.handle_event(window, event);
+    let _ = window.resize_backdrop_tint(size);
     Some(LRESULT(0))
 }
 

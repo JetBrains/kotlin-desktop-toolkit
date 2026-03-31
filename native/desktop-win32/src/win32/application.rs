@@ -68,7 +68,7 @@ impl Application {
     }
 
     pub(crate) fn new_window(&self, window_id: WindowId) -> anyhow::Result<Window> {
-        Window::new(window_id, Rc::downgrade(&self.event_loop), self.compositor_controller.Compositor()?)
+        Window::new(window_id, Rc::downgrade(&self.event_loop), self.compositor_controller.clone())
     }
 
     pub(crate) fn create_angle_device(&self, window: &Window) -> anyhow::Result<AngleDevice> {
