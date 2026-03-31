@@ -443,21 +443,24 @@ for (backend in backendsForOS(runTestsWithPlatform.os)) {
 
 val cargoFmtCheckTask = tasks.register<CargoFmtTask>("cargoFmtCheck") {
     checkOnly = true
+    group = "verification"
     workingDir = nativeDir.asFile
     cargoCommand = providers.cargoCommand()
     dependsOn(installRustTaskByPlatform[hostPlatform()]!!)
 }
 
 val cargoFmtTask = tasks.register<CargoFmtTask>("cargoFmt") {
+    group = "formatting"
     workingDir = nativeDir.asFile
     cargoCommand = providers.cargoCommand()
-    clippyFixTasks.forEach { mustRunAfter(it) }
+    clippyFixTasksByPlatform.forEach { mustRunAfter(it.value) }
     dependsOn(installRustTaskByPlatform[hostPlatform()]!!)
 }
 
-val clippyCheckTasks = installRustTaskByPlatform.map { (platform, installRustTask) ->
+val clippyCheckTasksByPlatform = installRustTaskByPlatform.mapValues { (platform, installRustTask) ->
     tasks.register<ClippyTask>("clippyCheckFor${platform.name()}") {
         checkOnly = true
+        group = "verification"
         workingDir = nativeDir.asFile
         cargoCommand = providers.cargoCommand()
         rustTarget = buildPlatformRustTarget(platform)
@@ -465,7 +468,7 @@ val clippyCheckTasks = installRustTaskByPlatform.map { (platform, installRustTas
     }
 }
 
-val clippyFixTasks = installRustTaskByPlatform.map { (platform, installRustTask) ->
+val clippyFixTasksByPlatform = installRustTaskByPlatform.mapValues { (platform, installRustTask) ->
     tasks.register<ClippyTask>("clippyFixFor${platform.name()}") {
         workingDir = nativeDir.asFile
         cargoCommand = providers.cargoCommand()
@@ -474,17 +477,36 @@ val clippyFixTasks = installRustTaskByPlatform.map { (platform, installRustTask)
     }
 }
 
-tasks.register("lint") {
-    dependsOn(tasks.named("ktlintCheck"))
-    clippyCheckTasks.forEach { dependsOn(it) }
-    dependsOn(cargoFmtCheckTask)
+fun createLintTask(name: String, platforms: List<Platform>) {
+    tasks.register(name) {
+        group = "verification"
+        dependsOn(tasks.named("ktlintCheck"))
+        for (platform in platforms) {
+            dependsOn(clippyCheckTasksByPlatform[platform]!!)
+        }
+        dependsOn(cargoFmtCheckTask)
+    }
 }
 
-tasks.register("autofix") {
-    dependsOn(tasks.named("ktlintFormat"))
-    clippyFixTasks.forEach { dependsOn(it) }
-    dependsOn(cargoFmtTask)
+enabledPlatforms.forEach {
+    createLintTask("lintFor${it.name()}", listOf(it))
 }
+createLintTask("lint", enabledPlatforms)
+
+fun createAutofixTask(name: String, platforms: List<Platform>) {
+    tasks.register(name) {
+        dependsOn(tasks.named("ktlintFormat"))
+        for (platform in platforms) {
+            dependsOn(clippyFixTasksByPlatform[platform]!!)
+        }
+        dependsOn(cargoFmtTask)
+    }
+}
+
+enabledPlatforms.forEach {
+    createAutofixTask("autofixFor${it.name()}", listOf(it))
+}
+createAutofixTask("autofix", enabledPlatforms)
 
 // Junit tests
 
