@@ -98,6 +98,35 @@ public object TextInputSource {
     }
 
     /**
+     * Returns the type of the input source identified by [sourceId], or `null` if
+     * the source is not found.
+     *
+     * Possible values (CFString constants from `TextInputSources.h`):
+     * - `"TISTypeKeyboardLayout"` — a keyboard layout
+     * - `"TISTypeKeyboardInputMethodWithoutModes"` — an input method without modes
+     * - `"TISTypeKeyboardInputMethodModeEnabled"` — a mode-enabled input method (parent)
+     * - `"TISTypeKeyboardInputMode"` — an input mode of a parent input method
+     * - `"TISTypeCharacterPalette"` — a character palette
+     * - `"TISTypeKeyboardViewer"` — a keyboard viewer
+     * - `"TISTypeInk"` — an ink input source
+     *
+     * Wraps `kTISPropertyInputSourceType`.
+     */
+    public fun type(sourceId: String): String? {
+        val typePtr = ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_macos_h.text_input_source_type(arena.allocateUtf8String(sourceId))
+            }
+        }
+        if (typePtr == MemorySegment.NULL) return null
+        return try {
+            typePtr.getUtf8String(0)
+        } finally {
+            ffiDownCall { desktop_macos_h.string_drop(typePtr) }
+        }
+    }
+
+    /**
      * Returns whether the input source identified by [sourceId] is capable of ASCII input.
      *
      * Wraps `kTISPropertyInputSourceIsASCIICapable`.

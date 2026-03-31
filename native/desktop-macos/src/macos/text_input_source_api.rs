@@ -23,6 +23,7 @@ unsafe extern "C" {
     static kTISPropertyInputSourceID: *const c_void;
     #[allow(dead_code)]
     static kTISPropertyLocalizedName: *const c_void;
+    static kTISPropertyInputSourceType: *const c_void;
     static kTISPropertyInputSourceIsASCIICapable: *const c_void;
     static kTISPropertyInputSourceIsSelectCapable: *const c_void;
     static kTISPropertyInputSourceIsEnableCapable: *const c_void;
@@ -156,6 +157,30 @@ pub extern "C" fn text_input_source_set_enable(source_id: BorrowedStrPtr, enable
 
             CFRelease(input_source);
             Ok(result)
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn text_input_source_type(source_id: BorrowedStrPtr) -> RustAllocatedStrPtr {
+    ffi_boundary("text_input_source_type", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let source_id_str = source_id.as_str()?;
+        unsafe {
+            let Some(input_source) = find_input_source_by_id(source_id_str, true) else {
+                return Ok(RustAllocatedStrPtr::null());
+            };
+
+            let type_ptr = TISGetInputSourceProperty(input_source, kTISPropertyInputSourceType);
+            let result = if type_ptr.is_null() {
+                Ok(RustAllocatedStrPtr::null())
+            } else {
+                let ns_string: &NSString = &*type_ptr.cast::<NSString>();
+                copy_to_c_string(ns_string)
+            };
+
+            CFRelease(input_source);
+            result
         }
     })
 }
