@@ -12,13 +12,16 @@ import org.jetbrains.desktop.macos.tests.KeyboardHelpers.assertKeyUp
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.assertAll
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 @EnabledOnOs(OS.MAC)
 class RobotTest : KDTApplicationTestBase() {
@@ -189,13 +192,33 @@ class RobotTest : KDTApplicationTestBase() {
         }
     }
 
-    @Ignore("Can't activate IME without activating parent input method")
     @Test
     fun `switch to japanese`() {
-        withInputSourceSelected("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese") {
-            val inputSources = ui { TextInputSource.list(includeAll = false) }
-            assertContains(inputSources, "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese")
-            assertEquals("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", TextInputSource.current())
+        val inputSourcesBefore = ui { TextInputSource.list(includeAll = false) }
+        try {
+            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping", true) } }
+            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", true) } }
+
+            assertTrue { ui { TextInputSource.select("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese") } }
+            assertEquals("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", ui { TextInputSource.current() })
+
+            assertTrue { ui { TextInputSource.select("com.apple.keylayout.ABC") } }
+            assertEquals("com.apple.keylayout.ABC", ui { TextInputSource.current() })
+
+            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping", false) } }
+            assertTrue { ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) } }
+
+        } finally {
+            // Cleanup after test
+            ui { TextInputSource.select("com.apple.keylayout.ABC") }
+            ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping", false) }
+            ui { TextInputSource.setEnabled("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese", false) }
+        }
+
+        val inputSourcesAfter = ui { TextInputSource.list(includeAll = false) }
+        val remainingSources = inputSourcesAfter.toSet().minus(inputSourcesBefore.toSet())
+        kotlin.test.assertTrue(message = remainingSources.toString()) {
+            remainingSources.isNotEmpty() || remainingSources == setOf("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese")
         }
     }
 
@@ -276,6 +299,30 @@ class RobotTest : KDTApplicationTestBase() {
             assert(!ui { TextInputSource.isAsciiCapable(layout) }) {
                 "$layout should NOT be ASCII capable"
             }
+        }
+    }
+
+    @Test
+    fun `getParent returns parent for input mode and null for keyboard layout`() {
+        val parent = ui { TextInputSource.getParent("com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese") }
+        assertEquals("com.apple.inputmethod.Kotoeri.RomajiTyping", parent)
+
+        val noParent = ui { TextInputSource.getParent("com.apple.keylayout.ABC") }
+        assertNull(noParent, "Keyboard layout should not have a parent")
+    }
+
+    @Ignore("Only for debugging")
+    @Test
+    fun `dump all input source properties`() {
+        val allSources = ui { TextInputSource.list(includeAll = true) }
+        val enabledSources = ui { TextInputSource.list(includeAll = false) }.toSet()
+        allSources.forEach { sourceId ->
+            val type = ui { TextInputSource.type(sourceId) }
+            val asciiCapable = ui { TextInputSource.isAsciiCapable(sourceId) }
+            val selectCapable = ui { TextInputSource.isSelectCapable(sourceId) }
+            val enableCapable = ui { TextInputSource.isEnableCapable(sourceId) }
+            val enabled = sourceId in enabledSources
+            println("$sourceId | type=$type | ascii=$asciiCapable | select=$selectCapable | enable=$enableCapable | enabled=$enabled")
         }
     }
 

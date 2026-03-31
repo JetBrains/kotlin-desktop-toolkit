@@ -186,6 +186,38 @@ pub extern "C" fn text_input_source_type(source_id: BorrowedStrPtr) -> RustAlloc
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn text_input_source_get_parent(source_id: BorrowedStrPtr) -> RustAllocatedStrPtr {
+    ffi_boundary("text_input_source_get_parent", || {
+        let _mtm = MainThreadMarker::new().unwrap();
+        let source_id_str = source_id.as_str()?;
+
+        // The parent is found by stripping the last dot-component from the source ID.
+        // E.g. "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese" -> "com.apple.inputmethod.Kotoeri.RomajiTyping"
+        let Some(dot_pos) = source_id_str.rfind('.') else {
+            return Ok(RustAllocatedStrPtr::null());
+        };
+        let candidate = &source_id_str[..dot_pos];
+
+        unsafe {
+            let Some(parent) = find_input_source_by_id(candidate, true) else {
+                return Ok(RustAllocatedStrPtr::null());
+            };
+
+            let id_ptr = TISGetInputSourceProperty(parent, kTISPropertyInputSourceID);
+            let result = if id_ptr.is_null() {
+                Ok(RustAllocatedStrPtr::null())
+            } else {
+                let ns_string: &NSString = &*id_ptr.cast::<NSString>();
+                copy_to_c_string(ns_string)
+            };
+
+            CFRelease(parent);
+            result
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn text_input_source_is_ascii_capable(source_id: BorrowedStrPtr) -> bool {
     ffi_boundary("text_input_source_is_ascii_capable", || {
         let _mtm = MainThreadMarker::new().unwrap();

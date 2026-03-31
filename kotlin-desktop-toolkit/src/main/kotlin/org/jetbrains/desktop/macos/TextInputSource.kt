@@ -127,6 +127,31 @@ public object TextInputSource {
     }
 
     /**
+     * Returns the source ID of the parent input source for the given [sourceId],
+     * or `null` if no parent exists.
+     *
+     * Only input modes (type `TISTypeKeyboardInputMode`) typically have a parent —
+     * the parent is the mode-enabled input method whose ID is a prefix of the mode's ID.
+     * For example, `"com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese"` has the parent
+     * `"com.apple.inputmethod.Kotoeri.RomajiTyping"`.
+     *
+     * Keyboard layouts and standalone input methods return `null`.
+     */
+    public fun getParent(sourceId: String): String? {
+        val parentPtr = ffiDownCall {
+            Arena.ofConfined().use { arena ->
+                desktop_macos_h.text_input_source_get_parent(arena.allocateUtf8String(sourceId))
+            }
+        }
+        if (parentPtr == MemorySegment.NULL) return null
+        return try {
+            parentPtr.getUtf8String(0)
+        } finally {
+            ffiDownCall { desktop_macos_h.string_drop(parentPtr) }
+        }
+    }
+
+    /**
      * Returns whether the input source identified by [sourceId] is capable of ASCII input.
      *
      * Wraps `kTISPropertyInputSourceIsASCIICapable`.
