@@ -98,6 +98,7 @@ public sealed class Event {
         val button: PointerButton,
         val clickCount: Int,
         val locationInWindow: LogicalPoint,
+        val locationOnScreen: PhysicalPoint,
         val nonClientArea: Boolean,
         val state: PointerState,
         val timestamp: Timestamp,
@@ -106,6 +107,7 @@ public sealed class Event {
     @ConsistentCopyVisibility
     public data class PointerEntered internal constructor(
         val locationInWindow: LogicalPoint,
+        val locationOnScreen: PhysicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
@@ -113,6 +115,7 @@ public sealed class Event {
     @ConsistentCopyVisibility
     public data class PointerExited internal constructor(
         val locationInWindow: LogicalPoint,
+        val locationOnScreen: PhysicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
@@ -120,6 +123,7 @@ public sealed class Event {
     @ConsistentCopyVisibility
     public data class PointerUpdated internal constructor(
         val locationInWindow: LogicalPoint,
+        val locationOnScreen: PhysicalPoint,
         val nonClientArea: Boolean,
         val state: PointerState,
         val timestamp: Timestamp,
@@ -129,6 +133,7 @@ public sealed class Event {
     public data class PointerUp internal constructor(
         val button: PointerButton,
         val locationInWindow: LogicalPoint,
+        val locationOnScreen: PhysicalPoint,
         val nonClientArea: Boolean,
         val state: PointerState,
         val timestamp: Timestamp,
@@ -138,6 +143,7 @@ public sealed class Event {
     public data class ScrollWheelX internal constructor(
         val scrollingDelta: Int,
         val locationInWindow: LogicalPoint,
+        val locationOnScreen: PhysicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
@@ -146,6 +152,7 @@ public sealed class Event {
     public data class ScrollWheelY internal constructor(
         val scrollingDelta: Int,
         val locationInWindow: LogicalPoint,
+        val locationOnScreen: PhysicalPoint,
         val state: PointerState,
         val timestamp: Timestamp,
     ) : Event()
@@ -275,6 +282,7 @@ private fun pointerDown(s: MemorySegment): Event {
         button = PointerButton.fromNative(NativePointerDownEvent.button(nativeEvent)),
         clickCount = NativePointerDownEvent.click_count(nativeEvent),
         locationInWindow = LogicalPoint.fromNative(NativePointerDownEvent.location_in_window(nativeEvent)),
+        locationOnScreen = PhysicalPoint.fromNative(NativePointerDownEvent.location_on_screen(nativeEvent)),
         nonClientArea = NativePointerDownEvent.non_client_area(nativeEvent),
         state = PointerState.fromNative(NativePointerDownEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerDownEvent.timestamp(nativeEvent)),
@@ -285,6 +293,7 @@ private fun pointerEntered(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_entered(s)
     return Event.PointerEntered(
         locationInWindow = LogicalPoint.fromNative(NativePointerEnteredEvent.location_in_window(nativeEvent)),
+        locationOnScreen = PhysicalPoint.fromNative(NativePointerEnteredEvent.location_on_screen(nativeEvent)),
         state = PointerState.fromNative(NativePointerEnteredEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerEnteredEvent.timestamp(nativeEvent)),
     )
@@ -294,6 +303,7 @@ private fun pointerExited(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_exited(s)
     return Event.PointerExited(
         locationInWindow = LogicalPoint.fromNative(NativePointerExitedEvent.location_in_window(nativeEvent)),
+        locationOnScreen = PhysicalPoint.fromNative(NativePointerExitedEvent.location_on_screen(nativeEvent)),
         state = PointerState.fromNative(NativePointerExitedEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerExitedEvent.timestamp(nativeEvent)),
     )
@@ -303,6 +313,7 @@ private fun pointerUpdated(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.pointer_updated(s)
     return Event.PointerUpdated(
         locationInWindow = LogicalPoint.fromNative(NativePointerUpdatedEvent.location_in_window(nativeEvent)),
+        locationOnScreen = PhysicalPoint.fromNative(NativePointerUpdatedEvent.location_on_screen(nativeEvent)),
         nonClientArea = NativePointerUpdatedEvent.non_client_area(nativeEvent),
         state = PointerState.fromNative(NativePointerUpdatedEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerUpdatedEvent.timestamp(nativeEvent)),
@@ -314,6 +325,7 @@ private fun pointerUp(s: MemorySegment): Event {
     return Event.PointerUp(
         button = PointerButton.fromNative(NativePointerUpEvent.button(nativeEvent)),
         locationInWindow = LogicalPoint.fromNative(NativePointerUpEvent.location_in_window(nativeEvent)),
+        locationOnScreen = PhysicalPoint.fromNative(NativePointerUpEvent.location_on_screen(nativeEvent)),
         nonClientArea = NativePointerUpEvent.non_client_area(nativeEvent),
         state = PointerState.fromNative(NativePointerUpEvent.state(nativeEvent)),
         timestamp = Timestamp(NativePointerUpEvent.timestamp(nativeEvent)),
@@ -325,6 +337,7 @@ private fun scrollWheelX(s: MemorySegment): Event {
     return Event.ScrollWheelX(
         scrollingDelta = NativeScrollWheelEvent.scrolling_delta(nativeEvent),
         locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
+        locationOnScreen = PhysicalPoint.fromNative(NativeScrollWheelEvent.location_on_screen(nativeEvent)),
         state = PointerState.fromNative(NativeScrollWheelEvent.state(nativeEvent)),
         timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
     )
@@ -335,6 +348,7 @@ private fun scrollWheelY(s: MemorySegment): Event {
     return Event.ScrollWheelY(
         scrollingDelta = NativeScrollWheelEvent.scrolling_delta(nativeEvent),
         locationInWindow = LogicalPoint.fromNative(NativeScrollWheelEvent.location_in_window(nativeEvent)),
+        locationOnScreen = PhysicalPoint.fromNative(NativeScrollWheelEvent.location_on_screen(nativeEvent)),
         state = PointerState.fromNative(NativeScrollWheelEvent.state(nativeEvent)),
         timestamp = Timestamp(NativeScrollWheelEvent.timestamp(nativeEvent)),
     )

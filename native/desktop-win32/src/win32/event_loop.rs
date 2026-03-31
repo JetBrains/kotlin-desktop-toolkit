@@ -441,6 +441,7 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
                     button: button_change.button(),
                     click_count,
                     location_in_window: pointer_info.get_location_in_window(),
+                    location_on_screen: pointer_info.get_physical_location(),
                     non_client_area: is_non_client,
                     state: pointer_info.get_pointer_state(),
                     timestamp: pointer_info.get_timestamp(),
@@ -449,12 +450,14 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
             PointerButtonChangeKind::Released => Event::PointerUp(PointerUpEvent {
                 button: button_change.button(),
                 location_in_window: pointer_info.get_location_in_window(),
+                location_on_screen: pointer_info.get_physical_location(),
                 non_client_area: is_non_client,
                 state: pointer_info.get_pointer_state(),
                 timestamp: pointer_info.get_timestamp(),
             }),
             PointerButtonChangeKind::Other => Event::PointerUpdated(PointerUpdatedEvent {
                 location_in_window: pointer_info.get_location_in_window(),
+                location_on_screen: pointer_info.get_physical_location(),
                 non_client_area: is_non_client,
                 state: pointer_info.get_pointer_state(),
                 timestamp: pointer_info.get_timestamp(),
@@ -465,6 +468,7 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
         window.set_is_pointer_in_window(true);
         Event::PointerEntered(PointerEnteredEvent {
             location_in_window: pointer_info.get_location_in_window(),
+            location_on_screen: pointer_info.get_physical_location(),
             state: pointer_info.get_pointer_state(),
             timestamp: pointer_info.get_timestamp(),
         })
@@ -487,6 +491,7 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPA
         button: pointer_button,
         click_count,
         location_in_window: pointer_info.get_location_in_window(),
+        location_on_screen: pointer_info.get_physical_location(),
         non_client_area: matches!(msg, WM_NCPOINTERDOWN),
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
@@ -507,6 +512,7 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
     let event = PointerUpEvent {
         button: pointer_button,
         location_in_window: pointer_info.get_location_in_window(),
+        location_on_screen: pointer_info.get_physical_location(),
         non_client_area: is_non_client,
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
@@ -521,6 +527,7 @@ fn on_pointerwheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WP
     let event_args = ScrollWheelEvent {
         scrolling_delta: GET_WHEEL_DELTA_WPARAM!(wparam),
         location_in_window: pointer_info.get_location_in_window(),
+        location_on_screen: pointer_info.get_physical_location(),
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
     };
@@ -537,6 +544,7 @@ fn on_pointerleave(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> O
     window.set_is_pointer_in_window(false);
     let event = PointerExitedEvent {
         location_in_window: pointer_info.get_location_in_window(),
+        location_on_screen: pointer_info.get_physical_location(),
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
     };

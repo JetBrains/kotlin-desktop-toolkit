@@ -111,6 +111,7 @@ pub struct PointerDownEvent {
     pub button: PointerButton,
     pub click_count: u32,
     pub location_in_window: LogicalPoint,
+    pub location_on_screen: PhysicalPoint,
     pub non_client_area: bool,
     pub state: PointerState,
     pub timestamp: Timestamp,
@@ -120,6 +121,7 @@ pub struct PointerDownEvent {
 #[derive(Debug)]
 pub struct PointerEnteredEvent {
     pub location_in_window: LogicalPoint,
+    pub location_on_screen: PhysicalPoint,
     pub state: PointerState,
     pub timestamp: Timestamp,
 }
@@ -128,6 +130,7 @@ pub struct PointerEnteredEvent {
 #[derive(Debug)]
 pub struct PointerExitedEvent {
     pub location_in_window: LogicalPoint,
+    pub location_on_screen: PhysicalPoint,
     pub state: PointerState,
     pub timestamp: Timestamp,
 }
@@ -142,6 +145,7 @@ impl From<PointerExitedEvent> for Event {
 #[derive(Debug)]
 pub struct PointerUpdatedEvent {
     pub location_in_window: LogicalPoint,
+    pub location_on_screen: PhysicalPoint,
     pub non_client_area: bool,
     pub state: PointerState,
     pub timestamp: Timestamp,
@@ -152,6 +156,7 @@ pub struct PointerUpdatedEvent {
 pub struct PointerUpEvent {
     pub button: PointerButton,
     pub location_in_window: LogicalPoint,
+    pub location_on_screen: PhysicalPoint,
     pub non_client_area: bool,
     pub state: PointerState,
     pub timestamp: Timestamp,
@@ -162,6 +167,7 @@ pub struct PointerUpEvent {
 pub struct ScrollWheelEvent {
     pub scrolling_delta: i32,
     pub location_in_window: LogicalPoint,
+    pub location_on_screen: PhysicalPoint,
     pub state: PointerState,
     pub timestamp: Timestamp,
 }
