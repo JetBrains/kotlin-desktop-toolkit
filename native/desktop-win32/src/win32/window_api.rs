@@ -180,6 +180,18 @@ pub extern "C" fn window_minimize(window_ptr: WindowPtr) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_remove_backdrop_tint(window_ptr: WindowPtr) {
+    with_window(&window_ptr, "window_remove_backdrop_tint", Window::remove_backdrop_tint);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_backdrop_tint(window_ptr: WindowPtr, color: u32, opacity: f32) {
+    with_window(&window_ptr, "window_set_backdrop_tint", |window| {
+        window.set_backdrop_tint(color, opacity)
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_cursor_from_file(window_ptr: WindowPtr, path: BorrowedStrPtr) {
     with_window(&window_ptr, "window_set_cursor_from_file", |window| {
         let cursor_file_path = copy_from_utf8_string(&path)?.to_os_string();
