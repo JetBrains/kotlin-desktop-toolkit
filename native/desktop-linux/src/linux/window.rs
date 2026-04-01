@@ -316,4 +316,24 @@ impl SimpleWindow {
     pub fn show_menu(&self, position: LogicalPoint, seat: &WlSeat, serial: u32) {
         self.window.show_window_menu(seat, serial, (position.x.round(), position.y.round()));
     }
+
+    pub fn set_max_size(&self, max_size: LogicalSize) {
+        let opt_max_size = if max_size.width == 0 || max_size.height == 0 {
+            None
+        } else {
+            Some((max_size.width, max_size.height))
+        };
+        self.window.set_max_size(opt_max_size);
+        self.window.commit();
+    }
+
+    pub fn set_min_size(&self, min_size: LogicalSize) {
+        let opt_min_size = if min_size.width == 0 || min_size.height == 0 {
+            None
+        } else {
+            Some((min_size.width, min_size.height))
+        };
+        self.window.set_min_size(opt_min_size);
+        self.window.commit();
+    }
 }
