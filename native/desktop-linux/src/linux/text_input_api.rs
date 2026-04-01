@@ -1,12 +1,12 @@
 use bitflag_attr::bitflag;
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::BorrowedArray;
 
 use crate::linux::geometry::LogicalRect;
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct TextInputContext<'a> {
-    pub surrounding_text: BorrowedStrPtr<'a>,
+    pub surrounding_text: BorrowedArray<'a, u8>,
     pub cursor_codepoint_offset: u16,
     pub selection_start_codepoint_offset: u16,
     pub hints: TextInputContentHints,

@@ -4,7 +4,7 @@ use crate::linux::{
     events::{TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData},
 };
 use anyhow::bail;
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::BorrowedArray;
 use log::{debug, warn};
 use smithay_client_toolkit::reexports::{
     client::{Connection, Dispatch, Proxy, QueueHandle, delegate_noop},
@@ -13,7 +13,6 @@ use smithay_client_toolkit::reexports::{
         zwp_text_input_v3::{self, ZwpTextInputV3},
     },
 };
-use std::ffi::CString;
 
 delegate_noop!(ApplicationState: ignore ZwpTextInputManagerV3);
 
@@ -70,7 +69,7 @@ impl TextInputContext<'_> {
     }
 
     pub fn apply(&self, text_input: &zwp_text_input_v3::ZwpTextInputV3) -> anyhow::Result<()> {
-        let surrounding_text = self.surrounding_text.as_str()?;
+        let surrounding_text = str::from_utf8(self.surrounding_text.as_slice()?)?;
 
         let cursor_pos_bytes = Self::get_byte_offset(surrounding_text, self.cursor_codepoint_offset);
 
@@ -178,7 +177,7 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                 let v = std::mem::take(&mut this.pending_text_input_event);
 
                 let (has_commit_string, commit_string) = match v.commit_string {
-                    Some(zwp_text_input_v3::Event::CommitString { text }) => (true, text.map(|t| CString::new(t).unwrap())),
+                    Some(zwp_text_input_v3::Event::CommitString { text }) => (true, text),
                     _ => (false, None),
                 };
                 let delete_surrounding_text = match v.delete_surrounding_text {
@@ -196,14 +195,14 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                         text,
                         cursor_begin,
                         cursor_end,
-                    }) => Some((text.map(|t| CString::new(t).unwrap()), cursor_begin, cursor_end)),
+                    }) => Some((text, cursor_begin, cursor_end)),
                     _ => None,
                 };
                 let e = TextInputEvent {
                     has_preedit_string: preedit_data.is_some(),
                     preedit_string: if let Some((preedit_text, preedit_begin, preedit_end)) = &preedit_data {
                         TextInputPreeditStringData {
-                            text: BorrowedStrPtr::new_optional(preedit_text.as_ref()),
+                            text: BorrowedArray::new_optional_string(preedit_text.as_ref()),
                             cursor_begin_byte_pos: *preedit_begin,
                             cursor_end_byte_pos: *preedit_end,
                         }
@@ -211,7 +210,7 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                         TextInputPreeditStringData::default()
                     },
                     has_commit_string,
-                    commit_string: BorrowedStrPtr::new_optional(commit_string.as_ref()),
+                    commit_string: BorrowedArray::new_optional_string(commit_string.as_ref()),
                     has_delete_surrounding_text: delete_surrounding_text.is_some(),
                     delete_surrounding_text: delete_surrounding_text.unwrap_or_default(),
                 };

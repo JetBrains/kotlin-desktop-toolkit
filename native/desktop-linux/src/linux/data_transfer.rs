@@ -1,7 +1,4 @@
-use std::{
-    ffi::CString,
-    io::{Read, Write},
-};
+use std::io::{Read, Write};
 
 use log::{debug, warn};
 use smithay_client_toolkit::{
@@ -93,14 +90,13 @@ pub fn read_from_pipe<'l, F>(
 where
     for<'a> F: FnMut(&mut ApplicationState, DataTransferContent<'a>) + 'l,
 {
-    let mime_type_cstr = CString::new(mime_type).unwrap();
     if let Err(e) = loop_handle.insert_source(read_pipe, move |(), res, state| {
         let f = unsafe { res.get_mut() };
         let mut buf = Vec::new();
         let content = match f.read_to_end(&mut buf) {
             Ok(size) => {
                 debug!("{f_name}: read {size} bytes");
-                DataTransferContent::new(&mime_type_cstr, &buf)
+                DataTransferContent::new(&mime_type, &buf)
             }
             Err(e) => {
                 warn!("{f_name}: error receiving data: {e}");
@@ -131,13 +127,13 @@ impl ApplicationState {
             self.query_drag_and_drop_target.with(&drag_and_drop_query_data, |target_info| {
                 let supported_mime_with_actions = target_info
                     .iter()
-                    .find(|&e| mime_types.iter().any(|s| s == e.supported_mime_type.as_str().unwrap()));
+                    .find(|&e| mime_types.iter().any(|s| s == e.supported_mime_type.as_optional_str().unwrap()));
 
                 debug!("query_drag_and_drop_target -> {target_info:?}, supported_mime_with_actions={supported_mime_with_actions:?}");
 
                 if let Some(v) = supported_mime_with_actions {
                     DragOfferMimetypeAndActions {
-                        mime_type: Some(v.supported_mime_type.as_str().unwrap().to_owned()),
+                        mime_type: Some(v.supported_mime_type.as_optional_str().unwrap().to_owned()),
                         supported_actions: v.supported_actions.into(),
                         preferred_action: v.preferred_action.into(),
                     }
@@ -193,7 +189,7 @@ impl DataDeviceHandler for ApplicationState {
         };
         selection_offer.with_mime_types(|mime_types| {
             debug!("DataDeviceHandler::selection: mime_types={mime_types:?}");
-            let mime_types = CString::new(mime_types.join(",")).unwrap();
+            let mime_types = mime_types.join(",");
             self.send_event(DataTransferAvailableEvent::new(DataSource::Clipboard, &mime_types));
         });
     }
@@ -365,7 +361,7 @@ impl PrimarySelectionDeviceHandler for ApplicationState {
         };
         selection_offer.with_mime_types(|mime_types| {
             debug!("PrimarySelectionDeviceHandler::selection: mime_types={mime_types:?}");
-            let mime_types = CString::new(mime_types.join(",")).unwrap();
+            let mime_types = mime_types.join(",");
             self.send_event(DataTransferAvailableEvent::new(DataSource::PrimarySelection, &mime_types));
         });
     }

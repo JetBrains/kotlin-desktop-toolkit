@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::{Context, bail};
-use log::{debug, trace};
+use log::trace;
 
 use crate::logger::PanicDefault;
 
@@ -367,8 +367,7 @@ pub struct BorrowedArray<'a, T> {
 }
 
 impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
-    pub fn from_slice(s: &'a [T]) -> Self {
-        debug!("BorrowedArray::from_slice: {s:?}");
+    pub const fn from_slice(s: &'a [T]) -> Self {
         Self {
             ptr: s.as_ptr(),
             len: s.len(),
@@ -394,7 +393,7 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
     }
 
     #[must_use]
-    pub fn new_optional(s: Option<&'a [T]>) -> Self {
+    pub const fn new_optional(s: Option<&'a [T]>) -> Self {
         if let Some(s) = s { Self::from_slice(s) } else { Self::null() }
     }
 
@@ -406,6 +405,27 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
             let slice = unsafe { slice::from_raw_parts(self.ptr, self.len) };
             Some(slice)
         }
+    }
+}
+
+impl<'a> BorrowedArray<'a, u8> {
+    #[must_use]
+    pub const fn new_string(s: &'a str) -> Self {
+        Self::from_slice(s.as_bytes())
+    }
+
+    #[must_use]
+    pub const fn new_optional_string(s: Option<&'a String>) -> Self {
+        if let Some(s) = s {
+            Self::from_slice(s.as_bytes())
+        } else {
+            Self::null()
+        }
+    }
+
+    #[must_use]
+    pub fn as_optional_str(&'a self) -> Option<&'a str> {
+        str::from_utf8(self.as_optional_slice()?).ok()
     }
 }
 

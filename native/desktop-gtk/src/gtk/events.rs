@@ -90,7 +90,7 @@ pub struct DataTransferContent<'a> {
 
 impl<'a> DataTransferContent<'a> {
     #[must_use]
-    pub fn new(mime_type: &'a CStr, data: &'a [u8]) -> Self {
+    pub const fn new(mime_type: &'a CStr, data: &'a [u8]) -> Self {
         Self {
             mime_type: BorrowedStrPtr::new(mime_type),
             data: BorrowedArray::from_slice(data),

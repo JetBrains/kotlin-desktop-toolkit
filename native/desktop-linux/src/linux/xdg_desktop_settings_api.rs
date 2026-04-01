@@ -1,4 +1,4 @@
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::BorrowedArray;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -58,7 +58,7 @@ pub struct Color {
 #[repr(C)]
 #[derive(Debug)]
 pub enum XdgDesktopSetting<'a> {
-    TitlebarLayout(BorrowedStrPtr<'a>),
+    TitlebarLayout(BorrowedArray<'a, u8>),
     ActionDoubleClickTitlebar(DesktopTitlebarAction),
     ActionRightClickTitlebar(DesktopTitlebarAction),
     ActionMiddleClickTitlebar(DesktopTitlebarAction),
@@ -71,7 +71,7 @@ pub enum XdgDesktopSetting<'a> {
     FontRgbaOrder(FontRgbaOrder),
     CursorBlink(bool),
     CursorSize(i32),
-    CursorTheme(BorrowedStrPtr<'a>),
+    CursorTheme(BorrowedArray<'a, u8>),
 
     /// Length of the cursor blink cycle, in milliseconds.
     CursorBlinkTimeMs(i32),

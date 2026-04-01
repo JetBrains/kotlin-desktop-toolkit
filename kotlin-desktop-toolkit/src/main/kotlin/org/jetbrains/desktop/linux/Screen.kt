@@ -18,11 +18,7 @@ public data class Screen internal constructor(
             val nativeName = NativeScreenInfo.name(s)
             return Screen(
                 screenId = NativeScreenInfo.screen_id(s),
-                name = if (nativeName == MemorySegment.NULL) {
-                    null
-                } else {
-                    nativeName.getUtf8String(0)
-                },
+                name = readNativeAutoDropU8Array(nativeName)?.decodeToString(),
                 origin = LogicalPoint.fromNative(NativeScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(NativeScreenInfo.size(s)),
                 maximumFramesPerSecond = NativeScreenInfo.maximum_frames_per_second(s),
