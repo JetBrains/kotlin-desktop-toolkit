@@ -1,4 +1,4 @@
-use std::{ffi::CString, thread::ThreadId, time::Duration};
+use std::{thread::ThreadId, time::Duration};
 
 use crate::linux::events::{DataTransferContent, EventHandler, WindowClosedEvent};
 use crate::linux::notifications::{NewNotificationData, NotificationAction, notification_action_receiver_task};
@@ -600,9 +600,11 @@ impl Application {
             .handle()
             .insert_source(event_c, move |event: channel::Event<NotificationData>, (), state| {
                 if let channel::Event::Msg(notification_data) = event {
-                    let action_cstring = notification_data.action.map(|v| CString::new(v).unwrap());
-                    let activation_token_cstring = notification_data.activation_token.map(|v| CString::new(v).unwrap());
-                    let e = NotificationClosedEvent::new(notification_data.id, action_cstring.as_ref(), activation_token_cstring.as_ref());
+                    let e = NotificationClosedEvent::new(
+                        notification_data.id,
+                        notification_data.action.as_ref(),
+                        notification_data.activation_token.as_ref(),
+                    );
                     state.send_event(e);
                 }
             })

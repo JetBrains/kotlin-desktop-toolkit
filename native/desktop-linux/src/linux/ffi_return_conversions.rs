@@ -1,8 +1,7 @@
 use crate::linux::application_api::{
     DataSource, DragAndDropQueryData, FfiObjDealloc, FfiQueryDragAndDropTarget, FfiSupportedActionsForMime, FfiTransferDataGetter,
 };
-use desktop_common::ffi_utils::BorrowedStrPtr;
-use std::ffi::CString;
+use desktop_common::ffi_utils::BorrowedArray;
 
 #[derive(Clone, Copy)]
 pub struct TransferDataGetter {
@@ -12,8 +11,7 @@ pub struct TransferDataGetter {
 
 impl TransferDataGetter {
     pub fn get(&self, clipboard_type: DataSource, mime_type: &str) -> Option<Vec<u8>> {
-        let mime_type_cstr = CString::new(mime_type).unwrap();
-        let ffi_response = (self.ffi_get)(clipboard_type, BorrowedStrPtr::new(&mime_type_cstr));
+        let ffi_response = (self.ffi_get)(clipboard_type, BorrowedArray::new_string(mime_type));
         let ret = ffi_response.data.as_optional_slice().map(Into::into);
         (self.ffi_dealloc)(ffi_response.obj_id);
         ret

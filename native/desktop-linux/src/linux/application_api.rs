@@ -1,10 +1,3 @@
-use anyhow::{Context, bail};
-use desktop_common::{
-    ffi_utils::{BorrowedArray, BorrowedOpaquePtr, BorrowedStrPtr, RustAllocatedRawPtr, RustAllocatedStrPtr},
-    logger::ffi_boundary,
-};
-use log::debug;
-
 use crate::linux::{
     application::Application,
     application_state::{EglInstance, get_egl},
@@ -13,6 +6,13 @@ use crate::linux::{
     geometry::LogicalPoint,
     text_input_api::TextInputContext,
 };
+use anyhow::{Context, bail};
+use desktop_common::ffi_utils::{AutoDropArray, BorrowedStrPtr};
+use desktop_common::{
+    ffi_utils::{BorrowedArray, BorrowedOpaquePtr, RustAllocatedRawPtr},
+    logger::ffi_boundary,
+};
+use log::debug;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -47,7 +47,7 @@ pub struct DragAndDropQueryData {
 #[repr(C)]
 #[derive(Debug)]
 pub struct FfiSupportedActionsForMime<'a> {
-    pub supported_mime_type: BorrowedStrPtr<'a>,
+    pub supported_mime_type: BorrowedArray<'a, u8>,
     pub supported_actions: DragAndDropActions,
     pub preferred_action: DragAndDropAction,
 }
@@ -76,7 +76,7 @@ pub enum DataSource {
 
 pub type FfiObjDealloc = extern "C" fn(i64);
 pub type FfiQueryDragAndDropTarget = extern "C" fn(&DragAndDropQueryData) -> FfiDragAndDropQueryResponse;
-pub type FfiTransferDataGetter = extern "C" fn(DataSource, BorrowedStrPtr) -> FfiTransferDataResponse;
+pub type FfiTransferDataGetter = extern "C" fn(DataSource, BorrowedArray<u8>) -> FfiTransferDataResponse;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -167,7 +167,7 @@ pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr, f: extern
     ffi_boundary("application_run_on_event_loop_async", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
         if let Some(s) = &app.run_on_event_loop {
-            s.send(f).map_err(std::convert::Into::into)
+            s.send(f).map_err(Into::into)
         } else {
             bail!("Event loop not yet started")
         }
@@ -175,11 +175,11 @@ pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr, f: extern
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_set_cursor_theme(mut app_ptr: AppPtr, name: BorrowedStrPtr, size: u32) {
+pub extern "C" fn application_set_cursor_theme(mut app_ptr: AppPtr, name: BorrowedArray<u8>, size: u32) {
     debug!("application_set_cursor_theme");
     ffi_boundary("application_set_cursor_theme", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.set_cursor_theme(name.as_str().unwrap(), size)
+        app.set_cursor_theme(name.as_optional_str().unwrap(), size)
     });
 }
 
@@ -217,86 +217,110 @@ pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr, mime_types: BorrowedStrPtr) {
+pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr, mime_types: BorrowedArray<u8>) {
     debug!("application_clipboard_put");
     ffi_boundary("application_clipboard_put", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.clipboard_put(MimeTypes::new(mime_types.as_str()?));
+        app.clipboard_put(MimeTypes::new(mime_types.as_optional_str().context("Invalid mime_types value")?));
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedStrPtr) {
+pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedArray<u8>) {
     let t = std::thread::current();
     debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
     ffi_boundary("application_clipboard_paste", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.clipboard_paste(serial, supported_mime_types.as_str()?);
+        app.clipboard_paste(
+            serial,
+            supported_mime_types
+                .as_optional_str()
+                .context("Invalid supported_mime_types value")?,
+        );
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_primary_selection_put(mut app_ptr: AppPtr, mime_types: BorrowedStrPtr) {
+pub extern "C" fn application_primary_selection_put(mut app_ptr: AppPtr, mime_types: BorrowedArray<u8>) {
     debug!("application_primary_selection_put");
     ffi_boundary("application_primary_selection_put", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.primary_selection_put(MimeTypes::new(mime_types.as_str()?));
+        app.primary_selection_put(MimeTypes::new(mime_types.as_optional_str().context("Invalid mime_types value")?));
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_primary_selection_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedStrPtr) {
+pub extern "C" fn application_primary_selection_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedArray<u8>) {
     let t = std::thread::current();
     debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
     ffi_boundary("application_clipboard_paste", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.primary_selection_paste(serial, supported_mime_types.as_str()?);
+        app.primary_selection_paste(
+            serial,
+            supported_mime_types
+                .as_optional_str()
+                .context("Invalid supported_mime_types value")?,
+        );
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_get_available_mimetypes(mut app_ptr: AppPtr) -> RustAllocatedStrPtr {
+pub extern "C" fn application_clipboard_get_available_mimetypes(mut app_ptr: AppPtr) -> AutoDropArray<u8> {
     debug!("application_clipboard_get_available_mimetypes");
     ffi_boundary("application_clipboard_get_available_mimetypes", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         if let Some(csv_mimetypes) = app.clipboard_get_available_mimetypes() {
-            Ok(RustAllocatedStrPtr::allocate(csv_mimetypes)?)
+            Ok(AutoDropArray::new(csv_mimetypes.into_bytes().into()))
         } else {
-            Ok(RustAllocatedStrPtr::null())
+            Ok(AutoDropArray::null())
         }
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_primary_selection_get_available_mimetypes(mut app_ptr: AppPtr) -> RustAllocatedStrPtr {
+pub extern "C" fn application_primary_selection_get_available_mimetypes(mut app_ptr: AppPtr) -> AutoDropArray<u8> {
     debug!("application_primary_selection_get_available_mimetypes");
     ffi_boundary("application_primary_selection_get_available_mimetypes", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         if let Some(csv_mimetypes) = app.primary_selection_get_available_mimetypes() {
-            Ok(RustAllocatedStrPtr::allocate(csv_mimetypes)?)
+            Ok(AutoDropArray::new(csv_mimetypes.into_bytes().into()))
         } else {
-            Ok(RustAllocatedStrPtr::null())
+            Ok(AutoDropArray::null())
         }
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: BorrowedStrPtr, activation_token: BorrowedStrPtr) -> RequestId {
+pub extern "C" fn application_open_url(
+    mut app_ptr: AppPtr,
+    url_string: BorrowedArray<u8>,
+    activation_token: BorrowedArray<u8>,
+) -> RequestId {
     ffi_boundary("application_open_url", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.open_url(url_string.as_str()?, activation_token.as_optional_str().unwrap())
+        app.open_url(
+            url_string.as_optional_str().context("Invalid url_string value")?,
+            activation_token.as_optional_str(),
+        )
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_open_file_manager(mut app_ptr: AppPtr, path: BorrowedStrPtr, activation_token: BorrowedStrPtr) -> RequestId {
+pub extern "C" fn application_open_file_manager(
+    mut app_ptr: AppPtr,
+    path: BorrowedArray<u8>,
+    activation_token: BorrowedArray<u8>,
+) -> RequestId {
     ffi_boundary("application_open_file_manager", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        Ok(app.open_file_manager(path.as_str()?.to_owned(), activation_token.as_optional_str().unwrap()))
+        Ok(app.open_file_manager(
+            path.as_optional_str().context("Invalid path value")?.to_owned(),
+            activation_token.as_optional_str(),
+        ))
     })
 }
 
@@ -309,16 +333,16 @@ pub extern "C" fn application_open_file_manager(mut app_ptr: AppPtr, path: Borro
 #[unsafe(no_mangle)]
 pub extern "C" fn application_request_show_notification(
     mut app_ptr: AppPtr,
-    title: BorrowedStrPtr,
-    body: BorrowedStrPtr,
-    sound_file_path: BorrowedStrPtr,
+    title: BorrowedArray<u8>,
+    body: BorrowedArray<u8>,
+    sound_file_path: BorrowedArray<u8>,
 ) -> RequestId {
     debug!("application_show_notification");
     ffi_boundary("application_show_notification", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        let summary = title.as_str()?.to_owned();
-        let body = body.as_str()?.to_owned();
-        let sound_file_path = sound_file_path.as_optional_str()?.map(ToOwned::to_owned);
+        let summary = title.as_optional_str().context("Invalid title value")?.to_owned();
+        let body = body.as_optional_str().context("Invalid body value")?.to_owned();
+        let sound_file_path = sound_file_path.as_optional_str().map(ToOwned::to_owned);
         app.request_show_notification(summary, body, sound_file_path)
     })
 }

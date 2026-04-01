@@ -1,11 +1,9 @@
-use std::ffi::CString;
-
 use anyhow::{Context, bail};
 use ashpd::{
     desktop::settings::{ACCENT_COLOR_SCHEME_KEY, APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY, ColorScheme, Namespace, Settings},
     zvariant::{OwnedValue, Structure},
 };
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::BorrowedArray;
 use futures_lite::StreamExt;
 use log::{debug, error};
 
@@ -108,8 +106,7 @@ impl XdgDesktopSetting<'_> {
     {
         match s {
             InternalXdgDesktopSetting::TitlebarLayout(v) => {
-                let cs = CString::new(v).unwrap();
-                f(XdgDesktopSetting::TitlebarLayout(BorrowedStrPtr::new(&cs)));
+                f(XdgDesktopSetting::TitlebarLayout(BorrowedArray::new_string(&v)));
             }
             InternalXdgDesktopSetting::ActionDoubleClickTitlebar(v) => f(XdgDesktopSetting::ActionDoubleClickTitlebar(v)),
             InternalXdgDesktopSetting::ActionRightClickTitlebar(v) => f(XdgDesktopSetting::ActionRightClickTitlebar(v)),
@@ -131,8 +128,7 @@ impl XdgDesktopSetting<'_> {
             InternalXdgDesktopSetting::AudibleBell(v) => f(Self::AudibleBell(v)),
             InternalXdgDesktopSetting::CursorSize(v) => f(Self::CursorSize(v)),
             InternalXdgDesktopSetting::CursorTheme(v) => {
-                let cs = CString::new(v).unwrap();
-                f(XdgDesktopSetting::CursorTheme(BorrowedStrPtr::new(&cs)));
+                f(XdgDesktopSetting::CursorTheme(BorrowedArray::new_string(&v)));
             }
             InternalXdgDesktopSetting::MiddleClickPaste(v) => f(Self::MiddleClickPaste(v)),
         }

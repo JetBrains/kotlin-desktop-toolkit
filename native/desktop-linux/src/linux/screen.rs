@@ -1,7 +1,4 @@
-use desktop_common::{
-    ffi_utils::{AutoDropArray, AutoDropStrPtr, RustAllocatedStrPtr},
-    logger::ffi_boundary,
-};
+use desktop_common::{ffi_utils::AutoDropArray, logger::ffi_boundary};
 use smithay_client_toolkit::output::{Mode, OutputInfo};
 
 use crate::linux::{
@@ -16,7 +13,7 @@ pub type ScreenId = u32;
 #[derive(Debug)]
 pub struct ScreenInfo {
     pub screen_id: ScreenId,
-    pub name: AutoDropStrPtr,
+    pub name: AutoDropArray<u8>,
     pub origin: LogicalPoint,
     pub size: LogicalSize,
     pub maximum_frames_per_second: i32,
@@ -35,10 +32,9 @@ impl ScreenInfo {
         let current_mode = info.modes.iter().find(|m| m.current);
         Self {
             screen_id: info.id,
-            name: info.name.map_or_else(
-                || RustAllocatedStrPtr::null().to_auto_drop(),
-                |s| RustAllocatedStrPtr::allocate(s.as_bytes()).unwrap().to_auto_drop(),
-            ),
+            name: info
+                .name
+                .map_or_else(AutoDropArray::null, |s| AutoDropArray::new(s.into_bytes().into())),
             origin: info.logical_position.map(Into::into).unwrap_or_default(),
             size: info
                 .logical_size

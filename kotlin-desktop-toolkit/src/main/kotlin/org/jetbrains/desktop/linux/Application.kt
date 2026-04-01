@@ -43,8 +43,8 @@ public data class WindowParams(
         val nativeWindowParams = NativeWindowParams.allocate(arena)
         NativeWindowParams.size(nativeWindowParams, (size ?: LogicalSize(0U, 0U)).toNative(arena))
         NativeWindowParams.min_size(nativeWindowParams, LogicalSize(minSize?.width ?: 0U, minSize?.height ?: 0U).toNative(arena))
-        NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
-        NativeWindowParams.app_id(nativeWindowParams, arena.allocateUtf8String(appId))
+        NativeWindowParams.title(nativeWindowParams, title.encodeToByteArray().toNative(arena))
+        NativeWindowParams.app_id(nativeWindowParams, appId.encodeToByteArray().toNative(arena))
         NativeWindowParams.prefer_client_side_decoration(nativeWindowParams, preferClientSideDecoration)
         NativeWindowParams.rendering_mode(nativeWindowParams, renderingMode.toNative())
         NativeWindowParams.window_id(nativeWindowParams, windowId)
@@ -135,7 +135,7 @@ public class Application : AutoCloseable {
     // called from native
     private fun onGetDataTransferData(nativeDataSource: Int, nativeMimeType: MemorySegment): MemorySegment {
         val dataSource = DataSource.fromNative(nativeDataSource)
-        val mimeType = nativeMimeType.getUtf8String(0)
+        val mimeType = readStringFromNativeU8Array(nativeMimeType)!!
         val result = applicationConfig?.getDataTransferData(dataSource, mimeType)
         val (arena, objId) = newPersistentArena()
         return result.toNativeTransferDataResponse(arena, objId)
@@ -173,8 +173,8 @@ public class Application : AutoCloseable {
     public fun openURL(url: String, activationToken: String?): RequestId? {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                val nativeUrl = arena.allocateUtf8String(url)
-                val nativeActivationToken = activationToken?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+                val nativeUrl = url.encodeToByteArray().toNative(arena)
+                val nativeActivationToken = activationToken?.encodeToByteArray().toNative(arena)
                 RequestId.fromNativeResponse(desktop_linux_h.application_open_url(appPtr!!, nativeUrl, nativeActivationToken))
             }
         }
@@ -183,8 +183,8 @@ public class Application : AutoCloseable {
     public fun openFileManager(path: String, activationToken: String?): RequestId? {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                val nativePath = arena.allocateUtf8String(path)
-                val nativeActivationToken = activationToken?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+                val nativePath = path.encodeToByteArray().toNative(arena)
+                val nativeActivationToken = activationToken?.encodeToByteArray().toNative(arena)
                 RequestId.fromNativeResponse(desktop_linux_h.application_open_file_manager(appPtr!!, nativePath, nativeActivationToken))
             }
         }
@@ -212,7 +212,7 @@ public class Application : AutoCloseable {
 
     public fun setCursorTheme(name: String, size: UInt) {
         Arena.ofConfined().use { arena ->
-            desktop_linux_h.application_set_cursor_theme(appPtr, arena.allocateUtf8String(name), size.toInt())
+            desktop_linux_h.application_set_cursor_theme(appPtr, name.encodeToByteArray().toNative(arena), size.toInt())
         }
     }
 
@@ -309,15 +309,18 @@ public class Application : AutoCloseable {
     }
 
     public fun clipboardGetAvailableMimeTypes(): List<String> {
-        val ffiCsvMimetypes = ffiDownCall { desktop_linux_h.application_clipboard_get_available_mimetypes(appPtr) }
-        return try {
-            if (ffiCsvMimetypes == MemorySegment.NULL) {
-                emptyList()
-            } else {
-                splitCsv(ffiCsvMimetypes.getUtf8String(0))
+        Arena.ofConfined().use { arena ->
+            val ffiCsvMimetypes = ffiDownCall { desktop_linux_h.application_clipboard_get_available_mimetypes(arena, appPtr) }
+            return try {
+                val csvMimetypes = readNativeAutoDropU8Array(ffiCsvMimetypes)?.decodeToString()
+                if (csvMimetypes == null) {
+                    emptyList()
+                } else {
+                    splitCsv(csvMimetypes)
+                }
+            } finally {
+                ffiDownCall { desktop_linux_h.rust_allocated_u8_array_drop(ffiCsvMimetypes) }
             }
-        } finally {
-            ffiDownCall { desktop_linux_h.string_drop(ffiCsvMimetypes) }
         }
     }
 
@@ -344,15 +347,18 @@ public class Application : AutoCloseable {
     }
 
     public fun primarySelectionGetAvailableMimeTypes(): List<String> {
-        val ffiCsvMimetypes = ffiDownCall { desktop_linux_h.application_primary_selection_get_available_mimetypes(appPtr) }
-        return try {
-            if (ffiCsvMimetypes == MemorySegment.NULL) {
-                emptyList()
-            } else {
-                splitCsv(ffiCsvMimetypes.getUtf8String(0))
+        Arena.ofConfined().use { arena ->
+            val ffiCsvMimetypes = ffiDownCall { desktop_linux_h.application_primary_selection_get_available_mimetypes(arena, appPtr) }
+            return try {
+                val csvMimetypes = readNativeAutoDropU8Array(ffiCsvMimetypes)?.decodeToString()
+                if (csvMimetypes == null) {
+                    emptyList()
+                } else {
+                    splitCsv(csvMimetypes)
+                }
+            } finally {
+                ffiDownCall { desktop_linux_h.rust_allocated_u8_array_drop(ffiCsvMimetypes) }
             }
-        } finally {
-            ffiDownCall { desktop_linux_h.string_drop(ffiCsvMimetypes) }
         }
     }
 
@@ -371,9 +377,9 @@ public class Application : AutoCloseable {
     public fun requestShowNotification(params: ShowNotificationParams): RequestId? {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
-                val title = arena.allocateUtf8String(params.title)
-                val body = arena.allocateUtf8String(params.body)
-                val soundFilePath = params.soundFilePath?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+                val title = params.title.encodeToByteArray().toNative(arena)
+                val body = params.body.encodeToByteArray().toNative(arena)
+                val soundFilePath = params.soundFilePath?.encodeToByteArray().toNative(arena)
                 RequestId.fromNativeResponse(desktop_linux_h.application_request_show_notification(appPtr, title, body, soundFilePath))
             }
         }

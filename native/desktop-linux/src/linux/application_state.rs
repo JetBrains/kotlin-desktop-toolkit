@@ -86,7 +86,7 @@ use smithay_client_toolkit::{
     shm::{Shm, ShmHandler},
     //
 };
-use std::{collections::HashMap, ffi::CString, sync::LazyLock};
+use std::{collections::HashMap, sync::LazyLock};
 
 /// cbindgen:ignore
 pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
@@ -547,8 +547,7 @@ impl ActivationHandler for ApplicationState {
             return;
         };
         let request_id = serial + 1; // aligned with `Application::request_internal_activation_token`
-        let token_cstring = CString::new(token).unwrap();
-        self.send_event(ActivationTokenResponse::new(request_id, &token_cstring));
+        self.send_event(ActivationTokenResponse::new(request_id, &token));
     }
 }
 

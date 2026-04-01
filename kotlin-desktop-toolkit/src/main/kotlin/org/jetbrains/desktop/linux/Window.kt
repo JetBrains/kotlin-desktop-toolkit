@@ -1,6 +1,7 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.desktop_linux_h
+import org.jetbrains.desktop.macos.toNative
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
@@ -43,8 +44,7 @@ public class Window internal constructor(
 
     public fun setTitle(title: String) {
         Arena.ofConfined().use { arena ->
-            val nativeTitle = arena.allocateUtf8String(title)
-            ffiDownCall { desktop_linux_h.window_set_title(appPtr, windowId, nativeTitle) }
+            ffiDownCall { desktop_linux_h.window_set_title(appPtr, windowId, title.encodeToByteArray().toNative(arena)) }
         }
     }
 
@@ -197,9 +197,8 @@ public class Window internal constructor(
 
     public fun activate(token: String) {
         Arena.ofConfined().use { arena ->
-            val nativeToken = arena.allocateUtf8String(token)
             ffiDownCall {
-                desktop_linux_h.window_activate(appPtr, windowId, nativeToken)
+                desktop_linux_h.window_activate(appPtr, windowId, token.encodeToByteArray().toNative(arena))
             }
         }
     }
