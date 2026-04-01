@@ -517,7 +517,6 @@ createAutofixTask("autofix", enabledPlatforms)
 abstract class X11TestEnv :
     BuildService<BuildServiceParameters.None>,
     AutoCloseable {
-    private val testDisplay = ":65"
     private var test: Test? = null
 
     private var startedProcesses = mutableListOf<Pair<Process, String>>()
@@ -540,7 +539,6 @@ abstract class X11TestEnv :
 
     private val newEnv by lazy {
         mutableMapOf(
-            "DISPLAY" to testDisplay,
             "GDK_BACKEND" to "x11",
             "GTK_A11Y" to "none",
             "IBUS_ADDRESS_FILE" to ibusAddressFile.absolutePathString(),
@@ -556,6 +554,15 @@ abstract class X11TestEnv :
             ).absolutePathString(),
             "XDG_SESSION_TYPE" to "x11",
         )
+    }
+
+    private fun findFirstAvailableDisplayNumber(): Int {
+        var displayNum = 0
+        val socketDir = Path.of("/tmp/.X11-unix")
+        while (socketDir.resolve("X$displayNum").exists()) {
+            displayNum += 1
+        }
+        return displayNum
     }
 
     private fun generateIBusXmlFileContent(ibusTestEngineFile: File): String {
@@ -592,17 +599,11 @@ abstract class X11TestEnv :
 """
     }
 
-    private fun newProcess(
-        vararg args: String,
-        getAdditionalEnvs: ((Map<String, String>) -> Map<String, String>)? = null,
-        afterStart: ((Process) -> Unit)? = null,
-    ) {
+    private fun newProcess(vararg args: String, afterStart: ((Process) -> Unit)? = null) {
         ProcessBuilder(*args).also { pb ->
             val env = pb.environment()
-            val additionalEnvs = getAdditionalEnvs?.invoke(env)
             env.clear()
             env.putAll(newEnv)
-            additionalEnvs?.let { env.putAll(it) }
         }.start().let {
             check(it.isAlive)
             afterStart?.invoke(it)
@@ -638,13 +639,15 @@ Exec=/bin/true
             xSettingsDConfigFile = it
         }.absolutePathString()
 
+        val testDisplayNumber = findFirstAvailableDisplayNumber()
+        val testDisplay = ":$testDisplayNumber"
         if (headless) {
             newProcess("Xvfb", testDisplay, "-ac", "-screen", "0", "3000x1500x24", "-dpi", "192")
         } else {
-            newProcess("Xephyr", testDisplay, "-screen", "3000x1500x24", "-dpi", "192", "-sw-cursor", getAdditionalEnvs = {
-                mapOf("DISPLAY" to it["DISPLAY"]!!)
-            })
+            newProcess("Xephyr", testDisplay, "-screen", "3000x1500x24", "-dpi", "192", "-sw-cursor")
         }
+
+        newEnv["DISPLAY"] = testDisplay
 
         newProcess(
             "dbus-daemon",
