@@ -497,6 +497,7 @@ dependencies = [
  "khronos-egl",
  "log",
  "windows",
+ "windows-core",
  "windows-numerics",
 ]
 
