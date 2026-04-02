@@ -386,43 +386,31 @@ class SampleEngine(IBus.Engine):
         # We need to chain this function if we want get_surrounding_text to work
         IBus.Engine.do_set_surrounding_text(self, ibus_text, cursor_pos, anchor_pos)
 
+class IMApp:
+    def __init__(self):
+        IBus.init()
+        self.bus = IBus.Bus.new()
+        self.bus.connect("disconnected", self.bus_disconnected_cb)
+        c = self.bus.get_connection()
+        assert c is not None, os.environ
+        factory = IBus.Factory.new(c)
+        factory.add_engine("jb_kdt_ibus_test_engine", SampleEngine)
+
+        component_name = "com.jetbrains.kdt.IBusTestEngine"
+        # bus.register_component doesn't work on Wayland
+        self.bus.request_name(component_name, 0)
+
+        self.main_loop = GLib.MainLoop()
+
+    def run(self):
+        self.main_loop.run()
+
+    def bus_disconnected_cb(self, bus):
+        self.main_loop.quit()
 
 def main():
     logging.basicConfig(format='[%(asctime)s.%(msecs)03d %(levelname)s jb_kdt_ibus_test_engine] %(message)s', level=logging.DEBUG, datefmt='%Y%m%d %H:%M:%S')
-    IBus.init()
-    bus = IBus.Bus.new()
-    c = bus.get_connection()
-    assert c is not None, os.environ
-    factory = IBus.Factory.new(c)
-    factory.add_engine("jb_kdt_ibus_test_engine", SampleEngine)
-
-    component_name = "com.jetbrains.kdt.IBusTestEngine"
-    component = IBus.Component(
-        name=component_name,
-        description="An IBus engine for KDT testing",
-        version="0.1.0",
-        license="Proprietary",
-        author="JetBrains",
-        homepage="https://www.jetbrains.com/",
-        textdomain="jb-kdt-ibus-test-engine"
-    )
-    component.add_engine(
-        IBus.EngineDesc(
-            name="jb_kdt_ibus_test_engine",
-            longname="JetBrains KDT IBus test engine",
-            description="An IBus engine for KDT testing",
-            language="en",
-            license="Proprietary",
-            author="JetBrains",
-            layout="us",
-        )
-    )
-    bus.register_component(component)
-
-    main_loop = GLib.MainLoop()
-    main_loop.run()
-    factory.do_destroy()
-
+    IMApp().run()
 
 if __name__ == "__main__":
     main()

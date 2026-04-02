@@ -25,10 +25,12 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermissions
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.copyTo
+import kotlin.io.path.createDirectories
 import kotlin.io.path.createDirectory
 import kotlin.io.path.createFile
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
+import kotlin.io.path.writeText
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import java.time.Duration as JavaDuration
@@ -519,12 +521,15 @@ abstract class X11TestEnv :
     private var startedProcesses = mutableListOf<Pair<Process, String>>()
 
     private val homeTempDir by lazy { Files.createTempDirectory("test_home") }
+    private val xdgDataHome by lazy { homeTempDir.resolve(".local/share").createDirectories() }
 
     private val ibusTempDir by lazy { Files.createTempDirectory("test_ibus") }
     private val ibusAddressFile by lazy {
         ibusTempDir.resolve("ibus-addr").createFile() // suppress the IBus warning about the non-existing file
     }
     private val ibusSocketFile by lazy { ibusTempDir.resolve("ibus-socket") }
+    private val ibusComponentPath by lazy { ibusTempDir.resolve("component").createDirectory() }
+    private val ibusComponentFile by lazy { ibusComponentPath.resolve("ibus_test_engine.xml") }
     private val ibusEngineTmpCapsOutputFile by lazy { ibusTempDir.resolve("test-engine-caps-out.txt") }
     private val ibusEngineTmpContentTypeOutputFile by lazy { ibusTempDir.resolve("test-engine-content-type-out.txt") }
     private val ibusEngineTmpCursorLocationOutputFile by lazy { ibusTempDir.resolve("test-engine-cursor-location-out.txt") }
@@ -537,16 +542,52 @@ abstract class X11TestEnv :
             "GDK_BACKEND" to "x11",
             "GTK_A11Y" to "none",
             "IBUS_ADDRESS_FILE" to ibusAddressFile.absolutePathString(),
+            "IBUS_COMPONENT_PATH" to "${ibusComponentPath.absolutePathString()}:/usr/share/ibus/component",
             "TEST_IBUS_ENGINE_CAPS_OUT_FILE" to ibusEngineTmpCapsOutputFile.absolutePathString(),
             "TEST_IBUS_ENGINE_CONTENT_TYPE_OUT_FILE" to ibusEngineTmpContentTypeOutputFile.absolutePathString(),
             "TEST_IBUS_ENGINE_CURSOR_LOCATION_OUT_FILE" to ibusEngineTmpCursorLocationOutputFile.absolutePathString(),
             "LANG" to "en_US.UTF-8",
             "HOME" to homeTempDir.absolutePathString(),
+            "XDG_DATA_HOME" to xdgDataHome.absolutePathString(),
             "XDG_RUNTIME_DIR" to homeTempDir.resolve("xdg_runtime_dir").createDirectory(
                 PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")),
             ).absolutePathString(),
             "XDG_SESSION_TYPE" to "x11",
         )
+    }
+
+    private fun generateIBusXmlFileContent(ibusTestEngineFile: File): String {
+        return """<?xml version="1.0" encoding="utf-8"?>
+<component>
+    <name>com.jetbrains.kdt.IBusTestEngine</name>
+    <description>An IBus engine for KDT testing</description>
+    <version>0.1.0</version>
+    <license>Proprietary</license>
+    <author>JetBrains</author>
+    <homepage>https://www.jetbrains.com/</homepage>
+    <exec>/usr/bin/python3 ${ibusTestEngineFile.absolutePath}</exec>
+    <textdomain>jb-kdt-ibus-test-engine</textdomain>
+    <engines>
+        <engine>
+            <name>jb_kdt_ibus_test_engine</name>
+            <longname>JetBrains KDT IBus test engine</longname>
+            <description>An IBus engine for KDT testing</description>
+            <language>en</language>
+            <license>Proprietary</license>
+            <author>JetBrains</author>
+            <layout>us</layout>
+            <layout_variant/>
+            <layout_option/>
+            <hotkeys/>
+            <symbol/>
+            <setup/>
+            <version/>
+            <textdomain/>
+            <rank>0</rank>
+        </engine>
+    </engines>
+</component>
+"""
     }
 
     private fun newProcess(
@@ -577,6 +618,17 @@ abstract class X11TestEnv :
         headless: Boolean,
     ): Map<String, String> {
         this.test = test
+
+        xdgDataHome
+            .resolve("dbus-1/services")
+            .createDirectories(PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")))
+            .resolve("org.freedesktop.Notifications.service")
+            .writeText(
+                """[D-BUS Service]
+Name=org.freedesktop.Notifications
+Exec=/bin/true
+""",
+            )
 
         val xSettingsDConfigFilePathString = homeTempDir.resolve(".xsettingsd").also {
             Path.of(baseXSettingsDConfigFile.asFile.absolutePath).copyTo(it)
@@ -648,15 +700,7 @@ abstract class X11TestEnv :
             }
         }
 
-        val dconfServicePath = "/usr/libexec/dconf-service".let {
-            if (Path.of(it).exists()) {
-                it
-            } else {
-                "/usr/lib/dconf-service"
-            }
-        }
-        newProcess(dconfServicePath)
-
+        ibusComponentFile.writeText(generateIBusXmlFileContent(ibusTestEngineFile.asFile))
         newProcess(
             "ibus-daemon",
             "-a",
@@ -665,6 +709,7 @@ abstract class X11TestEnv :
             "--panel",
             "disable",
             "--xim",
+            "--cache=none",
         ) {
             val aliveCheckIntervalMs = 10L
             var aliveCheckTimeoutMs = 1000L
@@ -730,6 +775,8 @@ abstract class X11TestEnv :
         ibusEngineTmpCapsOutputFile.deleteIfExists()
         ibusEngineTmpContentTypeOutputFile.deleteIfExists()
         ibusEngineTmpCursorLocationOutputFile.deleteIfExists()
+        ibusComponentFile.deleteIfExists()
+        ibusComponentPath.deleteIfExists()
         ibusTempDir.deleteIfExists()
 
         homeTempDir.toFile().deleteRecursively()
