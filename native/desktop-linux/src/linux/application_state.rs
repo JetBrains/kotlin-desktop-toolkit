@@ -1,5 +1,3 @@
-use std::{collections::HashMap, ffi::CString, sync::LazyLock};
-
 use crate::linux::application::send_event;
 use crate::linux::ffi_return_conversions::{QueryDragAndDropTarget, TransferDataGetter};
 use crate::linux::notifications::NotificationAction;
@@ -23,6 +21,7 @@ use crate::linux::{
     text_input::PendingTextInputEvent,
     window::SimpleWindow,
 };
+use anyhow::Context;
 use khronos_egl;
 use log::{debug, info, warn};
 use smithay_client_toolkit::{
@@ -87,6 +86,7 @@ use smithay_client_toolkit::{
     shm::{Shm, ShmHandler},
     //
 };
+use std::{collections::HashMap, ffi::CString, sync::LazyLock};
 
 /// cbindgen:ignore
 pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
@@ -217,6 +217,13 @@ impl ApplicationState {
     pub fn get_window_id(&self, surface: &WlSurface) -> Option<WindowId> {
         let surface_id: &ObjectId = &surface.id();
         self.windows.get(surface_id).map(|w| w.window_id)
+    }
+
+    pub fn get_window_mut(&mut self, window_id: WindowId) -> anyhow::Result<&mut SimpleWindow> {
+        self.window_id_to_surface_id
+            .get(&window_id)
+            .and_then(|surface_id| self.windows.get_mut(surface_id))
+            .with_context(|| format!("Couldn't find window for {window_id:?}"))
     }
 
     fn update_themed_cursor_with_seat(&mut self, qh: &QueueHandle<Self>, seat: &WlSeat) -> anyhow::Result<()> {

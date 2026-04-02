@@ -43,6 +43,7 @@ fn with_window_mut<R: PanicDefault>(
     ffi_boundary(name, || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
         let w = app
+            .state
             .get_window_mut(window_id)
             .with_context(|| format!("No window found {window_id:?}"))?;
         f(w)

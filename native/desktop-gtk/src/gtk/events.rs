@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedStrPtr};
 use desktop_common::logger::PanicDefault;
-use enumflags2::{BitFlag, BitFlags, bitflags};
+use enumflags2::{BitFlag, bitflags};
 
 use crate::gtk::{
     application_api::{DataSource, DragAndDropAction},
@@ -82,12 +82,6 @@ impl std::fmt::Debug for KeyModifierBitflag {
         }
 
         f.write_char(')')
-    }
-}
-
-impl From<BitFlags<KeyModifier>> for KeyModifierBitflag {
-    fn from(value: BitFlags<KeyModifier>) -> Self {
-        Self(value.bits_c())
     }
 }
 
