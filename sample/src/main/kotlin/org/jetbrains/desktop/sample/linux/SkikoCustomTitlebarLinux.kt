@@ -41,8 +41,8 @@ internal class SkikoCustomTitlebarLinux(
 
     companion object {
         const val CUSTOM_TITLEBAR_HEIGHT = 55
-        const val BUTTON_LINE_WIDTH: LogicalPixels = 5f
-        const val MOVE_RADIUS: LogicalPixels = 3f
+        const val BUTTON_LINE_WIDTH: LogicalPixels = 5.0
+        const val MOVE_RADIUS: LogicalPixels = 3.0
         val COLOR_DARK_GRAY = Color.makeRGB(128, 128, 128)
         val COLOR_LIGHT_GRAY = Color.makeRGB(211, 211, 211)
         val BUTTON_SIZE = LogicalSize(CUSTOM_TITLEBAR_HEIGHT, CUSTOM_TITLEBAR_HEIGHT)
@@ -271,10 +271,10 @@ internal class SkikoCustomTitlebarLinux(
         title: String,
         windowState: WindowState,
     ) {
-        val w = rect.width.toFloat() * scale
-        val h = rect.height.toFloat() * scale
-        val xOffset = rect.x.toFloat() * scale
-        val yOffset = rect.y.toFloat() * scale
+        val w = rect.width * scale
+        val h = rect.height * scale
+        val xOffset = rect.x * scale
+        val yOffset = rect.y * scale
 
         when (button) {
             WindowButtonType.Minimize, WindowButtonType.Maximize, WindowButtonType.Close, WindowButtonType.AppMenu -> {
@@ -294,7 +294,7 @@ internal class SkikoCustomTitlebarLinux(
 
         Paint().use { paint ->
             paint.color = Color.WHITE
-            paint.strokeWidth = BUTTON_LINE_WIDTH * scale
+            paint.strokeWidth = (BUTTON_LINE_WIDTH * scale).toFloat()
 
             val yTop = yOffset + (paint.strokeWidth / 2)
             val yBottom = (yOffset + h) - (paint.strokeWidth / 2)
@@ -333,7 +333,7 @@ internal class SkikoCustomTitlebarLinux(
                 WindowButtonType.Title -> {
                     paint.color = if (windowState.active) Color.WHITE else COLOR_LIGHT_GRAY
                     canvas.drawTextLine(
-                        titleTextLineCreator.makeTextLine(title, CUSTOM_TITLEBAR_HEIGHT.toFloat() * scale),
+                        titleTextLineCreator.makeTextLine(title, (CUSTOM_TITLEBAR_HEIGHT * scale).toFloat()),
                         xOffset,
                         yBottom,
                         paint,
@@ -343,7 +343,7 @@ internal class SkikoCustomTitlebarLinux(
         }
     }
 
-    fun draw(canvas: Canvas, scale: Float, xdgDesktopSettings: XdgDesktopSettings, title: String, windowState: WindowState) {
+    fun draw(canvas: Canvas, scale: Double, xdgDesktopSettings: XdgDesktopSettings, title: String, windowState: WindowState) {
         val physicalSize = size.toPhysical(scale)
         val w = physicalSize.width.toFloat()
         val h = physicalSize.height.toFloat()
@@ -354,7 +354,7 @@ internal class SkikoCustomTitlebarLinux(
         for ((rect, button) in rectangles) {
             val hovered = !isDragging && (lastMouseLocation?.let { rect.contains(it) } == true)
             val highlighted = hovered && (leftClickStartLocation?.let { rect.contains(it) } == true)
-            drawButton(canvas, button, rect, highlighted = highlighted, hovered = hovered, scale, title, windowState)
+            drawButton(canvas, button, rect, highlighted = highlighted, hovered = hovered, scale.toFloat(), title, windowState)
         }
     }
 }

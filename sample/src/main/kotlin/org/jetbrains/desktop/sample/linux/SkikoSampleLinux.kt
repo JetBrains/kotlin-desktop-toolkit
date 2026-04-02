@@ -773,7 +773,7 @@ private class ContentArea(
         }
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Float, editorState: EditorState) {
+    fun draw(canvas: Canvas, time: Long, scale: Double, editorState: EditorState) {
         val contentOrigin = origin.toPhysical(scale)
         val contentSize = size.toPhysical(scale)
         Paint().use { paint ->
@@ -791,7 +791,7 @@ private class ContentArea(
         canvas.withTranslated(contentOrigin) {
             Paint().use { paint ->
                 paint.color = Color.WHITE
-                paint.strokeWidth = scale
+                paint.strokeWidth = scale.toFloat()
                 canvas.drawLine(
                     contentSize.width.toFloat(),
                     0f,
@@ -802,9 +802,9 @@ private class ContentArea(
             }
         }
         canvas.drawSpinningCircle(contentOrigin, contentSize, time)
-        editorState.draw(canvas, contentSize.height / 2f, scale)
-        canvas.drawWindowBorders(contentOrigin, contentSize, scale)
-        canvas.drawCursor(contentOrigin, contentSize, scale)
+        editorState.draw(canvas, contentSize.height / 2f, scale.toFloat())
+        canvas.drawWindowBorders(contentOrigin, contentSize, scale.toFloat())
+        canvas.drawCursor(contentOrigin, contentSize, scale.toFloat())
     }
 
     private fun Canvas.drawSpinningCircle(origin: PhysicalPoint, size: PhysicalSize, t: Long) = withTranslated(origin) {
@@ -865,8 +865,8 @@ private class ContentArea(
 
                 Paint().use { paint ->
                     paint.color = 0x40FFFFFF
-                    canvas.drawRect(Rect.makeXYWH(0f, y * scale, width, 2 * scale), paint)
-                    canvas.drawRect(Rect.makeXYWH(x * scale, 0f, 2 * scale, height), paint)
+                    canvas.drawRect(Rect.makeXYWH(0f, (y * scale).toFloat(), width, 2 * scale), paint)
+                    canvas.drawRect(Rect.makeXYWH((x * scale).toFloat(), 0f, 2 * scale, height), paint)
                 }
             }
         }
@@ -1018,12 +1018,12 @@ private class WindowContainer(
             titlebar.configure(event, titlebarLayout)
             val customBorders = customBorders ?: CustomBorders().also { customBorders = it }
             customBorders.configure(event)
-            contentArea.origin = LogicalPoint(x = 0f, y = titlebar.size.height.toFloat())
+            contentArea.origin = LogicalPoint(x = 0.0, y = titlebar.size.height.toDouble())
             contentArea.size =
                 LogicalSize(width = event.size.width, height = event.size.height - titlebar.size.height)
         } else {
             customTitlebar = null
-            contentArea.origin = LogicalPoint(x = 0f, y = 0f)
+            contentArea.origin = LogicalPoint(x = 0.0, y = 0.0)
             contentArea.size = event.size
         }
     }
@@ -1109,7 +1109,7 @@ private class WindowContainer(
         return EventHandlerResult.Continue
     }
 
-    fun draw(canvas: Canvas, time: Long, scale: Float, title: String, editorState: EditorState, windowState: WindowState) {
+    fun draw(canvas: Canvas, time: Long, scale: Double, title: String, editorState: EditorState, windowState: WindowState) {
         val backgroundColor = if (xdgDesktopSettings.colorScheme == ColorSchemeValue.PreferDark) {
             Color.makeARGB(
                 240,
@@ -1187,7 +1187,7 @@ private class RotatingBallWindow(
 
     override fun Canvas.draw(size: PhysicalSize, scale: Double, time: Long) {
         val canvas = this
-        windowContainer.draw(canvas, time, scale.toFloat(), title, editorState, windowState)
+        windowContainer.draw(canvas, time, scale, title, editorState, windowState)
     }
 
     fun configure(event: Event.WindowConfigure): EventHandlerResult {
