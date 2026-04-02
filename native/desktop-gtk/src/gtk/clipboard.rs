@@ -1,6 +1,6 @@
 use crate::gtk::application::send_event;
-use crate::gtk::application_api::DataSource;
 use crate::gtk::data_transfer::read_all;
+use crate::gtk::data_transfer_api::DataSource;
 use crate::gtk::events::{DataTransferAvailableEvent, DataTransferContent, DataTransferEvent, EventHandler};
 use crate::gtk::ffi_return_conversions::TransferDataGetter;
 use crate::gtk::mime_types::MimeTypes;

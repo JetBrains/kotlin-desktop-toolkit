@@ -22,16 +22,19 @@ use desktop_gtk::gtk::text_input_api::{TextInputContentPurpose, TextInputContext
 use desktop_gtk::gtk::{
     application_api::{
         ApplicationCallbacks,
-        DataSource,
-        DragAndDropAction,
-        DragAndDropActions,
-        DragAndDropQueryData,
         FfiDragAndDropQueryResponse,
         FfiSupportedActionsForMime,
         RenderingMode,
         application_init,
         application_is_event_loop_thread,
         application_run_event_loop,
+        //
+    },
+    data_transfer_api::{
+        DataSource,
+        DragAndDropAction,
+        DragAndDropActions,
+        DragAndDropQueryData,
         //
     },
     events::{DataTransferContent, Event, KeyDownEvent, KeyModifiers, RequestId, TextInputEvent, WindowId},

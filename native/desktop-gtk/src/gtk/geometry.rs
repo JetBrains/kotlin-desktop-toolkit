@@ -1,5 +1,3 @@
-use gtk4::{gdk as gdk4, graphene};
-
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct PhysicalPixels(pub i32);
@@ -52,13 +50,6 @@ pub struct LogicalSize {
 //     LogicalPixels(value.into() / scale)
 // }
 
-impl From<LogicalSize> for graphene::Rect {
-    fn from(value: LogicalSize) -> Self {
-        #[allow(clippy::cast_precision_loss)]
-        Self::new(0., 0., value.width as f32, value.height as f32)
-    }
-}
-
 #[must_use]
 fn to_physical_value(value: i32, scale: f64) -> PhysicalPixels {
     #[allow(clippy::cast_possible_truncation)]
@@ -97,12 +88,6 @@ pub struct LogicalRect {
     pub y: i32,
     pub width: i32,
     pub height: i32,
-}
-
-impl From<LogicalRect> for gdk4::Rectangle {
-    fn from(value: LogicalRect) -> Self {
-        Self::new(value.x, value.y, value.width, value.height)
-    }
 }
 
 impl PhysicalRect {

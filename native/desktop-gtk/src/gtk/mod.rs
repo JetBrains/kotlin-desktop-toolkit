@@ -4,6 +4,7 @@ mod application_state;
 mod async_event_result;
 mod clipboard;
 mod data_transfer;
+pub mod data_transfer_api;
 mod desktop_settings;
 pub mod desktop_settings_api;
 pub mod events;

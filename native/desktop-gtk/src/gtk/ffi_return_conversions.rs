@@ -1,7 +1,7 @@
 use crate::gtk::application_api::{
-    DataSource, DragAndDropQueryData, FfiObjDealloc, FfiQueryDragAndDropTarget, FfiRetrieveSurroundingText, FfiSupportedActionsForMime,
-    FfiTransferDataGetter,
+    FfiObjDealloc, FfiQueryDragAndDropTarget, FfiRetrieveSurroundingText, FfiSupportedActionsForMime, FfiTransferDataGetter,
 };
+use crate::gtk::data_transfer_api::{DataSource, DragAndDropQueryData};
 use crate::gtk::events::WindowId;
 use crate::gtk::text_input::SurroundingTextWithSelection;
 use desktop_common::ffi_utils::BorrowedStrPtr;

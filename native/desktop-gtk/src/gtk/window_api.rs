@@ -1,6 +1,7 @@
 use super::window::SimpleWindow;
 use crate::gtk::application::with_app_state;
-use crate::gtk::application_api::{DragAndDropActions, RenderingMode};
+use crate::gtk::application_api::RenderingMode;
+use crate::gtk::data_transfer_api::DragAndDropActions;
 use crate::gtk::events::{RequestId, WindowDecorationMode, WindowId};
 use crate::gtk::file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams};
 use crate::gtk::geometry::LogicalSize;
