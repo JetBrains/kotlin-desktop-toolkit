@@ -1,11 +1,13 @@
-use anyhow::{Context, bail};
+use anyhow::bail;
 use ashpd::{
     desktop::settings::{ACCENT_COLOR_SCHEME_KEY, APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY, ColorScheme, Namespace, Settings},
-    zvariant::{OwnedValue, Structure},
+    zvariant::OwnedValue,
 };
 use desktop_common::ffi_utils::BorrowedArray;
 use futures_lite::StreamExt;
-use log::{debug, error};
+use log::{debug, error, warn};
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 use crate::linux::desktop_settings_api::{
     Color, DesktopTitlebarAction, FfiDesktopSetting, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme,
@@ -23,7 +25,7 @@ const GNOME_DESKTOP_PRIVACY_NAMESPACE: &str = "org.gnome.desktop.privacy";
 /// cbindgen:ignore
 const GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE: &str = "org.gnome.desktop.wm.preferences";
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum InternalDesktopSetting {
     AccentColor(Color),
     AudibleBell(bool),
@@ -50,8 +52,8 @@ pub enum InternalDesktopSetting {
 }
 
 impl FontAntialiasing {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match value {
+    pub fn parse(value: &String) -> anyhow::Result<Self> {
+        match value.as_str() {
             "none" => Ok(Self::None),
             "grayscale" => Ok(Self::Grayscale),
             "rgba" => Ok(Self::Rgba),
@@ -61,8 +63,8 @@ impl FontAntialiasing {
 }
 
 impl FontHinting {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match value {
+    pub fn parse(value: &String) -> anyhow::Result<Self> {
+        match value.as_str() {
             "none" => Ok(Self::None),
             "slight" => Ok(Self::Slight),
             "medium" => Ok(Self::Medium),
@@ -73,8 +75,8 @@ impl FontHinting {
 }
 
 impl FontRgbaOrder {
-    pub fn parse(value: &str) -> anyhow::Result<Self> {
-        match value {
+    pub fn parse(value: &String) -> anyhow::Result<Self> {
+        match value.as_str() {
             "rgb" => Ok(Self::Rgb),
             "bgr" => Ok(Self::Bgr),
             "vrgb" => Ok(Self::Vrgb),
@@ -85,8 +87,8 @@ impl FontRgbaOrder {
 }
 
 impl DesktopTitlebarAction {
-    fn parse(value: &str) -> anyhow::Result<Self> {
-        match value {
+    fn parse(value: &String) -> anyhow::Result<Self> {
+        match value.as_str() {
             "toggle-maximize" | "toggle-maximize-horizontally" | "toggle-maximize-vertically" => Ok(Self::ToggleMaximize),
             "minimize" | "lower" => Ok(Self::Minimize),
             "none" => Ok(Self::None),
@@ -139,37 +141,8 @@ impl FfiDesktopSetting<'_> {
 // dbus-send --dest=org.freedesktop.portal.Desktop --print-reply /org/freedesktop/portal/desktop org.freedesktop.portal.Settings.Read string:"org.gnome.desktop.wm.preferences" string:"button-layout"
 // dbus-send --dest=org.freedesktop.portal.Desktop --print-reply /org/freedesktop/portal/desktop org.freedesktop.portal.Settings.ReadAll array:string:"org.gnome.desktop.interface","org.gnome.desktop.wm.preferences","org.freedesktop.appearance"
 
-fn read_bool(value: &OwnedValue) -> anyhow::Result<bool> {
-    value.downcast_ref::<bool>().map_err(anyhow::Error::new)
-}
-
-fn read_string(value: &OwnedValue) -> anyhow::Result<String> {
-    value.downcast_ref::<String>().map_err(anyhow::Error::new)
-}
-
-fn read_i32(value: &OwnedValue) -> anyhow::Result<i32> {
-    value.downcast_ref::<i32>().map_err(anyhow::Error::new)
-}
-
-//fn parse_accent_color_string(value: &str) -> Option<Color> {
-//    match value {
-//        "blue" => {
-//
-//        } "teal", "green", "yellow", "orange", "red", "pink", "purple", "slate".
-//    }
-//}
-
-fn read_color(value: &OwnedValue) -> anyhow::Result<Color> {
-    //    let c : ashpd::desktop::Color = value.clone().try_into()?;
-    //    Ok(Color{red: c.red(), green: c.green(), blue: c.blue(), alpha: 1.0})
-    let s = value.downcast_ref::<Structure>().map_err(anyhow::Error::new)?;
-    let f = s.fields();
-    let f1 = f.first().context("Missing first field")?;
-    let f2 = f.get(1).context("Missing second field")?;
-    let f3 = f.get(2).context("Missing third field")?;
-    let red = f1.downcast_ref::<f64>()?;
-    let green = f2.downcast_ref::<f64>()?;
-    let blue = f3.downcast_ref::<f64>()?;
+fn read_color(value: OwnedValue) -> anyhow::Result<Color> {
+    let (red, green, blue): (f64, f64, f64) = value.try_into()?;
     Ok(Color {
         red,
         green,
@@ -179,66 +152,56 @@ fn read_color(value: &OwnedValue) -> anyhow::Result<Color> {
 }
 
 impl InternalDesktopSetting {
-    pub fn new(namespace: &str, key: &str, value: &OwnedValue) -> Option<Self> {
+    pub fn new(namespace: &str, key: &str, value: OwnedValue) -> Option<Self> {
         match Self::new_impl(namespace, key, value) {
             Ok(Some(v)) => Some(v),
-            Ok(None) => {
-                // debug!("Ignoring unknown setting {namespace} : {key} ({value:?})");
-                None
-            }
+            Ok(None) => None,
             Err(e) => {
-                error!(
-                    "{:?}",
-                    e.context(format!("Trying to parse value {value:?} for {namespace} : {key}"))
-                );
+                error!("{:?}", e.context(format!("Trying to parse value for {namespace} : {key}")));
                 None
             }
         }
     }
 
-    fn new_impl(namespace: &str, key: &str, value: &OwnedValue) -> anyhow::Result<Option<Self>> {
+    fn new_impl(namespace: &str, key: &str, value: OwnedValue) -> anyhow::Result<Option<Self>> {
         // We can only use entries from
         // https://github.com/GNOME/gtk/blob/2b56fd9d0e40a36ab516f49f2efc90ea7e2eacde/gdk/wayland/gdksettings-wayland.c#L267
         Ok(match namespace {
             APPEARANCE_NAMESPACE => match key {
-                COLOR_SCHEME_KEY => Some(Self::ColorScheme(value.clone().try_into()?)),
+                COLOR_SCHEME_KEY => Some(Self::ColorScheme(value.try_into()?)),
                 ACCENT_COLOR_SCHEME_KEY => Some(Self::AccentColor(read_color(value)?)),
                 _ => None,
             },
             GNOME_DESKTOP_INTERFACE_NAMESPACE => match key {
-                "cursor-blink" => Some(Self::CursorBlink(read_bool(value)?)),
-                "cursor-blink-time" => Some(Self::CursorBlinkTimeMs(read_i32(value)?)),
-                "cursor-blink-timeout" => Some(Self::CursorBlinkTimeoutMs(read_i32(value)? * 1000)),
-                "cursor-theme" => Some(Self::CursorTheme(read_string(value)?)),
-                "cursor-size" => Some(Self::CursorSize(read_i32(value)?)),
-                "enable-animations" => Some(Self::EnableAnimations(read_bool(value)?)),
-                "overlay-scrolling" => Some(Self::OverlayScrolling(read_bool(value)?)),
-                "font-antialiasing" => Some(Self::FontAntialiasing(FontAntialiasing::parse(&read_string(value)?)?)),
-                "font-hinting" => Some(Self::FontHinting(FontHinting::parse(&read_string(value)?)?)),
-                "font-rgba-order" => Some(Self::FontRgbaOrder(FontRgbaOrder::parse(&read_string(value)?)?)),
-                "gtk-enable-primary-paste" => Some(Self::MiddleClickPaste(read_bool(value)?)),
+                "cursor-blink" => Some(Self::CursorBlink(value.try_into()?)),
+                "cursor-blink-time" => Some(Self::CursorBlinkTimeMs(value.try_into()?)),
+                "cursor-blink-timeout" => Some(Self::CursorBlinkTimeoutMs(TryInto::<i32>::try_into(value)? * 1000)),
+                "cursor-theme" => Some(Self::CursorTheme(value.try_into()?)),
+                "cursor-size" => Some(Self::CursorSize(value.try_into()?)),
+                "enable-animations" => Some(Self::EnableAnimations(value.try_into()?)),
+                "overlay-scrolling" => Some(Self::OverlayScrolling(value.try_into()?)),
+                "font-antialiasing" => Some(Self::FontAntialiasing(FontAntialiasing::parse(&value.try_into()?)?)),
+                "font-hinting" => Some(Self::FontHinting(FontHinting::parse(&value.try_into()?)?)),
+                "font-rgba-order" => Some(Self::FontRgbaOrder(FontRgbaOrder::parse(&value.try_into()?)?)),
+                "gtk-enable-primary-paste" => Some(Self::MiddleClickPaste(value.try_into()?)),
                 _ => None,
             },
             GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE => match key {
-                "double-click" => Some(Self::DoubleClickIntervalMs(read_i32(value)?)),
-                "drag-threshold" => Some(Self::DragThresholdPixels(read_i32(value)?)),
+                "double-click" => Some(Self::DoubleClickIntervalMs(value.try_into()?)),
+                "drag-threshold" => Some(Self::DragThresholdPixels(value.try_into()?)),
                 _ => None,
             },
             GNOME_DESKTOP_PRIVACY_NAMESPACE => match key {
-                "recent-files-max-age" => Some(Self::RecentFilesMaxAgeDays(read_i32(value)?)),
-                "remember-recent-files" => Some(Self::RecentFilesEnabled(read_bool(value)?)),
+                "recent-files-max-age" => Some(Self::RecentFilesMaxAgeDays(value.try_into()?)),
+                "remember-recent-files" => Some(Self::RecentFilesEnabled(value.try_into()?)),
                 _ => None,
             },
             GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE => match key {
-                "audible-bell" => Some(Self::AudibleBell(read_bool(value)?)),
-                "button-layout" => Some(Self::TitlebarLayout(read_string(value)?)),
-                "action-double-click-titlebar" => {
-                    Some(Self::ActionDoubleClickTitlebar(DesktopTitlebarAction::parse(&read_string(value)?)?))
-                }
-                "action-right-click-titlebar" => Some(Self::ActionRightClickTitlebar(DesktopTitlebarAction::parse(&read_string(value)?)?)),
-                "action-middle-click-titlebar" => {
-                    Some(Self::ActionMiddleClickTitlebar(DesktopTitlebarAction::parse(&read_string(value)?)?))
-                }
+                "audible-bell" => Some(Self::AudibleBell(value.try_into()?)),
+                "button-layout" => Some(Self::TitlebarLayout(value.try_into()?)),
+                "action-double-click-titlebar" => Some(Self::ActionDoubleClickTitlebar(DesktopTitlebarAction::parse(&value.try_into()?)?)),
+                "action-right-click-titlebar" => Some(Self::ActionRightClickTitlebar(DesktopTitlebarAction::parse(&value.try_into()?)?)),
+                "action-middle-click-titlebar" => Some(Self::ActionMiddleClickTitlebar(DesktopTitlebarAction::parse(&value.try_into()?)?)),
                 _ => None,
             },
             _ => None,
@@ -246,21 +209,15 @@ impl InternalDesktopSetting {
     }
 }
 
-fn send(v: Option<InternalDesktopSetting>, sender: &dyn Fn(InternalDesktopSetting) -> anyhow::Result<()>) -> anyhow::Result<()> {
-    if let Some(s) = v {
-        debug!("Notifying about desktop setting: {s:?}");
-        sender(s)?;
-    }
-    Ok(())
+fn desktop_settings_from_namespace(namespace: &str, values: Namespace) -> HashMap<String, InternalDesktopSetting> {
+    values
+        .into_iter()
+        .filter_map(|(key, value)| InternalDesktopSetting::new(namespace, &key, value).map(|s| (key, s)))
+        .collect()
 }
 
-async fn read_initial_desktop_settings(
-    settings: &Settings,
-    sender: &(dyn Fn(InternalDesktopSetting) -> anyhow::Result<()> + Send + Sync),
-) -> anyhow::Result<()> {
-    let proxy = settings;
-
-    let reply = proxy
+async fn read_initial_desktop_settings(settings: &Settings) -> anyhow::Result<HashMap<String, HashMap<String, InternalDesktopSetting>>> {
+    let reply = settings
         .call_method(
             "ReadAll",
             &[
@@ -277,26 +234,65 @@ async fn read_initial_desktop_settings(
     // On some systems the namespace keys are duplicated, but they have different content
     // (i.e., contain some keys that are missing in other dict entries for the same namespace).
     // That's why we deserialize to vector of tuples (to emulate the MultiMap data type).
-    let all: Vec<(String, Namespace)> = reply.body().deserialize_unchecked()?;
+    let all_maybe_duplicated: Vec<(String, Namespace)> = reply.body().deserialize_unchecked()?;
 
-    for (namespace, kv) in all {
-        for (key, value) in kv {
-            //debug!("Reading initial desktop settings from {namespace} : {key} = {value:?}");
-            send(InternalDesktopSetting::new(&namespace, &key, &value), sender)?;
+    let mut all = HashMap::<String, HashMap<String, InternalDesktopSetting>>::new();
+
+    for (namespace, kv) in all_maybe_duplicated {
+        match all.entry(namespace) {
+            Entry::Occupied(occupied) => {
+                let settings = desktop_settings_from_namespace(occupied.key(), kv);
+                let occupied = occupied.into_mut();
+                for (new_key, new_setting) in settings {
+                    match occupied.entry(new_key) {
+                        Entry::Occupied(occupied_nested) => {
+                            let occupied_value = occupied_nested.into_mut();
+                            if *occupied_value != new_setting {
+                                warn!("Overwriting existing setting: {occupied_value:?} with {new_setting:?}");
+                                *occupied_value = new_setting;
+                            }
+                        }
+                        Entry::Vacant(vacant) => {
+                            vacant.insert(new_setting);
+                        }
+                    }
+                }
+            }
+            Entry::Vacant(vacant) => {
+                let settings = desktop_settings_from_namespace(vacant.key(), kv);
+                vacant.insert(settings);
+            }
         }
     }
-    Ok(())
+
+    Ok(all)
 }
 
 pub async fn desktop_settings_notifier(sender: impl Fn(InternalDesktopSetting) -> anyhow::Result<()> + Send + Sync) -> anyhow::Result<()> {
     let desktop_settings = Settings::new().await?;
-    read_initial_desktop_settings(&desktop_settings, &sender).await?;
+    let mut desktop_settings_signals = desktop_settings.receive_signal("SettingChanged").await?;
+
+    let mut all = read_initial_desktop_settings(&desktop_settings).await?;
+
+    for namespace in all.values() {
+        for value in namespace.values() {
+            //debug!("Reading initial desktop settings from {namespace} : {key} = {value:?}");
+            sender(value.clone())?;
+        }
+    }
 
     debug!("Listening to desktop settings changes");
-    let mut desktop_settings_signals = desktop_settings.receive_setting_changed().await?;
-    while let Some(s) = desktop_settings_signals.next().await {
-        debug!("Desktop setting changed: {s:?}");
-        send(InternalDesktopSetting::new(s.namespace(), s.key(), s.value()), &sender)?;
+    while let Some(change) = desktop_settings_signals.next().await {
+        let (change_namespace, change_key, change_value): (String, String, OwnedValue) = change.body().deserialize()?;
+        debug!("Desktop setting changed: {change_namespace} : {change_key} = {change_value:?}");
+        if let Some(ns) = all.get_mut(&change_namespace)
+            && let Some(prev) = ns.get_mut(&change_key)
+            && let Some(s) = InternalDesktopSetting::new(&change_namespace, &change_key, change_value)
+            && s != *prev
+        {
+            sender(s.clone())?;
+            *prev = s;
+        }
     }
     debug!("Stopped listening to desktop settings changes");
     Ok(())

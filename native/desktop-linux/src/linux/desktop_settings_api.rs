@@ -1,7 +1,7 @@
 use desktop_common::ffi_utils::BorrowedArray;
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum XdgDesktopColorScheme {
     /// No preference
     NoPreference,
@@ -12,7 +12,7 @@ pub enum XdgDesktopColorScheme {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FontAntialiasing {
     None,
     Grayscale,
@@ -20,7 +20,7 @@ pub enum FontAntialiasing {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FontHinting {
     None,
     Slight,
@@ -29,7 +29,7 @@ pub enum FontHinting {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FontRgbaOrder {
     Rgb,
     Bgr,
@@ -38,7 +38,7 @@ pub enum FontRgbaOrder {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DesktopTitlebarAction {
     Minimize,
     ToggleMaximize,
@@ -47,7 +47,7 @@ pub enum DesktopTitlebarAction {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Color {
     pub red: f64,
     pub green: f64,
