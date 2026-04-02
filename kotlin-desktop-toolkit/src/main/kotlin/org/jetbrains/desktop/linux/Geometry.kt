@@ -3,7 +3,7 @@ package org.jetbrains.desktop.linux
 import kotlin.math.roundToInt
 
 public typealias PhysicalPixels = Int
-public typealias LogicalPixels = Float
+public typealias LogicalPixels = Double
 
 public data class PhysicalSize(
     val width: PhysicalPixels,
@@ -30,8 +30,7 @@ public data class LogicalSize(
     }
 
     public companion object;
-    public fun toPhysical(scale: Float): PhysicalSize =
-        PhysicalSize((width.toFloat() * scale).roundToInt(), (height.toFloat() * scale).roundToInt())
+    public fun toPhysical(scale: Double): PhysicalSize = PhysicalSize((width * scale).roundToInt(), (height * scale).roundToInt())
 }
 
 public data class LogicalPoint(
@@ -39,9 +38,9 @@ public data class LogicalPoint(
     val y: LogicalPixels,
 ) {
     public companion object {
-        public val Zero: LogicalPoint = LogicalPoint(0f, 0f)
+        public val Zero: LogicalPoint = LogicalPoint(0.0, 0.0)
     }
-    public fun toPhysical(scale: Float): PhysicalPoint = PhysicalPoint((x * scale).roundToInt(), (y * scale).roundToInt())
+    public fun toPhysical(scale: Double): PhysicalPoint = PhysicalPoint((x * scale).roundToInt(), (y * scale).roundToInt())
 }
 
 public data class LogicalRect(

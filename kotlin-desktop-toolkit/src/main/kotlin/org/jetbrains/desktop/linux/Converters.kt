@@ -116,14 +116,14 @@ internal fun LogicalSize.toNative(arena: Arena): MemorySegment {
 }
 
 internal fun LogicalPoint.Companion.fromNative(s: MemorySegment) = LogicalPoint(
-    x = NativeLogicalPoint.x(s).toFloat(),
-    y = NativeLogicalPoint.y(s).toFloat(),
+    x = NativeLogicalPoint.x(s),
+    y = NativeLogicalPoint.y(s),
 )
 
 internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalPoint.allocate(arena)
-    NativeLogicalPoint.x(result, x.toDouble())
-    NativeLogicalPoint.y(result, y.toDouble())
+    NativeLogicalPoint.x(result, x)
+    NativeLogicalPoint.y(result, y)
     return result
 }
 
@@ -514,7 +514,7 @@ internal fun DragAndDropQueryResponse.toNative(arena: Arena, objId: Long): Memor
 
 internal fun ScrollData.Companion.fromNative(s: MemorySegment): ScrollData {
     return ScrollData(
-        delta = NativeScrollData.delta(s).toFloat(),
+        delta = NativeScrollData.delta(s),
         wheelValue120 = NativeScrollData.wheel_value120(s),
         isInverted = NativeScrollData.is_inverted(s),
         isStop = NativeScrollData.is_stop(s),
