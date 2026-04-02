@@ -3,7 +3,7 @@ use desktop_common::{
     ffi_utils::{BorrowedArray, BorrowedStrPtr},
     logger::PanicDefault,
 };
-use enumflags2::{BitFlag, BitFlags, bitflags};
+use enumflags2::{BitFlag, bitflags};
 use std::fmt::{Debug, Formatter};
 use std::{
     ffi::{CStr, CString},
@@ -87,18 +87,6 @@ impl Debug for KeyModifierBitflag {
         }
 
         f.write_char(')')
-    }
-}
-
-impl From<KeyModifier> for KeyModifierBitflag {
-    fn from(value: KeyModifier) -> Self {
-        Self(BitFlags::from_flag(value).bits_c())
-    }
-}
-
-impl From<BitFlags<KeyModifier>> for KeyModifierBitflag {
-    fn from(value: BitFlags<KeyModifier>) -> Self {
-        Self(value.bits_c())
     }
 }
 

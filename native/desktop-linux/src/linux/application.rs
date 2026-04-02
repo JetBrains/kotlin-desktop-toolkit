@@ -219,14 +219,6 @@ impl Application {
             .with_context(|| format!("Couldn't find window for {window_id:?}"))
     }
 
-    pub fn get_window_mut(&mut self, window_id: WindowId) -> anyhow::Result<&mut SimpleWindow> {
-        self.state
-            .window_id_to_surface_id
-            .get(&window_id)
-            .and_then(|surface_id| self.state.windows.get_mut(surface_id))
-            .with_context(|| format!("Couldn't find window for {window_id:?}"))
-    }
-
     pub fn set_cursor_theme(&mut self, name: &str, size: u32) -> anyhow::Result<()> {
         self.state.set_cursor_theme(&self.qh, name, size)
     }

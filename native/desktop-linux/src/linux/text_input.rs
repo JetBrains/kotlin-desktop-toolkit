@@ -85,11 +85,10 @@ impl TextInputContext<'_> {
         debug!(
             "Calling set_surrounding_text with cursor_pos_bytes={cursor_pos_bytes}, selection_start_pos_bytes={selection_start_pos_bytes}, surrounding_text={surrounding_text}"
         );
-        #[allow(clippy::cast_possible_truncation)]
         text_input.set_surrounding_text(
             surrounding_text.to_owned(),
-            cursor_pos_bytes as i32,
-            selection_start_pos_bytes as i32,
+            i32::try_from(cursor_pos_bytes)?,
+            i32::try_from(selection_start_pos_bytes)?,
         );
         text_input.set_content_type(self.hints.to_system()?, self.content_purpose.to_system());
         text_input.set_text_change_cause(if self.change_caused_by_input_method {

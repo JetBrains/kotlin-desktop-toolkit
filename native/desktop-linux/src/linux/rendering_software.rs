@@ -22,10 +22,10 @@ struct SoftwareBuffer<'a> {
 
 impl SoftwareRendering {
     /// cbindgen:ignore
-    const BYTES_PER_PIXEL: u8 = 4;
+    const BYTES_PER_PIXEL: i32 = 4;
 
     fn create_buffer(pool: &mut SlotPool, size: PhysicalSize) -> SoftwareBuffer<'_> {
-        let stride = size.width.0 * i32::from(Self::BYTES_PER_PIXEL);
+        let stride = size.width.0 * Self::BYTES_PER_PIXEL;
         let (buffer, canvas) = pool
             .create_buffer(size.width.0, size.height.0, stride, wl_shm::Format::Argb8888)
             .expect("create buffer");
@@ -33,7 +33,7 @@ impl SoftwareRendering {
     }
 
     pub fn new(shm: &Shm, size: PhysicalSize) -> Self {
-        let stride = size.width.0 * i32::from(Self::BYTES_PER_PIXEL);
+        let stride = size.width.0 * Self::BYTES_PER_PIXEL;
         let mut pool = SlotPool::new(
             (stride * size.height.0 * 2).try_into().unwrap(), // double buffered
             shm,
@@ -44,7 +44,7 @@ impl SoftwareRendering {
     }
 
     pub fn resize(&mut self, shm: &Shm, size: PhysicalSize) {
-        let stride = size.width.0 * i32::from(Self::BYTES_PER_PIXEL);
+        let stride = size.width.0 * Self::BYTES_PER_PIXEL;
         if self.buffer.height() != size.height.0 || self.buffer.stride() != stride {
             *self = Self::new(shm, size);
         }
