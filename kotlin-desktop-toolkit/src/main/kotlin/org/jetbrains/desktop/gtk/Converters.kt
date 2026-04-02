@@ -54,8 +54,8 @@ import org.jetbrains.desktop.gtk.generated.NativeWindowScaleChangedEvent
 import org.jetbrains.desktop.gtk.generated.NativeWindowScreenChangeEvent
 import org.jetbrains.desktop.gtk.generated.desktop_gtk_h
 import java.lang.foreign.Arena
-import java.lang.foreign.MemoryLayout
 import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 import kotlin.experimental.or
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
@@ -465,18 +465,15 @@ internal fun mimeTypesToNative(arena: Arena, mimeTypes: List<String>): MemorySeg
     return arena.allocateUtf8String(mimeTypes.joinToString(","))
 }
 
-private fun ByteArray?.toNative(arena: Arena): MemorySegment {
+internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
     val nativeDataArray = NativeBorrowedArray_u8.allocate(arena)
     if (this == null) {
         NativeBorrowedArray_u8.len(nativeDataArray, 0)
         NativeBorrowedArray_u8.ptr(nativeDataArray, MemorySegment.NULL)
     } else {
         NativeBorrowedArray_u8.len(nativeDataArray, size.toLong())
-        val nativeArray = arena.allocate(MemoryLayout.sequenceLayout(size.toLong(), desktop_gtk_h.C_CHAR))
-        this.forEachIndexed { i, b ->
-            nativeArray.setAtIndex(desktop_gtk_h.C_CHAR, i.toLong(), b)
-        }
 
+        val nativeArray = arena.allocateArray(ValueLayout.JAVA_BYTE, *this)
         NativeBorrowedArray_u8.ptr(nativeDataArray, nativeArray)
     }
 
@@ -556,24 +553,8 @@ private fun readNativeU8Array(nativeU8Array: MemorySegment): ByteArray? {
         return null
     }
     val len = NativeBorrowedArray_u8.len(nativeU8Array)
-    val buf = ByteArray(len.toInt())
-    for (i in 0 until len) {
-        buf[i.toInt()] = dataPtr.getAtIndex(desktop_gtk_h.C_CHAR, i)
-    }
-    return buf
+    return dataPtr.asSlice(0, len).toArray(ValueLayout.JAVA_BYTE)
 }
-
-// private fun readNativeU32Array(nativeU32Array: MemorySegment): List<UInt> {
-//    val len = NativeBorrowedArray_u32.len(nativeU32Array)
-//    val dataPtr = NativeBorrowedArray_u32.ptr(nativeU32Array)
-//    val values = mutableListOf<UInt>()
-//    for (i in 0 until len) {
-//        val raw = dataPtr.getAtIndex(desktop_gtk_h.C_INT, i)
-//        Logger.debug { "readNativeU32ArrayFor: len=$len : dataPtr=$dataPtr, value of index $i : $raw" }
-//        values.add(raw.toUInt())
-//    }
-//    return values
-// }
 
 internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Event {
     return when (NativeEvent.tag(s)) {
