@@ -1,7 +1,8 @@
 use crate::gtk::application::{Application, send_event, with_app_state_mut};
-use crate::gtk::application_api::{ApplicationCallbacks, DataSource, FfiWindowCloseRequest, RenderingMode};
+use crate::gtk::application_api::{ApplicationCallbacks, FfiWindowCloseRequest, RenderingMode};
 use crate::gtk::async_event_result::AsyncEventResult;
 use crate::gtk::clipboard::{ClipboardContentProvider, KdtClipboard};
+use crate::gtk::data_transfer_api::DataSource;
 use crate::gtk::desktop_settings::DesktopSettings;
 use crate::gtk::desktop_settings_api::FfiDesktopSetting;
 use crate::gtk::events::Event::DragIconFrameTick;
@@ -10,6 +11,7 @@ use crate::gtk::events::{
     NotificationClosedEvent, OpenGlDrawData, RequestId, WindowClosedEvent, WindowId,
 };
 use crate::gtk::ffi_return_conversions::{QueryDragAndDropTarget, RetrieveSurroundingText, TransferDataGetter};
+#[cfg(target_os = "linux")]
 use crate::gtk::file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl};
 use crate::gtk::file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams};
 use crate::gtk::geometry::{LogicalSize, PhysicalSize};
@@ -78,12 +80,6 @@ async fn get_ashpd_window_identifier(window: Option<&gtk4::Native>) -> Option<as
     } else {
         None
     }
-}
-
-#[cfg(not(target_os = "linux"))]
-#[allow(clippy::future_not_send, clippy::unused_async)]
-async fn get_ashpd_window_identifier(_window: Option<&gtk4::Native>) -> Option<ashpd::WindowIdentifier> {
-    None
 }
 
 pub struct ApplicationState {
@@ -277,6 +273,7 @@ impl ApplicationState {
         request_id
     }
 
+    #[cfg(target_os = "linux")]
     pub fn run_async_for_window<F>(
         &self,
         window_id: WindowId,
@@ -516,12 +513,14 @@ impl ApplicationState {
         request_id
     }
 
+    #[cfg(target_os = "linux")]
     async fn open_file_manager_impl(path: &str, request: ashpd::desktop::open_uri::OpenDirectoryRequest) -> anyhow::Result<()> {
         let f = tokio::fs::File::open(path).await?;
         request.send(&f).await?;
         Ok(())
     }
 
+    #[cfg(target_os = "linux")]
     pub fn open_file_manager(&self, path: String, activation_token: Option<&str>) -> RequestId {
         debug!("application_open_file_manager: {path}, activation_token={activation_token:?}");
         let request = ashpd::desktop::open_uri::OpenDirectoryRequest::default().activation_token(activation_token.map(Into::into));
@@ -531,6 +530,18 @@ impl ApplicationState {
         })
     }
 
+    #[allow(clippy::needless_pass_by_value, unused_variables)]
+    #[cfg(not(target_os = "linux"))]
+    pub fn open_file_manager(&self, path: String, activation_token: Option<&str>) -> RequestId {
+        self.run_async(|request_id| async move {
+            AsyncEventResult::UrlOpenResponse {
+                request_id,
+                error: Some(anyhow!("Unsupported")),
+            }
+        })
+    }
+
+    #[cfg(target_os = "linux")]
     pub fn show_open_file_dialog(
         &self,
         window_id: WindowId,
@@ -545,6 +556,18 @@ impl ApplicationState {
         })
     }
 
+    #[allow(unused_variables)]
+    #[cfg(not(target_os = "linux"))]
+    pub fn show_open_file_dialog(
+        &self,
+        window_id: WindowId,
+        common_params: &CommonFileDialogParams,
+        open_params: &OpenFileDialogParams,
+    ) -> anyhow::Result<RequestId> {
+        bail!("Unsupported");
+    }
+
+    #[cfg(target_os = "linux")]
     pub fn show_save_file_dialog(
         &self,
         window_id: WindowId,
@@ -556,6 +579,17 @@ impl ApplicationState {
             let result = show_save_file_dialog_impl(identifier, request).await;
             AsyncEventResult::FileChooserResponse { request_id, result }
         })
+    }
+
+    #[allow(unused_variables)]
+    #[cfg(not(target_os = "linux"))]
+    pub fn show_save_file_dialog(
+        &self,
+        window_id: WindowId,
+        common_params: &CommonFileDialogParams,
+        save_params: &SaveFileDialogParams,
+    ) -> anyhow::Result<RequestId> {
+        bail!("Unsupported");
     }
 
     pub fn request_show_notification(

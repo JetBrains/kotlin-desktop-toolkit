@@ -5,7 +5,7 @@ use desktop_common::logger::PanicDefault;
 use std::ffi::{CStr, CString};
 
 use crate::gtk::{
-    application_api::{DataSource, DragAndDropAction},
+    data_transfer_api::{DataSource, DragAndDropAction},
     desktop_settings_api::FfiDesktopSetting,
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
 };

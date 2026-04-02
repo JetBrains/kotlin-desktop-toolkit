@@ -7,7 +7,7 @@ use crate::gtk::events::{
     WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent, WindowScaleChangedEvent, WindowScreenChangeEvent,
 };
 use crate::gtk::ffi_return_conversions::{QueryDragAndDropTarget, RetrieveSurroundingText};
-use crate::gtk::geometry::{LogicalSize, PhysicalSize};
+use crate::gtk::geometry::{LogicalRect, LogicalSize, PhysicalSize};
 use crate::gtk::gl_widget::GlWidget;
 use crate::gtk::kdt_application::KdtApplication;
 use crate::gtk::keyboard::set_keyboard_event_handlers;
@@ -26,6 +26,12 @@ use gtk4::prelude::{GtkWindowExt, WidgetExt};
 use log::{debug, warn};
 use std::cell::RefCell;
 use std::rc::Rc;
+
+impl From<LogicalRect> for gdk4::Rectangle {
+    fn from(value: LogicalRect) -> Self {
+        Self::new(value.x, value.y, value.width, value.height)
+    }
+}
 
 fn get_toplevel(window: &gtk4::ApplicationWindow) -> anyhow::Result<gdk4::Toplevel> {
     let surface = window.surface().context("Cannot get window surface")?;

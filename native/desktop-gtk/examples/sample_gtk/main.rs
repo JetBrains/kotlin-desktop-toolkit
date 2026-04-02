@@ -15,8 +15,4 @@ pub fn main() {
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn main() -> Result<(), anyhow::Error> {
-    anyhow::bail!(
-        "Trying to run GTK example without enabling it. Try running `cargo run --features desktop-gtk/enabled --example sample_gtk`"
-    )
-}
+pub const fn main() {}

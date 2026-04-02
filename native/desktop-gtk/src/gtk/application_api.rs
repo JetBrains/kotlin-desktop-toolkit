@@ -1,7 +1,7 @@
 use crate::gtk::application::{Application, with_app_state, with_app_state_mut};
 use crate::gtk::application_state::{EglInstance, get_egl, get_gl};
+use crate::gtk::data_transfer_api::{DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData};
 use crate::gtk::events::{EventHandler, RequestId, WindowId};
-use crate::gtk::geometry::LogicalPoint;
 use crate::gtk::mime_types::MimeTypes;
 use desktop_common::ffi_utils::RustAllocatedStrPtr;
 use desktop_common::{
@@ -10,34 +10,12 @@ use desktop_common::{
 };
 use log::{debug, warn};
 
-#[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum DragAndDropAction {
-    None = 0b0000_0000,
-
-    Copy = 0b0000_0001,
-
-    Move = 0b0000_0010,
-    // TODO?: Ask
-}
-
-#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
-#[repr(transparent)]
-pub struct DragAndDropActions(pub u8);
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RenderingMode {
     Auto,
     Gl,
     GlEs,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct DragAndDropQueryData {
-    pub window_id: WindowId,
-    pub location_in_window: LogicalPoint,
 }
 
 #[repr(C)]
@@ -69,14 +47,6 @@ pub struct FfiTextInputSurroundingText {
     pub surrounding_text: BorrowedArray<'static, u8>,
     pub cursor_codepoint_offset: u16,
     pub selection_start_codepoint_offset: u16,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DataSource {
-    Clipboard,
-    DragAndDrop,
-    PrimarySelection,
 }
 
 pub type FfiObjDealloc = extern "C" fn(i64);

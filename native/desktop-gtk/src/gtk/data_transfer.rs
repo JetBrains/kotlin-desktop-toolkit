@@ -1,5 +1,5 @@
 use crate::gtk::application::send_event;
-use crate::gtk::application_api::{DragAndDropAction, DragAndDropActions, DragAndDropQueryData};
+use crate::gtk::data_transfer_api::{DragAndDropAction, DragAndDropActions, DragAndDropQueryData};
 use crate::gtk::events::{DataTransferContent, DragAndDropLeaveEvent, DropPerformedEvent, EventHandler, WindowId};
 use crate::gtk::ffi_return_conversions::QueryDragAndDropTarget;
 use crate::gtk::geometry::{LogicalPixels, LogicalPoint};

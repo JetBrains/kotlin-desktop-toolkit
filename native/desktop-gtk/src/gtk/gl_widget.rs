@@ -5,11 +5,11 @@ use crate::gtk::application_api::{RenderingMode, gl_get_proc_address_impl};
 use crate::gtk::events::OpenGlDrawData;
 use crate::gtk::geometry::{LogicalSize, PhysicalSize};
 use anyhow::bail;
-use gtk4::gdk as gdk4;
 use gtk4::glib;
 use gtk4::prelude::{GLContextExt, SnapshotExt, WidgetExt};
 use gtk4::subclass::prelude::{ObjectSubclassExt, ObjectSubclassIsExt};
 use gtk4::subclass::widget::WidgetImplExt;
+use gtk4::{gdk as gdk4, graphene};
 use log::{debug, warn};
 use std::cell::{OnceCell, RefCell};
 use std::ffi::{c_int, c_uint};
@@ -20,6 +20,13 @@ const GL_TEXTURE_2D: u32 = 0x0DE1;
 
 /// cbindgen:ignore
 const GL_FRAMEBUFFER: u32 = 0x8D40;
+
+impl From<LogicalSize> for graphene::Rect {
+    fn from(value: LogicalSize) -> Self {
+        #[allow(clippy::cast_precision_loss)]
+        Self::new(0., 0., value.width as f32, value.height as f32)
+    }
+}
 
 const unsafe fn cast_f<T, S>(t: T) -> S {
     unsafe { std::mem::transmute_copy::<ManuallyDrop<T>, S>(&ManuallyDrop::new(t)) }
