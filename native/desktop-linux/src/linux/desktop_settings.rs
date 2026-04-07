@@ -9,8 +9,7 @@ use ashpd::{
 use desktop_common::ffi_utils::BorrowedArray;
 use futures_lite::StreamExt;
 use log::{debug, error, warn};
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
+use std::collections::{BTreeMap, btree_map};
 
 /// cbindgen:ignore
 const GNOME_DESKTOP_INTERFACE_NAMESPACE: &str = "org.gnome.desktop.interface";
@@ -178,11 +177,11 @@ impl InternalDesktopSetting {
                 "cursor-theme" => Some(Self::CursorTheme(value.try_into()?)),
                 "cursor-size" => Some(Self::CursorSize(value.try_into()?)),
                 "enable-animations" => Some(Self::EnableAnimations(value.try_into()?)),
-                "overlay-scrolling" => Some(Self::OverlayScrolling(value.try_into()?)),
                 "font-antialiasing" => Some(Self::FontAntialiasing(FontAntialiasing::parse(&value.try_into()?)?)),
                 "font-hinting" => Some(Self::FontHinting(FontHinting::parse(&value.try_into()?)?)),
                 "font-rgba-order" => Some(Self::FontRgbaOrder(FontRgbaOrder::parse(&value.try_into()?)?)),
                 "gtk-enable-primary-paste" => Some(Self::MiddleClickPaste(value.try_into()?)),
+                "overlay-scrolling" => Some(Self::OverlayScrolling(value.try_into()?)),
                 _ => None,
             },
             GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE => match key {
@@ -196,11 +195,11 @@ impl InternalDesktopSetting {
                 _ => None,
             },
             GNOME_DESKTOP_WM_PREFERENCES_NAMESPACE => match key {
-                "audible-bell" => Some(Self::AudibleBell(value.try_into()?)),
-                "button-layout" => Some(Self::TitlebarLayout(value.try_into()?)),
                 "action-double-click-titlebar" => Some(Self::ActionDoubleClickTitlebar(DesktopTitlebarAction::parse(&value.try_into()?)?)),
                 "action-right-click-titlebar" => Some(Self::ActionRightClickTitlebar(DesktopTitlebarAction::parse(&value.try_into()?)?)),
                 "action-middle-click-titlebar" => Some(Self::ActionMiddleClickTitlebar(DesktopTitlebarAction::parse(&value.try_into()?)?)),
+                "audible-bell" => Some(Self::AudibleBell(value.try_into()?)),
+                "button-layout" => Some(Self::TitlebarLayout(value.try_into()?)),
                 _ => None,
             },
             _ => None,
@@ -208,7 +207,7 @@ impl InternalDesktopSetting {
     }
 }
 
-fn desktop_settings_from_namespace(namespace: &str, values: Namespace) -> HashMap<String, InternalDesktopSetting> {
+fn desktop_settings_from_namespace(namespace: &str, values: Namespace) -> BTreeMap<String, InternalDesktopSetting> {
     values
         .into_iter()
         .filter_map(|(key, value)| InternalDesktopSetting::new(namespace, &key, value).map(|s| (key, s)))
@@ -217,7 +216,7 @@ fn desktop_settings_from_namespace(namespace: &str, values: Namespace) -> HashMa
 
 async fn read_initial_desktop_settings(
     settings: &zbus::proxy::Proxy<'_>,
-) -> anyhow::Result<HashMap<String, HashMap<String, InternalDesktopSetting>>> {
+) -> anyhow::Result<BTreeMap<String, BTreeMap<String, InternalDesktopSetting>>> {
     let reply = settings
         .call_method(
             "ReadAll",
@@ -237,29 +236,30 @@ async fn read_initial_desktop_settings(
     // That's why we deserialize to vector of tuples (to emulate the MultiMap data type).
     let all_maybe_duplicated: Vec<(String, Namespace)> = reply.body().deserialize_unchecked()?;
 
-    let mut all = HashMap::<String, HashMap<String, InternalDesktopSetting>>::new();
+    // Use ordered map so that initial settings are always reported in the same order (useful for e.g. tests).
+    let mut all = BTreeMap::<String, BTreeMap<String, InternalDesktopSetting>>::new();
 
     for (namespace, kv) in all_maybe_duplicated {
         match all.entry(namespace) {
-            Entry::Occupied(occupied) => {
+            btree_map::Entry::Occupied(occupied) => {
                 let settings = desktop_settings_from_namespace(occupied.key(), kv);
                 let occupied = occupied.into_mut();
                 for (new_key, new_setting) in settings {
                     match occupied.entry(new_key) {
-                        Entry::Occupied(occupied_nested) => {
+                        btree_map::Entry::Occupied(occupied_nested) => {
                             let occupied_value = occupied_nested.into_mut();
                             if *occupied_value != new_setting {
                                 warn!("Overwriting existing setting: {occupied_value:?} with {new_setting:?}");
                                 *occupied_value = new_setting;
                             }
                         }
-                        Entry::Vacant(vacant) => {
+                        btree_map::Entry::Vacant(vacant) => {
                             vacant.insert(new_setting);
                         }
                     }
                 }
             }
-            Entry::Vacant(vacant) => {
+            btree_map::Entry::Vacant(vacant) => {
                 let settings = desktop_settings_from_namespace(vacant.key(), kv);
                 vacant.insert(settings);
             }

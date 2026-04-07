@@ -675,31 +675,30 @@ abstract class X11TestsBase {
 
         val initialSettings = InitialSettings()
 
-        var remainingSettingsReceived = 18
-        while (remainingSettingsReceived > 0) {
+        // Initial settings are always sent in the same order, and this is the last one.
+        while (initialSettings.isComposited == null) {
             val event = getNextEvent()
-            assertIs<Event.DesktopSettingChange>(event, "Remaining: $remainingSettingsReceived")
-            when (event.setting) {
-                is DesktopSetting.AccentColor -> initialSettings.accentColor = event.setting
-                is DesktopSetting.AudibleBell -> initialSettings.audibleBell = event.setting
-                is DesktopSetting.ColorScheme -> initialSettings.colorScheme = event.setting
-                is DesktopSetting.CursorBlink -> initialSettings.cursorBlink = event.setting
-                is DesktopSetting.CursorBlinkTime -> initialSettings.cursorBlinkTime = event.setting
-                is DesktopSetting.CursorBlinkTimeout -> initialSettings.cursorBlinkTimeout = event.setting
-                is DesktopSetting.DoubleClickInterval -> initialSettings.doubleClickInterval = event.setting
-                is DesktopSetting.DragAndDropDragThresholdPixels -> initialSettings.dragAndDropDragThresholdPixels = event.setting
-                is DesktopSetting.FontHinting -> initialSettings.fontHinting = event.setting
-                is DesktopSetting.FontRgbaOrder -> initialSettings.fontRgbaOrder = event.setting
-                is DesktopSetting.IsComposited -> initialSettings.isComposited = event.setting
-                is DesktopSetting.MiddleClickPaste -> initialSettings.middleClickPaste = event.setting
-                is DesktopSetting.OverlayScrolling -> initialSettings.overlayScrolling = event.setting
-                is DesktopSetting.DoubleClickDistancePixels -> initialSettings.doubleClickDistancePixels = event.setting
-                is DesktopSetting.EnableAnimations -> initialSettings.enableAnimations = event.setting
-                is DesktopSetting.PrimaryButtonWarpsSlider -> initialSettings.primaryButtonWarpsSlider = event.setting
-                is DesktopSetting.RecentFilesEnabled -> initialSettings.recentFilesEnabled = event.setting
-                is DesktopSetting.RecentFilesMaxAgeDays -> initialSettings.recentFilesMaxAgeDays = event.setting
+            assertIs<Event.DesktopSettingChange>(event, "initialSettings=$initialSettings")
+            when (val setting = event.setting) {
+                is DesktopSetting.AccentColor -> initialSettings.accentColor = setting
+                is DesktopSetting.AudibleBell -> initialSettings.audibleBell = setting
+                is DesktopSetting.ColorScheme -> initialSettings.colorScheme = setting
+                is DesktopSetting.CursorBlink -> initialSettings.cursorBlink = setting
+                is DesktopSetting.CursorBlinkTime -> initialSettings.cursorBlinkTime = setting
+                is DesktopSetting.CursorBlinkTimeout -> initialSettings.cursorBlinkTimeout = setting
+                is DesktopSetting.DoubleClickInterval -> initialSettings.doubleClickInterval = setting
+                is DesktopSetting.DragAndDropDragThresholdPixels -> initialSettings.dragAndDropDragThresholdPixels = setting
+                is DesktopSetting.FontHinting -> initialSettings.fontHinting = setting
+                is DesktopSetting.FontRgbaOrder -> initialSettings.fontRgbaOrder = setting
+                is DesktopSetting.IsComposited -> initialSettings.isComposited = setting
+                is DesktopSetting.MiddleClickPaste -> initialSettings.middleClickPaste = setting
+                is DesktopSetting.OverlayScrolling -> initialSettings.overlayScrolling = setting
+                is DesktopSetting.DoubleClickDistancePixels -> initialSettings.doubleClickDistancePixels = setting
+                is DesktopSetting.EnableAnimations -> initialSettings.enableAnimations = setting
+                is DesktopSetting.PrimaryButtonWarpsSlider -> initialSettings.primaryButtonWarpsSlider = setting
+                is DesktopSetting.RecentFilesEnabled -> initialSettings.recentFilesEnabled = setting
+                is DesktopSetting.RecentFilesMaxAgeDays -> initialSettings.recentFilesMaxAgeDays = setting
             }
-            remainingSettingsReceived -= 1
         }
 
         assertTrue(eventQueue.isEmpty())
@@ -1075,24 +1074,27 @@ class X11Tests : X11TestsBase() {
     fun testSettings() {
         val initialSettings = run(defaultApplicationConfig())
 
-        val initialAccentColor = initialSettings.accentColor!!
-        val initialAudibleBell = initialSettings.audibleBell!!
-        val initialColorScheme = initialSettings.colorScheme!!
-        val initialCursorBlink = initialSettings.cursorBlink!!
-        val initialCursorBlinkTime = initialSettings.cursorBlinkTime!!
-        val initialCursorBlinkTimeout = initialSettings.cursorBlinkTimeout!!
-        val initialDoubleClickInterval = initialSettings.doubleClickInterval!!
-        val initialDragAndDropDragThresholdPixels = initialSettings.dragAndDropDragThresholdPixels!!
-        val initialFontHinting = initialSettings.fontHinting!!
-        val initialFontRgbaOrder = initialSettings.fontRgbaOrder!!
-        val initialIsComposited = initialSettings.isComposited!!
-        val initialMiddleClickPaste = initialSettings.middleClickPaste!!
-        val initialOverlayScrolling = initialSettings.overlayScrolling!!
-        val initialDoubleClickDistancePixels = initialSettings.doubleClickDistancePixels!!
-        val initialEnableAnimations = initialSettings.enableAnimations!!
-        val initialPrimaryButtonWarpsSlider = initialSettings.primaryButtonWarpsSlider!!
-        val initialRecentFilesEnabled = initialSettings.recentFilesEnabled!!
-        val initialRecentFilesMaxAgeDays = initialSettings.recentFilesMaxAgeDays!!
+        val initialAccentColor = assertNotNull(initialSettings.accentColor, "Initial AccentColor setting")
+        val initialAudibleBell = assertNotNull(initialSettings.audibleBell, "Initial AudibleBell setting")
+        val initialColorScheme = assertNotNull(initialSettings.colorScheme, "Initial ColorScheme setting")
+        val initialCursorBlink = assertNotNull(initialSettings.cursorBlink, "Initial CursorBlink setting")
+        val initialCursorBlinkTime = assertNotNull(initialSettings.cursorBlinkTime, "Initial CursorBlinkTime setting")
+        val initialCursorBlinkTimeout = assertNotNull(initialSettings.cursorBlinkTimeout, "Initial CursorBlinkTimeout setting")
+        val initialDoubleClickInterval = assertNotNull(initialSettings.doubleClickInterval, "Initial DoubleClickInterval setting")
+        val initialDragAndDropDragThresholdPixels =
+            assertNotNull(initialSettings.dragAndDropDragThresholdPixels, "Initial DragAndDropDragThresholdPixels setting")
+        val initialFontHinting = assertNotNull(initialSettings.fontHinting, "Initial FontHinting setting")
+        val initialFontRgbaOrder = assertNotNull(initialSettings.fontRgbaOrder, "Initial FontRgbaOrder setting")
+        val initialIsComposited = assertNotNull(initialSettings.isComposited, "Initial IsComposited setting")
+        val initialMiddleClickPaste = assertNotNull(initialSettings.middleClickPaste, "Initial MiddleClickPaste setting")
+        val initialOverlayScrolling = assertNotNull(initialSettings.overlayScrolling, "Initial OverlayScrolling setting")
+        val initialDoubleClickDistancePixels =
+            assertNotNull(initialSettings.doubleClickDistancePixels, "Initial DoubleClickDistancePixels setting")
+        val initialEnableAnimations = assertNotNull(initialSettings.enableAnimations, "Initial EnableAnimations setting")
+        val initialPrimaryButtonWarpsSlider =
+            assertNotNull(initialSettings.primaryButtonWarpsSlider, "Initial PrimaryButtonWarpsSlider setting")
+        val initialRecentFilesEnabled = assertNotNull(initialSettings.recentFilesEnabled, "Initial RecentFilesEnabled setting")
+        val initialRecentFilesMaxAgeDays = assertNotNull(initialSettings.recentFilesMaxAgeDays, "Initial RecentFilesMaxAgeDays setting")
 
         val windowParams = defaultWindowParams()
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
