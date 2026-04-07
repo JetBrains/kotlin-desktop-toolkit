@@ -1,5 +1,5 @@
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PhysicalPixels(pub i32);
 
 #[repr(transparent)]
@@ -15,7 +15,7 @@ impl LogicalPixels {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PhysicalSize {
     pub width: PhysicalPixels,
     pub height: PhysicalPixels,

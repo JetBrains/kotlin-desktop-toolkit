@@ -6,6 +6,7 @@ use desktop_common::{
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::application_api::{FfiDragAndDropQueryResponse, FfiSupportedActionsForMime, FfiTransferDataResponse};
+use desktop_linux::linux::geometry::PhysicalSize;
 use desktop_linux::linux::screen::screen_list;
 use desktop_linux::linux::window_api::{
     window_maximize, window_minimize, window_set_fullscreen, window_unmaximize, window_unset_fullscreen,
@@ -91,6 +92,7 @@ pub struct WindowState {
     pub drag_and_drop_source: bool,
     pub opengl: Option<OpenglState>,
     last_received_path: Option<String>,
+    last_draw_event_size_and_scale: Option<(PhysicalSize, f64)>,
 }
 
 impl WindowState {
@@ -476,6 +478,15 @@ extern "C" fn event_handler(event: &Event) -> bool {
             }
             Event::WindowDraw(data) => {
                 if let Some(window_state) = state.windows.get_mut(&data.window_id) {
+                    if window_state
+                        .last_draw_event_size_and_scale
+                        .replace((data.physical_size, data.scale))
+                        .is_none_or(|(previous_size, previous_scale)| {
+                            previous_size != data.physical_size || (previous_scale - data.scale).abs() > 0.01
+                        })
+                    {
+                        debug!("different draw data: {event:?}");
+                    }
                     window_state.animation_tick();
 
                     if data.software_draw_data.canvas.is_null() {
