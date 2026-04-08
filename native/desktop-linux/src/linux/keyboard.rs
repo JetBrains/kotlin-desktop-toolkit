@@ -32,8 +32,9 @@ impl KeyboardHandler for ApplicationState {
         self.last_keyboard_event_serial = Some(serial);
         if let Some(window_id) = self.get_window_id(surface) {
             debug!("Keyboard focus on window with pressed syms: {keysyms:?}");
+            let xkb_codes = raw.iter().map(|v| v + 8).collect();
             let ks: Vec<u32> = keysyms.iter().map(|e| e.raw()).collect();
-            self.send_event(WindowKeyboardEnterEvent::new(window_id, raw, &ks));
+            self.send_event(WindowKeyboardEnterEvent::new(window_id, &xkb_codes, &ks));
         }
     }
 

@@ -522,10 +522,10 @@ pub struct WindowKeyboardEnterEvent<'a> {
 }
 
 impl<'a> WindowKeyboardEnterEvent<'a> {
-    pub(crate) const fn new(window_id: WindowId, raw: &'a [u32], keysyms: &'a [u32]) -> Self {
+    pub(crate) const fn new(window_id: WindowId, raw: &'a Vec<u32>, keysyms: &'a [u32]) -> Self {
         Self {
             window_id,
-            raw: BorrowedArray::from_slice(raw),
+            raw: BorrowedArray::from_slice(raw.as_slice()),
             keysyms: BorrowedArray::from_slice(keysyms),
         }
     }
