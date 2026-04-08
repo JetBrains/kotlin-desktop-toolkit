@@ -33,7 +33,7 @@ jobs:
         if: "${{ matrix.targets.package_manager == 'apt' }}"
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev libgtk-4-dev xvfb python3-gi xdotool xclip i3 dunst x11-xkb-utils dbus-daemon maim ibus ibus-gtk4 phinger-cursor-theme adwaita-icon-theme-full xsettingsd picom
+          sudo apt-get install --no-install-recommends libwayland-dev libxkbcommon-dev libgtk-4-dev xvfb python3-gi xdotool xclip i3 dunst x11-xkb-utils dbus-daemon maim ibus ibus-gtk4 phinger-cursor-theme adwaita-icon-theme-full xsettingsd picom sway grim wl-clipboard xdg-desktop-portal-gtk xdg-desktop-portal-gnome mako-notifier
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -55,7 +55,7 @@ jobs:
 #      - name: Lint with Gradle
 #        run: ./gradlew lint
       - name: Test with Gradle
-        run: ./gradlew test --info
+        run: ./gradlew test testGtk testWayland --info
       - name: Build with Gradle
         run: ./gradlew build
 
