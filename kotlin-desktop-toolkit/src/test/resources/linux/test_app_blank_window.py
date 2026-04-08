@@ -11,7 +11,7 @@ def eprint(msg):
     sys.stdout.flush()
 
 def _motion(*_args):
-    eprint(f"Received DRAG_MOTION event")
+    eprint("Received DRAG_MOTION event")
 
 def on_is_active_changed(w: Gtk.Window, *_args, **_kwargs):
     if w.is_active:

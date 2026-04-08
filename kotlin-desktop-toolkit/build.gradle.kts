@@ -31,6 +31,7 @@ import kotlin.io.path.createFile
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
 import kotlin.io.path.name
+import kotlin.io.path.readLines
 import kotlin.io.path.readText
 import kotlin.io.path.writeLines
 import kotlin.io.path.writeText
@@ -518,8 +519,10 @@ abstract class X11TestEnv :
     BuildService<BuildServiceParameters.None>,
     AutoCloseable {
     private var test: Test? = null
+    private var successfulRun = false
 
     private var startedProcesses = mutableListOf<Pair<Process, String>>()
+    private var logFiles = mutableListOf<Path>()
 
     private val homeTempDir by lazy { Files.createTempDirectory("test_home") }
     private val xdgDataHome by lazy { homeTempDir.resolve(".local/share").createDirectories() }
@@ -599,15 +602,31 @@ abstract class X11TestEnv :
 """
     }
 
-    private fun newProcess(vararg args: String, afterStart: ((Process) -> Unit)? = null) {
-        ProcessBuilder(*args).also { pb ->
+    private fun newProcess(vararg args: String, afterStart: (Process, Path) -> Boolean = { _, _ -> true }): Boolean {
+        println("Running ${args.toList()}")
+        val exeName = args.first().let {
+            val p = Path.of(it)
+            if (p.isAbsolute) {
+                p.name
+            } else {
+                it
+            }
+        }
+        val logFileStderr = Path.of(newEnv["HOME"]!!).resolve("$exeName-stderr.log")
+        return ProcessBuilder(*args).also { pb ->
             val env = pb.environment()
             env.clear()
             env.putAll(newEnv)
+            println(logFileStderr)
+            pb.redirectError(ProcessBuilder.Redirect.to(logFileStderr.toFile()))
         }.start().let {
             check(it.isAlive)
-            afterStart?.invoke(it)
-            startedProcesses.add(Pair(it, args.first()))
+            val ret = afterStart(it, logFileStderr)
+            if (ret) {
+                logFiles.add(logFileStderr)
+                startedProcesses.add(Pair(it, args.first()))
+            }
+            ret
         }
     }
 
@@ -656,8 +675,29 @@ Exec=/bin/true
             "--nopidfile",
             "--nosyslog",
             "--print-address",
-        ) {
-            newEnv["DBUS_SESSION_BUS_ADDRESS"] = it.inputReader().readLine()
+        ) { p, _ ->
+            newEnv["DBUS_SESSION_BUS_ADDRESS"] = p.inputReader().readLine()
+            true
+        }
+
+        ProcessBuilder(
+            "xdotool",
+            "getmouselocation",
+        ).also { pb ->
+            val env = pb.environment()
+            env.clear()
+            env.putAll(newEnv)
+            val startTime = TimeSource.Monotonic.markNow()
+            while (true) {
+                val p = pb.start()
+                if (p.waitFor() == 0) {
+                    break
+                }
+                if (startTime.elapsedNow() > 3.seconds) {
+                    throw Error("Could not run xdotool: ${p.errorReader().readText()}")
+                }
+                Thread.sleep(10)
+            }
         }
 
         ProcessBuilder(
@@ -688,22 +728,27 @@ Exec=/bin/true
         // We're using `xsettingsd` as a desktop-agnostic xsettings daemon.
         // E.g., Gnome used `gsd-xsettings` (gnome-settings-daemon) for this.
         var xSettingsDPid: String? = null
-        newProcess("xsettingsd", "--config=$xSettingsDConfigFilePathString") { p ->
-            xSettingsDPid = p.pid().toString()
-
-            val startTime = TimeSource.Monotonic.markNow()
-            val errLines = mutableListOf<String>()
-            while (true) {
-                val line = p.errorReader().readLine()
-                check(line != null) { "Error reading xsettingsd output" }
-                if (line.contains("Took ownership of selection")) {
-                    break
+        val startTime = TimeSource.Monotonic.markNow()
+        while (startTime.elapsedNow() < 10.seconds &&
+            !newProcess("xsettingsd", "--config=$xSettingsDConfigFilePathString") { p, log ->
+                xSettingsDPid = p.pid().toString()
+                var ret = false
+                while (p.isAlive) {
+                    val lines = log.readLines()
+                    if (lines.any { it.contains("Took ownership of selection") }) {
+                        ret = true
+                        newEnv["TEST_XSETTINGSD_LOG_FILE"] = log.absolutePathString()
+                        break
+                    }
+                    if (startTime.elapsedNow() > 10.seconds) {
+                        throw Error("Could not run xsettingsd:\n${lines.joinToString("\n")}")
+                    }
+                    Thread.sleep(10)
                 }
-                errLines.add(line)
-                if (startTime.elapsedNow() > 10.seconds) {
-                    throw Error("Could not run xsettingsd: ${errLines.joinToString("\n")}")
-                }
+                ret
             }
+        ) {
+            continue
         }
 
         ibusComponentFile.writeText(generateIBusXmlFileContent(ibusTestEngineFile.asFile))
@@ -716,14 +761,15 @@ Exec=/bin/true
             "disable",
             "--xim",
             "--cache=none",
-        ) {
+        ) { _, _ ->
             val aliveCheckIntervalMs = 10L
             var aliveCheckTimeoutMs = 1000L
             while (!ibusSocketFile.exists() && aliveCheckTimeoutMs > 0) {
-                Thread.sleep(aliveCheckTimeoutMs)
+                Thread.sleep(aliveCheckIntervalMs)
                 aliveCheckTimeoutMs -= aliveCheckIntervalMs
             }
             check(ibusSocketFile.exists()) { "${ibusSocketFile.absolutePathString()} does not exist" }
+            true
         }
 
         newProcess(ibusTestEngineFile.asFile.absolutePath)
@@ -735,6 +781,7 @@ Exec=/bin/true
         newEnv["TEST_RESOURCES_DIR"] = testResourcesDir.asFile.absolutePath
         newEnv["TEST_XSETTINGSD_PID"] = xSettingsDPid!!
         newEnv["TEST_XSETTINGSD_CONFIG_FILE"] = xSettingsDConfigFilePathString
+        successfulRun = true
         return newEnv
     }
 
@@ -786,7 +833,12 @@ Exec=/bin/true
         ibusComponentPath.deleteIfExists()
         ibusTempDir.deleteIfExists()
 
-        homeTempDir.toFile().deleteRecursively()
+        if (successfulRun && !testsFailed) {
+            for (logFile in logFiles) {
+                logFile.deleteIfExists()
+            }
+            homeTempDir.toFile().deleteRecursively()
+        }
     }
 }
 

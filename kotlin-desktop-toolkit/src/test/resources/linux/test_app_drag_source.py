@@ -11,15 +11,20 @@ def eprint(msg):
     print(msg)
     sys.stdout.flush()
 
-def on_is_active_changed(w: Gtk.Window, *_args, **_kwargs):
-    if w.is_active:
-        eprint("ready")
-
 class MyApplication(Gtk.Application):
     def __init__(self):
         super().__init__(application_id="org.jetbrains.desktop.linux.tests.TestAppDragSource")
         self.window: Gtk.ApplicationWindow | None = None
+        self.dnd_in_progress = False
         GLib.set_application_name("Drag Source Test App")
+
+    def _on_is_active_changed(self, w: Gtk.Window, *_args, **_kwargs):
+        if w.is_active and not self.dnd_in_progress:
+            eprint("ready")
+
+    def _on_dnd_finished(self, _drag: Gdk.Drag, *_args, **_kwargs):
+        self.dnd_in_progress = False
+        eprint("dnd-finished")
 
     def _pressed(self, src: Gtk.GestureClick, _n_press: int, x: float, y: float):
         assert(self.window is not None)
@@ -31,15 +36,27 @@ class MyApplication(Gtk.Application):
         actions = Gdk.DragAction.COPY | Gdk.DragAction.MOVE
         drag = Gdk.Drag.begin(surface, device, content, actions, x, y)
         assert(drag is not None)
-        eprint(f"TestAppDragSource drag begin")
+        self.dnd_in_progress = True
+        drag.connect("dnd-finished", self._on_dnd_finished)
+
+    def _on_motion_leave(self, *_args, **_kwargs):
+        if self.dnd_in_progress:
+            eprint("TestAppDragSource drag begin")
+
 
     def do_activate(self):
         try:
             self.window = Gtk.ApplicationWindow(application=self, title="Drag Source")
-            self.window.connect("notify::is-active", on_is_active_changed)
+            self.window.connect("notify::is-active", self._on_is_active_changed)
+
             click_gesture = Gtk.GestureClick.new()
             click_gesture.connect("pressed", self._pressed)
             self.window.add_controller(click_gesture)
+
+            motion_controller = Gtk.EventControllerMotion.new()
+            motion_controller.connect("leave", self._on_motion_leave)
+            self.window.add_controller(motion_controller)
+
             self.window.present()
         except Exception:
             eprint(traceback.format_exc())
