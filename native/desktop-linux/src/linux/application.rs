@@ -1,20 +1,18 @@
-use std::{thread::ThreadId, time::Duration};
-
 use crate::linux::events::{DataTransferContent, EventHandler, WindowClosedEvent};
-use crate::linux::notifications::{NewNotificationData, NotificationAction, notification_action_receiver_task};
+use crate::linux::notifications::{NewNotificationData, NotificationAction, init_notifications_task};
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
     application_state::{ApplicationState, get_egl},
     async_event_result::AsyncEventResult,
     data_transfer::{MimeTypes, read_from_pipe},
-    desktop_settings::desktop_settings_notifier,
+    desktop_settings::init_desktop_settings_notifier_task,
     desktop_settings_api::FfiDesktopSetting,
     drag_icon::DragIcon,
     events::{DataTransferEvent, Event, NotificationClosedEvent, RequestId, WindowId},
     file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
-    notifications::{NotificationData, notifications_receiver},
+    notifications::NotificationData,
     window::SimpleWindow,
     window_api::WindowParams,
     window_resize_edge_api::WindowResizeEdge,
@@ -25,7 +23,7 @@ use log::{debug, warn};
 use smithay_client_toolkit::{
     reexports::{
         calloop::{
-            EventLoop,
+            EventLoop, LoopHandle, RegistrationToken,
             channel::{self, Sender},
         },
         calloop_wayland_source::WaylandSource,
@@ -37,7 +35,7 @@ use smithay_client_toolkit::{
     },
     shell::WaylandSurface,
 };
-use tokio::spawn;
+use std::{thread::ThreadId, time::Duration};
 
 pub struct Application {
     pub event_loop: EventLoop<'static, ApplicationState>,
@@ -49,6 +47,32 @@ pub struct Application {
     rt: tokio::runtime::Runtime,
     async_request_counter: u32,
     run_async_sender: Sender<AsyncEventResult>,
+}
+
+struct AsyncTaskInfo {
+    name: &'static str,
+    registration_token: RegistrationToken,
+    join_handle: tokio::task::JoinHandle<anyhow::Result<()>>,
+}
+
+impl AsyncTaskInfo {
+    fn stop<T>(self, rt: &tokio::runtime::Runtime, loop_handle: &LoopHandle<T>) {
+        loop_handle.remove(self.registration_token);
+        self.join_handle.abort();
+        match rt.block_on(self.join_handle) {
+            Ok(Err(e)) => {
+                warn!("Error from async task {name}: {e}", name = self.name);
+            }
+            Err(e) => {
+                if !e.is_cancelled() {
+                    warn!("Error joining async task {name}: {e}", name = self.name);
+                }
+            }
+            Ok(Ok(())) => {
+                debug!("Async task {name} stopped", name = self.name);
+            }
+        }
+    }
 }
 
 fn create_run_async_sender(event_loop: &EventLoop<'static, ApplicationState>) -> Sender<AsyncEventResult> {
@@ -127,13 +151,16 @@ impl Application {
         request_id
     }
 
-    fn init_desktop_settings_notifier(&self) {
-        let (desktop_settings_sender, desktop_settings_channel) = channel::channel();
-        self.rt.spawn(desktop_settings_notifier(move |s| {
-            desktop_settings_sender.send(s).map_err(Into::into)
-        }));
+    pub fn shutdown(self) {
+        self.rt.shutdown_timeout(Duration::from_secs(10));
+        debug!("Application shutdown impl end");
+    }
 
-        self.event_loop
+    fn init_desktop_settings_notifier(&self) -> AsyncTaskInfo {
+        let (desktop_settings_sender, desktop_settings_channel) = channel::channel();
+
+        let registration_token = self
+            .event_loop
             .handle()
             .insert_source(desktop_settings_channel, move |event, (), state| {
                 if let channel::Event::Msg(e) = event {
@@ -143,6 +170,15 @@ impl Application {
                 }
             })
             .unwrap();
+
+        let join_handle = self.rt.spawn(init_desktop_settings_notifier_task(move |s| {
+            desktop_settings_sender.send(s).map_err(Into::into)
+        }));
+        AsyncTaskInfo {
+            name: "Desktop settings",
+            registration_token,
+            join_handle,
+        }
     }
 
     fn init_run_on_event_loop(&mut self) {
@@ -182,19 +218,23 @@ impl Application {
         }
     }
 
-    pub fn run(&mut self) -> Result<(), anyhow::Error> {
+    pub fn run(&mut self) -> anyhow::Result<()> {
         debug!("Application event loop: starting");
 
-        self.init_notifications();
-        self.init_desktop_settings_notifier();
         self.init_run_on_event_loop();
 
         self.event_loop_thread_id = Some(std::thread::current().id());
         self.state.send_event(Event::ApplicationStarted);
 
+        let notifications_task_info = self.init_notifications();
+        let desktop_settings_task_info = self.init_desktop_settings_notifier();
+
         while self.event_loop_iteration()? {
             // debug!("Application event loop: continuing");
         }
+        let loop_handle = self.event_loop.handle();
+        desktop_settings_task_info.stop(&self.rt, &loop_handle);
+        notifications_task_info.stop(&self.rt, &loop_handle);
         debug!("Application event loop: stopped");
         Ok(())
     }
@@ -591,12 +631,13 @@ impl Application {
         }))
     }
 
-    pub fn init_notifications(&mut self) {
+    fn init_notifications(&mut self) -> AsyncTaskInfo {
         let (notification_action_sender, notification_action_receiver) = tokio::sync::mpsc::channel(100);
 
         self.state.notification_action_sender = Some(notification_action_sender);
         let (event_sender, event_c) = channel::channel();
-        self.event_loop
+        let registration_token = self
+            .event_loop
             .handle()
             .insert_source(event_c, move |event: channel::Event<NotificationData>, (), state| {
                 if let channel::Event::Msg(notification_data) = event {
@@ -609,17 +650,15 @@ impl Application {
                 }
             })
             .unwrap();
-        self.rt.spawn(async move {
-            match zbus::Connection::session().await {
-                Ok(c) => {
-                    spawn(notifications_receiver(c.clone(), move |notification_data| {
-                        event_sender.send(notification_data).map_err(Into::into)
-                    }));
-                    spawn(notification_action_receiver_task(c, notification_action_receiver));
-                }
-                Err(e) => warn!("Error initializing notifications: {e}"),
-            }
-        });
+        let join_handle = self.rt.spawn(init_notifications_task(
+            move |notification_data| event_sender.send(notification_data).map_err(Into::into),
+            notification_action_receiver,
+        ));
+        AsyncTaskInfo {
+            name: "Notifications",
+            registration_token,
+            join_handle,
+        }
     }
 
     pub fn request_show_notification(
@@ -635,19 +674,22 @@ impl Application {
         self.async_request_counter = self.async_request_counter.wrapping_add(1);
         let request_id = RequestId(self.async_request_counter);
         let result_sender = self.run_async_sender.clone();
+        let result_reporter = Box::new(move |result| {
+            result_sender
+                .send(AsyncEventResult::NotificationShown { request_id, result })
+                .unwrap();
+        });
+        let new_notification_data = NewNotificationData {
+            summary,
+            body,
+            sound_file_path,
+            result_reporter,
+        };
         self.rt.spawn(async move {
-            let new_notification_data = NewNotificationData {
-                body,
-                summary,
-                sound_file_path,
-                result_reporter: Box::new(move |result| {
-                    result_sender
-                        .send(AsyncEventResult::NotificationShown { request_id, result })
-                        .unwrap();
-                }),
-            };
-            if let Err(e) = action_sender.send(NotificationAction::Show(new_notification_data)).await {
-                warn!("Error requesting notification: {e}");
+            if let Err(e) = action_sender.send(NotificationAction::Show(new_notification_data)).await
+                && let NotificationAction::Show(d) = e.0
+            {
+                (d.result_reporter)(Err(anyhow!("channel closed")));
             }
         });
         Ok(request_id)

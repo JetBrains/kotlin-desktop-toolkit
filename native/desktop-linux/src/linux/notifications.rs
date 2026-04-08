@@ -4,6 +4,7 @@ use anyhow::Context as _;
 use futures_lite::StreamExt;
 use log::debug;
 use std::collections::HashMap;
+use std::fmt::Formatter;
 use zbus::{proxy, zvariant::Value};
 
 #[proxy(
@@ -126,14 +127,22 @@ pub struct NewNotificationData {
     pub result_reporter: Box<dyn FnOnce(anyhow::Result<u32>) + 'static + Send + Sync>,
 }
 
+impl std::fmt::Debug for NewNotificationData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "NewNotificationData {{ summary: {}, body: {}, sound_file_path: {:?} }}",
+            self.summary, self.body, self.sound_file_path
+        )
+    }
+}
+
 async fn show_notification_async(
-    conn: &zbus::Connection,
+    proxy: &NotificationsProxy<'_>,
     summary: &str,
     body: &str,
     sound_file_path: Option<String>,
 ) -> anyhow::Result<u32> {
-    let proxy = NotificationsProxy::new(conn).await?;
-
     let app_name = ""; // auto
     let app_icon = ""; // auto
     let replaces_id = 0; // no replacement
@@ -150,8 +159,7 @@ async fn show_notification_async(
     Ok(notification_id)
 }
 
-async fn close_notification_async(conn: &zbus::Connection, notification_id: u32) -> anyhow::Result<()> {
-    let proxy = NotificationsProxy::new(conn).await?;
+async fn close_notification_async(proxy: &NotificationsProxy<'_>, notification_id: u32) -> anyhow::Result<()> {
     proxy.close_notification(notification_id).await?;
     Ok(())
 }
@@ -172,17 +180,18 @@ impl NotificationData {
     }
 }
 
+#[derive(Debug)]
 pub enum NotificationAction {
     Show(NewNotificationData),
     Close(u32),
 }
 
-pub async fn notifications_receiver(
-    conn: zbus::Connection,
-    sender: impl Fn(NotificationData) -> anyhow::Result<()> + Send + Sync,
+async fn notifications_receiver(
+    proxy: NotificationsProxy<'_>,
+    sender: impl Fn(NotificationData) -> anyhow::Result<()> + Send + Sync + 'static,
 ) -> anyhow::Result<()> {
-    let proxy = NotificationsProxy::new(&conn).await?;
     let mut stream = proxy.inner().receive_all_signals().await?;
+    debug!("Notifications receiver started");
 
     let mut last_sent_notification = 0;
     let mut current_notification_data: Option<NotificationData> = None;
@@ -232,21 +241,36 @@ pub async fn notifications_receiver(
             }
         }
     }
+    debug!("Notifications receiver stopped");
 
     Ok(())
 }
 
-pub async fn notification_action_receiver_task(
-    conn: zbus::Connection,
+async fn notification_action_receiver_task(
+    proxy: NotificationsProxy<'_>,
     mut notification_action_receiver: tokio::sync::mpsc::Receiver<NotificationAction>,
 ) -> anyhow::Result<()> {
+    debug!("Notifications action receiver started");
     while let Some(action) = notification_action_receiver.recv().await {
+        debug!("Received notification action {action:?}");
         match action {
             NotificationAction::Show(data) => {
-                (data.result_reporter)(show_notification_async(&conn, &data.summary, &data.body, data.sound_file_path).await);
+                (data.result_reporter)(show_notification_async(&proxy, &data.summary, &data.body, data.sound_file_path).await);
             }
-            NotificationAction::Close(notification_id) => close_notification_async(&conn, notification_id).await?,
+            NotificationAction::Close(notification_id) => close_notification_async(&proxy, notification_id).await?,
         }
     }
+    debug!("Notifications action receiver stopped");
     Ok(())
+}
+
+pub async fn init_notifications_task(
+    sender: impl Fn(NotificationData) -> anyhow::Result<()> + Send + Sync + 'static,
+    notification_action_receiver: tokio::sync::mpsc::Receiver<NotificationAction>,
+) -> anyhow::Result<()> {
+    let connection = zbus::Connection::session().await?;
+    let proxy = NotificationsProxy::new(&connection).await?;
+
+    tokio::spawn(notifications_receiver(proxy.clone(), sender));
+    notification_action_receiver_task(proxy, notification_action_receiver).await
 }
