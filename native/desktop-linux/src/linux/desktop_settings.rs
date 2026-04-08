@@ -1,6 +1,9 @@
+use crate::linux::desktop_settings_api::{
+    Color, DesktopTitlebarAction, FfiDesktopSetting, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme,
+};
 use anyhow::bail;
 use ashpd::{
-    desktop::settings::{ACCENT_COLOR_SCHEME_KEY, APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY, ColorScheme, Namespace, Settings},
+    desktop::settings::{ACCENT_COLOR_SCHEME_KEY, APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY, ColorScheme, Namespace},
     zvariant::OwnedValue,
 };
 use desktop_common::ffi_utils::BorrowedArray;
@@ -8,10 +11,6 @@ use futures_lite::StreamExt;
 use log::{debug, error, warn};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-
-use crate::linux::desktop_settings_api::{
-    Color, DesktopTitlebarAction, FfiDesktopSetting, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme,
-};
 
 /// cbindgen:ignore
 const GNOME_DESKTOP_INTERFACE_NAMESPACE: &str = "org.gnome.desktop.interface";
@@ -216,7 +215,9 @@ fn desktop_settings_from_namespace(namespace: &str, values: Namespace) -> HashMa
         .collect()
 }
 
-async fn read_initial_desktop_settings(settings: &Settings) -> anyhow::Result<HashMap<String, HashMap<String, InternalDesktopSetting>>> {
+async fn read_initial_desktop_settings(
+    settings: &zbus::proxy::Proxy<'_>,
+) -> anyhow::Result<HashMap<String, HashMap<String, InternalDesktopSetting>>> {
     let reply = settings
         .call_method(
             "ReadAll",
@@ -268,11 +269,15 @@ async fn read_initial_desktop_settings(settings: &Settings) -> anyhow::Result<Ha
     Ok(all)
 }
 
-pub async fn desktop_settings_notifier(sender: impl Fn(InternalDesktopSetting) -> anyhow::Result<()> + Send + Sync) -> anyhow::Result<()> {
-    let desktop_settings = Settings::new().await?;
+async fn desktop_settings_notifier(
+    desktop_settings: zbus::proxy::Proxy<'_>,
+    sender: impl Fn(InternalDesktopSetting) -> anyhow::Result<()> + Send + Sync,
+) -> anyhow::Result<()> {
     let mut desktop_settings_signals = desktop_settings.receive_signal("SettingChanged").await?;
+    debug!("Created desktop settings signal stream");
 
     let mut all = read_initial_desktop_settings(&desktop_settings).await?;
+    debug!("Received initial desktop settings");
 
     for namespace in all.values() {
         for value in namespace.values() {
@@ -296,4 +301,24 @@ pub async fn desktop_settings_notifier(sender: impl Fn(InternalDesktopSetting) -
     }
     debug!("Stopped listening to desktop settings changes");
     Ok(())
+}
+
+pub async fn init_desktop_settings_notifier_task(
+    sender: impl Fn(InternalDesktopSetting) -> anyhow::Result<()> + Send + Sync + 'static,
+) -> anyhow::Result<()> {
+    let connection = zbus::Connection::session().await?;
+    debug!("Created desktop settings connection");
+
+    // Don't use ashpd Settings, because it uses a static connection instance,
+    // which causes an issue when application is reinitialized (e.g. in tests).
+    // https://github.com/bilelmoussaoui/ashpd/blob/c91fe03807b9a72b56f57acd2f3efb53f0132560/client/src/proxy.rs#L27
+    let desktop_settings = zbus::proxy::Builder::new(&connection)
+        .interface("org.freedesktop.portal.Settings")?
+        .path("/org/freedesktop/portal/desktop")?
+        .destination("org.freedesktop.portal.Desktop")?
+        .build()
+        .await?;
+    debug!("Created desktop settings proxy");
+
+    desktop_settings_notifier(desktop_settings, sender).await
 }

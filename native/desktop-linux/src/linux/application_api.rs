@@ -121,7 +121,8 @@ pub extern "C" fn application_stop_event_loop(mut app_ptr: AppPtr) {
 pub extern "C" fn application_shutdown(app_ptr: AppPtr) {
     debug!("application_shutdown");
     ffi_boundary("application_shutdown", || {
-        let _app = unsafe { app_ptr.to_owned::<Application>() };
+        let app = unsafe { app_ptr.to_owned::<Application>() };
+        app.shutdown();
         Ok(())
     });
 }
