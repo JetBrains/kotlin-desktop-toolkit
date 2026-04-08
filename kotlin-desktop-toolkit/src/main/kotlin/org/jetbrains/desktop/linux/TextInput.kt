@@ -76,7 +76,7 @@ public enum class TextInputContentPurpose {
     internal companion object
 }
 
-public class TextInputContext(
+public data class TextInputContext(
     public val surroundingText: String,
     public val cursorCodepointOffset: UShort,
     public val selectionStartCodepointOffset: UShort,

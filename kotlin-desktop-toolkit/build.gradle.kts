@@ -30,6 +30,9 @@ import kotlin.io.path.createDirectory
 import kotlin.io.path.createFile
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.exists
+import kotlin.io.path.name
+import kotlin.io.path.readText
+import kotlin.io.path.writeLines
 import kotlin.io.path.writeText
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
@@ -53,23 +56,22 @@ repositories {
     mavenCentral()
 }
 
+val skikoVersion = "0.9.37.3"
 val skikoTargetOs = runTestsWithPlatform.os.normalizedName
-
 val skikoTargetArch = when (runTestsWithPlatform.arch) {
     Arch.aarch64 -> "arm64"
     Arch.x86_64 -> "x64"
 }
 
 dependencies {
+    // To be able to inspect gradle source code
+    runtimeOnly(gradleApi())
+
     // Use the Kotlin JUnit 5 integration.
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 
     // Use the JUnit 5 integration.
     testImplementation(libs.junit.jupiter.engine)
-
-    testImplementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTargetOs-$skikoTargetArch:0.9.37.3")
-    testImplementation("net.java.dev.jna:jna:5.18.1")
-    testImplementation("net.java.dev.jna:jna-platform:5.18.1")
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     implementation(kotlin("stdlib"))
@@ -615,6 +617,7 @@ abstract class X11TestEnv :
         dunstConfigFile: RegularFile,
         baseXSettingsDConfigFile: RegularFile,
         ibusTestEngineFile: RegularFile,
+        testResourcesDir: Directory,
         headless: Boolean,
     ): Map<String, String> {
         this.test = test
@@ -726,6 +729,7 @@ Exec=/bin/true
 
         newEnv["GSK_RENDERER"] = "vulkan"
         newEnv["TEST_DUNST_CONFIG_FILE"] = dunstConfigFile.asFile.absolutePath
+        newEnv["TEST_RESOURCES_DIR"] = testResourcesDir.asFile.absolutePath
         newEnv["TEST_XSETTINGSD_PID"] = xSettingsDPid!!
         newEnv["TEST_XSETTINGSD_CONFIG_FILE"] = xSettingsDConfigFilePathString
         return newEnv
@@ -783,23 +787,154 @@ Exec=/bin/true
     }
 }
 
-tasks.test {
-    jvmArgs("--enable-preview", "--enable-native-access=ALL-UNNAMED")
-    useJUnitPlatform()
+val buildWaylandVirtualDevicesTestApp = tasks.register<Exec>(
+    "buildWaylandVirtualDevicesTestApp-${buildPlatformRustTarget(runTestsWithPlatform)}",
+) {
+    val rustTarget = buildPlatformRustTarget(runTestsWithPlatform)
+    dependsOn(installRustTaskByPlatform[runTestsWithPlatform]!!)
+    inputs.files(nativeDir.rustWorkspaceFiles())
+    workingDir = nativeDir.asFile
+    executable = providers.cargoCommand().get()
+    args = listOf(
+        "build",
+        "--example=wayland_virtual_devices",
+        "--color=always",
+        "--target=$rustTarget",
+    )
+    outputs.file(nativeDir.file("target/$rustTarget/debug/examples/wayland_virtual_devices"))
+}
 
-    val getLibFolderForBackend: Map<Backend, Provider<Directory>> = buildMap {
-        for (backend in backendsForOS(runTestsWithPlatform.os)) {
-            val collectNativeArtifactsTask = collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev", backend)]
-            if (collectNativeArtifactsTask != null) {
-                dependsOn(collectNativeArtifactsTask)
-                put(backend, collectNativeArtifactsTask.flatMap { it.targetDirectory })
+sourceSets {
+    create("testGtk") {
+        compileClasspath += sourceSets.main.get().output
+        runtimeClasspath += sourceSets.main.get().output
+    }
+}
+
+val testGtkImplementation by configurations.getting {
+    extendsFrom(configurations.implementation.get())
+}
+val testGtkRuntimeOnly by configurations.getting
+
+configurations["testGtkRuntimeOnly"].extendsFrom(configurations.runtimeOnly.get())
+
+dependencies {
+    testGtkImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testGtkImplementation(libs.junit.jupiter.engine)
+    testGtkImplementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTargetOs-$skikoTargetArch:$skikoVersion")
+    testGtkImplementation("net.java.dev.jna:jna-platform:5.18.1")
+    testGtkRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+val testGtk = tasks.register<Test>("testGtk") {
+    description = "Test GTK implementation."
+    group = "verification"
+
+    testClassesDirs = sourceSets["testGtk"].output.classesDirs
+    classpath = sourceSets["testGtk"].runtimeClasspath
+
+    configureTestTask(this, listOf(Backend.GTK))
+
+    if (backendsForOS(runTestsWithPlatform.os).contains(Backend.GTK)) {
+        val x11TestEnvProvider = gradle.sharedServices.registerIfAbsent("x11TestEnv", X11TestEnv::class)
+        usesService(x11TestEnvProvider)
+        val testResourcesDir = layout.projectDirectory.dir("src/test/resources/linux")
+        doFirst {
+            val x11TestEnv = x11TestEnvProvider.get()
+            try {
+                val newEnv = x11TestEnv.run(
+                    this@register,
+                    i3config = testResourcesDir.file("i3_test_config"),
+                    dbusConfigFile = testResourcesDir.file("dbus-session-conf.xml"),
+                    dunstConfigFile = testResourcesDir.file("dunstrc.conf"),
+                    baseXSettingsDConfigFile = testResourcesDir.file("xsettingsd.conf"),
+                    ibusTestEngineFile = testResourcesDir.file("ibus_test_engine.py"),
+                    testResourcesDir = testResourcesDir,
+                    headless = true,
+                )
+                println(newEnv)
+                setEnvironment(newEnv)
+            } catch (e: Throwable) {
+                x11TestEnv.close()
+                throw e
             }
         }
     }
+}
 
-    if (getLibFolderForBackend.isEmpty()) {
-        enabled = false
-    } else {
+sourceSets {
+    create("testWayland") {
+        compileClasspath += sourceSets.main.get().output
+        runtimeClasspath += sourceSets.main.get().output
+    }
+}
+
+val testWaylandImplementation by configurations.getting {
+    extendsFrom(configurations.implementation.get())
+}
+val testWaylandRuntimeOnly by configurations.getting
+
+configurations["testWaylandRuntimeOnly"].extendsFrom(configurations.runtimeOnly.get())
+
+dependencies {
+    testWaylandImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testWaylandImplementation(libs.junit.jupiter.engine)
+    testWaylandImplementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTargetOs-$skikoTargetArch:$skikoVersion")
+    testWaylandImplementation("com.squareup.moshi:moshi-kotlin:1.15.2")
+    testWaylandRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+val testWayland = tasks.register<Test>("testWayland") {
+    description = "Test Wayland implementation."
+    group = "verification"
+
+    testClassesDirs = sourceSets["testWayland"].output.classesDirs
+    classpath = sourceSets["testWayland"].runtimeClasspath
+
+    configureTestTask(this, listOf(Backend.WAYLAND))
+
+    if (backendsForOS(runTestsWithPlatform.os).contains(Backend.WAYLAND)) {
+        dependsOn(buildWaylandVirtualDevicesTestApp)
+        val waylandTestEnvProvider = gradle.sharedServices.registerIfAbsent("waylandTestEnv", WaylandTestEnv::class)
+        usesService(waylandTestEnvProvider)
+        val testResourcesDir = layout.projectDirectory.dir("src/test/resources/linux")
+        val runVirtualDevicesCmd = buildWaylandVirtualDevicesTestApp.map { it.outputs.files.first() }.get().absolutePath
+        doFirst {
+            val waylandTestEnv = waylandTestEnvProvider.get()
+            try {
+                val newEnv = waylandTestEnv.run(
+                    this@register,
+                    swayConfig = testResourcesDir.file("sway_test_config"),
+                    dbusConfigFile = testResourcesDir.file("dbus-session-conf.xml"),
+                    testResourcesDir = testResourcesDir,
+                    runVirtualDevicesCmd = listOf(runVirtualDevicesCmd),
+                    headless = true,
+                )
+                println(newEnv)
+                setEnvironment(newEnv)
+            } catch (e: Throwable) {
+                waylandTestEnv.close()
+                throw e
+            }
+        }
+    }
+}
+
+fun configureTestTask(test: Test, backends: List<Backend>) {
+    test.apply {
+        jvmArgs("--enable-preview", "--enable-native-access=ALL-UNNAMED")
+        useJUnitPlatform()
+
+        val getLibFolderForBackend: Map<Backend, Provider<Directory>> = buildMap {
+            for (backend in backends) {
+                val collectNativeArtifactsTask = collectNativeArtifactsTaskByTarget[RustTarget(runTestsWithPlatform, "dev", backend)]
+                if (collectNativeArtifactsTask != null) {
+                    dependsOn(collectNativeArtifactsTask)
+                    put(backend, collectNativeArtifactsTask.flatMap { it.targetDirectory })
+                }
+            }
+        }
+
         val logFile = layout.buildDirectory.file("test-logs/desktop_native.log")
         jvmArgumentProviders.add(
             CommandLineArgumentProvider {
@@ -812,48 +947,221 @@ tasks.test {
             },
         )
 
-        if (getLibFolderForBackend.containsKey(Backend.GTK)) {
-            val x11TestEnvProvider = gradle.sharedServices.registerIfAbsent("x11TestEnv", X11TestEnv::class)
-            usesService(x11TestEnvProvider)
-            val testConfigDir = layout.projectDirectory.dir("src/test/resources/linux")
-            doFirst {
-                val x11TestEnv = x11TestEnvProvider.get()
-                try {
-                    val newEnv = x11TestEnv.run(
-                        this@test,
-                        i3config = testConfigDir.file("i3_test_config"),
-                        dbusConfigFile = testConfigDir.file("dbus-session-conf.xml"),
-                        dunstConfigFile = testConfigDir.file("dunstrc.conf"),
-                        baseXSettingsDConfigFile = testConfigDir.file("xsettingsd.conf"),
-                        ibusTestEngineFile = testConfigDir.file("ibus_test_engine.py"),
-                        headless = true,
-                    )
-                    println(newEnv)
-                    setEnvironment(newEnv)
-                } catch (e: Throwable) {
-                    x11TestEnv.close()
-                    throw e
-                }
+        systemProperty(
+            "java.util.logging.config.file",
+            layout.projectDirectory.file("src/test/resources/logging.properties").asFile.absolutePath,
+        )
+
+        systemProperty("junit.jupiter.testmethod.order.default", $$"org.junit.jupiter.api.MethodOrderer$Random")
+        systemProperty("junit.jupiter.testclass.order.default", $$"org.junit.jupiter.api.ClassOrderer$Random")
+//        systemProperty("junit.jupiter.execution.order.random.seed", 55999234918088)
+//        systemProperty("junit.jupiter.execution.class.order.random.seed", 55999234918088)
+
+        testLogging {
+            showStandardStreams = true
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+            events("failed")
+            events("passed")
+            events("skipped")
+        }
+
+        timeout = JavaDuration.ofMinutes(10)
+
+        // We run every test class in a separate JVM
+        forkEvery = 1
+        maxParallelForks = 1
+    }
+}
+
+abstract class WaylandTestEnv :
+    BuildService<BuildServiceParameters.None>,
+    AutoCloseable {
+    private var test: Test? = null
+
+    private var startedProcesses = mutableListOf<Pair<Process, String>>()
+    private var logFiles = mutableListOf<Path>()
+
+    private val homeTempDir by lazy { Files.createTempDirectory("test_home") }
+    private val xdgDataHome by lazy { homeTempDir.resolve(".local/share").createDirectories() }
+
+    private val newEnv by lazy {
+        mutableMapOf(
+            "XDG_CURRENT_DESKTOP" to "GNOME",
+            "SWAYSOCK" to homeTempDir.resolve("sway-socket").absolutePathString(),
+            "LANG" to "en_US.UTF-8",
+            "HOME" to homeTempDir.absolutePathString(),
+            "XDG_DATA_HOME" to xdgDataHome.absolutePathString(),
+            "XDG_RUNTIME_DIR" to homeTempDir.resolve("xdg_runtime_dir").createDirectory(
+                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")),
+            ).absolutePathString(),
+            "XDG_SESSION_TYPE" to "wayland",
+//            "WAYLAND_DEBUG" to "1",
+        )
+    }
+
+    private fun newProcess(
+        vararg args: String,
+        getAdditionalEnvs: ((Map<String, String>) -> Map<String, String>)? = null,
+        afterStart: ((Process) -> Unit)? = null,
+    ) {
+        println("Running ${args.toList()}")
+        val exeName = args.first().let {
+            val p = Path.of(it)
+            if (p.isAbsolute) {
+                p.name
+            } else {
+                it
             }
+        }
+        ProcessBuilder(*args).also { pb ->
+            val env = pb.environment()
+            val additionalEnvs = getAdditionalEnvs?.invoke(env)
+            env.clear()
+            env.putAll(newEnv)
+            additionalEnvs?.let { env.putAll(it) }
+
+            val logFileStderr = Path.of(newEnv["HOME"]!!).resolve("$exeName-stderr.log").also {
+                println(it)
+                logFiles.add(it)
+            }
+            pb.redirectError(ProcessBuilder.Redirect.to(logFileStderr.toFile()))
+        }.start().let {
+            check(it.isAlive)
+            afterStart?.invoke(it)
+            startedProcesses.add(Pair(it, exeName))
         }
     }
 
-    systemProperty(
-        "java.util.logging.config.file",
-        layout.projectDirectory.file("src/test/resources/logging.properties").asFile.absolutePath,
-    )
+    fun run(
+        test: Test,
+        swayConfig: RegularFile,
+        dbusConfigFile: RegularFile,
+        testResourcesDir: Directory,
+        runVirtualDevicesCmd: List<String>,
+        headless: Boolean,
+    ): Map<String, String> {
+        println("WaylandTestEnv run")
+        this.test = test
 
-    testLogging {
-        showStandardStreams = true
-        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-        events("failed")
-        events("passed")
-        events("skipped")
+        xdgDataHome
+            .resolve("dbus-1/services")
+            .createDirectories(PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")))
+            .resolve("org.freedesktop.Notifications.service")
+            .writeText(
+                """[D-BUS Service]
+Name=org.freedesktop.Notifications
+Exec=/bin/true
+""",
+            )
+
+        val testSwayOut = Files.createTempDirectory("test_sway_out")
+        val testSwayDisplayName = testSwayOut.resolve("display_name")
+        val testSwayConfig = Files.createTempFile("test_sway_config", "")
+        testSwayConfig.writeLines(
+            swayConfig.asFile.readLines() + listOf(
+                $$"""exec echo -n "$WAYLAND_DISPLAY" > $${testSwayDisplayName}.tmp && mv $${testSwayDisplayName}.tmp $$testSwayDisplayName""",
+            ),
+        )
+
+        newProcess(
+            "sway",
+//            "--debug",
+//            "--verbose",
+            "--config",
+            testSwayConfig.absolutePathString(),
+            getAdditionalEnvs = { env ->
+                buildMap {
+                    if (headless) {
+                        put("WLR_BACKENDS", "headless")
+                    } else {
+                        val orgXdgRuntimeDir = env["XDG_RUNTIME_DIR"]!!
+                        val orgWaylandDisplay = env["WAYLAND_DISPLAY"]!!
+                        put("WAYLAND_DISPLAY", Path.of(orgXdgRuntimeDir).resolve(orgWaylandDisplay).absolutePathString())
+                    }
+                }
+            },
+            afterStart = { p ->
+                val startTime = TimeSource.Monotonic.markNow()
+                while (true) {
+                    if (testSwayDisplayName.exists()) {
+                        break
+                    }
+                    if (startTime.elapsedNow() > 3.seconds) {
+                        throw Error("Could not run sway: ${p.errorReader().readText()}")
+                    }
+                    Thread.sleep(10)
+                }
+            },
+        )
+
+        val testDisplay = testSwayDisplayName.readText().trim()
+        testSwayDisplayName.deleteIfExists()
+        testSwayOut.deleteIfExists()
+        newEnv["WAYLAND_DISPLAY"] = testDisplay
+
+        newProcess(
+            "dbus-daemon",
+            "--config-file=${dbusConfigFile.asFile.absolutePath}",
+            "--nofork",
+            "--nopidfile",
+            "--nosyslog",
+            "--print-address",
+        ) {
+            newEnv["DBUS_SESSION_BUS_ADDRESS"] = it.inputReader().readLine()
+        }
+
+        newProcess(*runVirtualDevicesCmd.toTypedArray())
+
+//        ProcessBuilder("foot").also { pb ->
+//            val env = pb.environment()
+//            env.clear()
+//            env.putAll(newEnv)
+//            pb.start().waitFor()
+//        }
+
+        newEnv["TEST_RESOURCES_DIR"] = testResourcesDir.asFile.absolutePath
+        return newEnv
     }
 
-    timeout = JavaDuration.ofMinutes(10)
+    override fun close() {
+        println("WaylandTestEnv close")
+        val testsFailed = try {
+            test?.state?.rethrowFailure()
+            false
+        } catch (_: Throwable) {
+            true
+        }
+        test = null
 
-    // We run every test class in a separate JVM
-    forkEvery = 1
-    maxParallelForks = 1
+        startedProcesses.reverse()
+        for ((p, name) in startedProcesses) {
+            val wasAlive = p.isAlive
+            if (!wasAlive) {
+                println("ERROR: $name is not alive")
+            }
+
+            p.toHandle().destroy()
+            if (!wasAlive || testsFailed || name == "dbus-daemon") {
+                val stderr = p.errorReader().readText()
+                if (stderr.isNotBlank()) {
+                    println("\n$name stderr:\n$stderr")
+                }
+            }
+            p.destroy()
+            p.waitFor()
+        }
+        startedProcesses.clear()
+
+        if (!testsFailed) {
+            for (logFile in logFiles) {
+                logFile.deleteIfExists()
+            }
+            homeTempDir.toFile().deleteRecursively()
+        }
+    }
+}
+
+tasks.test {
+    val otherBackends = backendsForOS(runTestsWithPlatform.os).filter { it != Backend.GTK && it != Backend.WAYLAND }
+    configureTestTask(this, otherBackends)
 }

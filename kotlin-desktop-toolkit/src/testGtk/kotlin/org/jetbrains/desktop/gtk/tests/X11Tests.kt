@@ -1,4 +1,4 @@
-package org.jetbrains.desktop.linux.tests
+package org.jetbrains.desktop.gtk.tests
 
 import com.sun.jna.NativeLong
 import com.sun.jna.platform.unix.X11
@@ -118,13 +118,20 @@ private fun log(message: String) {
     println(withTimestamp(message))
 }
 
-private fun runCommandWithOutput(command: List<String>, timeout: Duration = 5.seconds): ByteArray {
+private fun runCommandWithOutput(command: List<String>, timeout: Duration = 5.seconds): ByteArray? {
     val pb = ProcessBuilder(command)
         .redirectOutput(ProcessBuilder.Redirect.PIPE)
         .redirectError(ProcessBuilder.Redirect.INHERIT)
 
     val proc = pb.start()
     assertTrue(proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS), command.toString())
+
+    if (proc.exitValue() != 0) {
+        val stderrReader = proc.errorReader()
+        val stderr = if (stderrReader.ready()) proc.errorReader().readText() else ""
+        log("$command failed, stderr=$stderr")
+        return null
+    }
     return proc.inputStream.readAllBytes()
 }
 
@@ -135,6 +142,10 @@ private fun runCommand(command: List<String>, timeout: Duration = 5.seconds) {
 
     val proc = pb.start()
     if (!proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
+        fail(withTimestamp("Timed out waiting for $command to finish"))
+    }
+
+    if (proc.exitValue() != 0) {
         val stderrReader = proc.errorReader()
         val stderr = if (stderrReader.ready()) proc.errorReader().readText() else ""
         fail(withTimestamp("$command failed, stderr=$stderr"))
@@ -156,23 +167,24 @@ private fun <T> waitUntilEq(expectedValue: T, timeout: Duration = 5.seconds, act
 }
 
 private enum class TestApp(private val resourcePath: String) {
-    BlankWindow("/linux/test_app_blank_window.py"),
-    ClipboardSource("/linux/test_app_clipboard_source.py"),
-    DragSource("/linux/test_app_drag_source.py"),
-    DropTarget("/linux/test_app_drop_target.py"),
-    PrimarySelectionSource("/linux/test_app_primary_selection_source.py"),
+    BlankWindow("test_app_blank_window.py"),
+    ClipboardSource("test_app_clipboard_source.py"),
+    DragSource("test_app_drag_source.py"),
+    DropTarget("test_app_drop_target.py"),
+    PrimarySelectionSource("test_app_primary_selection_source.py"),
     ;
 
     companion object {
-        private fun readResourceTextFile(path: String): String {
-            return this::class.java.getResource(path)!!.readText()
+        val TEST_RESOURCES_DIR = System.getenv("TEST_RESOURCES_DIR")!!
+        private fun getResourcePath(path: String): String {
+            return Path.of(TEST_RESOURCES_DIR).resolve(path).absolutePathString()
         }
     }
 
-    private fun createProcessBuilder(vararg args: String): ProcessBuilder {
+    private fun createProcessBuilder(): ProcessBuilder {
         log("Running test app: $this")
-        val appSource = readResourceTextFile(resourcePath)
-        return ProcessBuilder("python3", "-c", appSource, *args).redirectError(ProcessBuilder.Redirect.INHERIT).also {
+        val appPath = getResourcePath(resourcePath)
+        return ProcessBuilder("python3", appPath).redirectError(ProcessBuilder.Redirect.INHERIT).also {
             val env = it.environment()
             env.remove("GTK_DEBUG")
             env.remove("GDK_DEBUG")
@@ -181,9 +193,9 @@ private enum class TestApp(private val resourcePath: String) {
         }
     }
 
-    fun run(args: Array<String> = emptyArray(), block: ((Duration) -> String?) -> Unit) {
+    fun run(block: ((Duration) -> String?) -> Unit) {
         val outputFile = File.createTempFile("linux_test_app_output", "log")
-        val process = createProcessBuilder(*args)
+        val process = createProcessBuilder()
             .redirectOutput(ProcessBuilder.Redirect.to(outputFile))
             .start()
         AutoCloseable {
@@ -379,7 +391,7 @@ private class Dconf private constructor() {
         }
 
         fun supportsAccentColor(): Boolean {
-            return runCommandWithOutput(listOf("gsettings", "list-keys", SCHEMA)).decodeToString().contains("accent-color")
+            return runCommandWithOutput(listOf("gsettings", "list-keys", SCHEMA))!!.decodeToString().contains("accent-color")
         }
 
         fun withChangedAccentColor(value: AccentColorValue, block: () -> Unit) {
@@ -438,20 +450,20 @@ private fun withTestImeEngine(block: () -> Unit) {
     }
 }
 
-private fun getClipboardContent(format: String): ByteArray {
+private fun getClipboardContent(format: String): ByteArray? {
     return runCommandWithOutput(listOf("xclip", "-selection", "clipboard", "-o", "-t", format))
 }
 
-private fun getPrimarySelectionContent(format: String): ByteArray {
+private fun getPrimarySelectionContent(format: String): ByteArray? {
     return runCommandWithOutput(listOf("xclip", "-selection", "primary", "-o", "-t", format))
 }
 
 private fun getActiveWindowNumber(): ULong {
-    return runCommandWithOutput(listOf("xdotool", "getactivewindow")).decodeToString().trim().toULong()
+    return runCommandWithOutput(listOf("xdotool", "getactivewindow"))!!.decodeToString().trim().toULong()
 }
 
 private fun getActiveWindowTitle(): String {
-    return runCommandWithOutput(listOf("xdotool", "getactivewindow", "getwindowname")).decodeToString().trimEnd('\n')
+    return runCommandWithOutput(listOf("xdotool", "getactivewindow", "getwindowname"))!!.decodeToString().trimEnd('\n')
 }
 
 private fun screenshot(
@@ -601,7 +613,7 @@ internal data class InitialSettings(
 
 abstract class X11TestsBase {
     companion object {
-        private const val APP_ID = "org.jetbrains.desktop.linux.tests"
+        private const val APP_ID = "org.jetbrains.desktop.gtk.tests"
         internal const val TEXT_UTF8_MIME_TYPE = "text/plain;charset=utf-8"
         internal const val URI_LIST_MIME_TYPE = "text/uri-list"
         internal const val HTML_TEXT_MIME_TYPE = "text/html"
@@ -1403,13 +1415,14 @@ class X11Tests : X11TestsBase() {
         assertNotNull(screen.name)
         assertNotEquals(0U, screen.screenId)
 
-        val windowParams = defaultWindowParams().copy(minSize = LogicalSize(width = 100, height = 70))
+        val minSize = LogicalSize(width = 100, height = 70)
+        val windowParams = defaultWindowParams().copy(minSize = minSize)
         val window = ui { app.createWindow(windowParams) }
 
         withNextEvent { event ->
             assertInstanceOf<Event.WindowScaleChanged>(event)
             assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(event.newScale, screen.scale)
+            assertEquals(screen.scale, event.newScale)
         }
         withNextEvent { event ->
             assertInstanceOf<Event.WindowScreenChange>(event)
@@ -1516,7 +1529,7 @@ class X11Tests : X11TestsBase() {
 
         runCommand(listOf("i3-msg", "resize set width 1 height 1"))
 
-        expectedConfigureEvent = expectedConfigureEvent.copy(size = windowParams.minSize!!)
+        expectedConfigureEvent = expectedConfigureEvent.copy(size = minSize)
         withNextEvent { event ->
             assertEquals(expectedConfigureEvent, event)
         }
@@ -1621,7 +1634,7 @@ class X11Tests : X11TestsBase() {
                             expectedConfigureEvent = expectedConfigureEvent.copy(maximized = false)
                             assertEquals(expectedConfigureEvent, event, failMsg())
                         } else if (fullscreenExitChecklist.checkEntry("resized")) {
-                            expectedConfigureEvent = expectedConfigureEvent.copy(size = windowParams.minSize)
+                            expectedConfigureEvent = expectedConfigureEvent.copy(size = minSize)
                             assertEquals(expectedConfigureEvent, event, failMsg())
                             moveMouseTo(physicalScreenSize.width - 52, physicalScreenSize.height - 52)
                         } else {
@@ -1661,9 +1674,10 @@ class X11Tests : X11TestsBase() {
     fun testWindowMinSizeWithInitialMinSize() {
         run(defaultApplicationConfig())
 
+        val minSize = LogicalSize(width = 200, height = 150)
         val windowParams = defaultWindowParams().copy(
             size = LogicalSize(width = 50, height = 50),
-            minSize = LogicalSize(width = 200, height = 150),
+            minSize = minSize,
         )
 
         val window = createWindowAndWaitForFocus(windowParams).window
@@ -1671,10 +1685,10 @@ class X11Tests : X11TestsBase() {
         runCommand(listOf("i3-msg", "floating enable"))
         awaitEventOfType<Event.WindowConfigure> { event ->
             assertEquals(windowParams.windowId, event.windowId)
-            event.active && event.size == windowParams.minSize!!
+            event.active && event.size == minSize
         }
 
-        val newMinSize = LogicalSize(windowParams.minSize!!.width + 10, windowParams.minSize.height + 10)
+        val newMinSize = LogicalSize(minSize.width + 10, minSize.height + 10)
         ui { window.setMinSize(newMinSize) }
 
         awaitEventOfType<Event.WindowConfigure> { event ->
@@ -1695,15 +1709,16 @@ class X11Tests : X11TestsBase() {
     fun testWindowMinSizeWithInitialMinSizeNewSizeSmaller() {
         run(defaultApplicationConfig())
 
+        val minSize = LogicalSize(width = 200, height = 150)
         val windowParams = defaultWindowParams().copy(
             size = LogicalSize(width = 50, height = 50),
-            minSize = LogicalSize(width = 200, height = 150),
+            minSize = minSize,
         )
 
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
 
-        val newMinSize = LogicalSize(windowParams.minSize!!.width - 10, windowParams.minSize.height - 10)
+        val newMinSize = LogicalSize(minSize.width - 10, minSize.height - 10)
         ui { window.setMinSize(newMinSize) }
         awaitEventOfType<Event.WindowDraw>(msg = "WindowDraw after setMinSize") { true }
 
@@ -1711,7 +1726,7 @@ class X11Tests : X11TestsBase() {
         awaitEventOfType<Event.WindowConfigure> { event ->
             assertEquals(windowParams.windowId, event.windowId)
             if (event.active && event.size != initialWindowData.configure.size) {
-                assertEquals(windowParams.minSize, event.size)
+                assertEquals(minSize, event.size)
                 true
             } else {
                 false
@@ -2138,7 +2153,7 @@ text/plain;charset=utf-8
         )
 
         withSetClipboardContent(listOf(TEXT_UTF8_MIME_TYPE)) {
-            assertContentEquals(byteArrayOf(), getClipboardContent(HTML_TEXT_MIME_TYPE))
+            assertNull(getClipboardContent(HTML_TEXT_MIME_TYPE))
         }
     }
 
@@ -2160,7 +2175,7 @@ text/plain;charset=utf-8
         )
 
         withSetPrimarySelectionContent(listOf(TEXT_UTF8_MIME_TYPE)) {
-            assertContentEquals(byteArrayOf(), getPrimarySelectionContent(HTML_TEXT_MIME_TYPE))
+            assertNull(getPrimarySelectionContent(HTML_TEXT_MIME_TYPE))
         }
     }
 
@@ -2169,6 +2184,9 @@ text/plain;charset=utf-8
         run(defaultApplicationConfig())
 
         TestApp.ClipboardSource.run {
+            // Trigger the test app clipboard copy
+            withKeyPress(KeyCode.C) {}
+
             awaitEventOfType<Event.DataTransferAvailable> { event ->
                 assertEquals(DataSource.Clipboard, event.dataSource)
                 assertEquals(emptyList(), event.mimeTypes)
@@ -2213,6 +2231,14 @@ text/plain;charset=utf-8
                     content.data,
                 )
             }
+
+            val transferSerial3 = 6
+            ui { app.clipboardPaste(transferSerial3, listOf(PNG_MIME_TYPE)) }
+            withNextEvent { event ->
+                assertInstanceOf<Event.DataTransfer>(event)
+                assertEquals(transferSerial3, event.serial)
+                assertNull(event.content)
+            }
         }
     }
 
@@ -2221,6 +2247,9 @@ text/plain;charset=utf-8
         run(defaultApplicationConfig())
 
         TestApp.PrimarySelectionSource.run {
+            // Trigger the test app primary selection copy
+            withKeyPress(KeyCode.C) {}
+
             awaitEventOfType<Event.DataTransferAvailable> { event ->
                 assertEquals(DataSource.PrimarySelection, event.dataSource)
                 assertEquals(emptyList(), event.mimeTypes)
@@ -2254,24 +2283,28 @@ text/plain;charset=utf-8
         ui { app.clipboardGetAvailableMimeTypes() }.also {
             assertEquals(emptyList(), it)
         }
+        val serial = 6
+        ui { app.clipboardPaste(serial, listOf(TEXT_UTF8_MIME_TYPE)) }
+        withNextEvent { event ->
+            assertInstanceOf<Event.DataTransfer>(event, "event")
+            assertEquals(serial, event.serial, "event serial")
+            assertNull(event.content, "event content")
+        }
+    }
+
+    @Test
+    fun testPasteWithoutPrimarySelection() {
+        run(defaultApplicationConfig())
         ui { app.primarySelectionGetAvailableMimeTypes() }.also {
             assertEquals(emptyList(), it)
         }
 
-        val clipboardPasteSerial = 6
-        ui { app.clipboardPaste(clipboardPasteSerial, listOf(TEXT_UTF8_MIME_TYPE)) }
+        val serial = 6
+        ui { app.primarySelectionPaste(serial, listOf(TEXT_UTF8_MIME_TYPE)) }
         withNextEvent { event ->
-            assertInstanceOf<Event.DataTransfer>(event)
-            assertEquals(clipboardPasteSerial, event.serial)
-            assertNull(event.content)
-        }
-
-        val primarySelectionPasteSerial = 6
-        ui { app.primarySelectionPaste(primarySelectionPasteSerial, listOf(TEXT_UTF8_MIME_TYPE)) }
-        withNextEvent { event ->
-            assertInstanceOf<Event.DataTransfer>(event)
-            assertEquals(primarySelectionPasteSerial, event.serial)
-            assertNull(event.content)
+            assertInstanceOf<Event.DataTransfer>(event, "event")
+            assertEquals(serial, event.serial, "event serial")
+            assertNull(event.content, "event content")
         }
     }
 
@@ -2495,9 +2528,12 @@ text/plain;charset=utf-8
 
     @Test
     fun testTextInputContext() {
-        val capsTextOutput = IBusTestEngineOutput("TEST_IBUS_ENGINE_CAPS_OUT_FILE")
-        val cursorLocTextOutput = IBusTestEngineOutput("TEST_IBUS_ENGINE_CURSOR_LOCATION_OUT_FILE")
-        val contentTypeTextOutput = IBusTestEngineOutput("TEST_IBUS_ENGINE_CONTENT_TYPE_OUT_FILE")
+        val capsTextOutput =
+            IBusTestEngineOutput("TEST_IBUS_ENGINE_CAPS_OUT_FILE")
+        val cursorLocTextOutput =
+            IBusTestEngineOutput("TEST_IBUS_ENGINE_CURSOR_LOCATION_OUT_FILE")
+        val contentTypeTextOutput =
+            IBusTestEngineOutput("TEST_IBUS_ENGINE_CONTENT_TYPE_OUT_FILE")
 
         withTestImeEngine {
             run(
@@ -2510,7 +2546,7 @@ text/plain;charset=utf-8
                 }),
             )
             val ibusEngine = runCommandWithOutput(listOf("ibus", "engine"))
-            assertEquals("jb_kdt_ibus_test_engine\n", ibusEngine.decodeToString())
+            assertEquals("jb_kdt_ibus_test_engine\n", ibusEngine?.decodeToString())
             val windowParams = defaultWindowParams()
 
             var textInputContext = TextInputContext(
@@ -2670,7 +2706,7 @@ text/plain;charset=utf-8
                 }),
             )
             val ibusEngine = runCommandWithOutput(listOf("ibus", "engine"))
-            assertEquals("jb_kdt_ibus_test_engine\n", ibusEngine.decodeToString())
+            assertEquals("jb_kdt_ibus_test_engine\n", ibusEngine?.decodeToString())
             val windowParams = defaultWindowParams()
 
             val defaultTextInputContext = TextInputContext(
@@ -3287,8 +3323,9 @@ text/plain;charset=utf-8
                     withNextEvent { event ->
                         assertInstanceOf<Event.TextInput>(event)
                         assertEquals(windowParams.windowId, event.windowId)
-                        assertNotNull(event.commitStringData)
-                        assertEquals("❌ error, \uD83D\uDD8D highlighted error, ❗important❗", event.commitStringData.text)
+                        val commitStringData = event.commitStringData
+                        assertNotNull(commitStringData)
+                        assertEquals("❌ error, \uD83D\uDD8D highlighted error, ❗important❗", commitStringData.text)
                         assertNull(event.deleteSurroundingTextData)
                         assertNull(event.preeditStringData)
                     }
@@ -3509,9 +3546,10 @@ text/plain;charset=utf-8
             awaitEventOfType<Event.DropPerformed> { event ->
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(DragAndDropAction.Move, event.action)
-                assertNotNull(event.content)
-                assertEquals(TEXT_UTF8_MIME_TYPE, event.content.mimeType)
-                assertContentEquals("Text from TestAppDragSource".encodeToByteArray(), event.content.data)
+                val content = event.content
+                assertNotNull(content)
+                assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
+                assertContentEquals("Text from TestAppDragSource".encodeToByteArray(), content.data)
                 true
             }
         }
@@ -3720,9 +3758,10 @@ text/plain;charset=utf-8
         awaitEventOfType<Event.DropPerformed> { event ->
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(DragAndDropAction.Move, event.action)
-            assertNotNull(event.content)
-            assertEquals(TEXT_UTF8_MIME_TYPE, event.content.mimeType)
-            assertContentEquals(textContent, event.content.data)
+            val content = event.content
+            assertNotNull(content)
+            assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
+            assertContentEquals(textContent, content.data)
             assertEquals(
                 LogicalPoint(
                     x = mouseX / scale,
@@ -3920,9 +3959,9 @@ text/plain;charset=utf-8
             val notification1Id = withNextEvent { event ->
                 assertInstanceOf<Event.NotificationShown>(event)
                 assertEquals(notification1RequestId, event.requestId)
-                assertNotNull(event.notificationId)
                 event.notificationId
             }
+            assertNotNull(notification1Id)
 
             ui { app.closeNotification(notification1Id) }
 
