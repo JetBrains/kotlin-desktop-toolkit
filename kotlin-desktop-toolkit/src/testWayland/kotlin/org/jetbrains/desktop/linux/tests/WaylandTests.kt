@@ -1045,32 +1045,49 @@ abstract class WaylandTestsBase {
         return block(getNextEvent(timeout))
     }
 
-    internal fun awaitEventWithHistory(timeout: Duration = 5.seconds, predicate: (Event?, List<Event>) -> Boolean): Event? {
+    private fun <T : Event> awaitEventWithHistory(
+        timeout: Duration = 5.seconds,
+        convert: (Event) -> T?,
+        predicate: (T) -> Boolean,
+    ): Pair<T?, List<Event>> {
         val otherEvents = mutableListOf<Event>()
         while (true) {
-            val event: Event? = eventQueue.poll(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)
-            if (predicate(event, otherEvents) || event == null) {
-                return event
+            val event: Event = eventQueue.poll(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS) ?: return Pair(null, otherEvents)
+            val converted = convert(event)
+            if (converted != null && predicate(converted)) {
+                return Pair(converted, otherEvents)
             } else {
                 otherEvents.add(event)
             }
         }
     }
 
+    internal fun <T : Event> awaitEvent(
+        convert: (Event?) -> T?,
+        timeout: Duration = 5.seconds,
+        msg: String? = null,
+        predicate: (T) -> Boolean,
+    ): T {
+        val (event, otherEvents) = awaitEventWithHistory(timeout, convert = convert, predicate = predicate)
+        if (event == null) {
+            val additionalMsg = if (msg != null) ": $msg" else ""
+            val otherEventsMsg = if (otherEvents.isEmpty()) "" else ". Other events:\n${otherEvents.joinToString("\n")}"
+            fail(withTimestamp("Timed out waiting for event$additionalMsg$otherEventsMsg"))
+        } else {
+            return event
+        }
+    }
+
     internal inline fun <reified T : Event> awaitEventOfType(
         timeout: Duration = 5.seconds,
         msg: String? = null,
-        crossinline predicate: (T) -> Boolean,
+        noinline predicate: (T) -> Boolean,
     ): T {
-        return awaitEventWithHistory(timeout) { event, otherEvents ->
-            if (event == null) {
-                val additionalMsg = if (msg != null) ": $msg" else ""
-                val otherEventsMsg = if (otherEvents.isEmpty()) "" else ". Other events:\n${otherEvents.joinToString("\n")}"
-                fail(withTimestamp("Timed out waiting for event ${T::class.java.name}$additionalMsg$otherEventsMsg"))
-            } else {
-                event is T && predicate(event)
-            }
-        } as T
+        return awaitEvent(convert = { it as? T }, timeout = timeout, msg = msg, predicate = predicate)
+    }
+
+    internal fun awaitAnyEvent(timeout: Duration = 5.seconds, msg: String? = null, predicate: (Event?) -> Boolean): Event {
+        return awaitEvent(convert = { it }, timeout = timeout, msg = msg, predicate = predicate)
     }
 
     internal fun <T> ui(timeout: Duration = 5.seconds, body: () -> T): T {
@@ -2201,12 +2218,30 @@ class WaylandTests : WaylandTestsBase() {
         }
 
         withKeyPress(KeyCode.Tab) {
-            ui { window2.requestInternalActivationToken() }
-        }.let { request ->
+            awaitEvent({ it as? Event.KeyDown }) { event ->
+                assertEquals(KeyCode.Tab, event.keyCode.value)
+                assertEquals(KeySym.Tab, event.key.value)
+                assertFalse(event.isRepeat)
+                assertEquals("\t", event.characters)
+                true
+            }
+            val request = ui { window2.requestInternalActivationToken() }
             assertNotNull(request)
             awaitEventOfType<Event.ActivationTokenResponse> { event ->
                 assertEquals(request, event.requestId)
                 ui { window1.activate(event.token) }
+                true
+            }
+            awaitEvent({ it as? Event.WindowKeyboardLeave }) { event ->
+                assertEquals(window2Params.windowId, event.windowId)
+                true
+            }
+            awaitEvent({ it as? Event.WindowKeyboardEnter }) { event ->
+                assertEquals(window1Params.windowId, event.windowId)
+                val keyCode = event.keyCodes.single()
+                assertEquals(KeyCode.Tab, keyCode.value)
+                val keySym = event.keySyms.single()
+                assertEquals(KeySym.Tab, keySym.value)
                 true
             }
         }
@@ -2219,12 +2254,23 @@ class WaylandTests : WaylandTestsBase() {
         }
 
         withKeyPress(KeyCode.Tab) {
-            ui { window1.requestInternalActivationToken() }
-        }.let { request ->
+            val request = ui { window1.requestInternalActivationToken() }
             assertNotNull(request)
             awaitEventOfType<Event.ActivationTokenResponse> { event ->
                 assertEquals(request, event.requestId)
                 ui { window2.activate(event.token) }
+                true
+            }
+            awaitEvent({ it as? Event.WindowKeyboardLeave }) { event ->
+                assertEquals(window1Params.windowId, event.windowId)
+                true
+            }
+            awaitEvent({ it as? Event.WindowKeyboardEnter }) { event ->
+                assertEquals(window2Params.windowId, event.windowId)
+                val keyCode = event.keyCodes.single()
+                assertEquals(KeyCode.Tab, keyCode.value)
+                val keySym = event.keySyms.single()
+                assertEquals(KeySym.Tab, keySym.value)
                 true
             }
         }
@@ -3256,7 +3302,7 @@ text/plain;charset=utf-8
         if (wmVersion != null && wmVersion.name == "sway" && (wmVersion.major <= 1 && wmVersion.minor < 11)) {
             log("Trying to fix stuck pressed button state in compositor")
             val event = withMouseButtonDown(button) {
-                awaitEventWithHistory { event, _ ->
+                awaitAnyEvent { event ->
                     event is Event.MouseExited || event is Event.MouseDown
                 }
             }
@@ -3349,7 +3395,7 @@ text/plain;charset=utf-8
         val stateAfter = assertNotNull(wm.getFocusedWindowState())
 
         moveMouseTo(stateAfter.getClientAreaTopLeftGlobalPosition().shifted(4, 4))
-        awaitEventWithHistory { event, _ ->
+        awaitAnyEvent { event ->
             event is Event.MouseMoved || event is Event.MouseEntered
         }
 
