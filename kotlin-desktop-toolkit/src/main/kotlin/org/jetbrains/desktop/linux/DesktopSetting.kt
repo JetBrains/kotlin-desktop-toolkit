@@ -39,6 +39,22 @@ public enum class ColorSchemeValue {
     PreferLight,
 }
 
+public enum class XdgDesktopContrast {
+    /** No preference */
+    NoPreference,
+
+    /** Higher contrast */
+    High,
+}
+
+public enum class XdgDesktopReducedMotion {
+    /** No preference */
+    NoPreference,
+
+    /** Reduced motion */
+    ReducedMotion,
+}
+
 public enum class FontAntialiasingValue {
     None,
     Grayscale,
@@ -82,6 +98,8 @@ public sealed class DesktopSetting {
 
     public data class AudibleBell(val value: Boolean) : DesktopSetting()
 
+    public data class Contrast(val value: XdgDesktopContrast) : DesktopSetting()
+
     public data class CursorBlink(val value: Boolean) : DesktopSetting()
 
     /** Length of the cursor blink cycle, in milliseconds. */
@@ -112,6 +130,8 @@ public sealed class DesktopSetting {
 
     public data class RecentFilesEnabled(val value: Boolean) : DesktopSetting()
     public data class RecentFilesMaxAgeDays(val value: Int) : DesktopSetting()
+
+    public data class ReducedMotion(val value: XdgDesktopReducedMotion) : DesktopSetting()
 
     public data class TitlebarLayout(val value: String) : DesktopSetting()
 
