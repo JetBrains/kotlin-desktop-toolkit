@@ -1,9 +1,13 @@
 use crate::linux::desktop_settings_api::{
     Color, DesktopTitlebarAction, FfiDesktopSetting, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme,
+    XdgDesktopContrast, XdgDesktopReducedMotion,
 };
 use anyhow::bail;
 use ashpd::{
-    desktop::settings::{ACCENT_COLOR_SCHEME_KEY, APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY, ColorScheme, Namespace},
+    desktop::settings::{
+        ACCENT_COLOR_SCHEME_KEY, APPEARANCE_NAMESPACE, COLOR_SCHEME_KEY, CONTRAST_KEY, ColorScheme, Contrast, Namespace,
+        REDUCED_MOTION_KEY, ReducedMotion,
+    },
     zvariant::OwnedValue,
 };
 use desktop_common::ffi_utils::BorrowedArray;
@@ -31,6 +35,7 @@ pub enum InternalDesktopSetting {
     ActionRightClickTitlebar(DesktopTitlebarAction),
     ActionMiddleClickTitlebar(DesktopTitlebarAction),
     ColorScheme(ColorScheme),
+    Contrast(Contrast),
     CursorBlink(bool),
     CursorBlinkTimeMs(i32),
     CursorBlinkTimeoutMs(i32),
@@ -46,6 +51,7 @@ pub enum InternalDesktopSetting {
     OverlayScrolling(bool),
     RecentFilesEnabled(bool),
     RecentFilesMaxAgeDays(i32),
+    ReducedMotion(ReducedMotion),
     TitlebarLayout(String),
 }
 
@@ -112,6 +118,10 @@ impl FfiDesktopSetting<'_> {
                 ColorScheme::PreferDark => XdgDesktopColorScheme::PreferDark,
                 ColorScheme::PreferLight => XdgDesktopColorScheme::PreferLight,
             })),
+            InternalDesktopSetting::Contrast(v) => f(Self::Contrast(match v {
+                Contrast::NoPreference => XdgDesktopContrast::NoPreference,
+                Contrast::High => XdgDesktopContrast::High,
+            })),
             InternalDesktopSetting::CursorBlink(v) => f(Self::CursorBlink(v)),
             InternalDesktopSetting::CursorBlinkTimeMs(v) => f(Self::CursorBlinkTimeMs(v)),
             InternalDesktopSetting::CursorBlinkTimeoutMs(v) => f(Self::CursorBlinkTimeoutMs(v)),
@@ -129,6 +139,10 @@ impl FfiDesktopSetting<'_> {
             InternalDesktopSetting::OverlayScrolling(v) => f(Self::OverlayScrolling(v)),
             InternalDesktopSetting::RecentFilesEnabled(v) => f(Self::RecentFilesEnabled(v)),
             InternalDesktopSetting::RecentFilesMaxAgeDays(v) => f(Self::RecentFilesMaxAgeDays(v)),
+            InternalDesktopSetting::ReducedMotion(v) => f(Self::ReducedMotion(match v {
+                ReducedMotion::NoPreference => XdgDesktopReducedMotion::NoPreference,
+                ReducedMotion::ReducedMotion => XdgDesktopReducedMotion::ReducedMotion,
+            })),
             InternalDesktopSetting::TitlebarLayout(v) => {
                 f(FfiDesktopSetting::TitlebarLayout(BorrowedArray::new_string(&v)));
             }
@@ -168,6 +182,8 @@ impl InternalDesktopSetting {
             APPEARANCE_NAMESPACE => match key {
                 COLOR_SCHEME_KEY => Some(Self::ColorScheme(value.try_into()?)),
                 ACCENT_COLOR_SCHEME_KEY => Some(Self::AccentColor(read_color(value)?)),
+                CONTRAST_KEY => Some(Self::Contrast(value.try_into()?)),
+                REDUCED_MOTION_KEY => Some(Self::ReducedMotion(value.try_into()?)),
                 _ => None,
             },
             GNOME_DESKTOP_INTERFACE_NAMESPACE => match key {

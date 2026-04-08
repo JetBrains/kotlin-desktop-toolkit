@@ -44,6 +44,8 @@ import org.jetbrains.desktop.linux.WindowDecorationMode
 import org.jetbrains.desktop.linux.WindowId
 import org.jetbrains.desktop.linux.WindowParams
 import org.jetbrains.desktop.linux.WindowResizeEdge
+import org.jetbrains.desktop.linux.XdgDesktopContrast
+import org.jetbrains.desktop.linux.XdgDesktopReducedMotion
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
@@ -436,6 +438,7 @@ private enum class TestApp(private val resourcePath: String) {
 
 private class Dconf private constructor() {
     companion object {
+        private const val GNOME_DESKTOP_A11Y_NAMESPACE = "org.gnome.desktop.a11y.interface"
         private const val GNOME_DESKTOP_INTERFACE_NAMESPACE = "org.gnome.desktop.interface"
         private const val GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE = "org.gnome.desktop.peripherals.mouse"
         private const val GNOME_DESKTOP_PRIVACY_NAMESPACE = "org.gnome.desktop.privacy"
@@ -534,6 +537,15 @@ private class Dconf private constructor() {
             withChangedSetting(setting, tempValue, block)
         }
 
+        fun withChangedContrast(value: XdgDesktopContrast, block: () -> Unit) {
+            val setting = Setting(GNOME_DESKTOP_A11Y_NAMESPACE, "high-contrast")
+            val tempValue = when (value) {
+                XdgDesktopContrast.NoPreference -> false
+                XdgDesktopContrast.High -> true
+            }
+            withChangedSetting(setting, tempValue.toString(), block)
+        }
+
         fun withChangedDoubleClick(value: Duration, block: () -> Unit) {
             val setting = Setting(GNOME_DESKTOP_PERIPHERALS_MOUSE_NAMESPACE, "double-click")
             withChangedSetting(setting, value.inWholeMilliseconds.toString(), block)
@@ -619,6 +631,15 @@ private class Dconf private constructor() {
         fun withChangedRecentFilesMaxAgeDays(value: Int, block: () -> Unit) {
             val setting = Setting(GNOME_DESKTOP_PRIVACY_NAMESPACE, "recent-files-max-age")
             withChangedSetting(setting, value.toString(), block)
+        }
+
+        fun withChangedReducedMotion(value: XdgDesktopReducedMotion, block: () -> Unit) {
+            val setting = Setting(GNOME_DESKTOP_A11Y_NAMESPACE, "reduced-motion")
+            val tempValue = when (value) {
+                XdgDesktopReducedMotion.NoPreference -> "'no-preference'"
+                XdgDesktopReducedMotion.ReducedMotion -> "'reduce'"
+            }
+            withChangedSetting(setting, tempValue, block)
         }
 
         fun withChangedDragThresholdPixelsChanged(value: Int, block: () -> Unit) {
@@ -786,6 +807,7 @@ internal data class InitialSettings(
     var actionRightClickTitlebar: DesktopSetting.ActionRightClickTitlebar? = null,
     var audibleBell: DesktopSetting.AudibleBell? = null,
     var colorScheme: DesktopSetting.ColorScheme? = null,
+    var contrast: DesktopSetting.Contrast? = null,
     var cursorBlink: DesktopSetting.CursorBlink? = null,
     var cursorBlinkTime: DesktopSetting.CursorBlinkTime? = null,
     var cursorBlinkTimeout: DesktopSetting.CursorBlinkTimeout? = null,
@@ -801,6 +823,7 @@ internal data class InitialSettings(
     var overlayScrolling: DesktopSetting.OverlayScrolling? = null,
     var recentFilesEnabled: DesktopSetting.RecentFilesEnabled? = null,
     var recentFilesMaxAgeDays: DesktopSetting.RecentFilesMaxAgeDays? = null,
+    var reducedMotion: DesktopSetting.ReducedMotion? = null,
     var titlebarLayout: DesktopSetting.TitlebarLayout? = null,
 )
 
@@ -973,6 +996,7 @@ abstract class WaylandTestsBase {
                     is DesktopSetting.ActionRightClickTitlebar -> initialSettings.actionRightClickTitlebar = setting
                     is DesktopSetting.AudibleBell -> initialSettings.audibleBell = setting
                     is DesktopSetting.ColorScheme -> initialSettings.colorScheme = setting
+                    is DesktopSetting.Contrast -> initialSettings.contrast = setting
                     is DesktopSetting.CursorBlink -> initialSettings.cursorBlink = setting
                     is DesktopSetting.CursorBlinkTime -> initialSettings.cursorBlinkTime = setting
                     is DesktopSetting.CursorBlinkTimeout -> initialSettings.cursorBlinkTimeout = setting
@@ -988,6 +1012,7 @@ abstract class WaylandTestsBase {
                     is DesktopSetting.OverlayScrolling -> initialSettings.overlayScrolling = setting
                     is DesktopSetting.RecentFilesEnabled -> initialSettings.recentFilesEnabled = setting
                     is DesktopSetting.RecentFilesMaxAgeDays -> initialSettings.recentFilesMaxAgeDays = setting
+                    is DesktopSetting.ReducedMotion -> initialSettings.reducedMotion = setting
                     is DesktopSetting.TitlebarLayout -> initialSettings.titlebarLayout = setting
                 }
             }
@@ -1492,6 +1517,21 @@ class WaylandTests : WaylandTestsBase() {
             initialColorScheme == it.setting
         }
 
+        initialSettings.contrast?.let { initialContrast ->
+            val changed = when (initialContrast.value) {
+                XdgDesktopContrast.NoPreference -> XdgDesktopContrast.High
+                XdgDesktopContrast.High -> XdgDesktopContrast.NoPreference
+            }
+            Dconf.withChangedContrast(changed) {
+                awaitEventOfType<Event.DesktopSettingChange> {
+                    DesktopSetting.Contrast(changed) == it.setting
+                }
+            }
+            awaitEventOfType<Event.DesktopSettingChange> {
+                initialContrast == it.setting
+            }
+        }
+
         val initialCursorBlinkChanged = !initialCursorBlink.value
         Dconf.withChangedCursorBlink(initialCursorBlinkChanged) {
             val settingChangeEvent = awaitEventOfType<Event.DesktopSettingChange> { it.setting is DesktopSetting.CursorBlink }
@@ -1653,6 +1693,21 @@ class WaylandTests : WaylandTestsBase() {
         }
         awaitEventOfType<Event.DesktopSettingChange> {
             initialRecentFilesMaxAgeDays == it.setting
+        }
+
+        initialSettings.reducedMotion?.let { initial ->
+            val changed = when (initial.value) {
+                XdgDesktopReducedMotion.NoPreference -> XdgDesktopReducedMotion.ReducedMotion
+                XdgDesktopReducedMotion.ReducedMotion -> XdgDesktopReducedMotion.NoPreference
+            }
+            Dconf.withChangedReducedMotion(changed) {
+                awaitEventOfType<Event.DesktopSettingChange> {
+                    DesktopSetting.ReducedMotion(changed) == it.setting
+                }
+            }
+            awaitEventOfType<Event.DesktopSettingChange> {
+                initial == it.setting
+            }
         }
 
         assertEquals("appmenu:close", initialTitlebarLayout.value)

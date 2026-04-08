@@ -276,11 +276,36 @@ internal fun DesktopSetting.Companion.fromNative(s: MemorySegment): DesktopSetti
         )
 
         desktop_linux_h.NativeFfiDesktopSetting_ColorScheme() -> DesktopSetting.ColorScheme(
-            when (NativeFfiDesktopSetting.color_scheme(s)) {
+            when (val raw = NativeFfiDesktopSetting.color_scheme(s)) {
                 desktop_linux_h.NativeXdgDesktopColorScheme_NoPreference() -> ColorSchemeValue.NoPreference
                 desktop_linux_h.NativeXdgDesktopColorScheme_PreferDark() -> ColorSchemeValue.PreferDark
                 desktop_linux_h.NativeXdgDesktopColorScheme_PreferLight() -> ColorSchemeValue.PreferLight
-                else -> error("Unexpected color scheme ${NativeFfiDesktopSetting.color_scheme(s)}")
+                else -> {
+                    Logger.warn { "Unexpected color scheme $raw" }
+                    ColorSchemeValue.NoPreference
+                }
+            },
+        )
+
+        desktop_linux_h.NativeFfiDesktopSetting_Contrast() -> DesktopSetting.Contrast(
+            when (val raw = NativeFfiDesktopSetting.contrast(s)) {
+                desktop_linux_h.NativeXdgDesktopContrast_NoPreference() -> XdgDesktopContrast.NoPreference
+                desktop_linux_h.NativeXdgDesktopContrast_High() -> XdgDesktopContrast.High
+                else -> {
+                    Logger.warn { "Unexpected contrast value $raw" }
+                    XdgDesktopContrast.NoPreference
+                }
+            },
+        )
+
+        desktop_linux_h.NativeFfiDesktopSetting_ReducedMotion() -> DesktopSetting.ReducedMotion(
+            when (val raw = NativeFfiDesktopSetting.reduced_motion(s)) {
+                desktop_linux_h.NativeXdgDesktopReducedMotion_NoPreference() -> XdgDesktopReducedMotion.NoPreference
+                desktop_linux_h.NativeXdgDesktopReducedMotion_ReducedMotion() -> XdgDesktopReducedMotion.ReducedMotion
+                else -> {
+                    Logger.warn { "Unexpected reduced motion value $raw" }
+                    XdgDesktopReducedMotion.NoPreference
+                }
             },
         )
 
@@ -289,31 +314,31 @@ internal fun DesktopSetting.Companion.fromNative(s: MemorySegment): DesktopSetti
         )
 
         desktop_linux_h.NativeFfiDesktopSetting_FontAntialiasing() -> DesktopSetting.FontAntialiasing(
-            when (NativeFfiDesktopSetting.font_antialiasing(s)) {
+            when (val raw = NativeFfiDesktopSetting.font_antialiasing(s)) {
                 desktop_linux_h.NativeFontAntialiasing_None() -> FontAntialiasingValue.None
                 desktop_linux_h.NativeFontAntialiasing_Grayscale() -> FontAntialiasingValue.Grayscale
                 desktop_linux_h.NativeFontAntialiasing_Rgba() -> FontAntialiasingValue.Rgba
-                else -> error("Unexpected font aliasing ${NativeFfiDesktopSetting.font_antialiasing(s)}")
+                else -> error("Unexpected font aliasing $raw")
             },
         )
 
         desktop_linux_h.NativeFfiDesktopSetting_FontHinting() -> DesktopSetting.FontHinting(
-            when (NativeFfiDesktopSetting.font_hinting(s)) {
+            when (val raw = NativeFfiDesktopSetting.font_hinting(s)) {
                 desktop_linux_h.NativeFontHinting_None() -> FontHintingValue.None
                 desktop_linux_h.NativeFontHinting_Slight() -> FontHintingValue.Slight
                 desktop_linux_h.NativeFontHinting_Medium() -> FontHintingValue.Medium
                 desktop_linux_h.NativeFontHinting_Full() -> FontHintingValue.Full
-                else -> error("Unexpected font hinting ${NativeFfiDesktopSetting.font_hinting(s)}")
+                else -> error("Unexpected font hinting $raw")
             },
         )
 
         desktop_linux_h.NativeFfiDesktopSetting_FontRgbaOrder() -> DesktopSetting.FontRgbaOrder(
-            when (NativeFfiDesktopSetting.font_rgba_order(s)) {
+            when (val raw = NativeFfiDesktopSetting.font_rgba_order(s)) {
                 desktop_linux_h.NativeFontRgbaOrder_Rgb() -> FontRgbaOrderValue.Rgb
                 desktop_linux_h.NativeFontRgbaOrder_Bgr() -> FontRgbaOrderValue.Bgr
                 desktop_linux_h.NativeFontRgbaOrder_Vrgb() -> FontRgbaOrderValue.Vrgb
                 desktop_linux_h.NativeFontRgbaOrder_Vbgr() -> FontRgbaOrderValue.Vbgr
-                else -> error("Unexpected font rgba order ${NativeFfiDesktopSetting.font_rgba_order(s)}")
+                else -> error("Unexpected font rgba order $raw")
             },
         )
 
@@ -577,7 +602,7 @@ private fun readNativeU32Array(nativeU32Array: MemorySegment): IntArray? {
 }
 
 internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Event {
-    return when (NativeEvent.tag(s)) {
+    return when (val raw = NativeEvent.tag(s)) {
         desktop_linux_h.NativeEvent_ApplicationStarted() -> {
             Event.ApplicationStarted
         }
@@ -845,7 +870,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             )
         }
         else -> {
-            error("Unexpected Event tag")
+            error("Unexpected Event tag $raw")
         }
     }
 }

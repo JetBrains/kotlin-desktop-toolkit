@@ -13,6 +13,24 @@ pub enum XdgDesktopColorScheme {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum XdgDesktopContrast {
+    /// No preference
+    NoPreference,
+    /// Higher contrast
+    High,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum XdgDesktopReducedMotion {
+    /// No preference
+    NoPreference,
+    /// Reduced motion
+    ReducedMotion,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FontAntialiasing {
     None,
     Grayscale,
@@ -64,6 +82,7 @@ pub enum FfiDesktopSetting<'a> {
     ActionRightClickTitlebar(DesktopTitlebarAction),
     ActionMiddleClickTitlebar(DesktopTitlebarAction),
     ColorScheme(XdgDesktopColorScheme),
+    Contrast(XdgDesktopContrast),
     CursorBlink(bool),
 
     /// Length of the cursor blink cycle, in milliseconds.
@@ -84,5 +103,6 @@ pub enum FfiDesktopSetting<'a> {
     OverlayScrolling(bool),
     RecentFilesEnabled(bool),
     RecentFilesMaxAgeDays(i32),
+    ReducedMotion(XdgDesktopReducedMotion),
     TitlebarLayout(BorrowedArray<'a, u8>),
 }
