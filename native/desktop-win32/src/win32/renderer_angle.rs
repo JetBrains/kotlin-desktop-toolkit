@@ -7,8 +7,8 @@ use khronos_egl as egl;
 use windows::{
     UI::Composition::{Core::CompositorController, SpriteVisual},
     Win32::{Foundation::ERROR_PATH_NOT_FOUND, System::LibraryLoader::GetModuleFileNameW},
-    core::{Error as WinError, Interface},
 };
+use windows_core::{Error as WinError, Interface};
 use windows_numerics::Vector2;
 
 use super::{

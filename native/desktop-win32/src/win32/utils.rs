@@ -62,14 +62,14 @@ pub(crate) use {GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOBY
 
 pub(crate) fn is_windows_11_build_22000_or_higher() -> bool {
     unsafe {
-        windows::Win32::System::WinRT::Metadata::RoIsApiContractPresent(windows::core::w!("Windows.Foundation.UniversalApiContract"), 14, 0)
+        windows::Win32::System::WinRT::Metadata::RoIsApiContractPresent(windows_core::w!("Windows.Foundation.UniversalApiContract"), 14, 0)
     }
-    .is_ok_and(windows::core::BOOL::as_bool)
+    .is_ok_and(windows_core::BOOL::as_bool)
 }
 
 pub(crate) fn is_windows_11_build_22621_or_higher() -> bool {
     unsafe {
-        windows::Win32::System::WinRT::Metadata::RoIsApiContractPresent(windows::core::w!("Windows.Foundation.UniversalApiContract"), 15, 0)
+        windows::Win32::System::WinRT::Metadata::RoIsApiContractPresent(windows_core::w!("Windows.Foundation.UniversalApiContract"), 15, 0)
     }
-    .is_ok_and(windows::core::BOOL::as_bool)
+    .is_ok_and(windows_core::BOOL::as_bool)
 }

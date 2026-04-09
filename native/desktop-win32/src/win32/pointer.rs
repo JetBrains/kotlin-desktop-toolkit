@@ -86,7 +86,7 @@ impl PointerButtonChange {
 }
 
 impl PointerInfo {
-    pub(crate) fn try_from_message(wparam: WPARAM) -> windows::core::Result<Self> {
+    pub(crate) fn try_from_message(wparam: WPARAM) -> windows_core::Result<Self> {
         let pointer_id = u32::from(LOWORD!(wparam.0));
 
         let pointer_type = unsafe {

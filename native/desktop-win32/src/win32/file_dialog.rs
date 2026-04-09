@@ -2,17 +2,15 @@ use std::ffi::CString;
 
 use desktop_common::ffi_utils::BorrowedStrPtr;
 
-use windows::{
-    Win32::{
-        Foundation::ERROR_CANCELLED,
-        System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
-        UI::Shell::{
-            FOS_ALLOWMULTISELECT, FOS_FORCESHOWHIDDEN, FOS_PICKFOLDERS, IFileDialog, IFileOpenDialog, IFileSaveDialog, IShellItem,
-            SHCreateItemFromParsingName, SIGDN_FILESYSPATH,
-        },
+use windows::Win32::{
+    Foundation::ERROR_CANCELLED,
+    System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance},
+    UI::Shell::{
+        FOS_ALLOWMULTISELECT, FOS_FORCESHOWHIDDEN, FOS_PICKFOLDERS, IFileDialog, IFileOpenDialog, IFileSaveDialog, IShellItem,
+        SHCreateItemFromParsingName, SIGDN_FILESYSPATH,
     },
-    core::Result as WinResult,
 };
+use windows_core::Result as WinResult;
 
 use super::{
     strings::{copy_from_utf8_string, copy_from_wide_string},
