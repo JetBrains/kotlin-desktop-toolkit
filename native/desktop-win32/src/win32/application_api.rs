@@ -58,9 +58,9 @@ pub extern "C" fn application_stop_event_loop(app_ptr: AppPtr) {
 pub extern "C" fn application_open_url(url: BorrowedStrPtr) {
     ffi_boundary("application_open_url", || {
         let url = copy_from_utf8_string(&url)?;
-        let result = unsafe { ShellExecuteW(None, windows::core::w!("open"), &url, None, None, SW_SHOWNORMAL) };
+        let result = unsafe { ShellExecuteW(None, windows_core::w!("open"), &url, None, None, SW_SHOWNORMAL) };
         // https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew
-        anyhow::ensure!(result.0 as isize > 32, windows::core::Error::from_thread());
+        anyhow::ensure!(result.0 as isize > 32, windows_core::Error::from_thread());
         Ok(())
     });
 }

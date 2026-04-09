@@ -1,11 +1,9 @@
 use desktop_common::logger::PanicDefault;
-use windows::{
-    UI::{
-        Color as WUColor,
-        ViewManagement::{UIColorType, UISettings},
-    },
-    core::Result as WinResult,
+use windows::UI::{
+    Color as WUColor,
+    ViewManagement::{UIColorType, UISettings},
 };
+use windows_core::Result as WinResult;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]

@@ -1,13 +1,10 @@
 use std::path::Path;
 
-use windows::{
-    Win32::UI::WindowsAndMessaging::{
-        HCURSOR, IDC_APPSTARTING, IDC_ARROW, IDC_CROSS, IDC_HAND, IDC_HELP, IDC_IBEAM, IDC_NO, IDC_PERSON, IDC_PIN, IDC_SIZEALL,
-        IDC_SIZENESW, IDC_SIZENS, IDC_SIZENWSE, IDC_SIZEWE, IDC_UPARROW, IDC_WAIT, IMAGE_CURSOR, LR_DEFAULTSIZE, LR_LOADFROMFILE,
-        LR_SHARED, LoadImageW,
-    },
-    core::{Free, HSTRING, PCWSTR, Result as WinResult},
+use windows::Win32::UI::WindowsAndMessaging::{
+    HCURSOR, IDC_APPSTARTING, IDC_ARROW, IDC_CROSS, IDC_HAND, IDC_HELP, IDC_IBEAM, IDC_NO, IDC_PERSON, IDC_PIN, IDC_SIZEALL, IDC_SIZENESW,
+    IDC_SIZENS, IDC_SIZENWSE, IDC_SIZEWE, IDC_UPARROW, IDC_WAIT, IMAGE_CURSOR, LR_DEFAULTSIZE, LR_LOADFROMFILE, LR_SHARED, LoadImageW,
 };
+use windows_core::{Free, HSTRING, PCWSTR, Result as WinResult};
 
 // see https://learn.microsoft.com/en-us/windows/win32/menurc/about-cursors
 #[repr(C)]

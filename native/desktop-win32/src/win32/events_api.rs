@@ -64,7 +64,7 @@ pub extern "C" fn keydown_to_unicode(msg_id: u64) -> RustAllocatedStrPtr {
 
 #[allow(non_snake_case)]
 #[inline]
-unsafe fn TranslateMessageEx(lpmsg: *const MSG, flags: u32) -> windows::core::BOOL {
-    windows::core::link!("user32.dll" "system" fn TranslateMessageEx(lpmsg : *const MSG, flags : u32) -> windows::core::BOOL);
+unsafe fn TranslateMessageEx(lpmsg: *const MSG, flags: u32) -> windows_core::BOOL {
+    windows_core::link!("user32.dll" "system" fn TranslateMessageEx(lpmsg : *const MSG, flags : u32) -> windows_core::BOOL);
     unsafe { TranslateMessageEx(lpmsg, flags) }
 }

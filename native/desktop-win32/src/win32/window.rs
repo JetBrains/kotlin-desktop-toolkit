@@ -35,8 +35,8 @@ use windows::{
             },
         },
     },
-    core::{HSTRING, Interface, PCWSTR, Result as WinResult, w},
 };
+use windows_core::{HSTRING, Interface, PCWSTR, Result as WinResult, w};
 
 use super::{
     cursor::{Cursor, CursorIcon},
@@ -326,7 +326,7 @@ impl Window {
                     self.hwnd(),
                     DWMWA_USE_IMMERSIVE_DARK_MODE,
                     (&raw const enablement).cast(),
-                    size_of::<windows::core::BOOL>().try_into()?,
+                    size_of::<windows_core::BOOL>().try_into()?,
                 )?;
             }
         }

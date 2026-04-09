@@ -14,8 +14,8 @@ use windows::{
         },
         UI::Shell::{DROPFILES, DragQueryFileW, HDROP},
     },
-    core::{Error as WinError, w},
 };
+use windows_core::{Error as WinError, HSTRING, PWSTR, w};
 
 use super::{
     strings::{copy_from_utf8_bytes, copy_from_wide_string},
@@ -57,7 +57,7 @@ impl Clipboard {
         Ok(Self { is_open: true })
     }
 
-    pub fn register_format(format_name: &windows::core::HSTRING) -> anyhow::Result<u32> {
+    pub fn register_format(format_name: &HSTRING) -> anyhow::Result<u32> {
         Ok(unsafe { RegisterClipboardFormatW(format_name) })
     }
 
@@ -161,7 +161,7 @@ impl ClipboardData {
         })
     }
 
-    pub fn new_html(content: &windows::core::HSTRING) -> anyhow::Result<Self> {
+    pub fn new_html(content: &HSTRING) -> anyhow::Result<Self> {
         let html_format = HtmlFormatHelper::CreateHtmlFormat(content)?;
         let cstr = copy_from_wide_string(&html_format)?;
         Self::new(cstr.to_bytes_with_nul(), ClipboardFormat::HtmlFragment.id())
@@ -183,7 +183,7 @@ impl ClipboardData {
     pub fn get_text(&self) -> anyhow::Result<CString> {
         anyhow::ensure!(self.format_id == ClipboardFormat::Text.id(), "Unexpected data format.");
         let hglob = HGLOBAL(self.content.0);
-        let content = unsafe { windows::core::PWSTR(GlobalLock(hglob).cast()) };
+        let content = unsafe { PWSTR(GlobalLock(hglob).cast()) };
         let cstr = copy_from_wide_string(unsafe { content.as_wide() })?;
         global_unlock(hglob)?;
         Ok(cstr)
@@ -206,11 +206,11 @@ impl ClipboardData {
         let mut files = Vec::with_capacity(num_files.try_into()?);
         for i in 0..num_files {
             let file_name_len = unsafe { DragQueryFileW(HDROP(content), i, None) };
-            anyhow::ensure!(file_name_len != 0, windows::core::Error::from_thread());
+            anyhow::ensure!(file_name_len != 0, WinError::from_thread());
             let buffer_len = usize::try_from(file_name_len)? + 1;
             let mut buffer = vec![0u16; buffer_len];
             let file_name_len = unsafe { DragQueryFileW(HDROP(content), i, Some(buffer.as_mut_slice())) };
-            anyhow::ensure!(file_name_len != 0, windows::core::Error::from_thread());
+            anyhow::ensure!(file_name_len != 0, WinError::from_thread());
             files.push(copy_from_wide_string(buffer.as_slice())?);
         }
         global_unlock(hglob)?;
@@ -226,6 +226,6 @@ impl ClipboardData {
     }
 }
 
-fn global_unlock(mem: HGLOBAL) -> windows::core::Result<()> {
+fn global_unlock(mem: HGLOBAL) -> windows_core::Result<()> {
     unsafe { windows::Win32::System::Memory::GlobalUnlock(mem) }.or_else(|err| if err.code().is_ok() { Ok(()) } else { Err(err) })
 }

@@ -50,7 +50,7 @@ pub struct EventLoop {
 }
 
 impl EventLoop {
-    pub fn new(event_handler: EventHandler) -> windows::core::Result<Self> {
+    pub fn new(event_handler: EventHandler) -> windows_core::Result<Self> {
         unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
         unsafe { EnableMouseInPointer(true)? };
         Ok(Self { event_handler })
@@ -62,7 +62,7 @@ impl EventLoop {
         let mut msg = MSG::default();
         loop {
             match unsafe { GetMessageW(&raw mut msg, None, 0, 0).0 } {
-                -1 => anyhow::bail!("Event loop has exited with an error: {}", windows::core::Error::from_thread()),
+                -1 => anyhow::bail!("Event loop has exited with an error: {}", windows_core::Error::from_thread()),
                 0 => break,
                 _ => unsafe { DispatchMessageW(&raw const msg) },
             };
@@ -241,7 +241,7 @@ fn on_setcursor(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
 fn on_settext(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let result = unsafe { DefWindowProcW(window.hwnd(), WM_SETTEXT, wparam, lparam) };
     if result.0 == windows::Win32::Foundation::TRUE.0 as isize {
-        let pwstr = windows::core::PWSTR(lparam.0 as *mut u16);
+        let pwstr = windows_core::PWSTR(lparam.0 as *mut u16);
         let title = match copy_from_wide_string(unsafe { pwstr.as_wide() }) {
             Ok(text) => RustAllocatedStrPtr::from_c_string(text).to_auto_drop(),
             Err(err) => {
@@ -258,8 +258,8 @@ fn on_settext(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: L
 fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     // borrowed from https://github.com/microsoft/terminal/blob/73948072120beb51d355b3c74b5f774a6526b277/src/cascadia/WindowsTerminal/IslandWindow.cpp#L748
     if wparam.0 == 0 && lparam.0 != 0 {
-        let param = unsafe { windows::core::PWSTR(lparam.0 as *mut u16).to_hstring() };
-        if &param == windows::core::h!("ImmersiveColorSet") {
+        let param = unsafe { windows_core::PWSTR(lparam.0 as *mut u16).to_hstring() };
+        if &param == windows_core::h!("ImmersiveColorSet") {
             let new_appearance = Appearance::get_current()
                 .inspect_err(|err| log::error!("failed to get current system appearance: {err}"))
                 .ok()?;

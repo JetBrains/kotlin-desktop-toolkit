@@ -1,19 +1,16 @@
 use anyhow::Context;
 use desktop_common::ffi_utils::{AutoDropStrPtr, RustAllocatedStrPtr};
 
-use windows::{
-    Win32::{
-        Foundation::{LPARAM, POINT, RECT},
-        Graphics::Gdi::{
-            DEVMODEW, DISPLAY_DEVICE_ATTACHED_TO_DESKTOP, DISPLAY_DEVICEW, ENUM_CURRENT_SETTINGS, EnumDisplayDevicesW, EnumDisplayMonitors,
-            EnumDisplaySettingsW, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW, ScreenToClient,
-        },
-        UI::{
-            HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI},
-            WindowsAndMessaging::USER_DEFAULT_SCREEN_DPI,
-        },
+use windows::Win32::{
+    Foundation::{LPARAM, POINT, RECT},
+    Graphics::Gdi::{
+        DEVMODEW, DISPLAY_DEVICE_ATTACHED_TO_DESKTOP, DISPLAY_DEVICEW, ENUM_CURRENT_SETTINGS, EnumDisplayDevicesW, EnumDisplayMonitors,
+        EnumDisplaySettingsW, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW, ScreenToClient,
     },
-    core::HSTRING,
+    UI::{
+        HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI},
+        WindowsAndMessaging::USER_DEFAULT_SCREEN_DPI,
+    },
 };
 
 use super::{
@@ -45,7 +42,7 @@ pub(crate) fn enumerate_screens() -> anyhow::Result<Box<[ScreenInfo]>> {
     Ok(screens.into_boxed_slice())
 }
 
-unsafe extern "system" fn monitor_enum_proc(hmonitor: HMONITOR, _hdc: HDC, _lprc: *mut RECT, dwdata: LPARAM) -> windows::core::BOOL {
+unsafe extern "system" fn monitor_enum_proc(hmonitor: HMONITOR, _hdc: HDC, _lprc: *mut RECT, dwdata: LPARAM) -> windows_core::BOOL {
     let screens = Box::leak(unsafe { Box::from_raw(dwdata.0 as *mut Vec<ScreenInfo>) });
     let screen_info = match get_screen_info(hmonitor) {
         Ok(screen_info) => screen_info,
@@ -70,7 +67,7 @@ pub(crate) fn get_screen_info(hmonitor: HMONITOR) -> anyhow::Result<ScreenInfo> 
     if !unsafe { GetMonitorInfoW(hmonitor, (&raw mut monitor_info).cast()).as_bool() } {
         anyhow::bail!("failed to get monitor info");
     }
-    let device_name = HSTRING::from_wide(&monitor_info.szDevice);
+    let device_name = windows_core::HSTRING::from_wide(&monitor_info.szDevice);
     let mut display_device = DISPLAY_DEVICEW {
         cb: size_of::<DISPLAY_DEVICEW>().try_into()?,
         ..Default::default()
