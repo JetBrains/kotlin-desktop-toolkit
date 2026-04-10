@@ -25,13 +25,14 @@ use windows::{
         System::WinRT::Composition::ICompositorDesktopInterop,
         UI::{
             Controls::MARGINS,
-            HiDpi::GetDpiForWindow,
+            HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
-                GetClientRect, GetPropW, ICON_BIG, IsIconic, IsZoomed, LR_DEFAULTSIZE, PostMessageW, RegisterClassExW, RemovePropW,
-                SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor,
-                SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE,
-                WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
+                GetClientRect, GetPropW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW,
+                RemovePropW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SWP_NOACTIVATE,
+                SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
+                ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW,
+                WS_EX_NOREDIRECTIONBITMAP,
             },
         },
     },
@@ -393,8 +394,19 @@ impl Window {
 
     pub fn set_icon(&self, bytes: &[u8]) -> anyhow::Result<()> {
         const ICON_VER: u32 = 0x0003_0000;
-        let icon = unsafe { CreateIconFromResourceEx(bytes, true, ICON_VER, 0, 0, LR_DEFAULTSIZE)? };
-        unsafe { SendMessageW(self.hwnd(), WM_SETICON, Some(WPARAM(ICON_BIG as _)), Some(LPARAM(icon.0 as _))) };
+        let hwnd = self.hwnd();
+        let dpi = unsafe { GetDpiForWindow(hwnd) };
+        let set_icon_worker = |cx, cy, kind| -> WinResult<()> {
+            unsafe {
+                let cx = GetSystemMetricsForDpi(cx, dpi);
+                let cy = GetSystemMetricsForDpi(cy, dpi);
+                let icon = CreateIconFromResourceEx(bytes, true, ICON_VER, cx, cy, LR_DEFAULTCOLOR)?;
+                SendMessageW(hwnd, WM_SETICON, Some(WPARAM(kind as _)), Some(LPARAM(icon.0 as _)));
+            }
+            Ok(())
+        };
+        set_icon_worker(SM_CXSMICON, SM_CYSMICON, ICON_SMALL)?;
+        set_icon_worker(SM_CXICON, SM_CYICON, ICON_BIG)?;
         Ok(())
     }
 }
