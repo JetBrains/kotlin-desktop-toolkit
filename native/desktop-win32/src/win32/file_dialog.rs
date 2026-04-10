@@ -138,6 +138,6 @@ fn retrieve_selected_items(file_open_dialog: &IFileOpenDialog) -> anyhow::Result
 fn parse_shell_item(shell_item: &IShellItem) -> anyhow::Result<CString> {
     let shell_item_file_path = unsafe { shell_item.GetDisplayName(SIGDN_FILESYSPATH) }
         .inspect_err(|err| log::error!("failed to retrieve IShellItem's file system path: {err}"))?;
-    Ok(copy_from_wide_string(unsafe { shell_item_file_path.as_wide() })
-        .inspect_err(|err| log::error!("failed to convert IShellItem's file system path to UTF-8: {err}"))?)
+    copy_from_wide_string(unsafe { shell_item_file_path.as_wide() })
+        .inspect_err(|err| log::error!("failed to convert IShellItem's file system path to UTF-8: {err}"))
 }

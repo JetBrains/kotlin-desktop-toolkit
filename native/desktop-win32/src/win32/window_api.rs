@@ -194,8 +194,8 @@ pub extern "C" fn window_set_backdrop_tint(window_ptr: WindowPtr, color: u32, op
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_cursor_from_file(window_ptr: WindowPtr, path: BorrowedStrPtr) {
     with_window(&window_ptr, "window_set_cursor_from_file", |window| {
-        let cursor_file_path = copy_from_utf8_string(&path)?.to_os_string();
-        let cursor = Cursor::load_from_file(cursor_file_path)?;
+        let cursor_file_path = copy_from_utf8_string(&path)?;
+        let cursor = Cursor::load_from_file(&cursor_file_path)?;
         window.set_cursor(cursor);
         Ok(())
     });
