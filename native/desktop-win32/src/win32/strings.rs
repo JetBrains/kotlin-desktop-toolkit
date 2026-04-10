@@ -7,13 +7,12 @@ use windows::Win32::{
 };
 use windows_core::{Error as WinError, HSTRING, Result as WinResult};
 
-#[allow(clippy::cast_sign_loss)]
 pub(crate) fn copy_from_wide_string(s: &[u16]) -> WinResult<CString> {
     let len = unsafe { WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, s, None, None, None) };
     if len == 0 {
         return Err(WinError::from_thread());
     }
-    let mut buf = vec![0u8; len as usize + 1]; // ensure that we definitely have a terminating null character
+    let mut buf = vec![0u8; len.cast_unsigned() as usize + 1]; // ensure that we definitely have a terminating null character
     unsafe { WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, s, Some(&mut buf), None, None) };
     match CStr::from_bytes_until_nul(buf.as_slice()) {
         Ok(c_str) => Ok(c_str.to_owned()),
@@ -21,14 +20,13 @@ pub(crate) fn copy_from_wide_string(s: &[u16]) -> WinResult<CString> {
     }
 }
 
-#[allow(clippy::cast_sign_loss)]
 pub(crate) fn copy_from_utf8_bytes(s: &[u8]) -> anyhow::Result<HSTRING> {
     let len = unsafe { MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, None) };
     anyhow::ensure!(len != 0, WinError::from_thread());
-    let mut buf = vec![0u16; len as usize + 1];
+    let mut buf = vec![0u16; len.cast_unsigned() as usize + 1];
     let len = unsafe { MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, Some(&mut buf)) };
     anyhow::ensure!(len != 0, WinError::from_thread());
-    Ok(HSTRING::from_wide(&buf[..len as usize]))
+    Ok(HSTRING::from_wide(&buf[..len.cast_unsigned() as usize]))
 }
 
 pub(crate) fn copy_from_utf8_string(s: &BorrowedStrPtr) -> WinResult<HSTRING> {
