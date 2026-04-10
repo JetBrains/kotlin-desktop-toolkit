@@ -244,11 +244,10 @@ impl PointerClickCounter {
     }
 
     // See https://devblogs.microsoft.com/oldnewthing/20041018-00/?p=37543
-    #[allow(clippy::cast_sign_loss)]
     pub fn register_click(&mut self, button: PointerButton, physical_point: PhysicalPoint) -> u32 {
         let (x, y) = (physical_point.x.0, physical_point.y.0);
         let pt = POINT { x, y };
-        let tm_click = unsafe { GetMessageTime() } as u32;
+        let tm_click = unsafe { GetMessageTime() }.cast_unsigned();
 
         if button != self.button
             || !unsafe { PtInRect(&raw const self.last_click_rect, pt) }.as_bool()
