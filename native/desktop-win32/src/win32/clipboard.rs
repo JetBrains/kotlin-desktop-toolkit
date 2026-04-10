@@ -222,7 +222,7 @@ impl ClipboardData {
         let utf8_bytes = self.get_bytes()?;
         let html_format = copy_from_utf8_bytes(utf8_bytes.as_slice())?;
         let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)?;
-        Ok(copy_from_wide_string(&fragment)?)
+        copy_from_wide_string(&fragment)
     }
 }
 

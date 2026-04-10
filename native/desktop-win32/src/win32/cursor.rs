@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use windows::Win32::UI::WindowsAndMessaging::{
     HCURSOR, IDC_APPSTARTING, IDC_ARROW, IDC_CROSS, IDC_HAND, IDC_HELP, IDC_IBEAM, IDC_NO, IDC_PERSON, IDC_PIN, IDC_SIZEALL, IDC_SIZENESW,
     IDC_SIZENS, IDC_SIZENWSE, IDC_SIZEWE, IDC_UPARROW, IDC_WAIT, IMAGE_CURSOR, LR_DEFAULTSIZE, LR_LOADFROMFILE, LR_SHARED, LoadImageW,
@@ -70,9 +68,8 @@ impl Cursor {
         })
     }
 
-    pub(crate) fn load_from_file<T: AsRef<Path>>(file_path: T) -> WinResult<Self> {
-        let path_str = HSTRING::from(file_path.as_ref());
-        unsafe { LoadImageW(None, &path_str, IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE) }.map(|handle| Self {
+    pub(crate) fn load_from_file(file_path: &HSTRING) -> WinResult<Self> {
+        unsafe { LoadImageW(None, file_path, IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE | LR_LOADFROMFILE) }.map(|handle| Self {
             handle: HCURSOR(handle.0),
             is_system: false,
         })
