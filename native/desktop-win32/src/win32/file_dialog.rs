@@ -45,7 +45,7 @@ pub(crate) struct FileSaveDialog {
 }
 
 impl FileOpenDialog {
-    pub(crate) fn new(common_dialog_options: &FileDialogOptions, open_dialog_options: &FileOpenDialogOptions) -> WinResult<Self> {
+    pub(crate) fn new(common_dialog_options: &FileDialogOptions, open_dialog_options: &FileOpenDialogOptions) -> anyhow::Result<Self> {
         let file_dialog: IFileOpenDialog =
             unsafe { CoCreateInstance(&windows::Win32::UI::Shell::FileOpenDialog, None, CLSCTX_INPROC_SERVER)? };
         apply_common_options(&file_dialog, common_dialog_options)?;
@@ -64,7 +64,7 @@ impl FileOpenDialog {
         })
     }
 
-    pub(crate) fn show(&self, owner: &Window) -> WinResult<Vec<CString>> {
+    pub(crate) fn show(&self, owner: &Window) -> anyhow::Result<Vec<CString>> {
         if let Err(err) = unsafe { self.file_dialog.Show(Some(owner.hwnd())) }
             && err.code() == ERROR_CANCELLED.into()
         {
@@ -88,7 +88,7 @@ impl FileSaveDialog {
         Ok(Self { file_dialog })
     }
 
-    pub(crate) fn show(&self, owner: &Window) -> WinResult<CString> {
+    pub(crate) fn show(&self, owner: &Window) -> anyhow::Result<CString> {
         if let Err(err) = unsafe { self.file_dialog.Show(Some(owner.hwnd())) }
             && err.code() == ERROR_CANCELLED.into()
         {
@@ -124,7 +124,7 @@ fn apply_common_options(file_dialog: &IFileDialog, common_dialog_options: &FileD
     Ok(())
 }
 
-fn retrieve_selected_items(file_open_dialog: &IFileOpenDialog) -> WinResult<Vec<CString>> {
+fn retrieve_selected_items(file_open_dialog: &IFileOpenDialog) -> anyhow::Result<Vec<CString>> {
     let selected_items = unsafe { file_open_dialog.GetResults()? };
     let items_count = unsafe { selected_items.GetCount()? };
     let enum_items = unsafe { selected_items.EnumItems()? };
@@ -135,9 +135,9 @@ fn retrieve_selected_items(file_open_dialog: &IFileOpenDialog) -> WinResult<Vec<
     Ok(shell_items)
 }
 
-fn parse_shell_item(shell_item: &IShellItem) -> WinResult<CString> {
+fn parse_shell_item(shell_item: &IShellItem) -> anyhow::Result<CString> {
     let shell_item_file_path = unsafe { shell_item.GetDisplayName(SIGDN_FILESYSPATH) }
         .inspect_err(|err| log::error!("failed to retrieve IShellItem's file system path: {err}"))?;
-    copy_from_wide_string(unsafe { shell_item_file_path.as_wide() })
-        .inspect_err(|err| log::error!("failed to convert IShellItem's file system path to UTF-8: {err}"))
+    Ok(copy_from_wide_string(unsafe { shell_item_file_path.as_wide() })
+        .inspect_err(|err| log::error!("failed to convert IShellItem's file system path to UTF-8: {err}"))?)
 }

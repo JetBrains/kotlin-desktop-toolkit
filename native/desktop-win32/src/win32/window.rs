@@ -110,7 +110,7 @@ impl Window {
         Ok(window)
     }
 
-    pub fn create(window: &Rc<Self>, creation_params: &WindowParams) -> WinResult<()> {
+    pub fn create(window: &Rc<Self>, creation_params: &WindowParams) -> anyhow::Result<()> {
         let instance = crate::get_dll_instance();
         window.origin.replace(creation_params.origin);
         window.size.replace(creation_params.size);
