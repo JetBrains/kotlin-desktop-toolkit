@@ -18,6 +18,7 @@ use windows::{
 use windows_core::{Error as WinError, HSTRING, PWSTR, w};
 
 use super::{
+    data_object::global_unlock,
     strings::{copy_from_utf8_bytes, copy_from_wide_string},
     window::Window,
 };
@@ -124,8 +125,8 @@ impl Drop for Clipboard {
 }
 
 pub struct ClipboardData {
-    format_id: u32,
-    content: HANDLE,
+    pub(crate) format_id: u32,
+    pub(crate) content: HANDLE,
 }
 
 impl ClipboardData {
@@ -224,8 +225,4 @@ impl ClipboardData {
         let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)?;
         copy_from_wide_string(&fragment)
     }
-}
-
-fn global_unlock(mem: HGLOBAL) -> windows_core::Result<()> {
-    unsafe { windows::Win32::System::Memory::GlobalUnlock(mem) }.or_else(|err| if err.code().is_ok() { Ok(()) } else { Err(err) })
 }
