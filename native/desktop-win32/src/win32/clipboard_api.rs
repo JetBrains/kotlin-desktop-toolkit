@@ -4,7 +4,8 @@ use desktop_common::{
 };
 
 use super::{
-    clipboard::{Clipboard, ClipboardData, ClipboardFormat},
+    clipboard::{Clipboard, ClipboardFormat},
+    global_data::ClipboardData,
     strings::copy_from_utf8_string,
     window::Window,
     window_api::{WindowPtr, with_window},
