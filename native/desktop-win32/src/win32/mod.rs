@@ -13,6 +13,7 @@ pub mod events_api;
 pub mod file_dialog;
 pub mod file_dialog_api;
 pub mod geometry;
+pub mod global_data;
 pub mod keyboard;
 pub mod keyboard_api;
 pub mod pointer;

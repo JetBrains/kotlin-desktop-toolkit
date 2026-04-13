@@ -10,13 +10,13 @@ use windows::Win32::{
             DATADIR, DATADIR_GET, DVASPECT_CONTENT, FORMATETC, IAdviseSink, IDataObject, IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA,
             STGMEDIUM, STGMEDIUM_0, TYMED_HGLOBAL,
         },
-        Memory::{GMEM_FIXED, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock},
+        Memory::{GMEM_FIXED, GlobalAlloc, GlobalLock, GlobalSize},
     },
     UI::Shell::SHCreateStdEnumFmtEtc,
 };
 use windows_core::{BOOL, Error as WinError, HRESULT, Ref as WinRef, Result as WinResult, implement};
 
-use super::clipboard::ClipboardData;
+use super::global_data::{ClipboardData, global_unlock};
 
 #[implement(IDataObject)]
 pub struct DataObject {
@@ -122,8 +122,4 @@ impl IDataObject_Impl for DataObject_Impl {
     fn EnumDAdvise(&self) -> WinResult<IEnumSTATDATA> {
         Err(OLE_E_ADVISENOTSUPPORTED.into())
     }
-}
-
-pub(crate) fn global_unlock(mem: HGLOBAL) -> WinResult<()> {
-    unsafe { GlobalUnlock(mem) }.or_else(|err| if err.code().is_ok() { Ok(()) } else { Err(err) })
 }
