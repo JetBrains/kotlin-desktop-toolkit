@@ -320,6 +320,9 @@ class RotatingBallWindow(
 ) {
 
     companion object {
+        private const val TEXT_INPUT_HEIGHT = 36.0
+        private const val TEXT_INPUT_MARGIN = 16.0
+
         fun createWindow(
             device: MetalDevice,
             queue: MetalCommandQueue,
@@ -346,9 +349,18 @@ class RotatingBallWindow(
         }
     }
 
+    val textInput = ToyTextInput(window, LogicalPoint.Zero, LogicalSize.Zero)
+
     init {
-        windowContainer.resize(view.size().toLogical(window.scaleFactor()))
+        window.setTextInputClient(textInput)
+        updateLayout(view.size().toLogical(window.scaleFactor()))
         performDrawing(syncWithCA = true)
+    }
+
+    private fun updateLayout(viewSize: LogicalSize) {
+        windowContainer.resize(viewSize)
+        textInput.origin = LogicalPoint(TEXT_INPUT_MARGIN, viewSize.height - TEXT_INPUT_HEIGHT - TEXT_INPUT_MARGIN)
+        textInput.size = LogicalSize(viewSize.width - 2 * TEXT_INPUT_MARGIN, TEXT_INPUT_HEIGHT)
     }
 
     override fun handleEvent(event: Event): EventHandlerResult {
@@ -357,9 +369,13 @@ class RotatingBallWindow(
                 event is Event.WindowResize -> {
                     val viewSize = view.size().toLogical(window.scaleFactor())
                     assert(event.size == viewSize)
-                    windowContainer.resize(event.size)
+                    updateLayout(event.size)
                     EventHandlerResult.Stop
                 }
+            }
+            // Route keyboard and mouse events to the text input first
+            if (textInput.handleEvent(event) == EventHandlerResult.Stop) {
+                return EventHandlerResult.Stop
             }
             windowContainer.customTitlebar?.startWindowDrag = {
                 window.startDragWindow()
@@ -377,6 +393,7 @@ class RotatingBallWindow(
         val canvas = this
         // canvas.clear(Color.RED) // use RED to debug
         windowContainer.draw(canvas, time, window.scaleFactor())
+        textInput.draw(canvas, window.scaleFactor())
     }
 }
 
