@@ -5,31 +5,28 @@ use std::mem::ManuallyDrop;
 
 use windows::Win32::{
     Foundation::{DV_E_FORMATETC, E_NOTIMPL, E_POINTER, HGLOBAL, OLE_E_ADVISENOTSUPPORTED, S_OK},
-    System::{
-        Com::{
-            DATADIR, DATADIR_GET, DVASPECT_CONTENT, FORMATETC, IAdviseSink, IDataObject, IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA,
-            STGMEDIUM, STGMEDIUM_0, TYMED_HGLOBAL,
-        },
-        Memory::{GMEM_FIXED, GlobalAlloc, GlobalLock, GlobalSize},
+    System::Com::{
+        DATADIR, DATADIR_GET, DVASPECT_CONTENT, FORMATETC, IAdviseSink, IDataObject, IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA,
+        STGMEDIUM, STGMEDIUM_0, TYMED_HGLOBAL,
     },
     UI::Shell::SHCreateStdEnumFmtEtc,
 };
 use windows_core::{BOOL, Error as WinError, HRESULT, Ref as WinRef, Result as WinResult, implement};
 
-use super::global_data::{ClipboardData, global_unlock};
+use super::global_data::HGlobalData;
 
 #[implement(IDataObject)]
 pub struct DataObject {
     format_etc: FORMATETC,
-    data: ClipboardData,
+    data: HGlobalData,
 }
 
 impl DataObject {
     #[must_use]
-    pub const fn create(data: ClipboardData) -> Self {
+    pub const fn create(format_id: u32, data: HGlobalData) -> Self {
         let format_etc = FORMATETC {
             #[allow(clippy::cast_possible_truncation)]
-            cfFormat: data.format_id as u16,
+            cfFormat: format_id as u16,
             ptd: core::ptr::null_mut(),
             dwAspect: DVASPECT_CONTENT.0,
             lindex: -1,
@@ -44,14 +41,9 @@ impl DataObject {
             && (self.format_etc.tymed & format_etc.tymed) != 0
     }
 
+    #[inline]
     fn get_content(&self) -> WinResult<HGLOBAL> {
-        let hglob = HGLOBAL(self.data.content.0);
-        let size = unsafe { GlobalSize(hglob) };
-        let source = unsafe { GlobalLock(hglob) };
-        let dest = unsafe { GlobalAlloc(GMEM_FIXED, size)? };
-        unsafe { core::ptr::copy_nonoverlapping(source, dest.0, size) };
-        global_unlock(hglob)?;
-        Ok(dest)
+        self.data.copied()
     }
 }
 
