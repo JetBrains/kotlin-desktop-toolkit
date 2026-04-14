@@ -375,6 +375,7 @@ class RotatingBallWindow(
             }
             // Route keyboard and mouse events to the text input first
             if (textInput.handleEvent(event) == EventHandlerResult.Stop) {
+                view.setNeedsDisplay()
                 return EventHandlerResult.Stop
             }
             windowContainer.customTitlebar?.startWindowDrag = {
