@@ -1,7 +1,7 @@
 use std::sync::LazyLock;
 
 use windows::Win32::{
-    Foundation::{ERROR_SUCCESS, GetLastError},
+    Foundation::{ERROR_SUCCESS, GetLastError, HANDLE},
     System::{
         DataExchange::{
             CloseClipboard, CountClipboardFormats, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardSequenceNumber,
@@ -12,7 +12,7 @@ use windows::Win32::{
 };
 use windows_core::{Error as WinError, HSTRING, w};
 
-use super::{global_data::ClipboardData, window::Window};
+use super::{global_data::HGlobalData, window::Window};
 
 /// cbindgen:ignore
 static HTML_FORMAT: LazyLock<u32> = LazyLock::new(|| unsafe { RegisterClipboardFormatW(w!("HTML Format")) });
@@ -91,17 +91,17 @@ impl Clipboard {
         Ok(())
     }
 
-    pub fn get_data(&self, format: ClipboardFormat) -> anyhow::Result<ClipboardData> {
+    pub fn get_data(&self, format: ClipboardFormat) -> anyhow::Result<HGlobalData> {
         anyhow::ensure!(self.is_open, "Clipboard has been closed.");
         let format_id = format.id();
         anyhow::ensure!(self.is_format_available(format_id)?, "specified Clipboard format is unavailable");
         let mem = unsafe { GetClipboardData(format_id)? };
-        Ok(ClipboardData { format_id, content: mem })
+        HGlobalData::copy_from(mem)
     }
 
-    pub fn set_data(&self, data: &ClipboardData) -> anyhow::Result<()> {
+    pub fn set_data(&self, format: ClipboardFormat, data: &HGlobalData) -> anyhow::Result<()> {
         anyhow::ensure!(self.is_open, "Clipboard has been closed.");
-        unsafe { SetClipboardData(data.format_id, Some(data.content))? };
+        unsafe { SetClipboardData(format.id(), Some(HANDLE(data.as_raw().0)))? };
         Ok(())
     }
 }

@@ -5,7 +5,7 @@ use desktop_common::{
 
 use super::{
     clipboard::{Clipboard, ClipboardFormat},
-    global_data::ClipboardData,
+    global_data::{hglobal_reader, hglobal_writer},
     strings::copy_from_utf8_string,
     window::Window,
     window_api::{WindowPtr, with_window},
@@ -90,7 +90,7 @@ fn clipboard_get_data_impl(owner: &Window, data_format: u32) -> anyhow::Result<A
     let clipboard = Clipboard::open_for_window(owner)?;
     clipboard
         .get_data(ClipboardFormat::Other(data_format))
-        .and_then(|data| data.get_bytes())
+        .and_then(|data| hglobal_reader::get_bytes(&data))
         .map(|bytes| AutoDropArray::new(bytes.into_boxed_slice()))
 }
 
@@ -113,7 +113,7 @@ fn clipboard_get_file_list_impl(owner: &Window) -> anyhow::Result<AutoDropArray<
     let clipboard = Clipboard::open_for_window(owner)?;
     clipboard
         .get_data(ClipboardFormat::FileList)
-        .and_then(|data| data.get_file_list())
+        .and_then(|data| hglobal_reader::get_file_list(&data))
         .map(|file_list| file_list.into_iter().map(RustAllocatedStrPtr::from_c_string).collect())
         .map(AutoDropArray::new)
 }
@@ -136,7 +136,7 @@ fn clipboard_get_html_fragment_impl(owner: &Window) -> anyhow::Result<RustAlloca
     let clipboard = Clipboard::open_for_window(owner)?;
     clipboard
         .get_data(ClipboardFormat::HtmlFragment)
-        .and_then(|data| data.get_html())
+        .and_then(|data| hglobal_reader::get_html(&data))
         .map(RustAllocatedStrPtr::from_c_string)
 }
 
@@ -156,7 +156,7 @@ fn clipboard_get_text_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr
     let clipboard = Clipboard::open_for_window(owner)?;
     clipboard
         .get_data(ClipboardFormat::Text)
-        .and_then(|data| data.get_text())
+        .and_then(|data| hglobal_reader::get_text(&data))
         .map(RustAllocatedStrPtr::from_c_string)
 }
 
@@ -164,8 +164,8 @@ fn clipboard_get_text_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr
 pub extern "C" fn clipboard_set_data(owner: WindowPtr, data_format: u32, content: BorrowedArray<u8>) {
     with_window(&owner, "clipboard_set_data", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
-        let data = ClipboardData::new_bytes(content.as_slice()?, ClipboardFormat::Other(data_format))?;
-        clipboard.set_data(&data)
+        let data = hglobal_writer::new_bytes(content.as_slice()?)?;
+        clipboard.set_data(ClipboardFormat::Other(data_format), &data)
     });
 }
 
@@ -174,8 +174,8 @@ pub extern "C" fn clipboard_set_file_list(owner: WindowPtr, content: BorrowedArr
     with_window(&owner, "clipboard_set_data", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
         let files: anyhow::Result<Vec<&str>> = content.as_slice()?.iter().map(|str_ptr| str_ptr.as_str()).collect();
-        let data = ClipboardData::new_file_list(&files?)?;
-        clipboard.set_data(&data)
+        let data = hglobal_writer::new_file_list(&files?)?;
+        clipboard.set_data(ClipboardFormat::FileList, &data)
     });
 }
 
@@ -184,8 +184,8 @@ pub extern "C" fn clipboard_set_html_fragment(owner: WindowPtr, content: Borrowe
     with_window(&owner, "clipboard_set_html_fragment", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
         let fragment = copy_from_utf8_string(&content)?;
-        let data = ClipboardData::new_html(&fragment)?;
-        clipboard.set_data(&data)
+        let data = hglobal_writer::new_html(&fragment)?;
+        clipboard.set_data(ClipboardFormat::HtmlFragment, &data)
     });
 }
 
@@ -193,8 +193,8 @@ pub extern "C" fn clipboard_set_html_fragment(owner: WindowPtr, content: Borrowe
 pub extern "C" fn clipboard_set_text(owner: WindowPtr, content: BorrowedStrPtr) {
     with_window(&owner, "clipboard_set_text", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
-        let clipboard_data = ClipboardData::new_text(content.as_str()?)?;
-        clipboard.set_data(&clipboard_data)
+        let clipboard_data = hglobal_writer::new_text(content.as_str()?)?;
+        clipboard.set_data(ClipboardFormat::Text, &clipboard_data)
     });
 }
 
