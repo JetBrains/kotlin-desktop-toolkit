@@ -9,7 +9,6 @@ import org.jetbrains.desktop.macos.LogicalRect
 import org.jetbrains.desktop.macos.Robot
 import org.jetbrains.desktop.macos.TextInputClient
 import org.jetbrains.desktop.macos.TextRange
-import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout

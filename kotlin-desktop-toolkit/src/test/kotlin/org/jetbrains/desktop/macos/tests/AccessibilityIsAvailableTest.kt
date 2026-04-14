@@ -7,7 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 @EnabledOnOs(OS.MAC)
-class AccessibilityIsAvailableTest: KDTApplicationTestBase() {
+class AccessibilityIsAvailableTest : KDTApplicationTestBase() {
     @Test
     fun `Accessibility is available`() {
         val robot = ui { Robot() }
