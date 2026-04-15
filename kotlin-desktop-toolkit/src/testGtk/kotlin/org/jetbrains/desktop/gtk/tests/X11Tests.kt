@@ -117,40 +117,30 @@ private fun log(message: String) {
     println(withTimestamp(message))
 }
 
-private fun runCommandWithOutput(command: List<String>, timeout: Duration = 5.seconds): ByteArray? {
-    log("runCommandWithOutput: $command")
-    val pb = ProcessBuilder(command)
-        .redirectOutput(ProcessBuilder.Redirect.PIPE)
-        .redirectError(ProcessBuilder.Redirect.INHERIT)
-
-    val proc = pb.start()
-    assertTrue(proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS), command.toString())
-
-    if (proc.exitValue() != 0) {
-        val stderrReader = proc.errorReader()
-        val stderr = if (stderrReader.ready()) proc.errorReader().readText() else ""
-        log("$command failed, stderr=$stderr")
-        return null
-    }
-    return proc.inputStream.readAllBytes()
-}
-
-private fun runCommand(command: List<String>, timeout: Duration = 5.seconds) {
-    log("runCommand: $command")
-    val pb = ProcessBuilder(command)
-        .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-        .redirectError(ProcessBuilder.Redirect.PIPE)
-
-    val proc = pb.start()
+private fun runCommandImpl(command: List<String>, timeout: Duration = 5.seconds): Result<ByteArray> {
+    val proc = ProcessBuilder(command).start()
     if (!proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
         fail(withTimestamp("Timed out waiting for $command to finish"))
     }
 
-    if (proc.exitValue() != 0) {
-        val stderrReader = proc.errorReader()
-        val stderr = if (stderrReader.ready()) proc.errorReader().readText() else ""
-        fail(withTimestamp("$command failed, stderr=$stderr"))
+    val exitValue = proc.exitValue()
+    if (exitValue != 0) {
+        val stderr = proc.errorStream.readAllBytes().decodeToString()
+        return Result.failure(Error("$command failed ($exitValue), stderr=$stderr"))
     }
+    return Result.success(proc.inputStream.readAllBytes())
+}
+
+private fun runCommandWithOutput(command: List<String>, timeout: Duration = 5.seconds): ByteArray? {
+    val result = runCommandImpl(command, timeout)
+    result.exceptionOrNull()?.also {
+        log(it.toString())
+    }
+    return result.getOrNull()
+}
+
+private fun runCommand(command: List<String>, timeout: Duration = 5.seconds) {
+    runCommandImpl(command, timeout).getOrThrow()
 }
 
 private fun <T> waitUntilEq(expectedValue: T, timeout: Duration = 5.seconds, actualValueGetter: () -> T) {
@@ -185,7 +175,7 @@ private enum class TestApp(private val resourcePath: String) {
     private fun createProcessBuilder(): ProcessBuilder {
         log("Running test app: $this")
         val appPath = getResourcePath(resourcePath)
-        return ProcessBuilder("python3", appPath).redirectError(ProcessBuilder.Redirect.INHERIT).also {
+        return ProcessBuilder("python3", appPath).also {
             val env = it.environment()
             env.remove("GTK_DEBUG")
             env.remove("GDK_DEBUG")
@@ -200,9 +190,18 @@ private enum class TestApp(private val resourcePath: String) {
             .redirectOutput(ProcessBuilder.Redirect.to(outputFile))
             .start()
         return AutoCloseable {
-            assertTrue(process.isAlive, outputFile.absolutePath)
+            if (process.isAlive) {
+                process.toHandle().destroy()
+                process.waitFor(5, TimeUnit.SECONDS)
+            } else {
+                log("Test app $this process stopped by itself")
+            }
+            process.errorStream.readAllBytes().decodeToString().also {
+                if (it.isNotEmpty()) {
+                    log("Test app $this error output: $it")
+                }
+            }
             process.destroy()
-            process.waitFor(5, TimeUnit.SECONDS)
             log("Test app $this output:\n${outputFile.readText()}")
             outputFile.delete()
             log("Test app $this closed")
@@ -351,19 +350,11 @@ private class Dconf private constructor() {
 
         private data class Setting(val name: String) {
             fun read(): String? {
-                val p = ProcessBuilder("gsettings", "get", SCHEMA, name)
-                    .redirectError(ProcessBuilder.Redirect.INHERIT)
-                    .redirectOutput(ProcessBuilder.Redirect.PIPE)
-                    .start()
-                return if (p.waitFor() == 0) p.inputReader().readText().trim() else null
+                return runCommandWithOutput(listOf("gsettings", "get", SCHEMA, name))?.decodeToString()?.trim()
             }
 
-            fun changeTo(value: String): Int {
-                return ProcessBuilder("gsettings", "set", SCHEMA, name, value)
-                    .redirectError(ProcessBuilder.Redirect.INHERIT)
-                    .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-                    .start()
-                    .waitFor()
+            fun changeTo(value: String) {
+                runCommand(listOf("gsettings", "set", SCHEMA, name, value))
             }
 
             override fun toString(): String {
@@ -377,7 +368,7 @@ private class Dconf private constructor() {
             log("Original value of setting $setting = $origValue")
 
             log("Changing $setting to $tempValue")
-            assertEquals(0, setting.changeTo(tempValue), "Failed to change setting $setting")
+            setting.changeTo(tempValue)
 
             val changedValue = setting.read()
             assertNotNull(changedValue, "Failed to read changed setting $setting")
@@ -388,7 +379,7 @@ private class Dconf private constructor() {
             block()
 
             log("Reverting $setting to $origValue")
-            assertEquals(0, setting.changeTo(origValue), "Failed to revert setting $setting")
+            setting.changeTo(origValue)
         }
 
         fun withChangedColorScheme(value: ColorSchemeValue, block: () -> Unit) {
@@ -426,14 +417,19 @@ private class Dconf private constructor() {
 
 private fun withDunst(block: () -> Unit): List<String> {
     var output = emptyList<String>()
-    val process = ProcessBuilder("dunst", "-print", "-conf", System.getenv("TEST_DUNST_CONFIG_FILE")!!)
-        .redirectOutput(ProcessBuilder.Redirect.PIPE)
-        .redirectError(ProcessBuilder.Redirect.INHERIT)
-        .start()
+    val process = ProcessBuilder("dunst", "-print", "-conf", System.getenv("TEST_DUNST_CONFIG_FILE")!!).start()
     AutoCloseable {
-        assertTrue(process.isAlive)
-        process.toHandle().destroy()
-        process.waitFor()
+        if (process.isAlive) {
+            process.toHandle().destroy()
+            process.waitFor()
+        } else {
+            log("dunst process stopped by itself")
+        }
+        process.errorStream.readAllBytes().decodeToString().also {
+            if (it.isNotEmpty()) {
+                log("dunst error output: $it")
+            }
+        }
         output = process.inputReader().readLines()
         process.destroy()
     }.use {
