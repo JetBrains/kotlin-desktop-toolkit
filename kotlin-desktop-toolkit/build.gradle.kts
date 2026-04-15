@@ -602,8 +602,12 @@ abstract class X11TestEnv :
 """
     }
 
-    private fun newProcess(vararg args: String, afterStart: (Process, Path) -> Boolean = { _, _ -> true }): Boolean {
-        println("Running ${args.toList()}")
+    private fun newProcess(
+        vararg args: String,
+        getAdditionalEnvs: ((Map<String, String>) -> Map<String, String>)? = null,
+        afterStart: (Process, Path) -> Boolean = { _, _ -> true },
+    ): Boolean {
+        println("Running: ${args.joinToString(" ") { "\"$it\"" }}")
         val exeName = args.first().let {
             val p = Path.of(it)
             if (p.isAbsolute) {
@@ -615,8 +619,10 @@ abstract class X11TestEnv :
         val logFileStderr = Path.of(newEnv["HOME"]!!).resolve("$exeName-stderr.log")
         return ProcessBuilder(*args).also { pb ->
             val env = pb.environment()
+            val additionalEnvs = getAdditionalEnvs?.invoke(env)
             env.clear()
             env.putAll(newEnv)
+            additionalEnvs?.let { env.putAll(it) }
             println(logFileStderr)
             pb.redirectError(ProcessBuilder.Redirect.to(logFileStderr.toFile()))
         }.start().let {
@@ -663,7 +669,9 @@ Exec=/bin/true
         if (headless) {
             newProcess("Xvfb", testDisplay, "-ac", "-screen", "0", "3000x1500x24", "-dpi", "192")
         } else {
-            newProcess("Xephyr", testDisplay, "-screen", "3000x1500x24", "-dpi", "192", "-sw-cursor")
+            newProcess("Xephyr", testDisplay, "-screen", "3000x1500x24", "-dpi", "192", "-sw-cursor", getAdditionalEnvs = { env ->
+                mapOf("DISPLAY" to env["DISPLAY"]!!, "XAUTHORITY" to env["XAUTHORITY"]!!)
+            })
         }
 
         newEnv["DISPLAY"] = testDisplay
@@ -1059,7 +1067,7 @@ abstract class WaylandTestEnv :
         getAdditionalEnvs: ((Map<String, String>) -> Map<String, String>)? = null,
         afterStart: ((Process) -> Unit)? = null,
     ) {
-        println("Running ${args.toList()}")
+        println("Running: ${args.joinToString(" ") { "\"$it\"" }}")
         val exeName = args.first().let {
             val p = Path.of(it)
             if (p.isAbsolute) {
