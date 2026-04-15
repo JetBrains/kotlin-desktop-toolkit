@@ -683,7 +683,8 @@ private fun getMakoList(): MakoList? {
 }
 
 private fun withMako(block: () -> Unit) {
-    val process = ProcessBuilder("mako")
+    val makoPath = System.getenv("TEST_MAKO_PATH")!!
+    val process = ProcessBuilder(makoPath)
         .redirectOutput(ProcessBuilder.Redirect.INHERIT)
         .redirectError(ProcessBuilder.Redirect.INHERIT)
         .start()

@@ -1175,6 +1175,12 @@ Exec=/bin/true
 //        }
 
         newEnv["TEST_RESOURCES_DIR"] = testResourcesDir.asFile.absolutePath
+
+        // Work around the Ubuntu 22.04 apparmor issues: https://github.com/emersion/mako/issues/257
+        val testMakoPath = homeTempDir.resolve("mako")
+        Path.of("/usr/bin/mako").copyTo(testMakoPath)
+        newEnv["TEST_MAKO_PATH"] = testMakoPath.absolutePathString()
+
         return newEnv
     }
 
