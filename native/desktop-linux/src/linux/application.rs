@@ -563,7 +563,7 @@ impl Application {
         // Required to have a mouse button pressed serial, e.g.:
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-xdg-shell.c#L309
         if let Some((seat, serial)) = self.state.get_latest_pointer_button_seat_and_serial() {
-            debug!("window_show_menu: seat: {seat:?}, serial: {serial:?}");
+            debug!("window_show_menu: seat: {seat}, serial: {serial:?}", seat = seat.id());
             w.show_menu(position, seat, serial);
         }
         Ok(())

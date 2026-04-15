@@ -48,7 +48,7 @@ impl KeyboardHandler for ApplicationState {
         self.last_keyboard_event_serial = Some(serial);
         if let Some(keyboard_data) = keyboard.data::<KeyboardData<Self>>() {
             let seat = keyboard_data.seat();
-            debug!("KeyboardHandler::press_key: setting last_implicit_grab_seat to {seat:?}");
+            debug!("KeyboardHandler::press_key: setting last_implicit_grab_seat to {}", seat.id());
         }
         send_key_down_event(self, &event, false);
     }
