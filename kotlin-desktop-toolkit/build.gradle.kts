@@ -1,4 +1,3 @@
-import org.gradle.internal.impldep.kotlinx.serialization.Serializable
 import org.jetbrains.desktop.buildscripts.Arch
 import org.jetbrains.desktop.buildscripts.CargoFmtTask
 import org.jetbrains.desktop.buildscripts.ClippyTask
@@ -127,7 +126,6 @@ enum class Backend {
     }
 }
 
-@Serializable
 data class RustTarget(
     @get:Input val platform: Platform,
     @get:Input val profile: String,
@@ -987,6 +985,34 @@ fun configureTestTask(test: Test, backends: List<Backend>) {
     test.apply {
         jvmArgs("--enable-preview", "--enable-native-access=ALL-UNNAMED")
         useJUnitPlatform()
+        addTestListener(object : TestListener {
+            private fun getPrintableTestName(descriptor: TestDescriptor?): String {
+                val names = mutableListOf<String>()
+                var current = descriptor
+                while (current != null) {
+                    names.add(current.displayName)
+                    current = current.parent
+                }
+                names.reverse()
+                return names.joinToString(" > ")
+            }
+
+            override fun beforeSuite(suite: TestDescriptor?) {
+                logger.warn("beforeSuite: ${getPrintableTestName(suite)}")
+            }
+
+            override fun beforeTest(testDescriptor: TestDescriptor?) {
+                logger.warn("beforeTest: ${getPrintableTestName(testDescriptor)}")
+            }
+
+            override fun afterSuite(suite: TestDescriptor?, result: TestResult?) {
+                logger.warn("afterSuite: ${getPrintableTestName(suite)}")
+            }
+
+            override fun afterTest(testDescriptor: TestDescriptor?, result: TestResult?) {
+                logger.warn("afterTest: ${getPrintableTestName(testDescriptor)}")
+            }
+        })
 
         val getLibFolderForBackend: Map<Backend, Provider<Directory>> = buildMap {
             for (backend in backends) {

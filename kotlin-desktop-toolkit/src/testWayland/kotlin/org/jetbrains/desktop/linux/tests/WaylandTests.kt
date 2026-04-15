@@ -316,6 +316,7 @@ private fun log(message: String) {
 }
 
 private fun runCommandImpl(command: List<String>, timeout: Duration = 5.seconds): Result<ByteArray> {
+    log("runCommand: $command")
     val proc = ProcessBuilder(command).start()
     if (!proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
         fail(withTimestamp("Timed out waiting for $command to finish"))
@@ -784,6 +785,10 @@ private class Checklist(entries: List<String>) {
             true
         }
     }
+
+    fun uncheckEntry(entry: String) {
+        state[entry] = false
+    }
 }
 
 private fun performSoftwareDrawing(size: PhysicalSize, softwareDrawData: SoftwareDrawData, draw: (SkCanvas) -> Unit) {
@@ -1189,6 +1194,10 @@ abstract class WaylandTestsBase {
 
     internal fun withSetClipboardContent(mimeTypes: List<String>, block: () -> Unit) {
         ui { app.clipboardPut(mimeTypes) }
+        awaitEventOfType<Event.DataTransferAvailable>(msg = "withSetClipboardContent set") {
+            it.dataSource == DataSource.Clipboard &&
+                it.mimeTypes == mimeTypes
+        }
         AutoCloseable {
             ui { app.clipboardPut(emptyList()) }
             // Ensure that `DataTransferAvailable` events are sent.
@@ -1200,6 +1209,11 @@ abstract class WaylandTestsBase {
 
     internal fun withSetPrimarySelectionContent(mimeTypes: List<String>, block: () -> Unit) {
         ui { app.primarySelectionPut(mimeTypes) }
+        awaitEventOfType<Event.DataTransferAvailable>(msg = "withSetPrimarySelectionContent set") {
+            it.dataSource ==
+                DataSource.PrimarySelection &&
+                it.mimeTypes == mimeTypes
+        }
         AutoCloseable {
             ui { app.primarySelectionPut(emptyList()) }
             // Ensure that `DataTransferAvailable` events are sent.
@@ -1262,6 +1276,9 @@ abstract class WaylandTestsBase {
                     if (windowParams.windowId == event.windowId) {
                         draw = event
                         drawEventCount += 1
+                        if (drawEventCount > 1) {
+                            assertEquals(scale.newScale, event.scale)
+                        }
                         checklist.checkEntry("draw")
                     }
                 }
@@ -1284,6 +1301,7 @@ abstract class WaylandTestsBase {
                         scale = event
                         checklist.checkEntry("scale")
                         onScale?.invoke(scale.newScale)
+                        checklist.uncheckEntry("draw")
                     }
                 }
 
@@ -1292,11 +1310,6 @@ abstract class WaylandTestsBase {
                 }
             }
             checklist.uncheckedEntries()
-        }
-        if (scale.newScale > 1 && drawEventCount == 1) {
-            val drawEvent = getNextEvent()
-            assertIs<Event.WindowDraw>(drawEvent)
-            assertEquals(scale.newScale, drawEvent.scale)
         }
         return InitialWindowData(
             window = window,
@@ -2075,6 +2088,7 @@ class WaylandTests : WaylandTestsBase() {
         val screenshotSize = LogicalSize(150U, 150U)
 
         ui { app.setCursorTheme("phinger-cursors-light", 48U) }
+        ui {}
 
         val screenSize = assertNotNull(lastScreenSize)
         moveMouseTo(LogicalPoint(screenSize.width.toDouble(), screenSize.height.toDouble()))
@@ -3998,6 +4012,7 @@ text/plain;charset=utf-8
         awaitEventOfType<Event.WindowDraw> {
             it.size == lastScreenSize.toPhysical(it.scale)
         }
+        ui {}
 
         // Screenshot only the window, because sometimes the previous tests can leave the drag&drop artifacts
         screenshot(screenshotPath)

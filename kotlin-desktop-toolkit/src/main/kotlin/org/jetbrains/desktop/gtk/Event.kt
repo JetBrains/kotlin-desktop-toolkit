@@ -70,7 +70,11 @@ public sealed class WindowDecorationMode {
     public data class CustomTitlebar(val height: Int) : WindowDecorationMode()
 
     /** The server will draw window decorations. */
-    public object Server : WindowDecorationMode()
+    public object Server : WindowDecorationMode() {
+        override fun toString(): String {
+            return "Server"
+        }
+    }
 
     internal companion object;
 }
