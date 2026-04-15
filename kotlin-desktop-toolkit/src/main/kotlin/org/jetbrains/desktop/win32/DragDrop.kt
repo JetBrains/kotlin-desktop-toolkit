@@ -12,7 +12,9 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
     private var dropTargetCallbacks: DropTargetCallbacks? = null
 
     public fun registerDropTarget(dropTarget: DropTarget) {
-        check(dropTargetCallbacks == null) { "Drop target already registered." }
+        check(dropTargetCallbacks == null) {
+            "Drop target already registered. Please revoke the previous drop target before registering a new one."
+        }
         dropTargetCallbacks = DropTargetCallbacks(arena, dropTarget).also { callbacks ->
             window.withPointer { windowPtr ->
                 ffiDownCall {
@@ -28,6 +30,16 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
                 desktop_win32_h.drag_drop_start(dataFormat.id, data.toNative(arena), callbacks.toNative())
             }
         }
+    }
+
+    public fun revokeDropTarget() {
+        window.withPointer { windowPtr ->
+            ffiDownCall {
+                desktop_win32_h.drag_drop_revoke_target(windowPtr)
+            }
+        }
+        dropTargetCallbacks?.close()
+        dropTargetCallbacks = null
     }
 
     override fun close() {

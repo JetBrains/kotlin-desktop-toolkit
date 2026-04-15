@@ -5,7 +5,10 @@ use windows::Win32::{
     Foundation::{E_POINTER, POINTL},
     System::{
         Com::IDataObject,
-        Ole::{DROPEFFECT, DROPEFFECT_NONE, DoDragDrop, IDropSource, IDropSource_Impl, IDropTarget, IDropTarget_Impl, RegisterDragDrop},
+        Ole::{
+            DROPEFFECT, DROPEFFECT_NONE, DoDragDrop, IDropSource, IDropSource_Impl, IDropTarget, IDropTarget_Impl, RegisterDragDrop,
+            RevokeDragDrop,
+        },
         SystemServices::MODIFIERKEYS_FLAGS,
     },
 };
@@ -38,6 +41,11 @@ pub fn start_drag_drop(data_object: &IDataObject, callbacks: DragSourceCallbacks
     let source: IDropSource = DragSource { callbacks }.into();
     let mut effect = DROPEFFECT::default();
     unsafe { DoDragDrop(data_object, &source, DROPEFFECT_NONE, &raw mut effect).ok()? };
+    Ok(())
+}
+
+pub fn revoke_drop_target(window: &Window) -> anyhow::Result<()> {
+    unsafe { RevokeDragDrop(window.hwnd())? };
     Ok(())
 }
 
