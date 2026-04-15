@@ -2,7 +2,7 @@ use crate::sample_linux_draw::{OpenglState, draw_opengl_triangle_with_init, draw
 use core::str;
 use desktop_common::ffi_utils::BorrowedStrPtr;
 use desktop_common::{
-    ffi_utils::BorrowedArray,
+    ffi_utils::{BorrowedArray, BorrowedUtf8},
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_linux::linux::application_api::{FfiDragAndDropQueryResponse, FfiSupportedActionsForMime, FfiTransferDataResponse};
@@ -231,22 +231,18 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             true
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyV) => {
-            application_clipboard_paste(app_ptr, 0, BorrowedArray::new_string(TEXT_MIME_TYPE));
+            application_clipboard_paste(app_ptr, 0, BorrowedUtf8::new(TEXT_MIME_TYPE));
             true
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyC) => {
-            application_clipboard_put(app_ptr, BorrowedArray::new_string(ALL_MIMES));
+            application_clipboard_put(app_ptr, BorrowedUtf8::new(ALL_MIMES));
             true
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyP) => {
             let title = format!("Notification from window {}", window_id.0);
             let body = format!("Clicking this notification will activate window {}", window_id.0);
-            let request_id = application_request_show_notification(
-                app_ptr,
-                BorrowedArray::new_string(&title),
-                BorrowedArray::new_string(&body),
-                BorrowedArray::null(),
-            );
+            let request_id =
+                application_request_show_notification(app_ptr, BorrowedUtf8::new(&title), BorrowedUtf8::new(&body), BorrowedUtf8::null());
             if request_id.0 != 0 {
                 state.request_sources.insert(request_id, window_id);
             }
@@ -255,9 +251,9 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyO) => {
             let common_params = CommonFileDialogParams {
                 modal: false,
-                title: BorrowedArray::new_string("Open File for Linux Native Sample App test"),
-                accept_label: BorrowedArray::new_string("Let's go!"),
-                current_folder: BorrowedArray::new_string("/etc"),
+                title: BorrowedUtf8::new("Open File for Linux Native Sample App test"),
+                accept_label: BorrowedUtf8::new("Let's go!"),
+                current_folder: BorrowedUtf8::new("/etc"),
             };
             let open_params = OpenFileDialogParams {
                 select_directories: false,
@@ -271,12 +267,12 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyS) => {
             let common_params = CommonFileDialogParams {
                 modal: false,
-                title: BorrowedArray::new_string("Save File for Linux Native Sample App test"),
-                accept_label: BorrowedArray::new_string("Let's go!"),
-                current_folder: BorrowedArray::new_string("/tmp"),
+                title: BorrowedUtf8::new("Save File for Linux Native Sample App test"),
+                accept_label: BorrowedUtf8::new("Let's go!"),
+                current_folder: BorrowedUtf8::new("/tmp"),
             };
             let save_params = SaveFileDialogParams {
-                name_field_string_value: BorrowedArray::new_string("file from Linux Native Sample App.txt"),
+                name_field_string_value: BorrowedUtf8::new("file from Linux Native Sample App.txt"),
             };
             let request_id = window_show_save_file_dialog(app_ptr, window_id, &common_params, &save_params);
             debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
@@ -290,8 +286,8 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
                     window_id: new_window_id,
                     size: LogicalSize { width: 300, height: 200 },
                     min_size: LogicalSize { width: 0, height: 0 },
-                    title: BorrowedArray::new_string("Window N"),
-                    app_id: BorrowedArray::new_string(APP_ID),
+                    title: BorrowedUtf8::new("Window N"),
+                    app_id: BorrowedUtf8::new(APP_ID),
                     prefer_client_side_decoration: true,
                     rendering_mode: RenderingMode::Auto,
                 },
@@ -321,9 +317,9 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             true
         }
         (_, _) => {
-            if let Some(s) = event.characters.as_optional_slice() {
+            if let Some(s) = event.characters.get_optional("KeyDownEvent: characters").unwrap() {
                 let window_state = state.windows.get_mut(&window_id).unwrap();
-                window_state.text += str::from_utf8(s).unwrap();
+                window_state.text += s;
             }
             false
         }
@@ -349,7 +345,7 @@ fn on_text_input(event: &TextInputEvent, app_ptr: AppPtr<'_>, window_id: WindowI
         window_state.text.drain(range);
     }
     if event.has_commit_string
-        && let Some(commit_string) = event.commit_string.as_optional_str()
+        && let Some(commit_string) = event.commit_string.get_optional("TextInputEvent.commit_string").unwrap()
     {
         debug!("{window_id:?} commit_string: {commit_string}");
         window_state.text += commit_string;
@@ -361,7 +357,7 @@ fn on_text_input(event: &TextInputEvent, app_ptr: AppPtr<'_>, window_id: WindowI
     if event.has_preedit_string {
         if event.preedit_string.cursor_begin_byte_pos == -1 && event.preedit_string.cursor_end_byte_pos == -1 {
             // TODO: hide cursor
-        } else if let Some(preedit_string) = event.preedit_string.text.as_optional_str() {
+        } else if let Some(preedit_string) = event.preedit_string.text.get_optional("TextInputEvent.preedit_string").unwrap() {
             window_state.composed_text.push_str(preedit_string);
         }
     }
@@ -370,7 +366,7 @@ fn on_text_input(event: &TextInputEvent, app_ptr: AppPtr<'_>, window_id: WindowI
 }
 
 fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut WindowState) {
-    if let Some(mime_type) = content.mime_type.as_optional_str() {
+    if let Some(mime_type) = content.mime_type.get_optional("DataTransferContent.mime_type").unwrap() {
         let data = content.data.as_slice().unwrap();
         if mime_type == URI_LIST_MIME_TYPE {
             let list_str = str::from_utf8(data).unwrap();
@@ -414,8 +410,8 @@ fn on_application_started(state: &mut State) {
             window_id: window_1_id,
             size: LogicalSize { width: 200, height: 300 },
             min_size: LogicalSize { width: 100, height: 200 },
-            title: BorrowedArray::new_string("Window 1"),
-            app_id: BorrowedArray::new_string(APP_ID),
+            title: BorrowedUtf8::new("Window 1"),
+            app_id: BorrowedUtf8::new(APP_ID),
             prefer_client_side_decoration: false,
             rendering_mode: RenderingMode::Software,
         },
@@ -429,8 +425,8 @@ fn on_application_started(state: &mut State) {
             window_id: window_2_id,
             size: LogicalSize { width: 300, height: 200 },
             min_size: LogicalSize { width: 200, height: 100 },
-            title: BorrowedArray::new_string("Window 2"),
-            app_id: BorrowedArray::new_string(APP_ID),
+            title: BorrowedUtf8::new("Window 2"),
+            app_id: BorrowedUtf8::new(APP_ID),
             prefer_client_side_decoration: true,
             rendering_mode: RenderingMode::Auto,
         },
@@ -539,7 +535,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                         window_start_drag_and_drop(
                             app_ptr,
                             data.window_id,
-                            BorrowedArray::new_string(mime_types),
+                            BorrowedUtf8::new(mime_types),
                             actions,
                             RenderingMode::Auto,
                             drag_icon_size,
@@ -551,7 +547,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     true
                 }
                 MOUSE_BUTTON_MIDDLE => {
-                    application_primary_selection_paste(app_ptr, 1, BorrowedArray::new_string(TEXT_MIME_TYPE));
+                    application_primary_selection_paste(app_ptr, 1, BorrowedUtf8::new(TEXT_MIME_TYPE));
                     true
                 }
                 _ => false,
@@ -571,7 +567,11 @@ extern "C" fn event_handler(event: &Event) -> bool {
             }
             Event::KeyDown(event) => on_keydown(event, app_ptr, state),
             Event::FileChooserResponse(file_chooser_response) => {
-                if let Some(s) = file_chooser_response.newline_separated_files.as_optional_str() {
+                if let Some(s) = file_chooser_response
+                    .newline_separated_files
+                    .get_optional("FileChooserResponse.newline_separated_files")
+                    .unwrap()
+                {
                     let files = s.trim_ascii_end().split("\r\n").collect::<Vec<_>>();
                     info!("Selected files: {files:?}");
                 }
@@ -643,18 +643,18 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 }
             }
             Event::ActivationTokenResponse(data) => {
-                let token = data.token.as_optional_str().unwrap();
+                let token = data.token.get("ActivationTokenResponse.token").unwrap();
                 match state.activation_token_action.remove(&data.request_id).unwrap() {
                     ActivationTokenAction::ActivateWindow => {
                         if let Some(window_id) = state.windows.keys().find(|&&w| Some(w) != state.key_window_id) {
-                            window_activate(app_ptr, *window_id, BorrowedArray::new_string(token));
+                            window_activate(app_ptr, *window_id, BorrowedUtf8::new(token));
                         }
                     }
                     ActivationTokenAction::OpenFileManager(path) => {
-                        application_open_file_manager(app_ptr, BorrowedArray::new_string(&path), BorrowedArray::new_string(token));
+                        application_open_file_manager(app_ptr, BorrowedUtf8::new(&path), BorrowedUtf8::new(token));
                     }
                     ActivationTokenAction::OpenUrl(url) => {
-                        application_open_url(app_ptr, BorrowedArray::new_string(&url), BorrowedArray::new_string(token));
+                        application_open_url(app_ptr, BorrowedUtf8::new(&url), BorrowedUtf8::new(token));
                     }
                 }
                 true
@@ -671,9 +671,12 @@ extern "C" fn event_handler(event: &Event) -> bool {
             }
             Event::NotificationClosed(data) => {
                 if let Some(window_id_to_activate) = state.notification_sources.remove(&data.notification_id)
-                    && let Some(activation_token) = data.activation_token.as_optional_str()
+                    && let Some(activation_token) = data
+                        .activation_token
+                        .get_optional("Event::NotificationClosed.activation_token")
+                        .unwrap()
                 {
-                    window_activate(app_ptr, window_id_to_activate, BorrowedArray::new_string(activation_token));
+                    window_activate(app_ptr, window_id_to_activate, BorrowedUtf8::new(activation_token));
                 }
                 true
             }
@@ -687,14 +690,14 @@ fn on_desktop_settings_change(s: &FfiDesktopSetting, state: &mut State) {
         FfiDesktopSetting::CursorSize(v) => {
             let size = (*v).try_into().unwrap();
             if let Some(name) = &state.settings.cursor_theme_name {
-                application_set_cursor_theme(state.app_ptr.get(), BorrowedArray::new_string(name), size);
+                application_set_cursor_theme(state.app_ptr.get(), BorrowedUtf8::new(name), size);
             }
             state.settings.cursor_theme_size = Some(size);
         }
         FfiDesktopSetting::CursorTheme(v) => {
-            let name = v.as_optional_str().unwrap().to_owned();
+            let name = v.get("FfiDesktopSetting::CursorTheme").unwrap().to_owned();
             if let Some(size) = state.settings.cursor_theme_size {
-                application_set_cursor_theme(state.app_ptr.get(), BorrowedArray::new_string(&name), size);
+                application_set_cursor_theme(state.app_ptr.get(), BorrowedUtf8::new(&name), size);
             }
             state.settings.cursor_theme_name = Some(name);
         }
@@ -710,12 +713,12 @@ extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDrag
     if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF {
         const SUPPORTED_ACTIONS_PER_MIME: [FfiSupportedActionsForMime; 2] = [
             FfiSupportedActionsForMime {
-                supported_mime_type: BorrowedArray::new_string(URI_LIST_MIME_TYPE),
+                supported_mime_type: BorrowedUtf8::new(URI_LIST_MIME_TYPE),
                 supported_actions: DragAndDropActions(DragAndDropAction::Copy as u8),
                 preferred_action: DragAndDropAction::Copy,
             },
             FfiSupportedActionsForMime {
-                supported_mime_type: BorrowedArray::new_string(TEXT_MIME_TYPE),
+                supported_mime_type: BorrowedUtf8::new(TEXT_MIME_TYPE),
                 supported_actions: DragAndDropActions(DragAndDropAction::Move as u8 | DragAndDropAction::Copy as u8),
                 preferred_action: DragAndDropAction::Copy,
             },
@@ -761,8 +764,8 @@ fn leak_string_data(s: String) -> (&'static [u8], i64) {
     (static_str, obj_id)
 }
 
-extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedArray<u8>) -> FfiTransferDataResponse {
-    let mime_type_str = mime_type.as_optional_str().unwrap();
+extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedUtf8) -> FfiTransferDataResponse {
+    let mime_type_str = mime_type.get("get_data_transfer_data: mime_type").unwrap();
     let v = if mime_type_str == URI_LIST_MIME_TYPE {
         match source {
             DataSource::Clipboard => "file:///etc/hosts",

@@ -10,7 +10,7 @@ use crate::linux::{
     window_resize_edge_api::WindowResizeEdge,
 };
 use anyhow::Context;
-use desktop_common::ffi_utils::BorrowedArray;
+use desktop_common::ffi_utils::BorrowedUtf8;
 use desktop_common::logger::{PanicDefault, ffi_boundary};
 use log::debug;
 use smithay_client_toolkit::shell::xdg::window::DecorationMode;
@@ -54,10 +54,10 @@ pub struct WindowParams<'a> {
 
     pub min_size: LogicalSize,
 
-    pub title: BorrowedArray<'a, u8>,
+    pub title: BorrowedUtf8<'a>,
 
     /// See <https://wayland.app/protocols/xdg-shell#xdg_toplevel:request:set_app_id>
-    pub app_id: BorrowedArray<'a, u8>,
+    pub app_id: BorrowedUtf8<'a>,
 
     pub prefer_client_side_decoration: bool,
 
@@ -96,9 +96,10 @@ pub extern "C" fn window_get_size(app_ptr: AppPtr, window_id: WindowId) -> Logic
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_title: BorrowedArray<u8>) {
+pub extern "C" fn window_set_title(app_ptr: AppPtr, window_id: WindowId, new_title: BorrowedUtf8) {
     with_window(&app_ptr, window_id, "window_set_title", |w| {
-        w.window.set_title(new_title.as_optional_str().context("Invalid new_title value")?);
+        let new_title_str = new_title.get("window_set_title: new_title")?;
+        w.window.set_title(new_title_str);
         Ok(())
     });
 }
@@ -187,7 +188,7 @@ pub extern "C" fn window_unset_fullscreen(app_ptr: AppPtr, window_id: WindowId) 
 pub extern "C" fn window_start_drag_and_drop(
     mut app_ptr: AppPtr,
     window_id: WindowId,
-    mime_types: BorrowedArray<u8>,
+    mime_types: BorrowedUtf8,
     actions: DragAndDropActions,
     drag_icon_rendering_mode: RenderingMode,
     drag_icon_size: LogicalSize,
@@ -195,9 +196,10 @@ pub extern "C" fn window_start_drag_and_drop(
     debug!("window_start_drag_and_drop");
     ffi_boundary("window_start_drag_and_drop", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
+        let mime_types_str = mime_types.get("window_start_drag_and_drop: mime_types")?;
         app.start_drag(
             window_id,
-            MimeTypes::new(mime_types.as_optional_str().context("Invalid mime_types value")?),
+            MimeTypes::new(mime_types_str),
             actions.into(),
             drag_icon_rendering_mode,
             drag_icon_size,
@@ -276,10 +278,10 @@ pub extern "C" fn window_request_internal_activation_token(app_ptr: AppPtr, wind
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_activate(app_ptr: AppPtr, window_id: WindowId, token: BorrowedArray<u8>) {
+pub extern "C" fn window_activate(app_ptr: AppPtr, window_id: WindowId, token: BorrowedUtf8) {
     ffi_boundary("window_activate", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        let token_str = token.as_optional_str().context("Invalid token value")?.to_owned();
-        app.window_activate(window_id, token_str)
+        let token_str = token.get("window_activate: token")?;
+        app.window_activate(window_id, token_str.to_owned())
     });
 }

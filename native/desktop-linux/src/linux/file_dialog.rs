@@ -12,24 +12,24 @@ impl OpenFileDialogParams {
 }
 
 impl SaveFileDialogParams<'_> {
-    fn apply(&self, mut request: file_chooser::SaveFileRequest) -> file_chooser::SaveFileRequest {
-        if let Some(name_field_string_value) = self.name_field_string_value.as_optional_str() {
+    fn apply(&self, mut request: file_chooser::SaveFileRequest) -> anyhow::Result<file_chooser::SaveFileRequest> {
+        if let Some(name_field_string_value) = self.get_name_field_string_value()? {
             request = request.current_name(name_field_string_value);
         }
-        request
+        Ok(request)
     }
 }
 
 impl CommonFileDialogParams<'_> {
     pub fn create_open_request(&self, open_params: &OpenFileDialogParams) -> anyhow::Result<file_chooser::OpenFileRequest> {
         let mut request = file_chooser::SelectedFiles::open_file().modal(self.modal);
-        if let Some(title) = self.title.as_optional_str() {
+        if let Some(title) = self.get_title()? {
             request = request.title(title);
         }
-        if let Some(accept_label) = self.accept_label.as_optional_str() {
+        if let Some(accept_label) = self.get_accept_label()? {
             request = request.accept_label(accept_label);
         }
-        if let Some(current_folder) = self.current_folder.as_optional_str() {
+        if let Some(current_folder) = self.get_current_folder()? {
             request = request.current_folder(current_folder)?;
         }
         Ok(open_params.apply(request))
@@ -37,16 +37,16 @@ impl CommonFileDialogParams<'_> {
 
     pub fn create_save_request(&self, save_params: &SaveFileDialogParams) -> anyhow::Result<file_chooser::SaveFileRequest> {
         let mut request = file_chooser::SelectedFiles::save_file().modal(self.modal);
-        if let Some(title) = self.title.as_optional_str() {
+        if let Some(title) = self.get_title()? {
             request = request.title(title);
         }
-        if let Some(accept_label) = self.accept_label.as_optional_str() {
+        if let Some(accept_label) = self.get_accept_label()? {
             request = request.accept_label(accept_label);
         }
-        if let Some(current_folder) = self.current_folder.as_optional_str() {
+        if let Some(current_folder) = self.get_current_folder()? {
             request = request.current_folder(current_folder)?;
         }
-        Ok(save_params.apply(request))
+        save_params.apply(request)
     }
 }
 

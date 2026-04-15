@@ -10,7 +10,7 @@ use ashpd::{
     },
     zvariant::OwnedValue,
 };
-use desktop_common::ffi_utils::BorrowedArray;
+use desktop_common::ffi_utils::BorrowedUtf8;
 use futures_lite::StreamExt;
 use log::{debug, error, warn};
 use std::collections::{BTreeMap, btree_map};
@@ -127,7 +127,7 @@ impl FfiDesktopSetting<'_> {
             InternalDesktopSetting::CursorBlinkTimeoutMs(v) => f(Self::CursorBlinkTimeoutMs(v)),
             InternalDesktopSetting::CursorSize(v) => f(Self::CursorSize(v)),
             InternalDesktopSetting::CursorTheme(v) => {
-                f(FfiDesktopSetting::CursorTheme(BorrowedArray::new_string(&v)));
+                f(FfiDesktopSetting::CursorTheme(BorrowedUtf8::new(&v)));
             }
             InternalDesktopSetting::EnableAnimations(v) => f(Self::EnableAnimations(v)),
             InternalDesktopSetting::DoubleClickIntervalMs(v) => f(Self::DoubleClickIntervalMs(v)),
@@ -144,7 +144,7 @@ impl FfiDesktopSetting<'_> {
                 ReducedMotion::ReducedMotion => XdgDesktopReducedMotion::ReducedMotion,
             })),
             InternalDesktopSetting::TitlebarLayout(v) => {
-                f(FfiDesktopSetting::TitlebarLayout(BorrowedArray::new_string(&v)));
+                f(FfiDesktopSetting::TitlebarLayout(BorrowedUtf8::new(&v)));
             }
         }
     }

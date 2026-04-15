@@ -44,7 +44,7 @@ public class Window internal constructor(
 
     public fun setTitle(title: String) {
         Arena.ofConfined().use { arena ->
-            ffiDownCall { desktop_linux_h.window_set_title(appPtr, windowId, title.encodeToByteArray().toNative(arena)) }
+            ffiDownCall { desktop_linux_h.window_set_title(appPtr, windowId, title.toNativeUtf8(arena)) }
         }
     }
 
@@ -198,7 +198,7 @@ public class Window internal constructor(
     public fun activate(token: String) {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_linux_h.window_activate(appPtr, windowId, token.encodeToByteArray().toNative(arena))
+                desktop_linux_h.window_activate(appPtr, windowId, token.toNativeUtf8(arena))
             }
         }
     }

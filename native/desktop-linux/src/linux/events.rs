@@ -5,8 +5,8 @@ use crate::linux::{
 };
 use bitflag_attr::bitflag;
 use core::f64;
+use desktop_common::ffi_utils::BorrowedUtf8;
 use desktop_common::{ffi_utils::BorrowedArray, logger::PanicDefault};
-use std::fmt::{Debug, Formatter};
 
 // return true if event was handled
 pub type EventHandler = extern "C" fn(&Event) -> bool;
@@ -83,7 +83,7 @@ pub enum WindowDecorationMode {
 /// * `{ mime_type: "text/uri-list", data: "file:///data/some-file\r\nfile:///data/Some%20File%20With%20Spaces.txt\r\n" }`
 /// * `{ mime_type: "text/plain;charset=utf-8", data: "some text\r\nhere" }`
 pub struct DataTransferContent<'a> {
-    pub mime_type: BorrowedArray<'a, u8>,
+    pub mime_type: BorrowedUtf8<'a>,
     pub data: BorrowedArray<'a, u8>,
 }
 
@@ -91,7 +91,7 @@ impl<'a> DataTransferContent<'a> {
     #[must_use]
     pub const fn new(mime_type: &'a str, data: &'a [u8]) -> Self {
         Self {
-            mime_type: BorrowedArray::new_string(mime_type),
+            mime_type: BorrowedUtf8::new(mime_type),
             data: BorrowedArray::from_slice(data),
         }
     }
@@ -99,7 +99,7 @@ impl<'a> DataTransferContent<'a> {
     #[must_use]
     pub const fn null() -> Self {
         Self {
-            mime_type: BorrowedArray::null(),
+            mime_type: BorrowedUtf8::null(),
             data: BorrowedArray::null(),
         }
     }
@@ -162,7 +162,7 @@ impl<'a> From<DropPerformedEvent<'a>> for Event<'a> {
 #[derive(Debug)]
 pub struct DataTransferAvailableEvent<'a> {
     pub data_source: DataSource,
-    pub mime_types: BorrowedArray<'a, u8>,
+    pub mime_types: BorrowedUtf8<'a>,
 }
 
 impl<'a> From<DataTransferAvailableEvent<'a>> for Event<'a> {
@@ -176,7 +176,7 @@ impl<'a> DataTransferAvailableEvent<'a> {
     pub const fn new(data_source: DataSource, mime_types: &'a str) -> Self {
         Self {
             data_source,
-            mime_types: BorrowedArray::new_string(mime_types),
+            mime_types: BorrowedUtf8::new(mime_types),
         }
     }
 }
@@ -194,8 +194,9 @@ impl From<DataTransferCancelledEvent> for Event<'_> {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct KeyDownEvent<'a> {
-    pub characters: BorrowedArray<'a, u8>,
+    pub characters: BorrowedUtf8<'a>,
     pub code: KeyCode,
     pub key: u32,
     pub is_repeat: bool,
@@ -207,25 +208,11 @@ impl<'a> From<KeyDownEvent<'a>> for Event<'a> {
     }
 }
 
-impl Debug for KeyDownEvent<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let code = self.code;
-        let characters = &self.characters;
-        let characters_str = characters.as_optional_slice().and_then(|s| str::from_utf8(s).ok());
-        let key = self.key;
-        let is_repeat = self.is_repeat;
-        write!(
-            f,
-            "KeyDownEvent {{ code: {code:?}, characters: {characters_str:?}, key: {key}, is_repeat: {is_repeat} }}"
-        )
-    }
-}
-
 impl<'a> KeyDownEvent<'a> {
     pub(crate) fn new(code: KeyCode, key: u32, characters: Option<&'a String>, is_repeat: bool) -> Self {
         Self {
             code,
-            characters: BorrowedArray::new_optional(characters.and_then(|s| if s.is_empty() { None } else { Some(s.as_bytes()) })),
+            characters: BorrowedUtf8::optional(characters.and_then(|s| if s.is_empty() { None } else { Some(s) })),
             key,
             is_repeat,
         }
@@ -356,7 +343,7 @@ impl From<ScrollWheelEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct TextInputPreeditStringData<'a> {
     /// Can be null
-    pub text: BorrowedArray<'a, u8>,
+    pub text: BorrowedUtf8<'a>,
     pub cursor_begin_byte_pos: i32,
     pub cursor_end_byte_pos: i32,
 }
@@ -364,7 +351,7 @@ pub struct TextInputPreeditStringData<'a> {
 impl Default for TextInputPreeditStringData<'_> {
     fn default() -> Self {
         Self {
-            text: BorrowedArray::null(),
+            text: BorrowedUtf8::null(),
             cursor_begin_byte_pos: 0,
             cursor_end_byte_pos: 0,
         }
@@ -407,7 +394,7 @@ pub struct TextInputEvent<'a> {
     pub preedit_string: TextInputPreeditStringData<'a>,
     pub has_commit_string: bool,
     /// Can be null
-    pub commit_string: BorrowedArray<'a, u8>,
+    pub commit_string: BorrowedUtf8<'a>,
     pub has_delete_surrounding_text: bool,
     pub delete_surrounding_text: TextInputDeleteSurroundingTextData,
 }
@@ -579,7 +566,7 @@ impl From<WindowScreenChangeEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct FileChooserResponse<'a> {
     pub request_id: RequestId,
-    pub newline_separated_files: BorrowedArray<'a, u8>,
+    pub newline_separated_files: BorrowedUtf8<'a>,
 }
 
 impl<'a> From<FileChooserResponse<'a>> for Event<'a> {
@@ -592,7 +579,7 @@ impl<'a> From<FileChooserResponse<'a>> for Event<'a> {
 #[derive(Debug)]
 pub struct ActivationTokenResponse<'a> {
     pub request_id: u32,
-    pub token: BorrowedArray<'a, u8>,
+    pub token: BorrowedUtf8<'a>,
 }
 
 impl<'a> ActivationTokenResponse<'a> {
@@ -600,7 +587,7 @@ impl<'a> ActivationTokenResponse<'a> {
     pub const fn new(request_id: u32, token: &'a str) -> Self {
         Self {
             request_id,
-            token: BorrowedArray::new_string(token),
+            token: BorrowedUtf8::new(token),
         }
     }
 }
@@ -632,10 +619,10 @@ pub struct NotificationClosedEvent<'a> {
     pub notification_id: u32,
 
     /// Optional. Present only if notification was activated. By default, it has a value `"default"`.
-    pub action: BorrowedArray<'a, u8>,
+    pub action: BorrowedUtf8<'a>,
 
     /// Optional. Present only if notification was activated, and the application has an associated `.desktop` file.
-    pub activation_token: BorrowedArray<'a, u8>,
+    pub activation_token: BorrowedUtf8<'a>,
 }
 
 impl<'a> NotificationClosedEvent<'a> {
@@ -643,8 +630,8 @@ impl<'a> NotificationClosedEvent<'a> {
     pub const fn new(notification_id: u32, action: Option<&'a String>, activation_token: Option<&'a String>) -> Self {
         Self {
             notification_id,
-            action: BorrowedArray::new_optional_string(action),
-            activation_token: BorrowedArray::new_optional_string(activation_token),
+            action: BorrowedUtf8::optional(action),
+            activation_token: BorrowedUtf8::optional(activation_token),
         }
     }
 }

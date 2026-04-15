@@ -7,7 +7,7 @@ use crate::linux::{
     text_input_api::TextInputContext,
 };
 use anyhow::{Context, bail};
-use desktop_common::ffi_utils::AutoDropArray;
+use desktop_common::ffi_utils::{AutoDropArray, BorrowedUtf8};
 use desktop_common::{
     ffi_utils::{BorrowedArray, RustAllocatedRawPtr},
     logger::ffi_boundary,
@@ -48,9 +48,15 @@ pub struct DragAndDropQueryData {
 #[repr(C)]
 #[derive(Debug)]
 pub struct FfiSupportedActionsForMime<'a> {
-    pub supported_mime_type: BorrowedArray<'a, u8>,
+    pub supported_mime_type: BorrowedUtf8<'a>,
     pub supported_actions: DragAndDropActions,
     pub preferred_action: DragAndDropAction,
+}
+
+impl FfiSupportedActionsForMime<'_> {
+    pub(crate) fn get_supported_mime_type(&self) -> anyhow::Result<&str> {
+        self.supported_mime_type.get("FfiSupportedActionsForMime: supported_mime_type")
+    }
 }
 
 #[repr(C)]
@@ -77,7 +83,7 @@ pub enum DataSource {
 
 pub type FfiObjDealloc = extern "C" fn(i64);
 pub type FfiQueryDragAndDropTarget = extern "C" fn(&DragAndDropQueryData) -> FfiDragAndDropQueryResponse;
-pub type FfiTransferDataGetter = extern "C" fn(DataSource, BorrowedArray<u8>) -> FfiTransferDataResponse;
+pub type FfiTransferDataGetter = extern "C" fn(source: DataSource, mime_type: BorrowedUtf8) -> FfiTransferDataResponse;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -182,11 +188,12 @@ pub extern "C" fn application_run_on_event_loop_async(app_ptr: AppPtr, f: extern
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_set_cursor_theme(mut app_ptr: AppPtr, name: BorrowedArray<u8>, size: u32) {
+pub extern "C" fn application_set_cursor_theme(mut app_ptr: AppPtr, name: BorrowedUtf8, size: u32) {
     debug!("application_set_cursor_theme");
     ffi_boundary("application_set_cursor_theme", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.set_cursor_theme(name.as_optional_str().unwrap(), size)
+        let name_str = name.get("application_set_cursor_theme: name")?;
+        app.set_cursor_theme(name_str, size)
     });
 }
 
@@ -224,53 +231,47 @@ pub extern "C" fn application_text_input_disable(mut app_ptr: AppPtr) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr, mime_types: BorrowedArray<u8>) {
+pub extern "C" fn application_clipboard_put(mut app_ptr: AppPtr, mime_types: BorrowedUtf8) {
     debug!("application_clipboard_put");
     ffi_boundary("application_clipboard_put", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.clipboard_put(MimeTypes::new(mime_types.as_optional_str().context("Invalid mime_types value")?));
+        let mime_types_str = mime_types.get("application_clipboard_put: mime_types")?;
+        app.clipboard_put(MimeTypes::new(mime_types_str));
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedArray<u8>) {
+pub extern "C" fn application_clipboard_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedUtf8) {
     let t = std::thread::current();
     debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
     ffi_boundary("application_clipboard_paste", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.clipboard_paste(
-            serial,
-            supported_mime_types
-                .as_optional_str()
-                .context("Invalid supported_mime_types value")?,
-        );
+        let supported_mime_types_str = supported_mime_types.get("application_clipboard_paste: supported_mime_types")?;
+        app.clipboard_paste(serial, supported_mime_types_str);
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_primary_selection_put(mut app_ptr: AppPtr, mime_types: BorrowedArray<u8>) {
+pub extern "C" fn application_primary_selection_put(mut app_ptr: AppPtr, mime_types: BorrowedUtf8) {
     debug!("application_primary_selection_put");
     ffi_boundary("application_primary_selection_put", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.primary_selection_put(MimeTypes::new(mime_types.as_optional_str().context("Invalid mime_types value")?));
+        let mime_types_str = mime_types.get("application_primary_selection_put: mime_types")?;
+        app.primary_selection_put(MimeTypes::new(mime_types_str));
         Ok(())
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_primary_selection_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedArray<u8>) {
+pub extern "C" fn application_primary_selection_paste(app_ptr: AppPtr<'_>, serial: i32, supported_mime_types: BorrowedUtf8) {
     let t = std::thread::current();
     debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
     ffi_boundary("application_clipboard_paste", || {
         let app = unsafe { app_ptr.borrow::<Application>() };
-        app.primary_selection_paste(
-            serial,
-            supported_mime_types
-                .as_optional_str()
-                .context("Invalid supported_mime_types value")?,
-        );
+        let supported_mime_types_str = supported_mime_types.get("application_primary_selection_paste: supported_mime_types")?;
+        app.primary_selection_paste(serial, supported_mime_types_str);
         Ok(())
     });
 }
@@ -302,32 +303,22 @@ pub extern "C" fn application_primary_selection_get_available_mimetypes(mut app_
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_open_url(
-    mut app_ptr: AppPtr,
-    url_string: BorrowedArray<u8>,
-    activation_token: BorrowedArray<u8>,
-) -> RequestId {
+pub extern "C" fn application_open_url(mut app_ptr: AppPtr, url_string: BorrowedUtf8, activation_token: BorrowedUtf8) -> RequestId {
     ffi_boundary("application_open_url", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.open_url(
-            url_string.as_optional_str().context("Invalid url_string value")?,
-            activation_token.as_optional_str(),
-        )
+        let url = url_string.get("application_open_url: url_string")?;
+        let activation_token_opt = activation_token.get_optional("application_open_url: activation_token")?;
+        app.open_url(url, activation_token_opt)
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn application_open_file_manager(
-    mut app_ptr: AppPtr,
-    path: BorrowedArray<u8>,
-    activation_token: BorrowedArray<u8>,
-) -> RequestId {
+pub extern "C" fn application_open_file_manager(mut app_ptr: AppPtr, path: BorrowedUtf8, activation_token: BorrowedUtf8) -> RequestId {
     ffi_boundary("application_open_file_manager", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        Ok(app.open_file_manager(
-            path.as_optional_str().context("Invalid path value")?.to_owned(),
-            activation_token.as_optional_str(),
-        ))
+        let path_str = path.get("application_open_file_manager: path")?;
+        let activation_token_opt = activation_token.get_optional("application_open_file_manager: activation_token")?;
+        Ok(app.open_file_manager(path_str.to_owned(), activation_token_opt))
     })
 }
 
@@ -340,17 +331,17 @@ pub extern "C" fn application_open_file_manager(
 #[unsafe(no_mangle)]
 pub extern "C" fn application_request_show_notification(
     mut app_ptr: AppPtr,
-    title: BorrowedArray<u8>,
-    body: BorrowedArray<u8>,
-    sound_file_path: BorrowedArray<u8>,
+    title: BorrowedUtf8,
+    body: BorrowedUtf8,
+    sound_file_path: BorrowedUtf8,
 ) -> RequestId {
     debug!("application_show_notification");
     ffi_boundary("application_show_notification", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        let summary = title.as_optional_str().context("Invalid title value")?.to_owned();
-        let body = body.as_optional_str().context("Invalid body value")?.to_owned();
-        let sound_file_path = sound_file_path.as_optional_str().map(ToOwned::to_owned);
-        app.request_show_notification(summary, body, sound_file_path)
+        let summary = title.get("application_show_notification: title")?;
+        let body = body.get("application_show_notification: body")?;
+        let sound_file_path_opt = sound_file_path.get_optional("application_show_notification: sound_file_path")?;
+        app.request_show_notification(summary.to_owned(), body.to_owned(), sound_file_path_opt.map(ToOwned::to_owned))
     })
 }
 
