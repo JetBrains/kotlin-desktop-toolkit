@@ -6,7 +6,7 @@ use windows::{
     UI::Composition::Core::CompositorController,
     Win32::{
         System::{
-            Com::{COINIT_APARTMENTTHREADED, CoInitializeEx},
+            Ole::OleInitialize,
             WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
         },
         UI::WindowsAndMessaging::PostQuitMessage,
@@ -28,7 +28,7 @@ pub struct Application {
 
 impl Application {
     pub fn init_apartment() -> anyhow::Result<()> {
-        unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.ok()?;
+        unsafe { OleInitialize(None)? };
         Ok(())
     }
 
