@@ -164,8 +164,8 @@ fn clipboard_get_text_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr
 pub extern "C" fn clipboard_set_data(owner: WindowPtr, data_format: u32, content: BorrowedArray<u8>) {
     with_window(&owner, "clipboard_set_data", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
-        let data = hglobal_writer::new_bytes(content.as_slice()?)?;
-        clipboard.set_data(ClipboardFormat::Other(data_format), &data)
+        let mut data = hglobal_writer::new_bytes(content.as_slice()?)?;
+        clipboard.set_data(ClipboardFormat::Other(data_format), &mut data)
     });
 }
 
@@ -174,8 +174,8 @@ pub extern "C" fn clipboard_set_file_list(owner: WindowPtr, content: BorrowedArr
     with_window(&owner, "clipboard_set_data", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
         let files: anyhow::Result<Vec<&str>> = content.as_slice()?.iter().map(|str_ptr| str_ptr.as_str()).collect();
-        let data = hglobal_writer::new_file_list(&files?)?;
-        clipboard.set_data(ClipboardFormat::FileList, &data)
+        let mut data = hglobal_writer::new_file_list(&files?)?;
+        clipboard.set_data(ClipboardFormat::FileList, &mut data)
     });
 }
 
@@ -184,8 +184,8 @@ pub extern "C" fn clipboard_set_html_fragment(owner: WindowPtr, content: Borrowe
     with_window(&owner, "clipboard_set_html_fragment", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
         let fragment = copy_from_utf8_string(&content)?;
-        let data = hglobal_writer::new_html(&fragment)?;
-        clipboard.set_data(ClipboardFormat::HtmlFragment, &data)
+        let mut data = hglobal_writer::new_html(&fragment)?;
+        clipboard.set_data(ClipboardFormat::HtmlFragment, &mut data)
     });
 }
 
@@ -193,8 +193,8 @@ pub extern "C" fn clipboard_set_html_fragment(owner: WindowPtr, content: Borrowe
 pub extern "C" fn clipboard_set_text(owner: WindowPtr, content: BorrowedStrPtr) {
     with_window(&owner, "clipboard_set_text", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
-        let clipboard_data = hglobal_writer::new_text(content.as_str()?)?;
-        clipboard.set_data(ClipboardFormat::Text, &clipboard_data)
+        let mut data = hglobal_writer::new_text(content.as_str()?)?;
+        clipboard.set_data(ClipboardFormat::Text, &mut data)
     });
 }
 
