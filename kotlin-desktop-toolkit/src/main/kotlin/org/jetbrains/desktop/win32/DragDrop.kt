@@ -37,10 +37,20 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
 }
 
 public interface DropTarget {
-    public fun onDragEnter(modifiers: DragDropModifiers, point: PhysicalPoint, effect: DragDropEffects): DragDropEffects
+    /** NOTE: The implementer must release the DataObject when it is done using it! */
+    public fun onDragEnter(
+        dataObject: DataObject,
+        modifiers: DragDropModifiers,
+        point: PhysicalPoint,
+        effect: DragDropEffects,
+    ): DragDropEffects
+
     public fun onDragOver(modifiers: DragDropModifiers, point: PhysicalPoint, effect: DragDropEffects): DragDropEffects
+
     public fun onDragLeave()
-    public fun onDrop(modifiers: DragDropModifiers, point: PhysicalPoint, effect: DragDropEffects): DragDropEffects
+
+    /** NOTE: The implementer must release the DataObject when it is done using it! */
+    public fun onDrop(dataObject: DataObject, modifiers: DragDropModifiers, point: PhysicalPoint, effect: DragDropEffects): DragDropEffects
 }
 
 public interface DragSource {
@@ -105,8 +115,9 @@ private class DropTargetCallbacks(
         )
     }
 
-    fun dragEnter(keyState: Int, point: MemorySegment, effect: Int): Int {
-        val result = target.onDragEnter(DragDropModifiers(keyState), PhysicalPoint.fromNative(point), DragDropEffects(effect))
+    fun dragEnter(dataObj: MemorySegment, keyState: Int, point: MemorySegment, effect: Int): Int {
+        val result =
+            target.onDragEnter(DataObject(dataObj), DragDropModifiers(keyState), PhysicalPoint.fromNative(point), DragDropEffects(effect))
         return result.value
     }
 
@@ -117,8 +128,9 @@ private class DropTargetCallbacks(
 
     fun dragLeave() = target.onDragLeave()
 
-    fun drop(keyState: Int, point: MemorySegment, effect: Int): Int {
-        val result = target.onDrop(DragDropModifiers(keyState), PhysicalPoint.fromNative(point), DragDropEffects(effect))
+    fun drop(dataObj: MemorySegment, keyState: Int, point: MemorySegment, effect: Int): Int {
+        val result =
+            target.onDrop(DataObject(dataObj), DragDropModifiers(keyState), PhysicalPoint.fromNative(point), DragDropEffects(effect))
         return result.value
     }
 

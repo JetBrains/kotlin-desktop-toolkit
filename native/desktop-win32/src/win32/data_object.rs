@@ -115,3 +115,28 @@ impl IDataObject_Impl for DataObject_Impl {
         Err(OLE_E_ADVISENOTSUPPORTED.into())
     }
 }
+
+pub mod data_object_reader {
+    use windows::Win32::{
+        Foundation::{DV_E_TYMED, HANDLE},
+        System::Com::{DVASPECT_CONTENT, FORMATETC, IDataObject, TYMED_HGLOBAL},
+    };
+
+    use crate::win32::global_data::{HGlobalData, hglobal_reader};
+
+    pub fn read_bytes(data_object: &IDataObject, format_id: u32) -> anyhow::Result<Vec<u8>> {
+        let format_etc = FORMATETC {
+            cfFormat: format_id.try_into()?,
+            ptd: core::ptr::null_mut(),
+            dwAspect: DVASPECT_CONTENT.0,
+            lindex: -1,
+            tymed: TYMED_HGLOBAL.0.cast_unsigned(),
+        };
+        let medium = unsafe { data_object.GetData(&raw const format_etc)? };
+        if medium.tymed & TYMED_HGLOBAL.0.cast_unsigned() == 0 {
+            anyhow::bail!(windows_core::Error::from(DV_E_TYMED));
+        }
+        let hglobal = unsafe { medium.u.hGlobal };
+        hglobal_reader::get_bytes(&HGlobalData::copy_from(HANDLE(hglobal.0))?)
+    }
+}
