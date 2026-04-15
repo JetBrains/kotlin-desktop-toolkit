@@ -11,15 +11,15 @@ use windows::Win32::{
 };
 use windows_core::{BOOL, HRESULT, Ref as WinRef, Result as WinResult, implement};
 
-use super::{geometry::PhysicalPoint, window::Window};
+use super::{com::ComInterfaceRawPtr, geometry::PhysicalPoint, window::Window};
 
 #[allow(clippy::struct_field_names)]
 #[repr(C)]
 pub struct DropTargetCallbacks {
-    drag_enter_handler: extern "C" fn(u32, PhysicalPoint, u32) -> u32,
+    drag_enter_handler: extern "C" fn(ComInterfaceRawPtr, u32, PhysicalPoint, u32) -> u32,
     drag_over_handler: extern "C" fn(u32, PhysicalPoint, u32) -> u32,
     drag_leave_handler: extern "C" fn(),
-    drop_handler: extern "C" fn(u32, PhysicalPoint, u32) -> u32,
+    drop_handler: extern "C" fn(ComInterfaceRawPtr, u32, PhysicalPoint, u32) -> u32,
 }
 
 #[allow(clippy::struct_field_names)]
@@ -79,20 +79,22 @@ pub struct DropTarget {
 impl IDropTarget_Impl for DropTarget_Impl {
     fn DragEnter(
         &self,
-        _data_obj: WinRef<IDataObject>,
+        data_obj: WinRef<IDataObject>,
         key_state: MODIFIERKEYS_FLAGS,
         pt: &POINTL,
         effect: *mut DROPEFFECT,
     ) -> WinResult<()> {
         let effect = unsafe { effect.as_mut() }.ok_or(E_POINTER)?;
-        let result = (self.callbacks.drag_enter_handler)(key_state.0, PhysicalPoint::new(pt.x, pt.y), (*effect).0);
+        let data_object = data_obj.as_ref().ok_or(E_POINTER)?;
+        let data_obj_ptr = ComInterfaceRawPtr::new(data_object)?;
+        let result = (self.callbacks.drag_enter_handler)(data_obj_ptr, key_state.0, PhysicalPoint::new(pt.x, pt.y), effect.0);
         *effect = DROPEFFECT(result);
         Ok(())
     }
 
     fn DragOver(&self, key_state: MODIFIERKEYS_FLAGS, pt: &POINTL, effect: *mut DROPEFFECT) -> WinResult<()> {
         let effect = unsafe { effect.as_mut() }.ok_or(E_POINTER)?;
-        let result = (self.callbacks.drag_over_handler)(key_state.0, PhysicalPoint::new(pt.x, pt.y), (*effect).0);
+        let result = (self.callbacks.drag_over_handler)(key_state.0, PhysicalPoint::new(pt.x, pt.y), effect.0);
         *effect = DROPEFFECT(result);
         Ok(())
     }
@@ -102,9 +104,11 @@ impl IDropTarget_Impl for DropTarget_Impl {
         Ok(())
     }
 
-    fn Drop(&self, _data_obj: WinRef<IDataObject>, key_state: MODIFIERKEYS_FLAGS, pt: &POINTL, effect: *mut DROPEFFECT) -> WinResult<()> {
+    fn Drop(&self, data_obj: WinRef<IDataObject>, key_state: MODIFIERKEYS_FLAGS, pt: &POINTL, effect: *mut DROPEFFECT) -> WinResult<()> {
         let effect = unsafe { effect.as_mut() }.ok_or(E_POINTER)?;
-        let result = (self.callbacks.drop_handler)(key_state.0, PhysicalPoint::new(pt.x, pt.y), (*effect).0);
+        let data_object = data_obj.as_ref().ok_or(E_POINTER)?;
+        let data_obj_ptr = ComInterfaceRawPtr::new(data_object)?;
+        let result = (self.callbacks.drop_handler)(data_obj_ptr, key_state.0, PhysicalPoint::new(pt.x, pt.y), effect.0);
         *effect = DROPEFFECT(result);
         Ok(())
     }
