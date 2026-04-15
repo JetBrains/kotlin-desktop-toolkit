@@ -200,9 +200,11 @@ impl Application {
 
         let event_handler = self.state.callbacks.event_handler;
         for (k, v) in self.state.windows.extract_if(|_, v| v.close) {
-            debug!("Closing window {:?} ({k})", v.window_id);
-            self.state.window_id_to_surface_id.remove(&v.window_id);
-            send_event(event_handler, WindowClosedEvent { window_id: v.window_id });
+            let window_id = v.window_id;
+            debug!("Closing window {window_id:?} ({k})");
+            drop(v);
+            self.state.window_id_to_surface_id.remove(&window_id);
+            send_event(event_handler, WindowClosedEvent { window_id });
         }
 
         if self.exit && !send_event(event_handler, Event::ApplicationWantsToTerminate) {

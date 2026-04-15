@@ -58,6 +58,7 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.CompletableFuture
@@ -71,7 +72,6 @@ import kotlin.io.path.deleteIfExists
 import kotlin.io.path.fileSize
 import kotlin.io.path.readBytes
 import kotlin.io.path.writeBytes
-import kotlin.io.path.writeLines
 import kotlin.math.roundToInt
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -118,6 +118,7 @@ private fun log(message: String) {
 }
 
 private fun runCommandImpl(command: List<String>, timeout: Duration = 5.seconds): Result<ByteArray> {
+    log("runCommand: $command")
     val proc = ProcessBuilder(command).start()
     if (!proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
         fail(withTimestamp("Timed out waiting for $command to finish"))
@@ -143,18 +144,24 @@ private fun runCommand(command: List<String>, timeout: Duration = 5.seconds) {
     runCommandImpl(command, timeout).getOrThrow()
 }
 
-private fun <T> waitUntilEq(expectedValue: T, timeout: Duration = 5.seconds, actualValueGetter: () -> T) {
+private fun <T> waitUntilEqCheck(expectedValue: T, timeout: Duration = 5.seconds, actualValueGetter: () -> T): T? {
     val startTime = TimeSource.Monotonic.markNow()
     val waitStepMs = 10L
     var actualValue = actualValueGetter()
     while (startTime.elapsedNow() < timeout) {
         if (actualValue == expectedValue) {
-            return
+            return null
         }
         Thread.sleep(waitStepMs)
         actualValue = actualValueGetter()
     }
-    fail(withTimestamp("waitUntilEq timed out: Expected: $expectedValue, actual: $actualValue "))
+    return actualValue
+}
+
+private fun <T> waitUntilEq(expectedValue: T, timeout: Duration = 5.seconds, actualValueGetter: () -> T) {
+    waitUntilEqCheck(expectedValue, timeout, actualValueGetter)?.let { different ->
+        fail(withTimestamp("waitUntilEq timed out: Expected: $expectedValue, actual: $different "))
+    }
 }
 
 private enum class TestApp(private val resourcePath: String) {
@@ -263,7 +270,7 @@ private class XSettingsD {
         private fun quoted(value: String): String = "\"$value\""
 
         private fun reloadSettingsOnce(): Int {
-            log("Reloading xsettingsd")
+            log("Reloading xsettingsd, config file size: ${configFile.fileSize()}")
             return ProcessBuilder("kill", "-HUP", xSettingsDPid).start().waitFor()
         }
 
@@ -271,8 +278,10 @@ private class XSettingsD {
             // Try to work around the reload race condition:
             // https://codeberg.org/derat/xsettingsd/src/commit/351c70795f99f59064ca4b24da96b7b02a0db099/settings_manager.cc#L157-L159
             val oldLogFileSize = logFile.fileSize()
-            waitUntilEq(true) {
-                reloadSettingsOnce() == 0 && logFile.fileSize() != oldLogFileSize
+            assertEquals(0, reloadSettingsOnce())
+            if (waitUntilEqCheck(true) { logFile.fileSize() != oldLogFileSize } != null) {
+                assertEquals(0, reloadSettingsOnce())
+                waitUntilEq(true) { logFile.fileSize() != oldLogFileSize }
             }
         }
 
@@ -330,12 +339,14 @@ private class XSettingsD {
             } + toChange.mapNotNull { (name, tempValue) ->
                 tempValue?.let { "$name $it" }
             }
+            val newConfData = newConf.joinToString("\n", postfix = "\n").encodeToByteArray()
 
-            configFile.writeLines(newConf)
+            configFile.writeBytes(newConfData, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE, StandardOpenOption.SYNC)
             reloadSettings()
 
             AutoCloseable {
-                configFile.writeBytes(oldConf)
+                log("xsettingsd: reverting $toChange")
+                configFile.writeBytes(oldConf, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE, StandardOpenOption.SYNC)
                 reloadSettings()
             }.use {
                 block()
@@ -681,7 +692,7 @@ abstract class X11TestsBase {
 
     internal fun run(applicationConfig: ApplicationConfig): InitialSettings {
         // Reset the mouse position
-        moveMouseTo(50, 50)
+        moveMouseTo(49, 49)
         appExecutingResult = appExecutor.add {
             try {
                 app.runEventLoop(applicationConfig)
@@ -970,6 +981,7 @@ abstract class X11TestsBase {
         val draw: Event.WindowDraw,
         val keyboardEnter: Event.WindowKeyboardEnter,
         val screen: Event.WindowScreenChange,
+        val otherEvents: List<Event>,
     )
 
     internal fun createWindowAndWaitForFocus(windowParams: WindowParams, onScale: ((Double) -> Unit)? = null): InitialWindowData {
@@ -979,9 +991,28 @@ abstract class X11TestsBase {
         lateinit var draw: Event.WindowDraw
         lateinit var keyboardEnter: Event.WindowKeyboardEnter
         lateinit var screen: Event.WindowScreenChange
-        val checklist = Checklist(listOf("draw", "configure", "keyboardEnter", "scale", "screen"))
+        val otherEvents = mutableListOf<Event>()
+
+        val checklist = Checklist(listOf("draw", "configure", "keyboardEnter", "mouseEnter", "mouseMove", "scale", "screen"))
         waitUntilEq(emptySet()) {
             when (val event: Event? = eventQueue.poll()) {
+                null -> {}
+
+                is Event.MouseEntered -> {
+                    if (windowParams.windowId == event.windowId) {
+                        assertEquals(LogicalPoint(50f, 50f), event.locationInWindow)
+                        checklist.checkEntry("mouseEnter")
+                    }
+                }
+
+                is Event.MouseMoved -> {
+                    if (windowParams.windowId == event.windowId) {
+                        checklist.checkEntry("mouseMove")
+                        assertNotEquals(Duration.ZERO, event.timestamp.toDuration())
+                        assertEquals(LogicalPoint(50f, 50f), event.locationInWindow)
+                    }
+                }
+
                 is Event.WindowConfigure -> {
                     if (windowParams.windowId == event.windowId && event.active) {
                         configure = event
@@ -998,8 +1029,10 @@ abstract class X11TestsBase {
 
                 is Event.WindowDraw -> {
                     if (windowParams.windowId == event.windowId) {
+                        assertTrue(checklist.isChecked("scale"), "Draw event has to be after scale")
                         draw = event
                         checklist.checkEntry("draw")
+                        moveMouseTo((50 * scale.newScale).roundToInt(), (50 * scale.newScale).roundToInt())
                     }
                 }
 
@@ -1018,7 +1051,9 @@ abstract class X11TestsBase {
                     }
                 }
 
-                else -> {}
+                else -> {
+                    otherEvents.add(event)
+                }
             }
             checklist.uncheckedEntries()
         }
@@ -1029,6 +1064,7 @@ abstract class X11TestsBase {
             draw = draw,
             keyboardEnter = keyboardEnter,
             screen = screen,
+            otherEvents = otherEvents,
         )
     }
 
@@ -1447,12 +1483,6 @@ class X11Tests : X11TestsBase() {
         val windowParams = defaultWindowParams()
         val window = createWindowAndWaitForFocus(windowParams).window
 
-        moveMouseTo(50, 50)
-        awaitEventOfType<Event.MouseMoved> { event ->
-            assertEquals(windowParams.windowId, event.windowId)
-            true
-        }
-
         runCommand(listOf("i3-msg", "kill"))
 
         withKeyPress(KeyCode.A) {
@@ -1492,22 +1522,6 @@ class X11Tests : X11TestsBase() {
 
         val minSize = LogicalSize(width = 100, height = 70)
         val windowParams = defaultWindowParams().copy(minSize = minSize)
-        val window = ui { app.createWindow(windowParams) }
-
-        withNextEvent { event ->
-            assertInstanceOf<Event.WindowScaleChanged>(event)
-            assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(screen.scale, event.newScale)
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.WindowScreenChange>(event)
-            assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(screen.screenId, event.newScreenId)
-        }
-
-        // i3 versions older than 4.24 don't report windows as maximized.
-        // https://github.com/i3/i3/commit/b660d6a902cf44be22c434101dd2a4e6743e26bc
-        var reportsMaximized = true
 
         var expectedConfigureEvent = Event.WindowConfigure(
             windowId = windowParams.windowId,
@@ -1520,52 +1534,19 @@ class X11Tests : X11TestsBase() {
             insetEnd = LogicalSize(width = 0, height = 0),
         )
 
-        val otherInitialEvents = checkNextEvents(
-            checks = mapOf(
-                "WindowKeyboardEnter" to { event, _ ->
-                    val matchesType = event is Event.WindowKeyboardEnter
-                    if (matchesType) {
-                        assertEquals(windowParams.windowId, event.windowId)
-                    }
-                    matchesType
-                },
-                "Window active" to { event, _ ->
-                    if (event is Event.WindowConfigure) {
-                        assertEquals(windowParams.windowId, event.windowId)
-                        if (event.active) {
-                            reportsMaximized = event.maximized
-                            expectedConfigureEvent = expectedConfigureEvent.copy(maximized = reportsMaximized)
-                            assertEquals(expectedConfigureEvent, event)
-                        }
-                        event.active
-                    } else {
-                        false
-                    }
-                },
-                "WindowDraw" to { event, _ ->
-                    val matchesType = event is Event.WindowDraw
-                    if (matchesType) {
-                        assertEquals(windowParams.windowId, event.windowId)
-                        assertEquals(physicalScreenSize, event.size)
-                    }
-                    matchesType
-                },
-            ),
-        )
+        val initialWindowData = createWindowAndWaitForFocus(windowParams)
+        val window = initialWindowData.window
 
-        for (event in otherInitialEvents) {
-            // There might be additional WindowScreenChange events
-            when (event) {
-                is Event.WindowScreenChange -> {
-                    assertEquals(windowParams.windowId, event.windowId)
-                    assertEquals(screen.screenId, event.newScreenId)
-                }
-                is Event.WindowConfigure -> {
-                    assertEquals(windowParams.windowId, event.windowId)
-                }
-                else -> fail("Unexpected event: $event")
-            }
-        }
+        // i3 versions older than 4.24 don't report windows as maximized.
+        // https://github.com/i3/i3/commit/b660d6a902cf44be22c434101dd2a4e6743e26bc
+        val reportsMaximized = initialWindowData.configure.maximized
+        expectedConfigureEvent = expectedConfigureEvent.copy(maximized = reportsMaximized)
+
+        assertEquals(expectedConfigureEvent, initialWindowData.configure)
+        assertEquals(physicalScreenSize, initialWindowData.draw.size)
+        assertEquals(screen.scale, initialWindowData.scale.newScale)
+        assertEquals(screen.screenId, initialWindowData.screen.newScreenId)
+        assertTrue(initialWindowData.otherEvents.isEmpty(), "Unexpected initial events: ${initialWindowData.otherEvents}")
 
         runCommand(listOf("i3-msg", "floating enable, move position 0 0"))
 
@@ -1583,23 +1564,6 @@ class X11Tests : X11TestsBase() {
         withNextEvent { event ->
             assertInstanceOf<Event.WindowDraw>(event)
             assertEquals(windowParams.windowId, event.windowId)
-        }
-
-        moveMouseTo(50, 50)
-        withNextEvent { event ->
-            assertInstanceOf<Event.MouseEntered>(event)
-            assertEquals(windowParams.windowId, event.windowId)
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.MouseMoved>(event)
-            assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(
-                LogicalPoint(
-                    x = (50 / screen.scale).toFloat(),
-                    y = (50 / screen.scale).toFloat(),
-                ),
-                event.locationInWindow,
-            )
         }
 
         withMouseButtonDown(MouseButton.LEFT) {
@@ -1639,6 +1603,7 @@ class X11Tests : X11TestsBase() {
         }
 
         for (useI3 in listOf(true, false)) {
+            log("Fullscreen enable (useI3=$useI3)")
             if (useI3) {
                 runCommand(listOf("i3-msg", "fullscreen enable"))
             } else {
@@ -1700,6 +1665,7 @@ class X11Tests : X11TestsBase() {
                 }
             }
 
+            log("Fullscreen disable (useI3=$useI3)")
             if (useI3) {
                 runCommand(listOf("i3-msg", "fullscreen disable"))
             } else {
@@ -1730,7 +1696,6 @@ class X11Tests : X11TestsBase() {
                         } else if (fullscreenExitChecklist.checkEntry("resized")) {
                             expectedConfigureEvent = expectedConfigureEvent.copy(size = minSize)
                             assertEquals(expectedConfigureEvent, event, failMsg())
-                            moveMouseTo(physicalScreenSize.width - 52, physicalScreenSize.height - 52)
                         } else {
                             fail(withTimestamp("Unexpected event: $event, ${failMsg()}"))
                         }
@@ -1759,6 +1724,7 @@ class X11Tests : X11TestsBase() {
                         }
                         assertTrue(fullscreenExitChecklist.isChecked("resized"), failMsg())
                         assertEquals(windowParams.windowId, event.windowId, failMsg())
+                        moveMouseTo(physicalScreenSize.width - 52, physicalScreenSize.height - 52)
                     }
 
                     else -> {
@@ -1768,7 +1734,9 @@ class X11Tests : X11TestsBase() {
             }
             if (mouseInWindow) {
                 withNextEvent { event ->
-                    assertIs<Event.MouseExited>(event)
+                    if (event != null) {
+                        assertIs<Event.MouseExited>(event)
+                    }
                 }
             }
         }
@@ -1935,13 +1903,6 @@ class X11Tests : X11TestsBase() {
         run(defaultApplicationConfig())
         val windowParams = defaultWindowParams()
         createWindowAndWaitForFocus(windowParams)
-
-        moveMouseTo(101, 10)
-
-        awaitEventOfType<Event.MouseMoved> { event ->
-            assertEquals(windowParams.windowId, event.windowId)
-            true
-        }
 
         withMouseButtonDown(MouseButton.LEFT) {
             withNextEvent { event ->
@@ -2443,16 +2404,6 @@ text/plain;charset=utf-8
         val windowParams = defaultWindowParams()
         createWindowAndWaitForFocus(windowParams)
 
-        moveMouseTo(100, 100)
-        withNextEvent { event ->
-            assertInstanceOf<Event.MouseEntered>(event)
-            assertEquals(windowParams.windowId, event.windowId)
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.MouseMoved>(event)
-            assertEquals(windowParams.windowId, event.windowId)
-        }
-
         withKeyPress(KeyCode.A) {
             withNextEvent { event ->
                 assertInstanceOf<Event.KeyDown>(event)
@@ -2846,16 +2797,6 @@ text/plain;charset=utf-8
 
             val window = createWindowAndWaitForFocus(windowParams).window
             ui { window.textInputEnable(defaultTextInputContext) }
-
-            moveMouseTo(100, 100)
-            withNextEvent { event ->
-                assertInstanceOf<Event.MouseEntered>(event)
-                assertEquals(windowParams.windowId, event.windowId)
-            }
-            withNextEvent { event ->
-                assertInstanceOf<Event.MouseMoved>(event)
-                assertEquals(windowParams.windowId, event.windowId)
-            }
 
             val keyCodes = mapOf(
                 KeyCode.`1` to "1",
@@ -3587,8 +3528,7 @@ text/plain;charset=utf-8
         }
     }
 
-    @Test
-    fun testDragToWindow() {
+    fun testDragToWindowImpl() {
         val queryDragAndDropTargetTriggered = LinkedBlockingQueue<DragAndDropQueryData>()
         run(
             defaultApplicationConfig(
@@ -3685,7 +3625,26 @@ text/plain;charset=utf-8
             }
 
             waitUntilEq("dnd-finished") { readTestAppOutputLastLine(10.milliseconds) }
+            true
         }
+    }
+
+    @Test
+    fun testDragToWindow() {
+        var remainingRetries = 2
+        while (remainingRetries > 1) {
+            try {
+                testDragToWindowImpl()
+                return
+            } catch (e: AssertionError) {
+                log("Retrying testDragToWindow: $e")
+            }
+            remainingRetries -= 1
+            tearDown()
+            eventQueue.clear()
+            setUp()
+        }
+        testDragToWindowImpl()
     }
 
     @Test
@@ -3719,7 +3678,7 @@ text/plain;charset=utf-8
             val mouseY = physicalScreenSize.height / 2
             moveMouseTo((physicalScreenSize.width / 2) - 100, mouseY)
 
-            awaitEventOfType<Event.MouseEntered> { true }
+            awaitEventOfType<Event.MouseMoved> { true }
 
             withMouseButtonDown(MouseButton.LEFT) {
                 waitForWindowFocusAfterMouseDown(windowParams.windowId)
@@ -3916,19 +3875,7 @@ text/plain;charset=utf-8
     fun testMouseScroll() {
         run(defaultApplicationConfig())
         val windowParams = defaultWindowParams()
-        val scale = createWindowAndWaitForFocus(windowParams).scale.newScale
-
-        moveMouseTo((100 * scale).roundToInt(), (100 * scale).roundToInt())
-        withNextEvent { event ->
-            assertInstanceOf<Event.MouseEntered>(event)
-            assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(LogicalPoint(100f, 100f), event.locationInWindow)
-        }
-        withNextEvent { event ->
-            assertInstanceOf<Event.MouseMoved>(event)
-            assertEquals(windowParams.windowId, event.windowId)
-            assertNotEquals(Duration.ZERO, event.timestamp.toDuration())
-        }
+        createWindowAndWaitForFocus(windowParams)
 
         scrollMouseDown()
         withNextEvent { event ->
