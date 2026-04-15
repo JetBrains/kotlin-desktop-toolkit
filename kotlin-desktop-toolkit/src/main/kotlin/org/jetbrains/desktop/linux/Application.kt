@@ -43,8 +43,8 @@ public data class WindowParams(
         val nativeWindowParams = NativeWindowParams.allocate(arena)
         NativeWindowParams.size(nativeWindowParams, (size ?: LogicalSize(0U, 0U)).toNative(arena))
         NativeWindowParams.min_size(nativeWindowParams, LogicalSize(minSize?.width ?: 0U, minSize?.height ?: 0U).toNative(arena))
-        NativeWindowParams.title(nativeWindowParams, title.encodeToByteArray().toNative(arena))
-        NativeWindowParams.app_id(nativeWindowParams, appId.encodeToByteArray().toNative(arena))
+        NativeWindowParams.title(nativeWindowParams, title.toNativeUtf8(arena))
+        NativeWindowParams.app_id(nativeWindowParams, appId.toNativeUtf8(arena))
         NativeWindowParams.prefer_client_side_decoration(nativeWindowParams, preferClientSideDecoration)
         NativeWindowParams.rendering_mode(nativeWindowParams, renderingMode.toNative())
         NativeWindowParams.window_id(nativeWindowParams, windowId)
@@ -173,8 +173,8 @@ public class Application : AutoCloseable {
     public fun openURL(url: String, activationToken: String?): RequestId? {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                val nativeUrl = url.encodeToByteArray().toNative(arena)
-                val nativeActivationToken = activationToken?.encodeToByteArray().toNative(arena)
+                val nativeUrl = url.toNativeUtf8(arena)
+                val nativeActivationToken = activationToken.toNativeUtf8(arena)
                 RequestId.fromNativeResponse(desktop_linux_h.application_open_url(appPtr!!, nativeUrl, nativeActivationToken))
             }
         }
@@ -183,8 +183,8 @@ public class Application : AutoCloseable {
     public fun openFileManager(path: String, activationToken: String?): RequestId? {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                val nativePath = path.encodeToByteArray().toNative(arena)
-                val nativeActivationToken = activationToken?.encodeToByteArray().toNative(arena)
+                val nativePath = path.toNativeUtf8(arena)
+                val nativeActivationToken = activationToken.toNativeUtf8(arena)
                 RequestId.fromNativeResponse(desktop_linux_h.application_open_file_manager(appPtr!!, nativePath, nativeActivationToken))
             }
         }
@@ -212,7 +212,7 @@ public class Application : AutoCloseable {
 
     public fun setCursorTheme(name: String, size: UInt) {
         Arena.ofConfined().use { arena ->
-            desktop_linux_h.application_set_cursor_theme(appPtr, name.encodeToByteArray().toNative(arena), size.toInt())
+            desktop_linux_h.application_set_cursor_theme(appPtr, name.toNativeUtf8(arena), size.toInt())
         }
     }
 
@@ -377,9 +377,9 @@ public class Application : AutoCloseable {
     public fun requestShowNotification(params: ShowNotificationParams): RequestId? {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
-                val title = params.title.encodeToByteArray().toNative(arena)
-                val body = params.body.encodeToByteArray().toNative(arena)
-                val soundFilePath = params.soundFilePath?.encodeToByteArray().toNative(arena)
+                val title = params.title.toNativeUtf8(arena)
+                val body = params.body.toNativeUtf8(arena)
+                val soundFilePath = params.soundFilePath.toNativeUtf8(arena)
                 RequestId.fromNativeResponse(desktop_linux_h.application_request_show_notification(appPtr, title, body, soundFilePath))
             }
         }

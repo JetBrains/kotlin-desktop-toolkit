@@ -1,4 +1,4 @@
-use desktop_common::ffi_utils::BorrowedArray;
+use desktop_common::ffi_utils::BorrowedUtf8;
 use log::error;
 
 use crate::linux::events::{EventHandler, FileChooserResponse, NotificationShownEvent, RequestId};
@@ -38,11 +38,11 @@ impl AsyncEventResult {
                 };
                 match result {
                     Ok(files) => {
-                        send(BorrowedArray::new_string(&files));
+                        send(BorrowedUtf8::new(&files));
                     }
                     Err(e) => {
                         error!("{e}");
-                        send(BorrowedArray::null());
+                        send(BorrowedUtf8::null());
                     }
                 }
             }

@@ -1,6 +1,8 @@
 #![allow(clippy::missing_safety_doc)]
 
+use anyhow::{Context, anyhow, bail};
 use core::slice;
+use log::trace;
 use std::{
     ffi::{CStr, CString, NulError},
     fmt::Write,
@@ -8,9 +10,6 @@ use std::{
     ptr::NonNull,
     rc::Rc,
 };
-
-use anyhow::{Context, bail};
-use log::trace;
 
 use crate::logger::PanicDefault;
 
@@ -359,14 +358,19 @@ impl<T> Drop for AutoDropArray<T> {
 }
 
 #[repr(C)]
-#[derive(Debug)]
 pub struct BorrowedArray<'a, T> {
     ptr: *const T,
     len: ArraySize,
     phantom: PhantomData<&'a T>,
 }
 
-impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
+impl<T> std::fmt::Debug for BorrowedArray<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BorrowedArray<{type}> {{ ptr: {ptr:?}, len: {len} }}", type = std::any::type_name::<T>(), ptr = self.ptr, len = self.len)
+    }
+}
+
+impl<'a, T> BorrowedArray<'a, T> {
     pub const fn from_slice(s: &'a [T]) -> Self {
         Self {
             ptr: s.as_ptr(),
@@ -408,24 +412,76 @@ impl<'a, T: std::fmt::Debug> BorrowedArray<'a, T> {
     }
 }
 
-impl<'a> BorrowedArray<'a, u8> {
+#[repr(transparent)]
+pub struct BorrowedUtf8<'a>(BorrowedArray<'a, u8>);
+
+impl<'a> BorrowedUtf8<'a> {
     #[must_use]
-    pub const fn new_string(s: &'a str) -> Self {
-        Self::from_slice(s.as_bytes())
+    pub const fn new(s: &'a str) -> Self {
+        Self(BorrowedArray::from_slice(s.as_bytes()))
     }
 
     #[must_use]
-    pub const fn new_optional_string(s: Option<&'a String>) -> Self {
+    pub const fn null() -> Self {
+        Self(BorrowedArray::null())
+    }
+
+    #[must_use]
+    pub const fn optional(s: Option<&'a String>) -> Self {
         if let Some(s) = s {
-            Self::from_slice(s.as_bytes())
+            Self::new(s.as_str())
         } else {
-            Self::null()
+            Self(BorrowedArray::null())
         }
     }
 
-    #[must_use]
-    pub fn as_optional_str(&'a self) -> Option<&'a str> {
-        str::from_utf8(self.as_optional_slice()?).ok()
+    const fn get_optional_impl(&'a self) -> Result<Option<&'a str>, (&'a [u8], std::str::Utf8Error)> {
+        match self.0.as_optional_slice() {
+            None => Ok(None),
+            Some(slice) => match str::from_utf8(slice) {
+                Ok(s) => Ok(Some(s)),
+                Err(e) => Err((slice, e)),
+            },
+        }
+    }
+
+    pub fn get_optional(&'a self, context: &str) -> anyhow::Result<Option<&'a str>> {
+        match self.get_optional_impl() {
+            Ok(s) => Ok(s),
+            Err((slice, e)) => Err(anyhow!(
+                "{context}: error decoding {inner:?} ({slice:?}) as UTF-8: {e}",
+                inner = self.0
+            )),
+        }
+    }
+
+    pub fn get(&'a self, context: &str) -> anyhow::Result<&'a str> {
+        match self.get_optional(context)? {
+            None => bail!("{context} must not be null"),
+            Some(s) => Ok(s),
+        }
+    }
+}
+
+impl std::fmt::Debug for BorrowedUtf8<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.get_optional_impl() {
+            Ok(None) => f.write_str("BorrowedUtf8(None)"),
+            Ok(Some(s)) => write!(
+                f,
+                "BorrowedUtf8 {{ ptr: {ptr:?}, len: {len} }} ({s:?})",
+                ptr = self.0.ptr,
+                len = self.0.len
+            ),
+            Err((slice, e)) => {
+                write!(
+                    f,
+                    "BorrowedUtf8 {{ ptr: {ptr:?}, len: {len} }} (invalid UTF-8: {slice:?} : {e})",
+                    ptr = self.0.ptr,
+                    len = self.0.len
+                )
+            }
+        }
     }
 }
 

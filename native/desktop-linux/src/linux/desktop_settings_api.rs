@@ -1,4 +1,4 @@
-use desktop_common::ffi_utils::BorrowedArray;
+use desktop_common::ffi_utils::BorrowedUtf8;
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -92,7 +92,7 @@ pub enum FfiDesktopSetting<'a> {
     CursorBlinkTimeoutMs(i32),
 
     CursorSize(i32),
-    CursorTheme(BorrowedArray<'a, u8>),
+    CursorTheme(BorrowedUtf8<'a>),
     DoubleClickIntervalMs(i32),
     DragThresholdPixels(i32),
     EnableAnimations(bool),
@@ -104,5 +104,5 @@ pub enum FfiDesktopSetting<'a> {
     RecentFilesEnabled(bool),
     RecentFilesMaxAgeDays(i32),
     ReducedMotion(XdgDesktopReducedMotion),
-    TitlebarLayout(BorrowedArray<'a, u8>),
+    TitlebarLayout(BorrowedUtf8<'a>),
 }

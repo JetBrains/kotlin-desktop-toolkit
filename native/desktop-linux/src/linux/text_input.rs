@@ -4,7 +4,7 @@ use crate::linux::{
     events::{TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData},
 };
 use anyhow::bail;
-use desktop_common::ffi_utils::BorrowedArray;
+use desktop_common::ffi_utils::BorrowedUtf8;
 use log::{debug, warn};
 use smithay_client_toolkit::reexports::{
     client::{Connection, Dispatch, Proxy, QueueHandle, delegate_noop},
@@ -68,7 +68,7 @@ impl TextInputContext<'_> {
         it.offset()
     }
 
-    pub fn apply(&self, text_input: &zwp_text_input_v3::ZwpTextInputV3) -> anyhow::Result<()> {
+    pub fn apply(&self, text_input: &ZwpTextInputV3) -> anyhow::Result<()> {
         let surrounding_text = str::from_utf8(self.surrounding_text.as_slice()?)?;
 
         let cursor_pos_bytes = Self::get_byte_offset(surrounding_text, self.cursor_codepoint_offset);
@@ -202,7 +202,7 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                     has_preedit_string: preedit_data.is_some(),
                     preedit_string: if let Some((preedit_text, preedit_begin, preedit_end)) = &preedit_data {
                         TextInputPreeditStringData {
-                            text: BorrowedArray::new_optional_string(preedit_text.as_ref()),
+                            text: BorrowedUtf8::optional(preedit_text.as_ref()),
                             cursor_begin_byte_pos: *preedit_begin,
                             cursor_end_byte_pos: *preedit_end,
                         }
@@ -210,7 +210,7 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
                         TextInputPreeditStringData::default()
                     },
                     has_commit_string,
-                    commit_string: BorrowedArray::new_optional_string(commit_string.as_ref()),
+                    commit_string: BorrowedUtf8::optional(commit_string.as_ref()),
                     has_delete_surrounding_text: delete_surrounding_text.is_some(),
                     delete_surrounding_text: delete_surrounding_text.unwrap_or_default(),
                 };

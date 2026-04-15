@@ -128,13 +128,13 @@ impl ApplicationState {
             self.query_drag_and_drop_target.with(&drag_and_drop_query_data, |target_info| {
                 let supported_mime_with_actions = target_info
                     .iter()
-                    .find(|&e| mime_types.iter().any(|s| s == e.supported_mime_type.as_optional_str().unwrap()));
+                    .find(|&e| mime_types.iter().any(|s| s == e.get_supported_mime_type().unwrap()));
 
                 debug!("query_drag_and_drop_target -> {target_info:?}, supported_mime_with_actions={supported_mime_with_actions:?}");
 
                 if let Some(v) = supported_mime_with_actions {
                     DragOfferMimetypeAndActions {
-                        mime_type: Some(v.supported_mime_type.as_optional_str().unwrap().to_owned()),
+                        mime_type: Some(v.get_supported_mime_type().unwrap().to_owned()),
                         supported_actions: v.supported_actions.into(),
                         preferred_action: v.preferred_action.into(),
                     }

@@ -5,6 +5,7 @@ import org.jetbrains.desktop.linux.generated.NativeAutoDropArray_u8
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_FfiSupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
+import org.jetbrains.desktop.linux.generated.NativeBorrowedUtf8
 import org.jetbrains.desktop.linux.generated.NativeColor
 import org.jetbrains.desktop.linux.generated.NativeCommonFileDialogParams
 import org.jetbrains.desktop.linux.generated.NativeDataTransferAvailableEvent
@@ -460,7 +461,7 @@ internal fun TextInputDeleteSurroundingTextData.Companion.fromNative(s: MemorySe
 
 internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
     val result = NativeTextInputContext.allocate(arena)
-    NativeTextInputContext.surrounding_text(result, surroundingText.encodeToByteArray().toNative(arena))
+    NativeTextInputContext.surrounding_text(result, surroundingText.toNativeUtf8(arena))
     NativeTextInputContext.cursor_codepoint_offset(result, cursorCodepointOffset.toShort())
     NativeTextInputContext.selection_start_codepoint_offset(result, selectionStartCodepointOffset.toShort())
     NativeTextInputContext.hints(result, hints.toNative())
@@ -485,7 +486,7 @@ internal fun DataSource.Companion.fromNative(nativeDataSource: Int): DataSource 
 }
 
 internal fun mimeTypesToNative(arena: Arena, mimeTypes: List<String>): MemorySegment {
-    return mimeTypes.joinToString(",").encodeToByteArray().toNative(arena)
+    return mimeTypes.joinToString(",").toNativeUtf8(arena)
 }
 
 internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
@@ -501,6 +502,22 @@ internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
     }
 
     return nativeDataArray
+}
+
+internal fun String?.toNativeUtf8(arena: Arena): MemorySegment {
+    val native = NativeBorrowedUtf8.allocate(arena)
+    if (this == null) {
+        NativeBorrowedUtf8.len(native, 0)
+        NativeBorrowedUtf8.ptr(native, MemorySegment.NULL)
+    } else {
+        val byteArray = encodeToByteArray()
+        NativeBorrowedUtf8.len(native, byteArray.size.toLong())
+
+        val nativeArray = arena.allocateArray(ValueLayout.JAVA_BYTE, *byteArray)
+        NativeBorrowedUtf8.ptr(native, nativeArray)
+    }
+
+    return native
 }
 
 internal fun ByteArray?.toNativeTransferDataResponse(arena: Arena, objId: Long): MemorySegment {
@@ -539,7 +556,7 @@ internal fun Set<DragAndDropAction>.toNative(): Byte {
 }
 
 internal fun SupportedActionsForMime.toNative(result: MemorySegment, arena: Arena) {
-    NativeFfiSupportedActionsForMime.supported_mime_type(result, supportedMimeType.encodeToByteArray().toNative(arena))
+    NativeFfiSupportedActionsForMime.supported_mime_type(result, supportedMimeType.toNativeUtf8(arena))
     NativeFfiSupportedActionsForMime.supported_actions(result, supportedActions.toNative())
     NativeFfiSupportedActionsForMime.preferred_action(result, preferredAction.toNative())
 }
@@ -878,9 +895,9 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
 internal fun FileDialog.CommonDialogParams.toNative(arena: Arena): MemorySegment {
     val result = NativeCommonFileDialogParams.allocate(arena)
     NativeCommonFileDialogParams.modal(result, modal)
-    NativeCommonFileDialogParams.title(result, title?.encodeToByteArray()?.toNative(arena) ?: MemorySegment.NULL)
-    NativeCommonFileDialogParams.accept_label(result, acceptLabel?.encodeToByteArray()?.toNative(arena) ?: MemorySegment.NULL)
-    NativeCommonFileDialogParams.current_folder(result, currentFolder?.encodeToByteArray()?.toNative(arena) ?: MemorySegment.NULL)
+    NativeCommonFileDialogParams.title(result, title.toNativeUtf8(arena))
+    NativeCommonFileDialogParams.accept_label(result, acceptLabel.toNativeUtf8(arena))
+    NativeCommonFileDialogParams.current_folder(result, currentFolder.toNativeUtf8(arena))
     return result
 }
 
@@ -895,7 +912,7 @@ internal fun FileDialog.SaveDialogParams.toNative(arena: Arena): MemorySegment {
     val result = NativeSaveFileDialogParams.allocate(arena)
     NativeSaveFileDialogParams.name_field_string_value(
         result,
-        nameFieldStringValue?.encodeToByteArray()?.toNative(arena) ?: MemorySegment.NULL,
+        nameFieldStringValue.toNativeUtf8(arena),
     )
     return result
 }

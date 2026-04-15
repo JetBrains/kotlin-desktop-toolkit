@@ -1,4 +1,3 @@
-use anyhow::Context;
 use log::{debug, error, warn};
 use smithay_client_toolkit::{
     reexports::{
@@ -97,8 +96,8 @@ impl SimpleWindow {
         };
 
         let window = state.xdg_shell_state.create_window(window_surface, decorations, qh);
-        let app_id = params.app_id.as_optional_str().context("Invalid app_id value")?.to_owned();
-        window.set_title(params.title.as_optional_str().context("Invalid title value")?);
+        let app_id = params.app_id.get("WindowParams: app_id")?.to_owned();
+        window.set_title(params.title.get("WindowParams title")?);
         window.set_app_id(app_id.clone());
 
         let mut size = if params.size.width == 0 { None } else { Some(params.size) };
