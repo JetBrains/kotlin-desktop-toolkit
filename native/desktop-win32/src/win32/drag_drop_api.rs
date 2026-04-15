@@ -2,7 +2,7 @@ use desktop_common::{ffi_utils::BorrowedArray, logger::ffi_boundary};
 
 use super::{
     data_object::DataObject,
-    drag_drop::{DragSourceCallbacks, DropTargetCallbacks, register_drop_target, start_drag_drop},
+    drag_drop::{DragSourceCallbacks, DropTargetCallbacks, register_drop_target, revoke_drop_target, start_drag_drop},
     global_data::HGlobalData,
     window_api::{WindowPtr, with_window},
 };
@@ -21,4 +21,9 @@ pub extern "C" fn drag_drop_start(data_format: u32, dragged_data: BorrowedArray<
         let data_object = DataObject::create(data_format, data).into();
         start_drag_drop(&data_object, callbacks)
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn drag_drop_revoke_target(window_ptr: WindowPtr) {
+    with_window(&window_ptr, "drag_drop_revoke_target", revoke_drop_target);
 }
