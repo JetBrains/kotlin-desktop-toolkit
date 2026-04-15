@@ -7,6 +7,8 @@ pub mod clipboard_api;
 pub mod cursor;
 pub mod cursor_api;
 pub mod data_object;
+pub mod drag_drop;
+pub mod drag_drop_api;
 pub mod event_loop;
 pub mod events;
 pub mod events_api;
