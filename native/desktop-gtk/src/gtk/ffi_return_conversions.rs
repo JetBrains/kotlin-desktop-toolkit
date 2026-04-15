@@ -4,8 +4,7 @@ use crate::gtk::application_api::{
 use crate::gtk::data_transfer_api::{DataSource, DragAndDropQueryData};
 use crate::gtk::events::WindowId;
 use crate::gtk::text_input::SurroundingTextWithSelection;
-use desktop_common::ffi_utils::BorrowedStrPtr;
-use std::ffi::CString;
+use desktop_common::ffi_utils::BorrowedUtf8;
 
 #[derive(Clone, Copy)]
 pub struct TransferDataGetter {
@@ -15,8 +14,7 @@ pub struct TransferDataGetter {
 
 impl TransferDataGetter {
     pub fn get(&self, clipboard_type: DataSource, mime_type: &str) -> Option<Vec<u8>> {
-        let mime_type_cstr = CString::new(mime_type).unwrap();
-        let ffi_response = (self.ffi_get)(clipboard_type, BorrowedStrPtr::new(&mime_type_cstr));
+        let ffi_response = (self.ffi_get)(clipboard_type, BorrowedUtf8::new(mime_type));
         let ret = ffi_response.data.as_optional_slice().map(Into::into);
         (self.ffi_dealloc)(ffi_response.obj_id);
         ret

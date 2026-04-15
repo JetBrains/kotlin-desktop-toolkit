@@ -31,7 +31,7 @@ use gtk4::{gdk as gdk4, gio, glib};
 use log::{debug, warn};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ffi::{CString, OsStr};
+use std::ffi::OsStr;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::atomic::AtomicU32;
@@ -202,12 +202,10 @@ impl ApplicationState {
                     let ret = c.clone();
                     spawn(notifications_receiver(c, move |notification_data| {
                         Application::run_on_event_loop_async(move || {
-                            let action_cstring = notification_data.action.map(|v| CString::new(v).unwrap());
-                            let activation_token_cstring = notification_data.activation_token.map(|v| CString::new(v).unwrap());
                             let e = NotificationClosedEvent::new(
                                 notification_data.id,
-                                action_cstring.as_ref(),
-                                activation_token_cstring.as_ref(),
+                                notification_data.action.as_ref(),
+                                notification_data.activation_token.as_ref(),
                             );
                             send_event(event_handler, e);
                         });
@@ -355,7 +353,7 @@ impl ApplicationState {
             params.size,
             params.rendering_mode,
             min_size,
-            params.title.as_optional_str()?,
+            params.title.get_optional("WindowParams.title")?,
             params.decoration_mode,
             event_handler,
             self.query_drag_and_drop_target,
@@ -366,13 +364,6 @@ impl ApplicationState {
         self.window_id_to_window.borrow_mut().insert(window_id, simple_window);
         debug!("Created window {window_id:?}");
 
-        // if let Some(screen_change_event) = screen_change_event {
-        //     self.send_event(screen_change_event);
-        // }
-
-        // let xdg_titlebar_event =
-        //     XdgDesktopSettingChange(XdgDesktopSetting::TitlebarLayout(BorrowedStrPtr::new(c":minimize,maximize,close")));
-        // self.send_event(xdg_titlebar_event);
         Ok(())
     }
 

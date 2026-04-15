@@ -1,4 +1,4 @@
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::{BorrowedStrPtr, BorrowedUtf8};
 use desktop_gtk::gtk::application_api::{application_get_egl_proc_func, application_init_gl};
 use desktop_gtk::gtk::events::OpenGlDrawData;
 use desktop_gtk::gtk::geometry::PhysicalSize;
@@ -56,8 +56,8 @@ pub fn init_gl() -> Option<GlFns> {
         let egl_lib = application_get_egl_proc_func();
 
         if egl_lib.ctx.is_null() {
-            application_init_gl(BorrowedStrPtr::new(
-                c"/System/Library/Frameworks/OpenGL.framework/Versions/A/Libraries/libGL.dylib",
+            application_init_gl(BorrowedUtf8::new(
+                "/System/Library/Frameworks/OpenGL.framework/Versions/A/Libraries/libGL.dylib",
             ))
         } else {
             egl_lib

@@ -7,13 +7,12 @@ use crate::gtk::events::{
 use crate::gtk::ffi_return_conversions::RetrieveSurroundingText;
 use crate::gtk::text_input_api::{TextInputContentPurpose, TextInputContextHints};
 use anyhow::bail;
-use desktop_common::ffi_utils::{BorrowedArray, BorrowedStrPtr};
+use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use gtk4::glib::translate::FromGlib;
 use gtk4::pango;
 use gtk4::prelude::IMContextExt;
 use log::debug;
 use std::cmp::Ordering;
-use std::ffi::CString;
 
 impl From<TextInputContentPurpose> for gtk4::InputPurpose {
     fn from(value: TextInputContentPurpose) -> Self {
@@ -69,7 +68,7 @@ pub struct SurroundingTextWithSelection<'a> {
 
 impl<'a> SurroundingTextWithSelection<'a> {
     pub fn new(context: &'a FfiTextInputSurroundingText) -> anyhow::Result<Self> {
-        let text = str::from_utf8(context.surrounding_text.as_slice()?)?;
+        let text = context.surrounding_text.get("FfiTextInputSurroundingText.surrounding_text")?;
         let cursor_char_pos = context.cursor_codepoint_offset;
         let anchor_char_pos = context.selection_start_codepoint_offset;
         let (cursor_byte_index, anchor_byte_index) = match cursor_char_pos.cmp(&anchor_char_pos) {
@@ -107,13 +106,12 @@ fn get_byte_offset(text: &str, offset: i32) -> (i32, &str) {
 
 fn im_commit_handler(event_handler: EventHandler, window_id: WindowId, commit_string: &str) {
     debug!("commit for {window_id:?}: commit_string={commit_string}");
-    let commit_string_cstr = CString::new(commit_string).unwrap();
     let event = TextInputEvent {
         window_id,
         has_preedit_string: false,
         preedit_string: TextInputPreeditStringData::default(),
         has_commit_string: true,
-        commit_string: BorrowedStrPtr::new(&commit_string_cstr),
+        commit_string: BorrowedUtf8::new(commit_string),
         has_delete_surrounding_text: false,
         delete_surrounding_text: TextInputDeleteSurroundingTextData::default(),
     };
@@ -219,10 +217,9 @@ fn im_preedit_changed_handler(event_handler: EventHandler, window_id: WindowId, 
 
     let text_string = preedit_gstring.as_str();
     let (cursor_byte_pos, _) = get_byte_offset(text_string, cursor_char_pos);
-    let text_cstr = CString::new(preedit_gstring.as_str()).unwrap();
 
     let preedit_string = TextInputPreeditStringData {
-        text: BorrowedStrPtr::new(&text_cstr),
+        text: BorrowedUtf8::new(preedit_gstring.as_str()),
         cursor_byte_pos,
         attributes: BorrowedArray::from_slice(&attributes),
     };
@@ -231,7 +228,7 @@ fn im_preedit_changed_handler(event_handler: EventHandler, window_id: WindowId, 
         has_preedit_string: true,
         preedit_string,
         has_commit_string: false,
-        commit_string: BorrowedStrPtr::null(),
+        commit_string: BorrowedUtf8::null(),
         has_delete_surrounding_text: false,
         delete_surrounding_text: TextInputDeleteSurroundingTextData::default(),
     };
@@ -285,7 +282,7 @@ pub fn create_im_context(
             has_preedit_string: false,
             preedit_string: TextInputPreeditStringData::default(),
             has_commit_string: false,
-            commit_string: BorrowedStrPtr::null(),
+            commit_string: BorrowedUtf8::null(),
             has_delete_surrounding_text: false,
             delete_surrounding_text: TextInputDeleteSurroundingTextData::default(),
         };
@@ -301,7 +298,7 @@ pub fn create_im_context(
                     has_preedit_string: false,
                     preedit_string: TextInputPreeditStringData::default(),
                     has_commit_string: false,
-                    commit_string: BorrowedStrPtr::null(),
+                    commit_string: BorrowedUtf8::null(),
                     has_delete_surrounding_text: true,
                     delete_surrounding_text,
                 };

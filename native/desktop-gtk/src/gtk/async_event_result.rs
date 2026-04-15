@@ -1,6 +1,4 @@
-use std::ffi::CString;
-
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::BorrowedUtf8;
 use log::warn;
 
 use crate::gtk::events::{EventHandler, FileChooserResponse, NotificationShownEvent, RequestId};
@@ -13,7 +11,7 @@ pub enum AsyncEventResult {
     },
     FileChooserResponse {
         request_id: RequestId,
-        result: anyhow::Result<CString>,
+        result: anyhow::Result<String>,
     },
     NotificationClosed {},
     NotificationShown {
@@ -40,11 +38,11 @@ impl AsyncEventResult {
                 };
                 match result {
                     Ok(files) => {
-                        send(files.as_c_str().into());
+                        send(BorrowedUtf8::new(&files));
                     }
                     Err(e) => {
                         warn!("{e}");
-                        send(BorrowedStrPtr::null());
+                        send(BorrowedUtf8::null());
                     }
                 }
             }
