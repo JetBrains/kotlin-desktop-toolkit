@@ -99,9 +99,10 @@ impl Clipboard {
         HGlobalData::copy_from(mem)
     }
 
-    pub fn set_data(&self, format: ClipboardFormat, data: &HGlobalData) -> anyhow::Result<()> {
+    pub fn set_data(&self, format: ClipboardFormat, data: &mut HGlobalData) -> anyhow::Result<()> {
         anyhow::ensure!(self.is_open, "Clipboard has been closed.");
         unsafe { SetClipboardData(format.id(), Some(HANDLE(data.as_raw().0)))? };
+        data.detach();
         Ok(())
     }
 }
