@@ -1,8 +1,7 @@
 use bitflag_attr::bitflag;
 use core::f64;
-use desktop_common::ffi_utils::{BorrowedArray, BorrowedStrPtr};
+use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use desktop_common::logger::PanicDefault;
-use std::ffi::{CStr, CString};
 
 use crate::gtk::{
     data_transfer_api::{DataSource, DragAndDropAction},
@@ -84,15 +83,15 @@ pub enum WindowDecorationMode {
 /// * `{ mime_type: "text/uri-list", data: "file:///data/some-file\r\nfile:///data/Some%20File%20With%20Spaces.txt\r\n" }`
 /// * `{ mime_type: "text/plain;charset=utf-8", data: "some text\r\nhere" }`
 pub struct DataTransferContent<'a> {
-    pub mime_type: BorrowedStrPtr<'a>,
+    pub mime_type: BorrowedUtf8<'a>,
     pub data: BorrowedArray<'a, u8>,
 }
 
 impl<'a> DataTransferContent<'a> {
     #[must_use]
-    pub const fn new(mime_type: &'a CStr, data: &'a [u8]) -> Self {
+    pub const fn new(mime_type: &'a str, data: &'a [u8]) -> Self {
         Self {
-            mime_type: BorrowedStrPtr::new(mime_type),
+            mime_type: BorrowedUtf8::new(mime_type),
             data: BorrowedArray::from_slice(data),
         }
     }
@@ -100,7 +99,7 @@ impl<'a> DataTransferContent<'a> {
     #[must_use]
     pub const fn null() -> Self {
         Self {
-            mime_type: BorrowedStrPtr::null(),
+            mime_type: BorrowedUtf8::null(),
             data: BorrowedArray::null(),
         }
     }
@@ -176,7 +175,7 @@ impl<'a> From<DropPerformedEvent<'a>> for Event<'a> {
 #[derive(Debug)]
 pub struct DataTransferAvailableEvent<'a> {
     pub data_source: DataSource,
-    pub mime_types: BorrowedStrPtr<'a>,
+    pub mime_types: BorrowedUtf8<'a>,
 }
 
 impl<'a> From<DataTransferAvailableEvent<'a>> for Event<'a> {
@@ -187,10 +186,10 @@ impl<'a> From<DataTransferAvailableEvent<'a>> for Event<'a> {
 
 impl<'a> DataTransferAvailableEvent<'a> {
     #[must_use]
-    pub const fn new(data_source: DataSource, mime_types: &'a CStr) -> Self {
+    pub const fn new(data_source: DataSource, mime_types: &'a str) -> Self {
         Self {
             data_source,
-            mime_types: BorrowedStrPtr::new(mime_types),
+            mime_types: BorrowedUtf8::new(mime_types),
         }
     }
 }
@@ -364,7 +363,7 @@ pub struct TextInputPreeditAttribute {
 #[derive(Debug)]
 pub struct TextInputPreeditStringData<'a> {
     /// Can be null
-    pub text: BorrowedStrPtr<'a>,
+    pub text: BorrowedUtf8<'a>,
     pub cursor_byte_pos: i32,
     pub attributes: BorrowedArray<'a, TextInputPreeditAttribute>,
 }
@@ -372,7 +371,7 @@ pub struct TextInputPreeditStringData<'a> {
 impl Default for TextInputPreeditStringData<'_> {
     fn default() -> Self {
         Self {
-            text: BorrowedStrPtr::null(),
+            text: BorrowedUtf8::null(),
             cursor_byte_pos: 0,
             attributes: BorrowedArray::null(),
         }
@@ -401,7 +400,7 @@ pub struct TextInputEvent<'a> {
     pub preedit_string: TextInputPreeditStringData<'a>,
     pub has_commit_string: bool,
     /// Can be null
-    pub commit_string: BorrowedStrPtr<'a>,
+    pub commit_string: BorrowedUtf8<'a>,
     pub has_delete_surrounding_text: bool,
     pub delete_surrounding_text: TextInputDeleteSurroundingTextData,
 }
@@ -558,7 +557,7 @@ impl From<WindowScreenChangeEvent> for Event<'_> {
 #[derive(Debug)]
 pub struct FileChooserResponse<'a> {
     pub request_id: RequestId,
-    pub newline_separated_files: BorrowedStrPtr<'a>,
+    pub newline_separated_files: BorrowedUtf8<'a>,
 }
 
 impl<'a> From<FileChooserResponse<'a>> for Event<'a> {
@@ -588,19 +587,19 @@ pub struct NotificationClosedEvent<'a> {
     pub notification_id: u32,
 
     /// Optional. Present only if notification was activated. By default, it has a value `"default"`.
-    pub action: BorrowedStrPtr<'a>,
+    pub action: BorrowedUtf8<'a>,
 
     /// Optional. Present only if notification was activated, and the application has an associated `.desktop` file.
-    pub activation_token: BorrowedStrPtr<'a>,
+    pub activation_token: BorrowedUtf8<'a>,
 }
 
 impl<'a> NotificationClosedEvent<'a> {
     #[must_use]
-    pub fn new(notification_id: u32, action: Option<&'a CString>, activation_token: Option<&'a CString>) -> Self {
+    pub const fn new(notification_id: u32, action: Option<&'a String>, activation_token: Option<&'a String>) -> Self {
         Self {
             notification_id,
-            action: BorrowedStrPtr::new_optional(action),
-            activation_token: BorrowedStrPtr::new_optional(activation_token),
+            action: BorrowedUtf8::optional(action),
+            activation_token: BorrowedUtf8::optional(activation_token),
         }
     }
 }

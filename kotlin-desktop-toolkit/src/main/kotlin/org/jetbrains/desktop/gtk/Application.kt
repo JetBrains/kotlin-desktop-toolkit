@@ -56,7 +56,7 @@ public data class WindowParams(
         val nativeWindowParams = NativeWindowParams.allocate(arena)
         NativeWindowParams.size(nativeWindowParams, LogicalSize(size.width, size.height).toNative(arena))
         NativeWindowParams.min_size(nativeWindowParams, LogicalSize(minSize?.width ?: 0, minSize?.height ?: 0).toNative(arena))
-        NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
+        NativeWindowParams.title(nativeWindowParams, title.toNativeUtf8(arena))
         NativeWindowParams.decoration_mode(nativeWindowParams, decorationMode.toNative(arena))
         NativeWindowParams.rendering_mode(nativeWindowParams, renderingMode.toNative())
         NativeWindowParams.window_id(nativeWindowParams, windowId)
@@ -113,7 +113,7 @@ public class Application(public val appId: String) {
     init {
         Arena.ofConfined().use { arena ->
             ffiDownCall {
-                desktop_gtk_h.application_init(arena.allocateUtf8String(appId))
+                desktop_gtk_h.application_init(appId.toNativeUtf8(arena))
             }
         }
     }
@@ -146,7 +146,7 @@ public class Application(public val appId: String) {
     // called from native
     private fun onGetDataTransferData(nativeDataSource: Int, nativeMimeType: MemorySegment): MemorySegment {
         val dataSource = DataSource.fromNative(nativeDataSource)
-        val mimeType = nativeMimeType.getUtf8String(0)
+        val mimeType = readStringFromNativeU8Array(nativeMimeType)!!
         val result = applicationConfig?.getDataTransferData(dataSource, mimeType)
         val (arena, objId) = newPersistentArena()
         return result.toNativeTransferDataResponse(arena, objId)
@@ -195,8 +195,8 @@ public class Application(public val appId: String) {
     public fun openURL(url: String, activationToken: String?): RequestId? {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                val nativeUrl = arena.allocateUtf8String(url)
-                val nativeActivationToken = activationToken?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+                val nativeUrl = url.toNativeUtf8(arena)
+                val nativeActivationToken = activationToken.toNativeUtf8(arena)
                 RequestId.fromNativeResponse(desktop_gtk_h.application_open_url(nativeUrl, nativeActivationToken))
             }
         }
@@ -205,8 +205,8 @@ public class Application(public val appId: String) {
     public fun openFileManager(path: String, activationToken: String?): RequestId? {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                val nativePath = arena.allocateUtf8String(path)
-                val nativeActivationToken = activationToken?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+                val nativePath = path.toNativeUtf8(arena)
+                val nativeActivationToken = activationToken.toNativeUtf8(arena)
                 RequestId.fromNativeResponse(desktop_gtk_h.application_open_file_manager(nativePath, nativeActivationToken))
             }
         }
@@ -291,7 +291,7 @@ public class Application(public val appId: String) {
 
     public fun initializeGl(libPath: String): GlProcFunc? {
         return Arena.ofConfined().use { arena ->
-            val nativePath = arena.allocateUtf8String(libPath)
+            val nativePath = libPath.toNativeUtf8(arena)
             val s = desktop_gtk_h.application_init_gl(arena, nativePath)
             val f = NativeGetGlProcFuncData.f(s)
             val ctx = NativeGetGlProcFuncData.ctx(s)
@@ -364,9 +364,9 @@ public class Application(public val appId: String) {
     public fun requestShowNotification(params: ShowNotificationParams): RequestId? {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
-                val title = arena.allocateUtf8String(params.title)
-                val body = arena.allocateUtf8String(params.body)
-                val soundFilePath = params.soundFilePath?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL
+                val title = params.title.toNativeUtf8(arena)
+                val body = params.body.toNativeUtf8(arena)
+                val soundFilePath = params.soundFilePath.toNativeUtf8(arena)
                 RequestId.fromNativeResponse(desktop_gtk_h.application_request_show_notification(title, body, soundFilePath))
             }
         }

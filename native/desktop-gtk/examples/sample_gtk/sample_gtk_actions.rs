@@ -1,4 +1,4 @@
-use desktop_common::ffi_utils::BorrowedStrPtr;
+use desktop_common::ffi_utils::BorrowedUtf8;
 use desktop_gtk::gtk::text_input_api::TextInputContext;
 use desktop_gtk::gtk::{
     application_api::{
@@ -28,33 +28,32 @@ use desktop_gtk::gtk::{
         //
     },
 };
-use std::ffi::{CStr, CString};
 
 #[allow(dead_code)]
 pub enum Action {
     Dummy,
     ApplicationClipboardPaste {
         serial: i32,
-        supported_mime_types: &'static CStr,
+        supported_mime_types: &'static str,
     },
-    ApplicationClipboardPut(&'static CStr),
+    ApplicationClipboardPut(&'static str),
     ApplicationPrimarySelectionPaste {
         serial: i32,
-        supported_mime_types: &'static CStr,
+        supported_mime_types: &'static str,
     },
-    ApplicationPrimarySelectionPut(&'static CStr),
+    ApplicationPrimarySelectionPut(&'static str),
     ApplicationSetPreferDarkTheme(bool),
     ApplicationStopEventLoop,
     ApplicationStopDragAndDrop,
     WindowActivate {
         window_id: WindowId,
-        token: Option<CString>,
+        token: Option<String>,
     },
     WindowCreate {
         window_id: WindowId,
         size: LogicalSize,
         min_size: LogicalSize,
-        title: CString,
+        title: String,
         decoration_mode: WindowDecorationMode,
         rendering_mode: RenderingMode,
     },
@@ -74,7 +73,7 @@ impl Action {
             Self::ApplicationSetPreferDarkTheme(v) => application_set_prefer_dark_theme(v),
             Self::ApplicationStopDragAndDrop => application_stop_drag_and_drop(),
             Self::ApplicationStopEventLoop => application_stop_event_loop(),
-            Self::WindowActivate { window_id, token } => window_activate(window_id, BorrowedStrPtr::new_optional(token.as_ref())),
+            Self::WindowActivate { window_id, token } => window_activate(window_id, BorrowedUtf8::optional(token.as_ref())),
             Self::WindowCreate {
                 window_id,
                 size,
@@ -87,7 +86,7 @@ impl Action {
                     window_id,
                     size,
                     min_size,
-                    title: BorrowedStrPtr::new(&title),
+                    title: BorrowedUtf8::new(&title),
                     decoration_mode,
                     rendering_mode,
                 });
@@ -102,13 +101,13 @@ impl Action {
             Self::ApplicationClipboardPaste {
                 serial,
                 supported_mime_types,
-            } => application_clipboard_paste(serial, BorrowedStrPtr::new(supported_mime_types)),
-            Self::ApplicationClipboardPut(mime_types) => application_clipboard_put(BorrowedStrPtr::new(mime_types)),
+            } => application_clipboard_paste(serial, BorrowedUtf8::new(supported_mime_types)),
+            Self::ApplicationClipboardPut(mime_types) => application_clipboard_put(BorrowedUtf8::new(mime_types)),
             Self::ApplicationPrimarySelectionPaste {
                 serial,
                 supported_mime_types,
-            } => application_primary_selection_paste(serial, BorrowedStrPtr::new(supported_mime_types)),
-            Self::ApplicationPrimarySelectionPut(mime_types) => application_primary_selection_put(BorrowedStrPtr::new(mime_types)),
+            } => application_primary_selection_paste(serial, BorrowedUtf8::new(supported_mime_types)),
+            Self::ApplicationPrimarySelectionPut(mime_types) => application_primary_selection_put(BorrowedUtf8::new(mime_types)),
         }
     }
 }

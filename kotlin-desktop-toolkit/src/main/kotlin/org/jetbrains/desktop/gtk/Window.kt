@@ -2,7 +2,6 @@ package org.jetbrains.desktop.gtk
 
 import org.jetbrains.desktop.gtk.generated.desktop_gtk_h
 import java.lang.foreign.Arena
-import java.lang.foreign.MemorySegment
 
 public typealias WindowId = Long
 
@@ -44,8 +43,7 @@ public class Window internal constructor(params: WindowParams) : AutoCloseable {
 
     public fun setTitle(title: String) {
         Arena.ofConfined().use { arena ->
-            val nativeTitle = arena.allocateUtf8String(title)
-            ffiDownCall { desktop_gtk_h.window_set_title(windowId, nativeTitle) }
+            ffiDownCall { desktop_gtk_h.window_set_title(windowId, title.toNativeUtf8(arena)) }
         }
     }
 
@@ -148,7 +146,7 @@ public class Window internal constructor(params: WindowParams) : AutoCloseable {
 
     public fun activate(token: String?) {
         Arena.ofConfined().use { arena ->
-            val nativeToken = token?.let { token -> arena.allocateUtf8String(token) } ?: run { MemorySegment.NULL }
+            val nativeToken = token.toNativeUtf8(arena)
             ffiDownCall {
                 desktop_gtk_h.window_activate(windowId, nativeToken)
             }

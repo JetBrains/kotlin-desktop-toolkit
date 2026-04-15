@@ -10,7 +10,6 @@ use gdk4::subclass::prelude::ObjectSubclassIsExt;
 use gtk4::{gdk as gdk4, gio, glib};
 use log::{debug, warn};
 use std::cell::OnceCell;
-use std::ffi::CString;
 use std::pin::Pin;
 
 #[derive(Default)]
@@ -139,7 +138,7 @@ impl KdtClipboard {
         transfer_data_getter: TransferDataGetter,
     ) -> Self {
         let connect_changed_handler_id = gdk_clipboard.connect_changed(move |clipboard| {
-            let mime_types = CString::new(clipboard.formats().mime_types().join(",")).unwrap();
+            let mime_types = clipboard.formats().mime_types().join(",");
             send_event(event_handler, DataTransferAvailableEvent::new(clipboard_type, &mime_types));
         });
         Self {
@@ -163,8 +162,7 @@ impl KdtClipboard {
                     debug!("KdtClipboard::paste: reading {mime_type}");
                     read_all(&input_stream, move |res| {
                         if let Some(data) = res {
-                            let mime_type_cstr = CString::new(mime_type.as_str()).unwrap();
-                            let content = DataTransferContent::new(&mime_type_cstr, &data);
+                            let content = DataTransferContent::new(mime_type.as_str(), &data);
                             let event = DataTransferEvent { serial, content };
                             send_event(event_handler, event);
                         } else {

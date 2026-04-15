@@ -8,7 +8,7 @@ use crate::sample_gtk_draw_skia::{OpenglState, draw};
 use crate::sample_gtk_actions::Action;
 use core::str;
 use desktop_common::{
-    ffi_utils::{BorrowedArray, BorrowedStrPtr},
+    ffi_utils::{BorrowedArray, BorrowedStrPtr, BorrowedUtf8},
     logger_api::{LogLevel, LoggerConfiguration, logger_init_impl},
 };
 use desktop_gtk::gtk::application_api::{
@@ -48,21 +48,17 @@ use desktop_gtk::gtk::{
         //
     },
 };
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use std::cell::RefCell;
-use std::{
-    collections::HashMap,
-    ffi::{CStr, CString},
-    str::FromStr,
-};
+use std::{collections::HashMap, str::FromStr};
 use url::Url;
 
-const APP_ID: &CStr = c"org.jetbrains.desktop.gtk.native.sample-1";
-const HTML_TEXT_MIME_TYPE: &CStr = c"text/html";
-const TEXT_MIME_TYPE: &CStr = c"text/plain;charset=utf-8";
-const URI_LIST_MIME_TYPE: &CStr = c"text/uri-list";
+const APP_ID: &str = "org.jetbrains.desktop.gtk.native.sample-1";
+const HTML_TEXT_MIME_TYPE: &str = "text/html";
+const TEXT_MIME_TYPE: &str = "text/plain;charset=utf-8";
+const URI_LIST_MIME_TYPE: &str = "text/uri-list";
 
-const ALL_MIMES: &CStr = c"text/html,text/plain;charset=utf-8";
+const ALL_MIMES: &str = "text/html,text/plain;charset=utf-8";
 
 const DRAG_WIDTH_NEXT_TO_INSETS: i32 = 50;
 const DRAG_AND_DROP_LEFT_OF: f64 = 100.;
@@ -77,7 +73,7 @@ struct WindowState {
     drag_and_drop_target: bool,
     drag_and_drop_source: bool,
     opengl: Option<OpenglState>,
-    last_received_path: Option<CString>,
+    last_received_path: Option<String>,
     fullscreen: bool,
     maximized: bool,
     scale: f64,
@@ -223,17 +219,12 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
             supported_mime_types: TEXT_MIME_TYPE,
         }),
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyC) => Some(Action::ApplicationClipboardPut(ALL_MIMES)),
-        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyF) => Some(Action::ApplicationClipboardPut(c"")),
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyF) => Some(Action::ApplicationClipboardPut("")),
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyP) => {
             let title = format!("Notification from window {}", window_id.0);
             let body = format!("Clicking this notification will activate window {}", window_id.0);
-            let title_cstr = CString::new(title).unwrap();
-            let body_cstr = CString::new(body).unwrap();
-            let request_id = application_request_show_notification(
-                BorrowedStrPtr::new(&title_cstr),
-                BorrowedStrPtr::new(&body_cstr),
-                BorrowedStrPtr::null(),
-            );
+            let request_id =
+                application_request_show_notification(BorrowedUtf8::new(&title), BorrowedUtf8::new(&body), BorrowedUtf8::null());
             if request_id.0 != 0 {
                 state.request_sources.insert(request_id, window_id);
             }
@@ -242,9 +233,9 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyO) => {
             let common_params = CommonFileDialogParams {
                 modal: false,
-                title: c"Open File for GTK Native Sample App test".into(),
-                accept_label: c"Let's go!".into(),
-                current_folder: c"/etc".into(),
+                title: BorrowedUtf8::new("Open File for GTK Native Sample App test"),
+                accept_label: BorrowedUtf8::new("Let's go!"),
+                current_folder: BorrowedUtf8::new("/etc"),
             };
             let open_params = OpenFileDialogParams {
                 select_directories: false,
@@ -258,12 +249,12 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyS) => {
             let common_params = CommonFileDialogParams {
                 modal: false,
-                title: c"Save File for GTK Native Sample App test".into(),
-                accept_label: c"Let's go!".into(),
-                current_folder: c"/tmp".into(),
+                title: BorrowedUtf8::new("Save File for GTK Native Sample App test"),
+                accept_label: BorrowedUtf8::new("Let's go!"),
+                current_folder: BorrowedUtf8::new("/tmp"),
             };
             let save_params = SaveFileDialogParams {
-                name_field_string_value: c"file from GTK Native Sample App.txt".into(),
+                name_field_string_value: BorrowedUtf8::new("file from GTK Native Sample App.txt"),
             };
             let request_id = window_show_save_file_dialog(window_id, &common_params, &save_params);
             debug!("Requested open file dialog for {window_id:?}, request_id = {request_id:?}");
@@ -276,18 +267,18 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
                 window_id: new_window_id,
                 size: LogicalSize { width: 300, height: 200 },
                 min_size: LogicalSize { width: 0, height: 0 },
-                title: c"Window N".to_owned(),
+                title: "Window N".to_owned(),
                 decoration_mode: WindowDecorationMode::Server,
                 rendering_mode: RenderingMode::Auto,
             })
         }
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyL) => {
-            application_open_url(BorrowedStrPtr::new(c"https://jetbrains.com"), BorrowedStrPtr::null());
+            application_open_url(BorrowedUtf8::new("https://jetbrains.com"), BorrowedUtf8::null());
             Some(Action::Dummy)
         }
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyU) => {
             if let Some(path) = window_state.last_received_path.clone() {
-                application_open_file_manager(BorrowedStrPtr::new(&path), BorrowedStrPtr::null());
+                application_open_file_manager(BorrowedUtf8::new(&path), BorrowedUtf8::null());
             }
             Some(Action::Dummy)
         }
@@ -324,7 +315,7 @@ fn on_text_input(event: &TextInputEvent, window_id: WindowId, window_state: &mut
         window_state.text.drain(range);
     }
     if event.has_commit_string
-        && let Some(commit_string) = event.commit_string.as_optional_str().unwrap()
+        && let Some(commit_string) = event.commit_string.get_optional("TextInputEvent.commit_string").unwrap()
     {
         debug!("{window_id:?} commit_string: {commit_string}");
         window_state.text += commit_string;
@@ -335,7 +326,7 @@ fn on_text_input(event: &TextInputEvent, window_id: WindowId, window_state: &mut
 
     if event.has_preedit_string
         && event.preedit_string.cursor_byte_pos != -1
-        && let Some(preedit_string) = event.preedit_string.text.as_optional_str().unwrap()
+        && let Some(preedit_string) = event.preedit_string.text.get_optional("TextInputEvent.preedit_string").unwrap()
     {
         window_state.composed_text.push_str(preedit_string);
     }
@@ -344,7 +335,7 @@ fn on_text_input(event: &TextInputEvent, window_id: WindowId, window_state: &mut
 }
 
 fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut WindowState) {
-    if let Some(mime_type) = content.mime_type.as_optional_cstr() {
+    if let Some(mime_type) = content.mime_type.get_optional("DataTransferContent.mime_type").unwrap() {
         let data = content.data.as_slice().unwrap();
         if mime_type == URI_LIST_MIME_TYPE {
             let list_str = str::from_utf8(data).unwrap();
@@ -361,7 +352,7 @@ fn on_data_transfer_received(content: &DataTransferContent, window_state: &mut W
                 let first_uri = Url::from_str(first_uri_str).unwrap();
                 let path_buf = first_uri.to_file_path().unwrap();
                 let path_bytes = path_buf.into_os_string().into_encoded_bytes();
-                CString::new(path_bytes).unwrap()
+                String::from_utf8(path_bytes).unwrap()
             };
             window_state.last_received_path = Some(first_path);
             for e in list {
@@ -389,7 +380,7 @@ fn on_application_started(state: &mut State) -> Vec<Action> {
             window_id: WindowId(1),
             size: LogicalSize { width: 200, height: 300 },
             min_size: LogicalSize { width: 200, height: 100 },
-            title: c"Window 1".to_owned(),
+            title: "Window 1".to_owned(),
             decoration_mode: WindowDecorationMode::Server,
             rendering_mode: RenderingMode::Auto,
         },
@@ -397,7 +388,7 @@ fn on_application_started(state: &mut State) -> Vec<Action> {
             window_id: WindowId(2),
             size: LogicalSize { width: 600, height: 200 },
             min_size: LogicalSize { width: 200, height: 100 },
-            title: c"Window 2".to_owned(),
+            title: "Window 2".to_owned(),
             decoration_mode: WindowDecorationMode::CustomTitlebar(40),
             rendering_mode: RenderingMode::Auto,
         },
@@ -486,7 +477,7 @@ fn event_handler_impl(event: &Event) -> Vec<Action> {
                             let drag_icon_size = LogicalSize { width: 300, height: 300 };
                             window_start_drag_and_drop(
                                 data.window_id,
-                                BorrowedStrPtr::new(mime_types),
+                                BorrowedUtf8::new(mime_types),
                                 dnd_actions,
                                 RenderingMode::Auto,
                                 drag_icon_size,
@@ -534,15 +525,18 @@ fn event_handler_impl(event: &Event) -> Vec<Action> {
                 actions.push(action);
             }
         }
-        Event::FileChooserResponse(file_chooser_response) => match file_chooser_response.newline_separated_files.as_optional_str() {
-            Ok(s) => {
-                let files = s.map(|s| s.trim_ascii_end().split("\r\n").collect::<Vec<_>>());
-                info!("Selected files: {files:?}");
+        Event::FileChooserResponse(file_chooser_response) => {
+            if let Some(s) = file_chooser_response
+                .newline_separated_files
+                .get_optional("FileChooserResponse.newline_separated_files")
+                .unwrap()
+            {
+                {
+                    let files = s.trim_ascii_end().split("\r\n").collect::<Vec<_>>();
+                    info!("Selected files: {files:?}");
+                }
             }
-            Err(e) => {
-                error!("{e}");
-            }
-        },
+        }
         Event::DataTransfer(data) => {
             if let Some(key_window_id) = state.key_window_id
                 && let Some(window_state) = state.windows.get_mut(&key_window_id)
@@ -588,10 +582,14 @@ fn event_handler_impl(event: &Event) -> Vec<Action> {
             }
         }
         Event::NotificationClosed(data) => {
-            if data.action.as_optional_cstr().is_some()
+            if data.action.get_optional("NotificationClosedEvent.action").unwrap().is_some()
                 && let Some(window_id_to_activate) = state.notification_sources.remove(&data.notification_id)
             {
-                let activation_token = data.activation_token.as_optional_cstr().map(ToOwned::to_owned);
+                let activation_token = data
+                    .activation_token
+                    .get_optional("NotificationClosedEvent.activation_token")
+                    .unwrap()
+                    .map(ToOwned::to_owned);
                 actions.push(Action::WindowActivate {
                     window_id: window_id_to_activate,
                     token: activation_token,
@@ -629,12 +627,12 @@ extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDrag
     if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF && data.location_in_window.y.0 > inset_height.unwrap_or_default() {
         const SUPPORTED_ACTIONS_PER_MIME: [FfiSupportedActionsForMime; 2] = [
             FfiSupportedActionsForMime {
-                supported_mime_type: BorrowedStrPtr::new(URI_LIST_MIME_TYPE),
+                supported_mime_type: BorrowedUtf8::new(URI_LIST_MIME_TYPE),
                 supported_actions: DragAndDropActions(DragAndDropAction::Copy as u8),
                 preferred_action: DragAndDropAction::Copy,
             },
             FfiSupportedActionsForMime {
-                supported_mime_type: BorrowedStrPtr::new(TEXT_MIME_TYPE),
+                supported_mime_type: BorrowedUtf8::new(TEXT_MIME_TYPE),
                 supported_actions: DragAndDropActions(DragAndDropAction::Move as u8 | DragAndDropAction::Copy as u8),
                 preferred_action: DragAndDropAction::Copy,
             },
@@ -688,28 +686,28 @@ fn leak_string_data(s: String) -> (&'static [u8], i64) {
     (static_str, obj_id)
 }
 
-extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedStrPtr) -> FfiTransferDataResponse {
-    let mime_type_cstr = mime_type.as_optional_cstr().unwrap();
-    let v = if mime_type_cstr == URI_LIST_MIME_TYPE {
+extern "C" fn get_data_transfer_data(source: DataSource, mime_type: BorrowedUtf8) -> FfiTransferDataResponse {
+    let mime_type_str = mime_type.get("get_data_transfer_data: mime_type").unwrap();
+    let v = if mime_type_str == URI_LIST_MIME_TYPE {
         match source {
             DataSource::Clipboard => "file:///etc/hosts",
             DataSource::DragAndDrop => "file:///boot/efi/",
             DataSource::PrimarySelection => "file:///etc/environment",
         }
-    } else if mime_type_cstr == TEXT_MIME_TYPE {
+    } else if mime_type_str == TEXT_MIME_TYPE {
         match source {
             DataSource::Clipboard => "clipboard text",
             DataSource::DragAndDrop => "d&d text",
             DataSource::PrimarySelection => "primary selection text",
         }
-    } else if mime_type_cstr == HTML_TEXT_MIME_TYPE {
+    } else if mime_type_str == HTML_TEXT_MIME_TYPE {
         match source {
             DataSource::Clipboard => "<b>some html text</b>",
             DataSource::DragAndDrop => "<b>some html d&d text</b>",
             DataSource::PrimarySelection => "<b>some html primary selection text</b>",
         }
     } else {
-        mime_type_cstr.to_str().unwrap()
+        mime_type_str
     };
 
     let (static_str, obj_id) = leak_string_data(v.to_owned());
@@ -725,7 +723,7 @@ extern "C" fn retrieve_surrounding_text(window_id: WindowId) -> FfiTextInputSurr
     });
     let codepoints_count = u16::try_from(text.chars().count()).unwrap();
     let (static_str, obj_id) = leak_string_data(text);
-    let surrounding_text = BorrowedArray::from_slice(static_str);
+    let surrounding_text = BorrowedUtf8::new(str::from_utf8(static_str).unwrap());
     FfiTextInputSurroundingText {
         obj_id,
         surrounding_text,
@@ -740,7 +738,7 @@ pub fn main_impl() {
         console_level: LogLevel::Debug,
         file_level: LogLevel::Error,
     });
-    application_init(BorrowedStrPtr::new(APP_ID));
+    application_init(BorrowedUtf8::new(APP_ID));
     application_run_event_loop(ApplicationCallbacks {
         obj_dealloc,
         event_handler,

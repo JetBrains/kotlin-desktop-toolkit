@@ -7,7 +7,6 @@ use gtk4::gio::prelude::InputStreamExtManual;
 use gtk4::prelude::{IsA, WidgetExt};
 use gtk4::{gdk as gdk4, gio, glib};
 use log::{debug, warn};
-use std::ffi::CString;
 
 #[derive(Debug)]
 pub struct DragOfferMimetypeAndActions {
@@ -98,12 +97,12 @@ pub fn get_drag_offer_actions(
     query_drag_and_drop_target.with(&drag_and_drop_query_data, |target_info| {
         let supported_mime_with_actions = target_info
             .iter()
-            .find(|&e| mime_types.iter().any(|s| s == e.supported_mime_type.as_str().unwrap()));
+            .find(|&e| mime_types.iter().any(|s| s == e.get_supported_mime_type().unwrap()));
         debug!("query_drag_and_drop_target -> {target_info:?}, supported_mime_with_actions={supported_mime_with_actions:?}");
 
         if let Some(v) = supported_mime_with_actions {
             DragOfferMimetypeAndActions {
-                mime_type: Some(v.supported_mime_type.as_str().unwrap().to_owned()),
+                mime_type: Some(v.get_supported_mime_type().unwrap().to_owned()),
                 supported_actions: v.supported_actions.into(),
                 preferred_action: v.preferred_action.into(),
             }
@@ -169,8 +168,7 @@ pub fn handle_drop_target_drop(
                 read_all(&input_stream, move |data| {
                     drop_clone.finish(action);
                     if let Some(data) = data {
-                        let mime_type_cstr = CString::new(mime_type.as_str()).unwrap();
-                        let content = DataTransferContent::new(&mime_type_cstr, &data);
+                        let content = DataTransferContent::new(mime_type.as_str(), &data);
                         send_event(
                             event_handler,
                             DropPerformedEvent {

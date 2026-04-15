@@ -10,7 +10,7 @@ use crate::gtk::pointer_shapes_api::PointerShape;
 use crate::gtk::text_input_api::TextInputContext;
 
 use desktop_common::{
-    ffi_utils::BorrowedStrPtr,
+    ffi_utils::BorrowedUtf8,
     logger::{PanicDefault, ffi_boundary},
 };
 use log::debug;
@@ -27,7 +27,7 @@ pub struct WindowParams<'a> {
 
     pub min_size: LogicalSize,
 
-    pub title: BorrowedStrPtr<'a>,
+    pub title: BorrowedUtf8<'a>,
 
     pub decoration_mode: WindowDecorationMode,
 
@@ -79,9 +79,10 @@ impl PanicDefault for LogicalSize {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_set_title(window_id: WindowId, new_title: BorrowedStrPtr) {
+pub extern "C" fn window_set_title(window_id: WindowId, new_title: BorrowedUtf8) {
     with_window(window_id, "window_set_title", |w| {
-        w.set_title(new_title.as_str()?);
+        let new_title_str = new_title.get("window_set_title: new_title")?;
+        w.set_title(new_title_str);
         Ok(())
     });
 }
@@ -139,17 +140,18 @@ pub extern "C" fn window_unset_fullscreen(window_id: WindowId) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_start_drag_and_drop(
     window_id: WindowId,
-    mime_types: BorrowedStrPtr,
+    mime_types: BorrowedUtf8,
     actions: DragAndDropActions,
     drag_icon_rendering_mode: RenderingMode,
     drag_icon_size: LogicalSize,
 ) {
     debug!("window_start_drag_and_drop");
     ffi_boundary("window_start_drag_and_drop", || {
+        let mime_types_str = mime_types.get("window_start_drag_and_drop: mime_types")?;
         with_app_state(|app| {
             app.start_drag(
                 window_id,
-                &MimeTypes::new(mime_types.as_str()?),
+                &MimeTypes::new(mime_types_str),
                 actions.into(),
                 drag_icon_rendering_mode,
                 drag_icon_size,
@@ -183,10 +185,10 @@ pub extern "C" fn window_show_save_file_dialog(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_activate(window_id: WindowId, token: BorrowedStrPtr) {
+pub extern "C" fn window_activate(window_id: WindowId, token: BorrowedUtf8) {
     debug!("window_activate: {window_id:?}");
     with_window(window_id, "window_activate", |w| {
-        let token_str = token.as_optional_str()?;
+        let token_str = token.get_optional("window_activate: token")?;
         w.focus(token_str);
         Ok(())
     });

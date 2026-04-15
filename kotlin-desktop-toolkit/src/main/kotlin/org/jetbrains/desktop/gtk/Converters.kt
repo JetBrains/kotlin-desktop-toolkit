@@ -2,6 +2,7 @@ package org.jetbrains.desktop.gtk
 
 import org.jetbrains.desktop.gtk.generated.NativeBorrowedArray_FfiSupportedActionsForMime
 import org.jetbrains.desktop.gtk.generated.NativeBorrowedArray_u8
+import org.jetbrains.desktop.gtk.generated.NativeBorrowedUtf8
 import org.jetbrains.desktop.gtk.generated.NativeCommonFileDialogParams
 import org.jetbrains.desktop.gtk.generated.NativeDataTransferAvailableEvent
 import org.jetbrains.desktop.gtk.generated.NativeDataTransferCancelledEvent
@@ -60,10 +61,6 @@ import kotlin.experimental.or
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
-
-internal fun fromOptionalNativeString(s: MemorySegment): String? {
-    return if (s == MemorySegment.NULL) null else s.getUtf8String(0)
-}
 
 /**
  * Converts UTF-8 offset to UTF-16 offset.
@@ -409,7 +406,7 @@ internal fun TextInputPreeditStringData.Companion.fromNative(s: MemorySegment): 
     }
 
     return TextInputPreeditStringData(
-        text = fromOptionalNativeString(NativeTextInputPreeditStringData.text(s)),
+        text = readStringFromNativeU8Array(NativeTextInputPreeditStringData.text(s)),
         cursorBytePos = NativeTextInputPreeditStringData.cursor_byte_pos(s),
         attributes = attributes,
     )
@@ -440,7 +437,7 @@ internal fun TextInputSurroundingText?.toNative(arena: Arena, objId: Long): Memo
         NativeFfiTextInputSurroundingText.selection_start_codepoint_offset(result, 0)
     } else {
         NativeFfiTextInputSurroundingText.obj_id(result, objId)
-        NativeFfiTextInputSurroundingText.surrounding_text(result, surroundingText.encodeToByteArray().toNative(arena))
+        NativeFfiTextInputSurroundingText.surrounding_text(result, surroundingText.toNativeUtf8(arena))
         NativeFfiTextInputSurroundingText.cursor_codepoint_offset(result, cursorCodepointOffset.toShort())
         NativeFfiTextInputSurroundingText.selection_start_codepoint_offset(result, selectionStartCodepointOffset.toShort())
     }
@@ -450,7 +447,7 @@ internal fun TextInputSurroundingText?.toNative(arena: Arena, objId: Long): Memo
 internal fun DataTransferContent.Companion.fromNative(s: MemorySegment): DataTransferContent? {
     val nativeU8Array = NativeDataTransferContent.data(s)
     val buf = readNativeU8Array(nativeU8Array) ?: return null
-    val mimeType = NativeDataTransferContent.mime_type(s).getUtf8String(0)
+    val mimeType = readStringFromNativeU8Array(NativeDataTransferContent.mime_type(s))!!
     return DataTransferContent(mimeType = mimeType, data = buf)
 }
 
@@ -462,7 +459,7 @@ internal fun DataSource.Companion.fromNative(nativeDataSource: Int): DataSource 
 }
 
 internal fun mimeTypesToNative(arena: Arena, mimeTypes: List<String>): MemorySegment {
-    return arena.allocateUtf8String(mimeTypes.joinToString(","))
+    return mimeTypes.joinToString(",").toNativeUtf8(arena)
 }
 
 internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
@@ -478,6 +475,22 @@ internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
     }
 
     return nativeDataArray
+}
+
+internal fun String?.toNativeUtf8(arena: Arena): MemorySegment {
+    val native = NativeBorrowedUtf8.allocate(arena)
+    if (this == null) {
+        NativeBorrowedUtf8.len(native, 0)
+        NativeBorrowedUtf8.ptr(native, MemorySegment.NULL)
+    } else {
+        val byteArray = encodeToByteArray()
+        NativeBorrowedUtf8.len(native, byteArray.size.toLong())
+
+        val nativeArray = arena.allocateArray(ValueLayout.JAVA_BYTE, *byteArray)
+        NativeBorrowedUtf8.ptr(native, nativeArray)
+    }
+
+    return native
 }
 
 internal fun ByteArray?.toNativeTransferDataResponse(arena: Arena, objId: Long): MemorySegment {
@@ -525,7 +538,7 @@ private fun Int.toUTF32ByteArray(): ByteArray {
 }
 
 internal fun SupportedActionsForMime.toNative(result: MemorySegment, arena: Arena) {
-    NativeFfiSupportedActionsForMime.supported_mime_type(result, arena.allocateUtf8String(supportedMimeType))
+    NativeFfiSupportedActionsForMime.supported_mime_type(result, supportedMimeType.toNativeUtf8(arena))
     NativeFfiSupportedActionsForMime.supported_actions(result, supportedActions.toNative())
     NativeFfiSupportedActionsForMime.preferred_action(result, preferredAction.toNative())
 }
@@ -556,6 +569,10 @@ private fun readNativeU8Array(nativeU8Array: MemorySegment): ByteArray? {
     return dataPtr.asSlice(0, len).toArray(ValueLayout.JAVA_BYTE)
 }
 
+internal fun readStringFromNativeU8Array(nativeU8Array: MemorySegment): String? {
+    return readNativeU8Array(nativeU8Array)?.decodeToString()
+}
+
 internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Event {
     return when (NativeEvent.tag(s)) {
         desktop_gtk_h.NativeEvent_ApplicationStarted() -> {
@@ -573,7 +590,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
 
         desktop_gtk_h.NativeEvent_DataTransferAvailable() -> {
             val nativeEvent = NativeEvent.data_transfer_available(s)
-            val mimeTypesString = NativeDataTransferAvailableEvent.mime_types(nativeEvent).getUtf8String(0)
+            val mimeTypesString = readStringFromNativeU8Array(NativeDataTransferAvailableEvent.mime_types(nativeEvent))!!
             Event.DataTransferAvailable(
                 dataSource = DataSource.fromNative(NativeDataTransferAvailableEvent.data_source(nativeEvent)),
                 mimeTypes = splitCsv(mimeTypesString),
@@ -629,7 +646,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         }
         desktop_gtk_h.NativeEvent_FileChooserResponse() -> {
             val nativeEvent = NativeEvent.file_chooser_response(s)
-            val filesString = fromOptionalNativeString(NativeFileChooserResponse.newline_separated_files(nativeEvent))
+            val filesString = readStringFromNativeU8Array(NativeFileChooserResponse.newline_separated_files(nativeEvent))
             Event.FileChooserResponse(
                 requestId = RequestId.fromNativeField(NativeFileChooserResponse.request_id(nativeEvent)),
                 files = filesString?.trimEnd()?.split("\r\n") ?: emptyList(),
@@ -667,7 +684,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 },
                 commitStringData = if (NativeTextInputEvent.has_commit_string(nativeEvent)) {
                     TextInputCommitStringData(
-                        text = fromOptionalNativeString(NativeTextInputEvent.commit_string(nativeEvent)),
+                        text = readStringFromNativeU8Array(NativeTextInputEvent.commit_string(nativeEvent)),
                     )
                 } else {
                     null
@@ -730,8 +747,8 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.notification_closed(s)
             Event.NotificationClosed(
                 notificationId = NativeNotificationClosedEvent.notification_id(nativeEvent).toUInt(),
-                action = fromOptionalNativeString(NativeNotificationClosedEvent.action(nativeEvent)),
-                activationToken = fromOptionalNativeString(NativeNotificationClosedEvent.activation_token(nativeEvent)),
+                action = readStringFromNativeU8Array(NativeNotificationClosedEvent.action(nativeEvent)),
+                activationToken = readStringFromNativeU8Array(NativeNotificationClosedEvent.activation_token(nativeEvent)),
             )
         }
         desktop_gtk_h.NativeEvent_NotificationShown() -> {
@@ -820,9 +837,9 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
 internal fun FileDialog.CommonDialogParams.toNative(arena: Arena): MemorySegment {
     val result = NativeCommonFileDialogParams.allocate(arena)
     NativeCommonFileDialogParams.modal(result, modal)
-    NativeCommonFileDialogParams.title(result, title?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
-    NativeCommonFileDialogParams.accept_label(result, acceptLabel?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
-    NativeCommonFileDialogParams.current_folder(result, currentFolder?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+    NativeCommonFileDialogParams.title(result, title.toNativeUtf8(arena))
+    NativeCommonFileDialogParams.accept_label(result, acceptLabel.toNativeUtf8(arena))
+    NativeCommonFileDialogParams.current_folder(result, currentFolder.toNativeUtf8(arena))
     return result
 }
 
@@ -837,7 +854,7 @@ internal fun FileDialog.SaveDialogParams.toNative(arena: Arena): MemorySegment {
     val result = NativeSaveFileDialogParams.allocate(arena)
     NativeSaveFileDialogParams.name_field_string_value(
         result,
-        nameFieldStringValue?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+        nameFieldStringValue.toNativeUtf8(arena),
     )
     return result
 }
