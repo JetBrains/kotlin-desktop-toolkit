@@ -26,7 +26,7 @@ public object Clipboard {
         }
     }
 
-    public fun isFormatAvailable(owner: Window, format: ClipboardFormat): Boolean {
+    public fun isFormatAvailable(owner: Window, format: DataFormat): Boolean {
         return ffiDownCall {
             owner.withPointer { windowPtr ->
                 desktop_win32_h.clipboard_is_format_available(windowPtr, format.id)
@@ -34,7 +34,7 @@ public object Clipboard {
         }
     }
 
-    public fun listItemFormats(owner: Window): List<ClipboardFormat> {
+    public fun listItemFormats(owner: Window): List<DataFormat> {
         val formatIds = ffiDownCall {
             owner.withPointer { windowPtr ->
                 Arena.ofConfined().use { arena ->
@@ -49,13 +49,13 @@ public object Clipboard {
         }
         return formatIds.map { formatId ->
             when (formatId) {
-                ClipboardFormat.Text.id -> ClipboardFormat.Text
-                else -> ClipboardFormat(formatId)
+                DataFormat.Text.id -> DataFormat.Text
+                else -> DataFormat(formatId)
             }
         }
     }
 
-    public fun readItemOfType(owner: Window, format: ClipboardFormat): ByteArray {
+    public fun readItemOfType(owner: Window, format: DataFormat): ByteArray {
         return ffiDownCall {
             owner.withPointer { windowPtr ->
                 Arena.ofConfined().use { arena ->
@@ -70,7 +70,7 @@ public object Clipboard {
         }
     }
 
-    public fun tryReadItemOfType(owner: Window, format: ClipboardFormat): ByteArray? {
+    public fun tryReadItemOfType(owner: Window, format: DataFormat): ByteArray? {
         return ffiDownCall {
             owner.withPointer { windowPtr ->
                 Arena.ofConfined().use { arena ->
@@ -147,7 +147,7 @@ public object Clipboard {
         }
     }
 
-    public fun writeItemOfType(owner: Window, format: ClipboardFormat, data: ByteArray) {
+    public fun writeItemOfType(owner: Window, format: DataFormat, data: ByteArray) {
         ffiDownCall {
             owner.withPointer { windowPtr ->
                 Arena.ofConfined().use { arena ->
@@ -188,28 +188,6 @@ public object Clipboard {
                     desktop_win32_h.clipboard_set_text(windowPtr, strPtr)
                 }
             }
-        }
-    }
-}
-
-@JvmInline
-public value class ClipboardFormat internal constructor(internal val id: Int) {
-    public companion object {
-        public val Text: ClipboardFormat = ClipboardFormat(13) // CF_UNICODETEXT
-        public val FileList: ClipboardFormat = ClipboardFormat(15) // CF_HDROP
-
-        public val Html: ClipboardFormat by lazy {
-            ClipboardFormat(desktop_win32_h.clipboard_get_html_format_id())
-        }
-
-        public fun register(formatName: String): ClipboardFormat {
-            val formatId = ffiDownCall {
-                Arena.ofConfined().use { arena ->
-                    val namePtr = arena.allocateUtf8String(formatName)
-                    desktop_win32_h.clipboard_register_format(namePtr)
-                }
-            }
-            return ClipboardFormat(formatId)
         }
     }
 }

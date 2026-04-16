@@ -1,43 +1,13 @@
-use std::sync::LazyLock;
-
 use windows::Win32::{
     Foundation::{ERROR_SUCCESS, GetLastError, HANDLE},
-    System::{
-        DataExchange::{
-            CloseClipboard, CountClipboardFormats, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardSequenceNumber,
-            IsClipboardFormatAvailable, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
-        },
-        Ole::{CF_HDROP, CF_UNICODETEXT},
+    System::DataExchange::{
+        CloseClipboard, CountClipboardFormats, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardSequenceNumber,
+        IsClipboardFormatAvailable, OpenClipboard, SetClipboardData,
     },
 };
-use windows_core::{Error as WinError, HSTRING, w};
+use windows_core::Error as WinError;
 
-use super::{global_data::HGlobalData, window::Window};
-
-/// cbindgen:ignore
-static HTML_FORMAT: LazyLock<u32> = LazyLock::new(|| unsafe { RegisterClipboardFormatW(w!("HTML Format")) });
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClipboardFormat {
-    Text,
-    FileList,
-    HtmlFragment,
-    Other(u32),
-}
-
-impl ClipboardFormat {
-    #[inline]
-    #[must_use]
-    pub fn id(self) -> u32 {
-        match self {
-            Self::Text => u32::from(CF_UNICODETEXT.0),
-            Self::FileList => u32::from(CF_HDROP.0),
-            Self::HtmlFragment => *HTML_FORMAT,
-            Self::Other(fmt) => fmt,
-        }
-    }
-}
+use super::{data_transfer::DataFormat, global_data::HGlobalData, window::Window};
 
 pub struct Clipboard {
     is_open: bool,
@@ -47,10 +17,6 @@ impl Clipboard {
     pub fn open_for_window(window: &Window) -> anyhow::Result<Self> {
         unsafe { OpenClipboard(Some(window.hwnd()))? };
         Ok(Self { is_open: true })
-    }
-
-    pub fn register_format(format_name: &HSTRING) -> anyhow::Result<u32> {
-        Ok(unsafe { RegisterClipboardFormatW(format_name) })
     }
 
     #[must_use]
@@ -91,7 +57,7 @@ impl Clipboard {
         Ok(())
     }
 
-    pub fn get_data(&self, format: ClipboardFormat) -> anyhow::Result<HGlobalData> {
+    pub fn get_data(&self, format: DataFormat) -> anyhow::Result<HGlobalData> {
         anyhow::ensure!(self.is_open, "Clipboard has been closed.");
         let format_id = format.id();
         anyhow::ensure!(self.is_format_available(format_id)?, "specified Clipboard format is unavailable");
@@ -99,7 +65,7 @@ impl Clipboard {
         HGlobalData::copy_from(mem)
     }
 
-    pub fn set_data(&self, format: ClipboardFormat, data: &mut HGlobalData) -> anyhow::Result<()> {
+    pub fn set_data(&self, format: DataFormat, data: &mut HGlobalData) -> anyhow::Result<()> {
         anyhow::ensure!(self.is_open, "Clipboard has been closed.");
         unsafe { SetClipboardData(format.id(), Some(HANDLE(data.as_raw().0)))? };
         data.detach();
