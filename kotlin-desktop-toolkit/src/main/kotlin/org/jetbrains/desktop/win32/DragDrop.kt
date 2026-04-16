@@ -24,10 +24,10 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
         }
     }
 
-    public fun doDragDrop(dataFormat: DataFormat, data: ByteArray, dragSource: DragSource) {
+    public fun doDragDrop(dataObject: DataObject, dragSource: DragSource) {
         DragSourceCallbacks(arena, dragSource).use { callbacks ->
             ffiDownCall {
-                desktop_win32_h.drag_drop_start(dataFormat.id, data.toNative(arena), callbacks.toNative())
+                desktop_win32_h.drag_drop_start(dataObject.toNative(), callbacks.toNative())
             }
         }
     }
