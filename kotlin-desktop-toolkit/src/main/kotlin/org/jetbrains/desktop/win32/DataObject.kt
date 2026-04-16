@@ -5,7 +5,7 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
 public class DataObject(private var ptr: MemorySegment) : AutoCloseable {
-    public fun readBytes(format: ClipboardFormat): ByteArray {
+    public fun readBytes(format: DataFormat): ByteArray {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
                 val dataPtr = desktop_win32_h.data_object_read_bytes(arena, ptr, format.id)

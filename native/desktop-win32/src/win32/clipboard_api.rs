@@ -4,7 +4,8 @@ use desktop_common::{
 };
 
 use super::{
-    clipboard::{Clipboard, ClipboardFormat},
+    clipboard::Clipboard,
+    data_transfer::DataFormat,
     global_data::{hglobal_reader, hglobal_writer},
     strings::copy_from_utf8_string,
     window::Window,
@@ -89,7 +90,7 @@ pub extern "C" fn clipboard_try_get_data(owner: WindowPtr, data_format: u32) -> 
 fn clipboard_get_data_impl(owner: &Window, data_format: u32) -> anyhow::Result<AutoDropByteArray> {
     let clipboard = Clipboard::open_for_window(owner)?;
     clipboard
-        .get_data(ClipboardFormat::Other(data_format))
+        .get_data(DataFormat::Other(data_format))
         .and_then(|data| hglobal_reader::get_bytes(&data))
         .map(|bytes| AutoDropArray::new(bytes.into_boxed_slice()))
 }
@@ -112,7 +113,7 @@ pub extern "C" fn clipboard_try_get_file_list(owner: WindowPtr) -> AutoDropArray
 fn clipboard_get_file_list_impl(owner: &Window) -> anyhow::Result<AutoDropArray<RustAllocatedStrPtr>> {
     let clipboard = Clipboard::open_for_window(owner)?;
     clipboard
-        .get_data(ClipboardFormat::FileList)
+        .get_data(DataFormat::FileList)
         .and_then(|data| hglobal_reader::get_file_list(&data))
         .map(|file_list| file_list.into_iter().map(RustAllocatedStrPtr::from_c_string).collect())
         .map(AutoDropArray::new)
@@ -135,7 +136,7 @@ pub extern "C" fn clipboard_try_get_html_fragment(owner: WindowPtr) -> FfiOption
 fn clipboard_get_html_fragment_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr> {
     let clipboard = Clipboard::open_for_window(owner)?;
     clipboard
-        .get_data(ClipboardFormat::HtmlFragment)
+        .get_data(DataFormat::HtmlFragment)
         .and_then(|data| hglobal_reader::get_html(&data))
         .map(RustAllocatedStrPtr::from_c_string)
 }
@@ -155,7 +156,7 @@ pub extern "C" fn clipboard_try_get_text(owner: WindowPtr) -> FfiOption<RustAllo
 fn clipboard_get_text_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr> {
     let clipboard = Clipboard::open_for_window(owner)?;
     clipboard
-        .get_data(ClipboardFormat::Text)
+        .get_data(DataFormat::Text)
         .and_then(|data| hglobal_reader::get_text(&data))
         .map(RustAllocatedStrPtr::from_c_string)
 }
@@ -165,7 +166,7 @@ pub extern "C" fn clipboard_set_data(owner: WindowPtr, data_format: u32, content
     with_window(&owner, "clipboard_set_data", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
         let mut data = hglobal_writer::new_bytes(content.as_slice()?)?;
-        clipboard.set_data(ClipboardFormat::Other(data_format), &mut data)
+        clipboard.set_data(DataFormat::Other(data_format), &mut data)
     });
 }
 
@@ -175,7 +176,7 @@ pub extern "C" fn clipboard_set_file_list(owner: WindowPtr, content: BorrowedArr
         let clipboard = Clipboard::open_for_window(window)?;
         let files: anyhow::Result<Vec<&str>> = content.as_slice()?.iter().map(|str_ptr| str_ptr.as_str()).collect();
         let mut data = hglobal_writer::new_file_list(&files?)?;
-        clipboard.set_data(ClipboardFormat::FileList, &mut data)
+        clipboard.set_data(DataFormat::FileList, &mut data)
     });
 }
 
@@ -185,7 +186,7 @@ pub extern "C" fn clipboard_set_html_fragment(owner: WindowPtr, content: Borrowe
         let clipboard = Clipboard::open_for_window(window)?;
         let fragment = copy_from_utf8_string(&content)?;
         let mut data = hglobal_writer::new_html(&fragment)?;
-        clipboard.set_data(ClipboardFormat::HtmlFragment, &mut data)
+        clipboard.set_data(DataFormat::HtmlFragment, &mut data)
     });
 }
 
@@ -194,21 +195,13 @@ pub extern "C" fn clipboard_set_text(owner: WindowPtr, content: BorrowedStrPtr) 
     with_window(&owner, "clipboard_set_text", |window| {
         let clipboard = Clipboard::open_for_window(window)?;
         let mut data = hglobal_writer::new_text(content.as_str()?)?;
-        clipboard.set_data(ClipboardFormat::Text, &mut data)
+        clipboard.set_data(DataFormat::Text, &mut data)
     });
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_register_format(name: BorrowedStrPtr) -> u32 {
-    ffi_boundary("clipboard_register_format", || {
-        let format_name = copy_from_utf8_string(&name)?;
-        Clipboard::register_format(&format_name)
-    })
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn clipboard_get_html_format_id() -> u32 {
-    ffi_boundary("clipboard_get_html_format_id", || Ok(ClipboardFormat::HtmlFragment.id()))
+    ffi_boundary("clipboard_get_html_format_id", || Ok(DataFormat::HtmlFragment.id()))
 }
 
 #[unsafe(no_mangle)]
