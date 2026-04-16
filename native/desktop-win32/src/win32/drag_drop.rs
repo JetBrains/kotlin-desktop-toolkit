@@ -37,11 +37,11 @@ pub fn register_drop_target(window: &Window, callbacks: DropTargetCallbacks) -> 
     Ok(())
 }
 
-pub fn start_drag_drop(data_object: &IDataObject, callbacks: DragSourceCallbacks) -> anyhow::Result<()> {
+pub fn start_drag_drop(data_object: &IDataObject, allowed_effects: u32, callbacks: DragSourceCallbacks) -> anyhow::Result<u32> {
     let source: IDropSource = DragSource { callbacks }.into();
-    let mut effect = DROPEFFECT::default();
-    unsafe { DoDragDrop(data_object, &source, DROPEFFECT_NONE, &raw mut effect).ok()? };
-    Ok(())
+    let mut effect = DROPEFFECT_NONE;
+    unsafe { DoDragDrop(data_object, &source, DROPEFFECT(allowed_effects), &raw mut effect).ok()? };
+    Ok(effect.0)
 }
 
 pub fn revoke_drop_target(window: &Window) -> anyhow::Result<()> {
