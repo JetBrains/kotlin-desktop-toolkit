@@ -4,7 +4,7 @@
 use std::mem::ManuallyDrop;
 
 use windows::Win32::{
-    Foundation::{DV_E_FORMATETC, E_NOTIMPL, E_POINTER, HGLOBAL, OLE_E_ADVISENOTSUPPORTED, S_OK},
+    Foundation::{DV_E_FORMATETC, DV_E_TYMED, E_NOTIMPL, E_POINTER, HANDLE, HGLOBAL, OLE_E_ADVISENOTSUPPORTED, S_OK},
     System::Com::{
         DATADIR, DATADIR_GET, DVASPECT_CONTENT, FORMATETC, IAdviseSink, IDataObject, IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA,
         STGMEDIUM, STGMEDIUM_0, TYMED_HGLOBAL,
@@ -13,7 +13,7 @@ use windows::Win32::{
 };
 use windows_core::{BOOL, Error as WinError, HRESULT, Ref as WinRef, Result as WinResult, implement};
 
-use super::global_data::HGlobalData;
+use super::{data_transfer::DataFormat, global_data::HGlobalData};
 
 #[implement(IDataObject)]
 pub struct DataObject {
@@ -23,15 +23,8 @@ pub struct DataObject {
 
 impl DataObject {
     #[must_use]
-    pub const fn create(format_id: u32, data: HGlobalData) -> Self {
-        let format_etc = FORMATETC {
-            #[allow(clippy::cast_possible_truncation)]
-            cfFormat: format_id as u16,
-            ptd: core::ptr::null_mut(),
-            dwAspect: DVASPECT_CONTENT.0,
-            lindex: -1,
-            tymed: TYMED_HGLOBAL.0.cast_unsigned(),
-        };
+    pub fn create(data_format: DataFormat, data: HGlobalData) -> Self {
+        let format_etc = get_format_etc_for_hglobal(data_format);
         Self { format_etc, data }
     }
 
@@ -116,27 +109,33 @@ impl IDataObject_Impl for DataObject_Impl {
     }
 }
 
-pub mod data_object_reader {
-    use windows::Win32::{
-        Foundation::{DV_E_TYMED, HANDLE},
-        System::Com::{DVASPECT_CONTENT, FORMATETC, IDataObject, TYMED_HGLOBAL},
-    };
+pub fn is_data_object_format_available(data_object: &IDataObject, data_format: DataFormat) -> anyhow::Result<bool> {
+    let format_etc = get_format_etc_for_hglobal(data_format);
+    match unsafe { data_object.QueryGetData(&raw const format_etc) } {
+        S_OK => Ok(true),
+        DV_E_FORMATETC | DV_E_TYMED => Ok(false),
+        result => Err(WinError::from(result).into()),
+    }
+}
 
-    use crate::win32::global_data::{HGlobalData, hglobal_reader};
+pub fn get_hglobal_from_data_object(data_object: &IDataObject, data_format: DataFormat) -> anyhow::Result<HGlobalData> {
+    let format_etc = get_format_etc_for_hglobal(data_format);
+    let medium = unsafe { data_object.GetData(&raw const format_etc)? };
+    if medium.tymed & TYMED_HGLOBAL.0.cast_unsigned() == 0 {
+        anyhow::bail!(windows_core::Error::from(DV_E_TYMED));
+    }
+    let hglobal = unsafe { medium.u.hGlobal };
+    HGlobalData::copy_from(HANDLE(hglobal.0))
+}
 
-    pub fn read_bytes(data_object: &IDataObject, format_id: u32) -> anyhow::Result<Vec<u8>> {
-        let format_etc = FORMATETC {
-            cfFormat: format_id.try_into()?,
-            ptd: core::ptr::null_mut(),
-            dwAspect: DVASPECT_CONTENT.0,
-            lindex: -1,
-            tymed: TYMED_HGLOBAL.0.cast_unsigned(),
-        };
-        let medium = unsafe { data_object.GetData(&raw const format_etc)? };
-        if medium.tymed & TYMED_HGLOBAL.0.cast_unsigned() == 0 {
-            anyhow::bail!(windows_core::Error::from(DV_E_TYMED));
-        }
-        let hglobal = unsafe { medium.u.hGlobal };
-        hglobal_reader::get_bytes(&HGlobalData::copy_from(HANDLE(hglobal.0))?)
+#[inline]
+fn get_format_etc_for_hglobal(data_format: DataFormat) -> FORMATETC {
+    FORMATETC {
+        #[allow(clippy::cast_possible_truncation)]
+        cfFormat: data_format.id() as u16,
+        ptd: core::ptr::null_mut(),
+        dwAspect: DVASPECT_CONTENT.0,
+        lindex: -1,
+        tymed: TYMED_HGLOBAL.0.cast_unsigned(),
     }
 }

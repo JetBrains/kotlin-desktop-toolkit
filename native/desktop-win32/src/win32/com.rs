@@ -1,3 +1,5 @@
+use desktop_common::logger::PanicDefault;
+
 use windows::Win32::Foundation::E_POINTER;
 use windows_core::{IUnknown, Interface, Result as WinResult};
 
@@ -22,5 +24,13 @@ impl Drop for ComInterfaceRawPtr {
     fn drop(&mut self) {
         let _ = unsafe { IUnknown::from_raw(self.ptr) };
         self.ptr = core::ptr::null_mut();
+    }
+}
+
+impl PanicDefault for ComInterfaceRawPtr {
+    fn default() -> Self {
+        Self {
+            ptr: core::ptr::null_mut(),
+        }
     }
 }
