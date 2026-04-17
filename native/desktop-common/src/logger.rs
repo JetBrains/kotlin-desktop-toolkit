@@ -286,6 +286,12 @@ impl PanicDefault for f32 {
     }
 }
 
+impl PanicDefault for i64 {
+    fn default() -> Self {
+        0
+    }
+}
+
 impl PanicDefault for f64 {
     fn default() -> Self {
         0.0

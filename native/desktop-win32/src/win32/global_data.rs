@@ -9,6 +9,9 @@ pub struct HGlobalData {
     is_owned: bool,
 }
 
+unsafe impl Send for HGlobalData {}
+unsafe impl Sync for HGlobalData {}
+
 impl HGlobalData {
     pub fn alloc_and_init<F: FnOnce(*mut core::ffi::c_void)>(content_len: usize, init: F) -> anyhow::Result<Self> {
         let mem = unsafe { GlobalAlloc(GMEM_MOVEABLE, content_len)? };
