@@ -17,26 +17,35 @@ use super::{data_transfer::DataFormat, global_data::HGlobalData};
 
 #[implement(IDataObject)]
 pub struct DataObject {
-    format_etc: FORMATETC,
-    data: HGlobalData,
+    hash_map: papaya::HashMap<u32, HGlobalData>,
 }
 
 impl DataObject {
+    #[allow(clippy::new_without_default)]
     #[must_use]
-    pub fn create(data_format: DataFormat, data: HGlobalData) -> Self {
-        let format_etc = get_format_etc_for_hglobal(data_format);
-        Self { format_etc, data }
+    pub fn new() -> Self {
+        Self {
+            hash_map: papaya::HashMap::new(),
+        }
     }
 
-    const fn is_format_supported(&self, format_etc: &FORMATETC) -> bool {
-        self.format_etc.cfFormat == format_etc.cfFormat
-            && self.format_etc.dwAspect == format_etc.dwAspect
-            && (self.format_etc.tymed & format_etc.tymed) != 0
+    pub fn add_format(&self, data_format: DataFormat, data: HGlobalData) -> bool {
+        self.hash_map.pin().try_insert(data_format.id(), data).is_ok()
+    }
+
+    fn is_format_supported(&self, format_etc: &FORMATETC) -> bool {
+        self.hash_map.pin().contains_key(&u32::from(format_etc.cfFormat))
+            && format_etc.dwAspect == DVASPECT_CONTENT.0
+            && (format_etc.tymed & TYMED_HGLOBAL.0.cast_unsigned()) != 0
     }
 
     #[inline]
-    fn get_content(&self) -> WinResult<HGLOBAL> {
-        self.data.copied()
+    fn get_content(&self, format_id: u32) -> WinResult<HGLOBAL> {
+        self.hash_map
+            .pin()
+            .get(&format_id)
+            .ok_or_else(|| DV_E_FORMATETC.into())
+            .and_then(HGlobalData::copied)
     }
 }
 
@@ -48,7 +57,7 @@ impl IDataObject_Impl for DataObject_Impl {
         if !self.is_format_supported(format_etc) {
             return Err(DV_E_FORMATETC.into());
         }
-        let content = self.get_content()?;
+        let content = self.get_content(u32::from(format_etc.cfFormat))?;
         let medium = STGMEDIUM {
             tymed: TYMED_HGLOBAL.0.cast_unsigned(),
             u: STGMEDIUM_0 { hGlobal: content },
@@ -91,7 +100,15 @@ impl IDataObject_Impl for DataObject_Impl {
 
     fn EnumFormatEtc(&self, direction: u32) -> WinResult<IEnumFORMATETC> {
         match DATADIR(direction.cast_signed()) {
-            DATADIR_GET => unsafe { SHCreateStdEnumFmtEtc(&[self.format_etc]) },
+            DATADIR_GET => {
+                let formats = self
+                    .hash_map
+                    .pin()
+                    .keys()
+                    .map(|k| get_format_etc_for_hglobal(DataFormat::Other(*k)))
+                    .collect::<Vec<_>>();
+                unsafe { SHCreateStdEnumFmtEtc(&formats) }
+            }
             _ => Err(E_NOTIMPL.into()),
         }
     }
@@ -131,6 +148,8 @@ pub fn get_hglobal_from_data_object(data_object: &IDataObject, data_format: Data
 #[inline]
 fn get_format_etc_for_hglobal(data_format: DataFormat) -> FORMATETC {
     FORMATETC {
+        // Registered clipboard formats are identified by values in the range 0xC000 through 0xFFFF.
+        // See: https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerclipboardformatw
         #[allow(clippy::cast_possible_truncation)]
         cfFormat: data_format.id() as u16,
         ptd: core::ptr::null_mut(),

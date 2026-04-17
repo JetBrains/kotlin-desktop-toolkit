@@ -1,7 +1,7 @@
 use desktop_common::logger::PanicDefault;
 
 use windows::Win32::Foundation::E_POINTER;
-use windows_core::{IUnknown, Interface, Result as WinResult};
+use windows_core::{ComObject, ComObjectInner, ComObjectInterface, IUnknown, Interface, Result as WinResult};
 
 #[repr(transparent)]
 pub struct ComInterfaceRawPtr {
@@ -9,7 +9,16 @@ pub struct ComInterfaceRawPtr {
 }
 
 impl ComInterfaceRawPtr {
-    pub fn new<T: Interface>(com_object: &T) -> WinResult<Self> {
+    pub fn new<T: Interface>(com_interface: &T) -> WinResult<Self> {
+        let unknown = com_interface.cast::<IUnknown>()?;
+        Ok(Self { ptr: unknown.into_raw() })
+    }
+
+    pub fn from_object<T>(com_object: &ComObject<T>) -> WinResult<Self>
+    where
+        T: ComObjectInner,
+        <T as ComObjectInner>::Outer: ComObjectInterface<IUnknown>,
+    {
         let unknown = com_object.cast::<IUnknown>()?;
         Ok(Self { ptr: unknown.into_raw() })
     }
