@@ -72,11 +72,6 @@ class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
             window.requestRedraw()
         }
     }
-
-    override fun close() {
-        window.destroy()
-        super.close()
-    }
 }
 
 class ApplicationState(private val app: Application) : AutoCloseable {
@@ -104,6 +99,8 @@ class ApplicationState(private val app: Application) : AutoCloseable {
         if (appearance == Appearance.Dark) {
             window.window.setImmersiveDarkMode(true)
         }
+
+        window.initializeDropManager()
     }
 
     fun handleEvent(event: Event, windowId: WindowId): EventHandlerResult {
@@ -117,6 +114,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
                 }
                 EventHandlerResult.Stop
             }
+
             else -> window.handleEvent(event)
         }
     }
@@ -129,7 +127,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
 
 fun main(args: Array<String>) {
     if (args.isNotEmpty()) {
-        Logger.info { "args = $args" }
+        Logger.info { "args = ${args.contentToString()}" }
     }
     Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)

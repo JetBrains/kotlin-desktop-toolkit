@@ -4,12 +4,23 @@ import org.jetbrains.desktop.win32.AngleRenderer
 import org.jetbrains.desktop.win32.Appearance
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.CursorIcon
+import org.jetbrains.desktop.win32.DataObject
+import org.jetbrains.desktop.win32.DataObjectBuilder
+import org.jetbrains.desktop.win32.DragDropContinueResult
+import org.jetbrains.desktop.win32.DragDropEffect
+import org.jetbrains.desktop.win32.DragDropManager
+import org.jetbrains.desktop.win32.DragDropModifier
+import org.jetbrains.desktop.win32.DragDropModifiers
+import org.jetbrains.desktop.win32.DragSource
+import org.jetbrains.desktop.win32.DropTarget
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.FileDialog
 import org.jetbrains.desktop.win32.Keyboard
 import org.jetbrains.desktop.win32.Logger
+import org.jetbrains.desktop.win32.PhysicalPoint
 import org.jetbrains.desktop.win32.PhysicalSize
+import org.jetbrains.desktop.win32.PointerButton
 import org.jetbrains.desktop.win32.Screen
 import org.jetbrains.desktop.win32.SurfaceParams
 import org.jetbrains.desktop.win32.VirtualKey
@@ -43,8 +54,49 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
     private var currentSize = PhysicalSize(0, 0)
     private var surfaceParams: SurfaceParams? = null
 
+    private var dragDropManager: DragDropManager? = null
+
     private fun isSizeChanged(size: PhysicalSize): Boolean {
         return (size.width != currentSize.width || size.height != currentSize.height)
+    }
+
+    fun initializeDropManager() {
+        dragDropManager = DragDropManager(window).apply {
+            registerDropTarget(
+                object : DropTarget {
+                    override fun onDragEnter(
+                        dataObject: DataObject,
+                        modifiers: DragDropModifiers,
+                        point: PhysicalPoint,
+                        effect: DragDropEffect,
+                    ): DragDropEffect {
+                        Logger.debug { "Drag enter" }
+                        return effect
+                    }
+
+                    override fun onDragOver(modifiers: DragDropModifiers, point: PhysicalPoint, effect: DragDropEffect): DragDropEffect {
+                        return effect
+                    }
+
+                    override fun onDragLeave() {
+                        Logger.debug { "Drag leave" }
+                    }
+
+                    override fun onDrop(
+                        dataObject: DataObject,
+                        modifiers: DragDropModifiers,
+                        point: PhysicalPoint,
+                        effect: DragDropEffect,
+                    ): DragDropEffect {
+                        Logger.debug { "Drop" }
+                        val html = dataObject.readHtmlFragment()
+                        val text = dataObject.readTextItem()
+                        Logger.debug { "html: $html -- text: $text" }
+                        return effect
+                    }
+                },
+            )
+        }
     }
 
     open fun handleEvent(event: Event): EventHandlerResult {
@@ -121,6 +173,33 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                 EventHandlerResult.Continue
             }
 
+            is Event.PointerUpdated -> with(event) {
+                if (!nonClientArea && state.pressedButtons.hasFlag(PointerButton.Left)) {
+                    val dataObjectBuilder = DataObjectBuilder.create()
+                    dataObjectBuilder.addHtmlFragment("<b>HTML</b> <i>fragment</i>")
+                    dataObjectBuilder.addTextItem("Hello drag and drop!")
+                    dataObjectBuilder.build().use { dataObject ->
+                        val dragSource = object : DragSource {
+                            override fun onQueryContinueDrag(escapePressed: Boolean, modifiers: DragDropModifiers): DragDropContinueResult {
+                                return when {
+                                    escapePressed -> DragDropContinueResult.Cancel
+
+                                    !modifiers.hasFlag(DragDropModifier.LeftButton) -> {
+                                        Logger.debug { "Dropping (left button depressed)" }
+                                        DragDropContinueResult.Drop
+                                    }
+
+                                    else -> DragDropContinueResult.Continue
+                                }
+                            }
+                        }
+                        dragDropManager?.doDragDrop(dataObject, DragDropEffect.Copy, dragSource)
+                        Logger.debug { "Drag finished" }
+                    }
+                }
+                EventHandlerResult.Continue
+            }
+
             else -> EventHandlerResult.Continue
         }
     }
@@ -159,6 +238,11 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
     abstract fun Canvas.draw(size: PhysicalSize, scale: Float, time: Long)
 
     override fun close() {
+        dragDropManager?.let { manager ->
+            manager.revokeDropTarget()
+            manager.close()
+        }
+        window.destroy()
         window.close()
     }
 }
