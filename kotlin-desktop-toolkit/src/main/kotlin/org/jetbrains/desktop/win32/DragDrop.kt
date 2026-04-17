@@ -7,15 +7,13 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
 public class DragDropManager(private val window: Window) : AutoCloseable {
-    private val arena = Arena.ofConfined()
-
     private var dropTargetCallbacks: DropTargetCallbacks? = null
 
     public fun registerDropTarget(dropTarget: DropTarget) {
         check(dropTargetCallbacks == null) {
             "Drop target already registered. Please revoke the previous drop target before registering a new one."
         }
-        dropTargetCallbacks = DropTargetCallbacks(arena, dropTarget).also { callbacks ->
+        dropTargetCallbacks = DropTargetCallbacks(dropTarget).also { callbacks ->
             window.withPointer { windowPtr ->
                 ffiDownCall {
                     desktop_win32_h.drag_drop_register_target(windowPtr, callbacks.toNative())
@@ -25,7 +23,7 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
     }
 
     public fun doDragDrop(dataObject: DataObject, allowedEffects: DragDropEffect, dragSource: DragSource): DragDropEffect {
-        val effect = DragSourceCallbacks(arena, dragSource).use { callbacks ->
+        val effect = DragSourceCallbacks(dragSource).use { callbacks ->
             ffiDownCall {
                 desktop_win32_h.drag_drop_start(dataObject.toNative(), allowedEffects.value, callbacks.toNative())
             }
@@ -45,7 +43,6 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
 
     override fun close() {
         dropTargetCallbacks?.close()
-        arena.close()
     }
 }
 
@@ -99,10 +96,8 @@ public enum class DragDropContinueResult {
     }
 }
 
-private class DropTargetCallbacks(
-    arena: Arena,
-    private val target: DropTarget,
-) : AutoCloseable {
+private class DropTargetCallbacks(private val target: DropTarget) : AutoCloseable {
+    private val arena: Arena = Arena.ofConfined()
     private val callbacks: MemorySegment = NativeDropTargetCallbacks.allocate(arena)
 
     init {
@@ -149,14 +144,12 @@ private class DropTargetCallbacks(
     fun toNative(): MemorySegment = callbacks
 
     override fun close() {
-        // TODO: drop native callbacks
+        arena.close()
     }
 }
 
-private class DragSourceCallbacks(
-    arena: Arena,
-    private val source: DragSource,
-) : AutoCloseable {
+private class DragSourceCallbacks(private val source: DragSource) : AutoCloseable {
+    private val arena: Arena = Arena.ofConfined()
     private val callbacks: MemorySegment = NativeDragSourceCallbacks.allocate(arena)
 
     init {
@@ -174,7 +167,7 @@ private class DragSourceCallbacks(
     fun toNative(): MemorySegment = callbacks
 
     override fun close() {
-        // TODO: drop native callbacks
+        arena.close()
     }
 }
 
