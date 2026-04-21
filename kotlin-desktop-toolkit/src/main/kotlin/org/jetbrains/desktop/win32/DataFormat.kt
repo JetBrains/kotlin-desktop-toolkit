@@ -2,7 +2,6 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
-import kotlin.use
 
 @JvmInline
 public value class DataFormat internal constructor(internal val id: Int) {
@@ -22,6 +21,15 @@ public value class DataFormat internal constructor(internal val id: Int) {
                 }
             }
             return DataFormat(formatId)
+        }
+
+        public fun fromNative(formatId: Int): DataFormat {
+            return when (formatId) {
+                Text.id -> Text
+                FileList.id -> FileList
+                Html.id -> Html
+                else -> DataFormat(formatId)
+            }
         }
     }
 }

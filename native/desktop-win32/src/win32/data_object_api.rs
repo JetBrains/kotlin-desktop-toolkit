@@ -13,11 +13,13 @@ use windows_core::ComObject;
 
 use super::{
     com::ComInterfaceRawPtr,
-    data_object::{DataObject, get_hglobal_from_data_object, is_data_object_format_available},
+    data_object::{DataObject, enum_data_object_format_ids, get_hglobal_from_data_object, is_data_object_format_available},
     data_transfer::DataFormat,
     global_data::{hglobal_reader, hglobal_writer},
     strings::copy_from_utf8_string,
 };
+
+pub type AutoDropUInt32Array = AutoDropArray<u32>;
 
 /// cbindgen:ignore
 static DATA_OBJECT_NEXT_ID: AtomicI64 = AtomicI64::new(0);
@@ -108,6 +110,15 @@ pub extern "C" fn com_data_object_is_format_available(data_object_ptr: ComInterf
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_enum_formats(data_object_ptr: ComInterfaceRawPtr) -> AutoDropUInt32Array {
+    ffi_boundary("com_data_object_enum_formats", || {
+        let data_object = data_object_ptr.borrow::<IDataObject>()?;
+        let formats = enum_data_object_format_ids(&data_object)?;
+        Ok(AutoDropArray::new(formats))
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_read_bytes(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> AutoDropArray<u8> {
     ffi_boundary("com_data_object_read_bytes", || {
         let data_object = data_object_ptr.borrow::<IDataObject>()?;
@@ -152,6 +163,14 @@ pub extern "C" fn com_data_object_read_text(data_object_ptr: ComInterfaceRawPtr)
 pub extern "C" fn com_data_object_release(data_object_ptr: ComInterfaceRawPtr) {
     ffi_boundary("com_data_object_release", || {
         drop(data_object_ptr);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn native_u32_array_drop(array: AutoDropUInt32Array) {
+    ffi_boundary("native_u32_array_drop", || {
+        drop(array);
         Ok(())
     });
 }

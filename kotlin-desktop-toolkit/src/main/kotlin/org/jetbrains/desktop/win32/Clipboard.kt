@@ -47,12 +47,7 @@ public object Clipboard {
                 }
             }
         }
-        return formatIds.map { formatId ->
-            when (formatId) {
-                DataFormat.Text.id -> DataFormat.Text
-                else -> DataFormat(formatId)
-            }
-        }
+        return formatIds.map(DataFormat::fromNative)
     }
 
     public fun readItemOfType(owner: Window, format: DataFormat): ByteArray {
