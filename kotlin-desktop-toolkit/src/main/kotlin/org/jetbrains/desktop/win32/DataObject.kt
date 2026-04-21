@@ -11,6 +11,22 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
         }
     }
 
+    public fun listItemFormats(): List<DataFormat> = requireOpen { ptr ->
+        val formatIds = Arena.ofConfined().use { arena ->
+            val formatsPtr = ffiDownCall {
+                desktop_win32_h.com_data_object_enum_formats(arena, ptr)
+            }
+            try {
+                intArrayFromNative(formatsPtr)
+            } finally {
+                ffiDownCall {
+                    desktop_win32_h.native_u32_array_drop(formatsPtr)
+                }
+            }
+        }
+        formatIds.map(DataFormat::fromNative)
+    }
+
     public fun readItemOfType(format: DataFormat): ByteArray = requireOpen { ptr ->
         Arena.ofConfined().use { arena ->
             val dataPtr = ffiDownCall {

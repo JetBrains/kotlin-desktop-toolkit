@@ -135,6 +135,22 @@ pub fn is_data_object_format_available(data_object: &IDataObject, data_format: D
     }
 }
 
+pub fn enum_data_object_format_ids(data_object: &IDataObject) -> anyhow::Result<Box<[u32]>> {
+    let iter = unsafe { data_object.EnumFormatEtc(DATADIR_GET.0.cast_unsigned())? };
+    let mut hash_set = std::collections::HashSet::new();
+    let mut formats = [FORMATETC::default(); 1];
+    while S_OK == unsafe { iter.Next(&mut formats, None) } {
+        let format_etc = formats[0];
+        if format_etc.cfFormat != 0
+            && format_etc.dwAspect == DVASPECT_CONTENT.0
+            && (format_etc.tymed & TYMED_HGLOBAL.0.cast_unsigned()) != 0
+        {
+            hash_set.insert(u32::from(format_etc.cfFormat));
+        }
+    }
+    Ok(hash_set.into_iter().collect())
+}
+
 pub fn get_hglobal_from_data_object(data_object: &IDataObject, data_format: DataFormat) -> anyhow::Result<HGlobalData> {
     let format_etc = get_format_etc_for_hglobal(data_format);
     let medium = unsafe { data_object.GetData(&raw const format_etc)? };

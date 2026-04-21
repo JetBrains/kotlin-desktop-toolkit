@@ -5,6 +5,7 @@ use desktop_common::{
 
 use super::{
     clipboard::Clipboard,
+    data_object_api::AutoDropUInt32Array,
     data_transfer::DataFormat,
     global_data::{hglobal_reader, hglobal_writer},
     strings::copy_from_utf8_string,
@@ -13,7 +14,6 @@ use super::{
 };
 
 type AutoDropByteArray = AutoDropArray<u8>;
-type AutoDropUInt32Array = AutoDropArray<u32>;
 
 trait IntoFfiOption<T> {
     fn into_ffi_option(self) -> anyhow::Result<FfiOption<T>>
@@ -216,14 +216,6 @@ pub extern "C" fn native_byte_array_drop(array: AutoDropByteArray) {
 pub extern "C" fn native_optional_byte_array_drop(optional: FfiOption<AutoDropByteArray>) {
     ffi_boundary("native_optional_byte_array_drop", || {
         drop(optional);
-        Ok(())
-    });
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn native_u32_array_drop(array: AutoDropUInt32Array) {
-    ffi_boundary("native_u32_array_drop", || {
-        drop(array);
         Ok(())
     });
 }
