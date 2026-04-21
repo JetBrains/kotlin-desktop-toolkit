@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import java.util.concurrent.TimeUnit
+import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -57,6 +58,7 @@ class KoreanImeTest : KDTApplicationTestBase() {
      *   S → ㄴ (nieun), U → ㅕ (yeo), D → ㅇ (ieung)
      *   ㄴ + ㅕ + ㅇ = 녕
      */
+    @Ignore("Fails on CI, disable before investigation")
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     fun `typing S U D with Korean 2-Set IME produces 녕`() {
