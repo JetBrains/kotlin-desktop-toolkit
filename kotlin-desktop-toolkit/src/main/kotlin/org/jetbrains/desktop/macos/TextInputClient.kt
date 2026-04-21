@@ -104,12 +104,27 @@ public interface TextInputClient {
         val rect: LogicalRect,
         val actualRange: TextRange?,
     )
+
+    /**
+     * The first logical rectangle enclosing the characters in the given [range].
+     *
+     * The returned [RectAndRange.rect] is expressed in global screen coordinates with the origin at
+     *  the top-left of the primary screen and the Y axis pointing down
+     *  (the same coordinate system as [Screen.origin]).
+     *
+     * [RectAndRange.actualRange] reports the range actually covered by the returned rectangle,
+     *  which may differ from the requested [range] (e.g., when only part of it is laid out).
+     */
     public fun firstRectForCharacterRange(range: TextRange): RectAndRange
 
     /**
      * The character index, measured from the start of the receiver’s text storage,
-     *  of the character containing the given point.
-     *  Returns NSNotFound if the cursor is not within a character’s bounding rectangle.
+     *  of the character containing the given [point].
+     *
+     * [point] is expressed in global screen coordinates with the origin at the top-left of the
+     *  primary screen and the Y axis pointing down (the same coordinate system as [Screen.origin]).
+     *
+     * Returns `null` (NSNotFound) if the point is not within a character’s bounding rectangle.
      */
     public fun characterIndexForPoint(point: LogicalPoint): Long?
 
