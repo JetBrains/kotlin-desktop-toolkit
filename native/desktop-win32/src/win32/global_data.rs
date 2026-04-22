@@ -1,8 +1,13 @@
+use std::ffi::CString;
+
 use windows::Win32::{
     Foundation::{GlobalFree, HGLOBAL},
     System::Memory::{GMEM_FIXED, GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock},
+    UI::Shell::{DragQueryFileW, HDROP},
 };
-use windows_core::Result as WinResult;
+use windows_core::{Error as WinError, Result as WinResult};
+
+use super::strings::copy_from_wide_string;
 
 pub struct HGlobalData {
     mem: HGLOBAL,
@@ -125,21 +130,21 @@ pub(crate) mod hglobal_reader {
         ApplicationModel::DataTransfer::HtmlFormatHelper,
         Win32::{
             System::Memory::{GlobalLock, GlobalSize},
-            UI::Shell::{DragQueryFileW, HDROP},
+            UI::Shell::HDROP,
         },
     };
-    use windows_core::{Error as WinError, PWSTR};
+    use windows_core::PWSTR;
 
     use crate::win32::{
-        global_data::{HGlobalData, global_unlock},
+        global_data::{HGlobalData, global_unlock, parse_file_list},
         strings::{copy_from_utf8_bytes, copy_from_wide_string},
     };
 
     pub fn get_text(data: &HGlobalData) -> anyhow::Result<CString> {
         let content = unsafe { PWSTR(GlobalLock(data.mem).cast()) };
-        let cstr = copy_from_wide_string(unsafe { content.as_wide() })?;
+        let cstr = copy_from_wide_string(unsafe { content.as_wide() });
         global_unlock(data.mem)?;
-        Ok(cstr)
+        cstr
     }
 
     pub fn get_bytes(data: &HGlobalData) -> anyhow::Result<Vec<u8>> {
@@ -152,18 +157,9 @@ pub(crate) mod hglobal_reader {
 
     pub fn get_file_list(data: &HGlobalData) -> anyhow::Result<Vec<CString>> {
         let content = unsafe { GlobalLock(data.mem) };
-        let num_files = unsafe { DragQueryFileW(HDROP(content), u32::MAX, None) };
-        let mut files = Vec::with_capacity(num_files.try_into()?);
-        for i in 0..num_files {
-            let file_name_len = unsafe { DragQueryFileW(HDROP(content), i, None) };
-            anyhow::ensure!(file_name_len != 0, WinError::from_thread());
-            let mut buffer = vec![0u16; usize::try_from(file_name_len)? + 1];
-            let file_name_len = unsafe { DragQueryFileW(HDROP(content), i, Some(&mut buffer)) };
-            anyhow::ensure!(file_name_len != 0, WinError::from_thread());
-            files.push(copy_from_wide_string(&buffer)?);
-        }
+        let files = unsafe { parse_file_list(HDROP(content)) };
         global_unlock(data.mem)?;
-        Ok(files)
+        files
     }
 
     pub fn get_html(data: &HGlobalData) -> anyhow::Result<CString> {
@@ -172,4 +168,20 @@ pub(crate) mod hglobal_reader {
         let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)?;
         copy_from_wide_string(&fragment)
     }
+}
+
+/// # Safety
+/// `hdrop` must point to a valid `DROPFILES` structure followed by the double-NUL-terminated file list.
+pub(crate) unsafe fn parse_file_list(hdrop: HDROP) -> anyhow::Result<Vec<CString>> {
+    let num_files = unsafe { DragQueryFileW(hdrop, u32::MAX, None) };
+    let mut files = Vec::with_capacity(num_files.try_into()?);
+    for i in 0..num_files {
+        let file_name_len = unsafe { DragQueryFileW(hdrop, i, None) };
+        anyhow::ensure!(file_name_len != 0, WinError::from_thread());
+        let mut buffer = vec![0u16; usize::try_from(file_name_len)? + 1];
+        let file_name_len = unsafe { DragQueryFileW(hdrop, i, Some(&mut buffer)) };
+        anyhow::ensure!(file_name_len != 0, WinError::from_thread());
+        files.push(copy_from_wide_string(&buffer)?);
+    }
+    Ok(files)
 }
