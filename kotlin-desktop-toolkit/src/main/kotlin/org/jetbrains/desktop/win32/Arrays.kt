@@ -11,7 +11,7 @@ import java.lang.foreign.ValueLayout.JAVA_INT
 
 internal fun ByteArray.toNative(arena: Arena): MemorySegment = let { bytes ->
     val result = NativeBorrowedArray_u8.allocate(arena)
-    NativeBorrowedArray_u8.ptr(result, arena.allocateArray(JAVA_BYTE, *bytes))
+    NativeBorrowedArray_u8.ptr(result, arena.allocateFrom(JAVA_BYTE, *bytes))
     NativeBorrowedArray_u8.len(result, bytes.count().toLong())
     result
 }

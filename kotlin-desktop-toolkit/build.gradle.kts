@@ -77,14 +77,10 @@ dependencies {
     implementation(kotlin("stdlib"))
 }
 
-tasks.compileJava {
-    options.compilerArgs = listOf("--enable-preview")
-}
-
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
     withSourcesJar()
 }
@@ -983,7 +979,7 @@ val testWayland = tasks.register<Test>("testWayland") {
 
 fun configureTestTask(test: Test, backends: List<Backend>) {
     test.apply {
-        jvmArgs("--enable-preview", "--enable-native-access=ALL-UNNAMED")
+        jvmArgs("--enable-native-access=ALL-UNNAMED")
         useJUnitPlatform()
         addTestListener(object : TestListener {
             private fun getPrintableTestName(descriptor: TestDescriptor?): String {

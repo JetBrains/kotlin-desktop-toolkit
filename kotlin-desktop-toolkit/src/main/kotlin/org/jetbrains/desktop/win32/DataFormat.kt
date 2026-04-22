@@ -17,7 +17,7 @@ public value class DataFormat internal constructor(internal val id: Int) {
         public fun register(formatName: String): DataFormat {
             val formatId = ffiDownCall {
                 Arena.ofConfined().use { arena ->
-                    val namePtr = arena.allocateUtf8String(formatName)
+                    val namePtr = arena.allocateFrom(formatName)
                     desktop_win32_h.data_transfer_register_format(namePtr)
                 }
             }

@@ -61,7 +61,7 @@ public data class DragInfo(
             val locationInWindow = LogicalPoint.fromNative(NativeDragTargetInfo.location_in_window(segment))
             val allowedOperations = DragOperationsSet(NativeDragTargetInfo.allowed_operations(segment))
             val sequenceNumber = NativeDragTargetInfo.sequence_number(segment)
-            val pasteboardName = NativeDragTargetInfo.pasteboard_name(segment).getUtf8String(0)
+            val pasteboardName = NativeDragTargetInfo.pasteboard_name(segment).getString(0)
             return DragInfo(
                 destinationWindowId,
                 locationInWindow,

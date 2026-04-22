@@ -188,7 +188,7 @@ internal fun initLogger(logFile: Path, consoleLogLevel: LogLevel, fileLogLevel: 
         Arena.ofConfined().use { arena ->
             val configuration = NativeLoggerConfiguration.allocate(arena)
             val logFileStr = logFile.toAbsolutePath().toString()
-            NativeLoggerConfiguration.file_path(configuration, arena.allocateUtf8String(logFileStr))
+            NativeLoggerConfiguration.file_path(configuration, arena.allocateFrom(logFileStr))
             NativeLoggerConfiguration.console_level(configuration, consoleLogLevel.toNative())
             NativeLoggerConfiguration.file_level(configuration, fileLogLevel.toNative())
             desktop_gtk_h.logger_init(configuration)
@@ -207,7 +207,7 @@ private fun checkExceptions(): List<String> {
         if (count != 0L) {
             (0 until count).map { i ->
                 val cStrPtr = items.getAtIndex(NativeExceptionsArray.`items$layout`(), i)
-                cStrPtr.getUtf8String(0)
+                cStrPtr.getString(0)
             }.toList()
         } else {
             emptyList()

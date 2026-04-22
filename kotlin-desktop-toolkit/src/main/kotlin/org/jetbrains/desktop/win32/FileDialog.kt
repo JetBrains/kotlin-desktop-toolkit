@@ -31,7 +31,7 @@ public object FileDialog {
                 }
                 if (result != MemorySegment.NULL) {
                     try {
-                        result.getUtf8String(0).takeUnless { it.isEmpty() }
+                        result.getString(0).takeUnless { it.isEmpty() }
                     } finally {
                         ffiDownCall { desktop_win32_h.native_string_drop(result) }
                     }
@@ -65,16 +65,16 @@ public object FileDialog {
 
     internal fun FileDialogOptions.toNative(arena: Arena): MemorySegment {
         val result = NativeFileDialogOptions.allocate(arena)
-        NativeFileDialogOptions.title(result, title?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
-        NativeFileDialogOptions.prompt(result, prompt?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
-        NativeFileDialogOptions.name_field_label(result, nameFieldLabel?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+        NativeFileDialogOptions.title(result, title?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL)
+        NativeFileDialogOptions.prompt(result, prompt?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL)
+        NativeFileDialogOptions.name_field_label(result, nameFieldLabel?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL)
         NativeFileDialogOptions.name_field_string_value(
             result,
             nameFieldStringValue?.let {
-                arena.allocateUtf8String(it)
+                arena.allocateFrom(it)
             } ?: MemorySegment.NULL,
         )
-        NativeFileDialogOptions.directory_path(result, directoryPath?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+        NativeFileDialogOptions.directory_path(result, directoryPath?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL)
         NativeFileDialogOptions.shows_hidden_files(result, showsHiddenFiles)
         return result
     }

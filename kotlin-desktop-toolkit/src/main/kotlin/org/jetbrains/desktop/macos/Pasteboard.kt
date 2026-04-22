@@ -124,7 +124,7 @@ public object Pasteboard {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.pasteboard_clear(
-                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL,
                 )
             }
         }
@@ -152,7 +152,7 @@ public object Pasteboard {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.pasteboard_write_objects(
-                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL,
                     items.toNative(arena),
                 )
             }
@@ -173,8 +173,8 @@ public object Pasteboard {
             val nativeResult = ffiDownCall {
                 desktop_macos_h.pasteboard_read_items_of_type(
                     arena,
-                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
-                    arena.allocateUtf8String(type),
+                    pasteboard.toNameOrNull()?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL,
+                    arena.allocateFrom(type),
                 )
             }
             val items = NativePasteboardContentResult.items(nativeResult)
@@ -217,7 +217,7 @@ public object Pasteboard {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.pasteboard_read_change_count(
-                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL,
                 )
             }
         }
@@ -233,7 +233,7 @@ public object Pasteboard {
         return Arena.ofConfined().use { arena ->
             ffiDownCall {
                 desktop_macos_h.pasteboard_read_items_count(
-                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL,
                 )
             }
         }
@@ -253,7 +253,7 @@ public object Pasteboard {
             val nativeResult = ffiDownCall {
                 desktop_macos_h.pasteboard_read_item_types(
                     arena,
-                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL,
                     itemIndex.toLong(),
                 )
             }
@@ -284,9 +284,9 @@ public object Pasteboard {
             val nativeResult = ffiDownCall {
                 desktop_macos_h.pasteboard_read_item_data(
                     arena,
-                    pasteboard.toNameOrNull()?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL,
+                    pasteboard.toNameOrNull()?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL,
                     itemIndex.toLong(),
-                    arena.allocateUtf8String(type),
+                    arena.allocateFrom(type),
                 )
             }
             val found = NativePasteboardItemDataResult.found(nativeResult)
@@ -330,7 +330,7 @@ public value class PasteboardType internal constructor(internal val name: String
 // IMPL:
 
 internal fun Pasteboard.Element.toNative(natiiveElement: MemorySegment, arena: Arena) = let { element ->
-    NativeCombinedItemElement.uniform_type_identifier(natiiveElement, arena.allocateUtf8String(element.type))
+    NativeCombinedItemElement.uniform_type_identifier(natiiveElement, arena.allocateFrom(element.type))
     NativeCombinedItemElement.content(natiiveElement, element.content.toNative(arena))
 }
 

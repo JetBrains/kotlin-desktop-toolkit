@@ -68,7 +68,7 @@ public sealed class Event {
     ) : KeyEvent() {
         public fun toUnicode(): String = ffiDownCall {
             desktop_win32_h.keydown_to_unicode(originalMsgId)
-        }.getUtf8String(0)
+        }.getString(0)
     }
 
     @ConsistentCopyVisibility
@@ -405,6 +405,6 @@ private fun windowScaleChanged(s: MemorySegment): Event {
 private fun windowTitleChanged(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.window_title_changed(s)
     return Event.WindowTitleChanged(
-        title = NativeWindowTitleChangedEvent.title(nativeEvent).getUtf8String(0),
+        title = NativeWindowTitleChangedEvent.title(nativeEvent).getString(0),
     )
 }
