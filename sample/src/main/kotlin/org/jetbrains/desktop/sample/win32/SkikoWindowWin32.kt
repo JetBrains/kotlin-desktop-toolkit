@@ -5,7 +5,6 @@ import org.jetbrains.desktop.win32.Appearance
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.CursorIcon
 import org.jetbrains.desktop.win32.DataObject
-import org.jetbrains.desktop.win32.DataObjectBuilder
 import org.jetbrains.desktop.win32.DragDropContinueResult
 import org.jetbrains.desktop.win32.DragDropEffect
 import org.jetbrains.desktop.win32.DragDropManager
@@ -175,10 +174,10 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
 
             is Event.PointerUpdated -> with(event) {
                 if (!nonClientArea && state.pressedButtons.hasFlag(PointerButton.Left)) {
-                    val dataObjectBuilder = DataObjectBuilder.create()
-                    dataObjectBuilder.addHtmlFragment("<b>HTML</b> <i>fragment</i>")
-                    dataObjectBuilder.addTextItem("Hello drag and drop!")
-                    dataObjectBuilder.build().use { dataObject ->
+                    DataObject.build {
+                        addHtmlFragment("<b>HTML</b> <i>fragment</i>")
+                        addTextItem("Hello drag and drop!")
+                    }.use { dataObject ->
                         val dragSource = object : DragSource {
                             override fun onQueryContinueDrag(escapePressed: Boolean, modifiers: DragDropModifiers): DragDropContinueResult {
                                 return when {

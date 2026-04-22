@@ -48,7 +48,7 @@ pub extern "C" fn data_object_create() -> i64 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn data_object_add_from_bytes(data_object_id: i64, data_format: u32, content: BorrowedArray<u8>) -> bool {
-    ffi_boundary("data_object_create_from_bytes", || {
+    ffi_boundary("data_object_add_from_bytes", || {
         let data = hglobal_writer::new_bytes(content.as_slice()?)?;
         with_data_object(data_object_id, |data_object| {
             data_object.add_format(DataFormat::Other(data_format), data)
@@ -83,8 +83,8 @@ pub extern "C" fn data_object_add_from_text(data_object_id: i64, content: Borrow
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn data_object_into_com_object(data_object_id: i64) -> ComInterfaceRawPtr {
-    ffi_boundary("data_object_into_com_object", || {
+pub extern "C" fn data_object_into_com(data_object_id: i64) -> ComInterfaceRawPtr {
+    ffi_boundary("data_object_into_com", || {
         let registry = DATA_OBJECT_REGISTRY.pin();
         let data_object = registry.remove(&data_object_id).context("unknown data object id")?;
         Ok(ComInterfaceRawPtr::from_object(data_object)?)
@@ -92,16 +92,24 @@ pub extern "C" fn data_object_into_com_object(data_object_id: i64) -> ComInterfa
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn data_object_is_format_available(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> bool {
-    ffi_boundary("data_object_is_format_available", || {
+pub extern "C" fn data_object_drop(data_object_id: i64) {
+    ffi_boundary("data_object_drop", || {
+        DATA_OBJECT_REGISTRY.pin().remove(&data_object_id);
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_is_format_available(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> bool {
+    ffi_boundary("com_data_object_is_format_available", || {
         let data_object = data_object_ptr.borrow::<IDataObject>()?;
         is_data_object_format_available(&data_object, DataFormat::Other(data_format))
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn data_object_read_bytes(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> AutoDropArray<u8> {
-    ffi_boundary("data_object_read_bytes", || {
+pub extern "C" fn com_data_object_read_bytes(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> AutoDropArray<u8> {
+    ffi_boundary("com_data_object_read_bytes", || {
         let data_object = data_object_ptr.borrow::<IDataObject>()?;
         get_hglobal_from_data_object(&data_object, DataFormat::Other(data_format))
             .and_then(|data| hglobal_reader::get_bytes(&data))
@@ -110,8 +118,8 @@ pub extern "C" fn data_object_read_bytes(data_object_ptr: ComInterfaceRawPtr, da
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn data_object_read_file_list(data_object_ptr: ComInterfaceRawPtr) -> AutoDropArray<RustAllocatedStrPtr> {
-    ffi_boundary("data_object_read_file_list", || {
+pub extern "C" fn com_data_object_read_file_list(data_object_ptr: ComInterfaceRawPtr) -> AutoDropArray<RustAllocatedStrPtr> {
+    ffi_boundary("com_data_object_read_file_list", || {
         let data_object = data_object_ptr.borrow::<IDataObject>()?;
         get_hglobal_from_data_object(&data_object, DataFormat::FileList)
             .and_then(|data| hglobal_reader::get_file_list(&data))
@@ -121,8 +129,8 @@ pub extern "C" fn data_object_read_file_list(data_object_ptr: ComInterfaceRawPtr
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn data_object_read_html_fragment(data_object_ptr: ComInterfaceRawPtr) -> RustAllocatedStrPtr {
-    ffi_boundary("data_object_read_html_fragment", || {
+pub extern "C" fn com_data_object_read_html_fragment(data_object_ptr: ComInterfaceRawPtr) -> RustAllocatedStrPtr {
+    ffi_boundary("com_data_object_read_html_fragment", || {
         let data_object = data_object_ptr.borrow::<IDataObject>()?;
         get_hglobal_from_data_object(&data_object, DataFormat::HtmlFragment)
             .and_then(|data| hglobal_reader::get_html(&data))
@@ -131,8 +139,8 @@ pub extern "C" fn data_object_read_html_fragment(data_object_ptr: ComInterfaceRa
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn data_object_read_text(data_object_ptr: ComInterfaceRawPtr) -> RustAllocatedStrPtr {
-    ffi_boundary("data_object_read_text", || {
+pub extern "C" fn com_data_object_read_text(data_object_ptr: ComInterfaceRawPtr) -> RustAllocatedStrPtr {
+    ffi_boundary("com_data_object_read_text", || {
         let data_object = data_object_ptr.borrow::<IDataObject>()?;
         get_hglobal_from_data_object(&data_object, DataFormat::Text)
             .and_then(|data| hglobal_reader::get_text(&data))
@@ -141,8 +149,8 @@ pub extern "C" fn data_object_read_text(data_object_ptr: ComInterfaceRawPtr) -> 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn data_object_release(data_object_ptr: ComInterfaceRawPtr) {
-    ffi_boundary("data_object_release", || {
+pub extern "C" fn com_data_object_release(data_object_ptr: ComInterfaceRawPtr) {
+    ffi_boundary("com_data_object_release", || {
         drop(data_object_ptr);
         Ok(())
     });

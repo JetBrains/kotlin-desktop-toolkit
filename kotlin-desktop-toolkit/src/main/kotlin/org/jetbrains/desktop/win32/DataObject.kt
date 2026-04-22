@@ -4,111 +4,124 @@ import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
-public class DataObject(private var ptr: MemorySegment) : AutoCloseable {
-    public fun isFormatAvailable(format: DataFormat): Boolean {
-        return ffiDownCall {
-            desktop_win32_h.clipboard_is_format_available(ptr, format.id)
+public class DataObject(private var comInterfacePtr: MemorySegment) : AutoCloseable {
+    public fun isFormatAvailable(format: DataFormat): Boolean = requireOpen { ptr ->
+        ffiDownCall {
+            desktop_win32_h.com_data_object_is_format_available(ptr, format.id)
         }
     }
 
-    public fun readItemOfType(format: DataFormat): ByteArray {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                val dataPtr = desktop_win32_h.data_object_read_bytes(arena, ptr, format.id)
-                try {
-                    byteArrayFromNative(dataPtr)
-                } finally {
+    public fun readItemOfType(format: DataFormat): ByteArray = requireOpen { ptr ->
+        Arena.ofConfined().use { arena ->
+            val dataPtr = ffiDownCall {
+                desktop_win32_h.com_data_object_read_bytes(arena, ptr, format.id)
+            }
+            try {
+                byteArrayFromNative(dataPtr)
+            } finally {
+                ffiDownCall {
                     desktop_win32_h.native_byte_array_drop(dataPtr)
                 }
             }
         }
     }
 
-    public fun readHtmlFragment(): String {
-        return ffiDownCall {
-            val strPtr = desktop_win32_h.data_object_read_html_fragment(ptr)
-            stringFromNative(strPtr)
+    public fun readHtmlFragment(): String = requireOpen { ptr ->
+        val strPtr = ffiDownCall {
+            desktop_win32_h.com_data_object_read_html_fragment(ptr)
         }
+        stringFromNative(strPtr)
     }
 
-    public fun readListOfFiles(): List<String> {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                val arrayPtr = desktop_win32_h.data_object_read_file_list(arena, ptr)
-                listOfStringsFromNative(arrayPtr)
+    public fun readListOfFiles(): List<String> = requireOpen { ptr ->
+        Arena.ofConfined().use { arena ->
+            val arrayPtr = ffiDownCall {
+                desktop_win32_h.com_data_object_read_file_list(arena, ptr)
             }
+            listOfStringsFromNative(arrayPtr)
         }
     }
 
-    public fun readTextItem(): String {
-        return ffiDownCall {
-            val strPtr = desktop_win32_h.data_object_read_text(ptr)
-            stringFromNative(strPtr)
+    public fun readTextItem(): String = requireOpen { ptr ->
+        val strPtr = ffiDownCall {
+            desktop_win32_h.com_data_object_read_text(ptr)
         }
+        stringFromNative(strPtr)
     }
 
-    public fun toNative(): MemorySegment = ptr
+    internal fun toNative(): MemorySegment = requireOpen { it }
 
     override fun close() {
-        if (ptr != MemorySegment.NULL) {
+        if (comInterfacePtr != MemorySegment.NULL) {
             ffiDownCall {
-                desktop_win32_h.data_object_release(ptr)
+                desktop_win32_h.com_data_object_release(comInterfacePtr)
             }
-            ptr = MemorySegment.NULL
+            comInterfacePtr = MemorySegment.NULL
+        }
+    }
+
+    private inline fun <R> requireOpen(block: (MemorySegment) -> R): R {
+        val ptr = comInterfacePtr
+        check(ptr != MemorySegment.NULL) { "DataObject has been closed" }
+        return block(ptr)
+    }
+
+    public companion object {
+        public fun build(block: DataObjectBuilder.() -> Unit): DataObject {
+            val dataObjectId = ffiDownCall {
+                desktop_win32_h.data_object_create()
+            }
+            val builder = DataObjectBuilder(dataObjectId)
+            try {
+                builder.block()
+            } catch (e: Throwable) {
+                ffiDownCall {
+                    desktop_win32_h.data_object_drop(dataObjectId)
+                }
+                throw e
+            }
+            val ptr = ffiDownCall {
+                desktop_win32_h.data_object_into_com(dataObjectId)
+            }
+            return DataObject(ptr)
         }
     }
 }
 
-public class DataObjectBuilder(private val dataObjectId: Long) {
-    public companion object {
-        public fun create(): DataObjectBuilder {
-            val dataObjectId = ffiDownCall {
-                desktop_win32_h.data_object_create()
-            }
-            return DataObjectBuilder(dataObjectId)
-        }
-    }
-
+public class DataObjectBuilder internal constructor(private val dataObjectId: Long) {
     public fun addItemOfType(format: DataFormat, data: ByteArray): Boolean {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                val dataPtr = data.toNative(arena)
+        return Arena.ofConfined().use { arena ->
+            val dataPtr = data.toNative(arena)
+            ffiDownCall {
                 desktop_win32_h.data_object_add_from_bytes(dataObjectId, format.id, dataPtr)
             }
         }
     }
 
     public fun addHtmlFragment(fragment: String): Boolean {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                val strPtr = arena.allocateUtf8String(fragment)
+        return Arena.ofConfined().use { arena ->
+            val strPtr = arena.allocateUtf8String(fragment)
+            ffiDownCall {
                 desktop_win32_h.data_object_add_from_html_fragment(dataObjectId, strPtr)
             }
         }
     }
 
     public fun addListOfFiles(fileNames: List<String>): Boolean {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                val dataPtr = listOfStringsToNative(arena, fileNames)
+        return Arena.ofConfined().use { arena ->
+            val dataPtr = listOfStringsToNative(arena, fileNames)
+            ffiDownCall {
                 desktop_win32_h.data_object_add_from_file_list(dataObjectId, dataPtr)
             }
         }
     }
 
     public fun addTextItem(text: String): Boolean {
-        return ffiDownCall {
-            Arena.ofConfined().use { arena ->
-                val strPtr = arena.allocateUtf8String(text)
+        return Arena.ofConfined().use { arena ->
+            val strPtr = arena.allocateUtf8String(text)
+            ffiDownCall {
                 desktop_win32_h.data_object_add_from_text(dataObjectId, strPtr)
             }
         }
-    }
-
-    public fun build(): DataObject {
-        val ptr = ffiDownCall {
-            desktop_win32_h.data_object_into_com_object(dataObjectId)
-        }
-        return DataObject(ptr)
     }
 }
