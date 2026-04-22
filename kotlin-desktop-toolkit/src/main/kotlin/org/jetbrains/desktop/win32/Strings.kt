@@ -36,6 +36,7 @@ internal fun listOfStringsToNative(arena: Arena, list: List<String>): MemorySegm
 }
 
 internal fun stringFromNative(segment: MemorySegment): String {
+    check(segment != MemorySegment.NULL) { "Native string was null" }
     return try {
         segment.getUtf8String(0)
     } finally {

@@ -3,8 +3,14 @@ use desktop_common::{
     logger::ffi_boundary,
 };
 
+use windows::Win32::System::{
+    Com::IDataObject,
+    Ole::{OleFlushClipboard, OleGetClipboard, OleSetClipboard},
+};
+
 use super::{
     clipboard::Clipboard,
+    com::ComInterfaceRawPtr,
     data_object_api::AutoDropUInt32Array,
     data_transfer::DataFormat,
     global_data::{hglobal_reader, hglobal_writer},
@@ -202,6 +208,32 @@ pub extern "C" fn clipboard_set_text(owner: WindowPtr, content: BorrowedStrPtr) 
 #[unsafe(no_mangle)]
 pub extern "C" fn clipboard_get_html_format_id() -> u32 {
     ffi_boundary("clipboard_get_html_format_id", || Ok(DataFormat::HtmlFragment.id()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ole_clipboard_empty() {
+    ffi_boundary("ole_clipboard_empty", || {
+        unsafe { OleSetClipboard(None)? };
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ole_clipboard_get_data() -> ComInterfaceRawPtr {
+    ffi_boundary("ole_clipboard_get_data", || {
+        let data_object = unsafe { OleGetClipboard()? };
+        Ok(ComInterfaceRawPtr::new(&data_object)?)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ole_clipboard_set_data(data_object_ptr: ComInterfaceRawPtr) {
+    ffi_boundary("ole_clipboard_set_data", || {
+        let data_object = data_object_ptr.borrow::<IDataObject>()?;
+        unsafe { OleSetClipboard(&data_object)? };
+        unsafe { OleFlushClipboard()? };
+        Ok(())
+    });
 }
 
 #[unsafe(no_mangle)]
