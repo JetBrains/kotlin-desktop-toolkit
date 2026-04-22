@@ -84,15 +84,15 @@ internal fun listOfStringsFromNative(segment: MemorySegment): List<String> {
 
     return (0 until len).map { i ->
         val strPtr = ptr.getAtIndex(NativeAutoDropArray_RustAllocatedStrPtr.`ptr$layout`(), i)
-        strPtr.getUtf8String(0)
+        strPtr.getString(0)
     }.toList()
 }
 
 internal fun listOfStringsToNative(arena: Arena, list: List<String>): MemorySegment {
     val itemsCount = list.count().toLong()
-    val itemsArray = arena.allocateArray(NativeBorrowedStrPtr, itemsCount)
+    val itemsArray = arena.allocate(NativeBorrowedStrPtr, itemsCount)
     list.forEachIndexed { index, item ->
-        val strPtr = arena.allocateUtf8String(item)
+        val strPtr = arena.allocateFrom(item)
         itemsArray.setAtIndex(NativeBorrowedStrPtr, index.toLong(), strPtr)
     }
     val result = NativeBorrowedArray_BorrowedStrPtr.allocate(arena)
@@ -103,7 +103,7 @@ internal fun listOfStringsToNative(arena: Arena, list: List<String>): MemorySegm
 
 internal fun ByteArray.toNative(arena: Arena): MemorySegment = let { bytes ->
     val result = NativeBorrowedArray_u8.allocate(arena)
-    NativeBorrowedArray_u8.ptr(result, arena.allocateArray(JAVA_BYTE, *bytes))
+    NativeBorrowedArray_u8.ptr(result, arena.allocateFrom(JAVA_BYTE, *bytes))
     NativeBorrowedArray_u8.len(result, bytes.count().toLong())
     result
 }

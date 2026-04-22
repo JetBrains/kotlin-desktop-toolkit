@@ -192,7 +192,7 @@ public object AppMenuManager {
 
 private fun Keystroke.toNative(arena: Arena): MemorySegment = let { keystroke ->
     val result = NativeAppMenuKeystroke.allocate(arena)
-    NativeAppMenuKeystroke.key(result, arena.allocateUtf8String(keystroke.key))
+    NativeAppMenuKeystroke.key(result, arena.allocateFrom(keystroke.key))
     NativeAppMenuKeystroke.modifiers(result, keystroke.modifiers.value)
     result
 }
@@ -208,7 +208,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             val actionItemBody = NativeAppMenuItem_NativeActionItem_Body.allocate(arena)
             NativeAppMenuItem_NativeActionItem_Body.enabled(actionItemBody, menuItem.isEnabled)
             NativeAppMenuItem_NativeActionItem_Body.state(actionItemBody, menuItem.state.toNative())
-            NativeAppMenuItem_NativeActionItem_Body.title(actionItemBody, arena.allocateUtf8String(menuItem.title))
+            NativeAppMenuItem_NativeActionItem_Body.title(actionItemBody, arena.allocateFrom(menuItem.title))
             NativeAppMenuItem_NativeActionItem_Body.special_tag(actionItemBody, menuItem.specialTag.toNative())
             NativeAppMenuItem_NativeActionItem_Body.keystroke(actionItemBody, menuItem.keystroke?.toNative(arena) ?: MemorySegment.NULL)
             NativeAppMenuItem_NativeActionItem_Body.item_id(actionItemBody, itemId)
@@ -229,7 +229,7 @@ private fun AppMenuItem.toNative(nativeItem: MemorySegment, arena: Arena): Unit 
             }
 
             val subMenuItemBody = NativeAppMenuItem_NativeSubMenuItem_Body.allocate(arena)
-            NativeAppMenuItem_NativeSubMenuItem_Body.title(subMenuItemBody, arena.allocateUtf8String(menuItem.title))
+            NativeAppMenuItem_NativeSubMenuItem_Body.title(subMenuItemBody, arena.allocateFrom(menuItem.title))
             NativeAppMenuItem_NativeSubMenuItem_Body.special_tag(subMenuItemBody, menuItem.specialTag.toNative())
             NativeAppMenuItem_NativeSubMenuItem_Body.items_count(subMenuItemBody, menuItem.items.size.toLong())
             NativeAppMenuItem_NativeSubMenuItem_Body.items(subMenuItemBody, itemsArray)

@@ -36,7 +36,7 @@ public object FileDialog {
                 val result = desktop_macos_h.save_file_dialog_run_modal(nativeCommonDialogParams)
                 if (result != MemorySegment.NULL) {
                     try {
-                        result.getUtf8String(0)
+                        result.getString(0)
                     } finally {
                         ffiDownCall { desktop_macos_h.string_drop(result) }
                     }
@@ -71,17 +71,17 @@ public object FileDialog {
 
     internal fun CommonDialogParams.toNative(arena: Arena): MemorySegment {
         val result = NativeCommonFileDialogParams.allocate(arena)
-        NativeCommonFileDialogParams.title(result, title?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
-        NativeCommonFileDialogParams.prompt(result, prompt?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
-        NativeCommonFileDialogParams.message(result, message?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
-        NativeCommonFileDialogParams.name_field_label(result, nameFieldLabel?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+        NativeCommonFileDialogParams.title(result, title?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL)
+        NativeCommonFileDialogParams.prompt(result, prompt?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL)
+        NativeCommonFileDialogParams.message(result, message?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL)
+        NativeCommonFileDialogParams.name_field_label(result, nameFieldLabel?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL)
         NativeCommonFileDialogParams.name_field_string_value(
             result,
             nameFieldStringValue?.let {
-                arena.allocateUtf8String(it)
+                arena.allocateFrom(it)
             } ?: MemorySegment.NULL,
         )
-        NativeCommonFileDialogParams.directory_url(result, directoryUrl?.let { arena.allocateUtf8String(it) } ?: MemorySegment.NULL)
+        NativeCommonFileDialogParams.directory_url(result, directoryUrl?.let { arena.allocateFrom(it) } ?: MemorySegment.NULL)
         NativeCommonFileDialogParams.can_create_directories(result, canCreateDirectories)
         NativeCommonFileDialogParams.can_select_hidden_extension(result, canSelectHiddenExtensions)
         NativeCommonFileDialogParams.shows_hidden_files(result, showsHiddenFiles)

@@ -16,7 +16,7 @@ internal fun listOfStringsFromNative(segment: MemorySegment): List<String> {
     return try {
         (0 until len).map { i ->
             val strPtr = ptr.getAtIndex(NativeAutoDropArray_RustAllocatedStrPtr.`ptr$layout`(), i)
-            strPtr.getUtf8String(0)
+            strPtr.getString(0)
         }.toList()
     } finally {
         ffiDownCall {
@@ -37,7 +37,7 @@ internal fun optionalListOfStringsFromNative(segment: MemorySegment): List<Strin
     return try {
         (0 until len).map { i ->
             val strPtr = ptr.getAtIndex(NativeAutoDropArray_RustAllocatedStrPtr.`ptr$layout`(), i)
-            strPtr.getUtf8String(0)
+            strPtr.getString(0)
         }.toList()
     } finally {
         ffiDownCall {
@@ -48,9 +48,9 @@ internal fun optionalListOfStringsFromNative(segment: MemorySegment): List<Strin
 
 internal fun listOfStringsToNative(arena: Arena, list: List<String>): MemorySegment {
     val itemsCount = list.count().toLong()
-    val itemsArray = arena.allocateArray(NativeBorrowedStrPtr, itemsCount)
+    val itemsArray = arena.allocate(NativeBorrowedStrPtr, itemsCount)
     list.forEachIndexed { index, item ->
-        val strPtr = arena.allocateUtf8String(item)
+        val strPtr = arena.allocateFrom(item)
         itemsArray.setAtIndex(NativeBorrowedStrPtr, index.toLong(), strPtr)
     }
     val result = NativeBorrowedArray_BorrowedStrPtr.allocate(arena)
@@ -62,7 +62,7 @@ internal fun listOfStringsToNative(arena: Arena, list: List<String>): MemorySegm
 internal fun stringFromNative(segment: MemorySegment): String {
     check(segment != MemorySegment.NULL) { "Native string was null" }
     return try {
-        segment.getUtf8String(0)
+        segment.getString(0)
     } finally {
         ffiDownCall {
             desktop_win32_h.native_string_drop(segment)
@@ -77,7 +77,7 @@ internal fun optionalStringFromNative(segment: MemorySegment): String? {
     }
     val strPtr = NativeFfiOption_RustAllocatedStrPtr.value(segment)
     return try {
-        strPtr.getUtf8String(0)
+        strPtr.getString(0)
     } finally {
         ffiDownCall {
             desktop_win32_h.native_optional_string_drop(segment)

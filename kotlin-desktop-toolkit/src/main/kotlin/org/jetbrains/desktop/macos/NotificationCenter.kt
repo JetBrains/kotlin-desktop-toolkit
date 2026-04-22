@@ -206,7 +206,7 @@ public object NotificationCenter : AutoCloseable {
         ffiDownCall {
             Arena.ofConfined().use { arena ->
                 // Allocate array of NativeNotificationCategory structs
-                val categoriesArray = arena.allocateArray(NativeNotificationCategory.layout(), categories.size.toLong())
+                val categoriesArray = arena.allocate(NativeNotificationCategory.layout(), categories.size.toLong())
 
                 categories.forEachIndexed { categoryIndex, category ->
                     val categorySegment = categoriesArray.asSlice(
@@ -215,19 +215,19 @@ public object NotificationCenter : AutoCloseable {
                     )
 
                     // Allocate category ID
-                    val categoryIdPtr = arena.allocateUtf8String(category.categoryId.value)
+                    val categoryIdPtr = arena.allocateFrom(category.categoryId.value)
                     NativeNotificationCategory.category_id(categorySegment, categoryIdPtr)
 
                     // Allocate array of NativeNotificationAction structs for this category
-                    val actionsArray = arena.allocateArray(NativeNotificationAction.layout(), category.actions.size.toLong())
+                    val actionsArray = arena.allocate(NativeNotificationAction.layout(), category.actions.size.toLong())
                     category.actions.forEachIndexed { actionIndex, action ->
                         val actionSegment = actionsArray.asSlice(
                             actionIndex * NativeNotificationAction.layout().byteSize(),
                             NativeNotificationAction.layout(),
                         )
 
-                        val actionIdPtr = arena.allocateUtf8String(action.actionId.value)
-                        val actionTitlePtr = arena.allocateUtf8String(action.title)
+                        val actionIdPtr = arena.allocateFrom(action.actionId.value)
+                        val actionTitlePtr = arena.allocateFrom(action.title)
 
                         NativeNotificationAction.identifier(actionSegment, actionIdPtr)
                         NativeNotificationAction.title(actionSegment, actionTitlePtr)
@@ -292,11 +292,11 @@ public object NotificationCenter : AutoCloseable {
         try {
             ffiDownCall {
                 Arena.ofConfined().use { arena ->
-                    val identifierPtr = arena.allocateUtf8String(notificationId.value)
-                    val titlePtr = arena.allocateUtf8String(title)
-                    val bodyPtr = arena.allocateUtf8String(body)
-                    val soundNamePtr = arena.allocateUtf8String(sound.getSoundName())
-                    val categoryIdPtr = arena.allocateUtf8String(categoryId.value)
+                    val identifierPtr = arena.allocateFrom(notificationId.value)
+                    val titlePtr = arena.allocateFrom(title)
+                    val bodyPtr = arena.allocateFrom(body)
+                    val soundNamePtr = arena.allocateFrom(sound.getSoundName())
+                    val categoryIdPtr = arena.allocateFrom(categoryId.value)
 
                     // Allocate and populate the NotificationRequest struct
                     val requestSegment = arena.allocate(NativeNotificationRequest.layout())
@@ -324,7 +324,7 @@ public object NotificationCenter : AutoCloseable {
     public fun removeNotification(notificationId: NotificationId) {
         ffiDownCall {
             Arena.ofConfined().use { arena ->
-                val identifierPtr = arena.allocateUtf8String(notificationId.value)
+                val identifierPtr = arena.allocateFrom(notificationId.value)
                 desktop_macos_h.notification_remove(identifierPtr)
             }
         }
@@ -403,11 +403,11 @@ public object NotificationCenter : AutoCloseable {
     // Called from native when notification delivery completes
     private fun onNotificationDeliveryComplete(notificationIdentifier: MemorySegment, errorMessage: MemorySegment) {
         ffiUpCall {
-            val notificationId = NotificationId(notificationIdentifier.getUtf8String(0))
+            val notificationId = NotificationId(notificationIdentifier.getString(0))
             val error = if (errorMessage.address() == 0L) {
                 null
             } else {
-                errorMessage.getUtf8String(0)
+                errorMessage.getString(0)
             }
             showNotificationCallbacks.remove(notificationId)?.invoke(error)
                 ?: Logger.error { "onNotificationDeliveryComplete: no callback registered for notification $notificationId" }
@@ -417,8 +417,8 @@ public object NotificationCenter : AutoCloseable {
     // Called from native when user clicks an action button
     private fun onActionResponse(actionIdPtr: MemorySegment, notificationIdPtr: MemorySegment) {
         ffiUpCall {
-            val actionId = ActionId(actionIdPtr.getUtf8String(0))
-            val notificationId = NotificationId(notificationIdPtr.getUtf8String(0))
+            val actionId = ActionId(actionIdPtr.getString(0))
+            val notificationId = NotificationId(notificationIdPtr.getString(0))
             actionResponseCallback.invoke(notificationId, actionId)
         }
     }

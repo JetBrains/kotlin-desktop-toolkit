@@ -163,7 +163,7 @@ public object Clipboard {
     public fun writeHtmlFragment(owner: Window, fragment: String) {
         owner.withPointer { windowPtr ->
             Arena.ofConfined().use { arena ->
-                val strPtr = arena.allocateUtf8String(fragment)
+                val strPtr = arena.allocateFrom(fragment)
                 ffiDownCall {
                     desktop_win32_h.clipboard_set_html_fragment(windowPtr, strPtr)
                 }
@@ -185,7 +185,7 @@ public object Clipboard {
     public fun writeTextItem(owner: Window, text: String) {
         owner.withPointer { windowPtr ->
             Arena.ofConfined().use { arena ->
-                val strPtr = arena.allocateUtf8String(text)
+                val strPtr = arena.allocateFrom(text)
                 ffiDownCall {
                     desktop_win32_h.clipboard_set_text(windowPtr, strPtr)
                 }

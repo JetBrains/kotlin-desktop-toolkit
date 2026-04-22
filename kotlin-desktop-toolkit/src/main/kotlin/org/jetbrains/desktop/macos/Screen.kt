@@ -78,8 +78,8 @@ public data class Screen(
             return Screen(
                 screenId = NativeScreenInfo.screen_id(s),
                 isPrimary = NativeScreenInfo.is_primary(s),
-                name = NativeScreenInfo.name(s).getUtf8String(0),
-                uuid = NativeScreenInfo.uuid(s).getUtf8String(0),
+                name = NativeScreenInfo.name(s).getString(0),
+                uuid = NativeScreenInfo.uuid(s).getString(0),
                 origin = LogicalPoint.fromNative(NativeScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(NativeScreenInfo.size(s)),
                 scale = NativeScreenInfo.scale(s),

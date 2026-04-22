@@ -158,7 +158,7 @@ public class DataObjectBuilder internal constructor(private val dataObjectId: Lo
 
     public fun addHtmlFragment(fragment: String): Boolean {
         return Arena.ofConfined().use { arena ->
-            val strPtr = arena.allocateUtf8String(fragment)
+            val strPtr = arena.allocateFrom(fragment)
             ffiDownCall {
                 desktop_win32_h.data_object_add_from_html_fragment(dataObjectId, strPtr)
             }
@@ -176,7 +176,7 @@ public class DataObjectBuilder internal constructor(private val dataObjectId: Lo
 
     public fun addTextItem(text: String): Boolean {
         return Arena.ofConfined().use { arena ->
-            val strPtr = arena.allocateUtf8String(text)
+            val strPtr = arena.allocateFrom(text)
             ffiDownCall {
                 desktop_win32_h.data_object_add_from_text(dataObjectId, strPtr)
             }
