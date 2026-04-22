@@ -17,6 +17,7 @@ import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.FileDialog
 import org.jetbrains.desktop.win32.Keyboard
 import org.jetbrains.desktop.win32.Logger
+import org.jetbrains.desktop.win32.OleClipboard
 import org.jetbrains.desktop.win32.PhysicalPoint
 import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.PointerButton
@@ -136,13 +137,32 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                     }
 
                     VirtualKey.C -> {
-                        window.setCursor(CursorIcon.Hand)
+                        if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
+                            DataObject.build {
+                                addTextItem("Hello OLE clipboard!")
+                                addHtmlFragment("Hello <b>OLE clipboard</b>!")
+                            }.use { clipboardData ->
+                                OleClipboard.writeToClipboard(clipboardData)
+                            }
+                        } else {
+                            window.setCursor(CursorIcon.Hand)
+                        }
                     }
 
                     VirtualKey.O -> {
                         if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
                             val results = FileDialog.showOpenFileDialog(window)
                             Logger.debug { "Open file dialog results: $results" }
+                        }
+                    }
+
+                    VirtualKey.V -> {
+                        if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
+                            val clipboardData = OleClipboard.readClipboard()
+                            val textItem = clipboardData.readTextItem()
+                            val htmlFragment = clipboardData.readHtmlFragment()
+                            Logger.debug { "OLE clipboard text: $textItem" }
+                            Logger.debug { "OLE clipboard HTML fragment: $htmlFragment" }
                         }
                     }
 

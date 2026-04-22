@@ -2,6 +2,7 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
+import java.lang.foreign.MemorySegment
 
 public object Clipboard {
     public fun clear(owner: Window) {
@@ -183,6 +184,28 @@ public object Clipboard {
                     desktop_win32_h.clipboard_set_text(windowPtr, strPtr)
                 }
             }
+        }
+    }
+}
+
+public object OleClipboard {
+    public fun clear() {
+        ffiDownCall {
+            desktop_win32_h.ole_clipboard_empty()
+        }
+    }
+
+    public fun readClipboard(): DataObject {
+        val ptr = ffiDownCall {
+            desktop_win32_h.ole_clipboard_get_data()
+        }
+        check(ptr != MemorySegment.NULL) { "Failed to read from the OLE clipboard" }
+        return DataObject(ptr)
+    }
+
+    public fun writeToClipboard(dataObject: DataObject) {
+        ffiDownCall {
+            desktop_win32_h.ole_clipboard_set_data(dataObject.toNative())
         }
     }
 }
