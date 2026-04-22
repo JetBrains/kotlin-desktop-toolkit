@@ -9,6 +9,7 @@ pub mod cursor;
 pub mod cursor_api;
 pub mod data_object;
 pub mod data_object_api;
+pub mod data_reader;
 pub mod data_transfer;
 pub mod data_transfer_api;
 pub mod drag_drop;
