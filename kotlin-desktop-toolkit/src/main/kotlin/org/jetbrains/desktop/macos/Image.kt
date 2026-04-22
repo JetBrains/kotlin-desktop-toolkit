@@ -14,7 +14,7 @@ public class Image(private val data: ByteArray) {
      * The returned MemorySegment is allocated in the provided arena.
      */
     internal fun toNative(arena: Arena): MemorySegment {
-        val dataSegment = arena.allocateArray(ValueLayout.JAVA_BYTE, *data)
+        val dataSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, *data)
         val imageStruct = NativeImage.allocate(arena)
         NativeImage.data(imageStruct, dataSegment)
         NativeImage.data_length(imageStruct, dataSegment.byteSize())

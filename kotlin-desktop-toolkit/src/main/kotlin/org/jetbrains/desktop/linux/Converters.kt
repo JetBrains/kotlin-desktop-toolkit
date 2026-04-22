@@ -497,7 +497,7 @@ internal fun ByteArray?.toNative(arena: Arena): MemorySegment {
     } else {
         NativeBorrowedArray_u8.len(nativeDataArray, size.toLong())
 
-        val nativeArray = arena.allocateArray(ValueLayout.JAVA_BYTE, *this)
+        val nativeArray = arena.allocateFrom(ValueLayout.JAVA_BYTE, *this)
         NativeBorrowedArray_u8.ptr(nativeDataArray, nativeArray)
     }
 
@@ -513,7 +513,7 @@ internal fun String?.toNativeUtf8(arena: Arena): MemorySegment {
         val byteArray = encodeToByteArray()
         NativeBorrowedUtf8.len(native, byteArray.size.toLong())
 
-        val nativeArray = arena.allocateArray(ValueLayout.JAVA_BYTE, *byteArray)
+        val nativeArray = arena.allocateFrom(ValueLayout.JAVA_BYTE, *byteArray)
         NativeBorrowedUtf8.ptr(native, nativeArray)
     }
 

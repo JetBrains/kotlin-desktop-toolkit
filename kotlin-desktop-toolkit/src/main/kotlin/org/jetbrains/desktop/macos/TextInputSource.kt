@@ -90,7 +90,7 @@ public object TextInputSource {
         }
         if (layout == MemorySegment.NULL) return null
         return try {
-            layout.getUtf8String(0)
+            layout.getString(0)
         } finally {
             ffiDownCall { desktop_macos_h.string_drop(layout) }
         }
@@ -141,7 +141,7 @@ public object TextInputSource {
     public fun select(sourceId: String): Boolean {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                desktop_macos_h.text_input_source_select(arena.allocateUtf8String(sourceId))
+                desktop_macos_h.text_input_source_select(arena.allocateFrom(sourceId))
             }
         }
     }
@@ -164,12 +164,12 @@ public object TextInputSource {
     public fun type(sourceId: String): String? {
         val typePtr = ffiDownCall {
             Arena.ofConfined().use { arena ->
-                desktop_macos_h.text_input_source_type(arena.allocateUtf8String(sourceId))
+                desktop_macos_h.text_input_source_type(arena.allocateFrom(sourceId))
             }
         }
         if (typePtr == MemorySegment.NULL) return null
         return try {
-            typePtr.getUtf8String(0)
+            typePtr.getString(0)
         } finally {
             ffiDownCall { desktop_macos_h.string_drop(typePtr) }
         }
@@ -189,12 +189,12 @@ public object TextInputSource {
     public fun getParent(sourceId: String): String? {
         val parentPtr = ffiDownCall {
             Arena.ofConfined().use { arena ->
-                desktop_macos_h.text_input_source_get_parent(arena.allocateUtf8String(sourceId))
+                desktop_macos_h.text_input_source_get_parent(arena.allocateFrom(sourceId))
             }
         }
         if (parentPtr == MemorySegment.NULL) return null
         return try {
-            parentPtr.getUtf8String(0)
+            parentPtr.getString(0)
         } finally {
             ffiDownCall { desktop_macos_h.string_drop(parentPtr) }
         }
@@ -208,7 +208,7 @@ public object TextInputSource {
     public fun isAsciiCapable(sourceId: String): Boolean {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                desktop_macos_h.text_input_source_is_ascii_capable(arena.allocateUtf8String(sourceId))
+                desktop_macos_h.text_input_source_is_ascii_capable(arena.allocateFrom(sourceId))
             }
         }
     }
@@ -226,7 +226,7 @@ public object TextInputSource {
     public fun isSelectCapable(sourceId: String): Boolean {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                desktop_macos_h.text_input_source_is_select_capable(arena.allocateUtf8String(sourceId))
+                desktop_macos_h.text_input_source_is_select_capable(arena.allocateFrom(sourceId))
             }
         }
     }
@@ -245,7 +245,7 @@ public object TextInputSource {
     public fun isEnableCapable(sourceId: String): Boolean {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                desktop_macos_h.text_input_source_is_enable_capable(arena.allocateUtf8String(sourceId))
+                desktop_macos_h.text_input_source_is_enable_capable(arena.allocateFrom(sourceId))
             }
         }
     }
@@ -270,7 +270,7 @@ public object TextInputSource {
     public fun setEnabled(sourceId: String, enabled: Boolean): Boolean {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                desktop_macos_h.text_input_source_set_enable(arena.allocateUtf8String(sourceId), enabled)
+                desktop_macos_h.text_input_source_set_enable(arena.allocateFrom(sourceId), enabled)
             }
         }
     }

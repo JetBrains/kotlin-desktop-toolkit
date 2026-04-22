@@ -324,7 +324,7 @@ public class Application(public val appId: String) {
     public fun clipboardGetAvailableMimeTypes(): List<String> {
         val ffiCsvMimetypes = ffiDownCall { desktop_gtk_h.application_clipboard_get_available_mimetypes() }
         return try {
-            splitCsv(ffiCsvMimetypes.getUtf8String(0))
+            splitCsv(ffiCsvMimetypes.getString(0))
         } finally {
             ffiDownCall { desktop_gtk_h.string_drop(ffiCsvMimetypes) }
         }
@@ -355,7 +355,7 @@ public class Application(public val appId: String) {
     public fun primarySelectionGetAvailableMimeTypes(): List<String> {
         val ffiCsvMimetypes = ffiDownCall { desktop_gtk_h.application_primary_selection_get_available_mimetypes() }
         return try {
-            splitCsv(ffiCsvMimetypes.getUtf8String(0))
+            splitCsv(ffiCsvMimetypes.getString(0))
         } finally {
             ffiDownCall { desktop_gtk_h.string_drop(ffiCsvMimetypes) }
         }

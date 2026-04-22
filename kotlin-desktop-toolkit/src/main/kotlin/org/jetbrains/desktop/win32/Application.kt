@@ -134,7 +134,7 @@ public class Application : AutoCloseable {
 public fun Application.Companion.openURL(url: String) {
     ffiDownCall {
         Arena.ofConfined().use { arena ->
-            desktop_win32_h.application_open_url(arena.allocateUtf8String(url))
+            desktop_win32_h.application_open_url(arena.allocateFrom(url))
         }
     }
 }

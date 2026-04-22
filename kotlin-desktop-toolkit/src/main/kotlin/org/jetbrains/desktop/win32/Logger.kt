@@ -188,7 +188,7 @@ internal fun initLogger(logFile: Path, consoleLogLevel: LogLevel, fileLogLevel: 
         Arena.ofConfined().use { arena ->
             val configuration = NativeLoggerConfiguration.allocate(arena)
             val logFileStr = logFile.toAbsolutePath().toString()
-            NativeLoggerConfiguration.file_path(configuration, arena.allocateUtf8String(logFileStr))
+            NativeLoggerConfiguration.file_path(configuration, arena.allocateFrom(logFileStr))
             NativeLoggerConfiguration.console_level(configuration, consoleLogLevel.toNative())
             NativeLoggerConfiguration.file_level(configuration, fileLogLevel.toNative())
             desktop_win32_h.logger_init(configuration)
@@ -207,7 +207,7 @@ private fun checkExceptions(): List<String> {
         if (count != 0L) {
             (0 until count).map { i ->
                 val cStrPtr = items.getAtIndex(NativeExceptionsArray.`items$layout`(), i)
-                cStrPtr.getUtf8String(0)
+                cStrPtr.getString(0)
             }.toList()
         } else {
             emptyList()
@@ -244,6 +244,6 @@ internal inline fun <T> ffiUpCall(defaultResult: T, crossinline body: () -> T): 
 
 public fun outputDebugString(message: String) {
     Arena.ofConfined().use { arena ->
-        ffiDownCall { desktop_win32_h.logger_output_debug_string(arena.allocateUtf8String(message)) }
+        ffiDownCall { desktop_win32_h.logger_output_debug_string(arena.allocateFrom(message)) }
     }
 }

@@ -21,7 +21,7 @@ public data class WindowParams(
     internal fun toNative(arena: Arena): MemorySegment = NativeWindowParams.allocate(arena).also { nativeWindowParams ->
         NativeWindowParams.origin(nativeWindowParams, origin.toNative(arena))
         NativeWindowParams.size(nativeWindowParams, size.toNative(arena))
-        NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
+        NativeWindowParams.title(nativeWindowParams, arena.allocateFrom(title))
         NativeWindowParams.style(nativeWindowParams, style.toNative(arena))
     }
 }
@@ -157,7 +157,7 @@ public class Window internal constructor(
 
     public fun setCursorFromFile(path: Path) {
         Arena.ofConfined().use { arena ->
-            val nativePathString = arena.allocateUtf8String(path.toFile().absolutePath)
+            val nativePathString = arena.allocateFrom(path.toFile().absolutePath)
             ffiDownCall { desktop_win32_h.window_set_cursor_from_file(ptr, nativePathString) }
         }
     }
@@ -185,7 +185,7 @@ public class Window internal constructor(
 
     public fun setTitle(title: String) {
         Arena.ofConfined().use { arena ->
-            val nativeTitle = arena.allocateUtf8String(title)
+            val nativeTitle = arena.allocateFrom(title)
             ffiDownCall { desktop_win32_h.window_set_title(ptr, nativeTitle) }
         }
     }

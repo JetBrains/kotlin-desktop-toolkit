@@ -19,7 +19,7 @@ public object UrlUtils {
     public fun filePathToFileUrl(filePath: String): String? {
         return Arena.ofConfined().use { arena ->
             val result = ffiDownCall {
-                desktop_macos_h.url_file_path_to_file_url(arena.allocateUtf8String(filePath))
+                desktop_macos_h.url_file_path_to_file_url(arena.allocateFrom(filePath))
             }
             stringFromNullableNativePtr(result)
         }
@@ -36,7 +36,7 @@ public object UrlUtils {
     public fun urlToFilePath(url: String): String? {
         return Arena.ofConfined().use { arena ->
             val result = ffiDownCall {
-                desktop_macos_h.url_to_file_path(arena.allocateUtf8String(url))
+                desktop_macos_h.url_to_file_path(arena.allocateFrom(url))
             }
             stringFromNullableNativePtr(result)
         }
@@ -56,7 +56,7 @@ public object UrlUtils {
     public fun filePathToFileReferenceUrl(filePath: String): String? {
         return Arena.ofConfined().use { arena ->
             val result = ffiDownCall {
-                desktop_macos_h.url_file_path_to_file_reference_url(arena.allocateUtf8String(filePath))
+                desktop_macos_h.url_file_path_to_file_reference_url(arena.allocateFrom(filePath))
             }
             stringFromNullableNativePtr(result)
         }
@@ -64,7 +64,7 @@ public object UrlUtils {
 
     private fun stringFromNullableNativePtr(ptr: MemorySegment): String? {
         if (ptr == MemorySegment.NULL) return null
-        val str = ptr.getUtf8String(0)
+        val str = ptr.getString(0)
         ffiDownCall { desktop_macos_h.string_drop(ptr) }
         return str
     }

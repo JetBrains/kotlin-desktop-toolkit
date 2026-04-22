@@ -25,7 +25,7 @@ public object Sound {
     public fun playNamed(soundName: String): Boolean {
         return ffiDownCall {
             Arena.ofConfined().use { arena ->
-                val soundNamePtr = arena.allocateUtf8String(soundName)
+                val soundNamePtr = arena.allocateFrom(soundName)
                 desktop_macos_h.sound_play_named(soundNamePtr)
             }
         }

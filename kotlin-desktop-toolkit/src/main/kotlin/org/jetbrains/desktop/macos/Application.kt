@@ -61,7 +61,7 @@ public object Application {
         get() {
             val name = ffiDownCall { desktop_macos_h.application_get_name() }
             return try {
-                name.getUtf8String(0)
+                name.getString(0)
             } finally {
                 ffiDownCall { desktop_macos_h.string_drop(name) }
             }
@@ -130,7 +130,7 @@ public object Application {
     public fun setDockIconBadge(label: String) {
         ffiDownCall {
             Arena.ofConfined().use { arena ->
-                desktop_macos_h.application_set_dock_icon_badge(arena.allocateUtf8String(label))
+                desktop_macos_h.application_set_dock_icon_badge(arena.allocateFrom(label))
             }
         }
     }
@@ -173,7 +173,7 @@ public object Application {
     public fun openURL(url: String) {
         ffiDownCall {
             Arena.ofConfined().use { arena ->
-                desktop_macos_h.application_open_url(arena.allocateUtf8String(url))
+                desktop_macos_h.application_open_url(arena.allocateFrom(url))
             }
         }
     }
