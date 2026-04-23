@@ -185,9 +185,18 @@ public class Window internal constructor(
     // see: https://developer.apple.com/documentation/appkit/nswindow/occlusionstate-swift.property
     public val isVisible: Boolean get() = ffiDownCall { desktop_macos_h.window_is_visible(pointer) }
 
-    /*
-     * Though it's calls macOS maximize in maximized state it actually shrinks it back,
-     * so it's toggle
+
+    /**
+     * Toggles the window between its standard user-set frame and its zoomed (maximized) frame.
+     *
+     * A zoomed window is resized to fit the available screen area as determined by the
+     * window's delegate or by AppKit's default behavior. This is the same action performed
+     * by the green traffic-light button when Option-clicked, or by double-clicking the titlebar.
+     *
+     * Has no effect while the window is in full-screen mode (see [isFullScreen] and
+     * [toggleFullScreen]) — AppKit ignores `zoom:` on full-screen windows.
+     *
+     * See [NSWindow.zoom(_:)](https://developer.apple.com/documentation/appkit/nswindow/zoom(_:)).
      */
     public fun toggleMaximize() {
         ffiDownCall {
@@ -195,6 +204,15 @@ public class Window internal constructor(
         }
     }
 
+    /**
+     * Indicates whether the window is currently in its zoomed (maximized) state.
+     *
+     * Note that a full-screen window is also reported as zoomed by AppKit, so this
+     * property returns `true` whenever [isFullScreen] is `true`. To distinguish the
+     * two, check [isFullScreen] first.
+     *
+     * See [NSWindow.isZoomed](https://developer.apple.com/documentation/appkit/nswindow/iszoomed).
+     */
     public val isMaximized: Boolean get() = ffiDownCall { desktop_macos_h.window_is_maximized(pointer) }
 
     public fun miniaturize() {
@@ -211,11 +229,29 @@ public class Window internal constructor(
 
     public val isMiniaturized: Boolean get() = ffiDownCall { desktop_macos_h.window_is_miniaturized(pointer) }
 
+    /**
+     * Indicates whether the window is the application's key window.
+     *
+     * The key window receives keyboard input and is typically the frontmost window
+     * the user is actively interacting with. Only one window per application can be
+     * the key window at a time.
+     *
+     * See [NSWindow.isKeyWindow](https://developer.apple.com/documentation/appkit/nswindow/iskeywindow).
+     */
     public val isKey: Boolean
         get() {
             return ffiDownCall { desktop_macos_h.window_is_key(pointer) }
         }
 
+    /**
+     * Indicates whether the window is the application's main window.
+     *
+     * The main window is typically the primary document or focus of the user's attention
+     * within the application. The main window is often, but not always, the same as the
+     * key window. Only one window per application can be the main window at a time.
+     *
+     * See [NSWindow.isMainWindow](https://developer.apple.com/documentation/appkit/nswindow/ismainwindow).
+     */
     public val isMain: Boolean
         get() {
             return ffiDownCall { desktop_macos_h.window_is_main(pointer) }
