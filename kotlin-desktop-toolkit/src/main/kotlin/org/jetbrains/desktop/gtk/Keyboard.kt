@@ -444,5 +444,6 @@ public value class KeySym internal constructor(public val value: UInt) {
         public const val braceleft: RawKeysym = 0x7bU
         public const val bar: RawKeysym = 0x7cU
         public const val braceright: RawKeysym = 0x7dU
+        public const val asciitilde: RawKeysym = 0x7eU
     }
 }
