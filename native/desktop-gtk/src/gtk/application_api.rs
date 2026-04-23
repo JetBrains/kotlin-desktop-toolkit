@@ -276,7 +276,7 @@ pub extern "C" fn application_open_file_manager(path: BorrowedUtf8, activation_t
     ffi_boundary("application_open_file_manager", || {
         let path_str = path.get("application_open_file_manager: path")?;
         let activation_token_opt = activation_token.get_optional("application_open_file_manager: activation_token")?;
-        with_app_state(|app| Ok(app.open_file_manager(path_str.to_owned(), activation_token_opt)))
+        with_app_state(|app| Ok(app.open_file_manager(path_str, activation_token_opt)))
     })
 }
 

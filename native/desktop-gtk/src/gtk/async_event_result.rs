@@ -5,10 +5,6 @@ use crate::gtk::events::{EventHandler, FileChooserResponse, NotificationShownEve
 
 #[allow(clippy::enum_variant_names)]
 pub enum AsyncEventResult {
-    UrlOpenResponse {
-        request_id: RequestId,
-        error: Option<anyhow::Error>,
-    },
     FileChooserResponse {
         request_id: RequestId,
         result: anyhow::Result<String>,
@@ -23,11 +19,6 @@ pub enum AsyncEventResult {
 impl AsyncEventResult {
     pub fn send_as_event(self, event_handler: EventHandler) {
         match self {
-            Self::UrlOpenResponse { request_id, error } => {
-                if let Some(e) = error {
-                    warn!("Error trying to open URL for {request_id:?}: {e}");
-                }
-            }
             Self::FileChooserResponse { request_id, result } => {
                 let send = |newline_separated_files| {
                     let response = FileChooserResponse {
