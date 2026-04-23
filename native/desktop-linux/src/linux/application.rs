@@ -2,7 +2,7 @@ use crate::linux::events::{DataTransferContent, EventHandler, WindowClosedEvent}
 use crate::linux::notifications::{NewNotificationData, NotificationAction, init_notifications_task};
 use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
-    application_state::{ApplicationState, get_egl},
+    application_state::{ApplicationState, KdtRequestData, get_egl},
     async_event_result::AsyncEventResult,
     data_transfer::{MimeTypes, read_from_pipe},
     desktop_settings::init_desktop_settings_notifier_task,
@@ -521,29 +521,35 @@ impl Application {
         Ok(())
     }
 
-    pub fn request_internal_activation_token(&self, source_window_id: WindowId) -> anyhow::Result<u32> {
+    pub fn request_internal_activation_token(&mut self, source_window_id: WindowId) -> anyhow::Result<RequestId> {
         debug!("request_internal_activation_token: source_window_id={source_window_id:?}");
         let source_w: &SimpleWindow = self
+            .state
             .get_window(source_window_id)
             .with_context(|| format!("No window found {source_window_id:?}"))?;
         let Some(xdg_activation) = &self.state.xdg_activation else {
             warn!("xdg_activation not found");
-            return Ok(0);
+            return Ok(RequestId(0));
         };
         // Serial should be from the latest keyboard focus or mouse button down event, e.g.:
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-activation.c#L302
         // https://gitlab.gnome.org/GNOME/mutter/-/blob/607a7aef5f02d3213b5e436d11440997478a4ecc/src/wayland/meta-wayland-pointer.c#L760
         // https://invent.kde.org/plasma/kwin/-/blob/271eae7f21326b48e67de1ed218caf3bdf96a9c5/src/activation.cpp#L640
-        let Some((seat, serial)) = self.state.get_latest_event_seat_and_serial() else {
-            return Ok(0);
-        };
-        let request_id = serial + 1; // aligned with `impl ActivationHandler for ApplicationState`
-        xdg_activation.request_token(
+        let seat_and_serial = self
+            .state
+            .get_latest_event_seat_and_serial()
+            .map(|(seat, serial)| (seat.clone(), serial));
+        self.async_request_counter = self.async_request_counter.wrapping_add(1);
+        let request_id = RequestId(self.async_request_counter);
+        xdg_activation.request_token_with_data(
             &self.qh,
-            smithay_client_toolkit::activation::RequestData {
-                app_id: Some(source_w.app_id.clone()),
-                seat_and_serial: Some((seat.clone(), serial)),
-                surface: Some(source_w.window.wl_surface().clone()),
+            KdtRequestData {
+                request_data: smithay_client_toolkit::activation::RequestData {
+                    app_id: Some(source_w.app_id.clone()),
+                    seat_and_serial,
+                    surface: Some(source_w.window.wl_surface().clone()),
+                },
+                request_id,
             },
         );
         Ok(request_id)

@@ -270,9 +270,9 @@ pub extern "C" fn window_show_save_file_dialog(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn window_request_internal_activation_token(app_ptr: AppPtr, window_id: WindowId) -> u32 {
+pub extern "C" fn window_request_internal_activation_token(mut app_ptr: AppPtr, window_id: WindowId) -> RequestId {
     ffi_boundary("window_request_internal_activation_token", || {
-        let app = unsafe { app_ptr.borrow::<Application>() };
+        let app = unsafe { app_ptr.borrow_mut::<Application>() };
         app.request_internal_activation_token(window_id)
     })
 }

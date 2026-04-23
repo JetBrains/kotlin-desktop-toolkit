@@ -7,6 +7,7 @@ use crate::linux::{
     events::{
         ActivationTokenResponse,
         Event,
+        RequestId,
         ScreenId,
         WindowCapabilities,
         WindowCloseRequestEvent,
@@ -25,7 +26,7 @@ use anyhow::Context;
 use khronos_egl;
 use log::{debug, info, warn};
 use smithay_client_toolkit::{
-    activation::{ActivationHandler, ActivationState, RequestData},
+    activation::{ActivationHandler, ActivationState, RequestData, RequestDataExt},
     compositor::{CompositorHandler, CompositorState},
     data_device_manager::{
         DataDeviceManagerState,
@@ -219,6 +220,13 @@ impl ApplicationState {
         self.windows.get(surface_id).map(|w| w.window_id)
     }
 
+    pub fn get_window(&self, window_id: WindowId) -> anyhow::Result<&SimpleWindow> {
+        self.window_id_to_surface_id
+            .get(&window_id)
+            .and_then(|surface_id| self.windows.get(surface_id))
+            .with_context(|| format!("Couldn't find window for {window_id:?}"))
+    }
+
     pub fn get_window_mut(&mut self, window_id: WindowId) -> anyhow::Result<&mut SimpleWindow> {
         self.window_id_to_surface_id
             .get(&window_id)
@@ -283,9 +291,11 @@ impl ApplicationState {
         {
             debug!("Using keyboard event serial");
             Some((keyboard_data.seat(), keyboard_event_serial))
-        } else {
+        } else if let Some(pointer_event_seat_and_serial) = pointer_event_seat_and_serial {
             debug!("Using pointer event serial");
-            pointer_event_seat_and_serial
+            Some(pointer_event_seat_and_serial)
+        } else {
+            None
         }
     }
 }
@@ -541,18 +551,34 @@ impl Dispatch<WpFractionalScaleV1, ObjectId> for ApplicationState {
     }
 }
 
+#[derive(Debug)]
+pub struct KdtRequestData {
+    pub request_data: RequestData,
+    pub request_id: RequestId,
+}
+
+impl RequestDataExt for KdtRequestData {
+    fn app_id(&self) -> Option<&str> {
+        self.request_data.app_id()
+    }
+
+    fn seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
+        self.request_data.seat_and_serial()
+    }
+
+    fn surface(&self) -> Option<&WlSurface> {
+        self.request_data.surface()
+    }
+}
+
 impl ActivationHandler for ApplicationState {
-    type RequestData = RequestData;
+    type RequestData = KdtRequestData;
 
     fn new_token(&mut self, token: String, data: &Self::RequestData) {
+        let request_id = data.request_id;
         info!("ActivationHandler::new_token for {data:?}: {token}");
-        let Some((_seat, serial)) = &data.seat_and_serial else {
-            warn!("ActivationHandler::new_token: missing seat and serial data, ignoring request {data:?}");
-            return;
-        };
-        let request_id = serial + 1; // aligned with `Application::request_internal_activation_token`
         self.send_event(ActivationTokenResponse::new(request_id, &token));
     }
 }
 
-delegate_activation!(ApplicationState);
+delegate_activation!(ApplicationState, KdtRequestData);

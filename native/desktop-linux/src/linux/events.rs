@@ -595,13 +595,13 @@ impl<'a> From<FileChooserResponse<'a>> for Event<'a> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ActivationTokenResponse<'a> {
-    pub request_id: u32,
+    pub request_id: RequestId,
     pub token: BorrowedUtf8<'a>,
 }
 
 impl<'a> ActivationTokenResponse<'a> {
     #[must_use]
-    pub const fn new(request_id: u32, token: &'a str) -> Self {
+    pub const fn new(request_id: RequestId, token: &'a str) -> Self {
         Self {
             request_id,
             token: BorrowedUtf8::new(token),
