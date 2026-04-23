@@ -36,6 +36,10 @@ use smithay_client_toolkit::{
     shell::WaylandSurface,
 };
 use std::{thread::ThreadId, time::Duration};
+use tokio::sync::RwLock;
+
+/// cbindgen:ignore
+static DBUS_CONNECTION: RwLock<Option<zbus::Connection>> = RwLock::const_new(None);
 
 pub struct Application {
     pub event_loop: EventLoop<'static, ApplicationState>,
@@ -132,6 +136,24 @@ impl Application {
             run_async_sender,
             notifications_task_info: None,
         })
+    }
+
+    pub async fn dbus_connection() -> zbus::Result<zbus::Connection> {
+        if let Some(cnx) = DBUS_CONNECTION.read().await.as_ref() {
+            Ok(cnx.clone())
+        } else {
+            let cnx = zbus::Connection::session().await?;
+            debug!("Got DBus session connection");
+            let mut guard = DBUS_CONNECTION.write().await;
+            // during `await` another task may have initialized it
+            Ok(match guard.as_ref() {
+                None => {
+                    *guard = Some(cnx.clone());
+                    cnx
+                }
+                Some(cnx) => cnx.clone(),
+            })
+        }
     }
 
     /// Executes the future produced by the provided function.
@@ -240,6 +262,9 @@ impl Application {
         if let Some(notifications_task_info) = self.notifications_task_info.take() {
             notifications_task_info.stop(&self.rt, &loop_handle);
         }
+        self.rt.block_on(async {
+            *DBUS_CONNECTION.try_write().unwrap() = None;
+        });
         debug!("Application event loop: stopped");
         Ok(())
     }
@@ -574,30 +599,42 @@ impl Application {
         Ok(())
     }
 
-    pub fn open_url(&mut self, url_string: &str, activation_token: Option<&str>) -> anyhow::Result<RequestId> {
-        debug!("application_open_url: {url_string}, activation_token={activation_token:?}");
-        let uri = ashpd::Uri::parse(url_string)?;
+    async fn open_url_impl(uri: &ashpd::Uri, activation_token: Option<ashpd::ActivationToken>) -> anyhow::Result<()> {
+        let connection = Self::dbus_connection().await?;
         let request = ashpd::desktop::open_uri::OpenFileRequest::default()
+            .connection(Some(connection))
             .ask(false)
-            .activation_token(activation_token.map(Into::into));
+            .activation_token(activation_token);
 
+        request.send_uri(uri).await?;
+        Ok(())
+    }
+
+    pub fn open_url(&mut self, url_string: &str, activation_token_string: Option<&str>) -> anyhow::Result<RequestId> {
+        debug!("application_open_url: {url_string}, activation_token={activation_token_string:?}");
+        let uri = ashpd::Uri::parse(url_string)?;
+        let activation_token = activation_token_string.map(ashpd::ActivationToken::from);
         Ok(self.run_async(|request_id| async move {
-            let error = request.send_uri(&uri).await.err().map(Into::into);
+            let error = Self::open_url_impl(&uri, activation_token).await.err();
             AsyncEventResult::UrlOpenResponse { request_id, error }
         }))
     }
 
-    async fn open_file_manager_impl(path: &str, request: ashpd::desktop::open_uri::OpenDirectoryRequest) -> anyhow::Result<()> {
+    async fn open_file_manager_impl(path: &str, activation_token: Option<ashpd::ActivationToken>) -> anyhow::Result<()> {
+        let connection = Self::dbus_connection().await?;
+        let request = ashpd::desktop::open_uri::OpenDirectoryRequest::default()
+            .connection(Some(connection))
+            .activation_token(activation_token);
         let f = tokio::fs::File::open(path).await?;
         request.send(&f).await?;
         Ok(())
     }
 
-    pub fn open_file_manager(&mut self, path: String, activation_token: Option<&str>) -> RequestId {
-        debug!("application_open_file_manager: {path}, activation_token={activation_token:?}");
-        let request = ashpd::desktop::open_uri::OpenDirectoryRequest::default().activation_token(activation_token.map(Into::into));
+    pub fn open_file_manager(&mut self, path: String, activation_token_string: Option<&str>) -> RequestId {
+        debug!("application_open_file_manager: {path}, activation_token={activation_token_string:?}");
+        let activation_token = activation_token_string.map(ashpd::ActivationToken::from);
         self.run_async(|request_id| async move {
-            let error = Self::open_file_manager_impl(&path, request).await.err();
+            let error = Self::open_file_manager_impl(&path, activation_token).await.err();
             AsyncEventResult::UrlOpenResponse { request_id, error }
         })
     }

@@ -1,5 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
+use crate::linux::application::Application;
 use anyhow::Context as _;
 use futures_lite::StreamExt;
 use log::debug;
@@ -268,8 +269,7 @@ pub async fn init_notifications_task(
     sender: impl Fn(NotificationData) -> anyhow::Result<()> + Send + Sync + 'static,
     notification_action_receiver: tokio::sync::mpsc::Receiver<NotificationAction>,
 ) -> anyhow::Result<()> {
-    let connection = zbus::Connection::session().await?;
-    debug!("Got DBus session connection");
+    let connection = Application::dbus_connection().await?;
     let proxy = NotificationsProxy::new(&connection).await?;
     debug!("Got DBus Notifications proxy");
 

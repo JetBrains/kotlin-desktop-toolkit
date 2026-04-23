@@ -1,3 +1,4 @@
+use crate::linux::application::Application;
 use crate::linux::desktop_settings_api::{
     Color, DesktopTitlebarAction, FfiDesktopSetting, FontAntialiasing, FontHinting, FontRgbaOrder, XdgDesktopColorScheme,
     XdgDesktopContrast, XdgDesktopReducedMotion,
@@ -322,7 +323,7 @@ async fn desktop_settings_notifier(
 pub async fn init_desktop_settings_notifier_task(
     sender: impl Fn(InternalDesktopSetting) -> anyhow::Result<()> + Send + Sync + 'static,
 ) -> anyhow::Result<()> {
-    let connection = zbus::Connection::session().await?;
+    let connection = Application::dbus_connection().await?;
     debug!("Created desktop settings connection");
 
     // Don't use ashpd Settings, because it uses a static connection instance,

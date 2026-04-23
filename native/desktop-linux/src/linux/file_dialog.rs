@@ -1,5 +1,6 @@
 use ashpd::{WindowIdentifier, desktop::file_chooser};
 
+use crate::linux::application::Application;
 use crate::linux::{
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     string_utils::join_str_iter,
@@ -60,7 +61,8 @@ pub async fn show_open_file_dialog_impl(
     identifier: Option<WindowIdentifier>,
     request: file_chooser::OpenFileRequest,
 ) -> anyhow::Result<String> {
-    let open_file_request = request.identifier(identifier);
+    let connection = Application::dbus_connection().await?;
+    let open_file_request = request.connection(Some(connection)).identifier(identifier);
     let response = open_file_request.send().await?.response();
     convert_file_chooser_response(response)
 }
@@ -69,7 +71,8 @@ pub async fn show_save_file_dialog_impl(
     identifier: Option<WindowIdentifier>,
     request: file_chooser::SaveFileRequest,
 ) -> anyhow::Result<String> {
-    let open_file_request = request.identifier(identifier);
+    let connection = Application::dbus_connection().await?;
+    let open_file_request = request.connection(Some(connection)).identifier(identifier);
     let response = open_file_request.send().await?.response();
     convert_file_chooser_response(response)
 }
