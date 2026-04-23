@@ -542,7 +542,7 @@ abstract class X11TestEnv :
         mutableMapOf(
             "GDK_BACKEND" to "x11",
             "GDK_DEBUG" to "no-portals",
-            "GTK_A11Y" to "none",
+            "GTK_USE_PORTAL" to "0",
             "IBUS_ADDRESS_FILE" to ibusAddressFile.absolutePathString(),
             "IBUS_COMPONENT_PATH" to "${ibusComponentPath.absolutePathString()}:/usr/share/ibus/component",
             "TEST_IBUS_ENGINE_CAPS_OUT_FILE" to ibusEngineTmpCapsOutputFile.absolutePathString(),
@@ -765,6 +765,8 @@ Exec=/bin/true
             "unix:path=${ibusSocketFile.absolutePathString()}",
             "--verbose",
             "--panel",
+            "disable",
+            "--emoji-extension",
             "disable",
             "--xim",
             "--cache=none",
