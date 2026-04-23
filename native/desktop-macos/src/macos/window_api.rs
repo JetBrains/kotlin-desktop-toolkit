@@ -244,6 +244,7 @@ pub extern "C" fn window_make_key_and_order_front(window_ptr: WindowPtr) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_max_size(window_ptr: WindowPtr) -> LogicalSize {
     ffi_boundary("window_get_max_size", || {
+        let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.get_max_size())
     })
@@ -252,6 +253,7 @@ pub extern "C" fn window_get_max_size(window_ptr: WindowPtr) -> LogicalSize {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_max_size(window_ptr: WindowPtr, size: LogicalSize) {
     ffi_boundary("window_set_max_size", || {
+        let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.set_max_size(size);
         Ok(())
@@ -261,6 +263,7 @@ pub extern "C" fn window_set_max_size(window_ptr: WindowPtr, size: LogicalSize) 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_get_min_size(window_ptr: WindowPtr) -> LogicalSize {
     ffi_boundary("window_get_min_size", || {
+        let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.get_min_size())
     })
@@ -269,6 +272,7 @@ pub extern "C" fn window_get_min_size(window_ptr: WindowPtr) -> LogicalSize {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) {
     ffi_boundary("window_set_min_size", || {
+        let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.set_min_size(size);
         Ok(())
@@ -278,6 +282,7 @@ pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) 
 #[unsafe(no_mangle)]
 pub extern "C" fn window_toggle_full_screen(window_ptr: WindowPtr) {
     ffi_boundary("window_toggle_full_screen", || {
+        let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         window.ns_window.toggleFullScreen(None);
         Ok(())
@@ -287,6 +292,7 @@ pub extern "C" fn window_toggle_full_screen(window_ptr: WindowPtr) {
 #[unsafe(no_mangle)]
 pub extern "C" fn window_is_full_screen(window_ptr: WindowPtr) -> bool {
     ffi_boundary("window_is_full_screen", || {
+        let _mtm = MainThreadMarker::new().unwrap();
         let window = unsafe { window_ptr.borrow::<Window>() };
         Ok(window.ns_window.is_full_screen())
     })
