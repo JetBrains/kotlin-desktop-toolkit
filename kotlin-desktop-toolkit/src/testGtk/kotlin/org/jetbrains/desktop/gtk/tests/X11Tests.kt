@@ -90,6 +90,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
+import kotlin.time.measureTime
 import org.jetbrains.skia.BackendRenderTarget as SkBackendRenderTarget
 import org.jetbrains.skia.Bitmap as SkBitmap
 import org.jetbrains.skia.Color as SkColor
@@ -3926,7 +3927,7 @@ text/plain;charset=utf-8
     }
 
     @Test
-    fun testShowNotificationWithoutNotificationService() {
+    fun testShowNotificationServiceStartedAfterAppThenRestarted() {
         val showNotificationParams = ShowNotificationParams(
             title = "Test Notification 1",
             body = "Body of Test Notification 1",
@@ -3939,6 +3940,78 @@ text/plain;charset=utf-8
             assertInstanceOf<Event.NotificationShown>(event)
             assertEquals(notification1RequestId, event.requestId)
             assertNull(event.notificationId)
+        }
+
+        val showNotificationParams1 = ShowNotificationParams(
+            title = "Test Notification 1",
+            body = "Body of Test Notification 1",
+            soundFilePath = null,
+        )
+        withDunst {
+            val notification1RequestId = ui {
+                app.requestShowNotification(showNotificationParams1)
+            }
+            assertNotNull(notification1RequestId)
+            val notification1Id = withNextEvent { event ->
+                assertInstanceOf<Event.NotificationShown>(event)
+                assertEquals(notification1RequestId, event.requestId)
+                assertNotNull(event.notificationId)
+                event.notificationId
+            }
+            runCommand(listOf("dunstctl", "action"))
+
+            withNextEvent { event ->
+                assertInstanceOf<Event.NotificationClosed>(event)
+                assertEquals(notification1Id, event.notificationId)
+                assertEquals("default", event.action)
+            }
+        }.also {
+            checkDunstOutput(it, showNotificationParams1)
+        }
+
+        val showNotificationParams2 = ShowNotificationParams(
+            title = "Test Notification 2",
+            body = "Body of Test Notification 2",
+            soundFilePath = null,
+        )
+        withDunst {
+            val notification2RequestId = ui {
+                app.requestShowNotification(showNotificationParams2)
+            }
+            assertNotNull(notification2RequestId)
+            val notification2Id = withNextEvent { event ->
+                assertInstanceOf<Event.NotificationShown>(event)
+                assertEquals(notification2RequestId, event.requestId)
+                assertNotNull(event.notificationId)
+                event.notificationId
+            }
+            runCommand(listOf("dunstctl", "action"))
+
+            withNextEvent { event ->
+                assertInstanceOf<Event.NotificationClosed>(event)
+                assertEquals(notification2Id, event.notificationId)
+                assertEquals("default", event.action)
+            }
+        }.also {
+            checkDunstOutput(it, showNotificationParams2)
+        }
+    }
+
+    @Test
+    fun testShowNotificationWithoutNotificationServiceNotBlockingOnExit() {
+        val showNotificationParams = ShowNotificationParams(
+            title = "Test Notification 1",
+            body = "Body of Test Notification 1",
+            soundFilePath = null,
+        )
+        run(defaultApplicationConfig())
+        val timeTaken = measureTime {
+            val notification1RequestId = ui { app.requestShowNotification(showNotificationParams) }
+            assertNotNull(notification1RequestId)
+            tearDown()
+        }
+        if (timeTaken > 1.seconds) {
+            fail("Took $timeTaken")
         }
     }
 

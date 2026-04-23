@@ -269,7 +269,9 @@ pub async fn init_notifications_task(
     notification_action_receiver: tokio::sync::mpsc::Receiver<NotificationAction>,
 ) -> anyhow::Result<()> {
     let connection = zbus::Connection::session().await?;
+    debug!("Got DBus session connection");
     let proxy = NotificationsProxy::new(&connection).await?;
+    debug!("Got DBus Notifications proxy");
 
     tokio::spawn(notifications_receiver(proxy.clone(), sender));
     notification_action_receiver_task(proxy, notification_action_receiver).await

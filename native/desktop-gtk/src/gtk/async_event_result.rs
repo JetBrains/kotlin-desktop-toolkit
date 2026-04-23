@@ -43,7 +43,7 @@ impl AsyncEventResult {
             Self::NotificationClosed {} => {}
             Self::NotificationShown { request_id, result } => {
                 let notification_id = result.unwrap_or_else(|e| {
-                    warn!("{e}");
+                    warn!("{e}: {}", e.backtrace());
                     0
                 });
                 let event = NotificationShownEvent {
