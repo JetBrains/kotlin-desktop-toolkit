@@ -1,5 +1,21 @@
 use std::io::{Read, Write};
 
+use crate::linux::geometry::{LogicalPixels, LogicalPoint};
+use crate::linux::{
+    application_api::{DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData},
+    application_state::ApplicationState,
+    events::{
+        DataTransferAvailableEvent,
+        DataTransferCancelledEvent,
+        DataTransferContent,
+        DragAndDropFinishedEvent,
+        DragAndDropLeaveEvent,
+        DropPerformedEvent,
+        WindowId,
+        //
+    },
+};
+use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use log::{debug, warn};
 use smithay_client_toolkit::{
     data_device_manager::{
@@ -24,22 +40,6 @@ use smithay_client_toolkit::{
         protocols::wp::primary_selection::zv1::client::{
             zwp_primary_selection_device_v1::ZwpPrimarySelectionDeviceV1, zwp_primary_selection_source_v1::ZwpPrimarySelectionSourceV1,
         },
-    },
-};
-
-use crate::linux::geometry::{LogicalPixels, LogicalPoint};
-use crate::linux::{
-    application_api::{DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData},
-    application_state::ApplicationState,
-    events::{
-        DataTransferAvailableEvent,
-        DataTransferCancelledEvent,
-        DataTransferContent,
-        DragAndDropFinishedEvent,
-        DragAndDropLeaveEvent,
-        DropPerformedEvent,
-        WindowId,
-        //
     },
 };
 
@@ -121,9 +121,11 @@ impl ApplicationState {
         drag_offer.with_mime_types(|mime_types| {
             debug!("Drop handler: {x}x{y}, mime_types={mime_types:?}");
 
+            let ffi_mime_types = mime_types.iter().map(|s| BorrowedUtf8::new(s)).collect::<Vec<_>>();
             let drag_and_drop_query_data = DragAndDropQueryData {
                 window_id,
                 location_in_window: (x, y).into(),
+                mime_types: BorrowedArray::from_slice(&ffi_mime_types),
             };
             self.query_drag_and_drop_target.with(&drag_and_drop_query_data, |target_info| {
                 let supported_mime_with_actions = target_info

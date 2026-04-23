@@ -40,9 +40,10 @@ pub enum RenderingMode {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct DragAndDropQueryData {
+pub struct DragAndDropQueryData<'a> {
     pub window_id: WindowId,
     pub location_in_window: LogicalPoint,
+    pub mime_types: BorrowedArray<'a, BorrowedUtf8<'a>>,
 }
 
 #[repr(C)]

@@ -3655,6 +3655,7 @@ text/plain;charset=utf-8
                     assertEquals(windowParams.windowId, data.windowId)
                     assertNotEquals(0f, data.locationInWindow.x)
                     assertNotEquals(0f, data.locationInWindow.y)
+                    assertEquals(listOf(TEXT_UTF8_MIME_TYPE, "text/plain"), data.mimeTypes)
                 }
             }
 

@@ -59,6 +59,7 @@ public class DataTransferContent(
 public data class DragAndDropQueryData internal constructor(
     public val windowId: WindowId,
     public val locationInWindow: LogicalPoint,
+    public val mimeTypes: List<String>,
 ) {
     internal companion object;
 }

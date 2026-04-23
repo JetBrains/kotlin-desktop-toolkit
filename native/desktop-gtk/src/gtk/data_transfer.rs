@@ -3,6 +3,7 @@ use crate::gtk::data_transfer_api::{DragAndDropAction, DragAndDropActions, DragA
 use crate::gtk::events::{DataTransferContent, DragAndDropLeaveEvent, DropPerformedEvent, EventHandler, WindowId};
 use crate::gtk::ffi_return_conversions::QueryDragAndDropTarget;
 use crate::gtk::geometry::{LogicalPixels, LogicalPoint};
+use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use gtk4::gio::prelude::InputStreamExtManual;
 use gtk4::prelude::{IsA, WidgetExt};
 use gtk4::{gdk as gdk4, gio, glib};
@@ -89,9 +90,11 @@ pub fn get_drag_offer_actions(
     let mime_types = drop.formats().mime_types();
     // debug!("get_drag_offer_actions: {location_in_window:?}, mime_types={mime_types:?}");
 
+    let ffi_mime_types = mime_types.iter().map(|s| BorrowedUtf8::new(s)).collect::<Vec<_>>();
     let drag_and_drop_query_data = DragAndDropQueryData {
         window_id,
         location_in_window,
+        mime_types: BorrowedArray::from_slice(&ffi_mime_types),
     };
 
     query_drag_and_drop_target.with(&drag_and_drop_query_data, |target_info| {
