@@ -630,6 +630,49 @@ internal data class InitialSettings(
     var recentFilesMaxAgeDays: DesktopSetting.RecentFilesMaxAgeDays? = null,
 )
 
+internal data class ExpectedWindowConfigure(
+    var windowId: WindowId,
+    var size: LogicalSize,
+    var active: Boolean,
+    var maximized: Boolean,
+    var fullscreen: Boolean,
+    var decorationMode: WindowDecorationMode,
+    val insetStart: LogicalSize,
+    val insetEnd: LogicalSize,
+) {
+    fun assertEquals(event: Event?, msg: String? = null) {
+        val msg = msg?.let { ": $it" } ?: ""
+        assertInstanceOf<Event.WindowConfigure>(event, msg)
+        val failures = mutableListOf<String>()
+        if (windowId != event.windowId) {
+            failures.add("\nWindowConfigure.windowId(expected=$windowId, actual=${event.windowId})$msg")
+        }
+        if (size != event.size) {
+            failures.add("\nWindowConfigure.size(expected=$size, actual=${event.size})$msg")
+        }
+        if (active != event.active) {
+            failures.add("\nWindowConfigure.active(expected=$active, actual=${event.active})$msg")
+        }
+        if (maximized != event.maximized) {
+            failures.add("\nWindowConfigure.maximized(expected=$maximized, actual=${event.maximized})$msg")
+        }
+        if (fullscreen != event.fullscreen) {
+            failures.add("\nWindowConfigure.fullscreen(expected=$fullscreen, actual=${event.fullscreen})$msg")
+        }
+        if (decorationMode != event.decorationMode) {
+            failures.add("\nWindowConfigure.decorationMode(expected=$decorationMode, actual=${event.decorationMode})$msg")
+        }
+        if (insetStart != event.insetStart) {
+            failures.add("\nWindowConfigure.insetStart(expected=$insetStart, actual=${event.insetStart})$msg")
+        }
+        if (insetEnd != event.insetEnd) {
+            failures.add("\nWindowConfigure.insetEnd(expected=$insetEnd, actual=${event.insetEnd})$msg")
+        }
+        val failuresString = failures.joinToString()
+        assertEquals("", failuresString)
+    }
+}
+
 abstract class X11TestsBase {
     companion object {
         private const val APP_ID = "org.jetbrains.desktop.gtk.tests"
@@ -1524,7 +1567,7 @@ class X11Tests : X11TestsBase() {
         val minSize = LogicalSize(width = 100, height = 70)
         val windowParams = defaultWindowParams().copy(minSize = minSize)
 
-        var expectedConfigureEvent = Event.WindowConfigure(
+        var expectedConfigureEvent = ExpectedWindowConfigure(
             windowId = windowParams.windowId,
             size = fullscreenWindowSize,
             active = true,
@@ -1543,7 +1586,7 @@ class X11Tests : X11TestsBase() {
         val reportsMaximized = initialWindowData.configure.maximized
         expectedConfigureEvent = expectedConfigureEvent.copy(maximized = reportsMaximized)
 
-        assertEquals(expectedConfigureEvent, initialWindowData.configure)
+        expectedConfigureEvent.assertEquals(initialWindowData.configure)
         assertEquals(physicalScreenSize, initialWindowData.draw.size)
         assertEquals(screen.scale, initialWindowData.scale.newScale)
         assertEquals(screen.screenId, initialWindowData.screen.newScreenId)
@@ -1555,12 +1598,12 @@ class X11Tests : X11TestsBase() {
             expectedConfigureEvent = expectedConfigureEvent.copy(maximized = false)
 
             withNextEvent { event ->
-                assertEquals(expectedConfigureEvent, event)
+                expectedConfigureEvent.assertEquals(event)
             }
         }
         expectedConfigureEvent = expectedConfigureEvent.copy(size = windowParams.size)
         withNextEvent { event ->
-            assertEquals(expectedConfigureEvent, event)
+            expectedConfigureEvent.assertEquals(event)
         }
         withNextEvent { event ->
             assertInstanceOf<Event.WindowDraw>(event)
@@ -1590,7 +1633,7 @@ class X11Tests : X11TestsBase() {
 
         expectedConfigureEvent = expectedConfigureEvent.copy(size = minSize)
         withNextEvent { event ->
-            assertEquals(expectedConfigureEvent, event)
+            expectedConfigureEvent.assertEquals(event)
         }
         withNextEvent { event ->
             assertInstanceOf<Event.WindowDraw>(event)
@@ -1628,13 +1671,13 @@ class X11Tests : X11TestsBase() {
                     is Event.WindowConfigure -> {
                         if (fullscreenEnterChecklist.checkEntry("fullscreen")) {
                             expectedConfigureEvent = expectedConfigureEvent.copy(fullscreen = true)
-                            assertEquals(expectedConfigureEvent, event, failMsg())
+                            expectedConfigureEvent.assertEquals(event, failMsg())
                         } else if (reportsMaximized && event.maximized && fullscreenEnterChecklist.checkEntry("maximized")) {
                             expectedConfigureEvent = expectedConfigureEvent.copy(maximized = true)
-                            assertEquals(expectedConfigureEvent, event, failMsg())
+                            expectedConfigureEvent.assertEquals(event, failMsg())
                         } else if (fullscreenEnterChecklist.checkEntry("resized")) {
                             expectedConfigureEvent = expectedConfigureEvent.copy(size = fullscreenWindowSize)
-                            assertEquals(expectedConfigureEvent, event, failMsg())
+                            expectedConfigureEvent.assertEquals(event, failMsg())
                             moveMouseTo(physicalScreenSize.width - 51, physicalScreenSize.height - 51)
                         } else {
                             fail(withTimestamp("Unexpected event: $event, ${failMsg()}"))
@@ -1690,13 +1733,13 @@ class X11Tests : X11TestsBase() {
                     is Event.WindowConfigure -> {
                         if (fullscreenExitChecklist.checkEntry("notFullscreen")) {
                             expectedConfigureEvent = expectedConfigureEvent.copy(fullscreen = false)
-                            assertEquals(expectedConfigureEvent, event, failMsg())
+                            expectedConfigureEvent.assertEquals(event, failMsg())
                         } else if (reportsMaximized && fullscreenExitChecklist.checkEntry("notMaximized")) {
                             expectedConfigureEvent = expectedConfigureEvent.copy(maximized = false)
-                            assertEquals(expectedConfigureEvent, event, failMsg())
+                            expectedConfigureEvent.assertEquals(event, failMsg())
                         } else if (fullscreenExitChecklist.checkEntry("resized")) {
                             expectedConfigureEvent = expectedConfigureEvent.copy(size = minSize)
-                            assertEquals(expectedConfigureEvent, event, failMsg())
+                            expectedConfigureEvent.assertEquals(event, failMsg())
                         } else {
                             fail(withTimestamp("Unexpected event: $event, ${failMsg()}"))
                         }

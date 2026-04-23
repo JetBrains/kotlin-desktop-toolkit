@@ -453,6 +453,23 @@ pub struct WindowConfigureEvent {
     pub active: bool,
     pub maximized: bool,
     pub fullscreen: bool,
+
+    /// The window is currently in a tiled layout and the left edge is
+    /// considered to be adjacent to another part of the tiling grid.
+    pub tiled_left: bool,
+
+    /// The window is currently in a tiled layout and the right edge is
+    /// considered to be adjacent to another part of the tiling grid.
+    pub tiled_right: bool,
+
+    /// The window is currently in a tiled layout and the top edge is
+    /// considered to be adjacent to another part of the tiling grid.
+    pub tiled_top: bool,
+
+    /// The window is currently in a tiled layout and the bottom edge is
+    /// considered to be adjacent to another part of the tiling grid.
+    pub tiled_bottom: bool,
+
     pub decoration_mode: WindowDecorationMode,
     pub capabilities: WindowCapabilities,
 }

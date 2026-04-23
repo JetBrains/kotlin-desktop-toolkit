@@ -21,3 +21,7 @@ for_window [app_id="^org.jetbrains.desktop.linux.tests$"] floating enable, move 
 for_window [app_id="^org.jetbrains.desktop.linux.tests.TestApp.*"] floating enable, move position 300 0
 swaybg_command -
 swaynag_command -
+
+bar {
+    position bottom
+}
