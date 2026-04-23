@@ -269,8 +269,8 @@ public sealed class Event {
     @ConsistentCopyVisibility
     public data class WindowClosed internal constructor(val windowId: WindowId) : Event()
 
-    // TODO: Internal constructor
-    public data class WindowConfigure(
+    @ConsistentCopyVisibility
+    public data class WindowConfigure internal constructor(
         val windowId: WindowId,
         val size: LogicalSize,
         val active: Boolean,

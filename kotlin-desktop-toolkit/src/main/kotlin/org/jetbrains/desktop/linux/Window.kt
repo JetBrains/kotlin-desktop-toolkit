@@ -1,7 +1,6 @@
 package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.desktop_linux_h
-import org.jetbrains.desktop.macos.toNative
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 

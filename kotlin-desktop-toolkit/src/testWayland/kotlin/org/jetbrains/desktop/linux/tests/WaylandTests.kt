@@ -113,21 +113,28 @@ internal data class WmVersion(
 )
 
 internal interface WmWindowState {
+    fun getWindowId(): Int
     fun getTitle(): String
     fun getClientAreaTopLeftGlobalPosition(): LogicalPoint
     fun getClientAreaSize(): LogicalSize
 }
 
 internal interface WmInteractions {
+    fun getMaximizedWindowSize(screenName: String): LogicalSize
     fun getFocusedWindowState(): WmWindowState?
     fun getVersion(): WmVersion?
     fun fullScreenFocusedWindow()
     fun unsetFullScreenFocusedWindow()
+    fun tileWindows(windowIds: List<Int>)
 }
 
 internal class SwayWm : WmInteractions {
+    override fun getMaximizedWindowSize(screenName: String): LogicalSize {
+        return getSwayTree().getWorkspace(screenName).rect.toLogicalSize()
+    }
+
     override fun getFocusedWindowState(): WmWindowState? {
-        return getSwayTree()?.getFocusedNode()
+        return getSwayTree().getFocusedNode()
     }
 
     override fun getVersion(): WmVersion? {
@@ -138,6 +145,12 @@ internal class SwayWm : WmInteractions {
                 minor = it.minor,
                 patch = it.patch,
             )
+        }
+    }
+
+    override fun tileWindows(windowIds: List<Int>) {
+        for (windowId in windowIds) {
+            runCommand(listOf("swaymsg", "[con_id=$windowId] floating disable"))
         }
     }
 
@@ -170,13 +183,13 @@ internal class SwayWm : WmInteractions {
             return jsonAdapter.fromJson(json)
         }
 
-        private fun getSwayTree(): Tree? {
+        private fun getSwayTree(): Tree {
 //            log("getSwayTree")
-            val json = runCommandWithOutput(listOf("swaymsg", "--raw", "-t", "get_tree"))?.decodeToString() ?: return null
+            val json = runCommandWithOutput(listOf("swaymsg", "--raw", "-t", "get_tree"))?.decodeToString()!!
 //            log(json)
             val moshi: Moshi = Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
             val jsonAdapter = moshi.adapter(Tree::class.java)
-            return jsonAdapter.fromJson(json)
+            return jsonAdapter.fromJson(json)!!
         }
 
         private data class IdleInhibitors(
@@ -192,7 +205,11 @@ internal class SwayWm : WmInteractions {
             val y: Int,
             val width: Int,
             val height: Int,
-        )
+        ) {
+            fun toLogicalSize(): LogicalSize {
+                return LogicalSize(width = width.toUInt(), height = height.toUInt())
+            }
+        }
 
         @Suppress("PropertyName", "SpellCheckingInspection", "GrazieInspection")
         private data class Tree(
@@ -285,6 +302,14 @@ internal class SwayWm : WmInteractions {
                 return nodes.firstNotNullOfOrNull { it.getFocusedNode() } ?: floating_nodes.firstNotNullOfOrNull { it.getFocusedNode() }
             }
 
+            fun getWorkspace(screenName: String): Tree {
+                log("getWorkspace(screenName=$screenName)")
+                val outputNode = nodes.first { it.type == "output" && it.name == screenName }
+                return outputNode.nodes.first { it.type == "workspace" }
+            }
+
+            override fun getWindowId(): Int = id
+
             override fun getTitle(): String = name
 
             override fun getClientAreaTopLeftGlobalPosition(): LogicalPoint {
@@ -292,7 +317,7 @@ internal class SwayWm : WmInteractions {
             }
 
             override fun getClientAreaSize(): LogicalSize {
-                return LogicalSize(width = window_rect.width.toUInt(), height = window_rect.height.toUInt())
+                return window_rect.toLogicalSize()
             }
         }
     }
@@ -836,6 +861,59 @@ internal data class InitialSettings(
     var titlebarLayout: DesktopSetting.TitlebarLayout? = null,
 )
 
+internal data class ExpectedWindowConfigure(
+    val checkWindowCapabilities: (WindowCapabilities) -> Unit,
+    val windowId: WindowId,
+    val size: LogicalSize,
+    val active: Boolean,
+    val maximized: Boolean,
+    val fullscreen: Boolean,
+    val tiledLeft: Boolean,
+    val tiledRight: Boolean,
+    val tiledTop: Boolean,
+    val tiledBottom: Boolean,
+    val decorationMode: WindowDecorationMode,
+) {
+    fun assertEquals(event: Event?, msg: String? = null) {
+        val msg = msg?.let { ": $it" } ?: ""
+        assertInstanceOf<Event.WindowConfigure>(event, msg)
+        val failures = mutableListOf<String>()
+        if (windowId != event.windowId) {
+            failures.add("\nWindowConfigure.windowId(expected=$windowId, actual=${event.windowId})$msg")
+        }
+        if (size != event.size) {
+            failures.add("\nWindowConfigure.size(expected=$size, actual=${event.size})$msg")
+        }
+        if (active != event.active) {
+            failures.add("\nWindowConfigure.active(expected=$active, actual=${event.active})$msg")
+        }
+        if (maximized != event.maximized) {
+            failures.add("\nWindowConfigure.maximized(expected=$maximized, actual=${event.maximized})$msg")
+        }
+        if (fullscreen != event.fullscreen) {
+            failures.add("\nWindowConfigure.fullscreen(expected=$fullscreen, actual=${event.fullscreen})$msg")
+        }
+        if (tiledLeft != event.tiledLeft) {
+            failures.add("\nWindowConfigure.tiledLeft(expected=$tiledLeft, actual=${event.tiledLeft})$msg")
+        }
+        if (tiledRight != event.tiledRight) {
+            failures.add("\nWindowConfigure.tiledRight(expected=$tiledRight, actual=${event.tiledRight})$msg")
+        }
+        if (tiledTop != event.tiledTop) {
+            failures.add("\nWindowConfigure.tiledTop(expected=$tiledTop, actual=${event.tiledTop})$msg")
+        }
+        if (tiledBottom != event.tiledBottom) {
+            failures.add("\nWindowConfigure.tiledBottom(expected=$tiledBottom, actual=${event.tiledBottom})$msg")
+        }
+        if (decorationMode != event.decorationMode) {
+            failures.add("\nWindowConfigure.decorationMode(expected=$decorationMode, actual=${event.decorationMode})$msg")
+        }
+        val failuresString = failures.joinToString()
+        assertEquals("", failuresString)
+        checkWindowCapabilities(event.capabilities)
+    }
+}
+
 abstract class WaylandTestsBase {
     companion object {
         internal const val APP_ID = "org.jetbrains.desktop.linux.tests"
@@ -847,43 +925,44 @@ abstract class WaylandTestsBase {
         internal val DEFAULT_MOUSE_POS = LogicalPoint(50.0, 50.0)
 
         internal val wm by lazy { SwayWm() }
-        internal val windowCapabilities by lazy {
+
+        internal val checkWindowCapabilities: (WindowCapabilities) -> Unit by lazy {
             val wmVersion = wm.getVersion()
             if (wmVersion != null && wmVersion.name == "sway") {
                 if (wmVersion.major > 1 || wmVersion.minor > 11 || (wmVersion.minor == 11 && wmVersion.patch > 1)) {
-                    WindowCapabilities(
-                        windowMenu = false,
-                        maximize = false,
-                        fullscreen = true,
-                        minimize = false,
-                    )
+                    { capabilities ->
+                        assertFalse(capabilities.windowMenu)
+                        assertFalse(capabilities.maximize)
+                        assertTrue(capabilities.fullscreen)
+                        assertFalse(capabilities.minimize)
+                    }
                 } else if (wmVersion.major == 1 && (wmVersion.minor == 10 || (wmVersion.minor == 11 && wmVersion.patch == 0))) {
                     // See https://github.com/swaywm/sway/commit/516a3de4ca6c2378b875f62ffa6008d1cfa0cba9
                     // and https://github.com/swaywm/sway/commit/c5456be7506adece2cdf922ed6d919db597944ab
-                    WindowCapabilities(
-                        windowMenu = true,
-                        maximize = true,
-                        fullscreen = false,
-                        minimize = false,
-                    )
+                    { capabilities ->
+                        assertTrue(capabilities.windowMenu)
+                        assertTrue(capabilities.maximize)
+                        assertFalse(capabilities.fullscreen)
+                        assertFalse(capabilities.minimize)
+                    }
                 } else {
-                    // Started reporting since 1.10
-                    WindowCapabilities(
-                        windowMenu = true,
-                        maximize = true,
-                        fullscreen = true,
-                        minimize = true,
-                    )
+                    { capabilities ->
+                        assertTrue(capabilities.windowMenu)
+                        assertTrue(capabilities.maximize)
+                        assertTrue(capabilities.fullscreen)
+                        assertTrue(capabilities.minimize)
+                    }
                 }
             } else {
-                WindowCapabilities(
-                    windowMenu = true,
-                    maximize = true,
-                    fullscreen = true,
-                    minimize = true,
-                )
+                { capabilities ->
+                    assertTrue(capabilities.windowMenu)
+                    assertTrue(capabilities.maximize)
+                    assertTrue(capabilities.fullscreen)
+                    assertTrue(capabilities.minimize)
+                }
             }
         }
+
         private val appExecutor = SingleThreadTaskQueue()
 
         @BeforeAll
@@ -1814,19 +1893,22 @@ class WaylandTests : WaylandTestsBase() {
         val requestedSize = assertNotNull(windowParams.size)
         val window = ui { app.createWindow(windowParams) }
 
-        var expectedConfigureEvent = Event.WindowConfigure(
+        var expectedConfigureEvent = ExpectedWindowConfigure(
+            checkWindowCapabilities,
             windowId = windowParams.windowId,
             size = requestedSize,
             active = false,
             maximized = false,
             fullscreen = false,
             decorationMode = WindowDecorationMode.Server,
-            capabilities = windowCapabilities,
+            tiledLeft = false,
+            tiledRight = false,
+            tiledTop = false,
+            tiledBottom = false,
         )
 
         withNextEvent { event ->
-            assertInstanceOf<Event.WindowConfigure>(event)
-            assertEquals(expectedConfigureEvent, event)
+            expectedConfigureEvent.assertEquals(event)
         }
 
         var scale: Double? = null
@@ -1882,7 +1964,7 @@ class WaylandTests : WaylandTestsBase() {
             } else {
                 event
             }
-            assertEquals(expectedConfigureEvent, configureEvent)
+            expectedConfigureEvent.assertEquals(configureEvent)
             true
         }
 
@@ -1922,7 +2004,7 @@ class WaylandTests : WaylandTestsBase() {
                 "WindowConfigure" to { event, _ ->
                     val matchesType = event is Event.WindowConfigure
                     if (matchesType) {
-                        assertEquals(expectedConfigureEvent, event)
+                        expectedConfigureEvent.assertEquals(event)
                     }
                     matchesType
                 },
@@ -1996,7 +2078,7 @@ class WaylandTests : WaylandTestsBase() {
 
             expectedConfigureEvent = expectedConfigureEvent.copy(fullscreen = true, size = fullscreenWindowSize)
             withNextEvent { event ->
-                assertEquals(expectedConfigureEvent, event, "fullscreen configure, useWm=$useWm")
+                expectedConfigureEvent.assertEquals(event, "fullscreen configure, useWm=$useWm")
             }
 
             withNextEvent { event ->
@@ -2022,7 +2104,7 @@ class WaylandTests : WaylandTestsBase() {
 
             ui {
                 eventQueue.poll()?.let { event ->
-                    assertEquals(expectedConfigureEvent, event, "fullscreen configure, useWm=$useWm")
+                    expectedConfigureEvent.assertEquals(event, "fullscreen configure, useWm=$useWm")
                 }
             }
 
@@ -2036,7 +2118,7 @@ class WaylandTests : WaylandTestsBase() {
             expectedConfigureEvent = expectedConfigureEvent.copy(fullscreen = false, size = requestedSize)
 
             withNextEvent { event ->
-                assertEquals(expectedConfigureEvent, event, "fullscreen exit configure, useWm=$useWm")
+                expectedConfigureEvent.assertEquals(event, "fullscreen exit configure, useWm=$useWm")
             }
 
             withNextEvent { event ->
@@ -2061,7 +2143,7 @@ class WaylandTests : WaylandTestsBase() {
 
             ui {
                 eventQueue.poll()?.let { event ->
-                    assertEquals(expectedConfigureEvent, event, "fullscreen exit configure, useWm=$useWm")
+                    expectedConfigureEvent.assertEquals(event, "fullscreen exit configure, useWm=$useWm")
                 }
             }
         }
@@ -2200,6 +2282,7 @@ class WaylandTests : WaylandTestsBase() {
         run(defaultApplicationConfig())
 
         val window1Params = defaultWindowParams()
+        val requestedWindow1Size = assertNotNull(window1Params.size)
         val window1 = ui { app.createWindow(window1Params) }
 
         awaitEventOfType<Event.WindowDraw>(msg = "Draw first window") { event ->
@@ -2207,15 +2290,37 @@ class WaylandTests : WaylandTestsBase() {
             true
         }
 
+        var expectedWindow1ConfigureEvent = ExpectedWindowConfigure(
+            checkWindowCapabilities,
+            windowId = window1Params.windowId,
+            size = requestedWindow1Size,
+            active = true,
+            maximized = false,
+            fullscreen = false,
+            decorationMode = WindowDecorationMode.Server,
+            tiledLeft = false,
+            tiledRight = false,
+            tiledTop = false,
+            tiledBottom = false,
+        )
+
         awaitEventOfType<Event.WindowConfigure>(msg = "First window active") { event ->
             assertEquals(window1Params.windowId, event.windowId)
-            event.active
+            if (event.active) {
+                expectedWindow1ConfigureEvent.assertEquals(event, "First window active")
+                true
+            } else {
+                false
+            }
         }
 
+        val window1WmId = wm.getFocusedWindowState()!!.getWindowId()
+
+        val requestedWindow2Size = LogicalSize(width = 300U, height = 200U)
         val window2Params = WindowParams(
             windowId = 1,
             title = "Test Window 2",
-            size = LogicalSize(width = 300U, height = 200U),
+            size = requestedWindow2Size,
             minSize = null,
             preferClientSideDecoration = true,
             renderingMode = RenderingMode.Software,
@@ -2227,12 +2332,38 @@ class WaylandTests : WaylandTestsBase() {
             window2Params.windowId == event.windowId
         }
 
-        awaitEventOfType<Event.WindowConfigure>(msg = "Second window active") { event ->
-            window2Params.windowId == event.windowId && event.active && WindowDecorationMode.Client == event.decorationMode
-        }
+        var expectedWindow2ConfigureEvent = ExpectedWindowConfigure(
+            checkWindowCapabilities,
+            windowId = window2Params.windowId,
+            size = requestedWindow2Size,
+            active = true,
+            maximized = false,
+            fullscreen = false,
+            decorationMode = WindowDecorationMode.Client,
+            tiledLeft = false,
+            tiledRight = false,
+            tiledTop = false,
+            tiledBottom = false,
+        )
 
+        awaitEventOfType<Event.WindowConfigure>(msg = "Second window active") { event ->
+            if (window2Params.windowId == event.windowId && event.active) {
+                expectedWindow2ConfigureEvent.assertEquals(event, "Second window active")
+                true
+            } else {
+                false
+            }
+        }
+        val window2WmId = wm.getFocusedWindowState()!!.getWindowId()
+
+        expectedWindow1ConfigureEvent = expectedWindow1ConfigureEvent.copy(active = false)
         awaitEventOfType<Event.WindowConfigure>(msg = "First window no longer active") { event ->
-            window1Params.windowId == event.windowId && !event.active
+            if (window1Params.windowId == event.windowId && !event.active) {
+                expectedWindow1ConfigureEvent.assertEquals(event, "First window no longer active")
+                true
+            } else {
+                false
+            }
         }
 
         withKeyPress(KeyCode.Tab) {
@@ -2299,6 +2430,53 @@ class WaylandTests : WaylandTestsBase() {
         awaitEventOfType<Event.WindowConfigure>(msg = "Second window active after activating it") { event ->
             window2Params.windowId == event.windowId && event.active
         }
+
+        val screens = ui { app.allScreens() }.screens
+        val screen = screens.firstOrNull()
+        assertNotNull(screen)
+
+        wm.tileWindows(listOf(window2WmId, window1WmId))
+
+        val tiledWindowSize = wm.getMaximizedWindowSize(screen.name!!).let { LogicalSize(width = it.width / 2U, height = it.height) }
+        expectedWindow1ConfigureEvent =
+            expectedWindow1ConfigureEvent.copy(
+                size = tiledWindowSize,
+                tiledLeft = true,
+                tiledRight = true,
+                tiledTop = true,
+                tiledBottom = true,
+            )
+
+        expectedWindow2ConfigureEvent =
+            expectedWindow2ConfigureEvent.copy(
+                decorationMode = WindowDecorationMode.Server,
+                size = tiledWindowSize,
+                tiledLeft = true,
+                tiledRight = true,
+                tiledTop = true,
+                tiledBottom = true,
+            )
+
+        checkNextEvents(
+            checks = mapOf(
+                "Window 1 tiled" to { event, _ ->
+                    if (event is Event.WindowConfigure && event.windowId == window1Params.windowId && event.size == tiledWindowSize) {
+                        expectedWindow1ConfigureEvent.assertEquals(event)
+                        true
+                    } else {
+                        false
+                    }
+                },
+                "Window 2 tiled" to { event, _ ->
+                    if (event is Event.WindowConfigure && event.windowId == window2Params.windowId && event.size == tiledWindowSize) {
+                        expectedWindow2ConfigureEvent.assertEquals(event)
+                        true
+                    } else {
+                        false
+                    }
+                },
+            ),
+        )
 
         ui { window1.close() }
         awaitEventOfType<Event.WindowClosed>(msg = "First window closed") { event ->

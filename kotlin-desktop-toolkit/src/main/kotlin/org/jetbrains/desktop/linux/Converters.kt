@@ -846,6 +846,10 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 active = NativeWindowConfigureEvent.active(nativeEvent),
                 maximized = NativeWindowConfigureEvent.maximized(nativeEvent),
                 fullscreen = NativeWindowConfigureEvent.fullscreen(nativeEvent),
+                tiledLeft = NativeWindowConfigureEvent.tiled_left(nativeEvent),
+                tiledRight = NativeWindowConfigureEvent.tiled_right(nativeEvent),
+                tiledTop = NativeWindowConfigureEvent.tiled_top(nativeEvent),
+                tiledBottom = NativeWindowConfigureEvent.tiled_bottom(nativeEvent),
                 decorationMode = WindowDecorationMode.fromNative(NativeWindowConfigureEvent.decoration_mode(nativeEvent)),
                 capabilities = WindowCapabilities.fromNative(NativeWindowConfigureEvent.capabilities(nativeEvent)),
             )

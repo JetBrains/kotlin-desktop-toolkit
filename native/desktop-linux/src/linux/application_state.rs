@@ -475,6 +475,10 @@ impl WindowHandler for ApplicationState {
                     active: configure.is_activated(),
                     maximized: configure.is_maximized(),
                     fullscreen: configure.is_fullscreen(),
+                    tiled_left: configure.is_tiled_left(),
+                    tiled_right: configure.is_tiled_right(),
+                    tiled_top: configure.is_tiled_top(),
+                    tiled_bottom: configure.is_tiled_bottom(),
                     decoration_mode: configure.decoration_mode.into(),
                     capabilities: WindowCapabilities {
                         window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),

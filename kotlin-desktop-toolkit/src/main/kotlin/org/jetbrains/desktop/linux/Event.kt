@@ -19,8 +19,8 @@ public value class Timestamp private constructor(
     }
 }
 
-// TODO: Internal constructor
-public data class WindowCapabilities(
+@ConsistentCopyVisibility
+public data class WindowCapabilities internal constructor(
     /** `show_window_menu` is available. */
     public val windowMenu: Boolean,
 
@@ -308,13 +308,26 @@ public sealed class Event {
     @ConsistentCopyVisibility
     public data class WindowClosed internal constructor(val windowId: WindowId) : Event()
 
-    // TODO: Internal constructor
-    public data class WindowConfigure(
+    @ConsistentCopyVisibility
+    public data class WindowConfigure internal constructor(
         val windowId: WindowId,
         val size: LogicalSize,
         val active: Boolean,
         val maximized: Boolean,
         val fullscreen: Boolean,
+
+        /** The window is currently in a tiled layout and the left edge is  considered to be adjacent to another part of the tiling grid. */
+        val tiledLeft: Boolean,
+
+        /** The window is currently in a tiled layout and the right edge is considered to be adjacent to another part of the tiling grid. */
+        val tiledRight: Boolean,
+
+        /** The window is currently in a tiled layout and the top edge is considered to be adjacent to another part of the tiling grid. */
+        val tiledTop: Boolean,
+
+        /** The window is currently in a tiled layout and the bottom edge is considered to be adjacent to another part of the tiling grid. */
+        val tiledBottom: Boolean,
+
         val decorationMode: WindowDecorationMode,
         val capabilities: WindowCapabilities,
     ) : Event()
