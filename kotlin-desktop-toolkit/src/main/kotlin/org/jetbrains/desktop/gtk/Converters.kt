@@ -431,7 +431,7 @@ internal fun TextInputSurroundingText?.toNative(arena: Arena, objId: Long): Memo
     val result = NativeFfiTextInputSurroundingText.allocate(arena)
     if (this == null) {
         val text: ByteArray? = null
-        NativeFfiTextInputSurroundingText.obj_id(result, 0)
+        NativeFfiTextInputSurroundingText.obj_id(result, objId)
         NativeFfiTextInputSurroundingText.surrounding_text(result, text.toNative(arena))
         NativeFfiTextInputSurroundingText.cursor_codepoint_offset(result, 0)
         NativeFfiTextInputSurroundingText.selection_start_codepoint_offset(result, 0)
