@@ -3727,6 +3727,7 @@ text/plain;charset=utf-8
         val windowParams = defaultWindowParams()
         createWindowAndWaitForFocus(windowParams)
 
+        val expectedSourceMimeTypes = listOf("application/x-gtk-local-dnd", "text/plain;charset=utf-8", "text/plain")
         TestApp.DragSource.run { readTestAppOutputLastLine ->
             waitForTestAppFocus(windowParams.windowId)
 
@@ -3744,6 +3745,7 @@ text/plain;charset=utf-8
                     assertEquals(windowParams.windowId, data.windowId)
                     assertNotEquals(0.0, data.locationInWindow.x)
                     assertNotEquals(0.0, data.locationInWindow.y)
+                    assertEquals(expectedSourceMimeTypes, data.mimeTypes)
                 }
 
                 var dragAndDropLeaveEvent: Event.DragAndDropLeave? = null
@@ -3774,6 +3776,7 @@ text/plain;charset=utf-8
                     assertEquals(windowParams.windowId, data.windowId)
                     assertNotEquals(0.0, data.locationInWindow.x)
                     assertNotEquals(0.0, data.locationInWindow.y)
+                    assertEquals(expectedSourceMimeTypes, data.mimeTypes)
                 }
             }
 
@@ -3854,7 +3857,8 @@ text/plain;charset=utf-8
         val dragIconDrawTriggered = LinkedBlockingQueue<Boolean>()
         val queryDragAndDropTargetTriggered = LinkedBlockingQueue<DragAndDropQueryData>()
         val textContent = "test clipboard content".toByteArray()
-        val content = mapOf(TEXT_UTF8_MIME_TYPE to textContent)
+        val content = mapOf(TEXT_UTF8_MIME_TYPE to textContent, PNG_MIME_TYPE to byteArrayOf())
+        val advertisedMimeTypes = listOf(PNG_MIME_TYPE, TEXT_UTF8_MIME_TYPE)
 
         eventHandler = { event ->
             assertTrue(app.isEventLoopThread())
@@ -3923,7 +3927,7 @@ text/plain;charset=utf-8
             ui {
                 window.startDragAndDrop(
                     StartDragAndDropParams(
-                        mimeTypes = listOf(TEXT_UTF8_MIME_TYPE),
+                        mimeTypes = advertisedMimeTypes,
                         actions = setOf(DragAndDropAction.Copy, DragAndDropAction.Move),
                         dragIconParams = DragIconParams(
                             renderingMode = RenderingMode.Software,
@@ -3942,6 +3946,10 @@ text/plain;charset=utf-8
             mousePos = mousePos.copy(x = mousePos.x + 10)
             moveMouseTo(mousePos)
             waitUntilEq(false) { queryDragAndDropTargetTriggered.isEmpty() }
+        }
+
+        for (e in queryDragAndDropTargetTriggered) {
+            assertEquals(advertisedMimeTypes, e.mimeTypes)
         }
 
         dataTransferTriggered.get(1000, TimeUnit.MILLISECONDS)

@@ -2,6 +2,7 @@ package org.jetbrains.desktop.linux
 
 import org.jetbrains.desktop.linux.generated.NativeActivationTokenResponse
 import org.jetbrains.desktop.linux.generated.NativeAutoDropArray_u8
+import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_BorrowedUtf8
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_FfiSupportedActionsForMime
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u32
 import org.jetbrains.desktop.linux.generated.NativeBorrowedArray_u8
@@ -60,6 +61,7 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import kotlin.experimental.or
+import kotlin.streams.asSequence
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
@@ -531,6 +533,7 @@ internal fun DragAndDropQueryData.Companion.fromNative(s: MemorySegment): DragAn
     return DragAndDropQueryData(
         windowId = NativeDragAndDropQueryData.window_id(s),
         locationInWindow = LogicalPoint.fromNative(NativeDragAndDropQueryData.location_in_window(s)),
+        mimeTypes = readNativeBorrowedUtf8Array(NativeDragAndDropQueryData.mime_types(s)),
     )
 }
 
@@ -603,6 +606,18 @@ private fun readNativeU8Array(nativeU8Array: MemorySegment): ByteArray? {
     }
     val len = NativeBorrowedArray_u8.len(nativeU8Array)
     return dataPtr.asSlice(0, len).toArray(ValueLayout.JAVA_BYTE)
+}
+
+internal fun readNativeBorrowedUtf8Array(nativeU8Array: MemorySegment): List<String> {
+    val dataPtr = NativeBorrowedArray_BorrowedUtf8.ptr(nativeU8Array)
+    if (dataPtr == MemorySegment.NULL) {
+        return emptyList()
+    }
+    val len = NativeBorrowedArray_BorrowedUtf8.len(nativeU8Array)
+    val slice = dataPtr.asSlice(0, len * NativeBorrowedUtf8.sizeof())
+    val elements = slice.elements(NativeBorrowedUtf8.layout())
+    val ret = elements.asSequence().mapNotNull(::readStringFromNativeU8Array).toList()
+    return ret
 }
 
 internal fun readStringFromNativeU8Array(nativeU8Array: MemorySegment): String? {
