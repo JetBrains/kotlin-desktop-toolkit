@@ -5,21 +5,14 @@ use crate::gtk::events::{EventHandler, FileChooserResponse, NotificationShownEve
 
 #[allow(clippy::enum_variant_names)]
 pub enum AsyncEventResult {
-    FileChooserResponse {
-        request_id: RequestId,
-        result: anyhow::Result<Option<String>>,
-    },
-    NotificationClosed {},
-    NotificationShown {
-        request_id: RequestId,
-        result: anyhow::Result<u32>,
-    },
+    FileChooserResponse(anyhow::Result<Option<String>>),
+    NotificationShown(anyhow::Result<u32>),
 }
 
 impl AsyncEventResult {
-    pub fn send_as_event(self, event_handler: EventHandler) {
+    pub fn send_as_event(self, event_handler: EventHandler, request_id: RequestId) {
         match self {
-            Self::FileChooserResponse { request_id, result } => {
+            Self::FileChooserResponse(result) => {
                 let send = |newline_separated_files| {
                     let response = FileChooserResponse {
                         request_id,
@@ -40,8 +33,7 @@ impl AsyncEventResult {
                     }
                 }
             }
-            Self::NotificationClosed {} => {}
-            Self::NotificationShown { request_id, result } => {
+            Self::NotificationShown(result) => {
                 let notification_id = result.unwrap_or_else(|e| {
                     warn!("{e}: {}", e.backtrace());
                     0

@@ -226,22 +226,17 @@ impl ApplicationState {
     /// Executes the future produced by the provided function.
     /// Return value is the same as the one passed to the function, representing the request id,
     /// so that the response (optionally produced by the future) can be matched to the request.
-    pub fn run_async<F>(&self, f: impl FnOnce(RequestId) -> F) -> RequestId
+    pub fn run_async<F>(&self, f: impl FnOnce(EventHandler, RequestId) -> F) -> RequestId
     where
-        F: Future<Output = AsyncEventResult> + Send + 'static,
-        F::Output: Send + 'static,
+        F: Future<Output = ()> + 'static,
+        F::Output: 'static,
     {
         let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
         let request_id = RequestId(raw_request_id);
-        let future = f(request_id);
         let event_handler = self.event_handler;
+        let future = f(event_handler, request_id);
 
-        glib::spawn_future_local(async move {
-            let val = future.await;
-            glib::source::idle_add_once(move || {
-                val.send_as_event(event_handler);
-            });
-        });
+        glib::spawn_future_local(future);
         request_id
     }
 
@@ -501,14 +496,11 @@ impl ApplicationState {
         };
         let request = common_params.create_open_request(open_params, parent.as_ref())?;
 
-        let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
-        let request_id = RequestId(raw_request_id);
-        let event_handler = self.event_handler;
-
-        show_file_dialog_impl(&request, move |result| {
-            AsyncEventResult::FileChooserResponse { request_id, result }.send_as_event(event_handler);
-        });
-        Ok(request_id)
+        Ok(self.run_async(|event_handler, request_id| async move {
+            show_file_dialog_impl(&request, move |result| {
+                AsyncEventResult::FileChooserResponse(result).send_as_event(event_handler, request_id);
+            });
+        }))
     }
 
     pub fn show_save_file_dialog(
@@ -522,14 +514,11 @@ impl ApplicationState {
         };
         let request = common_params.create_save_request(save_params, parent.as_ref())?;
 
-        let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
-        let request_id = RequestId(raw_request_id);
-        let event_handler = self.event_handler;
-
-        show_file_dialog_impl(&request, move |result| {
-            AsyncEventResult::FileChooserResponse { request_id, result }.send_as_event(event_handler);
-        });
-        Ok(request_id)
+        Ok(self.run_async(|event_handler, request_id| async move {
+            show_file_dialog_impl(&request, move |result| {
+                AsyncEventResult::FileChooserResponse(result).send_as_event(event_handler, request_id);
+            });
+        }))
     }
 
     pub fn request_show_notification(&self, summary: String, body: String, sound_file_path: Option<String>) -> anyhow::Result<RequestId> {
@@ -537,40 +526,34 @@ impl ApplicationState {
             bail!("Didn't try initializing notifications");
         };
 
-        let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
-        let request_id = RequestId(raw_request_id);
-        let event_handler = self.event_handler;
-
-        let result_reporter = Box::new(move |result| {
-            Application::run_on_event_loop_async(move || {
-                AsyncEventResult::NotificationShown { request_id, result }.send_as_event(event_handler);
+        Ok(self.run_async(|event_handler, request_id| async move {
+            let result_reporter = Box::new(move |result| {
+                Application::run_on_event_loop_async(move || {
+                    AsyncEventResult::NotificationShown(result).send_as_event(event_handler, request_id);
+                });
             });
-        });
-        let new_notification_data = NewNotificationData {
-            summary,
-            body,
-            sound_file_path,
-            result_reporter,
-        };
-        glib::spawn_future_local(async move {
+            let new_notification_data = NewNotificationData {
+                summary,
+                body,
+                sound_file_path,
+                result_reporter,
+            };
             if let Err(e) = action_sender.send(NotificationAction::Show(new_notification_data)).await
                 && let NotificationAction::Show(d) = e.0
             {
                 (d.result_reporter)(Err(anyhow!("channel closed")));
             }
-        });
-        Ok(request_id)
+        }))
     }
 
     pub fn request_close_notification(&self, notification_id: u32) -> anyhow::Result<()> {
         let Some(action_sender) = self.notification_action_sender.clone() else {
             bail!("Didn't try initializing notifications");
         };
-        self.run_async(|_request_id| async move {
+        self.run_async(|_event_handler, _request_id| async move {
             if let Err(e) = action_sender.send(NotificationAction::Close(notification_id)).await {
                 warn!("Error closing notification: {e}");
             }
-            AsyncEventResult::NotificationClosed {}
         });
         Ok(())
     }
