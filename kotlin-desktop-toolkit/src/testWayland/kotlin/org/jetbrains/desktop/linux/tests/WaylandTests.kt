@@ -3830,20 +3830,95 @@ text/plain;charset=utf-8
     }
 
     @Test
-    fun testShowNotificationWithoutNotificationService() {
-        val showNotificationParams = ShowNotificationParams(
-            title = "Test Notification 1",
-            body = "Body of Test Notification 1",
-            soundFilePath = null,
-        )
+    fun testShowNotificationServiceStartedAfterAppThenRestarted() {
         run(defaultApplicationConfig())
-        val notification1RequestId = ui { app.requestShowNotification(showNotificationParams) }
+
+        val notification1RequestId = ui {
+            app.requestShowNotification(
+                ShowNotificationParams(
+                    title = "Test Notification 1",
+                    body = "Body of Test Notification 1",
+                    soundFilePath = null,
+                ),
+            )
+        }
         assertNotNull(notification1RequestId)
         withNextEvent { event ->
             assertInstanceOf<Event.NotificationShown>(event)
             assertEquals(notification1RequestId, event.requestId)
             assertNull(event.notificationId)
         }
+
+        withMako {
+            val showNotificationParams2 = ShowNotificationParams(
+                title = "Test Notification 2",
+                body = "Body of Test Notification 2",
+                soundFilePath = null,
+            )
+            val notificationRequestId = ui {
+                app.requestShowNotification(showNotificationParams2)
+            }
+            assertNotNull(notificationRequestId)
+            val notification1Id = withNextEvent { event ->
+                assertInstanceOf<Event.NotificationShown>(event)
+                assertEquals(notificationRequestId, event.requestId)
+                assertNotNull(event.notificationId)
+                event.notificationId
+            }
+            assertNotNull(notification1Id)
+
+            val notificationInfoList = assertNotNull(getMakoList()).data
+            assertEquals(1, notificationInfoList.size)
+            assertEquals(1, notificationInfoList.first().size)
+            val notificationInfo = notificationInfoList.single().single()
+            assertEquals(showNotificationParams2.title, notificationInfo.summary.data)
+            assertEquals(showNotificationParams2.body, notificationInfo.body.data)
+            assertEquals(notification1Id.toInt(), notificationInfo.id.data)
+
+            runCommand(listOf("makoctl", "invoke"))
+
+            withNextEvent { event ->
+                assertInstanceOf<Event.NotificationClosed>(event)
+                assertEquals(notification1Id, event.notificationId)
+                assertEquals("default", event.action)
+            }
+        }
+
+        withMako {
+            val showNotificationParams3 = ShowNotificationParams(
+                title = "Test Notification 3",
+                body = "Body of Test Notification 3",
+                soundFilePath = null,
+            )
+            val notificationRequestId = ui {
+                app.requestShowNotification(showNotificationParams3)
+            }
+            assertNotNull(notificationRequestId)
+            val notification1Id = withNextEvent { event ->
+                assertInstanceOf<Event.NotificationShown>(event)
+                assertEquals(notificationRequestId, event.requestId)
+                assertNotNull(event.notificationId)
+                event.notificationId
+            }
+            assertNotNull(notification1Id)
+
+            val notificationInfoList = assertNotNull(getMakoList()).data
+            assertEquals(1, notificationInfoList.size)
+            assertEquals(1, notificationInfoList.first().size)
+            val notificationInfo = notificationInfoList.single().single()
+            assertEquals(showNotificationParams3.title, notificationInfo.summary.data)
+            assertEquals(showNotificationParams3.body, notificationInfo.body.data)
+            assertEquals(notification1Id.toInt(), notificationInfo.id.data)
+
+            runCommand(listOf("makoctl", "invoke"))
+
+            withNextEvent { event ->
+                assertInstanceOf<Event.NotificationClosed>(event)
+                assertEquals(notification1Id, event.notificationId)
+                assertEquals("default", event.action)
+            }
+        }
+
         testSuccessful = true
     }
 

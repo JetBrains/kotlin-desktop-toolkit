@@ -47,6 +47,7 @@ pub struct Application {
     rt: tokio::runtime::Runtime,
     async_request_counter: u32,
     run_async_sender: Sender<AsyncEventResult>,
+    notifications_task_info: Option<AsyncTaskInfo>,
 }
 
 struct AsyncTaskInfo {
@@ -129,6 +130,7 @@ impl Application {
             rt,
             async_request_counter: 0,
             run_async_sender,
+            notifications_task_info: None,
         })
     }
 
@@ -228,7 +230,6 @@ impl Application {
         self.event_loop_thread_id = Some(std::thread::current().id());
         self.state.send_event(Event::ApplicationStarted);
 
-        let notifications_task_info = self.init_notifications();
         let desktop_settings_task_info = self.init_desktop_settings_notifier();
 
         while self.event_loop_iteration()? {
@@ -236,7 +237,9 @@ impl Application {
         }
         let loop_handle = self.event_loop.handle();
         desktop_settings_task_info.stop(&self.rt, &loop_handle);
-        notifications_task_info.stop(&self.rt, &loop_handle);
+        if let Some(notifications_task_info) = self.notifications_task_info.take() {
+            notifications_task_info.stop(&self.rt, &loop_handle);
+        }
         debug!("Application event loop: stopped");
         Ok(())
     }
@@ -633,7 +636,7 @@ impl Application {
         }))
     }
 
-    fn init_notifications(&mut self) -> AsyncTaskInfo {
+    fn init_notifications(&mut self) {
         let (notification_action_sender, notification_action_receiver) = tokio::sync::mpsc::channel(100);
 
         self.state.notification_action_sender = Some(notification_action_sender);
@@ -656,11 +659,11 @@ impl Application {
             move |notification_data| event_sender.send(notification_data).map_err(Into::into),
             notification_action_receiver,
         ));
-        AsyncTaskInfo {
+        self.notifications_task_info = Some(AsyncTaskInfo {
             name: "Notifications",
             registration_token,
             join_handle,
-        }
+        });
     }
 
     pub fn request_show_notification(
@@ -669,6 +672,9 @@ impl Application {
         body: String,
         sound_file_path: Option<String>,
     ) -> anyhow::Result<RequestId> {
+        if self.notifications_task_info.is_none() {
+            self.init_notifications();
+        }
         let Some(action_sender) = self.state.notification_action_sender.clone() else {
             bail!("Notifications not initialized");
         };
