@@ -24,8 +24,8 @@ use crate::gtk::window_api::WindowParams;
 use anyhow::{Context, anyhow, bail};
 use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::{
-    ActionMapExtManual, ApplicationExt, ApplicationExtManual, DisplayExt, DragExt, GtkApplicationExt, GtkWindowExt, ObjectExt, ObjectType,
-    WidgetExt, WidgetExtManual,
+    ActionMapExtManual, ApplicationExt, ApplicationExtManual, DisplayExt, DragExt, FileExt, GtkApplicationExt, GtkWindowExt, ObjectExt,
+    ObjectType, WidgetExt, WidgetExtManual,
 };
 use gtk4::{gdk as gdk4, gio, glib};
 use log::{debug, warn};
@@ -504,32 +504,40 @@ impl ApplicationState {
         request_id
     }
 
-    #[cfg(target_os = "linux")]
-    async fn open_file_manager_impl(path: &str, request: ashpd::desktop::open_uri::OpenDirectoryRequest) -> anyhow::Result<()> {
-        let f = tokio::fs::File::open(path).await?;
-        request.send(&f).await?;
-        Ok(())
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn open_file_manager(&self, path: String, activation_token: Option<&str>) -> RequestId {
-        debug!("application_open_file_manager: {path}, activation_token={activation_token:?}");
-        let request = ashpd::desktop::open_uri::OpenDirectoryRequest::default().activation_token(activation_token.map(Into::into));
-        self.run_async(|request_id| async move {
-            let error = Self::open_file_manager_impl(&path, request).await.err();
-            AsyncEventResult::UrlOpenResponse { request_id, error }
-        })
-    }
-
-    #[allow(clippy::needless_pass_by_value, unused_variables)]
-    #[cfg(not(target_os = "linux"))]
-    pub fn open_file_manager(&self, path: String, activation_token: Option<&str>) -> RequestId {
-        self.run_async(|request_id| async move {
-            AsyncEventResult::UrlOpenResponse {
-                request_id,
-                error: Some(anyhow!("Unsupported")),
+    fn open_file_manager_impl(path: &str, request_id: RequestId) {
+        let uri = gio::File::for_path(path).uri();
+        gio::bus_get(gio::BusType::Session, gio::Cancellable::NONE, move |result| match result {
+            Ok(connection) => {
+                connection.call(
+                    Some("org.freedesktop.FileManager1"),
+                    "/org/freedesktop/FileManager1",
+                    "org.freedesktop.FileManager1",
+                    "ShowItems",
+                    Some(&glib::Variant::from((vec![uri.as_str()], ""))),
+                    None,
+                    gio::DBusCallFlags::NONE,
+                    -1,
+                    gio::Cancellable::NONE,
+                    move |result| {
+                        if let Err(e) = result {
+                            warn!("Error trying to open URL for {request_id:?}: {e}");
+                        }
+                    },
+                );
             }
-        })
+            Err(e) => {
+                warn!("Error establishing DBus session connection: {e}");
+            }
+        });
+    }
+
+    pub fn open_file_manager(&self, path: &str, activation_token: Option<&str>) -> RequestId {
+        debug!("application_open_file_manager: {path}, activation_token={activation_token:?}");
+        let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
+        let request_id = RequestId(raw_request_id);
+
+        Self::open_file_manager_impl(path, request_id);
+        request_id
     }
 
     #[cfg(target_os = "linux")]
