@@ -437,6 +437,19 @@ private class EditorState {
                         ),
                     )
                 }
+                KeyCode.S -> {
+                    window.showSaveFileDialog(
+                        commonParams = FileDialog.CommonDialogParams(
+                            modal = true,
+                            title = "Open Files",
+                            acceptLabel = null,
+                            currentFolder = null,
+                        ),
+                        saveParams = FileDialog.SaveDialogParams(
+                            nameFieldStringValue = null,
+                        ),
+                    )
+                }
             }
             setOf(KeyModifiers.Shift) -> when (event.keyCode.value) {
                 KeyCode.Up -> {

@@ -541,6 +541,7 @@ abstract class X11TestEnv :
     private val newEnv by lazy {
         mutableMapOf(
             "GDK_BACKEND" to "x11",
+            "GDK_DEBUG" to "no-portals",
             "GTK_A11Y" to "none",
             "IBUS_ADDRESS_FILE" to ibusAddressFile.absolutePathString(),
             "IBUS_COMPONENT_PATH" to "${ibusComponentPath.absolutePathString()}:/usr/share/ibus/component",

@@ -11,8 +11,7 @@ use crate::gtk::events::{
     NotificationClosedEvent, OpenGlDrawData, RequestId, WindowClosedEvent, WindowId,
 };
 use crate::gtk::ffi_return_conversions::{QueryDragAndDropTarget, RetrieveSurroundingText, TransferDataGetter};
-#[cfg(target_os = "linux")]
-use crate::gtk::file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl};
+use crate::gtk::file_dialog::show_file_dialog_impl;
 use crate::gtk::file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams};
 use crate::gtk::geometry::{LogicalSize, PhysicalSize};
 use crate::gtk::gl_widget::GlWidget;
@@ -69,16 +68,6 @@ pub fn get_egl() -> Option<&'static EglInstance> {
     match &*EGL {
         Some(v) => Some(v),
         None => None,
-    }
-}
-
-#[cfg(target_os = "linux")]
-#[allow(clippy::future_not_send)]
-async fn get_ashpd_window_identifier(window: Option<&gtk4::Native>) -> Option<ashpd::WindowIdentifier> {
-    if let Some(window) = window {
-        ashpd::WindowIdentifier::from_native(window).await
-    } else {
-        None
     }
 }
 
@@ -269,38 +258,6 @@ impl ApplicationState {
             });
         });
         request_id
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn run_async_for_window<F>(
-        &self,
-        window_id: WindowId,
-        f: impl FnOnce(RequestId, Option<ashpd::WindowIdentifier>) -> F + 'static,
-    ) -> anyhow::Result<RequestId>
-    where
-        F: Future<Output = AsyncEventResult> + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
-        let request_id = RequestId(raw_request_id);
-
-        let rt = self.rt.clone();
-        let event_handler = self.event_handler;
-
-        let native = self.with_window(window_id, |w| Ok(w.window.upgrade().and_then(|w| w.native())))?;
-        glib::spawn_future_local(async move {
-            let identifier = get_ashpd_window_identifier(native.as_ref()).await;
-
-            let future = f(request_id, identifier);
-
-            rt.spawn(async move {
-                let val = future.await;
-                glib::source::idle_add_once(move || {
-                    val.send_as_event(event_handler);
-                });
-            });
-        });
-        Ok(request_id)
     }
 
     pub fn read_and_subscribe_to_desktop_settings(&mut self) -> anyhow::Result<Vec<FfiDesktopSetting>> {
@@ -540,55 +497,46 @@ impl ApplicationState {
         request_id
     }
 
-    #[cfg(target_os = "linux")]
     pub fn show_open_file_dialog(
         &self,
         window_id: WindowId,
         common_params: &CommonFileDialogParams,
         open_params: &OpenFileDialogParams,
     ) -> anyhow::Result<RequestId> {
-        let request = common_params.create_open_request(open_params)?;
+        let Some(parent) = self.with_window(window_id, |w| Ok(w.window.upgrade()))? else {
+            bail!("Window {window_id:?} not found");
+        };
+        let request = common_params.create_open_request(open_params, parent.as_ref())?;
 
-        self.run_async_for_window(window_id, |request_id, identifier| async move {
-            let result = show_open_file_dialog_impl(identifier, request).await;
-            AsyncEventResult::FileChooserResponse { request_id, result }
-        })
+        let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
+        let request_id = RequestId(raw_request_id);
+        let event_handler = self.event_handler;
+
+        show_file_dialog_impl(&request, move |result| {
+            AsyncEventResult::FileChooserResponse { request_id, result }.send_as_event(event_handler);
+        });
+        Ok(request_id)
     }
 
-    #[allow(unused_variables)]
-    #[cfg(not(target_os = "linux"))]
-    pub fn show_open_file_dialog(
-        &self,
-        window_id: WindowId,
-        common_params: &CommonFileDialogParams,
-        open_params: &OpenFileDialogParams,
-    ) -> anyhow::Result<RequestId> {
-        bail!("Unsupported");
-    }
-
-    #[cfg(target_os = "linux")]
     pub fn show_save_file_dialog(
         &self,
         window_id: WindowId,
         common_params: &CommonFileDialogParams,
         save_params: &SaveFileDialogParams,
     ) -> anyhow::Result<RequestId> {
-        let request = common_params.create_save_request(save_params)?;
-        self.run_async_for_window(window_id, |request_id, identifier| async move {
-            let result = show_save_file_dialog_impl(identifier, request).await;
-            AsyncEventResult::FileChooserResponse { request_id, result }
-        })
-    }
+        let Some(parent) = self.with_window(window_id, |w| Ok(w.window.upgrade()))? else {
+            bail!("Window {window_id:?} not found");
+        };
+        let request = common_params.create_save_request(save_params, parent.as_ref())?;
 
-    #[allow(unused_variables)]
-    #[cfg(not(target_os = "linux"))]
-    pub fn show_save_file_dialog(
-        &self,
-        window_id: WindowId,
-        common_params: &CommonFileDialogParams,
-        save_params: &SaveFileDialogParams,
-    ) -> anyhow::Result<RequestId> {
-        bail!("Unsupported");
+        let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
+        let request_id = RequestId(raw_request_id);
+        let event_handler = self.event_handler;
+
+        show_file_dialog_impl(&request, move |result| {
+            AsyncEventResult::FileChooserResponse { request_id, result }.send_as_event(event_handler);
+        });
+        Ok(request_id)
     }
 
     pub fn request_show_notification(

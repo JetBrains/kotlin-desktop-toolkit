@@ -23,7 +23,6 @@ mod pointer_shapes;
 pub mod pointer_shapes_api;
 pub mod screen;
 pub mod string_api;
-mod string_utils;
 mod text_input;
 pub mod text_input_api;
 mod window;
