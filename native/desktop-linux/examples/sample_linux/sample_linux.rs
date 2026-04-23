@@ -56,7 +56,7 @@ use desktop_linux::linux::{
     },
 };
 use log::{debug, info, warn};
-use std::{cell::RefCell, collections::HashMap, str::FromStr};
+use std::{cell::RefCell, collections::HashMap, env, str::FromStr};
 use url::Url;
 
 const APP_ID: &str = "org.jetbrains.desktop.linux.native.sample1";
@@ -107,7 +107,7 @@ impl WindowState {
 
 #[derive(Debug)]
 enum ActivationTokenAction {
-    ActivateWindow,
+    ActivateWindow(WindowId),
     OpenUrl(String),
     OpenFileManager(String),
 }
@@ -121,7 +121,7 @@ struct State {
     settings: Settings,
     request_sources: HashMap<RequestId, WindowId>,
     notification_sources: HashMap<u32, WindowId>,
-    activation_token_action: HashMap<u32, ActivationTokenAction>,
+    activation_token_action: HashMap<RequestId, ActivationTokenAction>,
 }
 
 thread_local! {
@@ -198,11 +198,13 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             true
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::Tab) => {
-            let request_id = window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
-            if request_id > 0 {
-                state
-                    .activation_token_action
-                    .insert(request_id, ActivationTokenAction::ActivateWindow);
+            if let Some(&window_id) = state.windows.keys().find(|&&w| Some(w) != state.key_window_id) {
+                let request_id = window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
+                if request_id.0 > 0 {
+                    state
+                        .activation_token_action
+                        .insert(request_id, ActivationTokenAction::ActivateWindow(window_id));
+                }
             }
             true
         }
@@ -297,7 +299,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyL) => {
             let request_id = window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
-            if request_id > 0 {
+            if request_id.0 > 0 {
                 state
                     .activation_token_action
                     .insert(request_id, ActivationTokenAction::OpenUrl("https://jetbrains.com".to_owned()));
@@ -308,7 +310,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             let window_state = state.windows.get_mut(&window_id).unwrap();
             if let Some(path) = window_state.last_received_path.clone() {
                 let request_id = window_request_internal_activation_token(app_ptr, state.key_window_id.unwrap());
-                if request_id > 0 {
+                if request_id.0 > 0 {
                     state
                         .activation_token_action
                         .insert(request_id, ActivationTokenAction::OpenFileManager(path));
@@ -432,6 +434,11 @@ fn on_application_started(state: &mut State) {
         },
     );
     state.windows.insert(window_2_id, WindowState::default());
+
+    if let Ok(activation_token) = env::var("XDG_ACTIVATION_TOKEN") {
+        window_activate(state.app_ptr.get(), window_1_id, BorrowedUtf8::new(activation_token.as_str()));
+        window_activate(state.app_ptr.get(), window_2_id, BorrowedUtf8::new(activation_token.as_str()));
+    }
 }
 
 #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
@@ -645,10 +652,8 @@ extern "C" fn event_handler(event: &Event) -> bool {
             Event::ActivationTokenResponse(data) => {
                 let token = data.token.get("ActivationTokenResponse.token").unwrap();
                 match state.activation_token_action.remove(&data.request_id).unwrap() {
-                    ActivationTokenAction::ActivateWindow => {
-                        if let Some(window_id) = state.windows.keys().find(|&&w| Some(w) != state.key_window_id) {
-                            window_activate(app_ptr, *window_id, BorrowedUtf8::new(token));
-                        }
+                    ActivationTokenAction::ActivateWindow(window_id) => {
+                        window_activate(app_ptr, window_id, BorrowedUtf8::new(token));
                     }
                     ActivationTokenAction::OpenFileManager(path) => {
                         application_open_file_manager(app_ptr, BorrowedUtf8::new(&path), BorrowedUtf8::new(token));
