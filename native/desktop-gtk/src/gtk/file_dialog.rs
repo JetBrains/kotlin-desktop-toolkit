@@ -1,74 +1,95 @@
-use ashpd::{WindowIdentifier, desktop::file_chooser};
-
-use crate::gtk::{
-    file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
-    string_utils::join_str_iter,
-};
+use crate::gtk::file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams};
+use anyhow::{Context, anyhow};
+use gtk4::gio;
+use gtk4::prelude::{Cast, FileChooserExt, FileChooserExtManual, FileExt, ListModelExt, NativeDialogExt, NativeDialogExtManual, ObjectExt};
+use log::debug;
 
 impl OpenFileDialogParams {
-    fn apply(&self, request: file_chooser::OpenFileRequest) -> file_chooser::OpenFileRequest {
-        request.directory(self.select_directories).multiple(self.allows_multiple_selection)
+    const fn get_action(&self) -> gtk4::FileChooserAction {
+        if self.select_directories {
+            gtk4::FileChooserAction::SelectFolder
+        } else {
+            gtk4::FileChooserAction::Open
+        }
+    }
+
+    fn apply(&self, file_chooser: &gtk4::FileChooserNative) {
+        file_chooser.set_select_multiple(self.allows_multiple_selection);
     }
 }
 
 impl SaveFileDialogParams<'_> {
-    fn apply(&self, mut request: file_chooser::SaveFileRequest) -> anyhow::Result<file_chooser::SaveFileRequest> {
+    fn apply(&self, file_chooser: &gtk4::FileChooserNative) -> anyhow::Result<()> {
         if let Some(name_field_string_value) = self.get_name_field_string_value()? {
-            request = request.current_name(name_field_string_value);
+            file_chooser.set_current_name(name_field_string_value);
         }
-        Ok(request)
+        Ok(())
     }
 }
 
 impl CommonFileDialogParams<'_> {
-    pub fn create_open_request(&self, open_params: &OpenFileDialogParams) -> anyhow::Result<file_chooser::OpenFileRequest> {
-        let mut request = file_chooser::SelectedFiles::open_file().modal(self.modal);
-        if let Some(title) = self.get_title()? {
-            request = request.title(title);
-        }
-        if let Some(accept_label) = self.get_accept_label()? {
-            request = request.accept_label(accept_label);
-        }
+    fn create_file_chooser(&self, action: gtk4::FileChooserAction, parent: &gtk4::Window) -> anyhow::Result<gtk4::FileChooserNative> {
+        let file_chooser = gtk4::FileChooserNative::new(self.get_title()?, Some(parent), action, self.get_accept_label()?, None);
+        file_chooser.set_modal(self.modal);
         if let Some(current_folder) = self.get_current_folder()? {
-            request = request.current_folder(current_folder)?;
+            let file = gio::File::for_path(current_folder);
+            file_chooser.set_current_folder(Some(&file))?;
         }
-        Ok(open_params.apply(request))
+
+        Ok(file_chooser)
     }
 
-    pub fn create_save_request(&self, save_params: &SaveFileDialogParams) -> anyhow::Result<file_chooser::SaveFileRequest> {
-        let mut request = file_chooser::SelectedFiles::save_file().modal(self.modal);
-        if let Some(title) = self.get_title()? {
-            request = request.title(title);
-        }
-        if let Some(accept_label) = self.get_accept_label()? {
-            request = request.accept_label(accept_label);
-        }
-        if let Some(current_folder) = self.get_current_folder()? {
-            request = request.current_folder(current_folder)?;
-        }
-        save_params.apply(request)
+    pub fn create_open_request(
+        &self,
+        open_params: &OpenFileDialogParams,
+        parent: &gtk4::Window,
+    ) -> anyhow::Result<gtk4::FileChooserNative> {
+        let file_chooser = self.create_file_chooser(open_params.get_action(), parent)?;
+        open_params.apply(&file_chooser);
+        Ok(file_chooser)
+    }
+
+    pub fn create_save_request(
+        &self,
+        save_params: &SaveFileDialogParams,
+        parent: &gtk4::Window,
+    ) -> anyhow::Result<gtk4::FileChooserNative> {
+        let file_chooser = self.create_file_chooser(gtk4::FileChooserAction::Save, parent)?;
+        save_params.apply(&file_chooser)?;
+        Ok(file_chooser)
     }
 }
 
-fn convert_file_chooser_response(response: Result<file_chooser::SelectedFiles, ashpd::Error>) -> anyhow::Result<String> {
-    let files = response?;
-    Ok(join_str_iter(files.uris().iter().map(ashpd::Uri::as_str), "\r\n"))
+fn convert_file_chooser_response(file_chooser: &gtk4::FileChooserNative, response: gtk4::ResponseType) -> anyhow::Result<Option<String>> {
+    if response == gtk4::ResponseType::Accept {
+        let mut acc = String::new();
+
+        let files = file_chooser.files();
+        let n_files = files.n_items();
+        for i in 0..n_files {
+            let e = files.item(i).with_context(|| format!("List element {i} missing"))?;
+            let file: gio::File = e.downcast().map_err(|e| anyhow!("Cannot downcast to gio::File: {e:?}"))?;
+            let path = file.path().with_context(|| format!("Missing path for file {file:?}"))?;
+            #[allow(clippy::unnecessary_debug_formatting)]
+            acc.push_str(path.to_str().with_context(|| format!("Cannot convert to str: {path:?}"))?);
+            acc.push_str("\r\n");
+        }
+        Ok(Some(acc))
+    } else {
+        Ok(None)
+    }
 }
 
-pub async fn show_open_file_dialog_impl(
-    identifier: Option<WindowIdentifier>,
-    request: file_chooser::OpenFileRequest,
-) -> anyhow::Result<String> {
-    let open_file_request = request.identifier(identifier);
-    let response = open_file_request.send().await?.response();
-    convert_file_chooser_response(response)
-}
-
-pub async fn show_save_file_dialog_impl(
-    identifier: Option<WindowIdentifier>,
-    request: file_chooser::SaveFileRequest,
-) -> anyhow::Result<String> {
-    let open_file_request = request.identifier(identifier);
-    let response = open_file_request.send().await?.response();
-    convert_file_chooser_response(response)
+pub fn show_file_dialog_impl(file_chooser: &gtk4::FileChooserNative, callback: impl Fn(anyhow::Result<Option<String>>) + 'static) {
+    file_chooser.add_weak_ref_notify_local(|| {
+        debug!("FileChooserNative destroyed");
+    });
+    // With `GDK_DEBUG=no-portals`, FileChooserNative object is destroyed at the end of this function, so this is a workaround.
+    let clone = file_chooser.clone();
+    file_chooser.run_async(move |file_chooser, response_type| {
+        debug!("FileChooserNative callback result: {response_type}");
+        let result = convert_file_chooser_response(file_chooser, response_type);
+        callback(result);
+        drop(clone);
+    });
 }

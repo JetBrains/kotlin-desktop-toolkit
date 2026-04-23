@@ -118,11 +118,7 @@ dependencies = [
  "enumflags2",
  "futures-channel",
  "futures-util",
- "gdk4-wayland",
- "gdk4-x11",
  "getrandom 0.4.2",
- "glib",
- "gtk4",
  "serde",
  "serde_repr",
  "tokio",
@@ -448,7 +444,6 @@ name = "desktop-gtk"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ashpd",
  "bitflag-attr",
  "desktop-common",
  "futures-lite",
@@ -886,56 +881,6 @@ dependencies = [
  "libc",
  "pango-sys",
  "pkg-config",
- "system-deps",
-]
-
-[[package]]
-name = "gdk4-wayland"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7027433b8f19075ab22f01d0e0ba4373e303ffdb4ce4f846a2763cb020ea9bdc"
-dependencies = [
- "gdk4",
- "gdk4-wayland-sys",
- "gio",
- "glib",
- "libc",
-]
-
-[[package]]
-name = "gdk4-wayland-sys"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "653cafb8715f2ac1c56edaf8060d9360ae3acbe3c6fb61b676a2917d42b668cf"
-dependencies = [
- "glib-sys",
- "libc",
- "system-deps",
-]
-
-[[package]]
-name = "gdk4-x11"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13a00e4c617d6570633e44ba3ff221350669edf6cf3447a40f882dfb6f1dfdc3"
-dependencies = [
- "gdk4",
- "gdk4-x11-sys",
- "gio",
- "glib",
- "libc",
- "x11-dl",
-]
-
-[[package]]
-name = "gdk4-x11-sys"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24d41f2e28f62378b081288914325d73bddbb6ccbbadb41aa6392afc71d27002"
-dependencies = [
- "gdk4-sys",
- "glib-sys",
- "libc",
  "system-deps",
 ]
 
@@ -3346,17 +3291,6 @@ name = "writeable"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
-
-[[package]]
-name = "x11-dl"
-version = "2.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38735924fedd5314a6e548792904ed8c6de6636285cb9fec04d5b1db85c1516f"
-dependencies = [
- "libc",
- "once_cell",
- "pkg-config",
-]
 
 [[package]]
 name = "xattr"

@@ -28,7 +28,6 @@ tokio = { version = "1.46.1", features = ["rt-multi-thread"] }
 zbus = { version = "5.12.0", default-features = false, features = ["tokio"] }
 gtk4 = { version = "0.11.0", features = ["v4_2"] }
 glib-unix =  { version = "0.22.0" }
-ashpd = { version = "0.13.2", default-features = false, features = ["file_chooser", "gtk4", "open_uri", "tokio"] }
 skia-safe = { optional = true, version = "0.93.0", default-features = true, features = ["gl"] }
 
 [target.'cfg(target_os="linux")'.dev-dependencies]

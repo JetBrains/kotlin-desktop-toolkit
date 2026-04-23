@@ -7,7 +7,7 @@ use crate::gtk::events::{EventHandler, FileChooserResponse, NotificationShownEve
 pub enum AsyncEventResult {
     FileChooserResponse {
         request_id: RequestId,
-        result: anyhow::Result<String>,
+        result: anyhow::Result<Option<String>>,
     },
     NotificationClosed {},
     NotificationShown {
@@ -28,8 +28,11 @@ impl AsyncEventResult {
                     event_handler(&response.into());
                 };
                 match result {
-                    Ok(files) => {
+                    Ok(Some(files)) => {
                         send(BorrowedUtf8::new(&files));
+                    }
+                    Ok(None) => {
+                        send(BorrowedUtf8::null());
                     }
                     Err(e) => {
                         warn!("{e}");
