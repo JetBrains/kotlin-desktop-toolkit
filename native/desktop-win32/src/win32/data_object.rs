@@ -4,10 +4,10 @@
 use std::mem::ManuallyDrop;
 
 use windows::Win32::{
-    Foundation::{DV_E_FORMATETC, DV_E_TYMED, E_NOTIMPL, E_POINTER, HANDLE, HGLOBAL, OLE_E_ADVISENOTSUPPORTED, S_OK},
+    Foundation::{DV_E_FORMATETC, DV_E_TYMED, E_NOTIMPL, E_POINTER, HGLOBAL, OLE_E_ADVISENOTSUPPORTED, S_OK},
     System::Com::{
         DATADIR, DATADIR_GET, DVASPECT_CONTENT, FORMATETC, IAdviseSink, IDataObject, IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA,
-        STGMEDIUM, STGMEDIUM_0, TYMED_HGLOBAL,
+        STGMEDIUM, STGMEDIUM_0, TYMED_HGLOBAL, TYMED_ISTREAM,
     },
     UI::Shell::SHCreateStdEnumFmtEtc,
 };
@@ -143,22 +143,12 @@ pub fn enum_data_object_format_ids(data_object: &IDataObject) -> anyhow::Result<
         let format_etc = formats[0];
         if format_etc.cfFormat != 0
             && format_etc.dwAspect == DVASPECT_CONTENT.0
-            && (format_etc.tymed & TYMED_HGLOBAL.0.cast_unsigned()) != 0
+            && ((format_etc.tymed & TYMED_HGLOBAL.0.cast_unsigned()) != 0 || (format_etc.tymed & TYMED_ISTREAM.0.cast_unsigned()) != 0)
         {
             hash_set.insert(u32::from(format_etc.cfFormat));
         }
     }
     Ok(hash_set.into_iter().collect())
-}
-
-pub fn get_hglobal_from_data_object(data_object: &IDataObject, data_format: DataFormat) -> anyhow::Result<HGlobalData> {
-    let format_etc = get_format_etc_for_hglobal(data_format);
-    let medium = unsafe { data_object.GetData(&raw const format_etc)? };
-    if medium.tymed & TYMED_HGLOBAL.0.cast_unsigned() == 0 {
-        anyhow::bail!(windows_core::Error::from(DV_E_TYMED));
-    }
-    let hglobal = unsafe { medium.u.hGlobal };
-    HGlobalData::copy_from(HANDLE(hglobal.0))
 }
 
 #[inline]

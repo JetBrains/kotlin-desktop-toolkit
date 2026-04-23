@@ -1,5 +1,5 @@
 use desktop_common::{
-    ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr, RustAllocatedStrPtr},
+    ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr, FfiOption, RustAllocatedStrPtr},
     logger::ffi_boundary,
 };
 use std::sync::{
@@ -13,13 +13,36 @@ use windows_core::ComObject;
 
 use super::{
     com::ComInterfaceRawPtr,
-    data_object::{DataObject, enum_data_object_format_ids, get_hglobal_from_data_object, is_data_object_format_available},
+    data_object::{DataObject, enum_data_object_format_ids, is_data_object_format_available},
+    data_reader::DataReader,
     data_transfer::DataFormat,
-    global_data::{hglobal_reader, hglobal_writer},
+    global_data::hglobal_writer,
     strings::copy_from_utf8_string,
 };
 
-pub type AutoDropUInt32Array = AutoDropArray<u32>;
+pub(crate) type AutoDropByteArray = AutoDropArray<u8>;
+pub(crate) type AutoDropUInt32Array = AutoDropArray<u32>;
+
+pub(crate) trait IntoFfiOption<T> {
+    fn into_ffi_option(self) -> anyhow::Result<FfiOption<T>>
+    where
+        T: desktop_common::logger::PanicDefault;
+}
+
+impl<T> IntoFfiOption<T> for anyhow::Result<T> {
+    fn into_ffi_option(self) -> anyhow::Result<FfiOption<T>>
+    where
+        T: desktop_common::logger::PanicDefault,
+    {
+        match self {
+            Ok(ok) => Ok(FfiOption::some(ok)),
+            Err(err) => {
+                log::trace!("failed to read data: {err}");
+                Ok(FfiOption::none())
+            }
+        }
+    }
+}
 
 /// cbindgen:ignore
 static DATA_OBJECT_NEXT_ID: AtomicI64 = AtomicI64::new(0);
@@ -119,44 +142,89 @@ pub extern "C" fn com_data_object_enum_formats(data_object_ptr: ComInterfaceRawP
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn com_data_object_read_bytes(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> AutoDropArray<u8> {
+pub extern "C" fn com_data_object_read_bytes(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> AutoDropByteArray {
     ffi_boundary("com_data_object_read_bytes", || {
-        let data_object = data_object_ptr.borrow::<IDataObject>()?;
-        get_hglobal_from_data_object(&data_object, DataFormat::Other(data_format))
-            .and_then(|data| hglobal_reader::get_bytes(&data))
-            .map(|bytes| AutoDropArray::new(bytes.into_boxed_slice()))
+        com_data_object_read_bytes_impl(&data_object_ptr, data_format)
     })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_try_read_bytes(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> FfiOption<AutoDropByteArray> {
+    ffi_boundary("com_data_object_try_read_bytes", || {
+        com_data_object_read_bytes_impl(&data_object_ptr, data_format).into_ffi_option()
+    })
+}
+
+fn com_data_object_read_bytes_impl(data_object_ptr: &ComInterfaceRawPtr, data_format: u32) -> anyhow::Result<AutoDropByteArray> {
+    let data_object = data_object_ptr.borrow::<IDataObject>()?;
+    DataReader::create(&data_object, DataFormat::Other(data_format))
+        .and_then(|reader| reader.get_bytes())
+        .map(|bytes| AutoDropArray::new(bytes.into_boxed_slice()))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_read_file_list(data_object_ptr: ComInterfaceRawPtr) -> AutoDropArray<RustAllocatedStrPtr> {
     ffi_boundary("com_data_object_read_file_list", || {
-        let data_object = data_object_ptr.borrow::<IDataObject>()?;
-        get_hglobal_from_data_object(&data_object, DataFormat::FileList)
-            .and_then(|data| hglobal_reader::get_file_list(&data))
-            .map(|file_list| file_list.into_iter().map(RustAllocatedStrPtr::from_c_string).collect())
-            .map(AutoDropArray::new)
+        com_data_object_read_file_list_impl(&data_object_ptr)
     })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_try_read_file_list(data_object_ptr: ComInterfaceRawPtr) -> AutoDropArray<RustAllocatedStrPtr> {
+    ffi_boundary("com_data_object_try_read_file_list", || {
+        com_data_object_read_file_list_impl(&data_object_ptr).or_else(|err| {
+            log::trace!("failed to read file list: {err}");
+            Ok(AutoDropArray::null())
+        })
+    })
+}
+
+fn com_data_object_read_file_list_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<AutoDropArray<RustAllocatedStrPtr>> {
+    let data_object = data_object_ptr.borrow::<IDataObject>()?;
+    DataReader::create(&data_object, DataFormat::FileList)
+        .and_then(|reader| reader.get_file_list())
+        .map(|file_list| file_list.into_iter().map(RustAllocatedStrPtr::from_c_string).collect())
+        .map(AutoDropArray::new)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_read_html_fragment(data_object_ptr: ComInterfaceRawPtr) -> RustAllocatedStrPtr {
     ffi_boundary("com_data_object_read_html_fragment", || {
-        let data_object = data_object_ptr.borrow::<IDataObject>()?;
-        get_hglobal_from_data_object(&data_object, DataFormat::HtmlFragment)
-            .and_then(|data| hglobal_reader::get_html(&data))
-            .map(RustAllocatedStrPtr::from_c_string)
+        com_data_object_read_html_fragment_impl(&data_object_ptr)
     })
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn com_data_object_read_text(data_object_ptr: ComInterfaceRawPtr) -> RustAllocatedStrPtr {
-    ffi_boundary("com_data_object_read_text", || {
-        let data_object = data_object_ptr.borrow::<IDataObject>()?;
-        get_hglobal_from_data_object(&data_object, DataFormat::Text)
-            .and_then(|data| hglobal_reader::get_text(&data))
-            .map(RustAllocatedStrPtr::from_c_string)
+pub extern "C" fn com_data_object_try_read_html_fragment(data_object_ptr: ComInterfaceRawPtr) -> FfiOption<RustAllocatedStrPtr> {
+    ffi_boundary("com_data_object_try_read_html_fragment", || {
+        com_data_object_read_html_fragment_impl(&data_object_ptr).into_ffi_option()
     })
+}
+
+fn com_data_object_read_html_fragment_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<RustAllocatedStrPtr> {
+    let data_object = data_object_ptr.borrow::<IDataObject>()?;
+    DataReader::create(&data_object, DataFormat::HtmlFragment)
+        .and_then(|reader| reader.get_html())
+        .map(RustAllocatedStrPtr::from_c_string)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_read_text(data_object_ptr: ComInterfaceRawPtr) -> RustAllocatedStrPtr {
+    ffi_boundary("com_data_object_read_text", || com_data_object_read_text_impl(&data_object_ptr))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_try_read_text(data_object_ptr: ComInterfaceRawPtr) -> FfiOption<RustAllocatedStrPtr> {
+    ffi_boundary("com_data_object_try_read_text", || {
+        com_data_object_read_text_impl(&data_object_ptr).into_ffi_option()
+    })
+}
+
+fn com_data_object_read_text_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<RustAllocatedStrPtr> {
+    let data_object = data_object_ptr.borrow::<IDataObject>()?;
+    DataReader::create(&data_object, DataFormat::Text)
+        .and_then(|reader| reader.get_text())
+        .map(RustAllocatedStrPtr::from_c_string)
 }
 
 #[unsafe(no_mangle)]
