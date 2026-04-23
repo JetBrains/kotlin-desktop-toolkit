@@ -11,36 +11,13 @@ use windows::Win32::System::{
 use super::{
     clipboard::Clipboard,
     com::ComInterfaceRawPtr,
-    data_object_api::AutoDropUInt32Array,
+    data_object_api::{AutoDropByteArray, AutoDropUInt32Array, IntoFfiOption},
     data_transfer::DataFormat,
     global_data::{hglobal_reader, hglobal_writer},
     strings::copy_from_utf8_string,
     window::Window,
     window_api::{WindowPtr, with_window},
 };
-
-type AutoDropByteArray = AutoDropArray<u8>;
-
-trait IntoFfiOption<T> {
-    fn into_ffi_option(self) -> anyhow::Result<FfiOption<T>>
-    where
-        T: desktop_common::logger::PanicDefault;
-}
-
-impl<T> IntoFfiOption<T> for anyhow::Result<T> {
-    fn into_ffi_option(self) -> anyhow::Result<FfiOption<T>>
-    where
-        T: desktop_common::logger::PanicDefault,
-    {
-        match self {
-            Ok(ok) => Ok(FfiOption::some(ok)),
-            Err(err) => {
-                log::trace!("failed to get data from Clipboard: {err}");
-                Ok(FfiOption::none())
-            }
-        }
-    }
-}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn clipboard_count_formats(owner: WindowPtr) -> i32 {
