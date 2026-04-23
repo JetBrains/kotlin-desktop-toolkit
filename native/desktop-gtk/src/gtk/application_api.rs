@@ -299,15 +299,15 @@ pub extern "C" fn application_request_show_notification(
         let sound_file_path_opt = sound_file_path
             .get_optional("application_show_notification: sound_file_path")?
             .map(ToOwned::to_owned);
-        with_app_state_mut(|app| app.request_show_notification(summary, body, sound_file_path_opt))
+        with_app_state(|app| app.request_show_notification(summary, body, sound_file_path_opt))
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_close_notification(notification_id: u32) {
-    debug!("application_show_notification");
-    ffi_boundary("application_show_notification", || {
-        with_app_state_mut(|app| app.request_close_notification(notification_id))
+    debug!("application_close_notification");
+    ffi_boundary("application_close_notification", || {
+        with_app_state(|app| app.request_close_notification(notification_id))
     });
 }
 

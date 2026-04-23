@@ -141,6 +141,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-channel"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "924ed96dd52d1b75e9c1a3e6275715fd320f5f9439fb5a4a11fa51f4221158d2"
+dependencies = [
+ "concurrent-queue",
+ "event-listener-strategy",
+ "futures-core",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "async-recursion"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -444,9 +456,9 @@ name = "desktop-gtk"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "bitflag-attr",
  "desktop-common",
- "futures-lite",
  "gles30",
  "glib-unix",
  "gtk4",
@@ -455,9 +467,7 @@ dependencies = [
  "libloading 0.9.0",
  "log",
  "skia-safe",
- "tokio",
  "url",
- "zbus",
 ]
 
 [[package]]

@@ -17,7 +17,7 @@ use crate::gtk::geometry::{LogicalSize, PhysicalSize};
 use crate::gtk::gl_widget::GlWidget;
 use crate::gtk::kdt_application::KdtApplication;
 use crate::gtk::mime_types::MimeTypes;
-use crate::gtk::notifications::{close_notification_async, notifications_receiver, show_notification_async};
+use crate::gtk::notifications::{NewNotificationData, NotificationAction, init_notifications_task};
 use crate::gtk::window::SimpleWindow;
 use crate::gtk::window_api::WindowParams;
 use anyhow::{Context, anyhow, bail};
@@ -35,7 +35,6 @@ use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::atomic::AtomicU32;
 use std::sync::{LazyLock, OnceLock, atomic};
-use tokio::spawn;
 
 /// cbindgen:ignore
 pub type EglInstance = khronos_egl::DynamicInstance<khronos_egl::EGL1_0>;
@@ -79,7 +78,6 @@ pub struct ApplicationState {
     retrieve_surrounding_text: RetrieveSurroundingText,
     _gtk_app_hold: gio::ApplicationHoldGuard,
     pub gtk_app: KdtApplication,
-    rt: Rc<tokio::runtime::Runtime>,
     async_request_counter: AtomicU32,
     window_id_to_window: Rc<RefCell<HashMap<WindowId, SimpleWindow>>>,
     clipboard: KdtClipboard,
@@ -88,15 +86,24 @@ pub struct ApplicationState {
     drag_icon: Rc<RefCell<Option<GlWidget>>>,
     drag_content_provider: Rc<RefCell<Option<ClipboardContentProvider>>>,
     desktop_settings: DesktopSettings,
-    notifications_connection_task: Option<tokio::task::JoinHandle<Option<zbus::Connection>>>,
-    notifications_connection: Option<zbus::Connection>,
+    notification_action_sender: Option<async_channel::Sender<NotificationAction>>,
+    notification_task_join_handle: Option<glib::JoinHandle<()>>,
 }
 
 impl Drop for ApplicationState {
     fn drop(&mut self) {
+        let main_context = glib::MainContext::default();
+        let wait_for_notification_task = if let Some(sender) = self.notification_action_sender.take() {
+            main_context.block_on(sender.send(NotificationAction::Exit)).is_ok()
+        } else {
+            false
+        };
         for window in self.gtk_app.windows() {
             self.gtk_app.remove_window(&window);
             window.destroy();
+        }
+        if wait_for_notification_task && let Some(join_handle) = self.notification_task_join_handle.take() {
+            _ = main_context.block_on(join_handle);
         }
         self.gtk_app.quit();
     }
@@ -106,8 +113,6 @@ impl ApplicationState {
     #[allow(clippy::too_many_lines)]
     pub fn new(callbacks: &ApplicationCallbacks) -> anyhow::Result<Self> {
         debug!("Initializing application state");
-
-        let rt = tokio::runtime::Builder::new_multi_thread().enable_io().worker_threads(1).build()?;
 
         let gtk_app = KdtApplication::new();
 
@@ -128,7 +133,14 @@ impl ApplicationState {
                 .build();
             gtk_app.add_action_entries([quit]);
 
-            let initial_settings = with_app_state_mut(Self::read_and_subscribe_to_desktop_settings).unwrap();
+            let initial_settings = with_app_state_mut(|state| {
+                let (notification_action_sender, notification_action_receiver) = async_channel::unbounded();
+                state.notification_task_join_handle = Some(Self::init_notifications(event_handler, notification_action_receiver));
+                state.notification_action_sender = Some(notification_action_sender);
+
+                state.read_and_subscribe_to_desktop_settings()
+            })
+            .unwrap();
 
             send_event(event_handler, Event::ApplicationStarted);
             debug!("After ApplicationStarted");
@@ -184,32 +196,6 @@ impl ApplicationState {
         );
         let desktop_settings = DesktopSettings::new(display);
 
-        debug!("Trying to init notifications");
-        let f = async move {
-            match zbus::Connection::session().await {
-                Ok(c) => {
-                    let ret = c.clone();
-                    spawn(notifications_receiver(c, move |notification_data| {
-                        Application::run_on_event_loop_async(move || {
-                            let e = NotificationClosedEvent::new(
-                                notification_data.id,
-                                notification_data.action.as_ref(),
-                                notification_data.activation_token.as_ref(),
-                            );
-                            send_event(event_handler, e);
-                        });
-                        Ok(())
-                    }));
-                    Some(ret)
-                }
-                Err(e) => {
-                    warn!("Error initializing notifications: {e}");
-                    None
-                }
-            }
-        };
-        let notifications_connection_task = Some(rt.spawn(f));
-
         Ok(Self {
             event_handler,
             window_close_request: callbacks.window_close_request,
@@ -224,7 +210,6 @@ impl ApplicationState {
             },
             _gtk_app_hold: gtk_app.hold(),
             gtk_app,
-            rt: Rc::new(rt),
             async_request_counter: AtomicU32::new(1),
             window_id_to_window: Rc::new(RefCell::new(HashMap::new())),
             clipboard,
@@ -233,8 +218,8 @@ impl ApplicationState {
             drag_icon: Rc::default(),
             drag_content_provider: Rc::default(),
             desktop_settings,
-            notifications_connection_task,
-            notifications_connection: None,
+            notification_action_sender: None,
+            notification_task_join_handle: None,
         })
     }
 
@@ -251,7 +236,7 @@ impl ApplicationState {
         let future = f(request_id);
         let event_handler = self.event_handler;
 
-        self.rt.spawn(async move {
+        glib::spawn_future_local(async move {
             let val = future.await;
             glib::source::idle_add_once(move || {
                 val.send_as_event(event_handler);
@@ -267,15 +252,23 @@ impl ApplicationState {
         })
     }
 
-    fn get_or_wait_for_notifications_connection(&mut self) -> anyhow::Result<Option<zbus::Connection>> {
-        if let Some(conn_handle) = self.notifications_connection_task.take() {
-            self.notifications_connection = self.rt.block_on(conn_handle)?;
-            Ok(self.notifications_connection.clone())
-        } else if self.notifications_connection.is_none() {
-            bail!("Didn't try initializing notifications");
-        } else {
-            Ok(self.notifications_connection.clone())
-        }
+    fn init_notifications(
+        event_handler: EventHandler,
+        notification_action_receiver: async_channel::Receiver<NotificationAction>,
+    ) -> glib::JoinHandle<()> {
+        glib::spawn_future_local(init_notifications_task(
+            move |notification_data| {
+                Application::run_on_event_loop_async(move || {
+                    let e = NotificationClosedEvent::new(
+                        notification_data.id,
+                        notification_data.action.as_ref(),
+                        notification_data.activation_token.as_ref(),
+                    );
+                    send_event(event_handler, e);
+                });
+            },
+            notification_action_receiver,
+        ))
     }
 
     pub fn new_window(&self, params: &WindowParams) -> anyhow::Result<()> {
@@ -539,34 +532,47 @@ impl ApplicationState {
         Ok(request_id)
     }
 
-    pub fn request_show_notification(
-        &mut self,
-        summary: String,
-        body: String,
-        sound_file_path: Option<String>,
-    ) -> anyhow::Result<RequestId> {
-        if let Some(conn) = self.get_or_wait_for_notifications_connection()? {
-            Ok(self.run_async(|request_id| async move {
-                let result = show_notification_async(&conn, &summary, &body, sound_file_path).await;
-                AsyncEventResult::NotificationShown { request_id, result }
-            }))
-        } else {
-            Err(anyhow!("Cannot interact with notifications"))
-        }
+    pub fn request_show_notification(&self, summary: String, body: String, sound_file_path: Option<String>) -> anyhow::Result<RequestId> {
+        let Some(action_sender) = self.notification_action_sender.clone() else {
+            bail!("Didn't try initializing notifications");
+        };
+
+        let raw_request_id = self.async_request_counter.fetch_add(1, atomic::Ordering::Relaxed);
+        let request_id = RequestId(raw_request_id);
+        let event_handler = self.event_handler;
+
+        let result_reporter = Box::new(move |result| {
+            Application::run_on_event_loop_async(move || {
+                AsyncEventResult::NotificationShown { request_id, result }.send_as_event(event_handler);
+            });
+        });
+        let new_notification_data = NewNotificationData {
+            summary,
+            body,
+            sound_file_path,
+            result_reporter,
+        };
+        glib::spawn_future_local(async move {
+            if let Err(e) = action_sender.send(NotificationAction::Show(new_notification_data)).await
+                && let NotificationAction::Show(d) = e.0
+            {
+                (d.result_reporter)(Err(anyhow!("channel closed")));
+            }
+        });
+        Ok(request_id)
     }
 
-    pub fn request_close_notification(&mut self, notification_id: u32) -> anyhow::Result<()> {
-        if let Some(conn) = self.get_or_wait_for_notifications_connection()? {
-            self.run_async(move |_request_id| async move {
-                if let Err(e) = close_notification_async(&conn, notification_id).await {
-                    warn!("Error closing notification {notification_id}: {e}");
-                }
-                AsyncEventResult::NotificationClosed {}
-            });
-            Ok(())
-        } else {
-            Err(anyhow!("Cannot interact with notifications"))
-        }
+    pub fn request_close_notification(&self, notification_id: u32) -> anyhow::Result<()> {
+        let Some(action_sender) = self.notification_action_sender.clone() else {
+            bail!("Didn't try initializing notifications");
+        };
+        self.run_async(|_request_id| async move {
+            if let Err(e) = action_sender.send(NotificationAction::Close(notification_id)).await {
+                warn!("Error closing notification: {e}");
+            }
+            AsyncEventResult::NotificationClosed {}
+        });
+        Ok(())
     }
 
     pub fn set_prefer_dark_theme(&self, value: bool) {
