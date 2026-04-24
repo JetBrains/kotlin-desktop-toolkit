@@ -213,9 +213,9 @@ public object Application {
             val event = Event.fromNative(nativeEvent)
             when {
                 /**
-                 * MacOS has race condition between WindowScreenChange and DisplayConfigurationChange events
+                 * MacOS has a race condition between WindowScreenChange and DisplayConfigurationChange events
                  * sometimes after system awakes we might receive WindowScreenChange earlier than DisplayConfigurationChange
-                 * Then if we deciede to access Application.screens we will read outdated value
+                 * Then, if we decide to access [Application.screens], we will read outdated value
                  */
                 event is Event.ApplicationDidFinishLaunching ||
                     event is Event.DisplayConfigurationChange ||

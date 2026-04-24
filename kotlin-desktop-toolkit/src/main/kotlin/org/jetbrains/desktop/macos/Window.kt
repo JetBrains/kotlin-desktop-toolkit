@@ -185,7 +185,6 @@ public class Window internal constructor(
     // see: https://developer.apple.com/documentation/appkit/nswindow/occlusionstate-swift.property
     public val isVisible: Boolean get() = ffiDownCall { desktop_macos_h.window_is_visible(pointer) }
 
-
     /**
      * Toggles the window between its standard user-set frame and its zoomed (maximized) frame.
      *
