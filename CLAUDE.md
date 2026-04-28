@@ -37,7 +37,7 @@ This is a Kotlin/Rust hybrid project providing desktop window management APIs fo
   - `desktop-common/` - Shared Rust utilities  
   - `desktop-macos/` - macOS native implementation
   - `desktop-linux/` - Linux/Wayland native implementation
-  - `desktop-win32/` - Windows native implementation
+  - `desktop-win32/` - Windows native implementation. Has a per-crate doc set at `native/desktop-win32/docs/` — start with `AGENTS.md`; covers architecture, FFI conventions, subsystem reference, and known issues. Treat that doc set as the canonical reference for the Win32 internals; the top-level CLAUDE.md is a thin index by comparison.
 
 ### Platform Bindings
 - Uses JExtract to generate Java bindings from Rust C headers
