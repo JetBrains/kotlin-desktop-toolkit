@@ -84,12 +84,9 @@ pub extern "C" fn clipboard_get_file_list(owner: WindowPtr) -> AutoDropArray<Rus
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn clipboard_try_get_file_list(owner: WindowPtr) -> AutoDropArray<RustAllocatedStrPtr> {
+pub extern "C" fn clipboard_try_get_file_list(owner: WindowPtr) -> FfiOption<AutoDropArray<RustAllocatedStrPtr>> {
     with_window(&owner, "clipboard_try_get_file_list", |window| {
-        clipboard_get_file_list_impl(window).or_else(|err| {
-            log::trace!("failed to get data from Clipboard: {err}");
-            Ok(AutoDropArray::null())
-        })
+        clipboard_get_file_list_impl(window).into_ffi_option()
     })
 }
 

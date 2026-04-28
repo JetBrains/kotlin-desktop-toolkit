@@ -102,23 +102,23 @@ public object Clipboard {
     }
 
     public fun readListOfFiles(owner: Window): List<String> {
-        return ffiDownCall {
-            owner.withPointer { windowPtr ->
-                Arena.ofConfined().use { arena ->
-                    val arrayPtr = desktop_win32_h.clipboard_get_file_list(arena, windowPtr)
-                    listOfStringsFromNative(arrayPtr)
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val arrayPtr = ffiDownCall {
+                    desktop_win32_h.clipboard_get_file_list(arena, windowPtr)
                 }
+                listOfStringsFromNative(arrayPtr)
             }
         }
     }
 
-    public fun tryReadListOfFiles(owner: Window): List<String> {
-        return ffiDownCall {
-            owner.withPointer { windowPtr ->
-                Arena.ofConfined().use { arena ->
-                    val arrayPtr = desktop_win32_h.clipboard_try_get_file_list(arena, windowPtr)
-                    listOfStringsFromNative(arrayPtr)
+    public fun tryReadListOfFiles(owner: Window): List<String>? {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val arrayPtr = ffiDownCall {
+                    desktop_win32_h.clipboard_try_get_file_list(arena, windowPtr)
                 }
+                optionalListOfStringsFromNative(arrayPtr)
             }
         }
     }
