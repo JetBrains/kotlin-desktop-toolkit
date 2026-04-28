@@ -1,8 +1,8 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.macos.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.win32.generated.NativeAutoDropArray_u32
 import org.jetbrains.desktop.win32.generated.NativeAutoDropArray_u8
+import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_u8
 import org.jetbrains.desktop.win32.generated.NativeFfiOption_AutoDropByteArray
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment

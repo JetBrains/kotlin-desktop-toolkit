@@ -1,6 +1,5 @@
 package org.jetbrains.desktop.win32
 
-import org.jetbrains.desktop.macos.byteArrayFromNative
 import org.jetbrains.desktop.win32.generated.NativeKeyState
 import org.jetbrains.desktop.win32.generated.NativePhysicalKeyStatus
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
