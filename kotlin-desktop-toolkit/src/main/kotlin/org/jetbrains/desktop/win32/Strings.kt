@@ -2,6 +2,7 @@ package org.jetbrains.desktop.win32
 
 import org.jetbrains.desktop.win32.generated.NativeAutoDropArray_RustAllocatedStrPtr
 import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_BorrowedStrPtr
+import org.jetbrains.desktop.win32.generated.NativeFfiOption_AutoDropArray_RustAllocatedStrPtr
 import org.jetbrains.desktop.win32.generated.NativeFfiOption_RustAllocatedStrPtr
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import org.jetbrains.desktop.win32.generated.desktop_win32_h.NativeBorrowedStrPtr
@@ -19,6 +20,27 @@ internal fun listOfStringsFromNative(segment: MemorySegment): List<String> {
         }.toList()
     } finally {
         desktop_win32_h.native_string_array_drop(segment)
+    }
+}
+
+internal fun optionalListOfStringsFromNative(segment: MemorySegment): List<String>? {
+    val isSome = NativeFfiOption_AutoDropArray_RustAllocatedStrPtr.is_some(segment)
+    if (!isSome) {
+        return null
+    }
+    val value = NativeFfiOption_AutoDropArray_RustAllocatedStrPtr.value(segment)
+    val ptr = NativeAutoDropArray_RustAllocatedStrPtr.ptr(value)
+    val len = NativeAutoDropArray_RustAllocatedStrPtr.len(value)
+
+    return try {
+        (0 until len).map { i ->
+            val strPtr = ptr.getAtIndex(NativeAutoDropArray_RustAllocatedStrPtr.`ptr$layout`(), i)
+            strPtr.getUtf8String(0)
+        }.toList()
+    } finally {
+        ffiDownCall {
+            desktop_win32_h.native_optional_string_array_drop(segment)
+        }
     }
 }
 

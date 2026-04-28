@@ -42,11 +42,35 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
         }
     }
 
+    public fun tryReadItemOfType(format: DataFormat): ByteArray? = requireOpen { ptr ->
+        Arena.ofConfined().use { arena ->
+            val dataPtr = ffiDownCall {
+                desktop_win32_h.com_data_object_try_read_bytes(arena, ptr, format.id)
+            }
+            try {
+                optionalByteArrayFromNative(dataPtr)
+            } finally {
+                ffiDownCall {
+                    desktop_win32_h.native_optional_byte_array_drop(dataPtr)
+                }
+            }
+        }
+    }
+
     public fun readHtmlFragment(): String = requireOpen { ptr ->
         val strPtr = ffiDownCall {
             desktop_win32_h.com_data_object_read_html_fragment(ptr)
         }
         stringFromNative(strPtr)
+    }
+
+    public fun tryReadHtmlFragment(): String? = requireOpen { ptr ->
+        Arena.ofConfined().use { arena ->
+            val optionalPtr = ffiDownCall {
+                desktop_win32_h.com_data_object_try_read_html_fragment(arena, ptr)
+            }
+            optionalStringFromNative(optionalPtr)
+        }
     }
 
     public fun readListOfFiles(): List<String> = requireOpen { ptr ->
@@ -58,11 +82,29 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
         }
     }
 
+    public fun tryReadListOfFiles(): List<String>? = requireOpen { ptr ->
+        Arena.ofConfined().use { arena ->
+            val arrayPtr = ffiDownCall {
+                desktop_win32_h.com_data_object_try_read_file_list(arena, ptr)
+            }
+            optionalListOfStringsFromNative(arrayPtr)
+        }
+    }
+
     public fun readTextItem(): String = requireOpen { ptr ->
         val strPtr = ffiDownCall {
             desktop_win32_h.com_data_object_read_text(ptr)
         }
         stringFromNative(strPtr)
+    }
+
+    public fun tryReadTextItem(): String? = requireOpen { ptr ->
+        Arena.ofConfined().use { arena ->
+            val strPtr = ffiDownCall {
+                desktop_win32_h.com_data_object_try_read_text(arena, ptr)
+            }
+            optionalStringFromNative(strPtr)
+        }
     }
 
     internal fun toNative(): MemorySegment = requireOpen { it }
