@@ -28,3 +28,11 @@ pub extern "C" fn native_string_array_drop(str_array: AutoDropArray<RustAllocate
         Ok(())
     });
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn native_optional_string_array_drop(optional: FfiOption<AutoDropArray<RustAllocatedStrPtr>>) {
+    ffi_boundary("native_optional_string_array_drop", || {
+        drop(optional);
+        Ok(())
+    });
+}

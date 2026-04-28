@@ -170,12 +170,9 @@ pub extern "C" fn com_data_object_read_file_list(data_object_ptr: ComInterfaceRa
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn com_data_object_try_read_file_list(data_object_ptr: ComInterfaceRawPtr) -> AutoDropArray<RustAllocatedStrPtr> {
+pub extern "C" fn com_data_object_try_read_file_list(data_object_ptr: ComInterfaceRawPtr) -> FfiOption<AutoDropArray<RustAllocatedStrPtr>> {
     ffi_boundary("com_data_object_try_read_file_list", || {
-        com_data_object_read_file_list_impl(&data_object_ptr).or_else(|err| {
-            log::trace!("failed to read file list: {err}");
-            Ok(AutoDropArray::null())
-        })
+        com_data_object_read_file_list_impl(&data_object_ptr).into_ffi_option()
     })
 }
 
