@@ -19,7 +19,9 @@ internal fun listOfStringsFromNative(segment: MemorySegment): List<String> {
             strPtr.getUtf8String(0)
         }.toList()
     } finally {
-        desktop_win32_h.native_string_array_drop(segment)
+        ffiDownCall {
+            desktop_win32_h.native_string_array_drop(segment)
+        }
     }
 }
 
@@ -62,7 +64,9 @@ internal fun stringFromNative(segment: MemorySegment): String {
     return try {
         segment.getUtf8String(0)
     } finally {
-        desktop_win32_h.native_string_drop(segment)
+        ffiDownCall {
+            desktop_win32_h.native_string_drop(segment)
+        }
     }
 }
 
@@ -75,6 +79,8 @@ internal fun optionalStringFromNative(segment: MemorySegment): String? {
     return try {
         strPtr.getUtf8String(0)
     } finally {
-        desktop_win32_h.native_optional_string_drop(segment)
+        ffiDownCall {
+            desktop_win32_h.native_optional_string_drop(segment)
+        }
     }
 }

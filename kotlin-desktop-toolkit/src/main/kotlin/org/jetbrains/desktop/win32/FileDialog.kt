@@ -23,17 +23,19 @@ public object FileDialog {
     )
 
     public fun showSaveFileDialog(owner: Window, options: FileDialogOptions = FileDialogOptions()): String? {
-        return Arena.ofConfined().use { arena ->
-            ffiDownCall {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
                 val nativeCommonDialogParams = options.toNative(arena)
-                val result = owner.withPointer { windowPtr ->
+                val result = ffiDownCall {
                     desktop_win32_h.save_file_dialog_run_modal(windowPtr, nativeCommonDialogParams)
                 }
                 if (result != MemorySegment.NULL) {
                     try {
                         result.getUtf8String(0).takeUnless { it.isEmpty() }
                     } finally {
-                        ffiDownCall { desktop_win32_h.native_string_drop(result) }
+                        ffiDownCall {
+                            desktop_win32_h.native_string_drop(result)
+                        }
                     }
                 } else {
                     null
@@ -47,11 +49,11 @@ public object FileDialog {
         options: FileDialogOptions = FileDialogOptions(),
         openDialogOptions: FileOpenDialogOptions = FileOpenDialogOptions(),
     ): List<String> {
-        return Arena.ofConfined().use { arena ->
-            ffiDownCall {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
                 val nativeCommonDialogParams = options.toNative(arena)
                 val nativeOpenFileDialogParams = openDialogOptions.toNative(arena)
-                val result = owner.withPointer { windowPtr ->
+                val result = ffiDownCall {
                     desktop_win32_h.open_file_dialog_run_modal(arena, windowPtr, nativeCommonDialogParams, nativeOpenFileDialogParams)
                 }
                 if (result != MemorySegment.NULL) {
