@@ -4,12 +4,9 @@ use windows::{
         Color as WUColor,
         ViewManagement::{UIColorType, UISettings},
     },
-    Win32::{
-        Foundation::{HLOCAL, LocalFree},
-        UI::{
-            Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW, HIGHCONTRASTW_FLAGS},
-            WindowsAndMessaging::{SPI_GETHIGHCONTRAST, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW},
-        },
+    Win32::UI::{
+        Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW, HIGHCONTRASTW_FLAGS},
+        WindowsAndMessaging::{SPI_GETHIGHCONTRAST, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW},
     },
 };
 use windows_core::{PWSTR, Result as WinResult};
@@ -81,14 +78,10 @@ impl HighContrast {
                 SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
             )?;
         }
-        // Per HIGHCONTRASTW doc: "The system allocates this buffer, free it
-        // with LocalFree." We don't need the scheme name for Off/On, so
-        // free immediately.
-        if !hc.lpszDefaultScheme.is_null() {
-            unsafe {
-                let _ = LocalFree(Some(HLOCAL(hc.lpszDefaultScheme.as_ptr().cast())));
-            }
-        }
+        // Do NOT call LocalFree on hc.lpszDefaultScheme. The MS doc says
+        // "The system allocates this buffer, free it with LocalFree", but
+        // empirically that crashes the heap (NTSTATUS 0xC0000374). The
+        // pointer is not a LocalAlloc'd heap allocation despite the doc.
         if hc.dwFlags.contains(HCF_HIGHCONTRASTON) {
             Ok(Self::On)
         } else {
