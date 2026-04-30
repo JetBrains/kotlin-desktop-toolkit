@@ -12,6 +12,7 @@ import org.jetbrains.desktop.win32.generated.NativePointerUpEvent
 import org.jetbrains.desktop.win32.generated.NativePointerUpdatedEvent
 import org.jetbrains.desktop.win32.generated.NativeScrollWheelEvent
 import org.jetbrains.desktop.win32.generated.NativeSystemAppearanceChangeEvent
+import org.jetbrains.desktop.win32.generated.NativeSystemHighContrastChangeEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowActivatedEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowDrawEvent
 import org.jetbrains.desktop.win32.generated.NativeWindowMoveEvent
@@ -161,6 +162,9 @@ public sealed class Event {
     public data class SystemAppearanceChange internal constructor(val newAppearance: Appearance) : Event()
 
     @ConsistentCopyVisibility
+    public data class SystemHighContrastChange internal constructor(val newHighContrast: HighContrast) : Event()
+
+    @ConsistentCopyVisibility
     public data class WindowActivated internal constructor(
         val active: Boolean,
         val minimized: Boolean,
@@ -215,6 +219,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeE
     desktop_win32_h.NativeEvent_ScrollWheelX() -> scrollWheelX(s)
     desktop_win32_h.NativeEvent_ScrollWheelY() -> scrollWheelY(s)
     desktop_win32_h.NativeEvent_SystemAppearanceChange() -> systemAppearanceChange(s)
+    desktop_win32_h.NativeEvent_SystemHighContrastChange() -> systemHighContrastChange(s)
     desktop_win32_h.NativeEvent_WindowActivated() -> windowActivated(s)
     desktop_win32_h.NativeEvent_WindowCloseRequest() -> Event.WindowCloseRequest
     desktop_win32_h.NativeEvent_WindowDraw() -> windowDraw(s)
@@ -358,6 +363,13 @@ private fun systemAppearanceChange(s: MemorySegment): Event {
     val nativeEvent = NativeEvent.system_appearance_change(s)
     return Event.SystemAppearanceChange(
         newAppearance = Appearance.fromNative(NativeSystemAppearanceChangeEvent.new_appearance(nativeEvent)),
+    )
+}
+
+private fun systemHighContrastChange(s: MemorySegment): Event {
+    val nativeEvent = NativeEvent.system_high_contrast_change(s)
+    return Event.SystemHighContrastChange(
+        newHighContrast = HighContrast.fromNative(NativeSystemHighContrastChangeEvent.new_high_contrast(nativeEvent)),
     )
 }
 

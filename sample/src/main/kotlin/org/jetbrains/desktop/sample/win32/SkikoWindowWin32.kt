@@ -187,6 +187,11 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                 EventHandlerResult.Stop
             }
 
+            is Event.SystemHighContrastChange -> {
+                Logger.debug { "Setting change: new high contrast: ${event.newHighContrast}" }
+                EventHandlerResult.Stop
+            }
+
             is Event.WindowTitleChanged -> with(event) {
                 Logger.debug { "New window title: $title" }
                 EventHandlerResult.Continue

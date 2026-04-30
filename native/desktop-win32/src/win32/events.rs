@@ -1,7 +1,7 @@
 use desktop_common::ffi_utils::AutoDropStrPtr;
 
 use super::{
-    appearance::Appearance,
+    appearance::{Appearance, HighContrast},
     geometry::{LogicalPoint, PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
     pointer::{PointerButton, PointerState},
@@ -25,6 +25,7 @@ pub enum Event {
     ScrollWheelX(ScrollWheelEvent),
     ScrollWheelY(ScrollWheelEvent),
     SystemAppearanceChange(SystemAppearanceChangeEvent),
+    SystemHighContrastChange(SystemHighContrastChangeEvent),
     WindowActivated(WindowActivatedEvent),
     WindowCloseRequest,
     WindowDraw(WindowDrawEvent),
@@ -181,6 +182,18 @@ pub struct SystemAppearanceChangeEvent {
 impl From<SystemAppearanceChangeEvent> for Event {
     fn from(value: SystemAppearanceChangeEvent) -> Self {
         Self::SystemAppearanceChange(value)
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct SystemHighContrastChangeEvent {
+    pub new_high_contrast: HighContrast,
+}
+
+impl From<SystemHighContrastChangeEvent> for Event {
+    fn from(value: SystemHighContrastChangeEvent) -> Self {
+        Self::SystemHighContrastChange(value)
     }
 }
 
