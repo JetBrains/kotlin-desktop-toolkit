@@ -99,8 +99,13 @@ impl CustomTitlebarState {
     fn init(&mut self, ns_window: &NSWindow) {
         let mut style_mask = ns_window.styleMask();
         style_mask |= NSWindowStyleMask::FullSizeContentView;
+        // Toggling FullSizeContentView changes the relationship between the frame
+        // and content rects, and AppKit shifts the frame to keep the content rect.
+        // Snapshot the frame and restore it so the window stays the same size to the user.
+        let frame = ns_window.frame();
         ns_window.setStyleMask(style_mask);
         if !style_mask.contains(NSWindowStyleMask::FullScreen) {
+            ns_window.setFrame_display(frame, true);
             set_default_titlebar_enabled(ns_window, false);
             self.activate_constraints(ns_window).unwrap();
         }
@@ -109,8 +114,10 @@ impl CustomTitlebarState {
     fn deinit(&mut self, ns_window: &NSWindow) {
         let mut style_mask = ns_window.styleMask();
         style_mask &= !NSWindowStyleMask::FullSizeContentView;
+        let frame = ns_window.frame();
         ns_window.setStyleMask(style_mask);
         if !style_mask.contains(NSWindowStyleMask::FullScreen) {
+            ns_window.setFrame_display(frame, true);
             self.deactivate_constraints(ns_window).unwrap();
             set_default_titlebar_enabled(ns_window, true);
         }
