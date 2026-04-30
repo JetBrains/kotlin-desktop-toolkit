@@ -60,7 +60,73 @@ This list is point-in-time. Verify against current code before acting.
 - **Fix**: change the field type to `PhysicalPoint`. Drop the `LogicalPoint::from_physical` conversion at the assignment site; pass the raw physical origin through. Kotlin callers that need logical coordinates within a specific monitor can convert using that monitor's `scale`. Verify no existing Kotlin caller assumes the value is logical.
 - **Note**: `ScreenInfo.size` is also currently `LogicalSize`; it's defensible (a single monitor's size in its own logical pixels makes sense), but consider whether the same cross-monitor argument applies — discuss when fixing.
 
+### `resize_backdrop_tint` / `Window::on_resize` commit ordering invariant (post-caption-buttons-plan)
+- **Where**: `window.rs` (`Window::resize_backdrop_tint`), `caption_buttons.rs` (`CaptionButtonStrip::on_resize`). Code introduced by the caption-buttons plan — does not exist on `main` yet.
+- **What**: After the caption-buttons plan lands, `Window::on_resize` will rely on `resize_backdrop_tint` not calling `compositor.commit()` itself, so the strip's `on_resize` (called immediately after) performs the single commit that publishes the backdrop's new size and the strip's new offset atomically. If a future maintainer adds a commit to `resize_backdrop_tint`, the strip move publishes after the backdrop's queued resize, surfacing one frame of visual mismatch.
+- **Fix**: lock down with a comment in `resize_backdrop_tint` (`// does not commit; see Window::on_resize ordering`); consider an assertion path on `Window`'s `CompositorController` use that catches double commits inside a single resize.
+- **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §3.3 / §5.5.
+
 ## Capability gaps
+
+### Custom-titlebar maximized content layer Y-offset
+- **Where**: `composition.rs` 3-layer split introduced by the caption-buttons plan (spec §3.3, §3.6).
+- **What**: composition (0,0) tracks the HWND window-rect top-left ([Visual.Offset](https://learn.microsoft.com/uwp/api/windows.ui.composition.visual.offset?view=winrt-26100)). When maximized, `WM_NCCALCSIZE` insets `rgrc[0].top` by `frame_y + padding` so the client rect sits at the monitor edge, but composition (0,0) still tracks the window-rect — `frame_y + padding` pixels off-monitor. The strip's `composition_root` is offset to compensate; `content_layer` (ANGLE / Kotlin) is not. If §7.3 maximize-content-placement testing shows Kotlin content clipping, mirror the strip's Y-shift onto `content_layer` from the same wndproc sites.
+- **Trigger**: spec §7.3 maximize-content-placement bullet reports content clipped at top monitor edge.
+- **Sketch when implementing**: `content_layer.SetOffset(Vector3 { X: 0.0, Y: max_chrome_y as f32, Z: 0.0 })` from `on_max_state_change` and `on_nccalcsize`; commit via `compositor_controller.Commit()`.
+- **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §3.3, §3.6.
+
+### Caption-button proactive device-loss detection
+- **Where**: `composition.rs` — `with_d2d_render_target` device-loss recovery (caption-buttons spec §6.2).
+- **What**: idle Custom-titlebar windows don't notice device loss until the next state change rasterises; worst case one frame of stale visuals.
+- **Trigger to add it back**: acceptance testing or production telemetry showing noticeable visual glitches under real device loss (driver reset, GPU swap, hardware change).
+- **Sketch when implementing**: `std::thread::spawn` is the simplest closure-capable wait — capture `dispatcher_queue.clone()` by move into the thread closure, `WaitForMultipleObjects` on `[device_removed_event, cancel_event]`, dispatch via `DispatcherQueue::TryEnqueue` on the device-removed branch, drop signals the cancel event and joins. Win32 threadpool wait (`CreateThreadpoolWait`) is the documented Microsoft pattern but its `extern "system" fn` callback boundary forces a `*mut c_void` context dance that's unnecessary for our scale (one wait per `D2dContext` per process).
+- **Sources**: [`ID3D11Device4::RegisterDeviceRemovedEvent`](https://learn.microsoft.com/windows/win32/api/d3d11_4/nf-d3d11_4-id3d11device4-registerdeviceremovedevent), [Composition native interop](https://learn.microsoft.com/windows/apps/develop/composition/composition-native-interop), spec §6.2.
+
+### Verify `RenderingDeviceReplaced` fires synchronously on the `SetRenderingDevice` caller's thread
+
+- **Assumption**: spec `2026-04-30-win32-caption-buttons-design.md` §6.2 (and §4.1) state that `RenderingDeviceReplaced` fires synchronously on the thread that called `SetRenderingDevice`. Microsoft's Composition native-interop sample is consistent with this (its handler runs on the worker thread that triggered `SetRenderingDevice` from `SetThreadpoolWait`), but no Microsoft doc page documents the thread-affinity contract — `[Threading(Both)]` / `[MarshalingBehavior(Agile)]` are thread-safety attributes, not thread-affinity ones.
+- **Probe procedure**: instrument the strip's `RenderingDeviceReplaced` closure (registered inside `CaptionButtonStrip::new` per the caption-buttons plan, Task 5.x) to record `GetCurrentThreadId()` and a "fired during SetRenderingDevice?" flag. Trigger device loss (driver toggle / D3D11 device-lost test). Compare against the UI thread id captured at strip construction.
+- **Contingency**: if the probe shows off-UI-thread firing in some configuration, the strip's `WM_NCDESTROY` drop ordering (caption-buttons plan, Phase 6 Task 6.4 step 8) and the `Send` bound on the callback are still correct, but the spec §6.2 prose claiming the callback is on the UI thread "because the toolkit always invokes `SetRenderingDevice` from the UI thread" must be revised. Maintenance rule for the closure: keep `Send`-correct unless / until the assumption is empirically confirmed.
+- **Sources**: spec §6.2.
+
+### Caption-button RTL mirroring
+- **Where**: `caption_buttons.rs` (`StripGeometry::hit_test` at `client_rect.right - strip_width_px`); `event_loop.rs` strip-consultation snippet (caption-buttons plan, Task 6.2 step 1).
+- **What**: Win32 `WindowStyle` has no layout-direction or `WS_EX_LAYOUTRTL` source, so the caption-buttons strip implements only the LTR layout. Apps that want RTL mirroring (Arabic, Hebrew) get caption buttons on the wrong edge.
+- **Sketch when implementing**: add a layout-direction input on `WindowStyle` (Kotlin `WindowStyle.layoutDirection`, FFI plumbing); under `WS_EX_LAYOUTRTL`, either skip strip consultation in `on_nchittest` or anchor strip bounds at `client_rect.left` instead of `client_rect.right`. Add RTL test cases to the visibility/availability table (spec §4.2).
+- **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §4.2 (visibility/availability table), [`WS_EX_LAYOUTRTL`](https://learn.microsoft.com/windows/win32/winmsg/extended-window-styles).
+
+### Caption-button animation cadence — `CommitNeeded` fallback
+- **Where**: caption-button strip's `ColorKeyFrameAnimation` (caption-buttons plan, Task 5.4); strip's `compositor_controller.Commit()` callsite (spec §5.5).
+- **What**: spec §5.2 / §5.5 commit once at `StartAnimation` and let the system compositor's thread advance the animation. Microsoft does not directly document whether `ColorKeyFrameAnimation` requires per-frame `Commit()` under the controlled-commit `CompositorController` variant; under-commit may produce visible stutter on idle windows (no ANGLE swap to drive frames).
+- **Trigger to add it back**: spec §7.3 hover-fade acceptance bullet reports stutter on a window with no active ANGLE rendering.
+- **Sketch when implementing**: subscribe to [`CompositorController.CommitNeeded`](https://learn.microsoft.com/uwp/api/windows.ui.composition.core.compositorcontroller.commitneeded) and call `Commit()` from the handler; alternatively run a UI-thread frame ticker for the duration of an in-flight strip animation.
+- **Sources**: spec §5.2 / §5.5 / §7.3.
+
+### `WM_NCMOUSEMOVE` fallback if `WM_NCPOINTER*` is missing on a supported config
+- **Where**: `event_loop.rs` non-client pointer routing.
+- **What**: spec §3.5 takes the `WM_NCPOINTER*` contract as established (`EnableMouseInPointer(true)` + the existing wndproc dispatch merging `WM_*POINTER*` and `WM_NC*POINTER*`). If field instrumentation surfaces a supported configuration where `WM_NCPOINTER*` is not delivered, the strip's hover state will not update.
+- **Sketch when implementing**: add a parallel `WM_NCMOUSEMOVE` / `WM_NCMOUSELEAVE` arm that translates the mouse-only message to the same `strip.on_pointer_update(...)` calls the `WM_NCPOINTER*` path uses today; gate it so only one path drives the strip on any given system.
+- **Sources**: spec §3.5.
+
+### Win32 system-menu restoration
+- **Where**: `event_loop.rs` — no Alt+Space, right-click-on-title-bar, or `WM_SYSCOMMAND` keyboard-system-command paths once `WS_CAPTION` is removed for `WindowTitleBarKind::Custom`. `WM_NCRBUTTONUP` over `HTCAPTION` does nothing.
+- **What**: native windows show the system menu on Alt+Space and on right-click of the title-bar drag region (and over caption buttons in some configurations). Custom-titlebar windows lose this affordance entirely; users cannot reach Move / Size / Minimize / Maximize / Close from the keyboard or right-click. UIA invoke patterns on caption buttons also depend on the system-menu surface for accessibility tools.
+- **Sketch when implementing**: `GetSystemMenu(hwnd, FALSE)` + `TrackPopupMenu(... TPM_RIGHTBUTTON | TPM_RETURNCMD ...)` + `SendMessageW(hwnd, WM_SYSCOMMAND, cmd, 0)` is the documented Win32 recipe. Hook `WM_NCRBUTTONUP` (caption-button strip non-primary fall-through path documented in caption-buttons spec §4.2) and `WM_SYSCOMMAND` for `SC_KEYMENU` (Alt+Space). Coordinate with the Close-disable entry above so `SC_CLOSE` state stays aligned with caption-Close availability.
+- **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §2 (out-of-scope handoff), [Microsoft `WM_SYSCOMMAND`](https://learn.microsoft.com/windows/win32/menurc/wm-syscommand), [Microsoft `TrackPopupMenu`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-trackpopupmenu).
+
+### Tall-mode title bars
+- **Where**: caption-button strip — `CaptionButtonMetrics::new` returns a fixed 32 epx button height (spec `2026-04-30-win32-caption-buttons-design.md` §4.5). The caption-buttons plan already handles the maximised layout transition (NCCALCSIZE inset, strip Y-shift, glyph swap); only the button-height policy is missing.
+- **What**: Windows Terminal opts into the WinUI `AppWindowTitleBar.PreferredHeightOption.Tall` shape: 40 epx windowed, 32 epx maximised. The toolkit has no `WindowTitleBarHeight` enum and no `Standard` / `Tall` opt-in, so apps that want a tall title bar (Terminal-style tab strips, Edge-style chrome) cannot get one.
+- **Sketch when implementing**: introduce `WindowTitleBarHeight { Standard, Tall }` on `WindowStyle` (`window_api.rs`, Kotlin `win32/Window.kt`); plumb through FFI; replace the hard-coded 32 epx in `CaptionButtonMetrics::new` with `resolve_button_height(WindowTitleBarHeight, is_maximized)`; extend `on_max_state_change` to recompute metrics + relayout when in Tall mode (the hook already runs on every max-state flip — it just doesn't recompute size today).
+- **Sources**: [Microsoft `AppWindowTitleBar.PreferredHeightOption`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.titlebarheightoption), [Windows Terminal `MinMaxCloseControl.xaml`](https://github.com/microsoft/terminal/blob/e4e3f08efca9d0ffba330eee12edbcb16897ddcb/src/cascadia/TerminalApp/MinMaxCloseControl.xaml), spec `2026-04-30-win32-caption-buttons-design.md` §4.5.
+
+### Win32 Close-button disable support
+- **Where**: Win32 `WindowStyle` (`window_api.rs`, Kotlin `win32/Window.kt`) has `is_minimizable` / `is_maximizable` but no `is_closable`; macOS `Window.Params` already has `isClosable`.
+- **What we verified**: Win32 Close availability is not controlled by a `WS_CLOSEBOX`-style window bit. Dynamic Close enablement is controlled through the window menu's `SC_CLOSE` item: `GetSystemMenu(hwnd, FALSE)` provides the per-window system-menu copy, and `EnableMenuItem(..., SC_CLOSE, MF_BYCOMMAND | MF_GRAYED)` disables and grays the command. Raymond Chen documents that Close is the special case where the menu item state controls whether the caption Close button is enabled. `CS_NOCLOSE` also disables Close on the window menu, but it is a window-class style, not a per-window runtime mechanism.
+- **Related evidence**: Chromium's `Window::EnableClose` uses `EnableMenuItem(GetSystemMenu(hwnd, false), SC_CLOSE, enable ? MF_ENABLED : MF_GRAYED)` followed by `SetWindowPos(... SWP_FRAMECHANGED ...)`. .NET exposes `VisualStyleElement.Window.CloseButton.Disabled`, so Disabled Close is a real themed caption-button state.
+- **Deferred design**: decide a Win32 API surface. Candidate naming, to review against the cross-platform API shape: `WindowStyle.is_closable` / Kotlin `isClosable`, default `true`. Custom caption-button Close availability must stay aligned with the system-menu `SC_CLOSE` state.
+- **Must verify during implementation**: the exact repaint/update requirement for this toolkit's custom-frame path after changing `SC_CLOSE` (`DrawMenuBar`, `SetWindowPos(... SWP_FRAMECHANGED ...)`, or both); behavior of Alt+F4 and system-menu Close when `SC_CLOSE` is grayed; interaction with future system-menu restoration and UIA invoke patterns.
+- **Sources**: [Microsoft `GetSystemMenu`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getsystemmenu), [Microsoft `EnableMenuItem`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enablemenuitem), [Microsoft Window Class Styles (`CS_NOCLOSE`)](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-class-styles), Raymond Chen's [caption-button enablement post](https://devblogs.microsoft.com/oldnewthing/20100604-00/?p=13803) and [`SC_CLOSE` state post](https://devblogs.microsoft.com/oldnewthing/20110805-00/?p=9963), Chromium [`Window::EnableClose`](https://chromium.googlesource.com/chromium/src/+/51077acd7f613ca7bc38d61ad1d22be2233a6e15/chrome/views/window.cc), and [.NET `VisualStyleElement.Window.CloseButton.Disabled`](https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.visualstyles.visualstyleelement.window.closebutton.disabled).
 
 ### IME support (WM_IME_*)
 - **Where**: `event_loop.rs` — no `WM_IME_STARTCOMPOSITION`, `WM_IME_COMPOSITION`, `WM_IME_ENDCOMPOSITION`, `WM_IME_NOTIFY`, `WM_INPUTLANGCHANGE` handlers.
@@ -70,25 +136,17 @@ This list is point-in-time. Verify against current code before acting.
   - Distinguish committed vs. tentative input.
   - React to input-language changes.
 - **Impact**: CJK / IME users get the final text but no on-the-fly composition feedback or the ability to render their own composition UI.
-- **Fix**: design the IME event surface (likely additional `Event` variants — `ImeCompositionStart`, `ImeCompositionUpdate`, `ImeCompositionEnd`, `ImeInputLanguageChanged`) and wire `WM_IME_*` handlers in `event_loop.rs`. Decide whether to use the legacy IMM API or the modern Text Services Framework. Coordinate with the macOS / Linux backends if a unified IME API is desired.
+- **Fix**: design the IME event surface (candidate `Event` variants to review: `ImeCompositionStart`, `ImeCompositionUpdate`, `ImeCompositionEnd`, `ImeInputLanguageChanged`) and wire `WM_IME_*` handlers in `event_loop.rs`. Decide whether to use the legacy IMM API or the modern Text Services Framework. Coordinate with the macOS / Linux backends if a unified IME API is desired.
 
 ### No file-type filter in file dialog
 - **Where**: `file_dialog.rs` — `COMDLG_FILTERSPEC` and `IFileDialog::SetFileTypes` not used.
-- **What**: Open / save dialogs cannot restrict the file-type dropdown. Likely capability gap vs. the macOS counterpart.
+- **What**: Open / save dialogs cannot restrict the file-type dropdown. Verify the intended cross-platform parity against the macOS counterpart before designing the API.
 - **Fix**: add a `file_types: BorrowedArray<FileTypeFilter>` (where `FileTypeFilter = { name, pattern }`) parameter to `FileDialogOptions`. Marshal to `COMDLG_FILTERSPEC[]` in `file_dialog.rs` and call `SetFileTypes` before `Show`.
-
-### No window_restore (un-maximise) FFI
-- **Where**: `window_api.rs` — `window_show` / `window_maximize` / `window_minimize` exist; no restore.
-- **Fix**: add `window_restore` calling `ShowWindow(hwnd, SW_RESTORE)`.
 
 ### No WM_DISPLAYCHANGE handler
 - **Where**: `event_loop.rs` — message not handled.
 - **What**: Monitor topology changes (connect/disconnect/reorder) are invisible. `screen_list` returns stale data until the caller polls again.
 - **Fix**: handle `WM_DISPLAYCHANGE` and emit a new `Event::ScreensChanged` variant.
-
-### High-contrast appearance not modelled
-- **Where**: `event_loop.rs:258-270` filters `WM_SETTINGCHANGE` on `wparam == 0 && lparam == "ImmersiveColorSet"` — high contrast arrives with `wparam` == `SPI_SETHIGHCONTRAST` (non-zero) and is excluded.
-- **Fix**: extend `Appearance` to include `HighContrast` (or expose it as a separate signal), and handle `SPI_SETHIGHCONTRAST` in `on_settingchange`.
 
 ### Asymmetric DPI silently mishandled
 - **Where**: `screen.rs:92-95` — `dpi_y` retrieved from `GetDpiForMonitor` then discarded.

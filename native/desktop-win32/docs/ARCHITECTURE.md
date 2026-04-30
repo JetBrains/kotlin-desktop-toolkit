@@ -20,6 +20,8 @@ This crate is **the Win32-focused backend**. Window creation, message pump, inpu
 - Do not propose `XamlRoot`, `ContentDialog`, `WinRT.Microsoft.UI.Xaml.*`, or any XAML-island bridging.
 - If a feature seems to require WinUI 3, the answer in this crate is "we don't support that here" — surface it for review and consider whether a separate WinUI 3 backend is the right home, not a partial dependency in this one.
 
+**Distinction worth holding onto.** "Don't depend on WinUI APIs" is *not* the same as "don't read WinUI docs." When the toolkit needs to replicate Win11-native UX behaviour (caption-button colours, hover/pressed semantics, animation curves, RTL mirroring rules, etc.), WinUI / Windows App SDK documentation and source are valid references for the *behavioural contract* — we cite them as conventions to follow, not as APIs we consume. Where WinUI describes a behaviour but does not expose concrete values, fall back to other public Win32-host implementations chosen on a per-feature basis, citing each value by repo path and revision. The rule: WinUI for the contract; Win32 / WinRT for the implementation; per-feature reference implementations only for values that WinUI keeps closed-source.
+
 ### WinRT exceptions in this crate (and why)
 
 The four WinRT subsystems used here, each with explicit rationale:
