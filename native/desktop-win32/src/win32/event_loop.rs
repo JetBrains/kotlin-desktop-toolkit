@@ -15,22 +15,23 @@ use windows::Win32::{
         WindowsAndMessaging::{
             AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
             GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS,
-            SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
-            USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE, WM_CREATE,
-            WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST,
-            WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN, WM_POINTERHWHEEL,
-            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
-            WM_SYSCHAR, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+            SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CHAR, WM_CLOSE,
+            WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE,
+            WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN,
+            WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT,
+            WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
 };
 
 use super::{
-    appearance::Appearance,
+    appearance::{Appearance, HighContrast},
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
-        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent, Timestamp,
-        WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent, WindowScaleChangedEvent, WindowTitleChangedEvent,
+        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
+        SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
+        WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
@@ -130,6 +131,8 @@ impl EventLoop {
             WM_SETTEXT => on_settext(self, window, wparam, lparam),
 
             WM_SETTINGCHANGE => on_settingchange(self, window, wparam, lparam),
+
+            WM_SYSCOLORCHANGE => on_syscolorchange(self, window),
 
             WM_CLOSE => self.handle_event(window, Event::WindowCloseRequest),
 
@@ -256,17 +259,44 @@ fn on_settext(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: L
 }
 
 fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    // Light/dark theme change: WM_SETTINGCHANGE wParam=0, lParam="ImmersiveColorSet".
     // borrowed from https://github.com/microsoft/terminal/blob/73948072120beb51d355b3c74b5f774a6526b277/src/cascadia/WindowsTerminal/IslandWindow.cpp#L748
     if wparam.0 == 0 && lparam.0 != 0 {
         let param = unsafe { windows_core::PWSTR(lparam.0 as *mut u16).to_hstring() };
         if &param == windows_core::h!("ImmersiveColorSet") {
-            let new_appearance = Appearance::get_current()
-                .inspect_err(|err| log::error!("failed to get current system appearance: {err}"))
-                .ok()?;
-            let event = SystemAppearanceChangeEvent { new_appearance };
-            event_loop.handle_event(window, event);
+            match Appearance::get_current() {
+                Ok(new_appearance) => {
+                    let event = SystemAppearanceChangeEvent { new_appearance };
+                    event_loop.handle_event(window, event);
+                }
+                Err(err) => log::error!("failed to get current system appearance: {err}"),
+            }
         }
     }
+    // High-contrast change: WM_SETTINGCHANGE wParam == SPI_SETHIGHCONTRAST.
+    if wparam.0 == SPI_SETHIGHCONTRAST.0 as usize {
+        match HighContrast::get_current() {
+            Ok(new_high_contrast) => {
+                let event = SystemHighContrastChangeEvent { new_high_contrast };
+                event_loop.handle_event(window, event);
+            }
+            Err(err) => log::error!("failed to get high-contrast state: {err}"),
+        }
+    }
+    None
+}
+
+fn on_syscolorchange(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
+    // Per the High contrast parameter doc, WM_SYSCOLORCHANGE is the prescribed
+    // signal to re-determine the high-contrast state. Both this and the
+    // WM_SETTINGCHANGE/SPI_SETHIGHCONTRAST signal in on_settingchange may fire
+    // on a single toggle; the toolkit fires the event idempotently and apps
+    // treat it as a current-state snapshot.
+    let new_high_contrast = HighContrast::get_current()
+        .inspect_err(|err| log::error!("failed to get high-contrast state on WM_SYSCOLORCHANGE: {err}"))
+        .ok()?;
+    let event = SystemHighContrastChangeEvent { new_high_contrast };
+    event_loop.handle_event(window, event);
     None
 }
 
