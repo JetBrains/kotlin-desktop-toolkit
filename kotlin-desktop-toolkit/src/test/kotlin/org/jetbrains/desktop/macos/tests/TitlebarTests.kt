@@ -1,10 +1,12 @@
 package org.jetbrains.desktop.macos.tests
 
+import org.jetbrains.desktop.macos.LogicalSize
 import org.jetbrains.desktop.macos.TitlebarConfiguration
 import org.jetbrains.desktop.macos.Window
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 @EnabledOnOs(OS.MAC)
 class TitlebarTests : KDTApplicationTestBase() {
@@ -60,6 +62,26 @@ class TitlebarTests : KDTApplicationTestBase() {
             from = TitlebarConfiguration.Custom(titlebarHeight = 22.0),
             to = TitlebarConfiguration.Regular,
         )
+    }
+
+    @Test
+    fun `window keeps its size when switching to custom titlebar`() {
+        val initialSize = LogicalSize(640.0, 480.0)
+        val window = ui {
+            Window.create(
+                size = initialSize,
+                titlebarConfiguration = TitlebarConfiguration.Regular,
+                isResizable = false,
+            )
+        }
+        ui {
+            assertEquals(initialSize, window.size, "Window should have the requested size before switching titlebar")
+            window.setTitlebarConfiguration(TitlebarConfiguration.Custom(titlebarHeight = 30.0))
+            assertEquals(initialSize, window.size, "Window size should be preserved after switching to custom titlebar")
+        }
+        ui {
+            window.close()
+        }
     }
 
     fun switchTitlebarHelper(from: TitlebarConfiguration, to: TitlebarConfiguration) {
