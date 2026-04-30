@@ -86,10 +86,6 @@ This list is point-in-time. Verify against current code before acting.
 - **What**: Monitor topology changes (connect/disconnect/reorder) are invisible. `screen_list` returns stale data until the caller polls again.
 - **Fix**: handle `WM_DISPLAYCHANGE` and emit a new `Event::ScreensChanged` variant.
 
-### `WindowTitleBarKind::Custom` has no FFI activation path
-- **Where**: `window_api.rs:79` (enum exists), but `Window::extend_content_into_titlebar` is `pub(crate)` — no `window_extend_content_into_titlebar` export.
-- **Fix**: either expose the FFI function or remove the unreachable enum variant.
-
 ### High-contrast appearance not modelled
 - **Where**: `event_loop.rs:258-270` filters `WM_SETTINGCHANGE` on `wparam == 0 && lparam == "ImmersiveColorSet"` — high contrast arrives with `wparam` == `SPI_SETHIGHCONTRAST` (non-zero) and is excluded.
 - **Fix**: extend `Appearance` to include `HighContrast` (or expose it as a separate signal), and handle `SPI_SETHIGHCONTRAST` in `on_settingchange`.

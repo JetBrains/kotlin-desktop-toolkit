@@ -46,7 +46,12 @@ impl WindowStyle {
     #[must_use]
     pub const fn to_system(&self) -> WINDOW_STYLE {
         let mut style = WS_OVERLAPPEDWINDOW.0;
-        if matches!(self.title_bar_kind, WindowTitleBarKind::None) {
+        // For both `None` and `Custom` title bars, remove WS_CAPTION. Per Window Styles docs,
+        // this also renders WS_SYSMENU / WS_MAXIMIZEBOX / WS_MINIMIZEBOX inert (their docs say
+        // each "must also be specified [with] WS_CAPTION/WS_SYSMENU"), so the system has no
+        // title-bar features to draw — including caption buttons — leaving the title-bar area
+        // free for the toolkit to render its own chrome.
+        if matches!(self.title_bar_kind, WindowTitleBarKind::None | WindowTitleBarKind::Custom) {
             style &= !WS_CAPTION.0;
         }
         if !self.is_resizable {
