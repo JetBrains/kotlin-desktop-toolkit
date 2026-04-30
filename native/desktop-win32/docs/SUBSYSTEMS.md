@@ -49,7 +49,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Gotchas.**
 - `application_dispatcher_invoke` returns a `bool` (enqueue succeeded?) — `Application.invokeOnDispatcher` discards it. Enqueues after dispatcher shutdown silently lose the lambda.
 - `EnableMouseInPointer(true)` (event_loop.rs:55) is process-wide and irreversible — third-party libs in the same process expecting raw `WM_MOUSE*` will silently break.
-- `WM_NCPOINTERUP` always returns `None` (event_loop.rs:522-523) so window buttons keep working — the Kotlin `EventHandlerResult` from a non-client `PointerUp` is ignored.
+- `WM_NCPOINTERUP` returns `None` outside the caption-button strip's hit-test area (`event_loop.rs:557` in the current tree) so DefWindowProc keeps driving any system caption buttons — `WindowTitleBarKind::Custom` windows have `WS_CAPTION` removed in `WindowStyle::to_system` and so have no system buttons, making the path a no-op there. Inside the strip's hit-test area or while a caption-button press session is active, `on_pointerup` returns `Some(LRESULT(0))` to suppress both the system path and the Kotlin-facing `PointerUp` event — see the caption-buttons plan (`docs/plans/2026-04-30-win32-caption-buttons.md`, Task 6.3 step 4).
 - `WM_POINTERUPDATE` and `WM_POINTERDOWN` can both emit `Event::PointerDown` for the same gesture (button press inside an update message + dedicated down handler) → possible duplicate events. See TODO.md.
 - Two commented-out variants in `events.rs:31`: `//WindowFocusChange`, `//WindowFullScreenToggle` — stale scaffolding.
 
@@ -63,7 +63,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Files.** `window.rs`, `window_api.rs` + Kotlin `Window.kt`.
 
-**FFI surface.** `window_new`, `window_create`, `window_drop`, `window_destroy`, `window_show`, `window_maximize`, `window_minimize`, `window_request_redraw`, `window_request_close`, `window_get_client_size`, `window_get_rect`, `window_get_scale_factor`, `window_get_screen_info`, `window_is_maximized`, `window_is_minimized`, `window_set_backdrop_tint`, `window_remove_backdrop_tint`, `window_set_cursor_from_file`, `window_set_cursor_from_system`, `window_set_icon`, `window_set_immersive_dark_mode`, `window_set_min_size`, `window_set_title`, `window_set_rect`. **No `window_restore`** — there's currently no way to un-maximise a window through the API.
+**FFI surface.** `window_new`, `window_create`, `window_drop`, `window_destroy`, `window_show`, `window_maximize`, `window_minimize`, `window_restore`, `window_request_redraw`, `window_request_close`, `window_get_client_size`, `window_get_rect`, `window_get_scale_factor`, `window_get_screen_info`, `window_is_maximized`, `window_is_minimized`, `window_set_backdrop_tint`, `window_remove_backdrop_tint`, `window_set_cursor_from_file`, `window_set_cursor_from_system`, `window_set_icon`, `window_set_immersive_dark_mode`, `window_set_min_size`, `window_set_title`, `window_set_rect`.
 
 **Key types.**
 - `Window` — `Rc<Window>` on Rust side. Holds `HWND` (via `AtomicPtr` set during `WM_NCCREATE`), `Weak<EventLoop>`, `CompositorController`, `composition_target: RefCell<Option<DesktopWindowTarget>>`, root `ContainerVisual`, backdrop `SpriteVisual`, cursor `RefCell<Option<Cursor>>`, `PointerClickCounter`. Opaque to Kotlin as `WindowPtr<'a> = RustAllocatedRcPtr<'a>` (alias).
@@ -79,7 +79,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - `WNDCLASS_INIT: OnceLock<u16>` (window.rs:82-94) uses non-atomic `get().is_none()` + `get_or_init` — racy if windows are created concurrently (today they aren't, but the code reads racy).
 - Window is created at `1×1` then resized in `initialize_window` → fires `WM_SIZE` twice on every window birth. **This is intentional**: the managed layer specifies the requested size in *logical* pixels, but the DPI scale needed to convert to *physical* pixels can only be read from a real `HWND` (`GetDpiForWindow`). The minimal-size window is created first to obtain the HWND, then `set_position` applies the logical→physical conversion. Consequence: `WM_SIZE` fires twice during creation; handlers must be idempotent.
 - `Window::drop` (window.rs:414-418) only logs a trace; doesn't verify the HWND was destroyed. If the `Rc` drops without `window_destroy`, the HWND leaks.
-- `WindowTitleBarKind::Custom` is reachable from Kotlin (see `Window.kt:228-239`); `extend_content_into_titlebar` is invoked automatically in `on_activate` for *every* title-bar kind (`event_loop.rs:278-280`), not gated on `Custom`. Plan 1 (2026-04-30) removed `WS_CAPTION` for `Custom` so the system no longer paints caption buttons under the toolkit's composition tree; Plan 3 layers toolkit-drawn caption buttons on top.
+- `WindowTitleBarKind::Custom` is reachable from Kotlin (see `Window.kt:228-239`); `extend_content_into_titlebar` is invoked from `on_activate` whenever `is_active && !is_minimized` (regardless of title-bar kind), not specifically gated on `Custom` (`event_loop.rs:307-314`). `WindowStyle::to_system` removes `WS_CAPTION` for `Custom`, which suppresses DWM/system caption buttons; the caption-buttons plan layers toolkit-drawn buttons on top.
 - `#[allow(dead_code)]` on `WindowTitleBarKind` (window_api.rs:79) and `WindowSystemBackdropType` (window_api.rs:88) — false positives because cbindgen reads them but rustc can't see that.
 
 **Cross-refs.** `application` (`CompositorController` source, `Weak<EventLoop>`), `event_loop` (wndproc dispatcher), `events` (event payloads), `geometry`, `cursor` (per-window cursor), `pointer` (`PointerClickCounter` storage), `screen` (`window_get_screen_info`), `strings`, `utils` (Win11 build probes).
@@ -108,7 +108,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Threading.** EGL contexts are not implicitly thread-safe — `make_current` must run on the thread that issues GL calls. `AngleDevice` is implicitly `!Send` (WinRT handles inside it are `!Send`); not asserted at the type level.
 
 **Gotchas.**
-- `swap_buffers` calls `glFinish` unconditionally before `eglSwapBuffers` (renderer_angle.rs:145) — serialises the CPU on every frame, eliminating GPU/CPU pipelining. Likely intentional for composition correctness; perf concern worth re-evaluating.
+- `swap_buffers` calls `glFinish` unconditionally before `eglSwapBuffers` (renderer_angle.rs:145) — serialises the CPU on every frame, eliminating GPU/CPU pipelining. Intent is not documented here; perf concern worth re-evaluating.
 - `swap_interval` hardcoded to 1; TODO at renderer_angle.rs:146 says "0 on resize" — no logic to detect resize.
 - `core::mem::transmute` in the `get_egl_proc!` macro (renderer_egl_utils.rs:37) — no `// SAFETY` comment; correctness rests on EGL spec matching the local function-pointer typedef.
 - `#[allow(clippy::bool_to_int_with_if)]` at renderer_angle.rs:143 is dead — function body has no conditional; leftover from a refactor.
@@ -249,18 +249,21 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 ## Appearance
 
-**Purpose.** Detect dark vs light mode by inspecting WinRT `UISettings::GetColorValue(Foreground)` and applying a luminance heuristic.
+**Purpose.** Detect system appearance state used by window chrome and caption-button rendering: light/dark theme plus high-contrast On/Off.
 
 **Files.** `appearance.rs`, `appearance_api.rs` + Kotlin `Appearance.kt`.
 
-**FFI surface.** `application_get_appearance` → `Appearance` (C enum).
+**FFI surface.** `application_get_appearance` → `Appearance` (C enum), `application_get_high_contrast` → `HighContrast` (C enum).
 
-**Mechanism.** `UISettings` COM object cached in `static CACHED_UI_SETTINGS: OnceLock<UISettings>` (appearance.rs:35). Each `get_current()` call reads the foreground colour and tests `(5*G + 2*R + B) > 8*128` (appearance.rs:50). Light foreground → dark theme.
+**Mechanism.** `Appearance::get_current()` uses a cached WinRT `UISettings` (`static CACHED_UI_SETTINGS: OnceLock<UISettings>`, appearance.rs:35), reads `Foreground`, and applies a luminance heuristic `(5*G + 2*R + B) > 8*128` (appearance.rs:50). `HighContrast::get_current()` reads `SPI_GETHIGHCONTRAST` and maps `HCF_HIGHCONTRASTON` to `HighContrast::{Off, On}`.
 
-**Change events.** Delivered via `WM_SETTINGCHANGE` filtered on `wparam == 0 && lparam == "ImmersiveColorSet"` (event_loop.rs:258-270). Event handler re-queries `Appearance::get_current()` and fires `SystemAppearanceChangeEvent`.
+**Change events.** `on_settingchange` emits:
+- `SystemAppearanceChangeEvent` on `WM_SETTINGCHANGE` with `wparam == 0 && lparam == "ImmersiveColorSet"`.
+- `SystemHighContrastChangeEvent` on `WM_SETTINGCHANGE` with `wparam == SPI_SETHIGHCONTRAST`.
+`on_syscolorchange` also re-queries high contrast and emits `SystemHighContrastChangeEvent` as an idempotent current-state snapshot.
 
 **Gotchas.**
-- High-contrast mode changes (also via `WM_SETTINGCHANGE`) excluded by the `wparam == 0` filter — high contrast is not modelled.
+- High-contrast changes can produce both `WM_SETTINGCHANGE` (`SPI_SETHIGHCONTRAST`) and `WM_SYSCOLORCHANGE`; the toolkit intentionally treats events as idempotent snapshots.
 - `WM_SETTINGCHANGE` is broadcast per-window, so the appearance event fires once per window. Apps with multiple windows see N redundant events for one OS change.
 - No registry / `DwmSetWindowAttribute` consultation here — DWM titlebar tinting is handled in `window.rs` / `event_loop.rs`, not in `appearance.rs`.
 
