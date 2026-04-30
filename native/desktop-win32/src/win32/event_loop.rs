@@ -339,7 +339,11 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     calcsize_params.rgrc[0].left -= rc.left;
     calcsize_params.rgrc[0].right -= rc.right;
     calcsize_params.rgrc[0].bottom -= rc.bottom;
-    // for custom title bar, the top inset should be 0 otherwise Windows will draw full native title bar
+    // For Custom title bar, leave the top inset at 0 so the entire title-bar area
+    // is part of the client area. The manual `on_nchittest` math (below) carves
+    // out HTTOP for the top resize zone and HTCAPTION for the rest. WS_CAPTION is
+    // removed at creation (see WindowStyle::to_system), so DWM does not paint a
+    // system caption / caption buttons over our composition tree.
     if !window.has_custom_title_bar() {
         calcsize_params.rgrc[0].top -= rc.top;
     }
@@ -381,10 +385,8 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     let mut window_rect = RECT::default();
     let _ = unsafe { GetWindowRect(hwnd, &raw mut window_rect) };
     let current_dpi = unsafe { GetDpiForWindow(hwnd) };
-    let resize_handle_height = unsafe {
-        let current_dpi = GetDpiForWindow(hwnd);
-        GetSystemMetricsForDpi(SM_CXPADDEDBORDER, current_dpi) + GetSystemMetricsForDpi(SM_CYSIZEFRAME, current_dpi)
-    };
+    let resize_handle_height =
+        unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, current_dpi) + GetSystemMetricsForDpi(SM_CYSIZEFRAME, current_dpi) };
     let title_bar_height = resize_handle_height + unsafe { GetSystemMetricsForDpi(SM_CYSIZE, current_dpi) };
     let is_on_resize_border = mouse_y < (window_rect.top + resize_handle_height) as _;
     let is_within_title_bar = mouse_y < (window_rect.top + title_bar_height) as _;
