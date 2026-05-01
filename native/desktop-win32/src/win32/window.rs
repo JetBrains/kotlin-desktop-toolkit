@@ -29,10 +29,10 @@ use windows::{
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
                 GetClientRect, GetPropW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW,
-                RemovePropW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SWP_NOACTIVATE,
-                SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
-                ShowWindow, USER_DEFAULT_SCREEN_DPI, WINDOW_STYLE, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW,
-                WS_EX_NOREDIRECTIONBITMAP,
+                RemovePropW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SW_SHOWNORMAL,
+                SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos,
+                SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW,
+                WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
             },
         },
     },
@@ -122,7 +122,7 @@ impl Window {
                 WS_EX_NOREDIRECTIONBITMAP,
                 WNDCLASS_NAME,
                 &title,
-                WINDOW_STYLE(0),
+                WS_OVERLAPPEDWINDOW,
                 0, // CW_USEDEFAULT: i32 = -2147483648i32
                 0, // CW_USEDEFAULT: i32 = -2147483648i32
                 1,
@@ -257,6 +257,10 @@ impl Window {
 
     pub fn minimize(&self) {
         let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWMINIMIZED) };
+    }
+
+    pub fn restore(&self) {
+        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWNORMAL) };
     }
 
     pub fn show(&self) {
