@@ -1643,7 +1643,7 @@ class X11Tests : X11TestsBase() {
         assertEquals(windowParams.title, getActiveWindowTitle())
         "New title 🙂".also {
             ui { window.setTitle(it) }
-            assertEquals(it, getActiveWindowTitle())
+            waitUntilEq(it) { getActiveWindowTitle() }
         }
 
         for (useI3 in listOf(true, false)) {
