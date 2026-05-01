@@ -61,12 +61,12 @@ impl DragIcon {
                 Ok(egl_rendering_data) => RenderingData::Egl(egl_rendering_data),
                 Err(e) => {
                     warn!("Failed to create EGL rendering, falling back to software rendering. Error: {e:?}");
-                    RenderingData::Software(SoftwareRendering::new(shm, physical_size))
+                    RenderingData::Software(SoftwareRendering::new(shm, physical_size)?)
                 }
             }
         } else {
             info!("Forcing software rendering");
-            RenderingData::Software(SoftwareRendering::new(shm, physical_size))
+            RenderingData::Software(SoftwareRendering::new(shm, physical_size)?)
         };
 
         let mut icon = Self {
@@ -127,7 +127,9 @@ impl DragIcon {
                 egl_data.resize(physical_size);
             }
             RenderingData::Software(data) => {
-                data.resize(shm, physical_size);
+                if let Err(e) = data.resize(shm, physical_size) {
+                    warn!("Error resizing software renderer for drag icon: {e}");
+                }
             }
         }
     }

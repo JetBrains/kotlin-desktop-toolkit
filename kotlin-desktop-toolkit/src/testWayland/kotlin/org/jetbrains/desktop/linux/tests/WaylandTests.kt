@@ -2269,6 +2269,67 @@ class WaylandTests : WaylandTestsBase() {
     }
 
     @Test
+    fun testWindowCreationLargeWindowId() {
+        run(defaultApplicationConfig())
+
+        val windowParams = defaultWindowParams().copy(windowId = WindowId.MAX_VALUE)
+        val w = createWindowAndWaitForFocus(windowParams).window
+
+        ui { w.close() }
+
+        awaitEventOfType<Event.WindowClosed> { event ->
+            assertEquals(windowParams.windowId, event.windowId)
+            true
+        }
+
+        testSuccessful = true
+    }
+
+    @Test
+    fun testWindowCreationTitleTooLong() {
+        run(defaultApplicationConfig())
+
+        val windowParams = defaultWindowParams().copy(
+            title = "t".repeat(Application.MAX_STRING_SIZE_BYTES + 1),
+        )
+        assertThrows<IllegalArgumentException> { ui { app.createWindow(windowParams) } }
+
+        testSuccessful = true
+    }
+
+    @Test
+    fun testWindowCreationAppIdTooLong() {
+        run(defaultApplicationConfig())
+
+        val windowParams = defaultWindowParams().copy(
+            appId = "a".repeat(Application.MAX_STRING_SIZE_BYTES + 1),
+        )
+        assertThrows<IllegalArgumentException> { ui { app.createWindow(windowParams) } }
+
+        testSuccessful = true
+    }
+
+    @Test
+    fun testWindowCreationLargeSizeValues() {
+        run(defaultApplicationConfig())
+
+        val windowParams = defaultWindowParams().copy(
+            size = LogicalSize(width = Int.MAX_VALUE.toUInt(), height = Int.MAX_VALUE.toUInt()),
+            minSize = LogicalSize(width = Int.MAX_VALUE.toUInt(), height = Int.MAX_VALUE.toUInt()),
+        )
+        val w = ui { app.createWindow(windowParams) }
+
+        ui { w.close() }
+
+        awaitEventOfType<Event.WindowClosed> { event ->
+            assertEquals(windowParams.windowId, event.windowId)
+            true
+        }
+
+        testSuccessful = true
+    }
+
+    @Test
     fun testMultipleWindowCreationWithSameId() {
         run(defaultApplicationConfig())
 

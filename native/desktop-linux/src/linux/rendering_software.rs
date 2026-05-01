@@ -1,3 +1,5 @@
+use anyhow::Context;
+use log::warn;
 use smithay_client_toolkit::{
     reexports::client::protocol::{wl_shm, wl_surface::WlSurface},
     shm::{
@@ -24,30 +26,28 @@ impl SoftwareRendering {
     /// cbindgen:ignore
     const BYTES_PER_PIXEL: i32 = 4;
 
-    fn create_buffer(pool: &mut SlotPool, size: PhysicalSize) -> SoftwareBuffer<'_> {
-        let stride = size.width.0 * Self::BYTES_PER_PIXEL;
-        let (buffer, canvas) = pool
-            .create_buffer(size.width.0, size.height.0, stride, wl_shm::Format::Argb8888)
-            .expect("create buffer");
-        SoftwareBuffer { buffer, canvas }
+    fn create_buffer(pool: &mut SlotPool, size: PhysicalSize) -> anyhow::Result<SoftwareBuffer<'_>> {
+        let stride = size.width.0.checked_mul(Self::BYTES_PER_PIXEL).context("stride")?;
+        let (buffer, canvas) = pool.create_buffer(size.width.0, size.height.0, stride, wl_shm::Format::Argb8888)?;
+        Ok(SoftwareBuffer { buffer, canvas })
     }
 
-    pub fn new(shm: &Shm, size: PhysicalSize) -> Self {
-        let stride = size.width.0 * Self::BYTES_PER_PIXEL;
+    pub fn new(shm: &Shm, size: PhysicalSize) -> anyhow::Result<Self> {
+        let stride = size.width.0.checked_mul(Self::BYTES_PER_PIXEL).context("stride")?;
         let mut pool = SlotPool::new(
-            (stride * size.height.0 * 2).try_into().unwrap(), // double buffered
+            usize::try_from(stride)? * usize::try_from(size.height.0)? * 2, // double buffered
             shm,
-        )
-        .expect("Failed to create pool");
-        let buffer = Self::create_buffer(&mut pool, size).buffer;
-        Self { pool, buffer, stride }
+        )?;
+        let buffer = Self::create_buffer(&mut pool, size)?.buffer;
+        Ok(Self { pool, buffer, stride })
     }
 
-    pub fn resize(&mut self, shm: &Shm, size: PhysicalSize) {
-        let stride = size.width.0 * Self::BYTES_PER_PIXEL;
+    pub fn resize(&mut self, shm: &Shm, size: PhysicalSize) -> anyhow::Result<()> {
+        let stride = size.width.0.checked_mul(Self::BYTES_PER_PIXEL).context("stride")?;
         if self.buffer.height() != size.height.0 || self.buffer.stride() != stride {
-            *self = Self::new(shm, size);
+            *self = Self::new(shm, size)?;
         }
+        Ok(())
     }
 
     pub fn draw<F>(&mut self, surface: &WlSurface, size: PhysicalSize, do_draw: F)
@@ -59,9 +59,16 @@ impl SoftwareRendering {
         } else {
             // This should be rare, but if the compositor has not released the previous
             // buffer, we need double-buffering.
-            let second_draw_data = Self::create_buffer(&mut self.pool, size);
-            self.buffer = second_draw_data.buffer;
-            second_draw_data.canvas
+            match Self::create_buffer(&mut self.pool, size) {
+                Ok(second_draw_data) => {
+                    self.buffer = second_draw_data.buffer;
+                    second_draw_data.canvas
+                }
+                Err(e) => {
+                    warn!("Failed to create second buffer: {e}");
+                    return;
+                }
+            }
         };
 
         let draw_data = SoftwareDrawData {

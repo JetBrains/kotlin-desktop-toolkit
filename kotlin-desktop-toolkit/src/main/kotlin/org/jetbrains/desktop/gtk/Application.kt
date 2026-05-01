@@ -100,6 +100,10 @@ public class ShowNotificationParams(
 )
 
 public class Application(public val appId: String) {
+    public companion object {
+        public const val MAX_STRING_SIZE_BYTES: Int = 4083 // Align with Wayland implementation
+    }
+
     private var applicationConfig: ApplicationConfig? = null
 
     private val activeArenas = mutableMapOf<Long, Arena>()

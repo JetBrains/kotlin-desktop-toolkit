@@ -486,7 +486,11 @@ internal fun String?.toNativeUtf8(arena: Arena): MemorySegment {
         NativeBorrowedUtf8.ptr(native, MemorySegment.NULL)
     } else {
         val byteArray = encodeToByteArray()
-        NativeBorrowedUtf8.len(native, byteArray.size.toLong())
+        val byteArraySize = byteArray.size
+        require(byteArraySize <= Application.MAX_STRING_SIZE_BYTES) {
+            "String too long (max ${Application.MAX_STRING_SIZE_BYTES} bytes, but was $byteArraySize bytes): $this)"
+        }
+        NativeBorrowedUtf8.len(native, byteArraySize.toLong())
 
         val nativeArray = arena.allocateArray(ValueLayout.JAVA_BYTE, *byteArray)
         NativeBorrowedUtf8.ptr(native, nativeArray)
