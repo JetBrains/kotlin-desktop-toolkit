@@ -3913,6 +3913,8 @@ text/plain;charset=utf-8
         moveMouseTo(mouseX, mouseY)
 
         withMouseButtonDown(MouseButton.LEFT) {
+            awaitEventOfType<Event.MouseDown> { true }
+
             ui {
                 window.startDragAndDrop(
                     StartDragAndDropParams(
@@ -3938,11 +3940,6 @@ text/plain;charset=utf-8
         }
 
         dataTransferTriggered.get(1000, TimeUnit.MILLISECONDS)
-        awaitEventOfType<Event.DragAndDropFinished> { event ->
-            assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(DragAndDropAction.Move, event.action)
-            true
-        }
         awaitEventOfType<Event.DropPerformed> { event ->
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(DragAndDropAction.Move, event.action)
@@ -3957,6 +3954,11 @@ text/plain;charset=utf-8
                 ),
                 event.locationInWindow,
             )
+            true
+        }
+        awaitEventOfType<Event.DragAndDropFinished> { event ->
+            assertEquals(windowParams.windowId, event.windowId)
+            assertEquals(DragAndDropAction.Move, event.action)
             true
         }
 
