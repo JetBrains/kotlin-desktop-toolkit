@@ -180,6 +180,14 @@ pub extern "C" fn window_minimize(window_ptr: WindowPtr) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_restore(window_ptr: WindowPtr) {
+    with_window(&window_ptr, "window_restore", |window| {
+        window.restore();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_remove_backdrop_tint(window_ptr: WindowPtr) {
     with_window(&window_ptr, "window_remove_backdrop_tint", Window::remove_backdrop_tint);
 }

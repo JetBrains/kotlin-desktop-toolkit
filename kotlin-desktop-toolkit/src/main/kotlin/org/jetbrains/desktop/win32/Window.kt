@@ -139,6 +139,10 @@ public class Window internal constructor(
         return ffiDownCall { desktop_win32_h.window_minimize(ptr) }
     }
 
+    public fun restore() {
+        return ffiDownCall { desktop_win32_h.window_restore(ptr) }
+    }
+
     public fun removeBackdropTint() {
         ffiDownCall { desktop_win32_h.window_remove_backdrop_tint(ptr) }
     }
