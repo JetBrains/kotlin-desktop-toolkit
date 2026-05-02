@@ -1,7 +1,7 @@
 use desktop_common::logger::PanicDefault;
 
 #[repr(transparent)]
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct PhysicalPixels(pub i32);
 
 #[repr(transparent)]
@@ -9,7 +9,7 @@ pub struct PhysicalPixels(pub i32);
 pub struct LogicalPixels(pub f32);
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PhysicalPoint {
     pub x: PhysicalPixels,
     pub y: PhysicalPixels,
@@ -35,7 +35,7 @@ impl PanicDefault for PhysicalPoint {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PhysicalSize {
     pub width: PhysicalPixels,
     pub height: PhysicalPixels,
