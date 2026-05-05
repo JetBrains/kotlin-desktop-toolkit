@@ -34,8 +34,8 @@ abstract class DownloadJExtractTask @Inject constructor(
     val jextractBinary = providerFactory.provider {
         val dir = jextractDirectory.get().asFile
         when (hostPlatform().os) { // FIXME: implement for each platform if required
-            Os.WINDOWS -> dir.resolve("jextract-22/bin/jextract.bat")
-            else -> dir.resolve("jextract-22/bin/jextract") // FIXME: path under the directory
+            Os.WINDOWS -> dir.resolve("jextract-25/bin/jextract.bat")
+            else -> dir.resolve("jextract-25/bin/jextract") // FIXME: path under the directory
         }
     }
 

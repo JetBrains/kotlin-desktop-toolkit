@@ -251,7 +251,7 @@ val compileNativeTaskByTarget = buildMap {
 }
 
 val downloadJExtractTask = tasks.register<DownloadJExtractTask>("downloadJExtract") {
-    slug = "22/6/openjdk-22-jextract+6-47"
+    slug = "25/1/openjdk-25-jextract+1-1"
     jextractDirectory = layout.buildDirectory.dir("jextract")
 }
 
