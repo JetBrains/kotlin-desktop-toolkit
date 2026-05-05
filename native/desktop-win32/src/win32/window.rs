@@ -34,6 +34,7 @@ use windows::{
                 SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW,
                 WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
             },
+            Input::KeyboardAndMouse::{TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT, TrackMouseEvent},
         },
     },
 };
@@ -74,6 +75,8 @@ pub struct Window {
     size: RefCell<LogicalSize>,
     style: RefCell<WindowStyle>,
     pointer_in_window: AtomicBool,
+    nc_leave_tracking_armed: AtomicBool,
+    pub(crate) caption_buttons: RefCell<Option<crate::win32::caption_buttons::CaptionButtonStrip>>,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
     backdrop_tint: RefCell<Option<SpriteVisual>>,
@@ -109,6 +112,8 @@ impl Window {
             size: RefCell::new(LogicalSize::new(0.0, 0.0)),
             style: RefCell::default(),
             pointer_in_window: AtomicBool::new(false),
+            nc_leave_tracking_armed: AtomicBool::new(false),
+            caption_buttons: RefCell::new(None),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
             backdrop_tint: RefCell::new(None),
@@ -169,6 +174,23 @@ impl Window {
         let layer = self.chrome_layer.borrow();
         let layer = layer.as_ref().context("Window has not been created yet")?;
         Ok(layer.clone())
+    }
+
+    pub(crate) fn ensure_nc_leave_tracking(&self) -> anyhow::Result<()> {
+        if !self.nc_leave_tracking_armed.swap(true, Ordering::Relaxed) {
+            let mut tme = TRACKMOUSEEVENT {
+                cbSize: size_of::<TRACKMOUSEEVENT>().try_into()?,
+                dwFlags: TME_NONCLIENT | TME_LEAVE,
+                hwndTrack: self.hwnd(),
+                dwHoverTime: 0,
+            };
+            unsafe { TrackMouseEvent(&raw mut tme)? };
+        }
+        Ok(())
+    }
+
+    pub(crate) fn nc_leave_tracking_fired(&self) {
+        self.nc_leave_tracking_armed.store(false, Ordering::Relaxed);
     }
 
     pub fn get_client_size(&self) -> anyhow::Result<LogicalSize> {
