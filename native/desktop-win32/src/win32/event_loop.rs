@@ -7,9 +7,7 @@ use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::{
         Dwm::DwmDefWindowProc,
-        Gdi::{
-            BeginPaint, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT, ScreenToClient,
-        },
+        Gdi::{BeginPaint, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT},
     },
     UI::{
         HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow, GetSystemMetricsForDpi, SetThreadDpiAwarenessContext},
@@ -31,14 +29,14 @@ use windows::Win32::{
 
 use super::{
     appearance::{Appearance, HighContrast},
-    caption_buttons::{CaptionButtonAction, PointerDeviceKind, caption_button_kind_for_hittest, hittest_for_caption_button_kind},
+    caption_buttons::{CaptionButtonAction, PointerDeviceKind, caption_kind_at_screen, hittest_for_caption_button_kind},
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
         PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
         SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
         WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
-    geometry::{PhysicalPixels, PhysicalPoint, PhysicalSize},
+    geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
     pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
@@ -405,7 +403,7 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let mut max_chrome_y = 0;
     if window.is_resizable() && is_maximized && window.has_custom_title_bar() {
         let dpi = unsafe { GetDpiForWindow(hwnd) };
-        max_chrome_y = unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) };
+        max_chrome_y = unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) };
         // The Custom-titlebar handler leaves the top inset at 0 so the
         // title-bar area stays in the client rect; add the maximized overhang
         // back here. Matches Windows Terminal's `_OnNcCalcSize` adding
@@ -506,27 +504,11 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     let mouse_x = GET_X_LPARAM!(lparam.0);
     let mouse_y = GET_Y_LPARAM!(lparam.0);
 
-    // Consult the caption-button strip first; convert screen-space (lparam) to
-    // strip-relative client coordinates and ask `strip.hit_test`.
-    if let Some(strip) = window.caption_buttons.borrow().as_ref() {
-        let mut client_point = POINT { x: mouse_x, y: mouse_y };
-        let _ = unsafe { ScreenToClient(hwnd, &raw mut client_point) };
-        let mut client_rect = RECT::default();
-        let _ = unsafe { GetClientRect(hwnd, &raw mut client_rect) };
-        let strip_left = client_rect.right - strip.strip_width_px();
-        if client_point.x >= strip_left
-            && client_point.x < client_rect.right
-            && client_point.y >= client_rect.top
-            && client_point.y < client_rect.bottom
-        {
-            let strip_relative = PhysicalPoint {
-                x: PhysicalPixels(client_point.x - strip_left),
-                y: PhysicalPixels(client_point.y - client_rect.top),
-            };
-            if let Some(kind) = strip.hit_test(strip_relative) {
-                return Some(LRESULT(hittest_for_caption_button_kind(kind, strip.is_enabled(kind)) as _));
-            }
-        }
+    // Consult the caption-button strip first; the screen→client conversion
+    // and hit-test math live in `caption_buttons::caption_kind_at_screen`.
+    if let Some(kind) = caption_kind_at_screen(window, PhysicalPoint::new(mouse_x, mouse_y)) {
+        let is_enabled = window.caption_buttons.borrow().as_ref().is_some_and(|s| s.is_enabled(kind));
+        return Some(LRESULT(hittest_for_caption_button_kind(kind, is_enabled) as _));
     }
 
     if original_ht != LRESULT(HTCLIENT as _) {
@@ -639,7 +621,7 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
 
     if msg == WM_NCPOINTERUPDATE && window.has_custom_title_bar() {
-        let kind = caption_button_kind_for_hittest(u32::from(HIWORD!(wparam.0)));
+        let kind = caption_kind_at_screen(window, pointer_info.get_physical_location());
         if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
             let device = device_kind_for(&pointer_info);
             let _ = window.ensure_nc_leave_tracking();
@@ -715,7 +697,7 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPA
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
 
     if msg == WM_NCPOINTERDOWN && window.has_custom_title_bar() {
-        let kind = caption_button_kind_for_hittest(u32::from(HIWORD!(wparam.0)));
+        let kind = caption_kind_at_screen(window, pointer_info.get_physical_location());
         if let Some(kind) = kind {
             let button_change = pointer_info.get_pointer_button_change();
             let is_primary = button_change.kind() == PointerButtonChangeKind::Pressed && button_change.button() == PointerButton::Left;
@@ -755,7 +737,12 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
     let is_non_client = matches!(msg, WM_NCPOINTERUP);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
 
-    if msg == WM_NCPOINTERUP && window.has_custom_title_bar() {
+    // Claim either WM_POINTERUP or WM_NCPOINTERUP when the strip has an active
+    // press: a press that started on a caption button (NC) but released after
+    // the cursor crossed into the client area arrives as WM_POINTERUP, and
+    // gating on WM_NCPOINTERUP alone would leave `press_session` stuck until
+    // WM_POINTERCAPTURECHANGED fires on deactivation.
+    if window.has_custom_title_bar() {
         let button_change = pointer_info.get_pointer_button_change();
         let is_primary = button_change.kind() == PointerButtonChangeKind::Released && button_change.button() == PointerButton::Left;
         let strip_owns_press = window
@@ -764,7 +751,7 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
             .as_ref()
             .is_some_and(|s| s.has_active_press_for(pointer_info.pointer_id()));
         if is_primary && strip_owns_press {
-            let kind_under_pointer = caption_button_kind_for_hittest(u32::from(HIWORD!(wparam.0)));
+            let kind_under_pointer = caption_kind_at_screen(window, pointer_info.get_physical_location());
             let action = window.caption_buttons.borrow_mut().as_mut().and_then(|strip| {
                 strip
                     .on_pointer_up(kind_under_pointer, pointer_info.pointer_id())
