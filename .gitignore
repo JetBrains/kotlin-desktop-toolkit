@@ -6,6 +6,9 @@
 .kotlin
 .DS_Store
 
+# Claude Code per-machine settings and ephemeral worktrees
+.claude/
+
 # Ignore Gradle build output directory
 build
 
