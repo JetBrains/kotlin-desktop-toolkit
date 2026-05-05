@@ -307,15 +307,14 @@ The strip never invokes `Window::request_close` and friends directly — it retu
 
 Minimize / Maximize follow Windows' paired-button behaviour per archived Microsoft KB Q130760: when neither style bit is present neither box appears; with one bit present both boxes appear and the absent one is disabled. The current *Window Styles* page documents the controlling style bits (`WS_MINIMIZEBOX`, `WS_MAXIMIZEBOX`, `WS_SYSMENU`) but not the paired-button outcome — treat it as **implementation-observed** (verified on Windows 11 against `WM_GETTITLEBARINFOEX`: hidden buttons surface as `STATE_SYSTEM_INVISIBLE`, disabled as `STATE_SYSTEM_UNAVAILABLE`).
 
-Maximize requires `is_resizable && is_maximizable`. `Window::maximize()` is a no-op on non-resizable windows.
+Maximize requires `is_maximizable`. `Window::maximize()` is a no-op when `!is_maximizable`; `is_resizable` controls resize affordances and the maximized overhang inset, not Maximize button actionability.
 
 | `WindowStyle` flags | Minimize button | Maximize button |
 |---|---|---|
 | `!is_minimizable && !is_maximizable` | hidden | hidden |
 | `is_minimizable && !is_maximizable` | visible, enabled | visible, disabled |
-| `!is_minimizable && is_maximizable && is_resizable` | visible, disabled | visible, enabled |
-| `is_minimizable && is_maximizable && is_resizable` | visible, enabled | visible, enabled |
-| any `is_maximizable` && !is_resizable | per Minimize column above | visible, disabled |
+| `!is_minimizable && is_maximizable` | visible, disabled | visible, enabled |
+| `is_minimizable && is_maximizable` | visible, enabled | visible, enabled |
 
 `Close` is always visible and enabled. Close-disable support is deferred because Win32 uses the system-menu `SC_CLOSE` state rather than a Min/Max-style window bit; see [TODO: Win32 Close-button disable support](../TODO.md#win32-close-button-disable-support).
 

@@ -424,7 +424,7 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let event = NCCalcSizeEvent { origin, size, scale };
     event_loop.handle_event(window, event);
     let _ = window.resize_backdrop_tint(size);
-    if let Some(strip) = window.caption_buttons.borrow().as_ref() {
+    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         let _ = strip
             .on_resize(size, max_chrome_y)
             .inspect_err(|err| log::warn!("strip on_resize failed: {err}"));
