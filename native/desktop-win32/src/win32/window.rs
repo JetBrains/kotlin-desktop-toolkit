@@ -287,6 +287,12 @@ impl Window {
     }
 
     pub fn maximize(&self) {
+        if !self.is_resizable() {
+            // Spec §4.2: Maximize is a no-op on non-resizable windows. Mirrors
+            // the strip-side availability gate so programmatic maximize agrees
+            // with the visible button state.
+            return;
+        }
         let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWMAXIMIZED) };
     }
 
@@ -475,7 +481,13 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
     if msg == WM_NCDESTROY {
         if let Ok(raw) = unsafe { RemovePropW(hwnd, WINDOW_PTR_PROP_NAME) } {
-            let _ = unsafe { Weak::from_raw(raw.0.cast::<Window>()) };
+            let weak = unsafe { Weak::from_raw(raw.0.cast::<Window>()) };
+            // Drop the strip (and its `RenderingDeviceReplacedRegistration`)
+            // before the HWND is recycled — otherwise an in-flight WinRT
+            // callback could `PostMessageW` to a stale or recycled handle.
+            if let Some(window) = weak.upgrade() {
+                window.caption_buttons.replace(None);
+            }
         }
         return LRESULT(0);
     }
@@ -524,6 +536,24 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.set_position(*window.origin.borrow(), *window.size.borrow())?;
     initialize_content(window, hwnd).context("failed to initialize the content")?;
     window.set_cursor(Cursor::load_from_system(CursorIcon::Arrow)?);
+
+    if window.has_custom_title_bar() {
+        let chrome_layer = window.chrome_layer()?;
+        let strip = crate::win32::caption_buttons::CaptionButtonStrip::new(
+            &chrome_layer,
+            window.get_scale(),
+            &window.style.borrow(),
+            window.compositor_controller.clone(),
+            hwnd,
+        )?;
+        let mut client_rect = RECT::default();
+        unsafe { GetClientRect(hwnd, &raw mut client_rect)? };
+        strip.set_strip_position(
+            PhysicalSize::new(client_rect.right - client_rect.left, client_rect.bottom - client_rect.top),
+            0,
+        )?;
+        window.caption_buttons.replace(Some(strip));
+    }
     Ok(())
 }
 

@@ -126,6 +126,10 @@ impl PointerInfo {
         }
     }
 
+    pub(crate) const fn pointer_id(&self) -> u32 {
+        self.get_native_pointer_info().pointerId
+    }
+
     pub(crate) fn get_pointer_state(&self) -> PointerState {
         let native_pointer_info = self.get_native_pointer_info();
         let pointer_flags = native_pointer_info.pointerFlags;

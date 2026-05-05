@@ -7,35 +7,42 @@ use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::{
         Dwm::DwmDefWindowProc,
-        Gdi::{BeginPaint, EndPaint, PAINTSTRUCT},
+        Gdi::{
+            BeginPaint, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT, ScreenToClient,
+        },
     },
     UI::{
         HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow, GetSystemMetricsForDpi, SetThreadDpiAwarenessContext},
         Input::Pointer::EnableMouseInPointer,
+        Shell::{ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
         WindowsAndMessaging::{
             AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
-            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS,
-            SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-            SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_APP, WM_CHAR,
-            WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS,
-            WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERDOWN,
-            WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT,
-            WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, IsZoomed,
+            MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED,
+            SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE,
+            WINDOWPOS, WM_ACTIVATE, WM_APP, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO,
+            WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP,
+            WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP,
+            WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE,
+            WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
 };
 
 use super::{
     appearance::{Appearance, HighContrast},
+    caption_buttons::{
+        CaptionButtonAction, PointerDeviceKind, caption_button_kind_for_hittest, hittest_for_caption_button_kind,
+    },
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
         PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
         SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
         WindowScaleChangedEvent, WindowTitleChangedEvent,
     },
-    geometry::{PhysicalPoint, PhysicalSize},
+    geometry::{PhysicalPixels, PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButtonChangeKind, PointerClickCounter, PointerInfo},
+    pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
@@ -118,6 +125,10 @@ impl EventLoop {
 
             WM_POINTERLEAVE => on_pointerleave(self, window, wparam),
 
+            WM_POINTERCAPTURECHANGED => on_pointercapturechanged(window, wparam),
+
+            WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED => on_caption_buttons_rdr(window),
+
             WM_ACTIVATE => on_activate(self, window, wparam),
 
             WM_NCCALCSIZE => on_nccalcsize(self, window, wparam, lparam),
@@ -197,7 +208,13 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         size: PhysicalSize::new(rect.right - rect.left, rect.bottom - rect.top),
         scale,
     };
-    event_loop.handle_event(window, event)
+    let result = event_loop.handle_event(window, event);
+    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+        let _ = strip
+            .on_dpi_change(window.get_scale())
+            .inspect_err(|err| log::warn!("strip on_dpi_change failed: {err}"));
+    }
+    result
 }
 
 fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) -> Option<LRESULT> {
@@ -215,6 +232,12 @@ fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) 
             scale: window.get_scale(),
         };
         event_loop.handle_event(window, event);
+    }
+    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+        let now_maximized = unsafe { IsZoomed(window.hwnd()) }.as_bool();
+        let _ = strip
+            .on_max_state_change(now_maximized)
+            .inspect_err(|err| log::warn!("strip on_max_state_change failed: {err}"));
     }
     Some(LRESULT(0))
 }
@@ -270,6 +293,10 @@ fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lpa
                 Ok(new_appearance) => {
                     let event = SystemAppearanceChangeEvent { new_appearance };
                     event_loop.handle_event(window, event);
+                    let hc = HighContrast::get_current()
+                        .inspect_err(|err| log::warn!("strip appearance notify: failed to read high-contrast state: {err}"))
+                        .unwrap_or(HighContrast::Off);
+                    notify_strip_appearance(window, new_appearance, hc);
                 }
                 Err(err) => log::error!("failed to get current system appearance: {err}"),
             }
@@ -281,6 +308,10 @@ fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lpa
             Ok(new_high_contrast) => {
                 let event = SystemHighContrastChangeEvent { new_high_contrast };
                 event_loop.handle_event(window, event);
+                let appearance = Appearance::get_current()
+                    .inspect_err(|err| log::warn!("strip appearance notify: failed to read appearance: {err}"))
+                    .unwrap_or(Appearance::Light);
+                notify_strip_appearance(window, appearance, new_high_contrast);
             }
             Err(err) => log::error!("failed to get high-contrast state: {err}"),
         }
@@ -299,6 +330,10 @@ fn on_syscolorchange(event_loop: &EventLoop, window: &Window) -> Option<LRESULT>
         .ok()?;
     let event = SystemHighContrastChangeEvent { new_high_contrast };
     event_loop.handle_event(window, event);
+    let appearance = Appearance::get_current()
+        .inspect_err(|err| log::warn!("strip appearance notify: failed to read appearance: {err}"))
+        .unwrap_or(Appearance::Light);
+    notify_strip_appearance(window, appearance, new_high_contrast);
     None
 }
 
@@ -314,8 +349,21 @@ fn on_activate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Optio
             .apply_system_backdrop()
             .inspect_err(|err| log::error!("failed to apply the requested system backdrop: {err}"));
     }
+    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+        let _ = strip
+            .on_activate(is_active)
+            .inspect_err(|err| log::warn!("strip on_activate failed: {err}"));
+    }
     let event = WindowActivatedEvent { is_active, is_minimized };
     event_loop.handle_event(window, event)
+}
+
+fn notify_strip_appearance(window: &Window, appearance: Appearance, high_contrast: HighContrast) {
+    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+        let _ = strip
+            .on_appearance_change(appearance, high_contrast)
+            .inspect_err(|err| log::warn!("strip on_appearance_change failed: {err}"));
+    }
 }
 
 fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
@@ -349,6 +397,30 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     if !window.has_custom_title_bar() {
         calcsize_params.rgrc[0].top -= rc.top;
     }
+
+    let is_maximized = unsafe { IsZoomed(hwnd) }.as_bool();
+    // The off-monitor overhang only exists when `WS_THICKFRAME` is set
+    // (spec §3.6); `WindowStyle::to_system` clears it when `!is_resizable`.
+    // `max_chrome_y` stays 0 for non-resizable / non-Custom / non-maximized
+    // windows so the strip's `set_strip_position` does not shift buttons
+    // down into the title-bar zone.
+    let mut max_chrome_y = 0;
+    if window.is_resizable() && is_maximized && window.has_custom_title_bar() {
+        let dpi = unsafe { GetDpiForWindow(hwnd) };
+        max_chrome_y = unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) };
+        // The Custom-titlebar handler leaves the top inset at 0 so the
+        // title-bar area stays in the client rect; add the maximized overhang
+        // back here. Matches Windows Terminal's `_OnNcCalcSize` adding
+        // `_GetResizeHandleHeight()` (= SM_CXPADDEDBORDER + SM_CYSIZEFRAME)
+        // to top only.
+        calcsize_params.rgrc[0].top += max_chrome_y;
+
+        // GH#1438 / GH#5209: 2-px claw-back so the cursor can still reveal an
+        // auto-hide taskbar. Custom-titlebar only.
+        let _ = apply_autohide_taskbar_inset(hwnd, &mut calcsize_params.rgrc[0])
+            .inspect_err(|err| log::warn!("autohide taskbar inset failed: {err}"));
+    }
+
     let origin = PhysicalPoint::new(calcsize_params.rgrc[0].left, calcsize_params.rgrc[0].top);
     let size = PhysicalSize::new(
         calcsize_params.rgrc[0].right - calcsize_params.rgrc[0].left,
@@ -358,11 +430,67 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let event = NCCalcSizeEvent { origin, size, scale };
     event_loop.handle_event(window, event);
     let _ = window.resize_backdrop_tint(size);
+    if let Some(strip) = window.caption_buttons.borrow().as_ref() {
+        let _ = strip
+            .on_resize(size, max_chrome_y)
+            .inspect_err(|err| log::warn!("strip on_resize failed: {err}"));
+    }
     Some(LRESULT(0))
 }
 
+/// Per Windows Terminal `_OnNcCalcSize` GH#1438 / GH#5209: when an auto-hide
+/// taskbar lives on an edge of the window's monitor, reduce the maximized
+/// client rect by 2 px on that edge so the cursor can reach the screen edge
+/// to trigger the taskbar reveal.
+fn apply_autohide_taskbar_inset(hwnd: windows::Win32::Foundation::HWND, rect: &mut RECT) -> anyhow::Result<()> {
+    const AUTOHIDE_TASKBAR_SIZE: i32 = 2;
+
+    let mut autohide = APPBARDATA::default();
+    autohide.cbSize = size_of::<APPBARDATA>() as u32;
+    let state = unsafe { SHAppBarMessage(ABM_GETSTATE, &raw mut autohide) } as u32;
+    if state & ABS_AUTOHIDE == 0 {
+        return Ok(());
+    }
+
+    let hmon = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+    if hmon.is_invalid() {
+        anyhow::bail!("MonitorFromWindow returned invalid HMONITOR for HWND {hwnd:?}");
+    }
+    let mut mon_info = MONITORINFO {
+        cbSize: size_of::<MONITORINFO>() as u32,
+        ..Default::default()
+    };
+    if !unsafe { GetMonitorInfoW(hmon, &raw mut mon_info) }.as_bool() {
+        anyhow::bail!("GetMonitorInfoW failed for HMONITOR {hmon:?}");
+    }
+
+    let has_autohide = |edge: u32| -> bool {
+        let mut data = APPBARDATA {
+            cbSize: size_of::<APPBARDATA>() as u32,
+            uEdge: edge,
+            rc: mon_info.rcMonitor,
+            ..Default::default()
+        };
+        let h = unsafe { SHAppBarMessage(ABM_GETAUTOHIDEBAREX, &raw mut data) };
+        h != 0
+    };
+    if has_autohide(ABE_TOP) {
+        rect.top += AUTOHIDE_TASKBAR_SIZE;
+    }
+    if has_autohide(ABE_BOTTOM) {
+        rect.bottom -= AUTOHIDE_TASKBAR_SIZE;
+    }
+    if has_autohide(ABE_LEFT) {
+        rect.left += AUTOHIDE_TASKBAR_SIZE;
+    }
+    if has_autohide(ABE_RIGHT) {
+        rect.right -= AUTOHIDE_TASKBAR_SIZE;
+    }
+    Ok(())
+}
+
 fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    if !window.has_custom_title_bar() || !window.is_resizable() {
+    if !window.has_custom_title_bar() {
         return None;
     }
     let hwnd = window.hwnd();
@@ -374,11 +502,36 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
             unsafe { DefWindowProcW(hwnd, WM_NCHITTEST, wparam, lparam) }
         }
     };
+    let mouse_x = GET_X_LPARAM!(lparam.0);
+    let mouse_y = GET_Y_LPARAM!(lparam.0);
+
+    // Consult the caption-button strip first; convert screen-space (lparam) to
+    // strip-relative client coordinates and ask `strip.hit_test`.
+    if let Some(strip) = window.caption_buttons.borrow().as_ref() {
+        let mut client_point = POINT { x: mouse_x, y: mouse_y };
+        let _ = unsafe { ScreenToClient(hwnd, &raw mut client_point) };
+        let mut client_rect = RECT::default();
+        let _ = unsafe { GetClientRect(hwnd, &raw mut client_rect) };
+        let strip_left = client_rect.right - strip.strip_width_px();
+        if client_point.x >= strip_left
+            && client_point.x < client_rect.right
+            && client_point.y >= client_rect.top
+            && client_point.y < client_rect.bottom
+        {
+            let strip_relative = PhysicalPoint {
+                x: PhysicalPixels(client_point.x - strip_left),
+                y: PhysicalPixels(client_point.y - client_rect.top),
+            };
+            if let Some(kind) = strip.hit_test(strip_relative) {
+                return Some(LRESULT(hittest_for_caption_button_kind(kind, strip.is_enabled(kind)) as _));
+            }
+        }
+    }
+
     if original_ht != LRESULT(HTCLIENT as _) {
         return Some(original_ht);
     }
-    let mouse_x = GET_X_LPARAM!(lparam.0);
-    let mouse_y = GET_Y_LPARAM!(lparam.0);
+
     let event = NCHitTestEvent { mouse_x, mouse_y };
     let handled = event_loop.handle_event(window, event);
     if handled.is_some() {
@@ -390,7 +543,10 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     let resize_handle_height =
         unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, current_dpi) + GetSystemMetricsForDpi(SM_CYSIZEFRAME, current_dpi) };
     let title_bar_height = resize_handle_height + unsafe { GetSystemMetricsForDpi(SM_CYSIZE, current_dpi) };
-    let is_on_resize_border = mouse_y < (window_rect.top + resize_handle_height) as _;
+    // Spec §3.2: only the resize-border match is gated on `is_resizable`; the
+    // title-bar drag region applies to non-resizable Custom-titlebar windows
+    // too so they remain draggable by their title bar.
+    let is_on_resize_border = window.is_resizable() && mouse_y < (window_rect.top + resize_handle_height) as _;
     let is_within_title_bar = mouse_y < (window_rect.top + title_bar_height) as _;
     let hit_test_result = if is_on_resize_border {
         HTTOP
@@ -403,6 +559,12 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
 }
 
 fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+        let _ = strip
+            .on_nc_mouse_leave()
+            .inspect_err(|err| log::warn!("strip on_nc_mouse_leave failed: {err}"));
+    }
+    window.nc_leave_tracking_fired();
     let mut dwm_result = LRESULT(0);
     if unsafe { DwmDefWindowProc(window.hwnd(), WM_NCMOUSELEAVE, wparam, lparam, &raw mut dwm_result) }.as_bool() {
         Some(dwm_result)
@@ -463,9 +625,46 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
     event_loop.handle_event(window, event)
 }
 
+fn device_kind_for(pointer_info: &PointerInfo) -> PointerDeviceKind {
+    match pointer_info {
+        PointerInfo::Touch(_) => PointerDeviceKind::Touch,
+        PointerInfo::Pen(_) => PointerDeviceKind::Pen,
+        PointerInfo::Common(_) => PointerDeviceKind::Mouse,
+    }
+}
+
 fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
     let is_non_client = matches!(msg, WM_NCPOINTERUPDATE);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
+
+    if msg == WM_NCPOINTERUPDATE && window.has_custom_title_bar() {
+        let kind = caption_button_kind_for_hittest(u32::from(HIWORD!(wparam.0)));
+        if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+            let device = device_kind_for(&pointer_info);
+            let _ = window.ensure_nc_leave_tracking();
+            let _ = strip.on_pointer_update(kind, pointer_info.pointer_id(), device);
+        }
+        if kind.is_some() {
+            // First-entry parity (spec §3.5): mirror `on_pointerupdate`'s
+            // else-branch so Kotlin gets a `PointerEntered` even when the
+            // pointer's first appearance is over a caption button.
+            if !window.is_pointer_in_window() {
+                window.set_is_pointer_in_window(true);
+                event_loop.handle_event(
+                    window,
+                    Event::PointerEntered(PointerEnteredEvent {
+                        location_in_window: pointer_info.get_location_in_window(),
+                        location_on_screen: pointer_info.get_physical_location(),
+                        state: pointer_info.get_pointer_state(),
+                        timestamp: pointer_info.get_timestamp(),
+                    }),
+                );
+            }
+            // Strip events are private — suppress the Kotlin dispatch.
+            return Some(LRESULT(0));
+        }
+    }
+
     let event = if window.is_pointer_in_window() {
         let button_change = pointer_info.get_pointer_button_change();
         match button_change.kind() {
@@ -513,6 +712,23 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
 
 fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
+
+    if msg == WM_NCPOINTERDOWN && window.has_custom_title_bar() {
+        let kind = caption_button_kind_for_hittest(u32::from(HIWORD!(wparam.0)));
+        if let Some(kind) = kind {
+            let button_change = pointer_info.get_pointer_button_change();
+            let is_primary = button_change.kind() == PointerButtonChangeKind::Pressed && button_change.button() == PointerButton::Left;
+            if is_primary {
+                if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+                    let device = device_kind_for(&pointer_info);
+                    let _ = strip.on_pointer_down(kind, pointer_info.pointer_id(), device);
+                }
+                return Some(LRESULT(0));
+            }
+            // Non-primary falls through to the existing dispatch.
+        }
+    }
+
     let pointer_button = match pointer_info.get_pointer_button_change() {
         change if change.kind() == PointerButtonChangeKind::Pressed => change.button(),
         pointer_button_change => {
@@ -537,6 +753,42 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPA
 fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
     let is_non_client = matches!(msg, WM_NCPOINTERUP);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
+
+    if msg == WM_NCPOINTERUP && window.has_custom_title_bar() {
+        let button_change = pointer_info.get_pointer_button_change();
+        let is_primary = button_change.kind() == PointerButtonChangeKind::Released && button_change.button() == PointerButton::Left;
+        let strip_owns_press = window
+            .caption_buttons
+            .borrow()
+            .as_ref()
+            .is_some_and(|s| s.has_active_press_for(pointer_info.pointer_id()));
+        if is_primary && strip_owns_press {
+            let kind_under_pointer = caption_button_kind_for_hittest(u32::from(HIWORD!(wparam.0)));
+            let action = window
+                .caption_buttons
+                .borrow_mut()
+                .as_mut()
+                .and_then(|strip| {
+                    strip
+                        .on_pointer_up(kind_under_pointer, pointer_info.pointer_id())
+                        .inspect_err(|err| log::warn!("strip on_pointer_up failed: {err}"))
+                        .ok()
+                        .flatten()
+                });
+            if let Some(action) = action {
+                match action {
+                    CaptionButtonAction::Close => {
+                        let _ = window.request_close();
+                    }
+                    CaptionButtonAction::Minimize => window.minimize(),
+                    CaptionButtonAction::Maximize => window.maximize(),
+                    CaptionButtonAction::Restore => window.restore(),
+                }
+            }
+            return Some(LRESULT(0));
+        }
+    }
+
     let pointer_button = match pointer_info.get_pointer_button_change() {
         change if change.kind() == PointerButtonChangeKind::Released => change.button(),
         pointer_button_change => {
@@ -553,8 +805,30 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
         timestamp: pointer_info.get_timestamp(),
     };
     let result = event_loop.handle_event(window, Event::PointerUp(event));
-    // WM_NCPOINTERUP should always return None so that the window buttons work
+    // Strip-claimed primary releases return early above; other NC releases pass
+    // through so DefWindowProc handles them.
     if is_non_client { None } else { result }
+}
+
+fn on_pointercapturechanged(window: &Window, wparam: WPARAM) -> Option<LRESULT> {
+    if !window.has_custom_title_bar() {
+        return None;
+    }
+    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+        let pointer_id = u32::from(LOWORD!(wparam.0));
+        let _ = strip.on_pointer_cancel(pointer_id);
+    }
+    // Cancellation only — must not fire `CaptionButtonAction`.
+    Some(LRESULT(0))
+}
+
+fn on_caption_buttons_rdr(window: &Window) -> Option<LRESULT> {
+    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+        let _ = strip
+            .on_rendering_device_replaced()
+            .inspect_err(|err| log::warn!("strip on_rendering_device_replaced failed: {err}"));
+    }
+    Some(LRESULT(0))
 }
 
 fn on_pointerwheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {

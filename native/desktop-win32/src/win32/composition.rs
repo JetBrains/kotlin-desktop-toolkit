@@ -78,8 +78,6 @@ impl D2dContext {
         surface: &CompositionDrawingSurface,
         body: impl FnOnce(&ID2D1RenderTarget, POINT) -> anyhow::Result<R>,
     ) -> anyhow::Result<Option<R>> {
-        use anyhow::Context as _;
-
         let surface_interop: ICompositionDrawingSurfaceInterop = surface.cast()?;
         let mut offset = POINT::default();
         let context = match unsafe { surface_interop.BeginDraw::<ID2D1DeviceContext>(None, &raw mut offset) } {
