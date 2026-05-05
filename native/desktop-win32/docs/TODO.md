@@ -1,6 +1,6 @@
 # TODO / Known issues
 
-Inventory of confirmed bugs, likely bugs, capability gaps, inline TODOs, smells, and open design questions surfaced during the documentation pass. Sorted by status (confirmed → likely → gap → smell → deferred review). Each item lists file:line and what to do.
+Inventory of confirmed bugs, likely bugs, capability gaps, inline TODOs, smells, and open design questions surfaced during the documentation pass. Sorted by status (confirmed → likely → gap → smell → deferred review). Each item lists the relevant file or function and what to do.
 
 This list is point-in-time. Verify against current code before acting.
 
@@ -20,17 +20,17 @@ This list is point-in-time. Verify against current code before acting.
 - **Options**: (a) document that the `DataObject` passed to drop callbacks is callback-scoped only and add a Kotlin-side guard that closes it on callback return; (b) deep-copy / clone the IDataObject inside the callback so the wrapped pointer is independently AddRef'd.
 
 ### `Window::drop` doesn't verify HWND destruction
-- **Where**: `window.rs:414-418`.
+- **Where**: `window.rs` (`impl Drop for Window`).
 - **What**: Only logs a trace; doesn't check `hwnd.is_null()` or call `DestroyWindow`. If the `Rc<Window>` drops without a prior `window_destroy`, the HWND leaks (and the window stays visible).
 - **Fix**: assert (or call `DestroyWindow` defensively) in `Drop`, or document that `window_destroy` is mandatory before drop and have the Kotlin `AutoCloseable` enforce it.
 
 ### `WNDCLASS_INIT` registration race
-- **Where**: `window.rs:82-94`.
+- **Where**: `window.rs` (`WNDCLASS_INIT`).
 - **What**: `OnceLock<u16>` checked with `get().is_none()` then populated via `get_or_init`. The two operations are not atomic together; concurrent window creation could call `RegisterClassExW` twice and lose the first atom.
 - **Fix**: use `get_or_init` alone (it's race-free) and remove the redundant `is_none` precheck.
 
 ### Duplicate `PointerDown` events
-- **Where**: `event_loop.rs:432` (`on_pointerupdate`) + `event_loop.rs:490` (`on_pointerdown`); also click-counter increment at both sites (`event_loop.rs:440`, `:490`).
+- **Where**: `event_loop.rs` (`on_pointerupdate` + `on_pointerdown`); also click-counter increment at both sites.
 - **What**: A single physical button press can produce both a `WM_POINTERUPDATE` with a button-press change and a dedicated `WM_POINTERDOWN`. Both handlers emit `Event::PointerDown` and update the click counter, leading to a double `PointerDown` and an inflated click count for the same gesture.
 - **Fix**: pick one handler as the source of truth for `PointerDown`; have the other one detect and skip the redundant emission.
 
@@ -60,17 +60,17 @@ This list is point-in-time. Verify against current code before acting.
 - **Fix**: change the field type to `PhysicalPoint`. Drop the `LogicalPoint::from_physical` conversion at the assignment site; pass the raw physical origin through. Kotlin callers that need logical coordinates within a specific monitor can convert using that monitor's `scale`. Verify no existing Kotlin caller assumes the value is logical.
 - **Note**: `ScreenInfo.size` is also currently `LogicalSize`; it's defensible (a single monitor's size in its own logical pixels makes sense), but consider whether the same cross-monitor argument applies — discuss when fixing.
 
-### `resize_backdrop_tint` / `Window::on_resize` commit ordering invariant (post-caption-buttons-plan)
-- **Where**: `window.rs` (`Window::resize_backdrop_tint`), `caption_buttons.rs` (`CaptionButtonStrip::on_resize`). Code introduced by the caption-buttons plan — does not exist on `main` yet.
-- **What**: After the caption-buttons plan lands, `Window::on_resize` will rely on `resize_backdrop_tint` not calling `compositor.commit()` itself, so the strip's `on_resize` (called immediately after) performs the single commit that publishes the backdrop's new size and the strip's new offset atomically. If a future maintainer adds a commit to `resize_backdrop_tint`, the strip move publishes after the backdrop's queued resize, surfacing one frame of visual mismatch.
-- **Fix**: lock down with a comment in `resize_backdrop_tint` (`// does not commit; see Window::on_resize ordering`); consider an assertion path on `Window`'s `CompositorController` use that catches double commits inside a single resize.
+### `resize_backdrop_tint` / caption-button resize commit ordering invariant
+- **Where**: `event_loop.rs` (`on_nccalcsize`), `window.rs` (`Window::resize_backdrop_tint`), `caption_buttons.rs` (`CaptionButtonStrip::on_resize`).
+- **What**: `on_nccalcsize` calls `resize_backdrop_tint(size)` and then `CaptionButtonStrip::on_resize(size, max_chrome_y)`. The strip's `on_resize` performs the single `CompositorController::Commit()` that publishes the backdrop's new size and the strip's new offset together. If a future maintainer adds a commit to `resize_backdrop_tint`, the backdrop resize can publish before the strip move, surfacing one frame of visual mismatch.
+- **Fix**: lock down with a comment in `resize_backdrop_tint` (`// does not commit; see on_nccalcsize / CaptionButtonStrip::on_resize ordering`); consider an assertion path on `Window`'s `CompositorController` use that catches double commits inside a single resize.
 - **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §3.3 / §5.5.
 
 ## Capability gaps
 
 ### Custom-titlebar maximized content layer Y-offset
 - **Where**: `composition.rs` 3-layer split introduced by the caption-buttons plan (spec §3.3, §3.6).
-- **What**: composition (0,0) tracks the HWND window-rect top-left ([Visual.Offset](https://learn.microsoft.com/uwp/api/windows.ui.composition.visual.offset?view=winrt-26100)). When maximized, `WM_NCCALCSIZE` insets `rgrc[0].top` by `frame_y + padding` so the client rect sits at the monitor edge, but composition (0,0) still tracks the window-rect — `frame_y + padding` pixels off-monitor. The strip's `composition_root` is offset to compensate; `content_layer` (ANGLE / Kotlin) is not. If §7.3 maximize-content-placement testing shows Kotlin content clipping, mirror the strip's Y-shift onto `content_layer` from the same wndproc sites.
+- **What**: composition (0,0) tracks the HWND window-rect top-left ([Visual.Offset](https://learn.microsoft.com/uwp/api/windows.ui.composition.visual.offset?view=winrt-26100)). When maximized, `WM_NCCALCSIZE` insets `rgrc[0].top` by `max_chrome_y` (`SM_CYSIZEFRAME` per manual verification) so the client rect sits at the monitor edge, but composition (0,0) still tracks the window-rect — `max_chrome_y` pixels off-monitor. The strip's `composition_root` is offset to compensate; `content_layer` (ANGLE / Kotlin) is not. If §7.3 maximize-content-placement testing shows Kotlin content clipping, mirror the strip's Y-shift onto `content_layer` from the same wndproc sites.
 - **Trigger**: spec §7.3 maximize-content-placement bullet reports content clipped at top monitor edge.
 - **Sketch when implementing**: `content_layer.SetOffset(Vector3 { X: 0.0, Y: max_chrome_y as f32, Z: 0.0 })` from `on_max_state_change` and `on_nccalcsize`; commit via `compositor_controller.Commit()`.
 - **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §3.3, §3.6.
@@ -90,7 +90,7 @@ This list is point-in-time. Verify against current code before acting.
 - **Sources**: spec §6.2.
 
 ### Caption-button RTL mirroring
-- **Where**: `caption_buttons.rs` (`StripGeometry::hit_test` at `client_rect.right - strip_width_px`); `event_loop.rs` strip-consultation snippet (caption-buttons plan, Task 6.2 step 1).
+- **Where**: `caption_buttons.rs` (`caption_kind_at_screen` and `StripGeometry::hit_test`); `event_loop.rs` strip consultation in `on_nchittest` / non-client pointer routing.
 - **What**: Win32 `WindowStyle` has no layout-direction or `WS_EX_LAYOUTRTL` source, so the caption-buttons strip implements only the LTR layout. Apps that want RTL mirroring (Arabic, Hebrew) get caption buttons on the wrong edge.
 - **Sketch when implementing**: add a layout-direction input on `WindowStyle` (Kotlin `WindowStyle.layoutDirection`, FFI plumbing); under `WS_EX_LAYOUTRTL`, either skip strip consultation in `on_nchittest` or anchor strip bounds at `client_rect.left` instead of `client_rect.right`. Add RTL test cases to the visibility/availability table (spec §4.2).
 - **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §4.2 (visibility/availability table), [`WS_EX_LAYOUTRTL`](https://learn.microsoft.com/windows/win32/winmsg/extended-window-styles).
@@ -186,7 +186,7 @@ This list is point-in-time. Verify against current code before acting.
 - **Investigation**: confirm whether composition correctness genuinely requires this. If only required for the first frame after a resize, gate it on a "needs-finish" flag.
 
 ### Per-call `GetDpiForWindow`
-- **Where**: `window.rs:187-190` — `Window::get_scale` is uncached.
+- **Where**: `window.rs` — `Window::get_scale` is uncached.
 - **Note**: deliberate to reflect per-monitor DPI changes in real time. Worth measuring under high message-rate scenarios (heavy pointer input, animations).
 
 ## Code smells worth reviewing

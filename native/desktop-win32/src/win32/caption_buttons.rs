@@ -347,7 +347,7 @@ pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_
 /// if no strip exists or the point falls outside the strip's bounds.
 ///
 /// This is the single source of truth for "screen coords → caption-button
-/// kind" — both `WM_NCHITTEST` and the `WM_NCPOINTER*` handlers go through
+/// kind" — `WM_NCHITTEST` and the caption-button pointer handlers go through
 /// it so the geometry stays in one place. The Win32 coordinate-transform
 /// calls (`ScreenToClient`, `GetClientRect`) live here rather than in the
 /// wndproc layer because they're a tightly-coupled pair with the strip's
