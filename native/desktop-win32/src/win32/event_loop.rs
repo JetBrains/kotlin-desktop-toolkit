@@ -800,10 +800,13 @@ fn on_pointercapturechanged(window: &Window, wparam: WPARAM) -> Option<LRESULT> 
     }
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         let pointer_id = u32::from(LOWORD!(wparam.0));
-        let _ = strip.on_pointer_cancel(pointer_id);
+        if strip.has_active_press_for(pointer_id) {
+            let _ = strip.on_pointer_cancel(pointer_id);
+            // Cancellation only — must not fire `CaptionButtonAction`.
+            return Some(LRESULT(0));
+        }
     }
-    // Cancellation only — must not fire `CaptionButtonAction`.
-    Some(LRESULT(0))
+    None
 }
 
 #[allow(clippy::unnecessary_wraps)]
