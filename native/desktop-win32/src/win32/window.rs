@@ -30,9 +30,9 @@ use windows::{
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
                 GetClientRect, GetPropW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW,
-                RemovePropW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SW_SHOWNORMAL,
-                SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos,
-                SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW,
+                RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_SHOW, SWP_NOACTIVATE,
+                SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
+                ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW,
                 WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
             },
         },
@@ -235,6 +235,14 @@ impl Window {
     }
 
     #[must_use]
+    pub fn has_non_system_title_bar(&self) -> bool {
+        matches!(
+            self.style.borrow().title_bar_kind,
+            WindowTitleBarKind::Custom | WindowTitleBarKind::None
+        )
+    }
+
+    #[must_use]
     pub fn is_maximized(&self) -> bool {
         unsafe { IsZoomed(self.hwnd()) }.as_bool()
     }
@@ -293,15 +301,22 @@ impl Window {
             // with the visible button state.
             return;
         }
-        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWMAXIMIZED) };
+        self.send_system_command(SC_MAXIMIZE);
     }
 
     pub fn minimize(&self) {
-        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWMINIMIZED) };
+        self.send_system_command(SC_MINIMIZE);
     }
 
     pub fn restore(&self) {
-        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWNORMAL) };
+        self.send_system_command(SC_RESTORE);
+    }
+
+    #[inline]
+    fn send_system_command(&self, command: u32) {
+        // Route through the system-command path to preserve standard shell
+        // transitions (including minimize/maximize/restore animations).
+        let _ = unsafe { SendMessageW(self.hwnd(), WM_SYSCOMMAND, Some(WPARAM(command as usize)), Some(LPARAM(0))) };
     }
 
     pub fn show(&self) {
