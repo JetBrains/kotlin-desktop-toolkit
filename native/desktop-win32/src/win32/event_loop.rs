@@ -17,23 +17,21 @@ use windows::Win32::{
         Shell::{ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
         WindowsAndMessaging::{
             AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
-            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, IsZoomed,
-            MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED,
-            SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE,
-            WINDOWPOS, WM_ACTIVATE, WM_APP, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO,
-            WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP,
-            WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP,
-            WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE,
-            WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, IsZoomed, MINMAXINFO, MSG, NCCALCSIZE_PARAMS,
+            SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+            SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_APP, WM_CHAR,
+            WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS,
+            WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT,
+            WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL,
+            WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSDEADCHAR, WM_SYSKEYDOWN,
+            WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
 };
 
 use super::{
     appearance::{Appearance, HighContrast},
-    caption_buttons::{
-        CaptionButtonAction, PointerDeviceKind, caption_button_kind_for_hittest, hittest_for_caption_button_kind,
-    },
+    caption_buttons::{CaptionButtonAction, PointerDeviceKind, caption_button_kind_for_hittest, hittest_for_caption_button_kind},
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
         PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
@@ -442,11 +440,14 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
 /// taskbar lives on an edge of the window's monitor, reduce the maximized
 /// client rect by 2 px on that edge so the cursor can reach the screen edge
 /// to trigger the taskbar reveal.
+#[allow(clippy::cast_possible_truncation)]
 fn apply_autohide_taskbar_inset(hwnd: windows::Win32::Foundation::HWND, rect: &mut RECT) -> anyhow::Result<()> {
     const AUTOHIDE_TASKBAR_SIZE: i32 = 2;
 
-    let mut autohide = APPBARDATA::default();
-    autohide.cbSize = size_of::<APPBARDATA>() as u32;
+    let mut autohide = APPBARDATA {
+        cbSize: size_of::<APPBARDATA>() as u32,
+        ..Default::default()
+    };
     let state = unsafe { SHAppBarMessage(ABM_GETSTATE, &raw mut autohide) } as u32;
     if state & ABS_AUTOHIDE == 0 {
         return Ok(());
@@ -625,7 +626,7 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
     event_loop.handle_event(window, event)
 }
 
-fn device_kind_for(pointer_info: &PointerInfo) -> PointerDeviceKind {
+const fn device_kind_for(pointer_info: &PointerInfo) -> PointerDeviceKind {
     match pointer_info {
         PointerInfo::Touch(_) => PointerDeviceKind::Touch,
         PointerInfo::Pen(_) => PointerDeviceKind::Pen,
@@ -764,17 +765,13 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
             .is_some_and(|s| s.has_active_press_for(pointer_info.pointer_id()));
         if is_primary && strip_owns_press {
             let kind_under_pointer = caption_button_kind_for_hittest(u32::from(HIWORD!(wparam.0)));
-            let action = window
-                .caption_buttons
-                .borrow_mut()
-                .as_mut()
-                .and_then(|strip| {
-                    strip
-                        .on_pointer_up(kind_under_pointer, pointer_info.pointer_id())
-                        .inspect_err(|err| log::warn!("strip on_pointer_up failed: {err}"))
-                        .ok()
-                        .flatten()
-                });
+            let action = window.caption_buttons.borrow_mut().as_mut().and_then(|strip| {
+                strip
+                    .on_pointer_up(kind_under_pointer, pointer_info.pointer_id())
+                    .inspect_err(|err| log::warn!("strip on_pointer_up failed: {err}"))
+                    .ok()
+                    .flatten()
+            });
             if let Some(action) = action {
                 match action {
                     CaptionButtonAction::Close => {
@@ -822,6 +819,7 @@ fn on_pointercapturechanged(window: &Window, wparam: WPARAM) -> Option<LRESULT> 
     Some(LRESULT(0))
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn on_caption_buttons_rdr(window: &Window) -> Option<LRESULT> {
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         let _ = strip
