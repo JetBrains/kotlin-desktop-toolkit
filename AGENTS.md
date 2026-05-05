@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) and Codex (Codex.ai/
 
 ### Core Commands
 - `./gradlew build` - Build the entire project including Rust native libraries and Java/Kotlin code
-- `./gradlew test` - Run JUnit tests with native library dependencies  
+- `./gradlew test` - Run JUnit tests with native library dependencies
 - `./gradlew lint` - Run ktlint for Kotlin and clippy/cargo fmt for Rust code
 - `./gradlew autofix` - Auto-format code with ktlint and cargo fmt, apply clippy fixes
 
@@ -34,7 +34,7 @@ This is a Kotlin/Rust hybrid project providing desktop window management APIs fo
 
 - **kotlin-desktop-toolkit/** - Main Kotlin API with platform-specific implementations in `org.jetbrains.desktop.{macos,linux,win32}`
 - **native/** - Rust workspace with platform-specific crates:
-  - `desktop-common/` - Shared Rust utilities  
+  - `desktop-common/` - Shared Rust utilities
   - `desktop-macos/` - macOS native implementation
   - `desktop-linux/` - Linux/Wayland native implementation
   - `desktop-win32/` - Windows native implementation. Has a per-crate doc set at `native/desktop-win32/docs/` — start with `AGENTS.md`; covers architecture, FFI conventions, subsystem reference, and known issues. Treat that doc set as the canonical reference for the Win32 internals; the top-level AGENTS.md is a thin index by comparison.
