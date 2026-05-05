@@ -5,15 +5,21 @@
 //! This module is a pure state machine over typed inputs. It does not call
 //! Win32 APIs; the wndproc layer in `event_loop.rs` is the only place that
 //! bridges Win32 messages and this module.
+//!
+//! Module-level lint allowances: this is graphics-math code that bridges
+//! pixel-bounded `i32` geometry into `WinRT` `Vector2`/`Vector3` (`f32`) and
+//! into surface sizes (`SizeInt32` / `i32`). Caption-button counts (≤ 3) and
+//! pixel sizes (≤ a few hundred) never approach the lossy ranges of these
+//! casts, so we silence them at the module level rather than peppering each
+//! site with `#[allow]`.
+#![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use std::rc::Rc;
 
 use windows::{
     Foundation::TimeSpan,
     Graphics::SizeInt32,
-    UI::Composition::{
-        CompositionColorBrush, CompositionDrawingSurface, ContainerVisual, Core::CompositorController, SpriteVisual,
-    },
+    UI::Composition::{CompositionColorBrush, CompositionDrawingSurface, ContainerVisual, Core::CompositorController, SpriteVisual},
     Win32::{
         Foundation::{HWND, LPARAM, WPARAM},
         Graphics::{
@@ -21,8 +27,8 @@ use windows::{
             Direct2D::{D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Brush},
             DirectWrite::{
                 DWRITE_FONT_METRICS, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_REGULAR,
-                DWRITE_GLYPH_METRICS, DWRITE_MEASURING_MODE_NATURAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
-                DWRITE_TEXT_ALIGNMENT_CENTER, IDWriteFactory, IDWriteFontFace,
+                DWRITE_GLYPH_METRICS, DWRITE_MEASURING_MODE_NATURAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER,
+                IDWriteFactory, IDWriteFontFace,
             },
             Gdi::{GetSysColor, SYS_COLOR_INDEX},
         },
@@ -91,15 +97,15 @@ struct PressSession {
 pub(crate) struct CaptionButtonKinds(u8);
 
 impl CaptionButtonKinds {
-    pub fn empty() -> Self {
+    pub const fn empty() -> Self {
         Self(0)
     }
 
-    pub fn with(self, kind: CaptionButtonKind) -> Self {
+    pub const fn with(self, kind: CaptionButtonKind) -> Self {
         Self(self.0 | (1 << kind as u8))
     }
 
-    pub fn contains(self, kind: CaptionButtonKind) -> bool {
+    pub const fn contains(self, kind: CaptionButtonKind) -> bool {
         (self.0 & (1 << kind as u8)) != 0
     }
 
@@ -108,16 +114,12 @@ impl CaptionButtonKinds {
     /// both hit-testing (`StripGeometry::hit_test`) and layout
     /// (`CaptionButtonStrip::relayout`, `CaptionButtonStrip::new`).
     pub fn iter_ordered(self) -> impl Iterator<Item = CaptionButtonKind> {
-        [
-            CaptionButtonKind::Minimize,
-            CaptionButtonKind::Maximize,
-            CaptionButtonKind::Close,
-        ]
-        .into_iter()
-        .filter(move |kind| self.contains(*kind))
+        [CaptionButtonKind::Minimize, CaptionButtonKind::Maximize, CaptionButtonKind::Close]
+            .into_iter()
+            .filter(move |kind| self.contains(*kind))
     }
 
-    pub fn from_style(style: &crate::win32::window_api::WindowStyle) -> Self {
+    pub const fn from_style(style: &crate::win32::window_api::WindowStyle) -> Self {
         let mut kinds = Self::empty().with(CaptionButtonKind::Close);
         if style.is_minimizable || style.is_maximizable {
             kinds = kinds.with(CaptionButtonKind::Minimize);
@@ -127,10 +129,7 @@ impl CaptionButtonKinds {
     }
 }
 
-fn availability_from_style(
-    kind: CaptionButtonKind,
-    style: &crate::win32::window_api::WindowStyle,
-) -> Availability {
+const fn availability_from_style(kind: CaptionButtonKind, style: &crate::win32::window_api::WindowStyle) -> Availability {
     match kind {
         CaptionButtonKind::Minimize if !style.is_minimizable => Availability::Disabled,
         // Maximize requires both `is_resizable` and `is_maximizable` per spec §4.2:
@@ -201,16 +200,16 @@ impl CaptionTheme {
     // Close-specific reds: `microsoft/terminal@e4e3f08efca…` MinMaxCloseControl.xaml
     // (`Opacity 0.9` → α=0xE6; `Opacity 0.7` → α=0xB3 — valid only because the
     // source RGB is fully opaque; both rounded to nearest).
-    fn light() -> Self {
+    const fn light() -> Self {
         Self {
             backplate_rest: rgba(0, 0, 0, 0),
-            backplate_hover: rgba(0, 0, 0, 0x09),    // SubtleFillColorSecondary
-            backplate_pressed: rgba(0, 0, 0, 0x06),  // SubtleFillColorTertiary
+            backplate_hover: rgba(0, 0, 0, 0x09),   // SubtleFillColorSecondary
+            backplate_pressed: rgba(0, 0, 0, 0x06), // SubtleFillColorTertiary
             backplate_inactive: rgba(0, 0, 0, 0),
-            foreground_rest: rgba(0, 0, 0, 0xE4),    // TextFillColorPrimary
+            foreground_rest: rgba(0, 0, 0, 0xE4), // TextFillColorPrimary
             foreground_hover: rgba(0, 0, 0, 0xE4),
-            foreground_pressed: rgba(0, 0, 0, 0x9E), // TextFillColorSecondary
-            foreground_disabled: rgba(0, 0, 0, 0x5C),// TextFillColorDisabled
+            foreground_pressed: rgba(0, 0, 0, 0x9E),  // TextFillColorSecondary
+            foreground_disabled: rgba(0, 0, 0, 0x5C), // TextFillColorDisabled
             foreground_inactive: rgba(0, 0, 0, 0x5C),
             close_backplate_hover: rgba(0xC4, 0x2B, 0x1C, 0xFF),
             close_backplate_pressed: rgba(0xC4, 0x2B, 0x1C, 0xE6),
@@ -219,16 +218,16 @@ impl CaptionTheme {
         }
     }
 
-    fn dark() -> Self {
+    const fn dark() -> Self {
         Self {
             backplate_rest: rgba(0, 0, 0, 0),
-            backplate_hover: rgba(0xFF, 0xFF, 0xFF, 0x0F),    // SubtleFillColorSecondary
-            backplate_pressed: rgba(0xFF, 0xFF, 0xFF, 0x0A),  // SubtleFillColorTertiary
+            backplate_hover: rgba(0xFF, 0xFF, 0xFF, 0x0F),   // SubtleFillColorSecondary
+            backplate_pressed: rgba(0xFF, 0xFF, 0xFF, 0x0A), // SubtleFillColorTertiary
             backplate_inactive: rgba(0, 0, 0, 0),
-            foreground_rest: rgba(0xFF, 0xFF, 0xFF, 0xFF),    // TextFillColorPrimary
+            foreground_rest: rgba(0xFF, 0xFF, 0xFF, 0xFF), // TextFillColorPrimary
             foreground_hover: rgba(0xFF, 0xFF, 0xFF, 0xFF),
-            foreground_pressed: rgba(0xFF, 0xFF, 0xFF, 0xC5), // TextFillColorSecondary
-            foreground_disabled: rgba(0xFF, 0xFF, 0xFF, 0x5D),// TextFillColorDisabled
+            foreground_pressed: rgba(0xFF, 0xFF, 0xFF, 0xC5),  // TextFillColorSecondary
+            foreground_disabled: rgba(0xFF, 0xFF, 0xFF, 0x5D), // TextFillColorDisabled
             foreground_inactive: rgba(0xFF, 0xFF, 0xFF, 0x5D),
             close_backplate_hover: rgba(0xC4, 0x2B, 0x1C, 0xFF),
             close_backplate_pressed: rgba(0xC4, 0x2B, 0x1C, 0xE6),
@@ -238,9 +237,7 @@ impl CaptionTheme {
     }
 
     fn high_contrast() -> Self {
-        use windows::Win32::Graphics::Gdi::{
-            COLOR_BTNFACE, COLOR_BTNTEXT, COLOR_GRAYTEXT, COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT,
-        };
+        use windows::Win32::Graphics::Gdi::{COLOR_BTNFACE, COLOR_BTNTEXT, COLOR_GRAYTEXT, COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT};
         let face = sys_color(COLOR_BTNFACE);
         let text = sys_color(COLOR_BTNTEXT);
         let highlight = sys_color(COLOR_HIGHLIGHT);
@@ -281,7 +278,7 @@ pub(crate) struct CaptionButtonMetrics {
 }
 
 impl CaptionButtonMetrics {
-    pub fn new(scale: f32) -> Self {
+    pub const fn new(scale: f32) -> Self {
         Self {
             button_size_px: LogicalSize::new(46.0, 32.0).to_physical(scale),
             glyph_extent_px: LogicalSize::new(10.0, 10.0).to_physical(scale),
@@ -317,12 +314,12 @@ impl StripGeometry {
     }
 }
 
-/// Map a caption-button hit to the WM_NCHITTEST return code per spec §4.2:
+/// Map a caption-button hit to the `WM_NCHITTEST` return code per spec §4.2:
 /// enabled Min/Max/Close → HTMINBUTTON / HTMAXBUTTON / HTCLOSE; visible
 /// disabled Min/Max → HTCAPTION (drag region) so the rectangle stays in the
 /// title-bar surface and Snap Layouts is *not* advertised on a disabled
 /// Maximize.
-pub(crate) fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_enabled: bool) -> u32 {
+pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_enabled: bool) -> u32 {
     use windows::Win32::UI::WindowsAndMessaging::{HTCAPTION, HTCLOSE, HTMAXBUTTON, HTMINBUTTON};
     match (kind, is_enabled) {
         (CaptionButtonKind::Close, _) => HTCLOSE,
@@ -335,7 +332,7 @@ pub(crate) fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_enable
 /// Inverse of `hittest_for_caption_button_kind`: recover the strip's
 /// button kind from the `HIWORD(WM_NCPOINTER* wParam)` hit-test code, or
 /// `None` for non-caption-button hit-tests so the wndproc falls through.
-pub(crate) fn caption_button_kind_for_hittest(hit_test: u32) -> Option<CaptionButtonKind> {
+pub(crate) const fn caption_button_kind_for_hittest(hit_test: u32) -> Option<CaptionButtonKind> {
     use windows::Win32::UI::WindowsAndMessaging::{HTCLOSE, HTMAXBUTTON, HTMINBUTTON};
     match hit_test {
         HTCLOSE => Some(CaptionButtonKind::Close),
@@ -414,7 +411,14 @@ impl CaptionButtonStrip {
         let mut buttons = Vec::new();
         for kind in visible_kinds.iter_ordered() {
             let availability = availability_from_style(kind, style);
-            buttons.push(create_caption_button(&compositor, &composition_root, &d2d_context, kind, availability, &metrics)?);
+            buttons.push(create_caption_button(
+                &compositor,
+                &composition_root,
+                &d2d_context,
+                kind,
+                availability,
+                &metrics,
+            )?);
         }
 
         // Seed appearance + HC from live state (spec §4.2); on failure, fall
@@ -461,19 +465,23 @@ impl CaptionButtonStrip {
         let gy = (bh - gh) / 2;
         for (i, button) in self.buttons.iter_mut().enumerate() {
             let x = (i as i32) * bw;
-            button.visuals.backplate.SetOffset(Vector3 { X: x as f32, Y: 0.0, Z: 0.0 })?;
+            button.visuals.backplate.SetOffset(Vector3 {
+                X: x as f32,
+                Y: 0.0,
+                Z: 0.0,
+            })?;
             button.visuals.backplate.SetSize(Vector2::new(bw as f32, bh as f32))?;
-            button.visuals.glyph.SetOffset(Vector3 { X: gx as f32, Y: gy as f32, Z: 0.0 })?;
+            button.visuals.glyph.SetOffset(Vector3 {
+                X: gx as f32,
+                Y: gy as f32,
+                Z: 0.0,
+            })?;
             button.visuals.glyph.SetSize(Vector2::new(gw as f32, gh as f32))?;
         }
         Ok(())
     }
 
-    pub(crate) fn set_strip_position(
-        &self,
-        client_size: PhysicalSize,
-        max_chrome_y: i32,
-    ) -> anyhow::Result<()> {
+    pub(crate) fn set_strip_position(&self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
         let bw = self.metrics.button_size_px.width.0;
         let total_width = bw * self.buttons.len() as i32;
         let x = client_size.width.0 - total_width;
@@ -486,7 +494,7 @@ impl CaptionButtonStrip {
     }
 
     fn rasterise_all_glyphs(&mut self) -> anyhow::Result<()> {
-        for button in self.buttons.iter_mut() {
+        for button in &mut self.buttons {
             if button.glyph_surface_dirty
                 && rasterise_glyph(
                     &self.d2d_context,
@@ -512,7 +520,7 @@ impl CaptionButtonStrip {
         let pointer_device = self.pointer_device;
         let press_session = self.press_session;
         let is_active = self.is_active;
-        for button in self.buttons.iter_mut() {
+        for button in &mut self.buttons {
             let new_interaction = resolve_interaction(
                 button.kind,
                 button.availability,
@@ -534,7 +542,7 @@ impl CaptionButtonStrip {
         .hit_test(point)
     }
 
-    pub fn strip_width_px(&self) -> i32 {
+    pub const fn strip_width_px(&self) -> i32 {
         self.metrics.button_size_px.width.0 * self.buttons.len() as i32
     }
 
@@ -553,12 +561,7 @@ impl CaptionButtonStrip {
         Ok(())
     }
 
-    pub fn on_pointer_down(
-        &mut self,
-        kind: CaptionButtonKind,
-        pointer_id: u32,
-        device: PointerDeviceKind,
-    ) -> anyhow::Result<()> {
+    pub fn on_pointer_down(&mut self, kind: CaptionButtonKind, pointer_id: u32, device: PointerDeviceKind) -> anyhow::Result<()> {
         if self.press_session.is_some() {
             return Ok(());
         }
@@ -628,11 +631,11 @@ impl CaptionButtonStrip {
     /// wndproc to gate Kotlin-facing `PointerUp` suppression on whether the
     /// strip is the actual owner of the matching `PointerDown` (multi-pointer
     /// safety — a touch hold must not swallow a mouse release).
-    pub(crate) fn has_active_press_for(&self, pointer_id: u32) -> bool {
+    pub(crate) const fn has_active_press_for(&self, pointer_id: u32) -> bool {
         matches!(self.press_session, Some(s) if s.pointer_id == pointer_id)
     }
 
-    fn action_for(&self, kind: CaptionButtonKind) -> CaptionButtonAction {
+    const fn action_for(&self, kind: CaptionButtonKind) -> CaptionButtonAction {
         match kind {
             CaptionButtonKind::Close => CaptionButtonAction::Close,
             CaptionButtonKind::Minimize => CaptionButtonAction::Minimize,
@@ -651,7 +654,7 @@ impl CaptionButtonStrip {
             self.is_active = is_active;
             // Spec §5.2: `is_active` flips never animate. Resetting per-button
             // history keeps the `Hovered → Idle` predicate false across the flip.
-            for button in self.buttons.iter_mut() {
+            for button in &mut self.buttons {
                 button.last_applied_interaction = ButtonInteraction::Idle;
             }
             self.apply_visuals_to_all_buttons()?;
@@ -662,7 +665,7 @@ impl CaptionButtonStrip {
 
     pub fn on_dpi_change(&mut self, new_scale: f32) -> anyhow::Result<()> {
         self.metrics = CaptionButtonMetrics::new(new_scale);
-        for button in self.buttons.iter_mut() {
+        for button in &mut self.buttons {
             let new_size = SizeInt32 {
                 Width: self.metrics.glyph_extent_px.width.0,
                 Height: self.metrics.glyph_extent_px.height.0,
@@ -681,7 +684,7 @@ impl CaptionButtonStrip {
         self.appearance = appearance;
         self.high_contrast = hc;
         if glyph_invalidate {
-            for button in self.buttons.iter_mut() {
+            for button in &mut self.buttons {
                 button.glyph_surface_dirty = true;
             }
         }
@@ -691,7 +694,7 @@ impl CaptionButtonStrip {
     }
 
     pub fn on_rendering_device_replaced(&mut self) -> anyhow::Result<()> {
-        for button in self.buttons.iter_mut() {
+        for button in &mut self.buttons {
             button.glyph_surface_dirty = true;
         }
         self.rasterise_all_glyphs()?;
@@ -703,7 +706,7 @@ impl CaptionButtonStrip {
     pub fn on_max_state_change(&mut self, is_maximized: bool) -> anyhow::Result<()> {
         if self.is_window_maximized != is_maximized {
             self.is_window_maximized = is_maximized;
-            for button in self.buttons.iter_mut() {
+            for button in &mut self.buttons {
                 if button.kind == CaptionButtonKind::Maximize {
                     button.glyph_surface_dirty = true;
                 }
@@ -732,7 +735,10 @@ fn create_caption_button(
     let backplate = compositor.CreateSpriteVisual()?;
     let backplate_brush = compositor.CreateColorBrushWithColor(rgba(0, 0, 0, 0))?;
     backplate.SetBrush(&backplate_brush)?;
-    backplate.SetSize(Vector2::new(metrics.button_size_px.width.0 as f32, metrics.button_size_px.height.0 as f32))?;
+    backplate.SetSize(Vector2::new(
+        metrics.button_size_px.width.0 as f32,
+        metrics.button_size_px.height.0 as f32,
+    ))?;
     parent.Children()?.InsertAtTop(&backplate)?;
 
     // Mask-brush topology: see spec §4.3. The `CompositionMaskBrush` and the
@@ -750,7 +756,10 @@ fn create_caption_button(
     glyph_mask_brush.SetMask(&glyph_surface_brush)?;
     let glyph = compositor.CreateSpriteVisual()?;
     glyph.SetBrush(&glyph_mask_brush)?;
-    glyph.SetSize(Vector2::new(metrics.glyph_extent_px.width.0 as f32, metrics.glyph_extent_px.height.0 as f32))?;
+    glyph.SetSize(Vector2::new(
+        metrics.glyph_extent_px.width.0 as f32,
+        metrics.glyph_extent_px.height.0 as f32,
+    ))?;
     backplate.Children()?.InsertAtTop(&glyph)?;
 
     Ok(CaptionButton {
@@ -768,7 +777,7 @@ fn create_caption_button(
     })
 }
 
-fn glyph_for(kind: CaptionButtonKind, is_maximised: bool, hc: HighContrast) -> char {
+const fn glyph_for(kind: CaptionButtonKind, is_maximised: bool, hc: HighContrast) -> char {
     match (kind, is_maximised, hc) {
         (CaptionButtonKind::Minimize, _, HighContrast::Off) => '\u{E921}',
         (CaptionButtonKind::Maximize, false, HighContrast::Off) => '\u{E922}',
@@ -785,28 +794,18 @@ fn glyph_for(kind: CaptionButtonKind, is_maximised: bool, hc: HighContrast) -> c
 /// (Segoe Fluent Icons, falling back to Segoe MDL2 Assets) and produce a
 /// concrete `IDWriteFontFace` for it. Returning the face here lets the caller
 /// run glyph-metric queries without re-opening the font collection.
-fn caption_glyph_font_family(
-    dwrite: &IDWriteFactory,
-) -> anyhow::Result<(windows::core::PCWSTR, IDWriteFontFace)> {
+fn caption_glyph_font_family(dwrite: &IDWriteFactory) -> anyhow::Result<(windows::core::PCWSTR, IDWriteFontFace)> {
     let mut collection = None;
     unsafe { dwrite.GetSystemFontCollection(&raw mut collection, false)? };
     let collection = collection.ok_or_else(|| anyhow::anyhow!("DirectWrite returned no system font collection"))?;
-    for family_name in [
-        windows::core::w!("Segoe Fluent Icons"),
-        windows::core::w!("Segoe MDL2 Assets"),
-    ] {
+    for family_name in [windows::core::w!("Segoe Fluent Icons"), windows::core::w!("Segoe MDL2 Assets")] {
         let mut index = 0u32;
         let mut exists = windows_core::BOOL(0);
         unsafe { collection.FindFamilyName(family_name, &raw mut index, &raw mut exists)? };
         if exists.as_bool() {
             let family = unsafe { collection.GetFontFamily(index)? };
-            let font = unsafe {
-                family.GetFirstMatchingFont(
-                    DWRITE_FONT_WEIGHT_REGULAR,
-                    DWRITE_FONT_STRETCH_NORMAL,
-                    DWRITE_FONT_STYLE_NORMAL,
-                )?
-            };
+            let font =
+                unsafe { family.GetFirstMatchingFont(DWRITE_FONT_WEIGHT_REGULAR, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL)? };
             let face = unsafe { font.CreateFontFace()? };
             return Ok((family_name, face));
         }
@@ -816,16 +815,12 @@ fn caption_glyph_font_family(
 
 /// Compute the DirectWrite font size (DIPs) at which the glyph's visible
 /// black-box fits within `target_extent_px`. Algorithm per spec §4.5.
-fn compute_glyph_font_size(
-    face: &IDWriteFontFace,
-    glyph_char: char,
-    target_extent_px: PhysicalSize,
-) -> anyhow::Result<f32> {
+fn compute_glyph_font_size(face: &IDWriteFontFace, glyph_char: char, target_extent_px: PhysicalSize) -> anyhow::Result<f32> {
     let codepoint = glyph_char as u32;
     let mut glyph_index: u16 = 0;
     unsafe { face.GetGlyphIndices(&raw const codepoint, 1, &raw mut glyph_index)? };
     if glyph_index == 0 {
-        anyhow::bail!("caption glyph U+{:04X} maps to .notdef in selected font", codepoint);
+        anyhow::bail!("caption glyph U+{codepoint:04X} maps to .notdef in selected font");
     }
 
     let mut glyph_metrics = DWRITE_GLYPH_METRICS::default();
@@ -888,9 +883,19 @@ fn rasterise_glyph(
                 // Pin to 96 DPI so 1 DIP == 1 pixel; `compute_glyph_font_size`
                 // assumes that mapping.
                 rt.SetDpi(96.0, 96.0);
-                let clear_color = D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
+                let clear_color = D2D1_COLOR_F {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.0,
+                };
                 rt.Clear(Some(&raw const clear_color));
-                let brush_color = D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+                let brush_color = D2D1_COLOR_F {
+                    r: 1.0,
+                    g: 1.0,
+                    b: 1.0,
+                    a: 1.0,
+                };
                 let brush = rt.CreateSolidColorBrush(&raw const brush_color, None)?;
                 let rect = D2D_RECT_F {
                     left: offset.x as f32,
@@ -923,9 +928,8 @@ fn apply_button_visuals(
     let (backplate, foreground) = colours_for(button.kind, button.availability, new_interaction, theme, is_active);
     let prev = button.last_applied_interaction;
     // Spec §5.2: animate only `Hovered → Idle` on Enabled buttons; everything else jumps.
-    let is_hover_leave = prev == ButtonInteraction::Hovered
-        && new_interaction == ButtonInteraction::Idle
-        && button.availability == Availability::Enabled;
+    let is_hover_leave =
+        prev == ButtonInteraction::Hovered && new_interaction == ButtonInteraction::Idle && button.availability == Availability::Enabled;
 
     if is_hover_leave {
         animate_color(&button.visuals.backplate_brush, backplate, std::time::Duration::from_millis(150))?;
@@ -938,11 +942,7 @@ fn apply_button_visuals(
     Ok(())
 }
 
-fn animate_color(
-    brush: &CompositionColorBrush,
-    target: windows::UI::Color,
-    duration: std::time::Duration,
-) -> anyhow::Result<()> {
+fn animate_color(brush: &CompositionColorBrush, target: windows::UI::Color, duration: std::time::Duration) -> anyhow::Result<()> {
     let anim = brush.Compositor()?.CreateColorKeyFrameAnimation()?;
     anim.SetDuration(TimeSpan {
         Duration: (duration.as_nanos() / 100) as i64,

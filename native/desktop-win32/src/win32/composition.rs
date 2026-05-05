@@ -21,11 +21,10 @@ use windows::{
         Foundation::{HMODULE, POINT},
         Graphics::{
             Direct2D::{
-                D2D1CreateFactory, D2D1_FACTORY_TYPE_SINGLE_THREADED, ID2D1Device, ID2D1DeviceContext, ID2D1Factory1,
-                ID2D1RenderTarget,
+                D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1CreateFactory, ID2D1Device, ID2D1DeviceContext, ID2D1Factory1, ID2D1RenderTarget,
             },
             Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1},
-            Direct3D11::{D3D11CreateDevice, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, ID3D11Device},
+            Direct3D11::{D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11Device},
             DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, DWriteCreateFactory, IDWriteFactory},
             Dxgi::{DXGI_ERROR_DEVICE_REMOVED, IDXGIAdapter, IDXGIDevice},
         },
@@ -43,6 +42,11 @@ impl D2dContext {
     /// Eagerly constructs the D3D11 / D2D devices, the DirectWrite factory,
     /// and the `CompositionGraphicsDevice`. The `Rc<D2dContext>` singleton
     /// wrapping happens once at `composition::ensure_d2d_context` (Task 1.3).
+    // Takes `Compositor` by value to mirror the singleton-accessor signature
+    // (`ensure_d2d_context(compositor: Compositor)`); the WinRT smart pointer
+    // is cheap to clone, so we accept the shadow rather than thread `&` through
+    // the public surface.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(compositor: Compositor) -> anyhow::Result<Self> {
         let d2d_device = build_d2d_device()?;
         let dwrite_factory: IDWriteFactory = unsafe { DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED)? };
@@ -96,9 +100,7 @@ impl D2dContext {
         let end_draw_result = unsafe { surface_interop.EndDraw() };
         match (body_result, end_draw_result) {
             (Ok(value), Ok(())) => Ok(Some(value)),
-            (Err(body_err), Err(end_draw_err)) => {
-                Err(body_err.context(format!("EndDraw also failed: {end_draw_err}")))
-            }
+            (Err(body_err), Err(end_draw_err)) => Err(body_err.context(format!("EndDraw also failed: {end_draw_err}"))),
             (Err(body_err), Ok(())) => Err(body_err),
             (Ok(_), Err(end_draw_err)) => Err(end_draw_err.into()),
         }
@@ -122,10 +124,7 @@ impl D2dContext {
     /// `WM_APP_*` message rather than call the strip directly — the event
     /// fires nested inside `with_d2d_render_target → rebuild_d2d_device`, so a
     /// direct re-entry would nest `BeginDraw` on the active surface.
-    pub(crate) fn add_rendering_device_replaced_callback<F>(
-        &self,
-        callback: F,
-    ) -> anyhow::Result<RenderingDeviceReplacedRegistration>
+    pub(crate) fn add_rendering_device_replaced_callback<F>(&self, callback: F) -> anyhow::Result<RenderingDeviceReplacedRegistration>
     where
         F: Fn() + Send + 'static,
     {
@@ -151,9 +150,7 @@ pub(crate) struct RenderingDeviceReplacedRegistration {
 
 impl Drop for RenderingDeviceReplacedRegistration {
     fn drop(&mut self) {
-        let _ = self
-            .composition_graphics_device
-            .RemoveRenderingDeviceReplaced(self.token);
+        let _ = self.composition_graphics_device.RemoveRenderingDeviceReplaced(self.token);
     }
 }
 
