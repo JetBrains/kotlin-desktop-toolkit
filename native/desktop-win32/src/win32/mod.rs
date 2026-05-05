@@ -5,6 +5,7 @@ pub mod application_api;
 pub mod clipboard;
 pub mod clipboard_api;
 pub mod com;
+pub mod composition;
 pub mod cursor;
 pub mod cursor_api;
 pub mod data_object;
