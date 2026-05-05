@@ -2,9 +2,13 @@
 //!
 //! See `docs/specs/2026-04-30-win32-caption-buttons-design.md` for the design.
 //!
-//! This module is a pure state machine over typed inputs. It does not call
-//! Win32 APIs; the wndproc layer in `event_loop.rs` is the only place that
-//! bridges Win32 messages and this module.
+//! The strip itself is a state machine driven by typed inputs from the
+//! wndproc layer (`kind`, pointer id, theme, etc.) and produces typed
+//! outputs (`Option<CaptionButtonAction>`). It does call `WinRT` Composition
+//! APIs to manage its visuals, plus a small set of Win32 coord-transform
+//! utilities (`ScreenToClient` / `GetClientRect`) inside `caption_kind_at_screen`
+//! so that the strip-anchoring math has a single home — wndproc-level
+//! `WM_*` message decoding stays in `event_loop.rs`.
 //!
 //! Module-level lint allowances: this is graphics-math code that bridges
 //! pixel-bounded `i32` geometry into `WinRT` `Vector2`/`Vector3` (`f32`) and
@@ -21,25 +25,30 @@ use windows::{
     Graphics::SizeInt32,
     UI::Composition::{CompositionColorBrush, CompositionDrawingSurface, ContainerVisual, Core::CompositorController, SpriteVisual},
     Win32::{
-        Foundation::{HWND, LPARAM, WPARAM},
+        Foundation::{HWND, LPARAM, POINT, RECT, WPARAM},
         Graphics::{
-            Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F},
-            Direct2D::{D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Brush},
+            Direct2D::{
+                Common::{D2D_RECT_F, D2D1_COLOR_F},
+                D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Brush,
+            },
             DirectWrite::{
                 DWRITE_FONT_METRICS, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_REGULAR,
                 DWRITE_GLYPH_METRICS, DWRITE_MEASURING_MODE_NATURAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER,
                 IDWriteFactory, IDWriteFontFace,
             },
-            Gdi::{GetSysColor, SYS_COLOR_INDEX},
+            Gdi::{GetSysColor, SYS_COLOR_INDEX, ScreenToClient},
         },
-        UI::WindowsAndMessaging::PostMessageW,
+        UI::WindowsAndMessaging::{GetClientRect, PostMessageW},
     },
 };
 use windows_numerics::{Vector2, Vector3};
 
-use super::appearance::{Appearance, HighContrast};
-use super::composition::{D2dContext, RenderingDeviceReplacedRegistration};
-use super::geometry::{LogicalSize, PhysicalPoint, PhysicalSize};
+use super::{
+    appearance::{Appearance, HighContrast},
+    composition::{D2dContext, RenderingDeviceReplacedRegistration},
+    geometry::{LogicalSize, PhysicalPixels, PhysicalPoint, PhysicalSize},
+    window::Window,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -287,9 +296,10 @@ impl CaptionButtonMetrics {
 }
 
 struct StripGeometry {
-    /// Width of the coordinate space `point` is in. Pass full client width
-    /// for client-space points (unit tests) or `strip_width_px` for
-    /// strip-local points (`CaptionButtonStrip::hit_test`).
+    /// Width of the coordinate space `point` is in. The strip's right edge
+    /// sits at `reference_width_px`; the strip-left is computed by
+    /// subtracting `button_count * button_width`. For client-space points,
+    /// pass the full client width.
     reference_width_px: i32,
     metrics: CaptionButtonMetrics,
     visible_kinds: CaptionButtonKinds,
@@ -329,17 +339,31 @@ pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_
     }
 }
 
-/// Inverse of `hittest_for_caption_button_kind`: recover the strip's
-/// button kind from the `HIWORD(WM_NCPOINTER* wParam)` hit-test code, or
-/// `None` for non-caption-button hit-tests so the wndproc falls through.
-pub(crate) const fn caption_button_kind_for_hittest(hit_test: u32) -> Option<CaptionButtonKind> {
-    use windows::Win32::UI::WindowsAndMessaging::{HTCLOSE, HTMAXBUTTON, HTMINBUTTON};
-    match hit_test {
-        HTCLOSE => Some(CaptionButtonKind::Close),
-        HTMAXBUTTON => Some(CaptionButtonKind::Maximize),
-        HTMINBUTTON => Some(CaptionButtonKind::Minimize),
-        _ => None,
-    }
+/// Hit-test the caption-button strip from the pointer's screen-space
+/// coordinates. Returns the caption-button kind under the point, or `None`
+/// if no strip exists or the point falls outside the strip's bounds.
+///
+/// This is the single source of truth for "screen coords → caption-button
+/// kind" — both `WM_NCHITTEST` and the `WM_NCPOINTER*` handlers go through
+/// it so the geometry stays in one place. The Win32 coordinate-transform
+/// calls (`ScreenToClient`, `GetClientRect`) live here rather than in the
+/// wndproc layer because they're a tightly-coupled pair with the strip's
+/// own hit-test math.
+pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> Option<CaptionButtonKind> {
+    let strip_ref = window.caption_buttons.borrow();
+    let strip = strip_ref.as_ref()?;
+    let hwnd = window.hwnd();
+    let mut client_point = POINT {
+        x: screen.x.0,
+        y: screen.y.0,
+    };
+    let _ = unsafe { ScreenToClient(hwnd, &raw mut client_point) };
+    let mut client_rect = RECT::default();
+    let _ = unsafe { GetClientRect(hwnd, &raw mut client_rect) };
+    strip.hit_test(
+        PhysicalPoint::new(client_point.x, client_point.y),
+        PhysicalPixels(client_rect.right),
+    )
 }
 
 pub(crate) struct CaptionButtonStrip {
@@ -533,17 +557,18 @@ impl CaptionButtonStrip {
         Ok(())
     }
 
-    pub fn hit_test(&self, point: PhysicalPoint) -> Option<CaptionButtonKind> {
+    /// Hit-test a point given in **client-space** coordinates (origin =
+    /// client top-left). The strip is anchored at the right edge, so the
+    /// caller passes the client area's full width as the reference. Returns
+    /// the caption-button kind under the point, or `None` if the point is
+    /// outside the strip's bounds (or no enabled button is hit).
+    pub fn hit_test(&self, client_point: PhysicalPoint, client_width: PhysicalPixels) -> Option<CaptionButtonKind> {
         StripGeometry {
-            reference_width_px: self.strip_width_px(),
+            reference_width_px: client_width.0,
             metrics: self.metrics,
             visible_kinds: self.visible_kinds,
         }
-        .hit_test(point)
-    }
-
-    pub const fn strip_width_px(&self) -> i32 {
-        self.metrics.button_size_px.width.0 * self.buttons.len() as i32
+        .hit_test(client_point)
     }
 
     pub fn on_pointer_update(
@@ -1327,7 +1352,7 @@ mod tests {
         assert_eq!(g.hit_test(pt(753, 16)), None);
     }
 
-    // --- hittest_for_caption_button_kind / caption_button_kind_for_hittest ---
+    // --- hittest_for_caption_button_kind ---
 
     #[test]
     fn enabled_min_max_close_return_their_dedicated_codes() {
@@ -1348,12 +1373,56 @@ mod tests {
         assert_eq!(hittest_for_caption_button_kind(CaptionButtonKind::Close, false), HTCLOSE);
     }
 
+    // --- caption_kind_at_screen exercise via StripGeometry ---
+    //
+    // `caption_kind_at_screen` is the wndproc-facing wrapper. Its body is:
+    //
+    //   ScreenToClient(hwnd, &mut p);
+    //   GetClientRect(hwnd, &mut r);
+    //   strip.hit_test(client_pt, client_width)
+    //
+    // `strip.hit_test` constructs a `StripGeometry` with `reference_width_px =
+    // client_width` and forwards to `StripGeometry::hit_test`. The Win32
+    // calls themselves can't be exercised without a real HWND, but the math
+    // they feed into is the same code path the tests below already cover —
+    // a client-space hit-test against an 800-px-wide reference. The cases
+    // here pin the client-space-coordinates contract (origin = client
+    // top-left, strip anchored at the right edge).
+
     #[test]
-    fn hittest_to_kind_matches_three_caption_codes() {
-        use windows::Win32::UI::WindowsAndMessaging::{HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON};
-        assert_eq!(caption_button_kind_for_hittest(HTCLOSE), Some(CaptionButtonKind::Close));
-        assert_eq!(caption_button_kind_for_hittest(HTMAXBUTTON), Some(CaptionButtonKind::Maximize));
-        assert_eq!(caption_button_kind_for_hittest(HTMINBUTTON), Some(CaptionButtonKind::Minimize));
-        assert_eq!(caption_button_kind_for_hittest(HTCLIENT), None);
+    fn client_space_hit_test_anchors_strip_at_right_edge() {
+        let kinds = CaptionButtonKinds::empty()
+            .with(CaptionButtonKind::Minimize)
+            .with(CaptionButtonKind::Maximize)
+            .with(CaptionButtonKind::Close);
+        let g = StripGeometry {
+            reference_width_px: 800,
+            metrics: CaptionButtonMetrics::new(1.0),
+            visible_kinds: kinds,
+        };
+        // Strip = three 46-px-wide buttons anchored at x=800.
+        // Min: [662, 708), Max: [708, 754), Close: [754, 800).
+        assert_eq!(g.hit_test(pt(799, 0)), Some(CaptionButtonKind::Close));
+        assert_eq!(g.hit_test(pt(708, 0)), Some(CaptionButtonKind::Maximize));
+        assert_eq!(g.hit_test(pt(662, 0)), Some(CaptionButtonKind::Minimize));
+        // x just left of the strip → no hit.
+        assert_eq!(g.hit_test(pt(661, 0)), None);
+        // y outside the button height (32 px) → no hit, even within x range.
+        assert_eq!(g.hit_test(pt(799, 32)), None);
+    }
+
+    #[test]
+    fn client_space_hit_test_handles_negative_y_above_client() {
+        // Negative y can occur if the cursor is above the client area
+        // (e.g., NC pointer events near the top edge after the overhang
+        // inset). Should always return `None`.
+        let kinds = CaptionButtonKinds::empty().with(CaptionButtonKind::Close);
+        let g = StripGeometry {
+            reference_width_px: 800,
+            metrics: CaptionButtonMetrics::new(1.0),
+            visible_kinds: kinds,
+        };
+        assert_eq!(g.hit_test(pt(799, -1)), None);
+        assert_eq!(g.hit_test(pt(799, -100)), None);
     }
 }
