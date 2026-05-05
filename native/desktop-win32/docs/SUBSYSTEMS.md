@@ -44,11 +44,11 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Ownership.** `application_init` heap-boxes the `Application` and returns the leaked pointer; `application_drop` reclaims. The `borrow::<Application>` path on each call leak-reconstructs the box (see `FFI_CONVENTIONS.md` → opaque pointers). Per-`WindowTitleChangedEvent` strings are `AutoDropStrPtr`, owned by the `Event` for the duration of the callback.
 
-**Threading.** Everything UI-thread. `OleInitialize(None)` at `application.rs:31`. `DispatcherQueueController::CreateOnDedicatedThread` is **not** used — `DQTYPE_THREAD_CURRENT` ties the queue to the calling thread. `KEYEVENT_MESSAGES` and `LAST_KEYEVENT_MESSAGE_ID` are `thread_local!` (event_loop.rs:43-46). `LAST_EXCEPTION_MSGS` is also thread-local — errors on background threads are silently lost (see `ARCHITECTURE.md`).
+**Threading.** Everything UI-thread. `OleInitialize(None)` runs during application setup. `DispatcherQueueController::CreateOnDedicatedThread` is **not** used — `DQTYPE_THREAD_CURRENT` ties the queue to the calling thread. `KEYEVENT_MESSAGES` and `LAST_KEYEVENT_MESSAGE_ID` are `thread_local!`. `LAST_EXCEPTION_MSGS` is also thread-local — errors on background threads are silently lost (see `ARCHITECTURE.md`).
 
 **Gotchas.**
 - `application_dispatcher_invoke` returns a `bool` (enqueue succeeded?) — `Application.invokeOnDispatcher` discards it. Enqueues after dispatcher shutdown silently lose the lambda.
-- `EnableMouseInPointer(true)` (event_loop.rs:55) is process-wide and irreversible — third-party libs in the same process expecting raw `WM_MOUSE*` will silently break.
+- `EnableMouseInPointer(true)` is process-wide and irreversible — third-party libs in the same process expecting raw `WM_MOUSE*` will silently break.
 - `WM_NCPOINTERUP` returns `None` outside the caption-button strip's hit-test area (`event_loop.rs:557` in the current tree) so DefWindowProc can handle default NC behavior. For non-system titlebar kinds (`WindowTitleBarKind::Custom` / `WindowTitleBarKind::None`), `WindowStyle::to_system` keeps `WS_CAPTION` for native transitions but clears `WS_SYSMENU`, so system caption buttons are not surfaced. Inside the strip's hit-test area or while a caption-button press session is active, `on_pointerup` returns `Some(LRESULT(0))` to suppress both the system path and the Kotlin-facing `PointerUp` event — see the caption-buttons plan (`docs/plans/2026-04-30-win32-caption-buttons.md`, Task 6.3 step 4).
 - `WM_POINTERUPDATE` and `WM_POINTERDOWN` can both emit `Event::PointerDown` for the same gesture (button press inside an update message + dedicated down handler) → possible duplicate events. See TODO.md.
 - Two commented-out variants in `events.rs:31`: `//WindowFocusChange`, `//WindowFullScreenToggle` — stale scaffolding.
@@ -69,17 +69,17 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - `Window` — `Rc<Window>` on Rust side. Holds `HWND` (via `AtomicPtr` set during `WM_NCCREATE`), `Weak<EventLoop>`, `CompositorController`, `composition_target: RefCell<Option<DesktopWindowTarget>>`, root `ContainerVisual`, backdrop `SpriteVisual`, cursor `RefCell<Option<Cursor>>`, `PointerClickCounter`. Opaque to Kotlin as `WindowPtr<'a> = RustAllocatedRcPtr<'a>` (alias).
 - `WindowParams`, `WindowStyle`, `WindowTitleBarKind`, `WindowSystemBackdropType` — `#[repr(C)]` enums/structs.
 
-**Ownership.** `window_new` does `Rc::new` → `Rc::into_raw`. `CreateWindowExW` is called with `lpCreateParams = Rc::downgrade(window).into_raw()`. In `WM_NCCREATE`, the `Weak` is reconstructed, upgraded, used to call `initialize_window`, then re-serialised via `Weak::into_raw` and stored as a Win32 window property under `KDT_WINDOW_PTR` (window.rs:473-479). On every wndproc message, `GetPropW` retrieves this raw pointer and wraps it in `ManuallyDrop::new(Weak::from_raw(...))` to avoid dropping the weak per message (window.rs:450). On `WM_NCDESTROY`, `RemovePropW` recovers the raw pointer and the weak is dropped. `window_drop` calls `to_rc::<Window>()` → `Rc::from_raw` → drop.
+**Ownership.** `window_new` does `Rc::new` → `Rc::into_raw`. `CreateWindowExW` is called with `lpCreateParams = Rc::downgrade(window).into_raw()`. In `WM_NCCREATE`, the `Weak` is reconstructed, upgraded, used to call `initialize_window`, then re-serialised via `Weak::into_raw` and stored as a Win32 window property under `KDT_WINDOW_PTR`. On every wndproc message, `GetPropW` retrieves this raw pointer and wraps it in `ManuallyDrop::new(Weak::from_raw(...))` to avoid dropping the weak per message. On `WM_NCDESTROY`, `RemovePropW` recovers the raw pointer and the weak is dropped. `window_drop` calls `to_rc::<Window>()` → `Rc::from_raw` → drop.
 
 **Threading.** Single UI thread (the one that called `Application::new`). Not `Send` (uses `Rc`, `RefCell`, non-Send WinRT handles) — implicit, not type-asserted.
 
-**DPI.** `Window::get_scale` (window.rs:187-190) calls `GetDpiForWindow(hwnd) / USER_DEFAULT_SCREEN_DPI` live on every call (not cached). `get_rect` uses `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)` rather than `GetWindowRect` — correct for Win11 invisible resize borders.
+**DPI.** `Window::get_scale` calls `GetDpiForWindow(hwnd) / USER_DEFAULT_SCREEN_DPI` live on every call (not cached). `get_rect` uses `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)` rather than `GetWindowRect` — correct for Win11 invisible resize borders.
 
 **Gotchas.**
-- `WNDCLASS_INIT: OnceLock<u16>` (window.rs:82-94) uses non-atomic `get().is_none()` + `get_or_init` — racy if windows are created concurrently (today they aren't, but the code reads racy).
-- Window is created at `1×1` then resized in `initialize_window` → fires `WM_SIZE` twice on every window birth. **This is intentional**: the managed layer specifies the requested size in *logical* pixels, but the DPI scale needed to convert to *physical* pixels can only be read from a real `HWND` (`GetDpiForWindow`). The minimal-size window is created first to obtain the HWND, then `set_position` applies the logical→physical conversion. Consequence: `WM_SIZE` fires twice during creation; handlers must be idempotent.
-- `Window::drop` (window.rs:414-418) only logs a trace; doesn't verify the HWND was destroyed. If the `Rc` drops without `window_destroy`, the HWND leaks.
-- `WindowTitleBarKind::Custom` is reachable from Kotlin (see `Window.kt:228-239`); `extend_content_into_titlebar` is invoked from `on_activate` whenever `is_active && !is_minimized` (regardless of title-bar kind), not specifically gated on `Custom` (`event_loop.rs:307-314`). `WindowStyle::to_system` keeps `WS_CAPTION` but clears `WS_SYSMENU` for non-system titlebar kinds (`Custom` / `None`); the caption-buttons path layers toolkit-drawn buttons on top while preserving native transition behavior.
+- `WNDCLASS_INIT: OnceLock<u16>` uses non-atomic `get().is_none()` + `get_or_init` — racy if windows are created concurrently (today they aren't, but the code reads racy).
+- Window is created at `1×1` then resized in `initialize_window`. **This is intentional**: the managed layer specifies the requested size in *logical* pixels, but the DPI scale needed to convert to *physical* pixels can only be read from a real `HWND` (`GetDpiForWindow`). The minimal-size window is created first to obtain the HWND, then `set_position` applies the logical→physical conversion. Consequence: creation emits repeated `WM_WINDOWPOSCHANGED` notifications. Size/move handlers must be idempotent.
+- `Window::drop` only logs a trace; doesn't verify the HWND was destroyed. If the `Rc` drops without `window_destroy`, the HWND leaks.
+- `WindowTitleBarKind::Custom` is reachable from Kotlin; `extend_content_into_titlebar` is invoked from `on_activate` whenever `is_active && !is_minimized` (regardless of title-bar kind), not specifically gated on `Custom`. `WindowStyle::to_system` keeps `WS_CAPTION` but clears `WS_SYSMENU` for non-system titlebar kinds (`Custom` / `None`); the caption-buttons path layers toolkit-drawn buttons on top while preserving native transition behavior.
 - `#[allow(dead_code)]` on `WindowTitleBarKind` (window_api.rs:79) and `WindowSystemBackdropType` (window_api.rs:88) — false positives because cbindgen reads them but rustc can't see that.
 
 **Cross-refs.** `application` (`CompositorController` source, `Weak<EventLoop>`), `event_loop` (wndproc dispatcher), `events` (event payloads), `geometry`, `cursor` (per-window cursor), `pointer` (`PointerClickCounter` storage), `screen` (`window_get_screen_info`), `strings`, `utils` (Win11 build probes).
@@ -190,7 +190,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `PointerState`, `PointerButton`, `PointerButtons` (bitmask), `PointerModifiers` (bitmask).
 - `PointerClickCounter` — tracks button identity, time window, move threshold (`SM_CXDOUBLECLK`/`SM_CYDOUBLECLK`).
 
-**Mechanism.** `EnableMouseInPointer(true)` (event_loop.rs:55, process-wide) routes `WM_MOUSE*` through the `WM_POINTER*` path. `PointerInfo::try_from_message` dispatches on `dwInputType` to call `GetPointerTouchInfo` / `GetPointerPenInfo` / `GetPointerInfo`. `PointerModifiers` is populated via `core::mem::transmute::<u32, PointerModifiers>(dwKeyStates)` (pointer.rs:153).
+**Mechanism.** `EnableMouseInPointer(true)` routes `WM_MOUSE*` through the `WM_POINTER*` path process-wide. `PointerInfo::try_from_message` dispatches on `dwInputType` to call `GetPointerTouchInfo` / `GetPointerPenInfo` / `GetPointerInfo`. `PointerModifiers` is populated via `core::mem::transmute::<u32, PointerModifiers>(dwKeyStates)` (pointer.rs:153).
 
 **Gotchas.**
 - WM_POINTERUPDATE + WM_POINTERDOWN both emit `PointerDown` for the same gesture (see "Application & event loop" gotchas).
@@ -212,7 +212,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Key types.** `Cursor` — RAII wrapper around `HCURSOR` plus `is_system: bool` flag. `Drop` calls `DestroyCursor` only when `is_system == false` (Win32 contract: `LR_SHARED` cursors must not be destroyed). `CursorIcon` enum maps to PCWSTR system cursor IDs.
 
-**Per-window cursor.** Stored as `RefCell<Option<Cursor>>` inside `Window`. Set via `Window::set_cursor` (`window.rs:266`); the previous `Cursor` drops (and is freed if it was a file cursor). Initialised to `Arrow` in `initialize_window` (`window.rs:487`). Re-applied to the DC on `WM_SETCURSOR` for the `HTCLIENT` hit.
+**Per-window cursor.** Stored as `RefCell<Option<Cursor>>` inside `Window`. Set via `Window::set_cursor`; the previous `Cursor` drops (and is freed if it was a file cursor). Initialised to `Arrow` in `initialize_window`. Re-applied to the DC on `WM_SETCURSOR` for the `HTCLIENT` hit.
 
 **Gotchas.**
 - `CursorIcon::Unknown` panics: `cursor.rs:52` — `panic!("Can't create Unknown cursor")`. Triggered if the integer 0 is ever passed across FFI from Kotlin.

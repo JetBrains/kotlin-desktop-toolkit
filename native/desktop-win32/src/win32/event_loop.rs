@@ -403,10 +403,9 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         let dpi = unsafe { GetDpiForWindow(hwnd) };
         max_chrome_y = unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) };
         // The non-system-titlebar handler leaves the top inset at 0 so the
-        // title-bar area stays in the client rect; add the maximized overhang
-        // back here. Matches Windows Terminal's `_OnNcCalcSize` adding
-        // `_GetResizeHandleHeight()` (= SM_CXPADDEDBORDER + SM_CYSIZEFRAME)
-        // to top only.
+        // title-bar area stays in the client rect; add the tested maximized
+        // top overhang back here. Manual verification showed that including
+        // SM_CXPADDEDBORDER over-insets this backend.
         calcsize_params.rgrc[0].top += max_chrome_y;
 
         // GH#1438 / GH#5209: 2-px claw-back so the cursor can still reveal an
