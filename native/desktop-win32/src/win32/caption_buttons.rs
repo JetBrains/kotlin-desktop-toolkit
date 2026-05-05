@@ -6,9 +6,33 @@
 //! Win32 APIs; the wndproc layer in `event_loop.rs` is the only place that
 //! bridges Win32 messages and this module.
 
-use windows::Win32::Graphics::Gdi::{GetSysColor, SYS_COLOR_INDEX};
+use std::rc::Rc;
+
+use windows::{
+    Foundation::TimeSpan,
+    Graphics::SizeInt32,
+    UI::Composition::{
+        CompositionColorBrush, CompositionDrawingSurface, ContainerVisual, Core::CompositorController, SpriteVisual,
+    },
+    Win32::{
+        Foundation::{HWND, LPARAM, WPARAM},
+        Graphics::{
+            Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F},
+            Direct2D::{D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Brush, ID2D1RenderTarget},
+            DirectWrite::{
+                DWRITE_FONT_METRICS, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_REGULAR,
+                DWRITE_GLYPH_METRICS, DWRITE_MEASURING_MODE_NATURAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
+                DWRITE_TEXT_ALIGNMENT_CENTER, IDWriteFactory, IDWriteFontFace,
+            },
+            Gdi::{GetSysColor, SYS_COLOR_INDEX},
+        },
+        UI::WindowsAndMessaging::PostMessageW,
+    },
+};
+use windows_numerics::{Vector2, Vector3};
 
 use super::appearance::{Appearance, HighContrast};
+use super::composition::{D2dContext, RenderingDeviceReplacedRegistration};
 use super::geometry::{LogicalSize, PhysicalPoint, PhysicalSize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -318,9 +342,641 @@ pub(crate) fn caption_button_kind_for_hittest(hit_test: u32) -> Option<CaptionBu
     }
 }
 
-// CaptionButtonStrip definition lives here once Phase 5 adds it.
 pub(crate) struct CaptionButtonStrip {
-    _placeholder: (),
+    composition_root: ContainerVisual,
+    buttons: Vec<CaptionButton>,
+    visible_kinds: CaptionButtonKinds,
+    is_active: bool,
+    is_window_maximized: bool,
+    appearance: Appearance,
+    high_contrast: HighContrast,
+    metrics: CaptionButtonMetrics,
+    pointer_over_kind: Option<CaptionButtonKind>,
+    pointer_device: Option<PointerDeviceKind>,
+    press_session: Option<PressSession>,
+    d2d_context: Rc<D2dContext>,
+    // Dropping the registration removes the RDR subscription (spec §6.2). Field is held
+    // for its `Drop` side-effect even though we never read it after construction.
+    #[allow(dead_code)]
+    device_replaced_registration: RenderingDeviceReplacedRegistration,
+    compositor_controller: CompositorController,
+}
+
+struct CaptionButton {
+    kind: CaptionButtonKind,
+    availability: Availability,
+    visuals: CaptionButtonVisuals,
+    last_applied_interaction: ButtonInteraction,
+    glyph_surface_dirty: bool,
+}
+
+struct CaptionButtonVisuals {
+    backplate: SpriteVisual,
+    backplate_brush: CompositionColorBrush,
+    glyph: SpriteVisual,
+    glyph_brush: CompositionColorBrush,
+    glyph_surface: CompositionDrawingSurface,
+}
+
+impl CaptionButtonStrip {
+    pub fn new(
+        chrome_layer: &ContainerVisual,
+        initial_scale: f32,
+        style: &crate::win32::window_api::WindowStyle,
+        compositor_controller: CompositorController,
+        hwnd: HWND,
+    ) -> anyhow::Result<Self> {
+        let compositor = compositor_controller.Compositor()?;
+        let d2d_context = crate::win32::composition::ensure_d2d_context(compositor.clone())?;
+
+        // Subscribe to RenderingDeviceReplaced; see spec §6.2 for the reentrancy contract.
+        let device_replaced_registration = {
+            let hwnd_value = hwnd.0 as isize;
+            d2d_context.add_rendering_device_replaced_callback(move || unsafe {
+                let _ = PostMessageW(
+                    Some(HWND(hwnd_value as _)),
+                    crate::win32::event_loop::WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED,
+                    WPARAM(0),
+                    LPARAM(0),
+                );
+            })?
+        };
+
+        let composition_root = compositor.CreateContainerVisual()?;
+        chrome_layer.Children()?.InsertAtTop(&composition_root)?;
+
+        let visible_kinds = CaptionButtonKinds::from_style(style);
+        let metrics = CaptionButtonMetrics::new(initial_scale);
+
+        let mut buttons = Vec::new();
+        for kind in visible_kinds.iter_ordered() {
+            let availability = availability_from_style(kind, style);
+            buttons.push(create_caption_button(&compositor, &composition_root, &d2d_context, kind, availability, &metrics)?);
+        }
+
+        // Seed appearance + HC from live state (spec §4.2); on failure, fall
+        // back to Light / Off — the next appearance event self-corrects.
+        let appearance = Appearance::get_current()
+            .inspect_err(|err| log::warn!("CaptionButtonStrip: failed to read initial appearance, defaulting to Light: {err}"))
+            .unwrap_or(Appearance::Light);
+        let high_contrast = HighContrast::get_current()
+            .inspect_err(|err| log::warn!("CaptionButtonStrip: failed to read initial high-contrast state, defaulting to Off: {err}"))
+            .unwrap_or(HighContrast::Off);
+
+        let mut strip = Self {
+            composition_root,
+            buttons,
+            visible_kinds,
+            is_active: false,
+            is_window_maximized: false,
+            appearance,
+            high_contrast,
+            metrics,
+            pointer_over_kind: None,
+            pointer_device: None,
+            press_session: None,
+            d2d_context,
+            device_replaced_registration,
+            compositor_controller,
+        };
+        strip.relayout()?;
+        strip.apply_visuals_to_all_buttons()?;
+        strip.compositor_controller.Commit()?;
+        Ok(strip)
+    }
+
+    fn relayout(&mut self) -> anyhow::Result<()> {
+        let bw = self.metrics.button_size_px.width.0;
+        let bh = self.metrics.button_size_px.height.0;
+        let total_width = bw * self.buttons.len() as i32;
+        // Buttons line up at increasing x within the strip's parent;
+        // `set_strip_position` places the parent at top-right of `chrome_layer`.
+        self.composition_root.SetSize(Vector2::new(total_width as f32, bh as f32))?;
+        let gw = self.metrics.glyph_extent_px.width.0;
+        let gh = self.metrics.glyph_extent_px.height.0;
+        let gx = (bw - gw) / 2;
+        let gy = (bh - gh) / 2;
+        for (i, button) in self.buttons.iter_mut().enumerate() {
+            let x = (i as i32) * bw;
+            button.visuals.backplate.SetOffset(Vector3 { X: x as f32, Y: 0.0, Z: 0.0 })?;
+            button.visuals.backplate.SetSize(Vector2::new(bw as f32, bh as f32))?;
+            button.visuals.glyph.SetOffset(Vector3 { X: gx as f32, Y: gy as f32, Z: 0.0 })?;
+            button.visuals.glyph.SetSize(Vector2::new(gw as f32, gh as f32))?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn set_strip_position(
+        &self,
+        client_size: PhysicalSize,
+        max_chrome_y: i32,
+    ) -> anyhow::Result<()> {
+        let bw = self.metrics.button_size_px.width.0;
+        let total_width = bw * self.buttons.len() as i32;
+        let x = client_size.width.0 - total_width;
+        self.composition_root.SetOffset(Vector3 {
+            X: x as f32,
+            Y: max_chrome_y as f32,
+            Z: 0.0,
+        })?;
+        Ok(())
+    }
+
+    fn rasterise_all_glyphs(&mut self) -> anyhow::Result<()> {
+        for button in self.buttons.iter_mut() {
+            if button.glyph_surface_dirty
+                && rasterise_glyph(
+                    &self.d2d_context,
+                    &button.visuals.glyph_surface,
+                    button.kind,
+                    self.is_window_maximized,
+                    self.high_contrast,
+                    &self.metrics,
+                )?
+            {
+                button.glyph_surface_dirty = false;
+            }
+        }
+        Ok(())
+    }
+
+    fn apply_visuals_to_all_buttons(&mut self) -> anyhow::Result<()> {
+        // Re-rasterise dirty glyphs (spec §6.2 reactive device-loss heal).
+        self.rasterise_all_glyphs()?;
+
+        let theme = CaptionTheme::resolve(self.appearance, self.high_contrast);
+        let pointer_over_kind = self.pointer_over_kind;
+        let pointer_device = self.pointer_device;
+        let press_session = self.press_session;
+        let is_active = self.is_active;
+        for button in self.buttons.iter_mut() {
+            let new_interaction = resolve_interaction(
+                button.kind,
+                button.availability,
+                pointer_over_kind,
+                pointer_device,
+                press_session.as_ref(),
+            );
+            apply_button_visuals(button, new_interaction, &theme, is_active)?;
+        }
+        Ok(())
+    }
+
+    pub fn hit_test(&self, point: PhysicalPoint) -> Option<CaptionButtonKind> {
+        StripGeometry {
+            reference_width_px: self.strip_width_px(),
+            metrics: self.metrics,
+            visible_kinds: self.visible_kinds,
+        }
+        .hit_test(point)
+    }
+
+    pub fn strip_width_px(&self) -> i32 {
+        self.metrics.button_size_px.width.0 * self.buttons.len() as i32
+    }
+
+    pub fn on_pointer_update(
+        &mut self,
+        kind: Option<CaptionButtonKind>,
+        _pointer_id: u32,
+        device: PointerDeviceKind,
+    ) -> anyhow::Result<()> {
+        if self.pointer_over_kind != kind || self.pointer_device != Some(device) {
+            self.pointer_over_kind = kind;
+            self.pointer_device = Some(device);
+            self.apply_visuals_to_all_buttons()?;
+            self.compositor_controller.Commit()?;
+        }
+        Ok(())
+    }
+
+    pub fn on_pointer_down(
+        &mut self,
+        kind: CaptionButtonKind,
+        pointer_id: u32,
+        device: PointerDeviceKind,
+    ) -> anyhow::Result<()> {
+        if self.press_session.is_some() {
+            return Ok(());
+        }
+        if self.button_for(kind).map(|b| b.availability) != Some(Availability::Enabled) {
+            return Ok(());
+        }
+        self.press_session = Some(PressSession {
+            pointer_id,
+            captured_kind: kind,
+            device,
+        });
+        self.pointer_over_kind = Some(kind);
+        self.pointer_device = Some(device);
+        self.apply_visuals_to_all_buttons()?;
+        self.compositor_controller.Commit()?;
+        Ok(())
+    }
+
+    pub fn on_pointer_up(
+        &mut self,
+        kind_under_pointer: Option<CaptionButtonKind>,
+        pointer_id: u32,
+    ) -> anyhow::Result<Option<CaptionButtonAction>> {
+        let session = match self.press_session {
+            Some(s) if s.pointer_id == pointer_id => s,
+            _ => return Ok(None),
+        };
+        self.press_session = None;
+        let action = if Some(session.captured_kind) == kind_under_pointer {
+            Some(self.action_for(session.captured_kind))
+        } else {
+            None
+        };
+        self.pointer_over_kind = kind_under_pointer;
+        self.apply_visuals_to_all_buttons()?;
+        self.compositor_controller.Commit()?;
+        Ok(action)
+    }
+
+    pub fn on_pointer_cancel(&mut self, pointer_id: u32) -> anyhow::Result<()> {
+        let should_cancel = matches!(self.press_session, Some(s) if s.pointer_id == pointer_id);
+        if should_cancel {
+            self.press_session = None;
+            self.apply_visuals_to_all_buttons()?;
+            self.compositor_controller.Commit()?;
+        }
+        Ok(())
+    }
+
+    pub fn on_nc_mouse_leave(&mut self) -> anyhow::Result<()> {
+        self.pointer_over_kind = None;
+        self.pointer_device = None;
+        self.apply_visuals_to_all_buttons()?;
+        self.compositor_controller.Commit()?;
+        Ok(())
+    }
+
+    fn button_for(&self, kind: CaptionButtonKind) -> Option<&CaptionButton> {
+        self.buttons.iter().find(|b| b.kind == kind)
+    }
+
+    pub fn is_enabled(&self, kind: CaptionButtonKind) -> bool {
+        self.button_for(kind).map(|b| b.availability) == Some(Availability::Enabled)
+    }
+
+    /// True iff the strip owns a press session for `pointer_id`. Used by the
+    /// wndproc to gate Kotlin-facing `PointerUp` suppression on whether the
+    /// strip is the actual owner of the matching `PointerDown` (multi-pointer
+    /// safety — a touch hold must not swallow a mouse release).
+    pub(crate) fn has_active_press_for(&self, pointer_id: u32) -> bool {
+        matches!(self.press_session, Some(s) if s.pointer_id == pointer_id)
+    }
+
+    fn action_for(&self, kind: CaptionButtonKind) -> CaptionButtonAction {
+        match kind {
+            CaptionButtonKind::Close => CaptionButtonAction::Close,
+            CaptionButtonKind::Minimize => CaptionButtonAction::Minimize,
+            CaptionButtonKind::Maximize => {
+                if self.is_window_maximized {
+                    CaptionButtonAction::Restore
+                } else {
+                    CaptionButtonAction::Maximize
+                }
+            }
+        }
+    }
+
+    pub fn on_activate(&mut self, is_active: bool) -> anyhow::Result<()> {
+        if self.is_active != is_active {
+            self.is_active = is_active;
+            // Spec §5.2: `is_active` flips never animate. Resetting per-button
+            // history keeps the `Hovered → Idle` predicate false across the flip.
+            for button in self.buttons.iter_mut() {
+                button.last_applied_interaction = ButtonInteraction::Idle;
+            }
+            self.apply_visuals_to_all_buttons()?;
+            self.compositor_controller.Commit()?;
+        }
+        Ok(())
+    }
+
+    pub fn on_dpi_change(&mut self, new_scale: f32) -> anyhow::Result<()> {
+        self.metrics = CaptionButtonMetrics::new(new_scale);
+        for button in self.buttons.iter_mut() {
+            let new_size = SizeInt32 {
+                Width: self.metrics.glyph_extent_px.width.0,
+                Height: self.metrics.glyph_extent_px.height.0,
+            };
+            button.visuals.glyph_surface.Resize(new_size)?;
+            button.glyph_surface_dirty = true;
+        }
+        self.relayout()?;
+        self.apply_visuals_to_all_buttons()?;
+        self.compositor_controller.Commit()?;
+        Ok(())
+    }
+
+    pub fn on_appearance_change(&mut self, appearance: Appearance, hc: HighContrast) -> anyhow::Result<()> {
+        let glyph_invalidate = self.high_contrast != hc;
+        self.appearance = appearance;
+        self.high_contrast = hc;
+        if glyph_invalidate {
+            for button in self.buttons.iter_mut() {
+                button.glyph_surface_dirty = true;
+            }
+        }
+        self.apply_visuals_to_all_buttons()?;
+        self.compositor_controller.Commit()?;
+        Ok(())
+    }
+
+    pub fn on_rendering_device_replaced(&mut self) -> anyhow::Result<()> {
+        for button in self.buttons.iter_mut() {
+            button.glyph_surface_dirty = true;
+        }
+        self.rasterise_all_glyphs()?;
+        self.apply_visuals_to_all_buttons()?;
+        self.compositor_controller.Commit()?;
+        Ok(())
+    }
+
+    pub fn on_max_state_change(&mut self, is_maximized: bool) -> anyhow::Result<()> {
+        if self.is_window_maximized != is_maximized {
+            self.is_window_maximized = is_maximized;
+            for button in self.buttons.iter_mut() {
+                if button.kind == CaptionButtonKind::Maximize {
+                    button.glyph_surface_dirty = true;
+                }
+            }
+            self.rasterise_all_glyphs()?;
+            self.compositor_controller.Commit()?;
+        }
+        Ok(())
+    }
+
+    pub fn on_resize(&self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
+        self.set_strip_position(client_size, max_chrome_y)?;
+        self.compositor_controller.Commit()?;
+        Ok(())
+    }
+}
+
+fn create_caption_button(
+    compositor: &windows::UI::Composition::Compositor,
+    parent: &ContainerVisual,
+    d2d_context: &Rc<D2dContext>,
+    kind: CaptionButtonKind,
+    availability: Availability,
+    metrics: &CaptionButtonMetrics,
+) -> anyhow::Result<CaptionButton> {
+    let backplate = compositor.CreateSpriteVisual()?;
+    let backplate_brush = compositor.CreateColorBrushWithColor(rgba(0, 0, 0, 0))?;
+    backplate.SetBrush(&backplate_brush)?;
+    backplate.SetSize(Vector2::new(metrics.button_size_px.width.0 as f32, metrics.button_size_px.height.0 as f32))?;
+    parent.Children()?.InsertAtTop(&backplate)?;
+
+    // Mask-brush topology: see spec §4.3. The `CompositionMaskBrush` and the
+    // wrapping `CompositionSurfaceBrush` for the glyph surface aren't stored
+    // on the visuals — the `glyph` SpriteVisual's `SetBrush(&mask_brush)`
+    // keeps the chain alive.
+    let glyph_surface = d2d_context.create_drawing_surface(SizeInt32 {
+        Width: metrics.glyph_extent_px.width.0,
+        Height: metrics.glyph_extent_px.height.0,
+    })?;
+    let glyph_surface_brush = compositor.CreateSurfaceBrushWithSurface(&glyph_surface)?;
+    let glyph_brush = compositor.CreateColorBrushWithColor(rgba(0, 0, 0, 0xFF))?;
+    let glyph_mask_brush = compositor.CreateMaskBrush()?;
+    glyph_mask_brush.SetSource(&glyph_brush)?;
+    glyph_mask_brush.SetMask(&glyph_surface_brush)?;
+    let glyph = compositor.CreateSpriteVisual()?;
+    glyph.SetBrush(&glyph_mask_brush)?;
+    glyph.SetSize(Vector2::new(metrics.glyph_extent_px.width.0 as f32, metrics.glyph_extent_px.height.0 as f32))?;
+    backplate.Children()?.InsertAtTop(&glyph)?;
+
+    Ok(CaptionButton {
+        kind,
+        availability,
+        visuals: CaptionButtonVisuals {
+            backplate,
+            backplate_brush,
+            glyph,
+            glyph_brush,
+            glyph_surface,
+        },
+        last_applied_interaction: ButtonInteraction::Idle,
+        glyph_surface_dirty: true,
+    })
+}
+
+fn glyph_for(kind: CaptionButtonKind, is_maximised: bool, hc: HighContrast) -> char {
+    match (kind, is_maximised, hc) {
+        (CaptionButtonKind::Minimize, _, HighContrast::Off) => '\u{E921}',
+        (CaptionButtonKind::Maximize, false, HighContrast::Off) => '\u{E922}',
+        (CaptionButtonKind::Maximize, true, HighContrast::Off) => '\u{E923}',
+        (CaptionButtonKind::Close, _, HighContrast::Off) => '\u{E8BB}',
+        (CaptionButtonKind::Minimize, _, HighContrast::On) => '\u{EF2D}',
+        (CaptionButtonKind::Maximize, false, HighContrast::On) => '\u{EF2E}',
+        (CaptionButtonKind::Maximize, true, HighContrast::On) => '\u{EF2F}',
+        (CaptionButtonKind::Close, _, HighContrast::On) => '\u{EF2C}',
+    }
+}
+
+/// Resolve the system font collection's first available caption-glyph family
+/// (Segoe Fluent Icons, falling back to Segoe MDL2 Assets) and produce a
+/// concrete `IDWriteFontFace` for it. Returning the face here lets the caller
+/// run glyph-metric queries without re-opening the font collection.
+fn caption_glyph_font_family(
+    dwrite: &IDWriteFactory,
+) -> anyhow::Result<(windows::core::PCWSTR, IDWriteFontFace)> {
+    let mut collection = None;
+    unsafe { dwrite.GetSystemFontCollection(&raw mut collection, false)? };
+    let collection = collection.ok_or_else(|| anyhow::anyhow!("DirectWrite returned no system font collection"))?;
+    for family_name in [
+        windows::core::w!("Segoe Fluent Icons"),
+        windows::core::w!("Segoe MDL2 Assets"),
+    ] {
+        let mut index = 0u32;
+        let mut exists = windows_core::BOOL(0);
+        unsafe { collection.FindFamilyName(family_name, &raw mut index, &raw mut exists)? };
+        if exists.as_bool() {
+            let family = unsafe { collection.GetFontFamily(index)? };
+            let font = unsafe {
+                family.GetFirstMatchingFont(
+                    DWRITE_FONT_WEIGHT_REGULAR,
+                    DWRITE_FONT_STRETCH_NORMAL,
+                    DWRITE_FONT_STYLE_NORMAL,
+                )?
+            };
+            let face = unsafe { font.CreateFontFace()? };
+            return Ok((family_name, face));
+        }
+    }
+    anyhow::bail!("neither Segoe Fluent Icons nor Segoe MDL2 Assets is present in the system font collection")
+}
+
+/// Compute the DirectWrite font size (DIPs) at which the glyph's visible
+/// black-box fits within `target_extent_px`. Algorithm per spec §4.5.
+fn compute_glyph_font_size(
+    face: &IDWriteFontFace,
+    glyph_char: char,
+    target_extent_px: PhysicalSize,
+) -> anyhow::Result<f32> {
+    let codepoint = glyph_char as u32;
+    let mut glyph_index: u16 = 0;
+    unsafe { face.GetGlyphIndices(&raw const codepoint, 1, &raw mut glyph_index)? };
+    if glyph_index == 0 {
+        anyhow::bail!("caption glyph U+{:04X} maps to .notdef in selected font", codepoint);
+    }
+
+    let mut glyph_metrics = DWRITE_GLYPH_METRICS::default();
+    unsafe { face.GetDesignGlyphMetrics(&raw const glyph_index, 1, &raw mut glyph_metrics, false)? };
+    let mut font_metrics = DWRITE_FONT_METRICS::default();
+    unsafe { face.GetMetrics(&raw mut font_metrics) };
+
+    let design_units_per_em = i32::from(font_metrics.designUnitsPerEm);
+    if design_units_per_em <= 0 {
+        anyhow::bail!("DirectWrite returned designUnitsPerEm = {design_units_per_em}");
+    }
+
+    let bbox_w = (glyph_metrics.advanceWidth as i32) - glyph_metrics.leftSideBearing - glyph_metrics.rightSideBearing;
+    // Horizontal-layout cell height per DWRITE_FONT_METRICS — `ascent + descent`,
+    // not `glyph_metrics.advanceHeight` (which is the *vertical* advance).
+    let cell_height_du = i32::from(font_metrics.ascent) + i32::from(font_metrics.descent);
+    let bbox_h = cell_height_du - glyph_metrics.topSideBearing - glyph_metrics.bottomSideBearing;
+    if bbox_w <= 0 || bbox_h <= 0 {
+        anyhow::bail!("DirectWrite returned non-positive glyph bbox: {bbox_w}x{bbox_h}");
+    }
+
+    let dpem = design_units_per_em as f32;
+    let font_size_x = (target_extent_px.width.0 as f32) * dpem / (bbox_w as f32);
+    let font_size_y = (target_extent_px.height.0 as f32) * dpem / (bbox_h as f32);
+    Ok(font_size_x.min(font_size_y))
+}
+
+fn rasterise_glyph(
+    d2d_context: &Rc<D2dContext>,
+    surface: &CompositionDrawingSurface,
+    kind: CaptionButtonKind,
+    is_maximised: bool,
+    hc: HighContrast,
+    metrics: &CaptionButtonMetrics,
+) -> anyhow::Result<bool> {
+    let glyph_char = glyph_for(kind, is_maximised, hc);
+    let dwrite = d2d_context.dwrite_factory();
+    let (font_family, font_face) = caption_glyph_font_family(&dwrite)?;
+    let font_size = compute_glyph_font_size(&font_face, glyph_char, metrics.glyph_extent_px)?;
+    let format = unsafe {
+        dwrite.CreateTextFormat(
+            font_family,
+            None::<&windows::Win32::Graphics::DirectWrite::IDWriteFontCollection>,
+            DWRITE_FONT_WEIGHT_REGULAR,
+            DWRITE_FONT_STYLE_NORMAL,
+            DWRITE_FONT_STRETCH_NORMAL,
+            font_size,
+            windows::core::w!("en-US"),
+        )?
+    };
+    unsafe {
+        format.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
+        format.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
+    }
+    let mut text_buf = [0u16; 2];
+    let text: &[u16] = glyph_char.encode_utf16(&mut text_buf);
+    let drew = d2d_context
+        .with_d2d_render_target(surface, |rt, offset| {
+            unsafe {
+                // Pin to 96 DPI so 1 DIP == 1 pixel; `compute_glyph_font_size`
+                // assumes that mapping.
+                rt.SetDpi(96.0, 96.0);
+                let clear_color = D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
+                rt.Clear(Some(&raw const clear_color));
+                let brush_color = D2D1_COLOR_F { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+                let brush = rt.CreateSolidColorBrush(&raw const brush_color, None)?;
+                let rect = D2D_RECT_F {
+                    left: offset.x as f32,
+                    top: offset.y as f32,
+                    right: offset.x as f32 + metrics.glyph_extent_px.width.0 as f32,
+                    bottom: offset.y as f32 + metrics.glyph_extent_px.height.0 as f32,
+                };
+                let brush: ID2D1Brush = brush.into();
+                rt.DrawText(
+                    text,
+                    &format,
+                    &raw const rect,
+                    &brush,
+                    D2D1_DRAW_TEXT_OPTIONS_NONE,
+                    DWRITE_MEASURING_MODE_NATURAL,
+                );
+            }
+            Ok(())
+        })?
+        .is_some();
+    Ok(drew)
+}
+
+fn apply_button_visuals(
+    button: &mut CaptionButton,
+    new_interaction: ButtonInteraction,
+    theme: &CaptionTheme,
+    is_active: bool,
+) -> anyhow::Result<()> {
+    let (backplate, foreground) = colours_for(button.kind, button.availability, new_interaction, theme, is_active);
+    let prev = button.last_applied_interaction;
+    // Spec §5.2: animate only `Hovered → Idle` on Enabled buttons; everything else jumps.
+    let is_hover_leave = prev == ButtonInteraction::Hovered
+        && new_interaction == ButtonInteraction::Idle
+        && button.availability == Availability::Enabled;
+
+    if is_hover_leave {
+        animate_color(&button.visuals.backplate_brush, backplate, std::time::Duration::from_millis(150))?;
+        animate_color(&button.visuals.glyph_brush, foreground, std::time::Duration::from_millis(100))?;
+    } else {
+        button.visuals.backplate_brush.SetColor(backplate)?;
+        button.visuals.glyph_brush.SetColor(foreground)?;
+    }
+    button.last_applied_interaction = new_interaction;
+    Ok(())
+}
+
+fn animate_color(
+    brush: &CompositionColorBrush,
+    target: windows::UI::Color,
+    duration: std::time::Duration,
+) -> anyhow::Result<()> {
+    let anim = brush.Compositor()?.CreateColorKeyFrameAnimation()?;
+    anim.SetDuration(TimeSpan {
+        Duration: (duration.as_nanos() / 100) as i64,
+    })?;
+    // Both keyframes set explicitly (docs don't pin the implicit start);
+    // matches Terminal's behaviour on rapid restart.
+    anim.InsertKeyFrame(0.0, brush.Color()?)?;
+    anim.InsertKeyFrame(1.0, target)?;
+    brush.StartAnimation(windows::core::h!("Color"), &anim)?;
+    Ok(())
+}
+
+fn colours_for(
+    kind: CaptionButtonKind,
+    availability: Availability,
+    interaction: ButtonInteraction,
+    theme: &CaptionTheme,
+    is_active: bool,
+) -> (windows::UI::Color, windows::UI::Color) {
+    if availability == Availability::Disabled {
+        return (theme.backplate_rest, theme.foreground_disabled);
+    }
+    if !is_active {
+        return (theme.backplate_inactive, theme.foreground_inactive);
+    }
+    if kind == CaptionButtonKind::Close {
+        match interaction {
+            ButtonInteraction::Hovered => return (theme.close_backplate_hover, theme.close_foreground_hover),
+            ButtonInteraction::Pressed => return (theme.close_backplate_pressed, theme.close_foreground_pressed),
+            _ => {}
+        }
+    }
+    match interaction {
+        ButtonInteraction::Idle | ButtonInteraction::PressedDraggedOff => (theme.backplate_rest, theme.foreground_rest),
+        ButtonInteraction::Hovered => (theme.backplate_hover, theme.foreground_hover),
+        ButtonInteraction::Pressed => (theme.backplate_pressed, theme.foreground_pressed),
+    }
 }
 
 #[cfg(test)]
