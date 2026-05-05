@@ -16,7 +16,7 @@ Caption-button rendering and pointer interaction for `WindowTitleBarKind::Custom
 
 Inherited preconditions:
 
-- Custom-titlebar windows are created with `WS_CAPTION` removed in `WindowStyle::to_system`. Per the *Window Styles* dependency chain (`WS_SYSMENU` requires `WS_CAPTION`; `WS_MAXIMIZEBOX` / `WS_MINIMIZEBOX` require `WS_SYSMENU`)[^window-styles], DWM/system caption buttons are not painted, so the toolkit owns Minimize / Maximize / Close rendering for these windows.
+- Non-system titlebar windows (`WindowTitleBarKind::Custom` / `WindowTitleBarKind::None`) keep `WS_CAPTION` but clear `WS_SYSMENU` in `WindowStyle::to_system`. This preserves native min/max/restore transition semantics while suppressing system caption controls; the toolkit owns Minimize / Maximize / Close rendering for `Custom` windows.
 - `on_nccalcsize` uses the current window style for left / right / bottom frame adjustment and intentionally leaves the Custom top inset at 0 so the title-bar area remains client area. Preserve that; add only the maximized inset and strip resize after the client rect is computed.
 - `on_nchittest` keeps the current first consultation with `DwmDefWindowProc` / `DefWindowProcW`. Insert strip hit-testing before preserving any default non-`HTCLIENT` result for points inside the strip. Outside the strip, preserve any non-`HTCLIENT` result before the Kotlin `NCHitTestEvent` callback and manual top-edge fallback. Split the current `!window.is_resizable()` early return so non-resizable Custom-titlebar windows still get caption-button hit-testing and title-bar drag fallback; only the resize-border math remains conditional on `is_resizable`.
 - `Appearance` is queried alongside a `HighContrast` enum (`Off` / `On`) which the strip consumes.
@@ -35,7 +35,7 @@ Two crate-internal modules, both `pub(crate)` only — no FFI surface, no `_api.
 - **`composition.rs`** exposes `pub(crate) fn ensure_d2d_context(compositor: Compositor) -> anyhow::Result<Rc<D2dContext>>` backed by a thread-local `OnceCell<Rc<D2dContext>>`. Called once per Custom-titlebar window from inside `CaptionButtonStrip::new`; later calls return the same `Rc<D2dContext>`. Failure is not memoised — a later Custom-titlebar window retries through the same cell.
 - **`Window`** gains `caption_buttons: RefCell<Option<CaptionButtonStrip>>`, populated in `initialize_window` if and only if `style.title_bar_kind == Custom` and caption-button construction succeeds. Construction failure before the window is shown is fatal for `window_create`; a `Custom` titlebar window must not appear without visible caption buttons. The strip owns the `Rc<D2dContext>` and the `RenderingDeviceReplacedRegistration` guard.
 - **`Window`** gains `nc_leave_tracking_armed: AtomicBool` and helper methods `ensure_nc_leave_tracking()` / `nc_leave_tracking_fired()` — see §3.5.
-- **`Window`** already has `restore()` (calls `ShowWindow(SW_RESTORE)`), used by the strip's maximize-button click path.
+- **`Window`** already has `minimize` / `maximize` / `restore`, routed through `SendMessageW(WM_SYSCOMMAND, SC_*)`, used by the strip click path.
 - **`event_loop.rs`** gains:
   - Strip consultation in `on_nchittest` after the initial `DwmDefWindowProc` / `DefWindowProcW` consultation, but before preserving a default non-`HTCLIENT` result for points inside the strip.
   - Current `on_nchittest` returns early when `!window.is_resizable()`. Split that guard: resize-border math stays conditional on `is_resizable`, but custom caption-button hit-testing and draggable titlebar fallback must still run for non-resizable Custom-titlebar windows.
@@ -141,7 +141,7 @@ Notes:
 - Detection uses [`IsZoomed(hwnd)`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-iszoomed). Observed: `WS_MAXIMIZE` is set before `WM_NCCALCSIZE(TRUE)` arrives during the maximize transition; Microsoft does not document this ordering, but Windows Terminal's `_OnNcCalcSize` relies on it.
 - DPI must come from [`GetDpiForWindow`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-getdpiforwindow) and the metrics from [`GetSystemMetricsForDpi`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-getsystemmetricsfordpi). The non-DPI-aware variants return wrong values on per-monitor v2 windows ([Mixed-Mode DPI Scaling](https://learn.microsoft.com/windows/win32/hidpi/high-dpi-improvements-for-desktop-applications#new-dpi-related-apis)).
 - There is no `SM_CYPADDEDBORDER`; the same `SM_CXPADDEDBORDER` value is added to both axes. Verified in Windows Terminal's `_GetResizeHandleHeight` at commit `e4e3f08efca9d0ffba330eee12edbcb16897ddcb` (`src/cascadia/WindowsTerminal/NonClientIslandWindow.cpp`), which carries this comment verbatim: *"there isn't a SM_CYPADDEDBORDER for the Y axis."*
-- To preserve the cursor's ability to trigger an auto-hide taskbar (which requires reaching the actual screen edge), the toolkit probes for an auto-hide taskbar on each monitor edge via [`SHAppBarMessage(ABM_GETSTATE)`](https://learn.microsoft.com/windows/win32/api/shellapi/nf-shellapi-shappbarmessage) + [`SHAppBarMessage(ABM_GETAUTOHIDEBAREX)`](https://learn.microsoft.com/windows/win32/api/shellapi/nf-shellapi-shappbarmessage) and claws back 2 px on the matching edge. Matches Windows Terminal's `_OnNcCalcSize` GH#1438 / GH#5209 handling (`AutohideTaskbarSize = 2`, `microsoft/terminal` at `e4e3f08efca…`). Custom-titlebar only — standard-frame windows retain the standard frame inset, leaving an OS-recognized non-client edge that triggers reveal without intervention.
+- To preserve the cursor's ability to trigger an auto-hide taskbar (which requires reaching the actual screen edge), the toolkit probes for an auto-hide taskbar on each monitor edge via [`SHAppBarMessage(ABM_GETSTATE)`](https://learn.microsoft.com/windows/win32/api/shellapi/nf-shellapi-shappbarmessage) + [`SHAppBarMessage(ABM_GETAUTOHIDEBAREX)`](https://learn.microsoft.com/windows/win32/api/shellapi/nf-shellapi-shappbarmessage) and claws back 2 px on the matching edge. Matches Windows Terminal's `_OnNcCalcSize` GH#1438 / GH#5209 handling (`AutohideTaskbarSize = 2`, `microsoft/terminal` at `e4e3f08efca…`). Non-system titlebar path (`Custom` / `None`) only — standard-frame windows retain the standard frame inset, leaving an OS-recognized non-client edge that triggers reveal without intervention.
 
 ## 4. Components
 
@@ -528,9 +528,9 @@ The wndproc routes pointer-up to the strip; the strip returns `Option<CaptionBut
 | Action | Wndproc dispatch |
 |---|---|
 | `Close` | `Window::request_close()` (existing — `PostMessage WM_CLOSE`) |
-| `Minimize` | `Window::minimize()` (existing — `ShowWindow(SW_SHOWMINIMIZED)`) |
-| `Maximize` | `Window::maximize()` (existing — `ShowWindow(SW_SHOWMAXIMIZED)`) |
-| `Restore` | `Window::restore()` (existing — `ShowWindow(SW_RESTORE)`) |
+| `Minimize` | `Window::minimize()` (existing — `SendMessageW(WM_SYSCOMMAND, SC_MINIMIZE, ...)`) |
+| `Maximize` | `Window::maximize()` (existing — `SendMessageW(WM_SYSCOMMAND, SC_MAXIMIZE, ...)`) |
+| `Restore` | `Window::restore()` (existing — `SendMessageW(WM_SYSCOMMAND, SC_RESTORE, ...)`) |
 
 The Maximize button's action depends on current state at click time: the strip reads its own `is_window_maximized` field (kept in sync via `on_max_state_change` — see §5.3) and returns `Restore` if maximized, `Maximize` otherwise. The strip does not call back into `Window` or `IsZoomed` to resolve the action.
 
@@ -670,7 +670,7 @@ Future work tracked separately in `TODO.md`: RTL mirroring; `WM_NCMOUSEMOVE` fal
 ### Microsoft documentation
 
 - [Custom Window Frame Using DWM](https://learn.microsoft.com/windows/win32/dwm/customframe) — the canonical Win32 custom-frame recipe (`WM_NCCALCSIZE`, `DwmExtendFrameIntoClientArea`, `WM_NCHITTEST`, `DwmDefWindowProc`).
-- [WM_NCCALCSIZE message](https://learn.microsoft.com/windows/win32/winmsg/wm-nccalcsize) — confirms standard-frame removal does not affect DWM-extended frames; the toolkit creates Custom-titlebar windows without `WS_CAPTION`, so the system caption buttons don't draw.
+- [WM_NCCALCSIZE message](https://learn.microsoft.com/windows/win32/winmsg/wm-nccalcsize) — confirms standard-frame removal does not affect DWM-extended frames; non-system titlebar windows keep `WS_CAPTION` for transition semantics but clear `WS_SYSMENU`, the non-system path uses custom non-client handling, and the `Custom` path adds toolkit-owned caption-button visuals.
 - [WM_NCHITTEST message](https://learn.microsoft.com/windows/win32/inputdev/wm-nchittest) — return-value table for `HTCLOSE` (20), `HTMAXBUTTON` (9), `HTMINBUTTON` (8).
 - [Support snap layouts for desktop apps on Windows 11](https://learn.microsoft.com/windows/apps/desktop/modernize/ui/apply-snap-layout-menu) — `HTMAXBUTTON` is the documented contract for Win11 snap-layout flyout.
 - [DwmDefWindowProc function](https://learn.microsoft.com/windows/win32/api/dwmapi/nf-dwmapi-dwmdefwindowproc) — first consultation in `WM_NCHITTEST` and `WM_NCMOUSELEAVE` for custom frames.
@@ -687,7 +687,7 @@ Future work tracked separately in `TODO.md`: RTL mirroring; `WM_NCMOUSEMOVE` fal
 - [High contrast parameter](https://learn.microsoft.com/windows/win32/winauto/high-contrast-parameter) — `GetSysColor` slot mapping for high-contrast colours; documents only the `BTN*` and `WINDOW*` foreground/background pairs.
 - [Compatibility / High-contrast mode](https://learn.microsoft.com/windows/compatibility/high-contrast-mode) — *"`COLOR_HIGHLIGHTTEXT` is meant to be used with `COLOR_HIGHLIGHT` as a background"*; supports the convention of using `HIGHLIGHT` / `HIGHLIGHTTEXT` for selected/hover state.
 - [Button Messages — Button Color Messages](https://learn.microsoft.com/windows/win32/controls/button-messages#button-color-messages) — `COLOR_GRAYTEXT` is *"Disabled (gray) text in buttons."*
-- [Window Styles](https://learn.microsoft.com/windows/win32/winmsg/window-styles) — `WS_SYSMENU` *"The `WS_CAPTION` style must also be specified."*; `WS_MAXIMIZEBOX` / `WS_MINIMIZEBOX` *"The `WS_SYSMENU` style must also be specified."* — the dependency chain `WindowStyle::to_system` leverages.
+- [Window Styles](https://learn.microsoft.com/windows/win32/winmsg/window-styles) — `WS_SYSMENU` *"The `WS_CAPTION` style must also be specified."*; `WS_MAXIMIZEBOX` / `WS_MINIMIZEBOX` *"The `WS_SYSMENU` style must also be specified."* — constraints referenced by `WindowStyle::to_system` and the custom-caption-button policy.
 - [Microsoft KB Archive Q130760](https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/130760) — documents the paired minimize / maximize box behaviour: neither box appears if both styles are omitted; if only one style is present, both boxes appear and the omitted style's box is disabled.
 - [TITLEBARINFOEX structure](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-titlebarinfoex) and [WM_GETTITLEBARINFOEX](https://learn.microsoft.com/en-us/windows/win32/menurc/wm-gettitlebarinfoex) — title-bar element indexes, per-element rectangles, and `STATE_SYSTEM_UNAVAILABLE` / `STATE_SYSTEM_INVISIBLE` states.
 - [ColorKeyFrameAnimation Class](https://learn.microsoft.com/uwp/api/windows.ui.composition.colorkeyframeanimation?view=winrt-28000) — available since Windows 10 build 10586 (1511 / Nov 2015 Update).
@@ -712,6 +712,6 @@ Future work tracked separately in `TODO.md`: RTL mirroring; `WM_NCMOUSEMOVE` fal
 - `native/desktop-win32/docs/SUBSYSTEMS.md` — Window, Renderer (ANGLE), Pointer, Appearance subsystems.
 - `native/desktop-win32/docs/TODO.md` — backlog for deferred caption-button-adjacent work, including Win32 Close-button disable support.
 
-[^window-styles]: [*Window Styles*](https://learn.microsoft.com/windows/win32/winmsg/window-styles): `WS_SYSMENU` *"The `WS_CAPTION` style must also be specified."*; `WS_MAXIMIZEBOX` / `WS_MINIMIZEBOX` *"The `WS_SYSMENU` style must also be specified."* The paired-button rendering outcome (one bit present → both boxes shown, missing one disabled) is documented separately in [Microsoft KB Archive Q130760](https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/130760).
+[^window-styles]: [*Window Styles*](https://learn.microsoft.com/windows/win32/winmsg/window-styles): `WS_SYSMENU` *"The `WS_CAPTION` style must also be specified."*; `WS_MAXIMIZEBOX` / `WS_MINIMIZEBOX` *"The `WS_SYSMENU` style must also be specified."* Non-system titlebar windows (`Custom` / `None`) keep `WS_CAPTION` but clear `WS_SYSMENU`; Minimize/Maximize/Restore behavior is toolkit-owned and dispatched via `WM_SYSCOMMAND`. The paired-button rendering outcome (one bit present → both boxes shown, missing one disabled) is documented separately in [Microsoft KB Archive Q130760](https://www.betaarchive.com/wiki/index.php/Microsoft_KB_Archive/130760).
 
 [^winui-capture]: [*UIElement.CapturePointer (WinUI)*](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.xaml.uielement.capturepointer?view=windows-app-sdk-1.8): *"the second element doesn't fire `PointerEntered` events for a captured pointer when the captured pointer enters it."*

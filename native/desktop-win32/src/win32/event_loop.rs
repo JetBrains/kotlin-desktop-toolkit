@@ -385,26 +385,24 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     calcsize_params.rgrc[0].left -= rc.left;
     calcsize_params.rgrc[0].right -= rc.right;
     calcsize_params.rgrc[0].bottom -= rc.bottom;
-    // For Custom title bar, leave the top inset at 0 so the entire title-bar area
-    // is part of the client area. The manual `on_nchittest` math (below) carves
-    // out HTTOP for the top resize zone and HTCAPTION for the rest. WS_CAPTION is
-    // removed at creation (see WindowStyle::to_system), so DWM does not paint a
-    // system caption / caption buttons over our composition tree.
-    if !window.has_custom_title_bar() {
+    // For non-system title bars (`Custom` / `None`), leave the top inset at 0 so
+    // the title-bar area is part of the client area. Even when `WS_CAPTION` is
+    // present, returning 0 for `WM_NCCALCSIZE` removes the standard frame/caption.
+    if !window.has_non_system_title_bar() {
         calcsize_params.rgrc[0].top -= rc.top;
     }
 
     let is_maximized = unsafe { IsZoomed(hwnd) }.as_bool();
     // The off-monitor overhang only exists when `WS_THICKFRAME` is set
     // (spec §3.6); `WindowStyle::to_system` clears it when `!is_resizable`.
-    // `max_chrome_y` stays 0 for non-resizable / non-Custom / non-maximized
+    // `max_chrome_y` stays 0 for non-resizable / system-titlebar / non-maximized
     // windows so the strip's `set_strip_position` does not shift buttons
     // down into the title-bar zone.
     let mut max_chrome_y = 0;
-    if window.is_resizable() && is_maximized && window.has_custom_title_bar() {
+    if window.is_resizable() && is_maximized && window.has_non_system_title_bar() {
         let dpi = unsafe { GetDpiForWindow(hwnd) };
         max_chrome_y = unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) };
-        // The Custom-titlebar handler leaves the top inset at 0 so the
+        // The non-system-titlebar handler leaves the top inset at 0 so the
         // title-bar area stays in the client rect; add the maximized overhang
         // back here. Matches Windows Terminal's `_OnNcCalcSize` adding
         // `_GetResizeHandleHeight()` (= SM_CXPADDEDBORDER + SM_CYSIZEFRAME)
@@ -412,7 +410,7 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         calcsize_params.rgrc[0].top += max_chrome_y;
 
         // GH#1438 / GH#5209: 2-px claw-back so the cursor can still reveal an
-        // auto-hide taskbar. Custom-titlebar only.
+        // auto-hide taskbar for non-system title bars.
         let _ = apply_autohide_taskbar_inset(hwnd, &mut calcsize_params.rgrc[0])
             .inspect_err(|err| log::warn!("autohide taskbar inset failed: {err}"));
     }
@@ -489,7 +487,7 @@ fn apply_autohide_taskbar_inset(hwnd: windows::Win32::Foundation::HWND, rect: &m
 }
 
 fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    if !window.has_custom_title_bar() {
+    if !window.has_non_system_title_bar() {
         return None;
     }
     let hwnd = window.hwnd();
@@ -527,13 +525,16 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
         unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, current_dpi) + GetSystemMetricsForDpi(SM_CYSIZEFRAME, current_dpi) };
     let title_bar_height = resize_handle_height + unsafe { GetSystemMetricsForDpi(SM_CYSIZE, current_dpi) };
     // Spec §3.2: only the resize-border match is gated on `is_resizable`; the
-    // title-bar drag region applies to non-resizable Custom-titlebar windows
+    // title-bar drag region applies to non-resizable custom-titlebar windows
     // too so they remain draggable by their title bar.
+    //
+    // `WindowTitleBarKind::None` must not expose a synthetic drag band.
+    let allow_titlebar_drag = window.has_custom_title_bar();
     let is_on_resize_border = window.is_resizable() && mouse_y < (window_rect.top + resize_handle_height) as _;
     let is_within_title_bar = mouse_y < (window_rect.top + title_bar_height) as _;
     let hit_test_result = if is_on_resize_border {
         HTTOP
-    } else if is_within_title_bar {
+    } else if allow_titlebar_drag && is_within_title_bar {
         HTCAPTION
     } else {
         HTCLIENT

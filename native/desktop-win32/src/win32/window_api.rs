@@ -7,7 +7,7 @@ use desktop_common::{
 
 use windows::Win32::{
     Graphics::Dwm::{DWM_SYSTEMBACKDROP_TYPE, DWMSBT_AUTO, DWMSBT_MAINWINDOW, DWMSBT_NONE, DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW},
-    UI::WindowsAndMessaging::{WINDOW_STYLE, WS_CAPTION, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME},
+    UI::WindowsAndMessaging::{WINDOW_STYLE, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_SYSMENU, WS_THICKFRAME},
 };
 
 use super::{
@@ -46,13 +46,14 @@ impl WindowStyle {
     #[must_use]
     pub const fn to_system(&self) -> WINDOW_STYLE {
         let mut style = WS_OVERLAPPEDWINDOW.0;
-        // For both `None` and `Custom` title bars, remove WS_CAPTION. Per Window Styles docs,
-        // this also renders WS_SYSMENU / WS_MAXIMIZEBOX / WS_MINIMIZEBOX inert (their docs say
-        // each "must also be specified [with] WS_CAPTION/WS_SYSMENU"), so the system has no
-        // title-bar features to draw — including caption buttons — leaving the title-bar area
-        // free for the toolkit to render its own chrome.
-        if matches!(self.title_bar_kind, WindowTitleBarKind::None | WindowTitleBarKind::Custom) {
-            style &= !WS_CAPTION.0;
+        // `Custom` and `None` intentionally keep `WS_CAPTION`: the non-client frame is still
+        // removed in `WM_NCCALCSIZE` (see `event_loop.rs`), but retaining caption
+        // semantics preserves native window transitions for min/max/restore.
+        //
+        // Do not expose system caption controls for non-system title bars; toolkit
+        // owns these surfaces for `Custom`, and `None` has no title-bar controls.
+        if matches!(self.title_bar_kind, WindowTitleBarKind::Custom | WindowTitleBarKind::None) {
+            style &= !WS_SYSMENU.0;
         }
         if !self.is_resizable {
             style &= !WS_THICKFRAME.0;
