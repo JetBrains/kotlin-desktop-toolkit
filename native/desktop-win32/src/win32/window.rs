@@ -295,10 +295,9 @@ impl Window {
     }
 
     pub fn maximize(&self) {
-        if !self.is_resizable() {
-            // Spec §4.2: Maximize is a no-op on non-resizable windows. Mirrors
-            // the strip-side availability gate so programmatic maximize agrees
-            // with the visible button state.
+        if !self.style.borrow().is_maximizable {
+            // Mirrors the strip-side availability gate so programmatic
+            // maximize agrees with the visible button state.
             return;
         }
         self.send_system_command(SC_MAXIMIZE);
@@ -554,7 +553,7 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
 
     if window.has_custom_title_bar() {
         let chrome_layer = window.chrome_layer()?;
-        let strip = crate::win32::caption_buttons::CaptionButtonStrip::new(
+        let mut strip = crate::win32::caption_buttons::CaptionButtonStrip::new(
             &chrome_layer,
             window.get_scale(),
             &window.style.borrow(),

@@ -141,9 +141,7 @@ impl CaptionButtonKinds {
 const fn availability_from_style(kind: CaptionButtonKind, style: &crate::win32::window_api::WindowStyle) -> Availability {
     match kind {
         CaptionButtonKind::Minimize if !style.is_minimizable => Availability::Disabled,
-        // Maximize requires both `is_resizable` and `is_maximizable` per spec §4.2:
-        // non-resizable windows have no maximize semantics in this toolkit.
-        CaptionButtonKind::Maximize if !(style.is_resizable && style.is_maximizable) => Availability::Disabled,
+        CaptionButtonKind::Maximize if !style.is_maximizable => Availability::Disabled,
         _ => Availability::Enabled,
     }
 }
@@ -296,11 +294,15 @@ impl CaptionButtonMetrics {
 }
 
 struct StripGeometry {
-    /// Width of the coordinate space `point` is in. The strip's right edge
-    /// sits at `reference_width_px`; the strip-left is computed by
-    /// subtracting `button_count * button_width`. For client-space points,
-    /// pass the full client width.
+    /// Width of the coordinate space `point` is in. The strip's right edge sits
+    /// at `reference_width_px`; the strip-left is computed by subtracting
+    /// `button_count * button_width`. For client-space points, pass the full
+    /// client width.
     reference_width_px: i32,
+    /// Vertical offset of the strip within the same coordinate space as `point`.
+    /// Maximized custom-titlebar windows shift the strip down by their chrome
+    /// overhang, so hit-testing must subtract this before checking button y.
+    top_offset_px: i32,
     metrics: CaptionButtonMetrics,
     visible_kinds: CaptionButtonKinds,
 }
@@ -309,7 +311,8 @@ impl StripGeometry {
     fn hit_test(&self, point: PhysicalPoint) -> Option<CaptionButtonKind> {
         let bw = self.metrics.button_size_px.width.0;
         let bh = self.metrics.button_size_px.height.0;
-        if point.y.0 < 0 || point.y.0 >= bh {
+        let y = point.y.0 - self.top_offset_px;
+        if y < 0 || y >= bh {
             return None;
         }
         let count = self.visible_kinds.0.count_ones() as i32;
@@ -378,6 +381,7 @@ pub(crate) struct CaptionButtonStrip {
     pointer_over_kind: Option<CaptionButtonKind>,
     pointer_device: Option<PointerDeviceKind>,
     press_session: Option<PressSession>,
+    top_offset_px: i32,
     d2d_context: Rc<D2dContext>,
     // Dropping the registration removes the RDR subscription (spec §6.2). Field is held
     // for its `Drop` side-effect even though we never read it after construction.
@@ -466,6 +470,7 @@ impl CaptionButtonStrip {
             pointer_over_kind: None,
             pointer_device: None,
             press_session: None,
+            top_offset_px: 0,
             d2d_context,
             device_replaced_registration,
             compositor_controller,
@@ -505,10 +510,11 @@ impl CaptionButtonStrip {
         Ok(())
     }
 
-    pub(crate) fn set_strip_position(&self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
+    pub(crate) fn set_strip_position(&mut self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
         let bw = self.metrics.button_size_px.width.0;
         let total_width = bw * self.buttons.len() as i32;
         let x = client_size.width.0 - total_width;
+        self.top_offset_px = max_chrome_y;
         self.composition_root.SetOffset(Vector3 {
             X: x as f32,
             Y: max_chrome_y as f32,
@@ -565,6 +571,7 @@ impl CaptionButtonStrip {
     pub fn hit_test(&self, client_point: PhysicalPoint, client_width: PhysicalPixels) -> Option<CaptionButtonKind> {
         StripGeometry {
             reference_width_px: client_width.0,
+            top_offset_px: self.top_offset_px,
             metrics: self.metrics,
             visible_kinds: self.visible_kinds,
         }
@@ -742,7 +749,7 @@ impl CaptionButtonStrip {
         Ok(())
     }
 
-    pub fn on_resize(&self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
+    pub fn on_resize(&mut self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
         self.set_strip_position(client_size, max_chrome_y)?;
         self.compositor_controller.Commit()?;
         Ok(())
@@ -1041,6 +1048,16 @@ mod tests {
     fn ltr_geometry(width: i32, kinds: CaptionButtonKinds) -> StripGeometry {
         StripGeometry {
             reference_width_px: width,
+            top_offset_px: 0,
+            metrics: CaptionButtonMetrics::new(1.0),
+            visible_kinds: kinds,
+        }
+    }
+
+    fn ltr_geometry_with_top_offset(width: i32, top_offset_px: i32, kinds: CaptionButtonKinds) -> StripGeometry {
+        StripGeometry {
+            reference_width_px: width,
+            top_offset_px,
             metrics: CaptionButtonMetrics::new(1.0),
             visible_kinds: kinds,
         }
@@ -1204,11 +1221,10 @@ mod tests {
     }
 
     #[test]
-    fn non_resizable_disables_maximize_even_when_maximizable_bit_is_set() {
-        // Spec §4.2 Maximize policy: requires is_resizable && is_maximizable.
+    fn non_resizable_keeps_maximize_enabled_when_maximizable_bit_is_set() {
         let style = style_with(true, true, false);
         assert_eq!(availability_from_style(CaptionButtonKind::Minimize, &style), Availability::Enabled);
-        assert_eq!(availability_from_style(CaptionButtonKind::Maximize, &style), Availability::Disabled);
+        assert_eq!(availability_from_style(CaptionButtonKind::Maximize, &style), Availability::Enabled);
     }
 
     // --- CaptionTheme palette ---
@@ -1397,6 +1413,7 @@ mod tests {
             .with(CaptionButtonKind::Close);
         let g = StripGeometry {
             reference_width_px: 800,
+            top_offset_px: 0,
             metrics: CaptionButtonMetrics::new(1.0),
             visible_kinds: kinds,
         };
@@ -1419,10 +1436,20 @@ mod tests {
         let kinds = CaptionButtonKinds::empty().with(CaptionButtonKind::Close);
         let g = StripGeometry {
             reference_width_px: 800,
+            top_offset_px: 0,
             metrics: CaptionButtonMetrics::new(1.0),
             visible_kinds: kinds,
         };
         assert_eq!(g.hit_test(pt(799, -1)), None);
         assert_eq!(g.hit_test(pt(799, -100)), None);
+    }
+
+    #[test]
+    fn hit_test_respects_maximized_strip_top_offset() {
+        let g = ltr_geometry_with_top_offset(800, 8, CaptionButtonKinds::empty().with(CaptionButtonKind::Close));
+        assert_eq!(g.hit_test(pt(799, 7)), None);
+        assert_eq!(g.hit_test(pt(799, 8)), Some(CaptionButtonKind::Close));
+        assert_eq!(g.hit_test(pt(799, 39)), Some(CaptionButtonKind::Close));
+        assert_eq!(g.hit_test(pt(799, 40)), None);
     }
 }

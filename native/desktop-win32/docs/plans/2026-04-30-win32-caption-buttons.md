@@ -23,7 +23,7 @@
 | `native/desktop-win32/src/win32/composition.rs` | new | `D2dContext` (private to caption-button rasterisation). Holds `IDWriteFactory` and `CompositionGraphicsDevice`, plus the device-loss recovery machinery. Exposes `new(compositor)`, `dwrite_factory()`, `create_drawing_surface()`, `with_d2d_render_target()`, `add_rendering_device_replaced_callback()`. |
 | `native/desktop-win32/src/win32/caption_buttons.rs` | new | `CaptionButtonStrip` (public to crate), `CaptionButton` / `CaptionTheme` / `CaptionButtonMetrics` / `Availability` / `ButtonInteraction` / `PressSession` / `PointerDeviceKind` (private). Pure state machine; no Win32 calls itself. Includes `#[cfg(test)] mod tests` for the pure logic. |
 | `native/desktop-win32/src/win32/pointer.rs` | modify | Add `PointerInfo::pointer_id()` accessor that returns `self.get_native_pointer_info().pointerId`. Consistent with the existing `get_pointer_state()` / `get_timestamp()` / etc. accessor pattern; lets the wndproc layer (Task 6.3) route to the strip without re-decoding `wparam`. |
-| `native/desktop-win32/src/win32/window.rs` | modify | Add `nc_leave_tracking_armed`, `ensure_nc_leave_tracking` / `nc_leave_tracking_fired`, `caption_buttons` fields and `chrome_layer` accessor; restructure `initialize_content` for the 3-layer split; redirect `add_visual` to insert into `content_layer`. Extend the existing `WM_NCDESTROY` arm to drop `window.caption_buttons` before the HWND is destroyed. Add an `if !self.is_resizable() { return; }` early-return to `Window::maximize()` so non-resizable windows can't be maximized programmatically (matches strip-layer policy in spec §4.2). |
+| `native/desktop-win32/src/win32/window.rs` | modify | Add `nc_leave_tracking_armed`, `ensure_nc_leave_tracking` / `nc_leave_tracking_fired`, `caption_buttons` fields and `chrome_layer` accessor; restructure `initialize_content` for the 3-layer split; redirect `add_visual` to insert into `content_layer`. Extend the existing `WM_NCDESTROY` arm to drop `window.caption_buttons` before the HWND is destroyed. Add an `if !self.style.borrow().is_maximizable { return; }` early-return to `Window::maximize()` so programmatic maximize matches strip-layer policy in spec §4.2. |
 | `native/desktop-win32/src/win32/event_loop.rs` | modify | Extend `on_nchittest` to consult strip. Extend existing `on_pointerupdate` / `on_pointerdown` / `on_pointerup` (which already merge `WM_*POINTER*` and `WM_NC*POINTER*`) to route to strip when `HIWORD(wParam)` is a caption-button hit-test value, filtering on primary-button-only via `pointer_info.get_pointer_button_change()`. Add cleanup-only `WM_POINTERCAPTURECHANGED`. Add `pub(crate) WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED` constant (Task 1.2 step 3) + wndproc dispatch arm (Task 6.4 step 2). Extend `on_activate` / `on_ncmouseleave` / `on_dpichanged` / `on_settingchange` / `on_windowposchanged` / `on_nccalcsize`. |
 | `native/desktop-win32/src/win32/mod.rs` | modify | Add `pub mod composition;` and `pub mod caption_buttons;`. |
 | `native/desktop-win32/Cargo.toml` | modify | Add real `windows = 0.62.2` features for `Graphics_DirectX`, `Win32_Graphics_Direct2D`, `Win32_Graphics_Direct2D_Common`, `Win32_Graphics_Direct3D`, `Win32_Graphics_Direct3D11`, `Win32_Graphics_DirectWrite`, `Win32_Graphics_Dxgi`. |
@@ -1008,11 +1008,10 @@ Inside `mod tests`:
     }
 
     #[test]
-    fn non_resizable_disables_maximize_even_when_maximizable_bit_is_set() {
-        // Spec §4.2 Maximize policy: requires is_resizable && is_maximizable.
+    fn non_resizable_keeps_maximize_enabled_when_maximizable_bit_is_set() {
         let style = style_with(true, true, false);
         assert_eq!(availability_from_style(CaptionButtonKind::Minimize, &style), Availability::Enabled);
-        assert_eq!(availability_from_style(CaptionButtonKind::Maximize, &style), Availability::Disabled);
+        assert_eq!(availability_from_style(CaptionButtonKind::Maximize, &style), Availability::Enabled);
     }
 ```
 
@@ -1040,9 +1039,7 @@ fn availability_from_style(
 ) -> Availability {
     match kind {
         CaptionButtonKind::Minimize if !style.is_minimizable => Availability::Disabled,
-        // Maximize requires both `is_resizable` and `is_maximizable` per spec §4.2:
-        // non-resizable windows have no maximize semantics in this toolkit.
-        CaptionButtonKind::Maximize if !(style.is_resizable && style.is_maximizable) => Availability::Disabled,
+        CaptionButtonKind::Maximize if !style.is_maximizable => Availability::Disabled,
         _ => Availability::Enabled,
     }
 }
