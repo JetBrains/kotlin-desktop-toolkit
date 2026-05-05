@@ -18,7 +18,7 @@ use windows::{
         Foundation::{HWND, LPARAM, WPARAM},
         Graphics::{
             Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F},
-            Direct2D::{D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Brush, ID2D1RenderTarget},
+            Direct2D::{D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Brush},
             DirectWrite::{
                 DWRITE_FONT_METRICS, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_REGULAR,
                 DWRITE_GLYPH_METRICS, DWRITE_MEASURING_MODE_NATURAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
@@ -79,6 +79,9 @@ enum ButtonInteraction {
 struct PressSession {
     pointer_id: u32,
     captured_kind: CaptionButtonKind,
+    // Recorded for future device-aware behaviour (e.g. distinguishing touch
+    // taps from mouse presses); the visual state-machine doesn't read it yet.
+    #[allow(dead_code)]
     device: PointerDeviceKind,
 }
 
