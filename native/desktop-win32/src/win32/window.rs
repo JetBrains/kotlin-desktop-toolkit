@@ -66,6 +66,9 @@ pub struct Window {
     compositor_controller: CompositorController,
     composition_target: RefCell<Option<DesktopWindowTarget>>,
     composition_root: RefCell<Option<ContainerVisual>>,
+    backdrop_layer: RefCell<Option<ContainerVisual>>,
+    content_layer: RefCell<Option<ContainerVisual>>,
+    chrome_layer: RefCell<Option<ContainerVisual>>,
     min_size: RefCell<Option<LogicalSize>>,
     origin: RefCell<LogicalPoint>,
     size: RefCell<LogicalSize>,
@@ -98,6 +101,9 @@ impl Window {
             compositor_controller,
             composition_target: RefCell::new(None),
             composition_root: RefCell::new(None),
+            backdrop_layer: RefCell::new(None),
+            content_layer: RefCell::new(None),
+            chrome_layer: RefCell::new(None),
             min_size: RefCell::new(None),
             origin: RefCell::default(),
             size: RefCell::new(LogicalSize::new(0.0, 0.0)),
@@ -149,13 +155,20 @@ impl Window {
     #[inline]
     pub(crate) fn add_visual(&self) -> anyhow::Result<SpriteVisual> {
         let sprite_visual = self.compositor_controller.Compositor()?.CreateSpriteVisual()?;
-        self.composition_root
+        self.content_layer
             .borrow()
             .as_ref()
             .context("Window has not been created yet")?
             .Children()?
             .InsertAtTop(&sprite_visual)?;
         Ok(sprite_visual)
+    }
+
+    #[inline]
+    pub(crate) fn chrome_layer(&self) -> anyhow::Result<ContainerVisual> {
+        let layer = self.chrome_layer.borrow();
+        let layer = layer.as_ref().context("Window has not been created yet")?;
+        Ok(layer.clone())
     }
 
     pub fn get_client_size(&self) -> anyhow::Result<LogicalSize> {
@@ -496,13 +509,32 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     let compositor = window.compositor_controller.Compositor()?;
     let compositor_interop: ICompositorDesktopInterop = compositor.cast()?;
     let desktop_window_target = unsafe { compositor_interop.CreateDesktopWindowTarget(hwnd, false) }?;
+
     let root_visual = compositor.CreateContainerVisual()?;
     root_visual.SetBackfaceVisibility(CompositionBackfaceVisibility::Hidden)?;
-    desktop_window_target.SetRoot(&root_visual)?;
+
+    let backdrop_layer = compositor.CreateContainerVisual()?;
+    let content_layer = compositor.CreateContainerVisual()?;
+    let chrome_layer = compositor.CreateContainerVisual()?;
+
+    // VisualCollection ordering is bottom-to-top; sequential `InsertAtTop`
+    // calls put each new layer above the previous one. Final stacking:
+    // backdrop (bottom) < content (middle) < chrome (top).
+    let root_children = root_visual.Children()?;
+    root_children.InsertAtTop(&backdrop_layer)?;
+    root_children.InsertAtTop(&content_layer)?;
+    root_children.InsertAtTop(&chrome_layer)?;
+
     let backdrop_visual = compositor.CreateSpriteVisual()?;
-    root_visual.Children()?.InsertAtBottom(&backdrop_visual)?;
+    backdrop_layer.Children()?.InsertAtBottom(&backdrop_visual)?;
+
+    desktop_window_target.SetRoot(&root_visual)?;
+
     window.backdrop_tint.replace(Some(backdrop_visual));
     window.composition_target.replace(Some(desktop_window_target));
     window.composition_root.replace(Some(root_visual));
+    window.backdrop_layer.replace(Some(backdrop_layer));
+    window.content_layer.replace(Some(content_layer));
+    window.chrome_layer.replace(Some(chrome_layer));
     Ok(())
 }
