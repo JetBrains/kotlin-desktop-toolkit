@@ -4,7 +4,7 @@ use crate::linux::{
     application_api::{ApplicationCallbacks, RenderingMode},
     application_state::{ApplicationState, KdtRequestData, get_egl},
     async_event_result::AsyncEventResult,
-    data_transfer::{MimeTypes, read_from_pipe},
+    data_transfer::MimeTypes,
     desktop_settings::init_desktop_settings_notifier_task,
     desktop_settings_api::FfiDesktopSetting,
     drag_icon::DragIcon,
@@ -121,7 +121,7 @@ impl Application {
             .insert(loop_handle)
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        let state = ApplicationState::new(&globals, &qh, callbacks, event_loop.handle(), wl_display);
+        let state = ApplicationState::new(&globals, &qh, callbacks, event_loop.handle(), wl_display)?;
         let rt = tokio::runtime::Builder::new_multi_thread().enable_io().worker_threads(1).build()?;
         let run_async_sender = create_run_async_sender(&event_loop);
 
@@ -390,15 +390,16 @@ impl Application {
                 return false;
             }
         };
-        read_from_pipe(
-            "application_primary_selection_paste",
-            read_pipe,
-            mime_type,
-            &self.state.loop_handle,
-            move |state, content| {
-                state.send_event(DataTransferEvent { serial, content });
-            },
-        )
+        let event_handler = self.state.callbacks.event_handler;
+        self.state
+            .read_from_pipe("application_primary_selection_paste", read_pipe, mime_type, move |content| {
+                let event = DataTransferEvent {
+                    serial,
+                    content: content.unwrap_or(DataTransferContent::null()),
+                };
+                send_event(event_handler, event);
+            });
+        true
     }
 
     pub fn primary_selection_paste(&self, serial: i32, supported_mime_types: &str) {
@@ -438,15 +439,16 @@ impl Application {
                 return false;
             }
         };
-        read_from_pipe(
-            "application_clipboard_paste",
-            read_pipe,
-            mime_type,
-            &self.state.loop_handle,
-            move |state, content| {
-                state.send_event(DataTransferEvent { serial, content });
-            },
-        )
+        let event_handler = self.state.callbacks.event_handler;
+        self.state
+            .read_from_pipe("application_clipboard_paste", read_pipe, mime_type, move |content| {
+                let event = DataTransferEvent {
+                    serial,
+                    content: content.unwrap_or(DataTransferContent::null()),
+                };
+                send_event(event_handler, event);
+            });
+        true
     }
 
     pub fn clipboard_paste(&self, serial: i32, supported_mime_types: &str) {

@@ -44,40 +44,42 @@ impl From<gdk4::DragAction> for DragAndDropAction {
     }
 }
 
-pub fn read_all(input_stream: &gio::InputStream, callback: impl FnOnce(Option<Vec<u8>>) + 'static) {
+fn read_all_recursive(
+    res: Result<(Vec<u8>, usize), (Vec<u8>, glib::Error)>,
+    input_stream: gio::InputStream,
+    mime_type: glib::GString,
+    mut buf_all: Vec<u8>,
+    callback: impl FnOnce(Option<DataTransferContent>) + 'static,
+) {
+    match res {
+        Ok((_chunk_buf, 0)) => {
+            debug!("read_all end: size={}", buf_all.len());
+            callback(Some(DataTransferContent::new(mime_type.as_str(), &buf_all)));
+        }
+        Ok((chunk_buf, size)) => {
+            debug!("read_all loop: size={size}");
+            buf_all.extend_from_slice(&chunk_buf[0..size]);
+            input_stream
+                .clone()
+                .read_async(vec![0; 4096], glib::Priority::DEFAULT, gio::Cancellable::NONE, move |res| {
+                    read_all_recursive(res, input_stream, mime_type, buf_all, callback);
+                });
+        }
+        Err((_chunk_buf, e)) => {
+            warn!("error receiving data: {e}");
+            callback(None);
+        }
+    }
+}
+
+pub fn read_all(input_stream: gio::InputStream, mime_type: glib::GString, callback: impl FnOnce(Option<DataTransferContent>) + 'static) {
     debug!("read_all start");
     let buf_all: Vec<u8> = Vec::new();
-    let input_stream_clone = input_stream.clone();
-    let f = |res: Result<(Vec<u8>, usize), (Vec<u8>, glib::Error)>| {
-        fn helper(
-            res: Result<(Vec<u8>, usize), (Vec<u8>, glib::Error)>,
-            input_stream: gio::InputStream,
-            mut buf_all: Vec<u8>,
-            callback: impl FnOnce(Option<Vec<u8>>) + 'static,
-        ) {
-            match res {
-                Ok((_chunk_buf, 0)) => {
-                    debug!("read_all end: size={}", buf_all.len());
-                    callback(Some(buf_all));
-                }
-                Ok((chunk_buf, size)) => {
-                    debug!("read_all loop: size={size}");
-                    buf_all.extend_from_slice(&chunk_buf[0..size]);
-                    input_stream
-                        .clone()
-                        .read_async(vec![0; 4096], glib::Priority::DEFAULT, gio::Cancellable::NONE, move |res| {
-                            helper(res, input_stream, buf_all, callback);
-                        });
-                }
-                Err((_chunk_buf, e)) => {
-                    warn!("application_clipboard_paste: error receiving data: {e}");
-                    callback(None);
-                }
-            }
-        }
-        helper(res, input_stream_clone, buf_all, callback);
-    };
-    input_stream.read_async(vec![0; 4096], glib::Priority::DEFAULT, gio::Cancellable::NONE, f);
+    input_stream
+        .clone()
+        .read_async(vec![0; 4096], glib::Priority::DEFAULT, gio::Cancellable::NONE, move |res| {
+            read_all_recursive(res, input_stream, mime_type, buf_all, callback);
+        });
 }
 
 #[must_use]
@@ -160,7 +162,7 @@ pub fn handle_drop_target_drop(
 
     drop.status(mime_type_and_actions.supported_actions, mime_type_and_actions.preferred_action);
 
-    let action = get_best_dnd_action(&mime_type_and_actions, drop.actions());
+    let gtk_action = get_best_dnd_action(&mime_type_and_actions, drop.actions());
     let drop_clone = drop.clone();
     drop.read_async(
         &[mime_type],
@@ -168,30 +170,18 @@ pub fn handle_drop_target_drop(
         gio::Cancellable::NONE,
         move |res| match res {
             Ok((input_stream, mime_type)) => {
-                read_all(&input_stream, move |data| {
-                    if let Some(data) = data {
-                        let content = DataTransferContent::new(mime_type.as_str(), &data);
-                        send_event(
-                            event_handler,
-                            DropPerformedEvent {
-                                window_id,
-                                content,
-                                action: action.into(),
-                                location_in_window,
-                            },
-                        );
-                    } else {
-                        send_event(
-                            event_handler,
-                            DropPerformedEvent {
-                                window_id,
-                                content: DataTransferContent::null(),
-                                action: DragAndDropAction::None,
-                                location_in_window,
-                            },
-                        );
-                    }
-                    drop_clone.finish(action);
+                read_all(input_stream, mime_type, move |data| {
+                    let gtk_action = if data.is_some() { gtk_action } else { gdk4::DragAction::empty() };
+
+                    let event = DropPerformedEvent {
+                        window_id,
+                        content: data.unwrap_or(DataTransferContent::null()),
+                        action: gtk_action.into(),
+                        location_in_window,
+                    };
+
+                    send_event(event_handler, event);
+                    drop_clone.finish(gtk_action);
                 });
             }
             Err(e) => {
