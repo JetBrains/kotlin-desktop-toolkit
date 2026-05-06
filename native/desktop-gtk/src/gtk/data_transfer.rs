@@ -145,7 +145,6 @@ pub fn handle_drop_target_drop(
     let mime_type_and_actions = get_drag_offer_actions(query_drag_and_drop_target, drop, location_in_window, window_id);
     let Some(mime_type) = mime_type_and_actions.mime_type.as_ref() else {
         debug!("DropStart: no matching MIME type");
-        drop.finish(gdk4::DragAction::empty());
         send_event(
             event_handler,
             DropPerformedEvent {
@@ -155,6 +154,7 @@ pub fn handle_drop_target_drop(
                 location_in_window,
             },
         );
+        drop.finish(gdk4::DragAction::empty());
         return false;
     };
 
@@ -169,7 +169,6 @@ pub fn handle_drop_target_drop(
         move |res| match res {
             Ok((input_stream, mime_type)) => {
                 read_all(&input_stream, move |data| {
-                    drop_clone.finish(action);
                     if let Some(data) = data {
                         let content = DataTransferContent::new(mime_type.as_str(), &data);
                         send_event(
@@ -192,10 +191,10 @@ pub fn handle_drop_target_drop(
                             },
                         );
                     }
+                    drop_clone.finish(action);
                 });
             }
             Err(e) => {
-                drop_clone.finish(drop_clone.actions());
                 warn!("DropStart: failed receiving data offer: {e}");
                 send_event(
                     event_handler,
@@ -206,6 +205,7 @@ pub fn handle_drop_target_drop(
                         location_in_window,
                     },
                 );
+                drop_clone.finish(drop_clone.actions());
             }
         },
     );
