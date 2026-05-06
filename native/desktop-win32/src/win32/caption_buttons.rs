@@ -38,7 +38,10 @@ use windows::{
             },
             Gdi::{GetSysColor, SYS_COLOR_INDEX, ScreenToClient},
         },
-        UI::WindowsAndMessaging::{GetClientRect, PostMessageW},
+        UI::{
+            HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
+            WindowsAndMessaging::{GetClientRect, GetWindowRect, PostMessageW, SM_CXPADDEDBORDER, SM_CYSIZEFRAME},
+        },
     },
 };
 use windows_numerics::{Vector2, Vector3};
@@ -389,7 +392,10 @@ pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_
 
 /// Hit-test the caption-button strip from the pointer's screen-space
 /// coordinates. Returns the caption-button kind under the point, or `None`
-/// if no strip exists or the point falls outside the strip's bounds.
+/// if no strip exists, the point falls outside the strip's bounds, or the
+/// point is inside the top resize-border band on a restored, resizable
+/// window — that band must reach `DefWindowProc` so the system resize
+/// cursor and drag loop fire instead of the strip claiming the hit.
 ///
 /// This is the single source of truth for "screen coords → caption-button
 /// kind" — `WM_NCHITTEST` and the caption-button pointer handlers go through
@@ -401,6 +407,9 @@ pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> 
     let strip_ref = window.caption_buttons.borrow();
     let strip = strip_ref.as_ref()?;
     let hwnd = window.hwnd();
+    if is_in_top_resize_border(window, hwnd, screen.y.0) {
+        return None;
+    }
     let mut client_point = POINT {
         x: screen.x.0,
         y: screen.y.0,
@@ -417,6 +426,25 @@ pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> 
         PhysicalPoint::new(client_point.x, client_point.y),
         PhysicalPixels(client_rect.right),
     )
+}
+
+/// True when `mouse_y` (screen-space) lands inside the top resize-border band
+/// of a restored, resizable window. Maximized and non-resizable windows have
+/// no resize band so the strip wins by default.
+fn is_in_top_resize_border(window: &Window, hwnd: HWND, mouse_y: i32) -> bool {
+    if !window.is_resizable() || window.is_maximized() {
+        return false;
+    }
+    let mut window_rect = RECT::default();
+    if unsafe { GetWindowRect(hwnd, &raw mut window_rect) }
+        .inspect_err(|err| log::warn!("GetWindowRect failed during resize-border check: {err}"))
+        .is_err()
+    {
+        return false;
+    }
+    let dpi = unsafe { GetDpiForWindow(hwnd) };
+    let resize_handle_height = unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) + GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) };
+    mouse_y < window_rect.top + resize_handle_height
 }
 
 pub(crate) struct CaptionButtonStrip {
