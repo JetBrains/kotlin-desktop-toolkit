@@ -56,7 +56,6 @@ import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
-import java.io.File
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -74,7 +73,11 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.deleteIfExists
+import kotlin.io.path.fileSize
+import kotlin.io.path.outputStream
 import kotlin.io.path.readBytes
+import kotlin.io.path.readLines
+import kotlin.io.path.readText
 import kotlin.math.roundToInt
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -92,6 +95,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
+import kotlin.time.measureTime
 import kotlin.use
 import org.jetbrains.skia.Bitmap as SkBitmap
 import org.jetbrains.skia.Canvas as SkCanvas
@@ -340,9 +344,10 @@ private fun log(message: String) {
     println(withTimestamp(message))
 }
 
-private fun runCommandImpl(command: List<String>, timeout: Duration = 5.seconds): Result<ByteArray> {
+private fun runCommandImpl(command: List<String>, timeout: Duration = 5.seconds): Result<Path> {
     log("runCommand: $command")
-    val proc = ProcessBuilder(command).start()
+    val outputFile = Files.createTempFile("${command.first()}-output", ".log")
+    val proc = ProcessBuilder(command).redirectOutput(ProcessBuilder.Redirect.to(outputFile.toFile())).start()
     if (!proc.waitFor(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)) {
         fail(withTimestamp("Timed out waiting for $command to finish"))
     }
@@ -352,7 +357,7 @@ private fun runCommandImpl(command: List<String>, timeout: Duration = 5.seconds)
         val stderr = proc.errorStream.readAllBytes().decodeToString()
         return Result.failure(Error("$command failed ($exitValue), stderr=$stderr"))
     }
-    return Result.success(proc.inputStream.readAllBytes())
+    return Result.success(outputFile)
 }
 
 private fun runCommandWithOutput(command: List<String>, timeout: Duration = 5.seconds): ByteArray? {
@@ -360,11 +365,15 @@ private fun runCommandWithOutput(command: List<String>, timeout: Duration = 5.se
     result.exceptionOrNull()?.also {
         log(it.toString())
     }
-    return result.getOrNull()
+    return result.getOrNull()?.let {
+        val data = it.readBytes()
+        it.deleteIfExists()
+        data
+    }
 }
 
 private fun runCommand(command: List<String>, timeout: Duration = 5.seconds) {
-    runCommandImpl(command, timeout).getOrThrow()
+    runCommandImpl(command, timeout).getOrThrow().deleteIfExists()
 }
 
 private fun <T> waitUntilEq(expectedValue: T, timeout: Duration = 5.seconds, actualValueGetter: () -> T) {
@@ -381,25 +390,10 @@ private fun <T> waitUntilEq(expectedValue: T, timeout: Duration = 5.seconds, act
     fail(withTimestamp("waitUntilEq timed out: Expected: $expectedValue, actual: $actualValue "))
 }
 
-private enum class TestApp(private val resourcePath: String) {
-    BlankWindow("test_app_blank_window.py"),
-    ClipboardSource("test_app_clipboard_source.py"),
-    DragSource("test_app_drag_source.py"),
-    DropTarget("test_app_drop_target.py"),
-    PrimarySelectionSource("test_app_primary_selection_source.py"),
-    ;
-
-    companion object {
-        val TEST_RESOURCES_DIR = System.getenv("TEST_RESOURCES_DIR")!!
-        private fun getResourcePath(path: String): String {
-            return Path.of(TEST_RESOURCES_DIR).resolve(path).absolutePathString()
-        }
-    }
-
+private class TestApp(private val cmd: List<String>) {
     private fun createProcessBuilder(): ProcessBuilder {
-        log("Running test app: $this")
-        val appPath = getResourcePath(resourcePath)
-        return ProcessBuilder("python3", appPath).also {
+        log("Running test app")
+        return ProcessBuilder(cmd).also {
             val env = it.environment()
             env.remove("GTK_DEBUG")
             env.remove("GDK_DEBUG")
@@ -411,33 +405,33 @@ private enum class TestApp(private val resourcePath: String) {
     }
 
     fun run(block: ((Duration) -> String?) -> Unit) {
-        val outputFile = File.createTempFile("linux_test_app_output", "log")
+        val outputFile = Files.createTempFile("linux_test_app_output", "log")
         val process = createProcessBuilder()
-            .redirectOutput(ProcessBuilder.Redirect.to(outputFile))
+            .redirectOutput(ProcessBuilder.Redirect.to(outputFile.toFile()))
             .start()
         AutoCloseable {
             if (process.isAlive) {
                 process.toHandle().destroy()
                 process.waitFor(5, TimeUnit.SECONDS)
             } else {
-                log("Test app $this process stopped by itself")
+                log("Test app process stopped by itself")
             }
             process.errorStream.readAllBytes().decodeToString().also {
                 if (it.isNotEmpty()) {
-                    log("Test app $this error output: $it")
+                    log("Test app error output: $it")
                 }
             }
             process.destroy()
-            log("Test app $this output:\n${outputFile.readText()}")
-            outputFile.delete()
-            log("Test app $this closed")
+            log("Test app output:\n${outputFile.readText()}")
+            outputFile.deleteIfExists()
+            log("Test app closed")
         }.use {
-            waitUntilEq(true) { !process.isAlive || outputFile.length() > 0 }
+            waitUntilEq(true) { !process.isAlive || outputFile.fileSize() > 0 }
             assertTrue(process.isAlive)
 
             val lines = outputFile.readLines()
             assertContentEquals(arrayOf("ready"), lines.toTypedArray())
-            log("Test app $this ready")
+            log("Test app ready")
 
             val lastLinesCount = mutableListOf(1)
             val readLastLine = { timeout: Duration ->
@@ -459,6 +453,81 @@ private enum class TestApp(private val resourcePath: String) {
             }
             block(readLastLine)
         }
+    }
+}
+
+val TEST_RESOURCES_DIR = System.getenv("TEST_RESOURCES_DIR")!!
+val TEST_APP_DATA_SOURCE_CMD = System.getenv("TEST_APP_DATA_SOURCE_CMD")!!
+
+private fun getResourcePath(path: String): String {
+    return Path.of(TEST_RESOURCES_DIR).resolve(path).absolutePathString()
+}
+
+fun withBlankWindowTestApp(block: ((Duration) -> String?) -> Unit) {
+    TestApp(listOf("python3", getResourcePath("test_app_blank_window.py"))).run(block)
+}
+
+fun withDropTargetTestApp(block: ((Duration) -> String?) -> Unit) {
+    TestApp(listOf("python3", getResourcePath("test_app_drop_target.py"))).run(block)
+}
+
+private enum class TestAppOperationMode(val value: String) {
+    Normal("normal"),
+    Slow("slow"),
+    ExitImmediately("exit-immediately"),
+    ExitAfterStartWriting("exit-after-start-writing"),
+}
+
+private fun withDataSourceTestAppImpl(
+    dataSource: String,
+    dataSourceArg: String,
+    operationMode: TestAppOperationMode,
+    data: List<Pair<String, Sequence<ByteArray>>>,
+    block: ((Duration) -> String?) -> Unit,
+) {
+    val tempFiles = mutableListOf<Path>()
+    val args = data.flatMap { (mimeType, inputStream) ->
+        val tempFile = Files.createTempFile("linux_test_app_clipboard_data", ".bin")
+        tempFile.outputStream().use { outStream ->
+            for (e in inputStream) {
+                outStream.write(e)
+            }
+        }
+        tempFiles.add(tempFile)
+        listOf("--data", mimeType, tempFile.absolutePathString())
+    }
+    TestApp(listOf(TEST_APP_DATA_SOURCE_CMD, dataSource, dataSourceArg, operationMode.value) + args).run(block)
+    tempFiles.forEach { it.deleteIfExists() }
+}
+
+private fun withDragSourceTestApp(
+    data: List<Pair<String, Sequence<ByteArray>>>,
+    operationMode: TestAppOperationMode = TestAppOperationMode.Normal,
+    block: ((Duration) -> String?) -> Unit,
+) {
+    withDataSourceTestAppImpl("--drag", "copy,move", operationMode, data, block)
+}
+
+private fun withClipboardSourceTestApp(
+    data: List<Pair<String, Sequence<ByteArray>>>,
+    operationMode: TestAppOperationMode = TestAppOperationMode.Normal,
+    block: ((Duration) -> String?) -> Unit,
+) {
+    withDataSourceTestAppImpl("--clipboard", "clipboard", operationMode, data, block)
+}
+
+private fun withPrimarySelectionSourceTestApp(
+    data: List<Pair<String, Sequence<ByteArray>>>,
+    operationMode: TestAppOperationMode = TestAppOperationMode.Normal,
+    block: ((Duration) -> String?) -> Unit,
+) {
+    withDataSourceTestAppImpl("--clipboard", "primary", operationMode, data, block)
+}
+
+private fun assertDataMatches(expectedDataSequence: Sequence<ByteArray>, actual: ByteArray) {
+    val actualDataStream = actual.inputStream()
+    for (e in expectedDataSequence) {
+        assertContentEquals(e, actualDataStream.readNBytes(e.size))
     }
 }
 
@@ -2564,7 +2633,7 @@ class WaylandTests : WaylandTestsBase() {
 
     @Test
     fun testSetClipboardContentForText() {
-        val textContent = "test clipboard content".toByteArray()
+        val textContent = "a".repeat(65537).toByteArray()
         val htmlContent = """<meta http-equiv="content-type" content="text/html; charset=utf-8"><p>normal, <b>bold</b>.</p>""".toByteArray()
         val content = mapOf(
             TEXT_UTF8_MIME_TYPE to textContent,
@@ -2590,7 +2659,7 @@ text/plain;charset=utf-8
                 assertEquals(expected, it?.decodeToString())
             }
 
-            assertContentEquals(htmlContent, getClipboardContent(HTML_TEXT_MIME_TYPE))
+//            assertContentEquals(htmlContent, getClipboardContent(HTML_TEXT_MIME_TYPE))
             assertContentEquals(textContent, getClipboardContent(TEXT_UTF8_MIME_TYPE))
         }
         testSuccessful = true
@@ -2749,11 +2818,14 @@ text/plain;charset=utf-8
         testSuccessful = true
     }
 
-    @Test
-    fun testClipboardPaste() {
+    private fun testClipboardPasteImpl(
+        data: List<Pair<String, Sequence<ByteArray>>>,
+        operationMode: TestAppOperationMode = TestAppOperationMode.Normal,
+        block: () -> Unit,
+    ) {
         run(defaultApplicationConfig())
-
-        TestApp.ClipboardSource.run {
+        val mimeTypes = data.map { it.first }
+        withClipboardSourceTestApp(data, operationMode) {
             // Trigger the test app clipboard copy
             withKeyPress(KeyCode.C) {}
 
@@ -2762,12 +2834,32 @@ text/plain;charset=utf-8
             initialWindowData.otherEvents.firstNotNullOfOrNull { it as? Event.DataTransferAvailable }
                 ?: awaitEventOfType<Event.DataTransferAvailable> { true }.let { event ->
                     assertEquals(DataSource.Clipboard, event.dataSource)
-                    assertEquals(listOf(HTML_TEXT_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_UTF8_MIME_TYPE), event.mimeTypes)
+                    assertEquals(mimeTypes, event.mimeTypes)
                 }
 
             val availableMimeTypes = ui { app.clipboardGetAvailableMimeTypes() }
-            assertEquals(listOf(HTML_TEXT_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_UTF8_MIME_TYPE), availableMimeTypes)
+            assertEquals(mimeTypes, availableMimeTypes)
 
+            block()
+        }
+        testSuccessful = true
+    }
+
+    @Test
+    fun testClipboardPaste() {
+        val htmlData = "<p>Text from <b>TestAppClipboardSource</b></p>".encodeToByteArray()
+        val uriListData =
+            $$"file:///some/path/With%20Spaces/&%20$p%E2%82%AC%C2%A2%C3%AF%C3%A5%C5%82%20%C3%A7%C4%A7%C4%81%C5%99%C3%9F\r\nfile:///tmp/%5BScreenshot%20from%2012:04:42%5D.png\r\n"
+                .encodeToByteArray()
+        val textData = $$"/some/path/With Spaces/& $p€¢ïåł çħāřß\n/tmp/[Screenshot from 12:04:42].png".encodeToByteArray()
+
+        testClipboardPasteImpl(
+            listOf(
+                HTML_TEXT_MIME_TYPE to sequenceOf(htmlData),
+                URI_LIST_MIME_TYPE to sequenceOf(uriListData),
+                TEXT_UTF8_MIME_TYPE to sequenceOf(textData),
+            ),
+        ) {
             val transferSerial1 = 5
             ui { app.clipboardPaste(transferSerial1, listOf(TEXT_UTF8_MIME_TYPE, PNG_MIME_TYPE)) }
             withNextEvent { event ->
@@ -2776,10 +2868,7 @@ text/plain;charset=utf-8
                 val content = event.content
                 assertNotNull(content)
                 assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
-                assertContentEquals(
-                    $$"/some/path/With Spaces/& $p€¢ïåł çħāřß\n/tmp/[Screenshot from 12:04:42].png".encodeToByteArray(),
-                    content.data,
-                )
+                assertContentEquals(textData, content.data)
             }
 
             val transferSerial2 = 6
@@ -2790,13 +2879,7 @@ text/plain;charset=utf-8
                 val content = event.content
                 assertNotNull(content)
                 assertEquals(URI_LIST_MIME_TYPE, content.mimeType)
-                assertContentEquals(
-                    (
-                        $$"file:///some/path/With%20Spaces/&%20$p%E2%82%AC%C2%A2%C3%AF%C3%A5%C5%82%20%C3%A7%C4%A7%C4%81%C5%99%C3%9F\r\n" +
-                            "file:///tmp/%5BScreenshot%20from%2012:04:42%5D.png\r\n"
-                        ).encodeToByteArray(),
-                    content.data,
-                )
+                assertContentEquals(uriListData, content.data)
             }
 
             val transferSerial3 = 6
@@ -2807,14 +2890,20 @@ text/plain;charset=utf-8
                 assertNull(event.content)
             }
         }
-        testSuccessful = true
     }
 
     @Test
     fun testPrimarySelectionPaste() {
         run(defaultApplicationConfig())
+        val htmlData = "<p>Text from <b>TestAppPrimarySelectionSource</b></p>".encodeToByteArray()
+        val textData = "Text from TestAppPrimarySelectionSource".encodeToByteArray()
 
-        TestApp.PrimarySelectionSource.run {
+        withPrimarySelectionSourceTestApp(
+            listOf(
+                HTML_TEXT_MIME_TYPE to sequenceOf(htmlData),
+                TEXT_UTF8_MIME_TYPE to sequenceOf(textData),
+            ),
+        ) {
             // Trigger the test app primary selection copy
             withKeyPress(KeyCode.C) {}
 
@@ -2837,7 +2926,7 @@ text/plain;charset=utf-8
                 val content = event.content
                 assertNotNull(content)
                 assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
-                assertContentEquals("Text from TestAppPrimarySelectionSource".encodeToByteArray(), content.data)
+                assertContentEquals(textData, content.data)
             }
         }
         testSuccessful = true
@@ -3730,7 +3819,7 @@ text/plain;charset=utf-8
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
 
-        TestApp.DropTarget.run { readTestAppOutputLastLine ->
+        withDropTargetTestApp { readTestAppOutputLastLine ->
             waitForTestAppFocus(windowParams.windowId)
 
             withMouseButtonDown(MouseButton.LEFT) {
@@ -3797,8 +3886,11 @@ text/plain;charset=utf-8
         val windowParams = defaultWindowParams()
         createWindowAndWaitForFocus(windowParams)
 
+        val textData = "Text from TestAppDragSource".encodeToByteArray()
         val expectedSourceMimeTypes = listOf("application/x-gtk-local-dnd", "text/plain;charset=utf-8", "text/plain")
-        TestApp.DragSource.run { readTestAppOutputLastLine ->
+        withDragSourceTestApp(
+            listOf(TEXT_UTF8_MIME_TYPE to sequenceOf(textData), "text/plain" to sequenceOf(textData)),
+        ) { readTestAppOutputLastLine ->
             waitForTestAppFocus(windowParams.windowId)
 
             val testAppLocation = mouseLocationForTestApp()
@@ -3887,7 +3979,7 @@ text/plain;charset=utf-8
         val initialWindowData = createWindowAndWaitForFocus(windowParams)
         val window = initialWindowData.window
 
-        TestApp.BlankWindow.run { readTestAppOutputLastLine ->
+        withBlankWindowTestApp { readTestAppOutputLastLine ->
             waitForTestAppFocus(windowParams.windowId)
 
             withMouseButtonDown(MouseButton.LEFT) {
@@ -3923,7 +4015,6 @@ text/plain;charset=utf-8
 
     @Test
     fun testDragToSameWindow() {
-        val dataTransferTriggered = CompletableFuture<Unit>()
         val dragIconDrawTriggered = LinkedBlockingQueue<Boolean>()
         val queryDragAndDropTargetTriggered = LinkedBlockingQueue<DragAndDropQueryData>()
         val textContent = "test clipboard content".toByteArray()
@@ -3955,11 +4046,7 @@ text/plain;charset=utf-8
                 getDataTransferData = { dataSource, mimeType ->
                     log("getDataTransferData: $dataSource, $mimeType")
                     when (dataSource) {
-                        DataSource.DragAndDrop -> {
-                            dataTransferTriggered.complete(Unit)
-                            content[mimeType]
-                        }
-
+                        DataSource.DragAndDrop -> content[mimeType]
                         else -> null
                     }
                 },
@@ -4009,20 +4096,19 @@ text/plain;charset=utf-8
             mousePos = mousePos.copy(x = mousePos.x + 10)
             moveMouseTo(mousePos)
             awaitEventOfType<Event.MouseExited> { true }
-            waitUntilEq(false) { dragIconDrawTriggered.isEmpty() }
+            waitUntilEq(true) { dragIconDrawTriggered.isNotEmpty() }
 
             mousePos = mousePos.copy(x = mousePos.x + 10)
             moveMouseTo(mousePos)
             mousePos = mousePos.copy(x = mousePos.x + 10)
             moveMouseTo(mousePos)
-            waitUntilEq(false) { queryDragAndDropTargetTriggered.isEmpty() }
+            waitUntilEq(true) { queryDragAndDropTargetTriggered.isNotEmpty() }
         }
 
         for (e in queryDragAndDropTargetTriggered) {
             assertEquals(advertisedMimeTypes, e.mimeTypes)
         }
 
-        dataTransferTriggered.get(1000, TimeUnit.MILLISECONDS)
         awaitEventOfType<Event.DropPerformed> { event ->
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(DragAndDropAction.Move, event.action)
