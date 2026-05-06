@@ -14,6 +14,7 @@ use desktop_common::{
 };
 use log::debug;
 use std::mem::ManuallyDrop;
+use std::sync::atomic::Ordering;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -119,7 +120,7 @@ pub extern "C" fn application_stop_event_loop(mut app_ptr: AppPtr) {
     debug!("application_stop_event_loop");
     ffi_boundary("application_stop_event_loop", || {
         let app = unsafe { app_ptr.borrow_mut::<Application>() };
-        app.exit = true;
+        app.exit.store(true, Ordering::Release);
         Ok(())
     });
 }

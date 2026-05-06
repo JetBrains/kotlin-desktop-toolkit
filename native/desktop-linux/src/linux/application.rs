@@ -35,6 +35,7 @@ use smithay_client_toolkit::{
     },
     shell::WaylandSurface,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{thread::ThreadId, time::Duration};
 use tokio::sync::RwLock;
 
@@ -44,7 +45,7 @@ static DBUS_CONNECTION: RwLock<Option<zbus::Connection>> = RwLock::const_new(Non
 pub struct Application {
     pub event_loop: EventLoop<'static, ApplicationState>,
     qh: QueueHandle<ApplicationState>,
-    pub exit: bool,
+    pub exit: AtomicBool,
     pub state: ApplicationState,
     pub run_on_event_loop: Option<Sender<extern "C" fn()>>,
     pub event_loop_thread_id: Option<ThreadId>,
@@ -127,7 +128,7 @@ impl Application {
         Ok(Self {
             event_loop,
             qh,
-            exit: false,
+            exit: AtomicBool::new(false),
             state,
             run_on_event_loop: None,
             event_loop_thread_id: None,
@@ -231,7 +232,7 @@ impl Application {
             send_event(event_handler, WindowClosedEvent { window_id });
         }
 
-        if self.exit && !send_event(event_handler, Event::ApplicationWantsToTerminate) {
+        if self.exit.load(Ordering::Acquire) && !send_event(event_handler, Event::ApplicationWantsToTerminate) {
             debug!("Exiting");
             send_event(event_handler, Event::ApplicationWillTerminate);
             self.state.windows.clear();
