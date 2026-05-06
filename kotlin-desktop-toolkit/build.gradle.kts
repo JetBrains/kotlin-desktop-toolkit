@@ -643,6 +643,7 @@ abstract class X11TestEnv :
         baseXSettingsDConfigFile: RegularFile,
         ibusTestEngineFile: RegularFile,
         testResourcesDir: Directory,
+        testAppDataSourceCmd: String,
         headless: Boolean,
     ): Map<String, String> {
         this.test = test
@@ -788,6 +789,7 @@ Exec=/bin/true
         newEnv["GSK_RENDERER"] = "vulkan"
         newEnv["TEST_DUNST_CONFIG_FILE"] = dunstConfigFile.asFile.absolutePath
         newEnv["TEST_RESOURCES_DIR"] = testResourcesDir.asFile.absolutePath
+        newEnv["TEST_APP_DATA_SOURCE_CMD"] = testAppDataSourceCmd
         newEnv["TEST_XSETTINGSD_PID"] = xSettingsDPid!!
         newEnv["TEST_XSETTINGSD_CONFIG_FILE"] = xSettingsDConfigFilePathString
         successfulRun = true
@@ -850,23 +852,27 @@ Exec=/bin/true
         }
     }
 }
-
-val buildWaylandVirtualDevicesTestApp = tasks.register<Exec>(
-    "buildWaylandVirtualDevicesTestApp-${buildPlatformRustTarget(runTestsWithPlatform)}",
-) {
-    val rustTarget = buildPlatformRustTarget(runTestsWithPlatform)
-    dependsOn(installRustTaskByPlatform[runTestsWithPlatform]!!)
-    inputs.files(nativeDir.rustWorkspaceFiles())
-    workingDir = nativeDir.asFile
-    executable = providers.cargoCommand().get()
-    args = listOf(
-        "build",
-        "--example=wayland_virtual_devices",
-        "--color=always",
-        "--target=$rustTarget",
-    )
-    outputs.file(nativeDir.file("target/$rustTarget/debug/examples/wayland_virtual_devices"))
+fun registerTaskForRustExample(name: String): TaskProvider<Exec> {
+    return tasks.register<Exec>(
+        "buildRustExample-$name-${buildPlatformRustTarget(runTestsWithPlatform)}",
+    ) {
+        val rustTarget = buildPlatformRustTarget(runTestsWithPlatform)
+        dependsOn(installRustTaskByPlatform[runTestsWithPlatform]!!)
+        inputs.files(nativeDir.rustWorkspaceFiles())
+        workingDir = nativeDir.asFile
+        executable = providers.cargoCommand().get()
+        args = listOf(
+            "build",
+            "--example=$name",
+            "--color=always",
+            "--target=$rustTarget",
+        )
+        outputs.file(nativeDir.file("target/$rustTarget/debug/examples/$name"))
+    }
 }
+
+val buildTestAppWaylandVirtualDevices = registerTaskForRustExample("wayland_virtual_devices")
+val buildTestAppDataSource = registerTaskForRustExample("test_app_data_source")
 
 sourceSets {
     create("testGtk") {
@@ -900,9 +906,11 @@ val testGtk = tasks.register<Test>("testGtk") {
     configureTestTask(this, listOf(Backend.GTK))
 
     if (backendsForOS(runTestsWithPlatform.os).contains(Backend.GTK)) {
+        dependsOn(buildTestAppDataSource)
         val x11TestEnvProvider = gradle.sharedServices.registerIfAbsent("x11TestEnv", X11TestEnv::class)
         usesService(x11TestEnvProvider)
         val testResourcesDir = layout.projectDirectory.dir("src/test/resources/linux")
+        val testAppDataSourceCmd = buildTestAppDataSource.map { it.outputs.files.first() }.get().absolutePath
         doFirst {
             val x11TestEnv = x11TestEnvProvider.get()
             try {
@@ -914,6 +922,7 @@ val testGtk = tasks.register<Test>("testGtk") {
                     baseXSettingsDConfigFile = testResourcesDir.file("xsettingsd.conf"),
                     ibusTestEngineFile = testResourcesDir.file("ibus_test_engine.py"),
                     testResourcesDir = testResourcesDir,
+                    testAppDataSourceCmd = testAppDataSourceCmd,
                     headless = true,
                 )
                 println(newEnv)
@@ -958,11 +967,13 @@ val testWayland = tasks.register<Test>("testWayland") {
     configureTestTask(this, listOf(Backend.WAYLAND))
 
     if (backendsForOS(runTestsWithPlatform.os).contains(Backend.WAYLAND)) {
-        dependsOn(buildWaylandVirtualDevicesTestApp)
+        dependsOn(buildTestAppWaylandVirtualDevices)
+        dependsOn(buildTestAppDataSource)
         val waylandTestEnvProvider = gradle.sharedServices.registerIfAbsent("waylandTestEnv", WaylandTestEnv::class)
         usesService(waylandTestEnvProvider)
         val testResourcesDir = layout.projectDirectory.dir("src/test/resources/linux")
-        val runVirtualDevicesCmd = buildWaylandVirtualDevicesTestApp.map { it.outputs.files.first() }.get().absolutePath
+        val runVirtualDevicesCmd = buildTestAppWaylandVirtualDevices.map { it.outputs.files.first() }.get().absolutePath
+        val testAppDataSourceCmd = buildTestAppDataSource.map { it.outputs.files.first() }.get().absolutePath
         doFirst {
             val waylandTestEnv = waylandTestEnvProvider.get()
             try {
@@ -971,7 +982,8 @@ val testWayland = tasks.register<Test>("testWayland") {
                     swayConfig = testResourcesDir.file("sway_test_config"),
                     dbusConfigFile = testResourcesDir.file("dbus-session-conf.xml"),
                     testResourcesDir = testResourcesDir,
-                    runVirtualDevicesCmd = listOf(runVirtualDevicesCmd),
+                    runVirtualDevicesCmd = runVirtualDevicesCmd,
+                    testAppDataSourceCmd = testAppDataSourceCmd,
                     headless = true,
                 )
                 println(newEnv)
@@ -1129,7 +1141,8 @@ abstract class WaylandTestEnv :
         swayConfig: RegularFile,
         dbusConfigFile: RegularFile,
         testResourcesDir: Directory,
-        runVirtualDevicesCmd: List<String>,
+        runVirtualDevicesCmd: String,
+        testAppDataSourceCmd: String,
         headless: Boolean,
     ): Map<String, String> {
         println("WaylandTestEnv run")
@@ -1202,7 +1215,7 @@ Exec=/bin/true
             newEnv["DBUS_SESSION_BUS_ADDRESS"] = it.inputReader().readLine()
         }
 
-        newProcess(*runVirtualDevicesCmd.toTypedArray())
+        newProcess(runVirtualDevicesCmd)
 
 //        ProcessBuilder("foot").also { pb ->
 //            val env = pb.environment()
@@ -1212,6 +1225,7 @@ Exec=/bin/true
 //        }
 
         newEnv["TEST_RESOURCES_DIR"] = testResourcesDir.asFile.absolutePath
+        newEnv["TEST_APP_DATA_SOURCE_CMD"] = testAppDataSourceCmd
 
         // Work around the Ubuntu 22.04 apparmor issues: https://github.com/emersion/mako/issues/257
         val testMakoPath = homeTempDir.resolve("mako")
