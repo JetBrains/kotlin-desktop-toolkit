@@ -85,6 +85,10 @@ public class ShowNotificationParams(
 )
 
 public class Application : AutoCloseable {
+    public companion object {
+        public const val MAX_STRING_SIZE_BYTES: Int = 4083 // 4096 minus header, string argument length and NUL byte.
+    }
+
     private var applicationConfig: ApplicationConfig? = null
 
     private val activeArenas = mutableMapOf<Long, Arena>()

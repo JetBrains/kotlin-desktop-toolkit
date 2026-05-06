@@ -707,7 +707,7 @@ abstract class X11TestsBase {
     private val display = X11.INSTANCE.XOpenDisplay(null)!!
 
     val app by lazy { Application(APP_ID) }
-    private lateinit var appExecutingResult: Future<Error?>
+    private var appExecutingResult: Future<Error?>? = null
     val eventQueue = LinkedBlockingQueue<Event>()
 
     internal fun defaultApplicationConfig(
@@ -1219,10 +1219,12 @@ abstract class X11TestsBase {
     @Timeout(value = 20, unit = TimeUnit.SECONDS)
     fun tearDown() {
         log("tearDown start")
-        if (!appExecutingResult.isDone) {
-            app.stopEventLoop()
+        appExecutingResult?.let {
+            if (!it.isDone) {
+                app.stopEventLoop()
+            }
+            assertNull(it.get())
         }
-        assertNull(appExecutingResult.get())
         log("tearDown end")
     }
 }
@@ -1983,6 +1985,55 @@ class X11Tests : X11TestsBase() {
             assertInstanceOf<Event.MouseUp>(event)
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(MouseButton.LEFT, event.button)
+        }
+    }
+
+    @Test
+    fun testWindowCreationLargeWindowId() {
+        run(defaultApplicationConfig())
+
+        val windowParams = defaultWindowParams().copy(windowId = WindowId.MAX_VALUE)
+        val w = createWindowAndWaitForFocus(windowParams).window
+
+        ui { w.close() }
+
+        awaitEventOfType<Event.WindowClosed> { event ->
+            assertEquals(windowParams.windowId, event.windowId)
+            true
+        }
+    }
+
+    @Test
+    fun testWindowCreationTitleTooLong() {
+        run(defaultApplicationConfig())
+
+        val windowParams = defaultWindowParams().copy(
+            title = "t".repeat(Application.MAX_STRING_SIZE_BYTES + 1),
+        )
+        assertThrows<IllegalArgumentException> { ui { app.createWindow(windowParams) } }
+    }
+
+    @Test
+    fun testWindowCreationAppIdTooLong() {
+        val appId = "a".repeat(Application.MAX_STRING_SIZE_BYTES + 1)
+        assertThrows<IllegalArgumentException> { Application(appId) }
+    }
+
+    @Test
+    fun testWindowCreationLargeSizeValues() {
+        run(defaultApplicationConfig())
+
+        val windowParams = defaultWindowParams().copy(
+            size = LogicalSize(width = Int.MAX_VALUE, height = Int.MAX_VALUE),
+            minSize = LogicalSize(width = Int.MAX_VALUE, height = Int.MAX_VALUE),
+        )
+        val w = ui { app.createWindow(windowParams) }
+
+        ui { w.close() }
+
+        awaitEventOfType<Event.WindowClosed> { event ->
+            assertEquals(windowParams.windowId, event.windowId)
+            true
         }
     }
 
