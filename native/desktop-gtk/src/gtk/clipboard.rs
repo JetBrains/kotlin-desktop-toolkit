@@ -1,7 +1,7 @@
 use crate::gtk::application::send_event;
 use crate::gtk::data_transfer::read_all;
 use crate::gtk::data_transfer_api::DataSource;
-use crate::gtk::events::{DataTransferAvailableEvent, DataTransferContent, DataTransferEvent, EventHandler};
+use crate::gtk::events::{DataTransferAvailableEvent, DataTransferCancelledEvent, DataTransferContent, DataTransferEvent, EventHandler};
 use crate::gtk::ffi_return_conversions::TransferDataGetter;
 use crate::gtk::mime_types::MimeTypes;
 use gdk4::prelude::{ObjectExt, OutputStreamExtManual};
@@ -17,6 +17,7 @@ pub struct ClipboardContentProviderImpl {
     pub formats: OnceCell<gdk4::ContentFormats>,
     pub clipboard_type: OnceCell<DataSource>,
     pub transfer_data_getter: OnceCell<TransferDataGetter>,
+    pub event_handler: OnceCell<EventHandler>,
 }
 
 #[glib::object_subclass]
@@ -41,6 +42,9 @@ impl gdk4::subclass::content_provider::ContentProviderImpl for ClipboardContentP
 
     fn detach_clipboard(&self, clipboard: &gdk4::Clipboard) {
         debug!("ContentProviderImpl::detach_clipboard");
+        let event_handler = *self.event_handler.get().expect("EventHandler must be set");
+        let data_source = *self.clipboard_type.get().expect("Clipboard type must be set");
+        send_event(event_handler, DataTransferCancelledEvent { data_source });
         self.parent_detach_clipboard(clipboard);
     }
 
@@ -104,12 +108,18 @@ glib::wrapper! {
 }
 
 impl ClipboardContentProvider {
-    pub fn new(mime_types: &MimeTypes, transfer_data_getter: TransferDataGetter, clipboard_type: DataSource) -> Self {
+    pub fn new(
+        mime_types: &MimeTypes,
+        transfer_data_getter: TransferDataGetter,
+        clipboard_type: DataSource,
+        event_handler: EventHandler,
+    ) -> Self {
         let obj = glib::Object::new::<Self>();
         let imp = obj.imp();
         imp.clipboard_type.set(clipboard_type).unwrap();
         imp.formats.set(gdk4::ContentFormats::new(&mime_types.val)).unwrap();
         imp.transfer_data_getter.get_or_init(|| transfer_data_getter);
+        imp.event_handler.get_or_init(|| event_handler);
         obj
     }
 }
@@ -193,6 +203,7 @@ impl KdtClipboard {
                 mime_types,
                 self.transfer_data_getter,
                 self.clipboard_type,
+                self.event_handler,
             ));
             self.gdk_clipboard.set_content(self.content_provider.as_ref())?;
         }

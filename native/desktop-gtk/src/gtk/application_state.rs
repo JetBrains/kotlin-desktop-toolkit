@@ -361,9 +361,9 @@ impl ApplicationState {
         drag_icon_rendering_mode: RenderingMode,
         drag_icon_size: LogicalSize,
     ) -> anyhow::Result<()> {
-        let provider = ClipboardContentProvider::new(mime_types, self.transfer_data_getter, DataSource::DragAndDrop);
-        let drag = self.with_window(window_id, |w| w.start_drag_operation(action, &provider))?;
         let event_handler = self.event_handler;
+        let provider = ClipboardContentProvider::new(mime_types, self.transfer_data_getter, DataSource::DragAndDrop, event_handler);
+        let drag = self.with_window(window_id, |w| w.start_drag_operation(action, &provider))?;
         {
             let drag_icon = self.drag_icon.clone();
             let drag_content_provider = self.drag_content_provider.clone();

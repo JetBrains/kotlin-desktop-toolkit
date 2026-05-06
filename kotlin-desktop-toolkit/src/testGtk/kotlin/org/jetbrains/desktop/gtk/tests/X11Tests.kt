@@ -2343,6 +2343,92 @@ text/plain;charset=utf-8
     }
 
     @Test
+    fun testSetClipboardContentThenOtherApplicationSetsClipboard() {
+        val textContent = "test clipboard content".toByteArray()
+        val content = mapOf(TEXT_UTF8_MIME_TYPE to textContent)
+        val mimeTypes = listOf(content.keys.single())
+
+        run(
+            defaultApplicationConfig(
+                getDataTransferData = { dataSource, mimeType ->
+                    when (dataSource) {
+                        DataSource.Clipboard -> content[mimeType]
+                        else -> null
+                    }
+                },
+            ),
+        )
+
+        withSetClipboardContent(mimeTypes) {
+            withClipboardSourceTestApp(listOf(HTML_TEXT_MIME_TYPE to sequenceOf("<p>other app text</p>".encodeToByteArray()))) {
+                // Trigger the test app clipboard copy
+                withKeyPress(KeyCode.C) {}
+                awaitEventOfType<Event.DataTransferCancelled> {
+                    it.dataSource == DataSource.Clipboard
+                }
+            }
+
+            ui {}
+            awaitEventOfType<Event.DataTransferAvailable>(msg = "testSetClipboardContentThenOtherApplicationSetsClipboard close wait 1") {
+                it.dataSource ==
+                    DataSource.Clipboard &&
+                    it.mimeTypes.isEmpty()
+            }
+            ui {}
+            awaitEventOfType<Event.DataTransferAvailable>(msg = "testSetClipboardContentThenOtherApplicationSetsClipboard close wait 2") {
+                it.dataSource ==
+                    DataSource.Clipboard &&
+                    it.mimeTypes.isEmpty()
+            }
+        }
+    }
+
+    @Test
+    fun testSetPrimarySelectionContentThenOtherApplicationSetsPrimarySelection() {
+        val textContent = "test clipboard content".toByteArray()
+        val content = mapOf(TEXT_UTF8_MIME_TYPE to textContent)
+        val mimeTypes = listOf(content.keys.single())
+
+        run(
+            defaultApplicationConfig(
+                getDataTransferData = { dataSource, mimeType ->
+                    when (dataSource) {
+                        DataSource.PrimarySelection -> content[mimeType]
+                        else -> null
+                    }
+                },
+            ),
+        )
+
+        withSetPrimarySelectionContent(mimeTypes) {
+            withPrimarySelectionSourceTestApp(listOf(HTML_TEXT_MIME_TYPE to sequenceOf("<p>other app text</p>".encodeToByteArray()))) {
+                // Trigger the test app clipboard copy
+                withKeyPress(KeyCode.C) {}
+                awaitEventOfType<Event.DataTransferCancelled> {
+                    it.dataSource == DataSource.PrimarySelection
+                }
+            }
+
+            ui {}
+            awaitEventOfType<Event.DataTransferAvailable>(
+                msg = "testSetPrimarySelectionContentThenOtherApplicationSetsPrimarySelection close wait 1",
+            ) {
+                it.dataSource ==
+                    DataSource.PrimarySelection &&
+                    it.mimeTypes.isEmpty()
+            }
+            ui {}
+            awaitEventOfType<Event.DataTransferAvailable>(
+                msg = "testSetPrimarySelectionContentThenOtherApplicationSetsPrimarySelection close wait 2",
+            ) {
+                it.dataSource ==
+                    DataSource.PrimarySelection &&
+                    it.mimeTypes.isEmpty()
+            }
+        }
+    }
+
+    @Test
     fun testSetPrimarySelectionContentForText() {
         val textContent = "test clipboard content".toByteArray()
         val htmlContent = """<meta http-equiv="content-type" content="text/html; charset=utf-8"><p>normal, <b>bold</b>.</p>""".toByteArray()
