@@ -147,17 +147,17 @@ pub struct ApplicationState {
     pub active_text_input: Option<ZwpTextInputV3>,
     pub pending_text_input_event: PendingTextInputEvent,
     pub notification_action_sender: Option<tokio::sync::mpsc::Sender<NotificationAction>>,
+    pub calloop_scheduler: calloop::futures::Scheduler<()>,
 }
 
 impl ApplicationState {
-    #[must_use]
     pub fn new(
         globals: &GlobalList,
         qh: &QueueHandle<Self>,
         callbacks: ApplicationCallbacks,
         loop_handle: LoopHandle<'static, Self>,
         display: WlDisplay,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let registry_state = RegistryState::new(globals);
         let seat_state = SeatState::new(globals, qh);
         let output_state = OutputState::new(globals, qh);
@@ -169,7 +169,12 @@ impl ApplicationState {
 
         let ffi_dealloc = callbacks.obj_dealloc;
 
-        Self {
+        let (calloop_exec, calloop_scheduler) = calloop::futures::executor()?;
+        loop_handle
+            .insert_source(calloop_exec, |(), _metadata, _shared| {})
+            .map_err(|e| e.error)?;
+
+        Ok(Self {
             transfer_data_getter: TransferDataGetter {
                 ffi_get: callbacks.get_data_transfer_data,
                 ffi_dealloc,
@@ -212,7 +217,8 @@ impl ApplicationState {
             active_text_input: None,
             pending_text_input_event: PendingTextInputEvent::default(),
             notification_action_sender: None,
-        }
+            calloop_scheduler,
+        })
     }
 
     pub fn get_window_id(&self, surface: &WlSurface) -> Option<WindowId> {

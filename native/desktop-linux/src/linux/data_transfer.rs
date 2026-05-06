@@ -1,5 +1,4 @@
-use std::io::{Read, Write};
-
+use crate::linux::application::send_event;
 use crate::linux::geometry::{LogicalPixels, LogicalPoint};
 use crate::linux::{
     application_api::{DataSource, DragAndDropAction, DragAndDropActions, DragAndDropQueryData},
@@ -16,6 +15,7 @@ use crate::linux::{
     },
 };
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
+use futures_lite::{AsyncReadExt, AsyncWriteExt};
 use log::{debug, warn};
 use smithay_client_toolkit::{
     data_device_manager::{
@@ -30,7 +30,6 @@ use smithay_client_toolkit::{
         selection::PrimarySelectionSourceHandler,
     },
     reexports::{
-        calloop::{LoopHandle, PostAction},
         client::{
             Connection, Proxy, QueueHandle,
             protocol::{
@@ -80,42 +79,43 @@ struct DragOfferMimetypeAndActions {
     pub preferred_action: DndAction,
 }
 
-#[must_use]
-pub fn read_from_pipe<'l, F>(
-    f_name: &'static str,
-    read_pipe: data_device_manager::ReadPipe,
-    mime_type: String,
-    loop_handle: &LoopHandle<'l, ApplicationState>,
-    mut callback: F,
-) -> bool
-where
-    for<'a> F: FnMut(&mut ApplicationState, DataTransferContent<'a>) + 'l,
-{
-    if let Err(e) = loop_handle.insert_source(read_pipe, move |(), res, state| {
-        let f = unsafe { res.get_mut() };
-        let mut buf = Vec::new();
-        let content = match f.read_to_end(&mut buf) {
-            Ok(size) => {
-                debug!("{f_name}: read {size} bytes");
-                DataTransferContent::new(&mime_type, &buf)
+impl ApplicationState {
+    pub fn read_from_pipe(
+        &self,
+        f_name: &'static str,
+        read_pipe: data_device_manager::ReadPipe,
+        mime_type: String,
+        callback: impl Fn(Option<DataTransferContent>) + 'static + Clone,
+    ) {
+        let callback_clone = callback.clone();
+
+        match self.loop_handle.adapt_io(read_pipe) {
+            Ok(mut async_read_pipe) => {
+                if let Err(e) = self.calloop_scheduler.schedule(async move {
+                    let mut buf = Vec::new();
+                    let content = match async_read_pipe.read_to_end(&mut buf).await {
+                        Ok(size) => {
+                            debug!("{f_name}: read {size} bytes");
+                            Some(DataTransferContent::new(&mime_type, &buf))
+                        }
+                        Err(e) => {
+                            warn!("{f_name}: error receiving data: {e}");
+                            None
+                        }
+                    };
+                    callback(content);
+                }) {
+                    warn!("{f_name}: failed to start reading: {e}");
+                    callback_clone(None);
+                }
             }
             Err(e) => {
                 warn!("{f_name}: error receiving data: {e}");
-                DataTransferContent::null()
+                callback_clone(None);
             }
-        };
-
-        callback(state, content);
-        PostAction::Remove
-    }) {
-        warn!("{f_name}: failed to start reading: {e}");
-        false
-    } else {
-        true
+        }
     }
-}
 
-impl ApplicationState {
     #[must_use]
     fn get_drag_offer_actions(&self, drag_offer: &DragOffer, x: f64, y: f64, window_id: WindowId) -> DragOfferMimetypeAndActions {
         drag_offer.with_mime_types(|mime_types| {
@@ -204,13 +204,16 @@ impl DataDeviceHandler for ApplicationState {
             debug!("DataDeviceHandler::drop_performed: no drag offer");
             return;
         };
+
         let x = drag_offer.x;
         let y = drag_offer.y;
         let surface = &drag_offer.surface;
-        let action = drag_offer.selected_action;
+        let wl_action = drag_offer.selected_action;
 
         let Some(window_id) = self.get_window_id(surface) else {
             warn!("DataDeviceHandler::drop_performed: couldn't find window for {surface:?}");
+            drag_offer.finish();
+            drag_offer.destroy();
             return;
         };
 
@@ -228,6 +231,8 @@ impl DataDeviceHandler for ApplicationState {
                 action: DragAndDropAction::None,
                 location_in_window,
             });
+            drag_offer.finish();
+            drag_offer.destroy();
             return;
         };
 
@@ -245,29 +250,26 @@ impl DataDeviceHandler for ApplicationState {
             }
         };
 
-        if !read_from_pipe(
-            "DataDeviceHandler::drop_performed",
-            read_pipe,
-            mime_type,
-            &self.loop_handle,
-            move |state, content| {
-                drag_offer.finish();
-                drag_offer.destroy();
-                state.send_event(DropPerformedEvent {
+        let event_handler = self.callbacks.event_handler;
+        self.read_from_pipe("DataDeviceHandler::drop_performed", read_pipe, mime_type, move |data| {
+            let action = if data.is_some() {
+                wl_action.into()
+            } else {
+                DragAndDropAction::None
+            };
+
+            send_event(
+                event_handler,
+                DropPerformedEvent {
                     window_id,
-                    content,
-                    action: action.into(),
+                    content: data.unwrap_or(DataTransferContent::null()),
+                    action,
                     location_in_window,
-                });
-            },
-        ) {
-            self.send_event(DropPerformedEvent {
-                window_id,
-                content: DataTransferContent::null(),
-                action: DragAndDropAction::None,
-                location_in_window,
-            });
-        }
+                },
+            );
+            drag_offer.finish();
+            drag_offer.destroy();
+        });
     }
 }
 
@@ -286,7 +288,7 @@ impl DataSourceHandler for ApplicationState {
         debug!("DataSourceHandler::accept_mime: {mime:?}");
     }
 
-    fn send_request(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &WlDataSource, mime: String, mut fd: WritePipe) {
+    fn send_request(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &WlDataSource, mime: String, fd: WritePipe) {
         debug!("DataSourceHandler::send_request: {mime}");
         let data_type = if self.copy_paste_source.as_ref().map(CopyPasteSource::inner) == Some(source) {
             DataSource::Clipboard
@@ -296,8 +298,21 @@ impl DataSourceHandler for ApplicationState {
             return;
         };
         if let Some(data) = self.transfer_data_getter.get(data_type, mime.as_str()) {
-            if fd.write_all(data.as_slice()).is_err() {
-                warn!("Write of {data_type:?} data failed");
+            match self.loop_handle.adapt_io(fd) {
+                Ok(mut async_write_pipe) => {
+                    if let Err(e) = self.calloop_scheduler.schedule(async move {
+                        if let Err(e) = async_write_pipe.write_all(&data).await {
+                            warn!("Write of {data_type:?} data failed: {e}");
+                        } else {
+                            debug!("Finished writing {data_type:?} data");
+                        }
+                    }) {
+                        warn!("Write of {data_type:?} data failed: {e}");
+                    }
+                }
+                Err(e) => {
+                    warn!("Write of {data_type:?} data failed: {e}");
+                }
             }
         } else {
             warn!("Don't have any {data_type:?} data");
@@ -321,13 +336,14 @@ impl DataSourceHandler for ApplicationState {
         if let Some(data_source) = data_source {
             self.send_event(DataTransferCancelledEvent { data_source });
         }
+        source.destroy();
     }
 
     fn dnd_dropped(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {
         debug!("DataSourceHandler::dnd_dropped");
     }
 
-    fn dnd_finished(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource) {
+    fn dnd_finished(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, source: &WlDataSource) {
         debug!("DataSourceHandler::dnd_finished");
         self.drag_source = None;
         self.drag_icon = None;
@@ -337,6 +353,7 @@ impl DataSourceHandler for ApplicationState {
             window_id,
             action: action.into(),
         });
+        source.destroy();
     }
 
     fn action(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _source: &WlDataSource, action: DndAction) {
@@ -386,12 +403,25 @@ impl PrimarySelectionSourceHandler for ApplicationState {
         _qh: &QueueHandle<Self>,
         _source: &ZwpPrimarySelectionSourceV1,
         mime: String,
-        mut write_pipe: WritePipe,
+        write_pipe: WritePipe,
     ) {
         debug!("PrimarySelectionSourceHandler::send_request: mime={mime}");
         if let Some(data) = self.transfer_data_getter.get(DataSource::PrimarySelection, mime.as_str()) {
-            if write_pipe.write_all(data.as_slice()).is_err() {
-                warn!("Write of primary selection data failed");
+            match self.loop_handle.adapt_io(write_pipe) {
+                Ok(mut async_write_pipe) => {
+                    if let Err(e) = self.calloop_scheduler.schedule(async move {
+                        if let Err(e) = async_write_pipe.write_all(&data).await {
+                            warn!("Write of primary selection data failed: {e}");
+                        } else {
+                            debug!("Finished writing primary selection data");
+                        }
+                    }) {
+                        warn!("Write of primary selection data failed: {e}");
+                    }
+                }
+                Err(e) => {
+                    warn!("Write of primary selection data failed: {e}");
+                }
             }
         } else {
             warn!("Don't have any primary selection data");

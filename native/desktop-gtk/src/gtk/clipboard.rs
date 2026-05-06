@@ -67,10 +67,15 @@ impl gdk4::subclass::content_provider::ContentProviderImpl for ClipboardContentP
         if let Some(data) = self.transfer_data_getter.get().unwrap().get(clipboard_type, mime_type) {
             let stream = stream.clone();
             Box::pin(async move {
-                match stream.write_future(data, io_priority).await {
-                    Ok((_buf, size)) => {
-                        debug!("Finished writing clipboard data, size={size}");
-                        Ok(())
+                match stream.write_all_future(data, io_priority).await {
+                    Ok((_buf, size, e)) => {
+                        if let Some(e) = e {
+                            warn!("Error writing clipboard data ({size} written): {e}");
+                            Err(e)
+                        } else {
+                            debug!("Finished writing clipboard data, size={size}");
+                            Ok(())
+                        }
                     }
                     Err((_buf, e)) => {
                         warn!("Error writing clipboard data: {e}");
@@ -79,7 +84,10 @@ impl gdk4::subclass::content_provider::ContentProviderImpl for ClipboardContentP
                 }
             })
         } else {
-            Box::pin(async { Ok(()) })
+            let msg = format!("Clipboard type {mime_type} not supported");
+            warn!("Error writing clipboard data: {msg}");
+            let e = glib::Error::new(gio::IOErrorEnum::NotSupported, &msg);
+            Box::pin(async { Err(e) })
         }
     }
 
@@ -156,18 +164,10 @@ impl KdtClipboard {
             .read_async(mime_types, glib::Priority::DEFAULT, gio::Cancellable::NONE, move |res| match res {
                 Ok((input_stream, mime_type)) => {
                     debug!("KdtClipboard::paste: reading {mime_type}");
-                    read_all(&input_stream, move |res| {
-                        if let Some(data) = res {
-                            let content = DataTransferContent::new(mime_type.as_str(), &data);
-                            let event = DataTransferEvent { serial, content };
-                            send_event(event_handler, event);
-                        } else {
-                            let event = DataTransferEvent {
-                                serial,
-                                content: DataTransferContent::null(),
-                            };
-                            send_event(event_handler, event);
-                        }
+                    read_all(input_stream, mime_type, move |content| {
+                        let content = content.unwrap_or(DataTransferContent::null());
+                        let event = DataTransferEvent { serial, content };
+                        send_event(event_handler, event);
                     });
                 }
                 Err(e) => {

@@ -2431,6 +2431,63 @@ text/plain;charset=utf-8
         }
     }
 
+    @Test
+    fun testClipboardPasteToSelf() {
+        val textContent = "a".repeat(200_000).toByteArray()
+        val content = mapOf(
+            TEXT_UTF8_MIME_TYPE to textContent,
+        )
+        run(
+            defaultApplicationConfig(
+                getDataTransferData = { dataSource, mimeType ->
+                    when (dataSource) {
+                        DataSource.Clipboard -> content[mimeType]
+                        else -> null
+                    }
+                },
+            ),
+        )
+
+        withSetClipboardContent(listOf(TEXT_UTF8_MIME_TYPE)) {
+            val transferSerial1 = 5
+            ui { app.clipboardPaste(transferSerial1, listOf(TEXT_UTF8_MIME_TYPE, PNG_MIME_TYPE)) }
+            withNextEvent { event ->
+                assertInstanceOf<Event.DataTransfer>(event)
+                assertEquals(transferSerial1, event.serial)
+                val content = event.content
+                assertNotNull(content)
+                assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
+                assertContentEquals(textContent, content.data)
+            }
+
+            val transferSerial2 = 6
+            ui { app.clipboardPaste(transferSerial2, listOf(PNG_MIME_TYPE, HTML_TEXT_MIME_TYPE)) }
+            withNextEvent { event ->
+                assertInstanceOf<Event.DataTransfer>(event)
+                assertEquals(transferSerial2, event.serial)
+                assertNull(event.content)
+            }
+        }
+    }
+
+    @Test
+    fun testClipboardPasteToSelfForNonExistingType() {
+        run(defaultApplicationConfig())
+
+        withSetClipboardContent(listOf(TEXT_UTF8_MIME_TYPE)) {
+            val transferSerial = 6
+            ui { app.clipboardPaste(transferSerial, listOf(PNG_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) }
+            withNextEvent { event ->
+                assertInstanceOf<Event.DataTransfer>(event)
+                assertEquals(transferSerial, event.serial)
+                val content = event.content
+                assertNotNull(content)
+                assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
+                assertContentEquals(byteArrayOf(), content.data)
+            }
+        }
+    }
+
     private fun testClipboardPasteImpl(
         data: List<Pair<String, Sequence<ByteArray>>>,
         operationMode: TestAppOperationMode = TestAppOperationMode.Normal,
@@ -2520,6 +2577,119 @@ text/plain;charset=utf-8
                 assertNull(event.content)
             }
         }
+    }
+
+    @Test
+    fun testClipboardPasteLargeData() {
+        val singleUriListData = "file:///tmp\r\n".encodeToByteArray()
+        val singleTextData = "qwertyuiop".encodeToByteArray()
+        val repetitions = 10000
+
+        val uriListData = (0..repetitions).asSequence().map { singleUriListData }
+        val textData = (0..repetitions).asSequence().map { singleTextData }
+        testClipboardPasteImpl(
+            listOf(
+                URI_LIST_MIME_TYPE to uriListData,
+                TEXT_UTF8_MIME_TYPE to textData,
+            ),
+        ) {
+            val transferSerial1 = 5
+            ui { app.clipboardPaste(transferSerial1, listOf(TEXT_UTF8_MIME_TYPE, PNG_MIME_TYPE)) }
+
+            withNextEvent { event ->
+                assertInstanceOf<Event.DataTransfer>(event)
+                assertEquals(transferSerial1, event.serial)
+                val content = event.content
+                assertNotNull(content)
+                assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
+                assertDataMatches(textData, content.data)
+            }
+
+            val transferSerial2 = 6
+            ui { app.clipboardPaste(transferSerial2, listOf(URI_LIST_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) }
+
+            withNextEvent { event ->
+                assertInstanceOf<Event.DataTransfer>(event)
+                assertEquals(transferSerial2, event.serial)
+                val content = event.content
+                assertNotNull(content)
+                assertEquals(URI_LIST_MIME_TYPE, content.mimeType)
+                assertDataMatches(uriListData, content.data)
+            }
+
+            val transferSerial3 = 7
+            ui { app.clipboardPaste(transferSerial3, listOf(PNG_MIME_TYPE)) }
+
+            withNextEvent { event ->
+                assertInstanceOf<Event.DataTransfer>(event)
+                assertEquals(transferSerial3, event.serial)
+                assertNull(event.content)
+            }
+        }
+    }
+
+    @Test
+    fun testClipboardPasteSlowSource() {
+        val textData = "qwertyuiop".repeat(10).encodeToByteArray()
+        val data = listOf(TEXT_UTF8_MIME_TYPE to sequenceOf(textData))
+
+        testClipboardPasteImpl(data, TestAppOperationMode.Slow) {
+            val transferSerial1 = 5
+            ui { app.clipboardPaste(transferSerial1, listOf(TEXT_UTF8_MIME_TYPE)) }
+
+            var uiCallbackCount = 0
+            var eventOrNull: Event? = null
+            val timeTaken = measureTime {
+                waitUntilEq(true) {
+                    eventOrNull = eventQueue.poll(10, TimeUnit.MILLISECONDS)
+                    ui { uiCallbackCount += 1 }
+                    eventOrNull != null
+                }
+            }
+            log("clipboard paste took $timeTaken, uiCallbackCount=$uiCallbackCount")
+
+            val event = eventOrNull
+            assertInstanceOf<Event.DataTransfer>(event)
+            assertEquals(transferSerial1, event.serial)
+            val content = event.content
+            assertNotNull(content)
+            assertEquals(TEXT_UTF8_MIME_TYPE, content.mimeType)
+            assertContentEquals(textData, content.data)
+
+            // Test app sleeps 100ms after every 10 bytes
+            if (timeTaken < 1.seconds) {
+                fail("Test data source implementation is too fast ($timeTaken)")
+            }
+
+            if (uiCallbackCount < 20) {
+                fail("Too few UI callbacks: $uiCallbackCount")
+            }
+        }
+    }
+
+    @Test
+    @Ignore("Event.DataTransfer is not received and other tests are impacted afterwards")
+    fun testClipboardPasteSourceDisappears() {
+        val textData = "qwertyuiop".repeat(10).encodeToByteArray()
+        val data = listOf(TEXT_UTF8_MIME_TYPE to sequenceOf(textData))
+
+        testClipboardPasteImpl(data, TestAppOperationMode.ExitAfterStartWriting) {
+            val transferSerial1 = 50
+            ui { app.clipboardPaste(transferSerial1, listOf(TEXT_UTF8_MIME_TYPE)) }
+
+            awaitEventOfType<Event.DataTransferAvailable> { event ->
+                assertEquals(DataSource.Clipboard, event.dataSource)
+                assertEquals(emptyList(), event.mimeTypes)
+                true
+            }
+
+            withNextEvent { event ->
+                assertInstanceOf<Event.DataTransfer>(event)
+                assertEquals(transferSerial1, event.serial)
+                assertNull(event.content)
+            }
+        }
+        assertTrue(eventQueue.isEmpty())
     }
 
     @Test
