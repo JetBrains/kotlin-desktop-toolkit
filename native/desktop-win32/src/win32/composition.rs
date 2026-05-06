@@ -25,17 +25,21 @@ use windows::{
             },
             Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1},
             Direct3D11::{D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11Device},
-            DirectWrite::{DWRITE_FACTORY_TYPE_SHARED, DWriteCreateFactory, IDWriteFactory},
+            DirectWrite::{
+                DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_REGULAR,
+                DWriteCreateFactory, IDWriteFactory, IDWriteFontFace,
+            },
             Dxgi::{DXGI_ERROR_DEVICE_REMOVED, IDXGIAdapter, IDXGIDevice},
         },
         System::WinRT::Composition::{ICompositionDrawingSurfaceInterop, ICompositorInterop},
     },
 };
-use windows_core::Interface;
+use windows_core::{HSTRING, Interface};
 
 pub(crate) struct D2dContext {
     dwrite_factory: IDWriteFactory,
     composition_graphics_device: CompositionGraphicsDevice,
+    caption_glyph_font: OnceCell<(&'static HSTRING, IDWriteFontFace)>,
 }
 
 impl D2dContext {
@@ -55,11 +59,41 @@ impl D2dContext {
         Ok(Self {
             dwrite_factory,
             composition_graphics_device,
+            caption_glyph_font: OnceCell::new(),
         })
     }
 
     pub fn dwrite_factory(&self) -> IDWriteFactory {
         self.dwrite_factory.clone()
+    }
+
+    /// Resolve the system font collection's first available caption-glyph
+    /// family (Segoe Fluent Icons, falling back to Segoe MDL2 Assets) and
+    /// produce a concrete `IDWriteFontFace` for it. Cached on first call;
+    /// subsequent calls return the cached face infallibly. The face
+    /// survives device-replaced events because the font collection is
+    /// independent of the D3D rendering device.
+    pub fn caption_glyph_font(&self) -> anyhow::Result<&(&'static HSTRING, IDWriteFontFace)> {
+        if let Some(cached) = self.caption_glyph_font.get() {
+            return Ok(cached);
+        }
+        let mut collection = None;
+        unsafe { self.dwrite_factory.GetSystemFontCollection(&raw mut collection, false)? };
+        let collection = collection.ok_or_else(|| anyhow::anyhow!("DirectWrite returned no system font collection"))?;
+        for family_name in [windows_core::h!("Segoe Fluent Icons"), windows_core::h!("Segoe MDL2 Assets")] {
+            let mut index = 0u32;
+            let mut exists = windows_core::BOOL(0);
+            unsafe { collection.FindFamilyName(family_name, &raw mut index, &raw mut exists)? };
+            if exists.as_bool() {
+                let family = unsafe { collection.GetFontFamily(index)? };
+                let font = unsafe {
+                    family.GetFirstMatchingFont(DWRITE_FONT_WEIGHT_REGULAR, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL)?
+                };
+                let face = unsafe { font.CreateFontFace()? };
+                return Ok(self.caption_glyph_font.get_or_init(|| (family_name, face)));
+            }
+        }
+        anyhow::bail!("neither Segoe Fluent Icons nor Segoe MDL2 Assets is present in the system font collection")
     }
 
     pub fn create_drawing_surface(&self, size: SizeInt32) -> anyhow::Result<CompositionDrawingSurface> {

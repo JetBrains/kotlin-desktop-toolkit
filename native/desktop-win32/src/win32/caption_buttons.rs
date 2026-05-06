@@ -34,7 +34,7 @@ use windows::{
             DirectWrite::{
                 DWRITE_FONT_METRICS, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_REGULAR,
                 DWRITE_GLYPH_METRICS, DWRITE_MEASURING_MODE_NATURAL, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_CENTER,
-                IDWriteFactory, IDWriteFontFace,
+                IDWriteFontFace,
             },
             Gdi::{GetSysColor, SYS_COLOR_INDEX, ScreenToClient},
         },
@@ -958,29 +958,6 @@ const fn glyph_for(kind: CaptionButtonKind, is_maximised: bool, hc: HighContrast
     }
 }
 
-/// Resolve the system font collection's first available caption-glyph family
-/// (Segoe Fluent Icons, falling back to Segoe MDL2 Assets) and produce a
-/// concrete `IDWriteFontFace` for it. Returning the face here lets the caller
-/// run glyph-metric queries without re-opening the font collection.
-fn caption_glyph_font_family(dwrite: &IDWriteFactory) -> anyhow::Result<(windows::core::PCWSTR, IDWriteFontFace)> {
-    let mut collection = None;
-    unsafe { dwrite.GetSystemFontCollection(&raw mut collection, false)? };
-    let collection = collection.ok_or_else(|| anyhow::anyhow!("DirectWrite returned no system font collection"))?;
-    for family_name in [windows::core::w!("Segoe Fluent Icons"), windows::core::w!("Segoe MDL2 Assets")] {
-        let mut index = 0u32;
-        let mut exists = windows_core::BOOL(0);
-        unsafe { collection.FindFamilyName(family_name, &raw mut index, &raw mut exists)? };
-        if exists.as_bool() {
-            let family = unsafe { collection.GetFontFamily(index)? };
-            let font =
-                unsafe { family.GetFirstMatchingFont(DWRITE_FONT_WEIGHT_REGULAR, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL)? };
-            let face = unsafe { font.CreateFontFace()? };
-            return Ok((family_name, face));
-        }
-    }
-    anyhow::bail!("neither Segoe Fluent Icons nor Segoe MDL2 Assets is present in the system font collection")
-}
-
 /// Compute the DirectWrite font size (DIPs) at which the glyph's visible
 /// black-box fits within `target_extent_px`. Algorithm per spec §4.5.
 fn compute_glyph_font_size(face: &IDWriteFontFace, glyph_char: char, target_extent_px: PhysicalSize) -> anyhow::Result<f32> {
@@ -1025,18 +1002,18 @@ fn rasterise_glyph(
     metrics: &CaptionButtonMetrics,
 ) -> anyhow::Result<bool> {
     let glyph_char = glyph_for(kind, is_maximised, hc);
+    let (font_family, font_face) = d2d_context.caption_glyph_font()?;
+    let font_size = compute_glyph_font_size(font_face, glyph_char, metrics.glyph_extent_px)?;
     let dwrite = d2d_context.dwrite_factory();
-    let (font_family, font_face) = caption_glyph_font_family(&dwrite)?;
-    let font_size = compute_glyph_font_size(&font_face, glyph_char, metrics.glyph_extent_px)?;
     let format = unsafe {
         dwrite.CreateTextFormat(
-            font_family,
+            *font_family,
             None::<&windows::Win32::Graphics::DirectWrite::IDWriteFontCollection>,
             DWRITE_FONT_WEIGHT_REGULAR,
             DWRITE_FONT_STYLE_NORMAL,
             DWRITE_FONT_STRETCH_NORMAL,
             font_size,
-            windows::core::w!("en-US"),
+            windows_core::h!("en-US"),
         )?
     };
     unsafe {
