@@ -2186,6 +2186,8 @@ class WaylandTests : WaylandTestsBase() {
         val errors = mutableListOf<String>()
         for (shape in PointerShape.entries) {
             ui { window.setPointerShape(shape) }
+            lastDrawEvents.clear()
+            awaitEventOfType<Event.WindowDraw> { true }
 
             tempDir.resolve("$shape.png").also { shapeScreenshotPath ->
                 var retryCount = 20
