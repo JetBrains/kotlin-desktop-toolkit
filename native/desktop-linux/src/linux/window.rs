@@ -192,11 +192,23 @@ impl SimpleWindow {
                     Ok(egl_rendering_data) => Some(RenderingData::Egl(egl_rendering_data)),
                     Err(e) => {
                         warn!("Failed to create EGL rendering, falling back to software rendering. Error: {e:?}");
-                        Some(RenderingData::Software(SoftwareRendering::new(shm, physical_size)))
+                        match SoftwareRendering::new(shm, physical_size) {
+                            Ok(software_rendering_data) => Some(RenderingData::Software(software_rendering_data)),
+                            Err(e) => {
+                                warn!("Failed to create software rendering. Error: {e:?}");
+                                None
+                            }
+                        }
                     }
                 }
             } else {
-                Some(RenderingData::Software(SoftwareRendering::new(shm, physical_size)))
+                match SoftwareRendering::new(shm, physical_size) {
+                    Ok(software_rendering_data) => Some(RenderingData::Software(software_rendering_data)),
+                    Err(e) => {
+                        warn!("Failed to create software rendering. Error: {e:?}");
+                        None
+                    }
+                }
             };
         }
         is_first_configure
@@ -281,7 +293,9 @@ impl SimpleWindow {
                     egl_data.resize(physical_size);
                 }
                 RenderingData::Software(data) => {
-                    data.resize(shm, physical_size);
+                    if let Err(e) = data.resize(shm, physical_size) {
+                        warn!("Error resizing software renderer for window: {e}");
+                    }
                 }
             }
         }
