@@ -1012,7 +1012,7 @@ abstract class WaylandTestsBase {
     }
 
     val app by lazy { Application() }
-    private lateinit var appExecutingResult: Future<Error?>
+    private var appExecutingResult: Future<Error?>? = null
     val eventQueue = LinkedBlockingQueue<Event>()
     var lastDrawEvents = mutableMapOf<WindowId, Event.WindowDraw>()
     internal var lastScreenSize: LogicalSize? = null
@@ -1490,14 +1490,17 @@ abstract class WaylandTestsBase {
 //        if (!testSuccessful) {
 //            Thread.sleep(60 * 1000)
 //        }
-        if (!appExecutingResult.isDone) {
-            app.stopEventLoop()
+        appExecutingResult?.let {
+            if (!it.isDone) {
+                app.stopEventLoop()
+            }
+            assertNull(it.get())
+            appExecutor.add { app.close() }.get()
+            appExecutingResult = null
+            awaitEventOfType<Event.ApplicationWantsToTerminate> { true }
+            awaitEventOfType<Event.ApplicationWillTerminate> { true }
         }
-        assertNull(appExecutingResult.get())
-        appExecutor.add { app.close() }.get()
 
-        awaitEventOfType<Event.ApplicationWantsToTerminate> { true }
-        awaitEventOfType<Event.ApplicationWillTerminate> { true }
         log("tearDown end")
     }
 }
@@ -4112,6 +4115,24 @@ text/plain;charset=utf-8
         }
 
         testSuccessful = true
+    }
+
+    @Test
+    fun testShowNotificationWithoutNotificationServiceNotBlockingOnExit() {
+        val showNotificationParams = ShowNotificationParams(
+            title = "Test Notification 1",
+            body = "Body of Test Notification 1",
+            soundFilePath = null,
+        )
+        run(defaultApplicationConfig())
+        val timeTaken = measureTime {
+            val notification1RequestId = ui { app.requestShowNotification(showNotificationParams) }
+            assertNotNull(notification1RequestId)
+            tearDown()
+        }
+        if (timeTaken > 1.seconds) {
+            fail("Took $timeTaken")
+        }
     }
 
     @Test
