@@ -15,7 +15,6 @@ use crate::gtk::file_dialog::show_file_dialog_impl;
 use crate::gtk::file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams};
 use crate::gtk::geometry::{LogicalSize, PhysicalSize};
 use crate::gtk::gl_widget::GlWidget;
-use crate::gtk::kdt_application::KdtApplication;
 use crate::gtk::mime_types::MimeTypes;
 use crate::gtk::notifications::{NewNotificationData, NotificationAction, init_notifications_task};
 use crate::gtk::window::SimpleWindow;
@@ -77,7 +76,7 @@ pub struct ApplicationState {
     query_drag_and_drop_target: QueryDragAndDropTarget,
     retrieve_surrounding_text: RetrieveSurroundingText,
     _gtk_app_hold: gio::ApplicationHoldGuard,
-    pub gtk_app: KdtApplication,
+    pub gtk_app: gtk4::Application,
     async_request_counter: AtomicU32,
     window_id_to_window: Rc<RefCell<HashMap<WindowId, SimpleWindow>>>,
     clipboard: KdtClipboard,
@@ -114,7 +113,10 @@ impl ApplicationState {
     pub fn new(callbacks: &ApplicationCallbacks) -> anyhow::Result<Self> {
         debug!("Initializing application state");
 
-        let gtk_app = KdtApplication::new();
+        let gtk_app = gtk4::Application::builder()
+            .application_id(glib::program_name().unwrap())
+            .flags(gio::ApplicationFlags::NON_UNIQUE)
+            .build();
 
         let application_wants_to_terminate = callbacks.application_wants_to_terminate;
         let event_handler = callbacks.event_handler;
@@ -125,7 +127,7 @@ impl ApplicationState {
         gtk_app.connect_startup(move |gtk_app| {
             debug!("App Startup");
             let quit = gio::ActionEntry::builder("quit")
-                .activate(move |gtk_app: &KdtApplication, _, _| {
+                .activate(move |gtk_app: &gtk4::Application, _, _| {
                     if application_wants_to_terminate() {
                         gtk_app.quit();
                     }

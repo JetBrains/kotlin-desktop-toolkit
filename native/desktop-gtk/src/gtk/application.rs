@@ -101,7 +101,7 @@ impl Application {
 
         debug!("Will start application event loop");
 
-        app.run();
+        app.run_with_args::<glib::GString>(&[]);
 
         debug!("Application event loop stopped");
         Ok(())
