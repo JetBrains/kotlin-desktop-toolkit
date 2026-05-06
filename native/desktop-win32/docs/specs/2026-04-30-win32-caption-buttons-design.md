@@ -39,7 +39,7 @@ Two crate-internal modules, both `pub(crate)` only — no FFI surface, no `_api.
 - **`event_loop.rs`** gains:
   - Strip consultation in `on_nchittest` after the initial `DwmDefWindowProc` / `DefWindowProcW` consultation, but before preserving a default non-`HTCLIENT` result for points inside the strip.
   - Current `on_nchittest` returns early when `!window.is_resizable()`. Split that guard: resize-border math stays conditional on `is_resizable`, but custom caption-button hit-testing and draggable titlebar fallback must still run for non-resizable Custom-titlebar windows.
-  - The existing pointer handlers (`on_pointerupdate`, `on_pointerdown`, `on_pointerup`) — which already merge client and non-client pointer messages via the `WM_POINTERUPDATE | WM_NCPOINTERUPDATE` / `_DOWN` / `_UP` arms in the wndproc dispatch — are extended so the non-client path reads `HIWORD(wParam)` and routes to the strip when the hit-test value is one of `HTCLOSE` / `HTMAXBUTTON` / `HTMINBUTTON`. On `WM_NCPOINTERUPDATE` the dispatch returns `Some(LRESULT(0))` for caption-button hit-test areas to suppress Kotlin-facing pointer events for the toolkit-owned gesture; non-caption NC areas (e.g. title-bar drag region) still fall through to the existing dispatch. In `on_pointerup`, caption-button release routing claims either `WM_NCPOINTERUP` or `WM_POINTERUP` when the strip owns the active press session for that pointer id, so NC→client drift before release does not leave the press session stuck.
+  - The existing pointer handlers (`on_pointerupdate`, `on_pointerdown`, `on_pointerup`) — which already merge client and non-client pointer messages via the `WM_POINTERUPDATE | WM_NCPOINTERUPDATE` / `_DOWN` / `_UP` arms in the wndproc dispatch — are extended so the non-client path reads `HIWORD(wParam)` and routes to the strip when the hit-test value is one of `HTCLOSE` / `HTMAXBUTTON` / `HTMINBUTTON`. On `WM_NCPOINTERUPDATE` the dispatch returns `Some(LRESULT(0))` for caption-button hit-test areas to suppress Kotlin-facing pointer events for the toolkit-owned gesture; non-caption NC areas (e.g. title-bar drag region) still fall through to the existing dispatch. Beyond the primary path, `on_pointerup` drains tracked `Suppressed` sessions via `strip.consume_swallowed_release(pointer_id, button)` — keyed by `(pointer_id, PointerButton)` so the drain works regardless of where the implicit pointer capture delivers the UP (`WM_NCPOINTERUP` off the strip, or `WM_POINTERUP` in the client area). Releases whose press began outside the strip fall through to Kotlin: chrome ownership scopes to cycles whose DOWN was on the strip.
   - `WM_POINTERCAPTURECHANGED` gets a small cleanup-only arm. If Windows reports pointer capture loss for a pointer id that matches the strip's active press session, the event-loop calls `strip.on_pointer_cancel(id)` and does not fire a caption-button action. The Microsoft docs require cleanup when this notification is received and warn not to depend on paired pointer notifications; they do **not** explicitly state that this notification is always delivered for implicit `WM_NCPOINTER*` capture loss, so treat it as defensive cleanup rather than the normal release path.
   - `TrackMouseEvent(TME_NONCLIENT | TME_LEAVE)` is armed at the window/event-loop layer when an NC pointer update enters the window non-client area, not when it enters a specific caption button.
   - Existing `on_ncmouseleave` extended to call `strip.on_nc_mouse_leave()` and `window.nc_leave_tracking_fired()` before the existing `DwmDefWindowProc` pass-through.
@@ -252,6 +252,17 @@ impl CaptionButtonStrip {
         pointer_id: u32,
     ) -> anyhow::Result<Option<CaptionButtonAction>>;
     pub fn on_pointer_cancel(&mut self, pointer_id: u32) -> anyhow::Result<()>;
+
+    // Press-session helpers (wndproc-level swallow path).
+    pub(crate) const fn track_swallowed_press(
+        &mut self,
+        kind: CaptionButtonKind,
+        pointer_id: u32,
+        button: PointerButton,
+    );
+    pub(crate) fn consume_swallowed_release(&mut self, pointer_id: u32, button: PointerButton) -> bool;
+    pub(crate) const fn has_active_press_for(&self, pointer_id: u32) -> bool;
+
     pub fn on_nc_mouse_leave(&mut self) -> anyhow::Result<()>;
 
     // Theming / metric / state changes.
@@ -265,12 +276,27 @@ impl CaptionButtonStrip {
     pub fn on_resize(&self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()>;
 }
 
-// The wndproc filters primary at the call site: `on_pointer_down` /
-// `on_pointer_up` are invoked only for primary-button events (and the
-// matching `WM_NCPOINTER*` suppression is gated on primary too). Non-primary
-// presses over caption-button hit-tests fall through to the existing
-// dispatch — Kotlin sees ordinary `PointerDown` / `PointerUp` with
-// `non_client_area = true`, exactly as today for the rest of the NC area.
+// The wndproc filters primary at the call site, but suppression is
+// broader than activation. Two press modes drive the strip's existing
+// `Option<PressSession>`:
+//   - `PressSessionMode::Active` — primary press on enabled button.
+//     Visual capture engaged; matched primary UP dispatches a
+//     `CaptionButtonAction` if released over the same button. Driven
+//     by `on_pointer_down`.
+//   - `PressSessionMode::Suppressed { held_button }` — wndproc-level
+//     swallow. No visual capture. `held_button = Left` for primary-
+//     on-disabled (paired with the existing primary-release branch
+//     via the tightened `has_active_press_for`); `held_button = Right
+//     / Middle / XButton1 / XButton2` for non-primary presses (paired
+//     with the new `consume_swallowed_release` drain). Driven by
+//     `track_swallowed_press` for non-primary, by `on_pointer_down`
+//     for primary-on-disabled.
+//
+// The `Option<PressSession>` invariant is preserved — concurrent
+// multi-button or multi-pointer presses are dropped (matching the
+// strip's existing single-press limitation). The dropped DOWN's
+// matching UP will leak to Kotlin; this is a known limitation, not
+// addressed here.
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum CaptionButtonAction {
@@ -294,10 +320,15 @@ pub(crate) enum CaptionButtonKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PointerDeviceKind { Mouse, Pen, Touch }
 
+enum PressSessionMode {
+    Active,                                      // primary press on enabled button; held button implicit (`Left`)
+    Suppressed { held_button: PointerButton },   // wndproc swallow; `Left` for primary-on-disabled, `Right`/`Middle`/`XButton1`/`XButton2` for non-primary
+}
+
 struct PressSession {
     pointer_id: u32,
     captured_kind: CaptionButtonKind,
-    device: PointerDeviceKind,
+    mode: PressSessionMode,
 }
 ```
 
@@ -322,7 +353,28 @@ For Minimize / Maximize, visibility and actionability are separate: if exactly o
 
 Disabled Minimize / Maximize buttons are suppressed from action and interaction, not from layout: they never enter Hovered / Pressed, `on_pointer_down` ignores them, and `on_pointer_up` never returns an action for them. Do not collapse disabled buttons out of the strip; collapse only when both Minimize and Maximize are hidden.
 
-**Primary-button-only activation.** The strip responds only to the primary action of a pointer ([`POINTER_CHANGE_FIRSTBUTTON_DOWN`](https://learn.microsoft.com/windows/win32/api/winuser/ne-winuser-pointer_button_change_type) / `..._UP` for mouse / pen, contact for touch). The wndproc computes `is_primary` from `POINTER_INFO.ButtonChangeType` and only invokes `strip.on_pointer_down` / `strip.on_pointer_up` (and suppresses the corresponding `WM_NCPOINTERDOWN` / `WM_NCPOINTERUP`) for primary events; non-primary presses over caption-button hit-tests fall through to the existing dispatch as ordinary `PointerDown` / `PointerUp` with `non_client_area = true`. The wndproc also short-circuits `on_pointerupdate`'s Kotlin-event dispatch for caption-button hit-test areas regardless of pointer state, so `Event::PointerUpdated` / `PointerEntered` / mid-contact button-change events never surface for the strip's region. Right-click on a caption button is not an action; that gesture belongs to the system-menu surface (future work).
+**Primary-button-only activation; full-press suppression.** The strip *acts* only on the primary action of a pointer ([`POINTER_CHANGE_FIRSTBUTTON_DOWN`](https://learn.microsoft.com/windows/win32/api/winuser/ne-winuser-pointer_button_change_type) / `..._UP` for mouse / pen, contact for touch). The wndproc computes `is_primary` from `POINTER_INFO.ButtonChangeType` and only invokes `strip.on_pointer_down` / `strip.on_pointer_up` for primary events. *Suppression* is broader. Acceptance criteria, by case:
+
+| Button | Press location | Release location | Activation? | Kotlin passthrough? |
+|---|---|---|---|---|
+| Primary | Enabled strip button | Same enabled button | yes | no |
+| Primary | Enabled strip button | Elsewhere (drag-off) | no | no |
+| Primary | Elsewhere | Any enabled strip button | no | yes (UP only) |
+| Primary | Disabled strip button | Anywhere | no | no |
+| Non-primary | Any strip button | Anywhere | no | no |
+| Non-primary | Elsewhere | Any strip button | no | yes (DOWN and UP both) |
+
+These outcomes are produced by two wndproc branches (the primary-action path and `consume_swallowed_release`) plus the implicit fallthrough — case (4) needs no branch because chrome doesn't intervene when the press wasn't on the strip.
+
+(1) **Primary-on-enabled.** `on_pointer_down` records `mode = Active`. The wndproc's `is_primary && strip_owns_press` branch (gated by `has_active_press_for`, now matching `Active | Suppressed { held_button: PointerButton::Left }`) invokes `on_pointer_up` — which dispatches a `CaptionButtonAction` if released over the same button.
+
+(2) **Primary-on-disabled.** `on_pointer_down` records `mode = Suppressed { held_button: Left }`. The same `has_active_press_for` branch matches, so the same wndproc path runs; `on_pointer_up` returns `None` silently and no action fires.
+
+(3) **Non-primary press over the strip, release anywhere.** The wndproc calls `strip.track_swallowed_press(kind, pointer_id, button)` to record `mode = Suppressed { held_button: button }`. The matching UP is drained by `strip.consume_swallowed_release(pointer_id, button)` — keyed on `(pointer_id, button)` rather than hit-test, so it works regardless of where the runtime's implicit pointer capture routes the UP.
+
+(4) **Press elsewhere, release over the strip (any button).** No session was recorded; `consume_swallowed_release` returns false; the bottom-of-function dispatch emits the `PointerUp` event. Chrome ownership scopes to cycles whose DOWN was on the strip — applies equally to primary and non-primary.
+
+`WM_POINTERCAPTURECHANGED` requires no `event_loop.rs` change: the existing call to `strip.on_pointer_cancel(pointer_id)` already drops any session for the cancelled pointer regardless of mode. The wndproc also short-circuits `on_pointerupdate`'s Kotlin-event dispatch for caption-button hit-test areas regardless of pointer state, so `Event::PointerUpdated` / `PointerEntered` / mid-contact button-change events never surface for the strip's region. The strip owns its hit-test rectangle end-to-end: Kotlin never sees `PointerDown` / `PointerUp` / `PointerUpdated` with `non_client_area = true` for points inside the strip, nor any release whose press began there. Right-click on a caption button remains an unhandled gesture — that surface is owned by the system-menu work tracked separately in `TODO.md`. The single-`Option<PressSession>` design retains the strip's existing single-press-at-a-time limitation: concurrent multi-button or multi-pointer presses (e.g. holding right while pressing left, or a touch + mouse hold) drop the second DOWN; its matching UP will leak.
 
 Disabled visible Minimize / Maximize map to `HTCAPTION`. This matches Win32's native default: `DefWindowProcW(WM_NCHITTEST)` returns `HTCAPTION` for native Min/Max button rectangles (including the *enabled* ones in `min && max`), and `DwmDefWindowProc(WM_NCHITTEST)` does not handle these hit-tests — implementation-observed on Windows 11. The strip therefore must return `HTMINBUTTON` / `HTMAXBUTTON` for *enabled* buttons (Snap Layouts requires `HTMAXBUTTON` per the doc) and `HTCAPTION` for disabled ones. Manual acceptance verifies disabled Min/Max fire no actions and disabled Maximize shows no Snap Layouts.
 
@@ -506,7 +558,7 @@ Implementation: `ColorKeyFrameAnimation` started via `Compositor.CreateColorKeyF
 | `WM_NCHITTEST` | `hit_test(point)` | cheap (geometry math) |
 | `WM_NCPOINTERUPDATE` entering/staying in the window NC area | window arms NC leave tracking; strip receives `on_pointer_update(Some(kind), id, device)` over an enabled button or `on_pointer_update(None, id, device)` elsewhere | cheap (state + brush) |
 | `WM_NCPOINTERDOWN` over an enabled button (primary) | `on_pointer_down(kind, id, device)` | cheap |
-| `WM_NCPOINTERUP` or `WM_POINTERUP` after a caption-button press | `on_pointer_up(Some(kind) / None, id) -> Option<CaptionButtonAction>`; action fires when release is over the captured enabled button. The wndproc invokes the strip and suppresses the Kotlin-facing `PointerUp` only for primary releases of strip-owned press sessions; everything else (non-primary releases, primary releases without an active strip session) falls through to the existing dispatch so Kotlin sees a matching `PointerUp` for its earlier `PointerDown`. | cheap |
+| `WM_NCPOINTERUP` or `WM_POINTERUP` after a caption-button press | `on_pointer_up(Some(kind) / None, id) -> Option<CaptionButtonAction>`; action fires when release is over the captured enabled button. UPs whose DOWN was on the strip are consumed (`Active` and `Suppressed`-`Left` via the primary branch, non-primary via `consume_swallowed_release`); releases whose press began outside the strip fall through to Kotlin as `PointerUp` events. | cheap |
 | `WM_POINTERCAPTURECHANGED` | `on_pointer_cancel(id)` for a matching active press session (and consume only in that case); cleanup only, no action | cheap |
 | `WM_NCMOUSELEAVE` | `on_nc_mouse_leave()` (also: window clears tracking armed) | cheap |
 | `WM_NCCALCSIZE` (after client-rect calc) | `on_resize(client_size, max_chrome_y)` | cheap (`SetOffset` per button + strip-position set) |

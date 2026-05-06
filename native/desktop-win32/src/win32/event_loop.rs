@@ -701,14 +701,16 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPA
         if let Some(kind) = kind {
             let button_change = pointer_info.get_pointer_button_change();
             let is_primary = button_change.kind() == PointerButtonChangeKind::Pressed && button_change.button() == PointerButton::Left;
-            if is_primary {
-                if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+            if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+                if is_primary {
                     let device = device_kind_for(&pointer_info);
                     let _ = strip.on_pointer_down(kind, pointer_info.pointer_id(), device);
+                } else {
+                    strip.track_swallowed_press(kind, pointer_info.pointer_id(), button_change.button());
                 }
-                return Some(LRESULT(0));
             }
-            // Non-primary falls through to the existing dispatch.
+            // Any press over the strip is chrome — consume even if no strip exists.
+            return Some(LRESULT(0));
         }
     }
 
@@ -770,6 +772,18 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
                 }
             }
             return Some(LRESULT(0));
+        }
+        // Drain tracked Suppressed sessions; press-elsewhere cycles fall
+        // through symmetrically with their PointerDown.
+        if !is_primary && button_change.kind() == PointerButtonChangeKind::Released {
+            let consumed = window
+                .caption_buttons
+                .borrow_mut()
+                .as_mut()
+                .is_some_and(|s| s.consume_swallowed_release(pointer_info.pointer_id(), button_change.button()));
+            if consumed {
+                return Some(LRESULT(0));
+            }
         }
     }
 

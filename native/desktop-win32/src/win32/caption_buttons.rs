@@ -47,6 +47,7 @@ use super::{
     appearance::{Appearance, HighContrast},
     composition::{D2dContext, RenderingDeviceReplacedRegistration},
     geometry::{LogicalSize, PhysicalPixels, PhysicalPoint, PhysicalSize},
+    pointer::PointerButton,
     window::Window,
 };
 
@@ -90,14 +91,22 @@ enum ButtonInteraction {
     PressedDraggedOff,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PressSessionMode {
+    /// Primary press on an enabled button. Visual capture engaged; matched
+    /// primary UP dispatches a `CaptionButtonAction` if released over the
+    /// same button. Held button is implicitly `Left`.
+    Active,
+    /// Wndproc-level swallow; no visual capture. `held_button = Left` for
+    /// primary-on-disabled, `Right` / `Middle` / `XButton1` / `XButton2` for non-primary.
+    Suppressed { held_button: PointerButton },
+}
+
 #[derive(Debug, Clone, Copy)]
 struct PressSession {
     pointer_id: u32,
     captured_kind: CaptionButtonKind,
-    // Recorded for future device-aware behaviour (e.g. distinguishing touch
-    // taps from mouse presses); the visual state-machine doesn't read it yet.
-    #[allow(dead_code)]
-    device: PointerDeviceKind,
+    mode: PressSessionMode,
 }
 
 /// Bitset of which caption-button kinds are visible on a window. Derived from
@@ -158,20 +167,31 @@ fn resolve_interaction(
     }
     let is_pointer_over_self = pointer_over_kind == Some(kind);
     match press_session {
-        Some(s) if s.captured_kind == kind => {
+        Some(s) if s.mode == PressSessionMode::Active && s.captured_kind == kind => {
             if is_pointer_over_self {
                 ButtonInteraction::Pressed
             } else {
                 ButtonInteraction::PressedDraggedOff
             }
         }
-        Some(_) => ButtonInteraction::Idle,
-        None if is_pointer_over_self => match pointer_device {
+        Some(s) if s.mode == PressSessionMode::Active => ButtonInteraction::Idle,
+        // Suppressed session OR no session: fall through to hover resolution.
+        // A non-primary press / disabled-primary press is consumed silently
+        // by the wndproc and must not suppress hover on neighbouring
+        // buttons — Suppressed sessions have no visual capture.
+        _ if is_pointer_over_self => match pointer_device {
             Some(PointerDeviceKind::Touch) => ButtonInteraction::Idle,
             _ => ButtonInteraction::Hovered,
         },
-        None => ButtonInteraction::Idle,
+        _ => ButtonInteraction::Idle,
     }
+}
+
+/// Predicate behind `CaptionButtonStrip::consume_swallowed_release`. Free
+/// so unit tests can exercise it without constructing a full
+/// `CaptionButtonStrip` (which requires live Composition / D2D resources).
+fn is_swallowed_release_match(session: &PressSession, pointer_id: u32, button: PointerButton) -> bool {
+    session.pointer_id == pointer_id && matches!(session.mode, PressSessionMode::Suppressed { held_button } if held_button == button)
 }
 
 struct CaptionTheme {
@@ -597,18 +617,29 @@ impl CaptionButtonStrip {
         if self.press_session.is_some() {
             return Ok(());
         }
-        if self.button_for(kind).map(|b| b.availability) != Some(Availability::Enabled) {
-            return Ok(());
-        }
+        let is_enabled = self.button_for(kind).map(|b| b.availability) == Some(Availability::Enabled);
+        // Disabled-primary records Suppressed{Left} so has_active_press_for
+        // matches and the existing primary-release branch consumes silently.
+        let mode = if is_enabled {
+            PressSessionMode::Active
+        } else {
+            PressSessionMode::Suppressed {
+                held_button: PointerButton::Left,
+            }
+        };
         self.press_session = Some(PressSession {
             pointer_id,
             captured_kind: kind,
-            device,
+            mode,
         });
-        self.pointer_over_kind = Some(kind);
-        self.pointer_device = Some(device);
-        self.apply_visuals_to_all_buttons()?;
-        self.compositor_controller.Commit()?;
+        if mode == PressSessionMode::Active {
+            self.pointer_over_kind = Some(kind);
+            self.pointer_device = Some(device);
+            self.apply_visuals_to_all_buttons()?;
+            self.compositor_controller.Commit()?;
+        }
+        // Suppressed: no visual side effects (spec §4.3 — disabled Min/Max
+        // never enter Hovered / Pressed).
         Ok(())
     }
 
@@ -622,23 +653,33 @@ impl CaptionButtonStrip {
             _ => return Ok(None),
         };
         self.press_session = None;
-        let action = if Some(session.captured_kind) == kind_under_pointer {
-            Some(self.action_for(session.captured_kind))
-        } else {
-            None
-        };
-        self.pointer_over_kind = kind_under_pointer;
-        self.apply_visuals_to_all_buttons()?;
-        self.compositor_controller.Commit()?;
-        Ok(action)
+        match session.mode {
+            PressSessionMode::Active => {
+                let action = (Some(session.captured_kind) == kind_under_pointer).then(|| self.action_for(session.captured_kind));
+                self.pointer_over_kind = kind_under_pointer;
+                self.apply_visuals_to_all_buttons()?;
+                self.compositor_controller.Commit()?;
+                Ok(action)
+            }
+            // Disabled-primary cycle (only Suppressed path that reaches
+            // here, per has_active_press_for); fire no action.
+            PressSessionMode::Suppressed { .. } => Ok(None),
+        }
     }
 
     pub fn on_pointer_cancel(&mut self, pointer_id: u32) -> anyhow::Result<()> {
+        let was_active = matches!(
+            self.press_session,
+            Some(s) if s.pointer_id == pointer_id && s.mode == PressSessionMode::Active
+        );
         let should_cancel = matches!(self.press_session, Some(s) if s.pointer_id == pointer_id);
         if should_cancel {
             self.press_session = None;
-            self.apply_visuals_to_all_buttons()?;
-            self.compositor_controller.Commit()?;
+            // Visuals only need reverting if Active had been engaged.
+            if was_active {
+                self.apply_visuals_to_all_buttons()?;
+                self.compositor_controller.Commit()?;
+            }
         }
         Ok(())
     }
@@ -659,12 +700,59 @@ impl CaptionButtonStrip {
         self.button_for(kind).map(|b| b.availability) == Some(Availability::Enabled)
     }
 
-    /// True iff the strip owns a press session for `pointer_id`. Used by the
-    /// wndproc to gate Kotlin-facing `PointerUp` suppression on whether the
-    /// strip is the actual owner of the matching `PointerDown` (multi-pointer
-    /// safety — a touch hold must not swallow a mouse release).
+    /// True iff the strip owns a press session for `pointer_id` whose
+    /// matching *primary* (Left) UP must be consumed by the wndproc.
+    /// Returns true for `Active` and for primary-on-disabled
+    /// `Suppressed { held_button: Left }`; returns false for non-primary
+    /// `Suppressed`, which the wndproc drains through its own
+    /// non-primary release path.
     pub(crate) const fn has_active_press_for(&self, pointer_id: u32) -> bool {
-        matches!(self.press_session, Some(s) if s.pointer_id == pointer_id)
+        matches!(
+            self.press_session,
+            Some(s) if s.pointer_id == pointer_id && matches!(
+                s.mode,
+                PressSessionMode::Active
+                    | PressSessionMode::Suppressed { held_button: PointerButton::Left }
+            )
+        )
+    }
+
+    /// Record a wndproc-consumed non-primary DOWN as a `Suppressed` session
+    /// keyed by `held_button`; the matching UP is drained by
+    /// `consume_swallowed_release`. No-op if a session already exists
+    /// (concurrent multi-button presses drop the second DOWN — its UP will
+    /// leak; consistent with `on_pointer_down`'s single-press limitation).
+    /// `kind` populates `captured_kind` for struct-shape uniformity with
+    /// `Active`; Suppressed-mode consumers don't read it.
+    pub(crate) const fn track_swallowed_press(&mut self, kind: CaptionButtonKind, pointer_id: u32, button: PointerButton) {
+        if self.press_session.is_some() {
+            return;
+        }
+        self.press_session = Some(PressSession {
+            pointer_id,
+            captured_kind: kind,
+            mode: PressSessionMode::Suppressed { held_button: button },
+        });
+    }
+
+    /// Drain a `Suppressed` session whose pointer-id matches and whose
+    /// held button is `button`. Returns `true` iff the session was found
+    /// and dropped — callers swallowing the matching UP should treat
+    /// `true` as the signal to suppress further dispatch.
+    ///
+    /// Only `Suppressed` sessions are drained here; `Active` sessions
+    /// continue to flow through `on_pointer_up`'s primary-action path.
+    pub(crate) fn consume_swallowed_release(&mut self, pointer_id: u32, button: PointerButton) -> bool {
+        let matches_session = self
+            .press_session
+            .as_ref()
+            .is_some_and(|s| is_swallowed_release_match(s, pointer_id, button));
+        if matches_session {
+            self.press_session = None;
+            true
+        } else {
+            false
+        }
     }
 
     const fn action_for(&self, kind: CaptionButtonKind) -> CaptionButtonAction {
@@ -1020,11 +1108,11 @@ mod tests {
     use crate::win32::geometry::PhysicalPixels;
     use crate::win32::window_api::{WindowStyle, WindowSystemBackdropType, WindowTitleBarKind};
 
-    fn session(kind: CaptionButtonKind, device: PointerDeviceKind) -> PressSession {
+    fn session(kind: CaptionButtonKind, _device: PointerDeviceKind) -> PressSession {
         PressSession {
             pointer_id: 1,
             captured_kind: kind,
-            device,
+            mode: PressSessionMode::Active,
         }
     }
 
@@ -1170,6 +1258,99 @@ mod tests {
             Some(&s),
         );
         assert_eq!(r, ButtonInteraction::Idle);
+    }
+
+    #[test]
+    fn suppressed_session_does_not_drive_pressed_state_on_captured() {
+        // A Suppressed session — e.g. non-primary press over Close —
+        // must not render Close as Pressed even though the cursor is
+        // over the captured button. Verifies the `mode == Active` gate
+        // on the first match arm.
+        let suppressed = PressSession {
+            pointer_id: 1,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Suppressed {
+                held_button: PointerButton::Right,
+            },
+        };
+        let r = resolve_interaction(
+            CaptionButtonKind::Close,
+            Availability::Enabled,
+            Some(CaptionButtonKind::Close),
+            Some(PointerDeviceKind::Mouse),
+            Some(&suppressed),
+        );
+        assert_eq!(r, ButtonInteraction::Hovered);
+    }
+
+    #[test]
+    fn suppressed_session_does_not_suppress_neighbour_hover() {
+        // A Suppressed session over Close must not force Maximize to
+        // Idle when the cursor moves over Maximize. Primary presses
+        // suppress neighbour hover (existing rule, preserved by the
+        // `mode == Active` second-arm gate); non-primary swallows do not.
+        let suppressed = PressSession {
+            pointer_id: 1,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Suppressed {
+                held_button: PointerButton::Right,
+            },
+        };
+        let r = resolve_interaction(
+            CaptionButtonKind::Maximize,
+            Availability::Enabled,
+            Some(CaptionButtonKind::Maximize),
+            Some(PointerDeviceKind::Mouse),
+            Some(&suppressed),
+        );
+        assert_eq!(r, ButtonInteraction::Hovered);
+    }
+
+    #[test]
+    fn active_session_still_suppresses_neighbour_hover() {
+        // Regression check: the existing rule ("primary press over X
+        // suppresses hover on every other button") must still hold.
+        let active = PressSession {
+            pointer_id: 1,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Active,
+        };
+        let r = resolve_interaction(
+            CaptionButtonKind::Maximize,
+            Availability::Enabled,
+            Some(CaptionButtonKind::Maximize),
+            Some(PointerDeviceKind::Mouse),
+            Some(&active),
+        );
+        assert_eq!(r, ButtonInteraction::Idle);
+    }
+
+    // --- track_swallowed_press / consume_swallowed_release ---
+
+    #[test]
+    fn swallowed_release_matches_pointer_and_button() {
+        let s = PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Suppressed {
+                held_button: PointerButton::Right,
+            },
+        };
+        assert!(!is_swallowed_release_match(&s, 7, PointerButton::Left)); // wrong button
+        assert!(!is_swallowed_release_match(&s, 8, PointerButton::Right)); // wrong pointer
+        assert!(is_swallowed_release_match(&s, 7, PointerButton::Right)); // match
+    }
+
+    #[test]
+    fn swallowed_release_skips_active_sessions() {
+        let s = PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Active,
+        };
+        // Active sessions must NOT match — the primary-action path owns
+        // their drainage.
+        assert!(!is_swallowed_release_match(&s, 7, PointerButton::Left));
     }
 
     // --- visible-button derivation ---
