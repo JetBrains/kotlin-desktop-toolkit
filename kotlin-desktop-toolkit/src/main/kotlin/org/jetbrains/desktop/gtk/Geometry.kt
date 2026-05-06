@@ -24,7 +24,7 @@ public data class LogicalSize(
     val height: Int,
 ) {
     init {
-        check(width >= 0 && height >= 0) {
+        require(width >= 0 && height >= 0) {
             "Invalid size (both width and height must be positive)"
         }
     }

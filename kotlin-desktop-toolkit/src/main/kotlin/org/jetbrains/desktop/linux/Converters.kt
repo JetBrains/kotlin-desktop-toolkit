@@ -103,14 +103,16 @@ internal fun splitCsv(s: String): List<String> {
 }
 
 internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
-    width = NativeLogicalSize.width(s).toUInt(),
-    height = NativeLogicalSize.height(s).toUInt(),
+    width = NativeLogicalSize.width(s),
+    height = NativeLogicalSize.height(s),
 )
 
-internal fun LogicalSize.toNative(arena: Arena): MemorySegment {
+internal fun LogicalSize?.toNative(arena: Arena): MemorySegment {
+    val width = this?.width ?: 0
+    val height = this?.height ?: 0
     val result = NativeLogicalSize.allocate(arena)
-    NativeLogicalSize.width(result, width.toInt())
-    NativeLogicalSize.height(result, height.toInt())
+    NativeLogicalSize.width(result, width)
+    NativeLogicalSize.height(result, height)
     return result
 }
 
@@ -128,10 +130,10 @@ internal fun LogicalPoint.toNative(arena: Arena): MemorySegment {
 
 internal fun LogicalRect.toNative(arena: Arena): MemorySegment {
     val result = NativeLogicalRect.allocate(arena)
-    NativeLogicalRect.x(result, x.toInt())
-    NativeLogicalRect.y(result, y.toInt())
-    NativeLogicalRect.width(result, width.toInt())
-    NativeLogicalRect.height(result, height.toInt())
+    NativeLogicalRect.x(result, x)
+    NativeLogicalRect.y(result, y)
+    NativeLogicalRect.width(result, width)
+    NativeLogicalRect.height(result, height)
     return result
 }
 
