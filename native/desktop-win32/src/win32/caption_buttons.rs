@@ -226,7 +226,6 @@ struct CaptionTheme {
     backplate_rest: windows::UI::Color,
     backplate_hover: windows::UI::Color,
     backplate_pressed: windows::UI::Color,
-    backplate_inactive: windows::UI::Color,
     foreground_rest: windows::UI::Color,
     foreground_hover: windows::UI::Color,
     foreground_pressed: windows::UI::Color,
@@ -255,17 +254,18 @@ impl CaptionTheme {
     // Close-specific reds: `microsoft/terminal@e4e3f08efca…` MinMaxCloseControl.xaml
     // (`Opacity 0.9` → α=0xE6; `Opacity 0.7` → α=0xB3 — valid only because the
     // source RGB is fully opaque; both rounded to nearest).
+    // Inactive foreground: `TitleBarDeactivatedForegroundBrush` →
+    // `TextFillColorTertiary` (microsoft-ui-xaml `TitleBar` resources).
     const fn light() -> Self {
         Self {
             backplate_rest: rgba(0, 0, 0, 0),
             backplate_hover: rgba(0, 0, 0, 0x09),   // SubtleFillColorSecondary
             backplate_pressed: rgba(0, 0, 0, 0x06), // SubtleFillColorTertiary
-            backplate_inactive: rgba(0, 0, 0, 0),
-            foreground_rest: rgba(0, 0, 0, 0xE4), // TextFillColorPrimary
+            foreground_rest: rgba(0, 0, 0, 0xE4),   // TextFillColorPrimary
             foreground_hover: rgba(0, 0, 0, 0xE4),
             foreground_pressed: rgba(0, 0, 0, 0x9E),  // TextFillColorSecondary
             foreground_disabled: rgba(0, 0, 0, 0x5C), // TextFillColorDisabled
-            foreground_inactive: rgba(0, 0, 0, 0x5C),
+            foreground_inactive: rgba(0, 0, 0, 0x72),
             close_backplate_hover: rgba(0xC4, 0x2B, 0x1C, 0xFF),
             close_backplate_pressed: rgba(0xC4, 0x2B, 0x1C, 0xE6),
             close_foreground_hover: rgba(0xFF, 0xFF, 0xFF, 0xFF),
@@ -278,12 +278,11 @@ impl CaptionTheme {
             backplate_rest: rgba(0, 0, 0, 0),
             backplate_hover: rgba(0xFF, 0xFF, 0xFF, 0x0F),   // SubtleFillColorSecondary
             backplate_pressed: rgba(0xFF, 0xFF, 0xFF, 0x0A), // SubtleFillColorTertiary
-            backplate_inactive: rgba(0, 0, 0, 0),
-            foreground_rest: rgba(0xFF, 0xFF, 0xFF, 0xFF), // TextFillColorPrimary
+            foreground_rest: rgba(0xFF, 0xFF, 0xFF, 0xFF),   // TextFillColorPrimary
             foreground_hover: rgba(0xFF, 0xFF, 0xFF, 0xFF),
             foreground_pressed: rgba(0xFF, 0xFF, 0xFF, 0xC5),  // TextFillColorSecondary
             foreground_disabled: rgba(0xFF, 0xFF, 0xFF, 0x5D), // TextFillColorDisabled
-            foreground_inactive: rgba(0xFF, 0xFF, 0xFF, 0x5D),
+            foreground_inactive: rgba(0xFF, 0xFF, 0xFF, 0x87),
             close_backplate_hover: rgba(0xC4, 0x2B, 0x1C, 0xFF),
             close_backplate_pressed: rgba(0xC4, 0x2B, 0x1C, 0xE6),
             close_foreground_hover: rgba(0xFF, 0xFF, 0xFF, 0xFF),
@@ -302,7 +301,6 @@ impl CaptionTheme {
             backplate_rest: face,
             backplate_hover: highlight,
             backplate_pressed: highlight,
-            backplate_inactive: face,
             foreground_rest: text,
             foreground_hover: highlight_text,
             foreground_pressed: highlight_text,
@@ -1110,9 +1108,6 @@ fn colours_for(
     if availability == Availability::Disabled {
         return (theme.backplate_rest, theme.foreground_disabled);
     }
-    if !is_active {
-        return (theme.backplate_inactive, theme.foreground_inactive);
-    }
     if kind == CaptionButtonKind::Close {
         match interaction {
             ButtonInteraction::Hovered => return (theme.close_backplate_hover, theme.close_foreground_hover),
@@ -1121,7 +1116,14 @@ fn colours_for(
         }
     }
     match interaction {
-        ButtonInteraction::Idle | ButtonInteraction::PressedDraggedOff => (theme.backplate_rest, theme.foreground_rest),
+        ButtonInteraction::Idle | ButtonInteraction::PressedDraggedOff => {
+            let foreground = if is_active {
+                theme.foreground_rest
+            } else {
+                theme.foreground_inactive
+            };
+            (theme.backplate_rest, foreground)
+        }
         ButtonInteraction::Hovered => (theme.backplate_hover, theme.foreground_hover),
         ButtonInteraction::Pressed => (theme.backplate_pressed, theme.foreground_pressed),
     }
@@ -1779,5 +1781,86 @@ mod tests {
         assert_eq!(g.hit_test(pt(799, 8)), Some(CaptionButtonKind::Close));
         assert_eq!(g.hit_test(pt(799, 39)), Some(CaptionButtonKind::Close));
         assert_eq!(g.hit_test(pt(799, 40)), None);
+    }
+
+    #[test]
+    fn inactive_idle_uses_tertiary_foreground_with_transparent_backplate_light() {
+        let theme = CaptionTheme::light();
+        let (bg, fg) = colours_for(
+            CaptionButtonKind::Minimize,
+            Availability::Enabled,
+            ButtonInteraction::Idle,
+            &theme,
+            false,
+        );
+        assert_eq!(bg, theme.backplate_rest);
+        assert_eq!(fg, rgba(0, 0, 0, 0x72));
+    }
+
+    #[test]
+    fn inactive_idle_uses_tertiary_foreground_dark() {
+        let theme = CaptionTheme::dark();
+        let (_, fg) = colours_for(
+            CaptionButtonKind::Minimize,
+            Availability::Enabled,
+            ButtonInteraction::Idle,
+            &theme,
+            false,
+        );
+        assert_eq!(fg, rgba(0xFF, 0xFF, 0xFF, 0x87));
+    }
+
+    #[test]
+    fn inactive_hovered_matches_active_hovered() {
+        let theme = CaptionTheme::dark();
+        let inactive = colours_for(
+            CaptionButtonKind::Minimize,
+            Availability::Enabled,
+            ButtonInteraction::Hovered,
+            &theme,
+            false,
+        );
+        let active = colours_for(
+            CaptionButtonKind::Minimize,
+            Availability::Enabled,
+            ButtonInteraction::Hovered,
+            &theme,
+            true,
+        );
+        assert_eq!(inactive, active);
+    }
+
+    #[test]
+    fn inactive_pressed_matches_active_pressed() {
+        let theme = CaptionTheme::light();
+        let inactive = colours_for(
+            CaptionButtonKind::Maximize,
+            Availability::Enabled,
+            ButtonInteraction::Pressed,
+            &theme,
+            false,
+        );
+        let active = colours_for(
+            CaptionButtonKind::Maximize,
+            Availability::Enabled,
+            ButtonInteraction::Pressed,
+            &theme,
+            true,
+        );
+        assert_eq!(inactive, active);
+    }
+
+    #[test]
+    fn inactive_close_hover_keeps_close_red() {
+        let theme = CaptionTheme::light();
+        let (bg, fg) = colours_for(
+            CaptionButtonKind::Close,
+            Availability::Enabled,
+            ButtonInteraction::Hovered,
+            &theme,
+            false,
+        );
+        assert_eq!(bg, theme.close_backplate_hover);
+        assert_eq!(fg, theme.close_foreground_hover);
     }
 }
