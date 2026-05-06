@@ -194,8 +194,7 @@ pub extern "C" fn application_clipboard_put(mime_types: BorrowedUtf8) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_clipboard_paste(serial: i32, supported_mime_types: BorrowedUtf8) {
-    let t = std::thread::current();
-    debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
+    debug!("application_clipboard_paste: {supported_mime_types:?}");
     ffi_boundary("application_clipboard_paste", || {
         let supported_mime_types_str = supported_mime_types.get("application_clipboard_paste: supported_mime_types")?;
         let supported_mime_types = MimeTypes::new(supported_mime_types_str);
@@ -218,8 +217,7 @@ pub extern "C" fn application_primary_selection_put(mime_types: BorrowedUtf8) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_primary_selection_paste(serial: i32, supported_mime_types: BorrowedUtf8) {
-    let t = std::thread::current();
-    debug!("application_clipboard_paste, thread id: {:?} ({:?})", t.id(), t.name());
+    debug!("application_primary_selection_paste: {supported_mime_types:?}");
     ffi_boundary("application_clipboard_paste", || {
         let supported_mime_types_str = supported_mime_types.get("application_primary_selection_paste: supported_mime_types")?;
         let supported_mime_types = MimeTypes::new(supported_mime_types_str);
