@@ -30,10 +30,10 @@ use windows::{
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
                 GetClientRect, GetPropW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW,
-                RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_SHOW, SWP_NOACTIVATE,
-                SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
-                ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW,
-                WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
+                RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW,
+                SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos,
+                SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WM_SYSCOMMAND,
+                WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
             },
         },
     },
@@ -358,6 +358,37 @@ impl Window {
             backdrop_visual.SetSize(windows_numerics::Vector2 {
                 X: size.width.0 as f32,
                 Y: size.height.0 as f32,
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Win11 maximize-overhang inset in physical pixels: `SM_CYSIZEFRAME`
+    /// (DPI-aware) when resizable, maximized, and non-system title bar;
+    /// `0` otherwise.
+    pub(crate) fn max_chrome_y(&self) -> i32 {
+        if !self.is_resizable() || !self.has_non_system_title_bar() || !self.is_maximized() {
+            return 0;
+        }
+        let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
+        unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) }
+    }
+
+    /// Queues a Y-offset on `content_layer` so Kotlin / ANGLE content lines
+    /// up with the visible monitor edge when maximized — composition (0,0)
+    /// tracks the (off-monitor) window-rect top-left, mirroring the
+    /// strip's `composition_root` shift.
+    ///
+    /// Does not commit; caller must arrange a strip commit to publish the
+    /// queued offset. See `TODO.md` `resize_backdrop_tint` / caption-button
+    /// resize commit ordering invariant.
+    pub(crate) fn set_content_top_offset(&self, top_offset_px: i32) -> anyhow::Result<()> {
+        if let Some(layer) = self.content_layer.borrow().as_ref() {
+            #[allow(clippy::cast_precision_loss)]
+            layer.SetOffset(windows_numerics::Vector3 {
+                X: 0.0,
+                Y: top_offset_px as f32,
+                Z: 0.0,
             })?;
         }
         Ok(())

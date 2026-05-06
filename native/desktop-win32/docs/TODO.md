@@ -68,13 +68,6 @@ This list is point-in-time. Verify against current code before acting.
 
 ## Capability gaps
 
-### Custom-titlebar maximized content layer Y-offset
-- **Where**: `composition.rs` 3-layer split introduced by the caption-buttons plan (spec §3.3, §3.6).
-- **What**: composition (0,0) tracks the HWND window-rect top-left ([Visual.Offset](https://learn.microsoft.com/uwp/api/windows.ui.composition.visual.offset?view=winrt-26100)). When maximized, `WM_NCCALCSIZE` insets `rgrc[0].top` by `max_chrome_y` (`SM_CYSIZEFRAME` per manual verification) so the client rect sits at the monitor edge, but composition (0,0) still tracks the window-rect — `max_chrome_y` pixels off-monitor. The strip's `composition_root` is offset to compensate; `content_layer` (ANGLE / Kotlin) is not. If §7.3 maximize-content-placement testing shows Kotlin content clipping, mirror the strip's Y-shift onto `content_layer` from the same wndproc sites.
-- **Trigger**: spec §7.3 maximize-content-placement bullet reports content clipped at top monitor edge.
-- **Sketch when implementing**: `content_layer.SetOffset(Vector3 { X: 0.0, Y: max_chrome_y as f32, Z: 0.0 })` from `on_max_state_change` and `on_nccalcsize`; commit via `compositor_controller.Commit()`.
-- **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §3.3, §3.6.
-
 ### Caption-button proactive device-loss detection
 - **Where**: `composition.rs` — `with_d2d_render_target` device-loss recovery (caption-buttons spec §6.2).
 - **What**: idle Custom-titlebar windows don't notice device loss until the next state change rasterises; worst case one frame of stale visuals.

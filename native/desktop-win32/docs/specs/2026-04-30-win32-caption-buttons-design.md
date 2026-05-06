@@ -273,7 +273,7 @@ impl CaptionButtonStrip {
     ) -> anyhow::Result<()>;
     pub fn on_rendering_device_replaced(&mut self) -> anyhow::Result<()>;
     pub fn on_max_state_change(&mut self, is_maximized: bool) -> anyhow::Result<()>;
-    pub fn on_resize(&self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()>;
+    pub fn on_resize(&mut self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()>;
 }
 
 // The wndproc filters primary at the call site, but suppression is
@@ -559,14 +559,14 @@ Implementation: `ColorKeyFrameAnimation` started via `Compositor.CreateColorKeyF
 | `WM_NCPOINTERUPDATE` entering/staying in the window NC area | window arms NC leave tracking; strip receives `on_pointer_update(Some(kind), id, device)` over an enabled button or `on_pointer_update(None, id, device)` elsewhere | cheap (state + brush) |
 | `WM_NCPOINTERDOWN` over an enabled button (primary) | `on_pointer_down(kind, id, device)` | cheap |
 | `WM_NCPOINTERUP` or `WM_POINTERUP` after a caption-button press | `on_pointer_up(Some(kind) / None, id) -> Option<CaptionButtonAction>`; action fires when release is over the captured enabled button. UPs whose DOWN was on the strip are consumed (`Active` and `Suppressed`-`Left` via the primary branch, non-primary via `consume_swallowed_release`); releases whose press began outside the strip fall through to Kotlin as `PointerUp` events. | cheap |
-| `WM_POINTERCAPTURECHANGED` | `on_pointer_cancel(id)` for a matching active press session (and consume only in that case); cleanup only, no action | cheap |
+| `WM_POINTERCAPTURECHANGED` | `on_pointer_cancel(id)` for any session whose `pointer_id` matches; cleanup only, no action | cheap |
 | `WM_NCMOUSELEAVE` | `on_nc_mouse_leave()` (also: window clears tracking armed) | cheap |
-| `WM_NCCALCSIZE` (after client-rect calc) | `on_resize(client_size, max_chrome_y)` | cheap (`SetOffset` per button + strip-position set) |
+| `WM_NCCALCSIZE` (after client-rect calc) | `Window::set_content_top_offset(max_chrome_y)` (Custom only) and `on_resize(client_size, max_chrome_y)` | cheap (`SetOffset` per button + strip-position set + content-layer offset; single `Commit` from `on_resize`) |
 | `WM_DPICHANGED` | `on_dpi_change(new_scale)` | **expensive** (re-rasterise all glyph surfaces) |
 | `Appearance` event | `on_appearance_change(appearance, hc)` | **expensive iff foreground-rest colour changed** |
 | `HighContrast` event | same as above with new `hc` | **expensive** (glyph code points swap E921↔EF2D etc.) |
 | `WM_ACTIVATE` | `on_activate(is_active)` | cheap (theme re-resolve, brush updates) |
-| `WM_WINDOWPOSCHANGED` | `on_max_state_change(IsZoomed(hwnd))` (strip short-circuits unchanged) | **expensive for Maximize button only** (E922 ↔ E923) on actual transitions; Y-shift handled by `on_resize` |
+| `WM_WINDOWPOSCHANGED` | `Window::set_content_top_offset(max_chrome_y)` (Custom only) and `on_max_state_change(IsZoomed(hwnd))` | **expensive for Maximize button only** (E922 ↔ E923) on actual transitions; strip + content-layer Y-shift published by `on_max_state_change`'s commit |
 
 The `WM_WINDOWPOSCHANGED` row covers both user-driven (button click) and programmatic (`Window::maximize` / `Window::restore`) maximize-state transitions.
 
@@ -692,7 +692,7 @@ These tests live in `caption_buttons.rs` `#[cfg(test)] mod tests { ... }`. No Wi
 - **High contrast** — `HighContrast { Off, On }` is binary (`appearance.rs:55-58`); the strip does not distinguish among the four shipped HC themes (HC #1, HC #2, HC White, HC Black). The actual colours come from `GetSysColor` reads (§4.4) and therefore vary per theme even though the toolkit's enum is binary. Manually verify: (a) glyph code points swap to the contrast variants U+EF2C / EF2D / EF2E / EF2F when HC turns On; (b) cycling through all four shipped HC themes under HC On — the strip's backplate, glyph foreground, hover, and pressed colours read from `COLOR_BTNFACE` / `COLOR_BTNTEXT` / `COLOR_HIGHLIGHT` / `COLOR_HIGHLIGHTTEXT` / `COLOR_GRAYTEXT`, so each theme paints a visibly different palette and no colour is hard-coded; (c) a side-by-side visual comparison against a native Win32 chrome window (e.g., File Explorer) under each HC theme — caption-button colours match. Divergence from native colour pairs (e.g., hover not using `HIGHLIGHT` / `HIGHLIGHTTEXT`) is a bug, not acceptable variance.
 - Maximize → Restore via the button — glyph swap U+E922 ↔ U+E923.
 - **Maximized window edge inset** — when the window is maximized on each of (a) a single-monitor setup, (b) a primary monitor with the taskbar at bottom, (c) a primary monitor with the taskbar at top, (d) a secondary monitor at a different DPI scale than the primary: every caption button is fully visible (no clipping at right or top edge), the strip's right edge sits flush against the inset client area, the Close button's top edge sits flush with the visible monitor edge (no clip, no excess gap above the buttons). The close button hover region maps correctly under the cursor, and Snap Layouts pop on the maximize button at the visually-correct location. Verifies §3.6 inset and strip-side Y-shift.
-- **Maximized Custom-titlebar content placement** — render Skiko content at client y=0 (e.g. a coloured rect), maximize, and confirm the rect's top sits flush with the visible monitor edge. If clipped, see TODO `Custom-titlebar maximized content layer Y-offset`.
+- **Maximized Custom-titlebar content placement** — render Skiko content at client y=0 (e.g. a coloured rect), maximize, and confirm the rect's top sits flush with the visible monitor edge.
 - Snap-layout flyout appears on Win11 hover over the maximize button.
 - Mouse, touch, and pen input — touch correctly skips the hover state.
 - DPI change by dragging across monitors with different scales — glyph re-rasterised crisply at the new scale; deterministic font size from `GetDesignGlyphMetrics` per §4.5 produces glyphs whose visible bbox matches the 10-epx target on each monitor.

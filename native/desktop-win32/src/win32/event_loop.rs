@@ -15,7 +15,7 @@ use windows::Win32::{
         Shell::{ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
         WindowsAndMessaging::{
             AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
-            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, IsZoomed, MINMAXINFO, MSG, NCCALCSIZE_PARAMS,
+            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS,
             SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
             SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_APP, WM_CHAR,
             WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS,
@@ -230,7 +230,13 @@ fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) 
         event_loop.handle_event(window, event);
     }
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let now_maximized = unsafe { IsZoomed(window.hwnd()) }.as_bool();
+        let now_maximized = window.is_maximized();
+        let max_chrome_y = window.max_chrome_y();
+        if window.has_custom_title_bar() {
+            let _ = window
+                .set_content_top_offset(max_chrome_y)
+                .inspect_err(|err| log::warn!("set_content_top_offset failed: {err}"));
+        }
         let _ = strip
             .on_max_state_change(now_maximized)
             .inspect_err(|err| log::warn!("strip on_max_state_change failed: {err}"));
@@ -392,16 +398,13 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         calcsize_params.rgrc[0].top -= rc.top;
     }
 
-    let is_maximized = unsafe { IsZoomed(hwnd) }.as_bool();
     // The off-monitor overhang only exists when `WS_THICKFRAME` is set
     // (spec §3.6); `WindowStyle::to_system` clears it when `!is_resizable`.
     // `max_chrome_y` stays 0 for non-resizable / system-titlebar / non-maximized
     // windows so the strip's `set_strip_position` does not shift buttons
     // down into the title-bar zone.
-    let mut max_chrome_y = 0;
-    if window.is_resizable() && is_maximized && window.has_non_system_title_bar() {
-        let dpi = unsafe { GetDpiForWindow(hwnd) };
-        max_chrome_y = unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) };
+    let max_chrome_y = window.max_chrome_y();
+    if max_chrome_y != 0 {
         // The non-system-titlebar handler leaves the top inset at 0 so the
         // title-bar area stays in the client rect; add the tested maximized
         // top overhang back here. Manual verification showed that including
@@ -423,6 +426,13 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let event = NCCalcSizeEvent { origin, size, scale };
     event_loop.handle_event(window, event);
     let _ = window.resize_backdrop_tint(size);
+    // Custom only: the strip's commit publishes the queued offset. None /
+    // System have no strip, so queueing here would leak the mutation.
+    if window.has_custom_title_bar() {
+        let _ = window
+            .set_content_top_offset(max_chrome_y)
+            .inspect_err(|err| log::warn!("set_content_top_offset failed: {err}"));
+    }
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         let _ = strip
             .on_resize(size, max_chrome_y)
@@ -814,7 +824,9 @@ fn on_pointercapturechanged(window: &Window, wparam: WPARAM) -> Option<LRESULT> 
     }
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         let pointer_id = u32::from(LOWORD!(wparam.0));
-        if strip.has_active_press_for(pointer_id) {
+        // Cleanup gate matches every owned session — `has_active_press_for`
+        // would leak non-primary `Suppressed` sessions on capture loss.
+        if strip.has_press_for(pointer_id) {
             let _ = strip.on_pointer_cancel(pointer_id);
             // Cancellation only — must not fire `CaptionButtonAction`.
             return Some(LRESULT(0));

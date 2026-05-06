@@ -102,7 +102,7 @@ enum PressSessionMode {
     Suppressed { held_button: PointerButton },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PressSession {
     pointer_id: u32,
     captured_kind: CaptionButtonKind,
@@ -192,6 +192,31 @@ fn resolve_interaction(
 /// `CaptionButtonStrip` (which requires live Composition / D2D resources).
 fn is_swallowed_release_match(session: &PressSession, pointer_id: u32, button: PointerButton) -> bool {
     session.pointer_id == pointer_id && matches!(session.mode, PressSessionMode::Suppressed { held_button } if held_button == button)
+}
+
+/// True iff `session` is a real primary release for `pointer_id`: `Active`
+/// or `Suppressed { held_button: Left }`. Non-primary `Suppressed` is
+/// drained via `consume_swallowed_release` instead.
+const fn is_real_release_match(session: &PressSession, pointer_id: u32) -> bool {
+    session.pointer_id == pointer_id
+        && matches!(
+            session.mode,
+            PressSessionMode::Active
+                | PressSessionMode::Suppressed {
+                    held_button: PointerButton::Left
+                }
+        )
+}
+
+/// Clears `*session` if it matches `pointer_id` and returns `true` iff the
+/// cleared session was `Active` (i.e. visuals must be refreshed).
+fn cancel_press_session(session: &mut Option<PressSession>, pointer_id: u32) -> bool {
+    let Some(s) = *session else { return false };
+    if s.pointer_id != pointer_id {
+        return false;
+    }
+    *session = None;
+    s.mode == PressSessionMode::Active
 }
 
 struct CaptionTheme {
@@ -380,9 +405,14 @@ pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> 
         x: screen.x.0,
         y: screen.y.0,
     };
-    let _ = unsafe { ScreenToClient(hwnd, &raw mut client_point) };
+    unsafe { ScreenToClient(hwnd, &raw mut client_point) }
+        .ok()
+        .inspect_err(|err| log::warn!("ScreenToClient failed: {err}"))
+        .ok()?;
     let mut client_rect = RECT::default();
-    let _ = unsafe { GetClientRect(hwnd, &raw mut client_rect) };
+    unsafe { GetClientRect(hwnd, &raw mut client_rect) }
+        .inspect_err(|err| log::warn!("GetClientRect failed: {err}"))
+        .ok()?;
     strip.hit_test(
         PhysicalPoint::new(client_point.x, client_point.y),
         PhysicalPixels(client_rect.right),
@@ -649,7 +679,7 @@ impl CaptionButtonStrip {
         pointer_id: u32,
     ) -> anyhow::Result<Option<CaptionButtonAction>> {
         let session = match self.press_session {
-            Some(s) if s.pointer_id == pointer_id => s,
+            Some(s) if is_real_release_match(&s, pointer_id) => s,
             _ => return Ok(None),
         };
         self.press_session = None;
@@ -661,25 +691,16 @@ impl CaptionButtonStrip {
                 self.compositor_controller.Commit()?;
                 Ok(action)
             }
-            // Disabled-primary cycle (only Suppressed path that reaches
-            // here, per has_active_press_for); fire no action.
+            // Disabled-primary cycle (Suppressed{Left}); fire no action.
             PressSessionMode::Suppressed { .. } => Ok(None),
         }
     }
 
     pub fn on_pointer_cancel(&mut self, pointer_id: u32) -> anyhow::Result<()> {
-        let was_active = matches!(
-            self.press_session,
-            Some(s) if s.pointer_id == pointer_id && s.mode == PressSessionMode::Active
-        );
-        let should_cancel = matches!(self.press_session, Some(s) if s.pointer_id == pointer_id);
-        if should_cancel {
-            self.press_session = None;
-            // Visuals only need reverting if Active had been engaged.
-            if was_active {
-                self.apply_visuals_to_all_buttons()?;
-                self.compositor_controller.Commit()?;
-            }
+        // Visuals only need reverting if Active had been engaged.
+        if cancel_press_session(&mut self.press_session, pointer_id) {
+            self.apply_visuals_to_all_buttons()?;
+            self.compositor_controller.Commit()?;
         }
         Ok(())
     }
@@ -700,21 +721,17 @@ impl CaptionButtonStrip {
         self.button_for(kind).map(|b| b.availability) == Some(Availability::Enabled)
     }
 
-    /// True iff the strip owns a press session for `pointer_id` whose
-    /// matching *primary* (Left) UP must be consumed by the wndproc.
-    /// Returns true for `Active` and for primary-on-disabled
-    /// `Suppressed { held_button: Left }`; returns false for non-primary
-    /// `Suppressed`, which the wndproc drains through its own
-    /// non-primary release path.
+    /// Release-gate predicate: true iff the strip owns a session whose
+    /// matching primary (Left) UP must be consumed by the wndproc. Pair
+    /// with `has_press_for` for the broader cleanup gate.
     pub(crate) const fn has_active_press_for(&self, pointer_id: u32) -> bool {
-        matches!(
-            self.press_session,
-            Some(s) if s.pointer_id == pointer_id && matches!(
-                s.mode,
-                PressSessionMode::Active
-                    | PressSessionMode::Suppressed { held_button: PointerButton::Left }
-            )
-        )
+        matches!(self.press_session, Some(s) if is_real_release_match(&s, pointer_id))
+    }
+
+    /// Cleanup-gate predicate: true iff the strip owns any press session
+    /// for `pointer_id`, regardless of mode (capture loss, deactivation).
+    pub(crate) const fn has_press_for(&self, pointer_id: u32) -> bool {
+        matches!(self.press_session, Some(s) if s.pointer_id == pointer_id)
     }
 
     /// Record a wndproc-consumed non-primary DOWN as a `Suppressed` session
@@ -832,8 +849,11 @@ impl CaptionButtonStrip {
                 }
             }
             self.rasterise_all_glyphs()?;
-            self.compositor_controller.Commit()?;
         }
+        // Always commit: WM_WINDOWPOSCHANGED queues companion updates
+        // (e.g. `Window::set_content_top_offset`) on this controller and
+        // relies on this commit to publish them.
+        self.compositor_controller.Commit()?;
         Ok(())
     }
 
@@ -1351,6 +1371,128 @@ mod tests {
         // Active sessions must NOT match — the primary-action path owns
         // their drainage.
         assert!(!is_swallowed_release_match(&s, 7, PointerButton::Left));
+    }
+
+    // --- is_real_release_match (on_pointer_up local guard) ---
+
+    #[test]
+    fn real_release_matches_active_session_with_same_pointer_id() {
+        let session = PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Active,
+        };
+        assert!(is_real_release_match(&session, 7));
+    }
+
+    #[test]
+    fn real_release_matches_suppressed_left_disabled_primary_cycle() {
+        let session = PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Maximize,
+            mode: PressSessionMode::Suppressed {
+                held_button: PointerButton::Left,
+            },
+        };
+        assert!(is_real_release_match(&session, 7));
+    }
+
+    #[test]
+    fn real_release_rejects_suppressed_right_so_caller_preserves_session_for_drain() {
+        let session = PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Suppressed {
+                held_button: PointerButton::Right,
+            },
+        };
+        assert!(!is_real_release_match(&session, 7));
+    }
+
+    #[test]
+    fn real_release_rejects_mismatched_pointer_id() {
+        let session = PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Active,
+        };
+        assert!(!is_real_release_match(&session, 99));
+    }
+
+    #[test]
+    fn real_release_in_outer_match_preserves_suppressed_right_session() {
+        let mut press_session = Some(PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Suppressed {
+                held_button: PointerButton::Right,
+            },
+        });
+        let pointer_id = 7;
+        let cleared = match press_session {
+            Some(s) if is_real_release_match(&s, pointer_id) => {
+                press_session = None;
+                Some(s)
+            }
+            _ => None,
+        };
+        assert!(cleared.is_none());
+        assert!(press_session.is_some());
+    }
+
+    // --- cancel_press_session (capture-loss / deactivation cleanup) ---
+
+    #[test]
+    fn cancel_clears_active_session_and_signals_visual_refresh() {
+        let mut session = Some(PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Active,
+        });
+        let needs_visual_refresh = cancel_press_session(&mut session, 7);
+        assert!(session.is_none());
+        assert!(needs_visual_refresh);
+    }
+
+    #[test]
+    fn cancel_clears_suppressed_left_session_without_visual_refresh() {
+        let mut session = Some(PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Suppressed {
+                held_button: PointerButton::Left,
+            },
+        });
+        let needs_visual_refresh = cancel_press_session(&mut session, 7);
+        assert!(session.is_none());
+        assert!(!needs_visual_refresh);
+    }
+
+    #[test]
+    fn cancel_clears_suppressed_right_session_regression_for_capture_loss_leak() {
+        let mut session = Some(PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Suppressed {
+                held_button: PointerButton::Right,
+            },
+        });
+        let needs_visual_refresh = cancel_press_session(&mut session, 7);
+        assert!(session.is_none());
+        assert!(!needs_visual_refresh);
+    }
+
+    #[test]
+    fn cancel_with_mismatched_pointer_id_is_a_noop() {
+        let original = PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Active,
+        };
+        let mut session = Some(original);
+        let needs_visual_refresh = cancel_press_session(&mut session, 99);
+        assert_eq!(session, Some(original));
+        assert!(!needs_visual_refresh);
     }
 
     // --- visible-button derivation ---

@@ -150,7 +150,9 @@ pub(crate) struct RenderingDeviceReplacedRegistration {
 
 impl Drop for RenderingDeviceReplacedRegistration {
     fn drop(&mut self) {
-        let _ = self.composition_graphics_device.RemoveRenderingDeviceReplaced(self.token);
+        if let Err(err) = self.composition_graphics_device.RemoveRenderingDeviceReplaced(self.token) {
+            log::warn!("RemoveRenderingDeviceReplaced failed on Drop: {err}");
+        }
     }
 }
 
