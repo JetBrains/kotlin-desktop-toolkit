@@ -13,7 +13,6 @@ mod file_dialog;
 pub mod file_dialog_api;
 pub mod geometry;
 mod gl_widget;
-mod kdt_application;
 mod keyboard;
 mod layout_manager_wrapper;
 mod mime_types;

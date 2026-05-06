@@ -9,7 +9,6 @@ use crate::gtk::events::{
 use crate::gtk::ffi_return_conversions::{QueryDragAndDropTarget, RetrieveSurroundingText};
 use crate::gtk::geometry::{LogicalRect, LogicalSize, PhysicalSize};
 use crate::gtk::gl_widget::GlWidget;
-use crate::gtk::kdt_application::KdtApplication;
 use crate::gtk::keyboard::set_keyboard_event_handlers;
 use crate::gtk::layout_manager_wrapper::LayoutManagerWrapper;
 use crate::gtk::mouse::set_mouse_event_handlers;
@@ -303,7 +302,7 @@ pub struct SimpleWindow {
 impl SimpleWindow {
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     pub fn new(
-        gtk_application: &KdtApplication,
+        gtk_application: &gtk4::Application,
         window_id: WindowId,
         size: LogicalSize,
         rendering_mode: RenderingMode,
