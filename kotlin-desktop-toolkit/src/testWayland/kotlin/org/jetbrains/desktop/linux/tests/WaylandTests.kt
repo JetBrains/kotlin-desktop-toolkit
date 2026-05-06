@@ -2346,25 +2346,29 @@ class WaylandTests : WaylandTestsBase() {
             tiledBottom = false,
         )
 
-        awaitEventOfType<Event.WindowConfigure>(msg = "Second window active") { event ->
-            if (window2Params.windowId == event.windowId && event.active) {
-                expectedWindow2ConfigureEvent.assertEquals(event, "Second window active")
-                true
-            } else {
-                false
-            }
-        }
-        val window2WmId = wm.getFocusedWindowState()!!.getWindowId()
-
         expectedWindow1ConfigureEvent = expectedWindow1ConfigureEvent.copy(active = false)
-        awaitEventOfType<Event.WindowConfigure>(msg = "First window no longer active") { event ->
-            if (window1Params.windowId == event.windowId && !event.active) {
-                expectedWindow1ConfigureEvent.assertEquals(event, "First window no longer active")
-                true
-            } else {
-                false
-            }
-        }
+        checkNextEvents(
+            checks = mapOf(
+                "Second window active" to { event, _ ->
+                    if (event is Event.WindowConfigure && event.windowId == window2Params.windowId && event.active) {
+                        expectedWindow2ConfigureEvent.assertEquals(event, "Second window active")
+                        true
+                    } else {
+                        false
+                    }
+                },
+                "First window no longer active" to { event, _ ->
+                    if (event is Event.WindowConfigure && event.windowId == window1Params.windowId && !event.active) {
+                        expectedWindow1ConfigureEvent.assertEquals(event, "First window no longer active")
+                        true
+                    } else {
+                        false
+                    }
+                },
+            ),
+        )
+
+        val window2WmId = wm.getFocusedWindowState()!!.getWindowId()
 
         withKeyPress(KeyCode.Tab) {
             awaitEvent({ it as? Event.KeyDown }) { event ->
