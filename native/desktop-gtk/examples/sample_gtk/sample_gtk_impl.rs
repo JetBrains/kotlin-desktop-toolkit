@@ -99,7 +99,7 @@ struct State {
     drag_icon: Option<WindowState>,
     request_sources: HashMap<RequestId, WindowId>,
     notification_sources: HashMap<u32, WindowId>,
-    key_window_id: Option<WindowId>,
+    data_request_sources: HashMap<i32, WindowId>,
 }
 
 impl State {
@@ -125,6 +125,18 @@ thread_local! {
 
 fn with_borrow_mut_state<T>(f: impl FnOnce(&mut State) -> T) -> T {
     STATE.with_borrow_mut(f)
+}
+
+impl State {
+    fn add_data_request_source(&mut self, window_id: WindowId) -> i32 {
+        let v = self.data_request_sources.keys().max().unwrap_or(&0) + 1;
+        self.data_request_sources.insert(v, window_id);
+        v
+    }
+
+    fn get_window_for_request(&mut self, serial: i32) -> Option<WindowId> {
+        self.data_request_sources.remove(&serial)
+    }
 }
 
 fn draw_with_init(draw_data: &OpenGlDrawData, physical_size: PhysicalSize, scale: f64, window_state: &mut WindowState) {
@@ -196,16 +208,16 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
                 Some(Action::WindowSetFullscreen(window_id))
             }
         }
-        (KeyModifiers::Ctrl, keycode::KeyMappingCode::Tab) => {
-            state
-                .windows
-                .keys()
-                .find(|&&w| Some(w) != state.key_window_id)
-                .map(|window_id| Action::WindowActivate {
+        (KeyModifiers::Ctrl, keycode::KeyMappingCode::Tab) => state.windows.iter().find_map(|(window_id, window_state)| {
+            if window_state.active {
+                Some(Action::WindowActivate {
                     window_id: *window_id,
                     token: None,
                 })
-        }
+            } else {
+                None
+            }
+        }),
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyQ) => Some(Action::WindowClose(window_id)),
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyM) => {
             if window_state.maximized {
@@ -215,7 +227,7 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
             }
         }
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyV) => Some(Action::ApplicationClipboardPaste {
-            serial: 0,
+            serial: state.add_data_request_source(window_id),
             supported_mime_types: TEXT_MIME_TYPE,
         }),
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyC) => Some(Action::ApplicationClipboardPut(ALL_MIMES)),
@@ -495,7 +507,7 @@ fn event_handler_impl(event: &Event) -> Vec<Action> {
                     }
                     MOUSE_BUTTON_MIDDLE => {
                         actions.push(Action::ApplicationPrimarySelectionPaste {
-                            serial: 1,
+                            serial: state.add_data_request_source(data.window_id),
                             supported_mime_types: TEXT_MIME_TYPE,
                         });
                     }
@@ -507,15 +519,11 @@ fn event_handler_impl(event: &Event) -> Vec<Action> {
             state.key_modifiers = data.modifiers;
         }
         Event::WindowKeyboardEnter(data) => {
-            state.key_window_id = Some(data.window_id);
             state.with_mut_window_state(data.window_id, |window_state| {
                 actions.push(on_text_input_availability_changed(true, data.window_id, window_state));
             });
         }
         Event::WindowKeyboardLeave(data) => {
-            if state.key_window_id == Some(data.window_id) {
-                state.key_window_id = None;
-            }
             state.with_mut_window_state(data.window_id, |window_state| {
                 actions.push(on_text_input_availability_changed(false, data.window_id, window_state));
             });
@@ -538,8 +546,8 @@ fn event_handler_impl(event: &Event) -> Vec<Action> {
             }
         }
         Event::DataTransfer(data) => {
-            if let Some(key_window_id) = state.key_window_id
-                && let Some(window_state) = state.windows.get_mut(&key_window_id)
+            if let Some(window_id) = state.get_window_for_request(data.serial)
+                && let Some(window_state) = state.windows.get_mut(&window_id)
             {
                 on_data_transfer_received(&data.content, window_state);
             }

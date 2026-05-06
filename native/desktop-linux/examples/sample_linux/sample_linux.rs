@@ -122,6 +122,7 @@ struct State {
     request_sources: HashMap<RequestId, WindowId>,
     notification_sources: HashMap<u32, WindowId>,
     activation_token_action: HashMap<RequestId, ActivationTokenAction>,
+    data_request_sources: HashMap<i32, WindowId>,
 }
 
 thread_local! {
@@ -130,6 +131,18 @@ thread_local! {
 }
 
 const DRAG_AND_DROP_LEFT_OF: f64 = 100.;
+
+impl State {
+    fn add_data_request_source(&mut self, window_id: WindowId) -> i32 {
+        let v = self.data_request_sources.keys().max().unwrap_or(&0) + 1;
+        self.data_request_sources.insert(v, window_id);
+        v
+    }
+
+    fn get_window_for_request(&mut self, serial: i32) -> Option<WindowId> {
+        self.data_request_sources.remove(&serial)
+    }
+}
 
 fn create_text_input_context(text: &str, change_caused_by_input_method: bool) -> TextInputContext<'_> {
     let codepoints_count = u16::try_from(text.chars().count()).unwrap();
@@ -233,7 +246,7 @@ fn on_keydown(event: &KeyDownEvent, app_ptr: AppPtr<'_>, state: &mut State) -> b
             true
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyV) => {
-            application_clipboard_paste(app_ptr, 0, BorrowedUtf8::new(TEXT_MIME_TYPE));
+            application_clipboard_paste(app_ptr, state.add_data_request_source(window_id), BorrowedUtf8::new(TEXT_MIME_TYPE));
             true
         }
         (KEY_MODIFIER_CTRL, keycode::KeyMappingCode::KeyC) => {
@@ -554,7 +567,11 @@ extern "C" fn event_handler(event: &Event) -> bool {
                     true
                 }
                 MOUSE_BUTTON_MIDDLE => {
-                    application_primary_selection_paste(app_ptr, 1, BorrowedUtf8::new(TEXT_MIME_TYPE));
+                    application_primary_selection_paste(
+                        app_ptr,
+                        state.add_data_request_source(data.window_id),
+                        BorrowedUtf8::new(TEXT_MIME_TYPE),
+                    );
                     true
                 }
                 _ => false,
@@ -585,8 +602,8 @@ extern "C" fn event_handler(event: &Event) -> bool {
                 true
             }
             Event::DataTransfer(data) => {
-                if let Some(key_window_id) = state.key_window_id
-                    && let Some(window_state) = state.windows.get_mut(&key_window_id)
+                if let Some(window_id) = state.get_window_for_request(data.serial)
+                    && let Some(window_state) = state.windows.get_mut(&window_id)
                 {
                     on_data_transfer_received(&data.content, window_state);
                     true
