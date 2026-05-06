@@ -105,7 +105,9 @@ internal fun LogicalSize.Companion.fromNative(s: MemorySegment) = LogicalSize(
     height = NativeLogicalSize.height(s),
 )
 
-internal fun LogicalSize.toNative(arena: Arena): MemorySegment {
+internal fun LogicalSize?.toNative(arena: Arena): MemorySegment {
+    val width = this?.width ?: 0
+    val height = this?.height ?: 0
     val result = NativeLogicalSize.allocate(arena)
     NativeLogicalSize.width(result, width)
     NativeLogicalSize.height(result, height)

@@ -211,7 +211,7 @@ internal class SwayWm : WmInteractions {
             val height: Int,
         ) {
             fun toLogicalSize(): LogicalSize {
-                return LogicalSize(width = width.toUInt(), height = height.toUInt())
+                return LogicalSize(width = width, height = height)
             }
         }
 
@@ -1057,7 +1057,7 @@ abstract class WaylandTestsBase {
             return WindowParams(
                 windowId = 0,
                 title = "Test Window 1",
-                size = LogicalSize(width = 200U, height = 300U),
+                size = LogicalSize(width = 200, height = 300),
                 minSize = null,
                 appId = APP_ID,
                 preferClientSideDecoration = false,
@@ -1961,7 +1961,7 @@ class WaylandTests : WaylandTestsBase() {
         }
         assertNotEquals(0, screen.screenId)
 
-        val windowParams = defaultWindowParams().copy(minSize = LogicalSize(width = 100U, height = 70U))
+        val windowParams = defaultWindowParams().copy(minSize = LogicalSize(width = 100, height = 70))
         val requestedSize = assertNotNull(windowParams.size)
         val window = ui { app.createWindow(windowParams) }
 
@@ -2239,7 +2239,7 @@ class WaylandTests : WaylandTestsBase() {
 
         val mouseLoc = LogicalPoint(100.0, 100.0)
         val screenshotPoint = LogicalPoint(50.0, 50.0)
-        val screenshotSize = LogicalSize(150U, 150U)
+        val screenshotSize = LogicalSize(150, 150)
 
         ui { app.setCursorTheme("phinger-cursors-light", 48U) }
         ui {}
@@ -2386,8 +2386,8 @@ class WaylandTests : WaylandTestsBase() {
         run(defaultApplicationConfig())
 
         val windowParams = defaultWindowParams().copy(
-            size = LogicalSize(width = Int.MAX_VALUE.toUInt(), height = Int.MAX_VALUE.toUInt()),
-            minSize = LogicalSize(width = Int.MAX_VALUE.toUInt(), height = Int.MAX_VALUE.toUInt()),
+            size = LogicalSize(width = Int.MAX_VALUE, height = Int.MAX_VALUE),
+            minSize = LogicalSize(width = Int.MAX_VALUE, height = Int.MAX_VALUE),
         )
         val w = ui { app.createWindow(windowParams) }
 
@@ -2451,7 +2451,7 @@ class WaylandTests : WaylandTestsBase() {
 
         val window1WmId = wm.getFocusedWindowState()!!.getWindowId()
 
-        val requestedWindow2Size = LogicalSize(width = 300U, height = 200U)
+        val requestedWindow2Size = LogicalSize(width = 300, height = 200)
         val window2Params = WindowParams(
             windowId = 1,
             title = "Test Window 2",
@@ -2576,7 +2576,7 @@ class WaylandTests : WaylandTestsBase() {
 
         wm.tileWindows(listOf(window2WmId, window1WmId))
 
-        val tiledWindowSize = wm.getMaximizedWindowSize(screen.name!!).let { LogicalSize(width = it.width / 2U, height = it.height) }
+        val tiledWindowSize = wm.getMaximizedWindowSize(screen.name!!).let { LogicalSize(width = it.width / 2, height = it.height) }
         expectedWindow1ConfigureEvent =
             expectedWindow1ConfigureEvent.copy(
                 size = tiledWindowSize,
@@ -3288,7 +3288,7 @@ text/plain;charset=utf-8
     fun testTextInputContext() {
         var textInputContext = TextInputContext(
             contentPurpose = TextInputContentPurpose.Normal,
-            cursorRectangle = LogicalRect(x = 50U, y = 20U, width = 5U, height = 10U),
+            cursorRectangle = LogicalRect(x = 50, y = 20, width = 5, height = 10),
             surroundingText = "",
             cursorCodepointOffset = 0U,
             selectionStartCodepointOffset = 0U,
@@ -3361,7 +3361,7 @@ text/plain;charset=utf-8
         textInputContext = textInputContext.copy(
             contentPurpose = TextInputContentPurpose.Phone,
             hints = setOf(TextInputContentHint.Lowercase),
-            cursorRectangle = LogicalRect(x = 1000000000U, y = 1000000000U, width = 1000000000U, height = 1000000000U),
+            cursorRectangle = LogicalRect(x = 1000000000, y = 1000000000, width = 1000000000, height = 1000000000),
         )
         assertEquals(
             "content_purpose: Phone, content_hints: [Lowercase]",
@@ -3393,7 +3393,7 @@ text/plain;charset=utf-8
         textInputContext = textInputContext.copy(
             contentPurpose = TextInputContentPurpose.Name,
             hints = setOf(TextInputContentHint.HiddenText),
-            cursorRectangle = LogicalRect(x = 1U, y = 2U, width = 3U, height = 4U),
+            cursorRectangle = LogicalRect(x = 1, y = 2, width = 3, height = 4),
         )
         assertEquals(
             "content_purpose: Name, content_hints: [HiddenText]",
@@ -3468,7 +3468,7 @@ text/plain;charset=utf-8
 
         var textInputContext = TextInputContext(
             contentPurpose = TextInputContentPurpose.Normal,
-            cursorRectangle = LogicalRect(x = 200U, y = 100U, width = 10U, height = 20U),
+            cursorRectangle = LogicalRect(x = 200, y = 100, width = 10, height = 20),
             surroundingText = "",
             cursorCodepointOffset = 0U,
             selectionStartCodepointOffset = 0U,
@@ -3874,11 +3874,11 @@ text/plain;charset=utf-8
 
     fun implTestWindowResizeToSmaller(
         button: MouseButton,
-        moveX: UInt = 50U,
-        moveY: UInt = 100U,
+        moveX: Int = 50,
+        moveY: Int = 100,
         windowParams: WindowParams = defaultWindowParams(),
-        expectedDecreaseX: UInt = moveX,
-        expectedDecreaseY: UInt = moveY,
+        expectedDecreaseX: Int = moveX,
+        expectedDecreaseY: Int = moveY,
     ) {
         run(defaultApplicationConfig())
 
@@ -3892,8 +3892,8 @@ text/plain;charset=utf-8
         assertEquals(requestedWindowSize, stateBefore.getClientAreaSize())
 
         val expectedSize = LogicalSize(
-            width = (requestedWindowSize.width.toInt() - expectedDecreaseX.toInt()).toUInt(),
-            height = (requestedWindowSize.height.toInt() - expectedDecreaseY.toInt()).toUInt(),
+            width = (requestedWindowSize.width - expectedDecreaseX),
+            height = (requestedWindowSize.height - expectedDecreaseY),
         )
 
         // Move the mouse to the top-left part of the window
@@ -3904,7 +3904,7 @@ text/plain;charset=utf-8
             // With Sway, it doesn't matter which edge we specify; it's dependent on the mouse position
             ui { window.startResize(WindowResizeEdge.TopLeft) }
             awaitEventOfType<Event.MouseExited> { true }
-            moveMouseTo(mousePos.shifted(moveX.toInt(), moveY.toInt()))
+            moveMouseTo(mousePos.shifted(moveX, moveY))
             awaitEventOfType<Event.WindowConfigure> { event ->
                 event.active && event.size == expectedSize
             }
@@ -3918,7 +3918,7 @@ text/plain;charset=utf-8
 
         assertEquals(expectedSize, stateAfter.getClientAreaSize())
         assertEquals(
-            stateBefore.getClientAreaTopLeftGlobalPosition().shifted(expectedDecreaseX.toInt(), expectedDecreaseY.toInt()),
+            stateBefore.getClientAreaTopLeftGlobalPosition().shifted(expectedDecreaseX, expectedDecreaseY),
             stateAfter.getClientAreaTopLeftGlobalPosition(),
         )
 
@@ -3942,8 +3942,8 @@ text/plain;charset=utf-8
 
     @Test
     fun testWindowResizeWithMinSize() {
-        val size = LogicalSize(width = 200U, height = 300U)
-        val minSize = LogicalSize(width = 100U, height = 70U)
+        val size = LogicalSize(width = 200, height = 300)
+        val minSize = LogicalSize(width = 100, height = 70)
         val windowParams = defaultWindowParams().copy(size = size, minSize = minSize)
         implTestWindowResizeToSmaller(
             MouseButton.LEFT,
@@ -4250,7 +4250,7 @@ text/plain;charset=utf-8
                         actions = setOf(DragAndDropAction.Copy, DragAndDropAction.Move),
                         dragIconParams = DragIconParams(
                             renderingMode = RenderingMode.Software,
-                            size = LogicalSize(100U, 50U),
+                            size = LogicalSize(100, 50),
                         ),
                     ),
                 )
@@ -4555,7 +4555,7 @@ text/plain;charset=utf-8
     fun testRendering() {
         val backgroundColor = SkColor.BLUE
         val rectColor = SkColor.RED
-        val rectSize = LogicalSize(100U, 50U)
+        val rectSize = LogicalSize(100, 50)
         var scale: Double? = null
 
         val draw: (Event.WindowDraw) -> Unit = { event ->
@@ -4624,8 +4624,8 @@ text/plain;charset=utf-8
         val path = screenshotPath.absolutePathString()
 
         val bottomRightRectColor = bitmap.getColor(
-            ((rectSize.width - 1U).toDouble() * imageScale).roundToInt(),
-            ((rectSize.height - 1U).toDouble() * imageScale).roundToInt(),
+            ((rectSize.width - 1).toDouble() * imageScale).roundToInt(),
+            ((rectSize.height - 1).toDouble() * imageScale).roundToInt(),
         )
         assertEquals(
             rectColor,

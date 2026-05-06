@@ -10,7 +10,7 @@ public data class DragIconParams(
     public val size: LogicalSize,
 ) {
     init {
-        check(size.width > 0 && size.height > 0) {
+        require(size.width > 0 && size.height > 0) {
             "Invalid size (both width and height must be greater than zero)"
         }
     }
@@ -104,7 +104,7 @@ public class Window internal constructor(params: WindowParams) : AutoCloseable {
                     mimeTypesToNative(arena, params.mimeTypes),
                     params.actions.toNative(),
                     (params.dragIconParams?.renderingMode ?: RenderingMode.Auto).toNative(),
-                    (params.dragIconParams?.size ?: LogicalSize(0, 0)).toNative(arena),
+                    params.dragIconParams?.size.toNative(arena),
                 )
             }
         }

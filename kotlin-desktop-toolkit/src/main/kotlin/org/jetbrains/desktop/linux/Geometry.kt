@@ -20,9 +20,15 @@ public data class PhysicalPoint(
 }
 
 public data class LogicalSize(
-    val width: UInt,
-    val height: UInt,
+    val width: Int,
+    val height: Int,
 ) {
+    init {
+        require(width >= 0 && height >= 0) {
+            "Invalid size (both width and height must be positive)"
+        }
+    }
+
     public companion object;
     public fun toPhysical(scale: Double): PhysicalSize {
         val width = (width.toDouble() * scale).roundToInt()
@@ -42,8 +48,8 @@ public data class LogicalPoint(
 }
 
 public data class LogicalRect(
-    val x: UInt,
-    val y: UInt,
-    val width: UInt,
-    val height: UInt,
+    val x: Int,
+    val y: Int,
+    val width: Int,
+    val height: Int,
 )

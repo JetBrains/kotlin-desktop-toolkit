@@ -210,7 +210,7 @@ private class EditorState {
     private var text: StringBuilder = StringBuilder()
     private var cursorVisible = true
     private var cursorOffset: Int = 0
-    private var cursorRectangle = LogicalRect(0U, 0U, 0U, 0U)
+    private var cursorRectangle = LogicalRect(0, 0, 0, 0)
     private var selectionStartOffset: Int? = null
     private var selectionEndOffset: Int? = null
     private var textLineCreator = TextLineCreator(cachedFontSize = 0f, cachedText = "")
@@ -334,10 +334,10 @@ private class EditorState {
                 val y1 = y + textLine.descent
 
                 cursorRectangle = LogicalRect(
-                    x = (x / scale).roundToInt().toUInt(),
-                    y = (y0 / scale).roundToInt().toUInt(),
-                    width = 5U,
-                    height = ((textLine.descent - textLine.ascent) / scale).roundToInt().toUInt(),
+                    x = (x / scale).roundToInt(),
+                    y = (y0 / scale).roundToInt(),
+                    width = 5,
+                    height = ((textLine.descent - textLine.ascent) / scale).roundToInt(),
                 )
                 paint.color = Color.GREEN
                 paint.strokeWidth = cursorRectangle.width.toFloat() * scale
@@ -685,7 +685,7 @@ internal class WindowState {
 }
 
 fun TextLine.toLogicalSize(): LogicalSize {
-    return LogicalSize(width = ceil(width).roundToInt().toUInt(), height = ceil(height).roundToInt().toUInt())
+    return LogicalSize(width = ceil(width).roundToInt(), height = ceil(height).roundToInt())
 }
 
 private class ContentArea(
@@ -864,7 +864,7 @@ private class ContentArea(
 
 private class CustomBorders {
     companion object {
-        const val BORDER_SIZE = 5U
+        const val BORDER_SIZE = 5
 
         fun edgeToPointerShape(edge: WindowResizeEdge): PointerShape {
             return when (edge) {
@@ -884,16 +884,16 @@ private class CustomBorders {
 
     fun configure(event: Event.WindowConfigure) {
         rectangles.clear()
-        rectangles.add(Pair(LogicalRect(x = 0U, y = 0U, width = BORDER_SIZE, height = BORDER_SIZE), WindowResizeEdge.TopLeft))
+        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = BORDER_SIZE, height = BORDER_SIZE), WindowResizeEdge.TopLeft))
         rectangles.add(
             Pair(
-                LogicalRect(x = event.size.width - BORDER_SIZE, y = 0U, width = BORDER_SIZE, height = BORDER_SIZE),
+                LogicalRect(x = event.size.width - BORDER_SIZE, y = 0, width = BORDER_SIZE, height = BORDER_SIZE),
                 WindowResizeEdge.TopRight,
             ),
         )
         rectangles.add(
             Pair(
-                LogicalRect(x = 0U, y = event.size.height - BORDER_SIZE, width = BORDER_SIZE, height = BORDER_SIZE),
+                LogicalRect(x = 0, y = event.size.height - BORDER_SIZE, width = BORDER_SIZE, height = BORDER_SIZE),
                 WindowResizeEdge.BottomLeft,
             ),
         )
@@ -909,17 +909,17 @@ private class CustomBorders {
             ),
         )
 
-        rectangles.add(Pair(LogicalRect(x = 0U, y = 0U, width = BORDER_SIZE, height = event.size.height), WindowResizeEdge.Left))
+        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = BORDER_SIZE, height = event.size.height), WindowResizeEdge.Left))
         rectangles.add(
             Pair(
-                LogicalRect(x = event.size.width - BORDER_SIZE, y = 0U, width = BORDER_SIZE, height = event.size.height),
+                LogicalRect(x = event.size.width - BORDER_SIZE, y = 0, width = BORDER_SIZE, height = event.size.height),
                 WindowResizeEdge.Right,
             ),
         )
-        rectangles.add(Pair(LogicalRect(x = 0U, y = 0U, width = event.size.width, height = BORDER_SIZE), WindowResizeEdge.Top))
+        rectangles.add(Pair(LogicalRect(x = 0, y = 0, width = event.size.width, height = BORDER_SIZE), WindowResizeEdge.Top))
         rectangles.add(
             Pair(
-                LogicalRect(x = 0U, y = event.size.height - BORDER_SIZE, width = event.size.width, height = BORDER_SIZE),
+                LogicalRect(x = 0, y = event.size.height - BORDER_SIZE, width = event.size.width, height = BORDER_SIZE),
                 WindowResizeEdge.Bottom,
             ),
         )
@@ -1126,7 +1126,7 @@ private class RotatingBallWindow(
 
     companion object {
         fun createWindow(app: Application, windowParams: WindowParams, xdgDesktopSettings: XdgDesktopSettings): RotatingBallWindow {
-            val windowSize = LogicalSize(640U, 480U)
+            val windowSize = LogicalSize(640, 480)
             val windowContentSize = windowSize // todo it's incorrect
             val container = WindowContainer.create(windowContentSize, xdgDesktopSettings)
 
@@ -1285,8 +1285,8 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
         nextWindowId += 1
         val windowParams = WindowParams(
             windowId = windowId,
-            size = LogicalSize(width = 640U, height = 480U),
-            minSize = LogicalSize(320U, 240U),
+            size = LogicalSize(width = 640, height = 480),
+            minSize = LogicalSize(320, 240),
             title = "Window $windowId",
             appId = "org.jetbrains.desktop.linux.skikoSample1",
             preferClientSideDecoration = useCustomTitlebar,
