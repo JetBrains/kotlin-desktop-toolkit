@@ -18,10 +18,6 @@ impl gtk4::subclass::prelude::ObjectSubclass for LayoutManagerWrapperImpl {
     const NAME: &'static str = "LayoutManagerWrapper";
     type Type = LayoutManagerWrapper;
     type ParentType = gtk4::LayoutManager;
-
-    fn new() -> Self {
-        Self::default()
-    }
 }
 
 impl gtk4::subclass::prelude::ObjectImpl for LayoutManagerWrapperImpl {}

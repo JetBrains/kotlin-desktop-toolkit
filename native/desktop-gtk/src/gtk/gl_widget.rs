@@ -177,10 +177,6 @@ impl gdk4::subclass::prelude::ObjectSubclass for GlWidgetImpl {
     const NAME: &'static str = "GlWidget";
     type Type = GlWidget;
     type ParentType = gtk4::Widget;
-
-    fn new() -> Self {
-        Self::default()
-    }
 }
 
 impl gdk4::subclass::prelude::ObjectImpl for GlWidgetImpl {}

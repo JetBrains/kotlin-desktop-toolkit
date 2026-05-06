@@ -25,10 +25,6 @@ impl gdk4::subclass::prelude::ObjectSubclass for ClipboardContentProviderImpl {
     const NAME: &'static str = "ClipboardContentProvider";
     type Type = ClipboardContentProvider;
     type ParentType = gdk4::ContentProvider;
-
-    fn new() -> Self {
-        Self::default()
-    }
 }
 
 impl gdk4::subclass::prelude::ObjectImpl for ClipboardContentProviderImpl {}
