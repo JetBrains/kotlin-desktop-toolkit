@@ -36,12 +36,8 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
-}
-
-tasks.compileJava {
-    options.compilerArgs = listOf("--enable-preview")
 }
 
 val depScope = configurations.dependencyScope("native") {
@@ -84,11 +80,10 @@ tasks.register<JavaExec>("runSkikoSampleMac") {
     mainClass.set("org.jetbrains.desktop.sample.macos.SkikoSampleMacKt")
     javaLauncher.set(
         javaToolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(21))
+            languageVersion.set(JavaLanguageVersion.of(25))
         },
     )
     jvmArgs = listOf(
-        "--enable-preview",
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
@@ -105,11 +100,10 @@ tasks.register<JavaExec>("runApplicationMenuSampleMac") {
     mainClass.set("org.jetbrains.desktop.sample.macos.ApplicationMenuSampleMacKt")
     javaLauncher.set(
         javaToolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(21))
+            languageVersion.set(JavaLanguageVersion.of(25))
         },
     )
     jvmArgs = listOf(
-        "--enable-preview",
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
@@ -126,11 +120,10 @@ tasks.register<JavaExec>("runSkikoSampleLinux") {
     mainClass.set("org.jetbrains.desktop.sample.linux.SkikoSampleLinuxKt")
     javaLauncher.set(
         javaToolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(21))
+            languageVersion.set(JavaLanguageVersion.of(25))
         },
     )
     jvmArgs = listOf(
-        "--enable-preview",
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
@@ -144,11 +137,10 @@ tasks.register<JavaExec>("runSkikoSampleGtk") {
     mainClass.set("org.jetbrains.desktop.sample.gtk.SkikoSampleGtkKt")
     javaLauncher.set(
         javaToolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(21))
+            languageVersion.set(JavaLanguageVersion.of(25))
         },
     )
     jvmArgs = listOf(
-        "--enable-preview",
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
     )
@@ -177,11 +169,10 @@ tasks.register<JavaExec>("runSkikoSampleWin32") {
     mainClass.set("org.jetbrains.desktop.sample.win32.SkikoSampleWin32Kt")
     javaLauncher.set(
         javaToolchains.launcherFor {
-            languageVersion.set(JavaLanguageVersion.of(21))
+            languageVersion.set(JavaLanguageVersion.of(25))
         },
     )
     jvmArgs = listOf(
-        "--enable-preview",
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
         "-Dstdout.encoding=UTF-8",
@@ -241,7 +232,6 @@ tasks.jpackage {
     destination.set(layout.buildDirectory.dir("dist"))
 
     javaOptions = listOf(
-        "--enable-preview",
         "--enable-native-access=ALL-UNNAMED",
         "-Djextract.trace.downcalls=false",
         "-Dkdt.library.folder.path=\$APPDIR/native",

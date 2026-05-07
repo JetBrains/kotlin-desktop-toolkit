@@ -229,7 +229,7 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
     // called from native code
     private fun insertTextCallback(s: MemorySegment) {
         ffiUpCall {
-            val text = NativeInsertTextArgs.text(s).getUtf8String(0)
+            val text = NativeInsertTextArgs.text(s).getString(0)
             val replacementRange = TextRange.fromNative(NativeInsertTextArgs.replacement_range(s)).nullIfNotFound()
             textInputClient.insertText(text = text, replacementRange = replacementRange)
         }
@@ -238,7 +238,7 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
     // called from native code
     private fun setMarkedTextCallback(args: MemorySegment) {
         ffiUpCall {
-            val text = NativeSetMarkedTextArgs.text(args).getUtf8String(0)
+            val text = NativeSetMarkedTextArgs.text(args).getString(0)
             val selectedRange = TextRange.fromNative(NativeSetMarkedTextArgs.selected_range(args)).nullIfNotFound()
             val replacementRange = TextRange.fromNative(NativeSetMarkedTextArgs.replacement_range(args)).nullIfNotFound()
             textInputClient.setMarkedText(text, selectedRange = selectedRange, replacementRange = replacementRange)
@@ -266,7 +266,7 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
 
                 (stringAndRange.actualRange ?: TextRange.notFound).toNative(NativeAttributedStringForRangeResult.actual_range(result))
                 if (stringAndRange.text != null) {
-                    NativeAttributedStringForRangeResult.string(result, localArena.allocateUtf8String(stringAndRange.text))
+                    NativeAttributedStringForRangeResult.string(result, localArena.allocateFrom(stringAndRange.text))
                 } else {
                     NativeAttributedStringForRangeResult.string(result, MemorySegment.NULL)
                 }
@@ -308,7 +308,7 @@ internal data class TextInputClientHolder(var textInputClient: TextInputClient =
     // called from native code
     private fun doCommandCallback(command: MemorySegment): Boolean {
         return ffiUpCall(defaultResult = false) {
-            textInputClient.doCommand(command.getUtf8String(0))
+            textInputClient.doCommand(command.getString(0))
         }
     }
 

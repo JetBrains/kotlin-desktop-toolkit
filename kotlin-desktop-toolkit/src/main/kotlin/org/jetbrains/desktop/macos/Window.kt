@@ -30,7 +30,7 @@ public class Window internal constructor(
             val nativeWindowParams = NativeWindowParams.allocate(arena)
             NativeWindowParams.origin(nativeWindowParams, origin.toNative(arena))
             NativeWindowParams.size(nativeWindowParams, size.toNative(arena))
-            NativeWindowParams.title(nativeWindowParams, arena.allocateUtf8String(title))
+            NativeWindowParams.title(nativeWindowParams, arena.allocateFrom(title))
 
             NativeWindowParams.is_resizable(nativeWindowParams, isResizable)
             NativeWindowParams.is_closable(nativeWindowParams, isClosable)
@@ -97,14 +97,14 @@ public class Window internal constructor(
         get() {
             val title = ffiDownCall { desktop_macos_h.window_get_title(pointer) }
             return try {
-                title.getUtf8String(0)
+                title.getString(0)
             } finally {
                 ffiDownCall { desktop_macos_h.string_drop(title) }
             }
         }
         set(value) {
             Arena.ofConfined().use { arena ->
-                val title = arena.allocateUtf8String(value)
+                val title = arena.allocateFrom(value)
                 ffiDownCall { desktop_macos_h.window_set_title(pointer, title) }
             }
         }

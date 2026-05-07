@@ -22,7 +22,7 @@ public data class Screen internal constructor(
                 name = if (nativeName == MemorySegment.NULL) {
                     null
                 } else {
-                    nativeName.getUtf8String(0)
+                    nativeName.getString(0)
                 },
                 origin = LogicalPoint.fromNative(NativeScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(NativeScreenInfo.size(s)),
