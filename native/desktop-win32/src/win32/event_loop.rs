@@ -10,19 +10,18 @@ use windows::Win32::{
         Gdi::{BeginPaint, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT},
     },
     UI::{
-        HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow, GetSystemMetricsForDpi, SetThreadDpiAwarenessContext},
+        HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetSystemMetricsForDpi, SetThreadDpiAwarenessContext},
         Input::Pointer::EnableMouseInPointer,
         Shell::{ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
         WindowsAndMessaging::{
             AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
-            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS,
-            SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-            SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_APP,
-            WM_CANCELMODE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP,
-            WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT,
-            WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL,
-            WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSDEADCHAR, WM_SYSKEYDOWN,
-            WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SM_CYSIZE,
+            SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, USER_DEFAULT_SCREEN_DPI,
+            WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_APP, WM_CANCELMODE, WM_CHAR, WM_CLOSE, WM_CREATE,
+            WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST,
+            WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN,
+            WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT,
+            WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
 };
@@ -199,6 +198,9 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         LOWORD!(wparam.0),
         "The DPI values of the X-axis and the Y-axis should be identical for Windows apps."
     );
+    // Refresh the DPI cache from wparam before any handler reads it; downstream
+    // `Window::max_chrome_y` / `get_scale` / hit-test math see the new DPI.
+    window.set_dpi_metrics(u32::from(dpi));
     let scale = f32::from(dpi) / (USER_DEFAULT_SCREEN_DPI as f32);
     let rect = unsafe { *(lparam.0 as *const RECT) };
     let event = WindowScaleChangedEvent {
@@ -211,16 +213,14 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         let _ = strip
             .on_dpi_change(scale)
             .inspect_err(|err| log::warn!("strip on_dpi_change failed: {err}"));
-        // Re-anchor the strip to the (already-resized) client and the new
-        // chrome offset. `GetDpiForWindow` may still report the old DPI,
-        // so derive `max_chrome_y` from the wparam value.
+        // Re-anchor the strip; the cache is already fresh, so `max_chrome_y`
+        // reads the new DPI without re-syscalling.
         let mut client_rect = RECT::default();
         match unsafe { GetClientRect(window.hwnd(), &raw mut client_rect) } {
             Ok(()) => {
                 let client_size = PhysicalSize::new(client_rect.right - client_rect.left, client_rect.bottom - client_rect.top);
-                let max_chrome_y = window.max_chrome_y_for_dpi(u32::from(dpi));
                 let _ = strip
-                    .on_resize(client_size, max_chrome_y)
+                    .on_resize(client_size, window.max_chrome_y())
                     .inspect_err(|err| log::warn!("strip on_resize during DPI change failed: {err}"));
             }
             Err(err) => log::warn!("GetClientRect during WM_DPICHANGED failed: {err}"),
@@ -563,10 +563,9 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     }
     let mut window_rect = RECT::default();
     let _ = unsafe { GetWindowRect(hwnd, &raw mut window_rect) };
-    let current_dpi = unsafe { GetDpiForWindow(hwnd) };
-    let resize_handle_height =
-        unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, current_dpi) + GetSystemMetricsForDpi(SM_CYSIZEFRAME, current_dpi) };
-    let title_bar_height = resize_handle_height + unsafe { GetSystemMetricsForDpi(SM_CYSIZE, current_dpi) };
+    let m = window.dpi_metrics();
+    let resize_handle_height = m.padded_border + m.size_frame;
+    let title_bar_height = resize_handle_height + unsafe { GetSystemMetricsForDpi(SM_CYSIZE, m.dpi) };
     // Spec §3.2: only the resize-border match is gated on `is_resizable`; the
     // title-bar drag region applies to non-resizable custom-titlebar windows
     // too so they remain draggable by their title bar.
@@ -683,7 +682,9 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
         {
             let device = device_kind_for(&pointer_info);
             if is_non_client {
-                let _ = window.ensure_nc_leave_tracking();
+                let _ = window
+                    .ensure_nc_leave_tracking()
+                    .inspect_err(|err| log::warn!("ensure_nc_leave_tracking failed: {err}"));
             }
             let _ = strip.on_pointer_update(kind, pointer_info.pointer_id(), device);
         }

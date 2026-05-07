@@ -194,6 +194,8 @@ pub(crate) struct RenderingDeviceReplacedRegistration {
 
 impl Drop for RenderingDeviceReplacedRegistration {
     fn drop(&mut self) {
+        // Spec §3.4: RDR callback runs on UI thread; no concurrent
+        // delivery against this Drop. See TODO.md for the affinity probe.
         if let Err(err) = self.composition_graphics_device.RemoveRenderingDeviceReplaced(self.token) {
             log::warn!("RemoveRenderingDeviceReplaced failed on Drop: {err}");
         }

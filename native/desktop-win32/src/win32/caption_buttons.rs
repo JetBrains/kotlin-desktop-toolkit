@@ -38,10 +38,7 @@ use windows::{
             },
             Gdi::{GetSysColor, SYS_COLOR_INDEX, ScreenToClient},
         },
-        UI::{
-            HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
-            WindowsAndMessaging::{GetClientRect, GetWindowRect, PostMessageW, SM_CXPADDEDBORDER, SM_CYSIZEFRAME},
-        },
+        UI::WindowsAndMessaging::{GetClientRect, GetWindowRect, PostMessageW},
     },
 };
 use windows_numerics::{Vector2, Vector3};
@@ -413,7 +410,7 @@ pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> 
     let strip_ref = window.caption_buttons.borrow();
     let strip = strip_ref.as_ref()?;
     let hwnd = window.hwnd();
-    if is_in_top_resize_border(window, hwnd, screen.y.0) {
+    if is_in_top_resize_border(window, screen.y.0) {
         return None;
     }
     let mut client_point = POINT {
@@ -437,20 +434,19 @@ pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> 
 /// True when `mouse_y` (screen-space) lands inside the top resize-border band
 /// of a restored, resizable window. Maximized and non-resizable windows have
 /// no resize band so the strip wins by default.
-fn is_in_top_resize_border(window: &Window, hwnd: HWND, mouse_y: i32) -> bool {
+fn is_in_top_resize_border(window: &Window, mouse_y: i32) -> bool {
     if !window.is_resizable() || window.is_maximized() {
         return false;
     }
     let mut window_rect = RECT::default();
-    if unsafe { GetWindowRect(hwnd, &raw mut window_rect) }
+    if unsafe { GetWindowRect(window.hwnd(), &raw mut window_rect) }
         .inspect_err(|err| log::warn!("GetWindowRect failed during resize-border check: {err}"))
         .is_err()
     {
         return false;
     }
-    let dpi = unsafe { GetDpiForWindow(hwnd) };
-    let resize_handle_height = unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) + GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) };
-    mouse_y < window_rect.top + resize_handle_height
+    let m = window.dpi_metrics();
+    mouse_y < window_rect.top + m.padded_border + m.size_frame
 }
 
 pub(crate) struct CaptionButtonStrip {
@@ -497,6 +493,7 @@ impl CaptionButtonStrip {
         style: &crate::win32::window_api::WindowStyle,
         compositor_controller: CompositorController,
         hwnd: HWND,
+        client_size: PhysicalSize,
     ) -> anyhow::Result<Self> {
         let compositor = compositor_controller.Compositor()?;
         let d2d_context = crate::win32::composition::ensure_d2d_context(compositor.clone())?;
@@ -559,73 +556,99 @@ impl CaptionButtonStrip {
             device_replaced_registration,
             compositor_controller,
         };
-        strip.relayout()?;
-        strip.apply_visuals_to_all_buttons()?;
+        strip.relayout();
+        strip.set_strip_position(client_size, 0);
+        strip.apply_visuals_to_all_buttons();
         strip.compositor_controller.Commit()?;
         Ok(strip)
     }
 
-    fn relayout(&mut self) -> anyhow::Result<()> {
+    fn relayout(&mut self) {
         let bw = self.metrics.button_size_px.width.0;
         let bh = self.metrics.button_size_px.height.0;
         let total_width = bw * self.buttons.len() as i32;
         // Buttons line up at increasing x within the strip's parent;
         // `set_strip_position` places the parent at top-right of `chrome_layer`.
-        self.composition_root.SetSize(Vector2::new(total_width as f32, bh as f32))?;
+        let _ = self
+            .composition_root
+            .SetSize(Vector2::new(total_width as f32, bh as f32))
+            .inspect_err(|err| log::warn!("composition_root SetSize failed: {err}"));
         let gw = self.metrics.glyph_extent_px.width.0;
         let gh = self.metrics.glyph_extent_px.height.0;
         let gx = (bw - gw) / 2;
         let gy = (bh - gh) / 2;
         for (i, button) in self.buttons.iter_mut().enumerate() {
             let x = (i as i32) * bw;
-            button.visuals.backplate.SetOffset(Vector3 {
-                X: x as f32,
-                Y: 0.0,
-                Z: 0.0,
-            })?;
-            button.visuals.backplate.SetSize(Vector2::new(bw as f32, bh as f32))?;
-            button.visuals.glyph.SetOffset(Vector3 {
-                X: gx as f32,
-                Y: gy as f32,
-                Z: 0.0,
-            })?;
-            button.visuals.glyph.SetSize(Vector2::new(gw as f32, gh as f32))?;
+            let _ = button
+                .visuals
+                .backplate
+                .SetOffset(Vector3 {
+                    X: x as f32,
+                    Y: 0.0,
+                    Z: 0.0,
+                })
+                .inspect_err(|err| log::warn!("backplate SetOffset failed: {err}"));
+            let _ = button
+                .visuals
+                .backplate
+                .SetSize(Vector2::new(bw as f32, bh as f32))
+                .inspect_err(|err| log::warn!("backplate SetSize failed: {err}"));
+            let _ = button
+                .visuals
+                .glyph
+                .SetOffset(Vector3 {
+                    X: gx as f32,
+                    Y: gy as f32,
+                    Z: 0.0,
+                })
+                .inspect_err(|err| log::warn!("glyph SetOffset failed: {err}"));
+            let _ = button
+                .visuals
+                .glyph
+                .SetSize(Vector2::new(gw as f32, gh as f32))
+                .inspect_err(|err| log::warn!("glyph SetSize failed: {err}"));
         }
-        Ok(())
     }
 
-    pub(crate) fn set_strip_position(&mut self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
+    fn set_strip_position(&mut self, client_size: PhysicalSize, max_chrome_y: i32) {
         let x = strip_offset_x(client_size.width.0, self.metrics.button_size_px.width.0, self.buttons.len());
         self.top_offset_px = max_chrome_y;
-        self.composition_root.SetOffset(Vector3 {
-            X: x as f32,
-            Y: max_chrome_y as f32,
-            Z: 0.0,
-        })?;
-        Ok(())
+        let _ = self
+            .composition_root
+            .SetOffset(Vector3 {
+                X: x as f32,
+                Y: max_chrome_y as f32,
+                Z: 0.0,
+            })
+            .inspect_err(|err| log::warn!("composition_root SetOffset failed: {err}"));
     }
 
-    fn rasterise_all_glyphs(&mut self) -> anyhow::Result<()> {
+    fn rasterise_all_glyphs(&mut self) {
         for button in &mut self.buttons {
-            if button.glyph_surface_dirty
-                && rasterise_glyph(
-                    &self.d2d_context,
-                    &button.visuals.glyph_surface,
-                    button.kind,
-                    self.is_window_maximized,
-                    self.high_contrast,
-                    &self.metrics,
-                )?
-            {
+            if !button.glyph_surface_dirty {
+                continue;
+            }
+            // Spec §6.3: glyph failure logs and leaves dirty for retry next frame.
+            // Both `Err` and `Ok(false)` (device lost) keep `glyph_surface_dirty = true`.
+            let drew = rasterise_glyph(
+                &self.d2d_context,
+                &button.visuals.glyph_surface,
+                button.kind,
+                self.is_window_maximized,
+                self.high_contrast,
+                &self.metrics,
+            )
+            .inspect_err(|err| log::warn!("rasterise_glyph failed for {:?}: {err}", button.kind))
+            .unwrap_or(false);
+            if drew {
                 button.glyph_surface_dirty = false;
             }
         }
-        Ok(())
     }
 
-    fn apply_visuals_to_all_buttons(&mut self) -> anyhow::Result<()> {
+    fn apply_visuals_to_all_buttons(&mut self) {
         // Re-rasterise dirty glyphs (spec §6.2 reactive device-loss heal).
-        self.rasterise_all_glyphs()?;
+        self.rasterise_all_glyphs();
 
         let theme = CaptionTheme::resolve(self.appearance, self.high_contrast);
         let pointer_over_kind = self.pointer_over_kind;
@@ -640,9 +663,8 @@ impl CaptionButtonStrip {
                 pointer_device,
                 press_session.as_ref(),
             );
-            apply_button_visuals(button, new_interaction, &theme, is_active)?;
+            apply_button_visuals(button, new_interaction, &theme, is_active);
         }
-        Ok(())
     }
 
     /// Hit-test a point given in **client-space** coordinates (origin =
@@ -669,7 +691,7 @@ impl CaptionButtonStrip {
         if self.pointer_over_kind != kind || self.pointer_device != Some(device) {
             self.pointer_over_kind = kind;
             self.pointer_device = Some(device);
-            self.apply_visuals_to_all_buttons()?;
+            self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
         Ok(())
@@ -697,7 +719,7 @@ impl CaptionButtonStrip {
         if mode == PressSessionMode::Active {
             self.pointer_over_kind = Some(kind);
             self.pointer_device = Some(device);
-            self.apply_visuals_to_all_buttons()?;
+            self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
         // Suppressed: no visual side effects (spec §4.3 — disabled Min/Max
@@ -719,7 +741,7 @@ impl CaptionButtonStrip {
             PressSessionMode::Active => {
                 let action = (Some(session.captured_kind) == kind_under_pointer).then(|| self.action_for(session.captured_kind));
                 self.pointer_over_kind = kind_under_pointer;
-                self.apply_visuals_to_all_buttons()?;
+                self.apply_visuals_to_all_buttons();
                 self.compositor_controller.Commit()?;
                 Ok(action)
             }
@@ -731,7 +753,7 @@ impl CaptionButtonStrip {
     pub fn on_pointer_cancel(&mut self, pointer_id: u32) -> anyhow::Result<()> {
         // Visuals only need reverting if Active had been engaged.
         if cancel_press_session(&mut self.press_session, pointer_id) {
-            self.apply_visuals_to_all_buttons()?;
+            self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
         Ok(())
@@ -741,7 +763,7 @@ impl CaptionButtonStrip {
     /// and on deactivation, where there is no pointer id to match against.
     pub fn cancel_any_press(&mut self) -> anyhow::Result<()> {
         if cancel_any_press_session(&mut self.press_session) {
-            self.apply_visuals_to_all_buttons()?;
+            self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
         Ok(())
@@ -750,7 +772,7 @@ impl CaptionButtonStrip {
     pub fn on_nc_mouse_leave(&mut self) -> anyhow::Result<()> {
         self.pointer_over_kind = None;
         self.pointer_device = None;
-        self.apply_visuals_to_all_buttons()?;
+        self.apply_visuals_to_all_buttons();
         self.compositor_controller.Commit()?;
         Ok(())
     }
@@ -836,7 +858,7 @@ impl CaptionButtonStrip {
             for button in &mut self.buttons {
                 button.last_applied_interaction = ButtonInteraction::Idle;
             }
-            self.apply_visuals_to_all_buttons()?;
+            self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
         Ok(())
@@ -852,8 +874,8 @@ impl CaptionButtonStrip {
             button.visuals.glyph_surface.Resize(new_size)?;
             button.glyph_surface_dirty = true;
         }
-        self.relayout()?;
-        self.apply_visuals_to_all_buttons()?;
+        self.relayout();
+        self.apply_visuals_to_all_buttons();
         self.compositor_controller.Commit()?;
         Ok(())
     }
@@ -867,7 +889,7 @@ impl CaptionButtonStrip {
                 button.glyph_surface_dirty = true;
             }
         }
-        self.apply_visuals_to_all_buttons()?;
+        self.apply_visuals_to_all_buttons();
         self.compositor_controller.Commit()?;
         Ok(())
     }
@@ -876,8 +898,8 @@ impl CaptionButtonStrip {
         for button in &mut self.buttons {
             button.glyph_surface_dirty = true;
         }
-        self.rasterise_all_glyphs()?;
-        self.apply_visuals_to_all_buttons()?;
+        self.rasterise_all_glyphs();
+        self.apply_visuals_to_all_buttons();
         self.compositor_controller.Commit()?;
         Ok(())
     }
@@ -890,7 +912,7 @@ impl CaptionButtonStrip {
                     button.glyph_surface_dirty = true;
                 }
             }
-            self.rasterise_all_glyphs()?;
+            self.rasterise_all_glyphs();
         }
         // Always commit: WM_WINDOWPOSCHANGED queues companion updates
         // (e.g. `Window::set_content_top_offset`) on this controller and
@@ -900,7 +922,7 @@ impl CaptionButtonStrip {
     }
 
     pub fn on_resize(&mut self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
-        self.set_strip_position(client_size, max_chrome_y)?;
+        self.set_strip_position(client_size, max_chrome_y);
         self.compositor_controller.Commit()?;
         Ok(())
     }
@@ -1085,12 +1107,7 @@ fn rasterise_glyph(
     Ok(drew)
 }
 
-fn apply_button_visuals(
-    button: &mut CaptionButton,
-    new_interaction: ButtonInteraction,
-    theme: &CaptionTheme,
-    is_active: bool,
-) -> anyhow::Result<()> {
+fn apply_button_visuals(button: &mut CaptionButton, new_interaction: ButtonInteraction, theme: &CaptionTheme, is_active: bool) {
     let (backplate, foreground) = colours_for(button.kind, button.availability, new_interaction, theme, is_active);
     let prev = button.last_applied_interaction;
     // Spec §5.2: animate only `Hovered → Idle` on Enabled buttons; everything else jumps.
@@ -1098,24 +1115,32 @@ fn apply_button_visuals(
         prev == ButtonInteraction::Hovered && new_interaction == ButtonInteraction::Idle && button.availability == Availability::Enabled;
 
     if is_hover_leave {
-        animate_color_or_set(&button.visuals.backplate_brush, backplate, std::time::Duration::from_millis(150))?;
-        animate_color_or_set(&button.visuals.glyph_brush, foreground, std::time::Duration::from_millis(100))?;
+        animate_color_or_set(&button.visuals.backplate_brush, backplate, std::time::Duration::from_millis(150));
+        animate_color_or_set(&button.visuals.glyph_brush, foreground, std::time::Duration::from_millis(100));
     } else {
-        button.visuals.backplate_brush.SetColor(backplate)?;
-        button.visuals.glyph_brush.SetColor(foreground)?;
+        let _ = button
+            .visuals
+            .backplate_brush
+            .SetColor(backplate)
+            .inspect_err(|err| log::warn!("backplate_brush SetColor failed: {err}"));
+        let _ = button
+            .visuals
+            .glyph_brush
+            .SetColor(foreground)
+            .inspect_err(|err| log::warn!("glyph_brush SetColor failed: {err}"));
     }
     button.last_applied_interaction = new_interaction;
-    Ok(())
 }
 
 /// Spec §6.3: `StartAnimation` failure logs at warning level and falls
 /// back to an instant `SetColor`. The visual jumps instead of fading.
-fn animate_color_or_set(brush: &CompositionColorBrush, target: windows::UI::Color, duration: std::time::Duration) -> anyhow::Result<()> {
+fn animate_color_or_set(brush: &CompositionColorBrush, target: windows::UI::Color, duration: std::time::Duration) {
     if let Err(err) = animate_color(brush, target, duration) {
         log::warn!("CaptionButtonStrip: color animation failed; applying target colour directly: {err}");
-        brush.SetColor(target)?;
+        let _ = brush
+            .SetColor(target)
+            .inspect_err(|err| log::warn!("animate_color_or_set fallback SetColor failed: {err}"));
     }
-    Ok(())
 }
 
 fn animate_color(brush: &CompositionColorBrush, target: windows::UI::Color, duration: std::time::Duration) -> anyhow::Result<()> {

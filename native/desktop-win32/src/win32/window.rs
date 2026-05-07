@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     mem::ManuallyDrop,
     rc::{Rc, Weak},
     sync::{
@@ -30,10 +30,10 @@ use windows::{
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
                 GetClientRect, GetPropW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW,
-                RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW,
-                SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos,
-                SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WM_SYSCOMMAND,
-                WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
+                RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME,
+                SM_CYSMICON, SW_SHOW, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW,
+                SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY,
+                WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
             },
         },
     },
@@ -60,6 +60,31 @@ const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32Window");
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct WindowId(pub isize);
 
+/// Per-DPI metrics consumed by chrome / hit-test code. Recomputed from a
+/// single source — `WM_DPICHANGED`'s wparam — so readers never re-syscall
+/// `GetDpiForWindow` / `GetSystemMetricsForDpi` per call.
+#[derive(Clone, Copy)]
+pub(crate) struct DpiMetrics {
+    pub dpi: u32,
+    pub scale: f32,
+    pub padded_border: i32,
+    pub size_frame: i32,
+}
+
+impl DpiMetrics {
+    #[allow(clippy::cast_precision_loss)]
+    fn for_dpi(dpi: u32) -> Self {
+        // Per-monitor DPI maxes at a few hundred; truncating to u16 covers the OS range.
+        let dpi_u16 = u16::try_from(dpi).unwrap_or(u16::MAX);
+        Self {
+            dpi,
+            scale: f32::from(dpi_u16) / (USER_DEFAULT_SCREEN_DPI as f32),
+            padded_border: unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) },
+            size_frame: unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) },
+        }
+    }
+}
+
 #[allow(clippy::struct_field_names)]
 pub struct Window {
     id: WindowId,
@@ -76,6 +101,7 @@ pub struct Window {
     style: RefCell<WindowStyle>,
     pointer_in_window: AtomicBool,
     nc_leave_tracking_armed: AtomicBool,
+    cached_dpi_metrics: Cell<DpiMetrics>,
     pub(crate) caption_buttons: RefCell<Option<crate::win32::caption_buttons::CaptionButtonStrip>>,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
@@ -113,6 +139,7 @@ impl Window {
             style: RefCell::default(),
             pointer_in_window: AtomicBool::new(false),
             nc_leave_tracking_armed: AtomicBool::new(false),
+            cached_dpi_metrics: Cell::new(DpiMetrics::for_dpi(USER_DEFAULT_SCREEN_DPI)),
             caption_buttons: RefCell::new(None),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
@@ -222,11 +249,17 @@ impl Window {
         Ok(LogicalRect { origin, size })
     }
 
-    #[allow(clippy::cast_precision_loss)]
     #[must_use]
-    pub fn get_scale(&self) -> f32 {
-        let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
-        (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
+    pub const fn get_scale(&self) -> f32 {
+        self.dpi_metrics().scale
+    }
+
+    pub(crate) const fn dpi_metrics(&self) -> DpiMetrics {
+        self.cached_dpi_metrics.get()
+    }
+
+    pub(crate) fn set_dpi_metrics(&self, dpi: u32) {
+        self.cached_dpi_metrics.set(DpiMetrics::for_dpi(dpi));
     }
 
     pub fn get_screen_info(&self) -> anyhow::Result<ScreenInfo> {
@@ -341,7 +374,10 @@ impl Window {
         let mut rect = RECT::default();
         unsafe { GetClientRect(self.hwnd(), &raw mut rect)? };
         #[allow(clippy::cast_precision_loss)]
-        backdrop_visual.SetSize(windows_numerics::Vector2::new(rect.right as f32, rect.bottom as f32))?;
+        let width = rect.right.max(0) as f32;
+        #[allow(clippy::cast_precision_loss)]
+        let height = rect.bottom.max(0) as f32;
+        backdrop_visual.SetSize(windows_numerics::Vector2::new(width, height))?;
         backdrop_visual.SetBrush(&backdrop_brush)?;
         backdrop_visual.SetOpacity(opacity)?;
         backdrop_visual.SetIsVisible(true)?;
@@ -375,18 +411,7 @@ impl Window {
         if !self.is_resizable() || !self.has_non_system_title_bar() || !self.is_maximized() {
             return 0;
         }
-        let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
-        unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) }
-    }
-
-    /// Same as [`max_chrome_y`] but uses an explicit DPI. Use this from
-    /// `WM_DPICHANGED` handling, where `GetDpiForWindow` may still report
-    /// the previous DPI until the window is resized to the suggested rect.
-    pub(crate) fn max_chrome_y_for_dpi(&self, dpi: u32) -> i32 {
-        if !self.is_resizable() || !self.has_non_system_title_bar() || !self.is_maximized() {
-            return 0;
-        }
-        unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) }
+        self.dpi_metrics().size_frame
     }
 
     /// Queues a Y-offset on `content_layer` so Kotlin / ANGLE content lines
@@ -601,6 +626,8 @@ fn on_nccreate(hwnd: HWND, lparam: LPARAM) -> anyhow::Result<()> {
 
 fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.hwnd.store(hwnd.0, Ordering::Release);
+    let dpi = unsafe { GetDpiForWindow(hwnd) };
+    window.set_dpi_metrics(dpi);
     unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.borrow().to_system().0 as _) };
     window.set_position(*window.origin.borrow(), *window.size.borrow())?;
     initialize_content(window, hwnd).context("failed to initialize the content")?;
@@ -608,18 +635,16 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
 
     if window.has_custom_title_bar() {
         let chrome_layer = window.chrome_layer()?;
-        let mut strip = crate::win32::caption_buttons::CaptionButtonStrip::new(
+        let mut client_rect = RECT::default();
+        unsafe { GetClientRect(hwnd, &raw mut client_rect)? };
+        let client_size = PhysicalSize::new(client_rect.right - client_rect.left, client_rect.bottom - client_rect.top);
+        let strip = crate::win32::caption_buttons::CaptionButtonStrip::new(
             &chrome_layer,
             window.get_scale(),
             &window.style.borrow(),
             window.compositor_controller.clone(),
             hwnd,
-        )?;
-        let mut client_rect = RECT::default();
-        unsafe { GetClientRect(hwnd, &raw mut client_rect)? };
-        strip.set_strip_position(
-            PhysicalSize::new(client_rect.right - client_rect.left, client_rect.bottom - client_rect.top),
-            0,
+            client_size,
         )?;
         window.caption_buttons.replace(Some(strip));
     }
