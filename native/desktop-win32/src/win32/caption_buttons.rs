@@ -595,9 +595,7 @@ impl CaptionButtonStrip {
     }
 
     pub(crate) fn set_strip_position(&mut self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
-        let bw = self.metrics.button_size_px.width.0;
-        let total_width = bw * self.buttons.len() as i32;
-        let x = client_size.width.0 - total_width;
+        let x = strip_offset_x(client_size.width.0, self.metrics.button_size_px.width.0, self.buttons.len());
         self.top_offset_px = max_chrome_y;
         self.composition_root.SetOffset(Vector3 {
             X: x as f32,
@@ -908,6 +906,13 @@ impl CaptionButtonStrip {
     }
 }
 
+/// X offset that anchors the strip's right edge to the client area's right
+/// edge. Pure arithmetic; extracted so the layout invariant lives in one
+/// readable place.
+const fn strip_offset_x(client_width_px: i32, button_width_px: i32, button_count: usize) -> i32 {
+    client_width_px - button_width_px * button_count as i32
+}
+
 fn create_caption_button(
     compositor: &windows::UI::Composition::Compositor,
     parent: &ContainerVisual,
@@ -1093,13 +1098,23 @@ fn apply_button_visuals(
         prev == ButtonInteraction::Hovered && new_interaction == ButtonInteraction::Idle && button.availability == Availability::Enabled;
 
     if is_hover_leave {
-        animate_color(&button.visuals.backplate_brush, backplate, std::time::Duration::from_millis(150))?;
-        animate_color(&button.visuals.glyph_brush, foreground, std::time::Duration::from_millis(100))?;
+        animate_color_or_set(&button.visuals.backplate_brush, backplate, std::time::Duration::from_millis(150))?;
+        animate_color_or_set(&button.visuals.glyph_brush, foreground, std::time::Duration::from_millis(100))?;
     } else {
         button.visuals.backplate_brush.SetColor(backplate)?;
         button.visuals.glyph_brush.SetColor(foreground)?;
     }
     button.last_applied_interaction = new_interaction;
+    Ok(())
+}
+
+/// Spec §6.3: `StartAnimation` failure logs at warning level and falls
+/// back to an instant `SetColor`. The visual jumps instead of fading.
+fn animate_color_or_set(brush: &CompositionColorBrush, target: windows::UI::Color, duration: std::time::Duration) -> anyhow::Result<()> {
+    if let Err(err) = animate_color(brush, target, duration) {
+        log::warn!("CaptionButtonStrip: color animation failed; applying target colour directly: {err}");
+        brush.SetColor(target)?;
+    }
     Ok(())
 }
 

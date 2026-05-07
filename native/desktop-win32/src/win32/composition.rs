@@ -18,7 +18,7 @@ use windows::{
     },
     UI::Composition::{CompositionDrawingSurface, CompositionGraphicsDevice, Compositor},
     Win32::{
-        Foundation::{HMODULE, POINT},
+        Foundation::{D2DERR_RECREATE_TARGET, HMODULE, POINT},
         Graphics::{
             Direct2D::{
                 D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1CreateFactory, ID2D1Device, ID2D1DeviceContext, ID2D1Factory1, ID2D1RenderTarget,
@@ -29,12 +29,12 @@ use windows::{
                 DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_REGULAR,
                 DWriteCreateFactory, IDWriteFactory, IDWriteFontFace,
             },
-            Dxgi::{DXGI_ERROR_DEVICE_REMOVED, IDXGIAdapter, IDXGIDevice},
+            Dxgi::{DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET, IDXGIAdapter, IDXGIDevice},
         },
         System::WinRT::Composition::{ICompositionDrawingSurfaceInterop, ICompositorInterop},
     },
 };
-use windows_core::{HSTRING, Interface};
+use windows_core::{HRESULT, HSTRING, Interface};
 
 pub(crate) struct D2dContext {
     dwrite_factory: IDWriteFactory,
@@ -108,9 +108,9 @@ impl D2dContext {
     ///
     /// `Ok(None)` means the underlying D3D11 device was lost; the caller
     /// should skip this frame and leave any dirty flags set so the next
-    /// invocation re-rasterises. The `DXGI_ERROR_DEVICE_REMOVED` branch
-    /// dispatches to the `rebuild_d2d_device` path in this module. Other
-    /// errors propagate.
+    /// invocation re-rasterises. Device-loss is trapped on both `BeginDraw`
+    /// and `EndDraw` (see [`is_device_lost_hresult`]) and dispatches to
+    /// the `rebuild_d2d_device` path in this module. Other errors propagate.
     pub fn with_d2d_render_target<R>(
         &self,
         surface: &CompositionDrawingSurface,
@@ -120,7 +120,7 @@ impl D2dContext {
         let mut offset = POINT::default();
         let context = match unsafe { surface_interop.BeginDraw::<ID2D1DeviceContext>(None, &raw mut offset) } {
             Ok(context) => context,
-            Err(err) if err.code() == DXGI_ERROR_DEVICE_REMOVED => {
+            Err(err) if is_device_lost_hresult(err.code()) => {
                 self.rebuild_d2d_device()?;
                 return Ok(None);
             }
@@ -128,23 +128,33 @@ impl D2dContext {
         };
         let rt: &ID2D1RenderTarget = (&context).into();
         // EndDraw must run even on body failure — an open BeginDraw breaks
-        // future rasterisations on this surface. Body error wins; EndDraw
-        // error attaches as context.
+        // future rasterisations on this surface.
         let body_result = body(rt, offset);
         let end_draw_result = unsafe { surface_interop.EndDraw() };
+        // Device loss reported on EndDraw bypasses the normal precedence:
+        // skip this frame, rebuild, and let the caller leave dirty flags
+        // set. The body error (if any) is moot — the device is gone, so
+        // the closure's failure was almost certainly a consequence.
+        if let Err(ref err) = end_draw_result
+            && is_device_lost_hresult(err.code())
+        {
+            self.rebuild_d2d_device()?;
+            return Ok(None);
+        }
+        // Normal precedence: body error wins, EndDraw error attaches as context.
         match (body_result, end_draw_result) {
             (Ok(value), Ok(())) => Ok(Some(value)),
-            (Err(body_err), Err(end_draw_err)) => Err(body_err.context(format!("EndDraw also failed: {end_draw_err}"))),
             (Err(body_err), Ok(())) => Err(body_err),
             (Ok(_), Err(end_draw_err)) => Err(end_draw_err.into()),
+            (Err(body_err), Err(end_draw_err)) => Err(body_err.context(format!("EndDraw also failed: {end_draw_err}"))),
         }
     }
 
     /// Rebuild the D3D/D2D devices after device loss is detected.
     ///
-    /// Called from the `BeginDraw` `DXGI_ERROR_DEVICE_REMOVED` path inside
-    /// `with_d2d_render_target`. Do not call this from `RenderingDeviceReplaced`;
-    /// that event is only the redraw notification after `SetRenderingDevice`.
+    /// Called from device-loss paths inside `with_d2d_render_target`. Do
+    /// not call from `RenderingDeviceReplaced`; that event is only the
+    /// redraw notification after `SetRenderingDevice`.
     pub(crate) fn rebuild_d2d_device(&self) -> anyhow::Result<()> {
         let d2d_device = build_d2d_device()?;
         let cgd_interop: windows::Win32::System::WinRT::Composition::ICompositionGraphicsDeviceInterop =
@@ -188,6 +198,15 @@ impl Drop for RenderingDeviceReplacedRegistration {
             log::warn!("RemoveRenderingDeviceReplaced failed on Drop: {err}");
         }
     }
+}
+
+/// HRESULTs Microsoft documents as signalling D3D/D2D device loss. Trap on
+/// both [`ID2D1RenderTarget::BeginDraw`] and [`ID2D1RenderTarget::EndDraw`]
+/// — `EndDraw` doc explicitly returns `D2DERR_RECREATE_TARGET` when the
+/// device is gone, while `BeginDraw` typically reports the underlying
+/// DXGI HRESULT.
+const fn is_device_lost_hresult(code: HRESULT) -> bool {
+    matches!(code, DXGI_ERROR_DEVICE_REMOVED | DXGI_ERROR_DEVICE_RESET | D2DERR_RECREATE_TARGET)
 }
 
 fn build_d2d_device() -> anyhow::Result<ID2D1Device> {

@@ -177,15 +177,20 @@ impl Window {
     }
 
     pub(crate) fn ensure_nc_leave_tracking(&self) -> anyhow::Result<()> {
-        if !self.nc_leave_tracking_armed.swap(true, Ordering::Relaxed) {
-            let mut tme = TRACKMOUSEEVENT {
-                cbSize: size_of::<TRACKMOUSEEVENT>().try_into()?,
-                dwFlags: TME_NONCLIENT | TME_LEAVE,
-                hwndTrack: self.hwnd(),
-                dwHoverTime: 0,
-            };
-            unsafe { TrackMouseEvent(&raw mut tme)? };
+        // Set the armed flag only after `TrackMouseEvent` succeeds. The old
+        // `swap(true)`-then-call pattern left the flag stuck at `true` if
+        // the syscall failed, permanently disabling NC leave tracking.
+        if self.nc_leave_tracking_armed.load(Ordering::Relaxed) {
+            return Ok(());
         }
+        let mut tme = TRACKMOUSEEVENT {
+            cbSize: size_of::<TRACKMOUSEEVENT>().try_into()?,
+            dwFlags: TME_NONCLIENT | TME_LEAVE,
+            hwndTrack: self.hwnd(),
+            dwHoverTime: 0,
+        };
+        unsafe { TrackMouseEvent(&raw mut tme)? };
+        self.nc_leave_tracking_armed.store(true, Ordering::Relaxed);
         Ok(())
     }
 

@@ -179,9 +179,11 @@ impl D2dContext {
     // Internally requests `BeginDraw::<ID2D1DeviceContext>` (the documented
     // IID per the Composition native-interop sample) then upcasts to
     // `&ID2D1RenderTarget` for the closure.
-    // Ok(None) on DXGI_ERROR_DEVICE_REMOVED — caller skips this frame.
-    // Callers must preserve dirty state when Ok(None) is returned; no pixels were drawn.
-    // Other errors propagate as anyhow::Error.
+    // Ok(None) when device loss is detected on either BeginDraw or EndDraw —
+    // caller skips this frame. The trap matches three HRESULTs:
+    // DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET, D2DERR_RECREATE_TARGET
+    // (see §6.2). Callers must preserve dirty state when Ok(None) is returned;
+    // no pixels were drawn. Other errors propagate as anyhow::Error.
 
     /// Cheap WinRT smart-pointer clone — the factory is a plain field, so this is infallible.
     pub fn dwrite_factory(&self) -> IDWriteFactory;
@@ -653,13 +655,13 @@ Three tiers. Construction of a `Custom` titlebar window must fail closed if capt
 
 ### 6.2 Runtime: device loss
 
-Device loss is detected **only via `BeginDraw` returning `DXGI_ERROR_DEVICE_REMOVED`** (the reactive path inside `with_d2d_render_target`). The proactive path through `ID3D11Device4::RegisterDeviceRemovedEvent` plus a threadpool wait callback is deferred — see `TODO.md` *Caption-button proactive device-loss detection*.
+Device loss is detected reactively inside `with_d2d_render_target` on both [`ID2D1RenderTarget::BeginDraw`](https://learn.microsoft.com/en-us/windows/win32/api/d2d1/nf-d2d1-id2d1rendertarget-begindraw) and [`ID2D1RenderTarget::EndDraw`](https://learn.microsoft.com/en-us/windows/win32/api/d2d1/nf-d2d1-id2d1rendertarget-enddraw). `EndDraw`'s doc explicitly returns `D2DERR_RECREATE_TARGET` when the underlying device is lost, so the chokepoint must trap there too — not only on `BeginDraw`. The proactive path through `ID3D11Device4::RegisterDeviceRemovedEvent` plus a threadpool wait callback is deferred — see `TODO.md` *Caption-button proactive device-loss detection*.
 
-Recovery sequence (single path): `BeginDraw` returns `DXGI_ERROR_DEVICE_REMOVED` → `with_d2d_render_target` calls `D2dContext::rebuild_d2d_device` synchronously on the UI thread → builds a fresh `ID2D1Device` (D3D11 + D2D only — DirectWrite factory and `CompositionGraphicsDevice` survive device loss) → calls `ICompositionGraphicsDeviceInterop::SetRenderingDevice` on the existing `CompositionGraphicsDevice`, which retains the new device. The original `BeginDraw` returns `Ok(None)` so the calling glyph-rasterise function leaves `glyph_surface_dirty = true`; the next `RenderingDeviceReplaced` notification fires the strip's redraw subscription (below) which re-rasterises and commits.
+Recovery sequence (single path): a device-loss HRESULT on `BeginDraw` or `EndDraw` → `with_d2d_render_target` calls `D2dContext::rebuild_d2d_device` synchronously on the UI thread → builds a fresh `ID2D1Device` (D3D11 + D2D only — DirectWrite factory and `CompositionGraphicsDevice` survive device loss) → calls `ICompositionGraphicsDeviceInterop::SetRenderingDevice` on the existing `CompositionGraphicsDevice`, which retains the new device. The chokepoint returns `Ok(None)` so the calling glyph-rasterise function leaves `glyph_surface_dirty = true`; the next `RenderingDeviceReplaced` notification fires the strip's redraw subscription (below) which re-rasterises and commits. When `EndDraw` reports device loss after a successful body closure, the body's return value is dropped — the device is gone, so the closure's outputs are no longer trustworthy.
 
 The expectation that `RenderingDeviceReplaced` fires on the UI thread holds only because the toolkit always invokes `SetRenderingDevice` from the UI thread — agile marshalling lets the callback fire on the caller's thread, not on a thread of the framework's choosing. Microsoft's Composition native-interop sample demonstrates the inverse pattern: when its `SetRenderingDevice` runs from a `SetThreadpoolWait` worker, the handler runs on that worker. See `TODO.md` *Verify `RenderingDeviceReplaced` fires synchronously*.
 
-**HRESULT match.** The check matches exactly `DXGI_ERROR_DEVICE_REMOVED` (`0x887A0005`), matching the [Composition native interop](https://learn.microsoft.com/windows/apps/develop/composition/composition-native-interop) sample's `BeginDraw` check.
+**HRESULT match.** Three documented loss-class HRESULTs are trapped: `DXGI_ERROR_DEVICE_REMOVED` (`0x887A0005`), `DXGI_ERROR_DEVICE_RESET` (`0x887A0007`), and `D2DERR_RECREATE_TARGET` (`0x8899000C`). The first two come from the underlying DXGI / D3D11 device; the third is D2D-specific and is the canonical signal `EndDraw` returns when the device is gone. The [Composition native interop](https://learn.microsoft.com/windows/apps/develop/composition/composition-native-interop) sample only covers the `DXGI_ERROR_DEVICE_REMOVED` case; the broader set comes from each API's documented return-values table.
 
 **Surface lifetime.** `CompositionDrawingSurface` instances stay usable after `SetRenderingDevice` — only their contents need re-rasterising. The Composition native-interop sample reuses every surface across device replacement.
 
