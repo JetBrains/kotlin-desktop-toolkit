@@ -156,6 +156,21 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                         }
                     }
 
+                    VirtualKey.R -> {
+                        window.setResizable(!window.isResizable())
+                        Logger.debug { "Resizable: ${window.isResizable()}" }
+                    }
+
+                    VirtualKey.N -> {
+                        window.setMinimizable(!window.isMinimizable())
+                        Logger.debug { "Minimizable: ${window.isMinimizable()}" }
+                    }
+
+                    VirtualKey.M -> {
+                        window.setMaximizable(!window.isMaximizable())
+                        Logger.debug { "Maximizable: ${window.isMaximizable()}" }
+                    }
+
                     VirtualKey.V -> {
                         if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
                             val clipboardData = OleClipboard.readClipboard()

@@ -187,6 +187,30 @@ public class Window internal constructor(
         }
     }
 
+    public fun isResizable(): Boolean {
+        return ffiDownCall { desktop_win32_h.window_is_resizable(ptr) }
+    }
+
+    public fun setResizable(value: Boolean) {
+        ffiDownCall { desktop_win32_h.window_set_is_resizable(ptr, value) }
+    }
+
+    public fun isMinimizable(): Boolean {
+        return ffiDownCall { desktop_win32_h.window_is_minimizable(ptr) }
+    }
+
+    public fun setMinimizable(value: Boolean) {
+        ffiDownCall { desktop_win32_h.window_set_is_minimizable(ptr, value) }
+    }
+
+    public fun isMaximizable(): Boolean {
+        return ffiDownCall { desktop_win32_h.window_is_maximizable(ptr) }
+    }
+
+    public fun setMaximizable(value: Boolean) {
+        ffiDownCall { desktop_win32_h.window_set_is_maximizable(ptr, value) }
+    }
+
     public fun setTitle(title: String) {
         Arena.ofConfined().use { arena ->
             val nativeTitle = arena.allocateFrom(title)

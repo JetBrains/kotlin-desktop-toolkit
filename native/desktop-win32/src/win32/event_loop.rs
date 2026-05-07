@@ -356,7 +356,7 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
 }
 
 fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    if !window.has_custom_title_bar() || !window.is_resizable() {
+    if !window.has_custom_title_bar() {
         return None;
     }
     let hwnd = window.hwnd();

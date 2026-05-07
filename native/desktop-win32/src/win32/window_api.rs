@@ -240,6 +240,45 @@ pub extern "C" fn window_set_min_size(window_ptr: WindowPtr, size: LogicalSize) 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_is_resizable(window_ptr: WindowPtr) -> bool {
+    with_window(&window_ptr, "window_is_resizable", |window| Ok(window.is_resizable()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_is_resizable(window_ptr: WindowPtr, value: bool) {
+    with_window(&window_ptr, "window_set_is_resizable", |window| {
+        window.set_is_resizable(value)?;
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_is_minimizable(window_ptr: WindowPtr) -> bool {
+    with_window(&window_ptr, "window_is_minimizable", |window| Ok(window.is_minimizable()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_is_minimizable(window_ptr: WindowPtr, value: bool) {
+    with_window(&window_ptr, "window_set_is_minimizable", |window| {
+        window.set_is_minimizable(value)?;
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_is_maximizable(window_ptr: WindowPtr) -> bool {
+    with_window(&window_ptr, "window_is_maximizable", |window| Ok(window.is_maximizable()))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_set_is_maximizable(window_ptr: WindowPtr, value: bool) {
+    with_window(&window_ptr, "window_set_is_maximizable", |window| {
+        window.set_is_maximizable(value)?;
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_set_title(window_ptr: WindowPtr, title: BorrowedStrPtr) {
     with_window(&window_ptr, "window_set_title", |window| {
         let new_title = copy_from_utf8_string(&title)?;

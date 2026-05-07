@@ -28,11 +28,12 @@ use windows::{
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
-                GetClientRect, GetPropW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW,
-                RemovePropW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SW_SHOWNORMAL,
-                SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos,
-                SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW,
-                WS_EX_NOREDIRECTIONBITMAP, WS_OVERLAPPEDWINDOW,
+                GetClientRect, GetPropW, GetWindowLongPtrW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW,
+                RegisterClassExW, RemovePropW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED,
+                SW_SHOWNORMAL, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW,
+                SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE,
+                WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+                WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -49,6 +50,23 @@ use super::{
     utils,
     window_api::{WindowParams, WindowStyle, WindowTitleBarKind},
 };
+
+#[derive(Clone, Copy)]
+enum StyleFlag {
+    Resizable,
+    Minimizable,
+    Maximizable,
+}
+
+impl StyleFlag {
+    const fn bit(self) -> u32 {
+        match self {
+            Self::Resizable => WS_THICKFRAME.0,
+            Self::Minimizable => WS_MINIMIZEBOX.0,
+            Self::Maximizable => WS_MAXIMIZEBOX.0,
+        }
+    }
+}
 
 /// cbindgen:ignore
 const WINDOW_PTR_PROP_NAME: PCWSTR = w!("KDT_WINDOW_PTR");
@@ -214,6 +232,16 @@ impl Window {
         self.style.borrow().is_resizable
     }
 
+    #[must_use]
+    pub fn is_minimizable(&self) -> bool {
+        self.style.borrow().is_minimizable
+    }
+
+    #[must_use]
+    pub fn is_maximizable(&self) -> bool {
+        self.style.borrow().is_maximizable
+    }
+
     pub(crate) fn extend_content_into_titlebar(&self) -> WinResult<()> {
         if utils::is_windows_11_build_22000_or_higher() {
             let colorref = COLORREF(DWMWA_COLOR_NONE);
@@ -357,6 +385,49 @@ impl Window {
 
     pub fn set_title(&self, title: &HSTRING) -> WinResult<()> {
         unsafe { SetWindowTextW(self.hwnd(), title) }
+    }
+
+    pub fn set_is_resizable(&self, value: bool) -> WinResult<()> {
+        self.update_style_flag(StyleFlag::Resizable, value)?;
+        self.style.borrow_mut().is_resizable = value;
+        Ok(())
+    }
+
+    pub fn set_is_minimizable(&self, value: bool) -> WinResult<()> {
+        self.update_style_flag(StyleFlag::Minimizable, value)?;
+        self.style.borrow_mut().is_minimizable = value;
+        Ok(())
+    }
+
+    pub fn set_is_maximizable(&self, value: bool) -> WinResult<()> {
+        self.update_style_flag(StyleFlag::Maximizable, value)?;
+        self.style.borrow_mut().is_maximizable = value;
+        Ok(())
+    }
+
+    fn update_style_flag(&self, flag: StyleFlag, value: bool) -> WinResult<()> {
+        let hwnd = self.hwnd();
+        let bit = flag.bit();
+        let current: u32 = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) }.try_into().unwrap();
+        let new_style = if value { current | bit } else { current & !bit };
+        if new_style == current {
+            return Ok(());
+        }
+        unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, new_style.try_into().unwrap()) };
+        // SWP_FRAMECHANGED forces the cached non-client area to be recomputed so the
+        // new style takes effect; size/position/z-order are intentionally preserved.
+        unsafe {
+            SetWindowPos(
+                hwnd,
+                None,
+                0,
+                0,
+                0,
+                0,
+                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE,
+            )?;
+        }
+        Ok(())
     }
 
     #[must_use]
