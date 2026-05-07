@@ -45,7 +45,7 @@ pub(crate) struct D2dContext {
 impl D2dContext {
     /// Eagerly constructs the D3D11 / D2D devices, the DirectWrite factory,
     /// and the `CompositionGraphicsDevice`. The `Rc<D2dContext>` singleton
-    /// wrapping happens once at `composition::ensure_d2d_context` (Task 1.3).
+    /// wrapping happens once at `composition::ensure_d2d_context`.
     // Takes `Compositor` by value to mirror the singleton-accessor signature
     // (`ensure_d2d_context(compositor: Compositor)`); the WinRT smart pointer
     // is cheap to clone, so we accept the shadow rather than thread `&` through
@@ -108,9 +108,9 @@ impl D2dContext {
     ///
     /// `Ok(None)` means the underlying D3D11 device was lost; the caller
     /// should skip this frame and leave any dirty flags set so the next
-    /// invocation re-rasterises. The `DXGI_ERROR_DEVICE_REMOVED` branch is
-    /// wired below; Task 1.6 adds the `rebuild_d2d_device` body it calls.
-    /// Other errors propagate.
+    /// invocation re-rasterises. The `DXGI_ERROR_DEVICE_REMOVED` branch
+    /// dispatches to the `rebuild_d2d_device` path in this module. Other
+    /// errors propagate.
     pub fn with_d2d_render_target<R>(
         &self,
         surface: &CompositionDrawingSurface,

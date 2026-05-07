@@ -7,6 +7,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - [Application & event loop](#application--event-loop)
 - [Window](#window)
 - [Renderer (ANGLE)](#renderer-angle)
+- [Caption buttons & D2D context](#caption-buttons--d2d-context)
 - [Geometry](#geometry)
 - [Keyboard](#keyboard)
 - [Pointer](#pointer)
@@ -49,9 +50,9 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Gotchas.**
 - `application_dispatcher_invoke` returns a `bool` (enqueue succeeded?) — `Application.invokeOnDispatcher` discards it. Enqueues after dispatcher shutdown silently lose the lambda.
 - `EnableMouseInPointer(true)` is process-wide and irreversible — third-party libs in the same process expecting raw `WM_MOUSE*` will silently break.
-- `WM_NCPOINTERUP` returns `None` outside the caption-button strip's hit-test area (`event_loop.rs:557` in the current tree) so DefWindowProc can handle default NC behavior. For non-system titlebar kinds (`WindowTitleBarKind::Custom` / `WindowTitleBarKind::None`), `WindowStyle::to_system` keeps `WS_CAPTION` for native transitions but clears `WS_SYSMENU`, so system caption buttons are not surfaced. Inside the strip's hit-test area or while a caption-button press session is active, `on_pointerup` returns `Some(LRESULT(0))` to suppress both the system path and the Kotlin-facing `PointerUp` event — see the caption-buttons plan (`docs/plans/2026-04-30-win32-caption-buttons.md`, Task 6.3 step 4).
+- `WM_NCPOINTERUP` returns `None` outside the caption-button strip's hit-test area (`event_loop.rs` in the current tree) so DefWindowProc can handle default NC behavior. For non-system titlebar kinds (`WindowTitleBarKind::Custom` / `WindowTitleBarKind::None`), `WindowStyle::to_system` keeps `WS_CAPTION` for native transitions but clears `WS_SYSMENU`, so system caption buttons are not surfaced. Inside the strip's hit-test area or while a caption-button press session is active, `on_pointerup` returns `Some(LRESULT(0))` to suppress both the system path and the Kotlin-facing `PointerUp` event — see the caption-buttons spec §3.2.
 - `WM_POINTERUPDATE` and `WM_POINTERDOWN` can both emit `Event::PointerDown` for the same gesture (button press inside an update message + dedicated down handler) → possible duplicate events. See TODO.md.
-- Two commented-out variants in `events.rs:31`: `//WindowFocusChange`, `//WindowFullScreenToggle` — stale scaffolding.
+- Two commented-out variants in `events.rs`: `//WindowFocusChange`, `//WindowFullScreenToggle` — stale scaffolding.
 
 **Cross-refs.** `geometry` (event payloads), `keyboard`, `pointer`, `appearance` (`SystemAppearanceChangeEvent` on `WM_SETTINGCHANGE`), `window`, `renderer_angle` (factory), `com.rs` (transitively via OLE init), `desktop_common::ffi_utils` (pointer wrappers), `desktop_common::logger` (error/FFI boundary).
 
@@ -80,7 +81,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - Window is created at `1×1` then resized in `initialize_window`. **This is intentional**: the managed layer specifies the requested size in *logical* pixels, but the DPI scale needed to convert to *physical* pixels can only be read from a real `HWND` (`GetDpiForWindow`). The minimal-size window is created first to obtain the HWND, then `set_position` applies the logical→physical conversion. Consequence: creation emits repeated `WM_WINDOWPOSCHANGED` notifications. Size/move handlers must be idempotent.
 - `Window::drop` only logs a trace; doesn't verify the HWND was destroyed. If the `Rc` drops without `window_destroy`, the HWND leaks.
 - `WindowTitleBarKind::Custom` is reachable from Kotlin; `extend_content_into_titlebar` is invoked from `on_activate` whenever `is_active && !is_minimized` (regardless of title-bar kind), not specifically gated on `Custom`. `WindowStyle::to_system` keeps `WS_CAPTION` but clears `WS_SYSMENU` for non-system titlebar kinds (`Custom` / `None`); the caption-buttons path layers toolkit-drawn buttons on top while preserving native transition behavior.
-- `#[allow(dead_code)]` on `WindowTitleBarKind` (window_api.rs:79) and `WindowSystemBackdropType` (window_api.rs:88) — false positives because cbindgen reads them but rustc can't see that.
+- `#[allow(dead_code)]` on `WindowTitleBarKind` (window_api.rs) and `WindowSystemBackdropType` (window_api.rs) — false positives because cbindgen reads them but rustc can't see that.
 
 **Cross-refs.** `application` (`CompositorController` source, `Weak<EventLoop>`), `event_loop` (wndproc dispatcher), `events` (event payloads), `geometry`, `cursor` (per-window cursor), `pointer` (`PointerClickCounter` storage), `screen` (`window_get_screen_info`), `strings`, `utils` (Win11 build probes).
 
@@ -95,8 +96,8 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **FFI surface.** `renderer_angle_device_create`, `renderer_angle_drop`, `renderer_angle_resize_surface`, `renderer_angle_make_current`, `renderer_angle_swap_buffers`, `renderer_angle_get_egl_get_proc_func`.
 
 **Key types.**
-- `AngleDevice` (renderer_angle.rs:43) — owns the EGL `Display`, `Context`, `Surface`, the `CompositorController`, and a `SpriteVisual`. Box-allocated, opaque pointer.
-- `EglInstance` (`renderer_egl_utils.rs:7`) — `khronos_egl::DynamicInstance<EGL1_5>` type alias.
+- `AngleDevice` (renderer_angle.rs) — owns the EGL `Display`, `Context`, `Surface`, the `CompositorController`, and a `SpriteVisual`. Box-allocated, opaque pointer.
+- `EglInstance` (`renderer_egl_utils.rs`) — `khronos_egl::DynamicInstance<EGL1_5>` type alias.
 - `EglGetProcFuncData`, `EglSurfaceData`, `SurfaceParams` — small `#[repr(C)]` structs returned to Kotlin.
 
 **Init sequence (renderer_angle.rs).**
@@ -108,13 +109,43 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Threading.** EGL contexts are not implicitly thread-safe — `make_current` must run on the thread that issues GL calls. `AngleDevice` is implicitly `!Send` (WinRT handles inside it are `!Send`); not asserted at the type level.
 
 **Gotchas.**
-- `swap_buffers` calls `glFinish` unconditionally before `eglSwapBuffers` (renderer_angle.rs:145) — serialises the CPU on every frame, eliminating GPU/CPU pipelining. Intent is not documented here; perf concern worth re-evaluating.
-- `swap_interval` hardcoded to 1; TODO at renderer_angle.rs:146 says "0 on resize" — no logic to detect resize.
-- `core::mem::transmute` in the `get_egl_proc!` macro (renderer_egl_utils.rs:37) — no `// SAFETY` comment; correctness rests on EGL spec matching the local function-pointer typedef.
-- `#[allow(clippy::bool_to_int_with_if)]` at renderer_angle.rs:143 is dead — function body has no conditional; leftover from a refactor.
+- `swap_buffers` calls `glFinish` unconditionally before `eglSwapBuffers` (renderer_angle.rs) — serialises the CPU on every frame, eliminating GPU/CPU pipelining. Intent is not documented here; perf concern worth re-evaluating.
+- `swap_interval` hardcoded to 1; TODO at renderer_angle.rs says "0 on resize" — no logic to detect resize.
+- `core::mem::transmute` in the `get_egl_proc!` macro (renderer_egl_utils.rs) — no `// SAFETY` comment; correctness rests on EGL spec matching the local function-pointer typedef.
+- `#[allow(clippy::bool_to_int_with_if)]` at renderer_angle.rs is dead — function body has no conditional; leftover from a refactor.
 - `libEGL.dll` lookup has no fallback — missing DLL surfaces as `ERROR_PATH_NOT_FOUND` with no helpful diagnostic.
 
 **Cross-refs.** `application` (factory), `window` (provides the `SpriteVisual`), `geometry` (surface dimensions in physical pixels).
+
+---
+
+## Caption buttons & D2D context
+
+**Purpose.** Toolkit-managed Min / Max / Restore / Close buttons for `WindowTitleBarKind::Custom` windows. Pure-state-machine strip rasterised via Direct2D / DirectWrite onto a per-window `CaptionButtonStrip` in the window's `chrome_layer`. Win11 Snap Layouts integration via `HTMAXBUTTON`. Design lives in `docs/specs/2026-04-30-win32-caption-buttons-design.md` — this section navigates the implementation, not the design.
+
+**Files.** `caption_buttons.rs` (strip + state machine + theme + metrics), `composition.rs` (`D2dContext`).
+
+**FFI surface.** None. Both modules are `pub(crate)` only — no Kotlin-facing API. Click side-effects route through existing `Window::request_close` / `minimize` / `maximize` / `restore`.
+
+**Key types.**
+- `CaptionButtonStrip` (caption_buttons.rs) — owns its `composition_root`, the per-button visuals, the press-session state machine, and an `Rc<D2dContext>` clone. `pub(crate)`. `!Send`.
+- `D2dContext` (composition.rs) — gateway to D3D11 / D2D / DirectWrite / `CompositionGraphicsDevice`. UI-thread singleton via `composition::ensure_d2d_context` (thread-local `OnceCell<Rc<D2dContext>>`). `!Send`.
+- `CaptionButtonKind` — `#[repr(u8)]` (discriminants are load-bearing for the bitset). `CaptionButtonAction`, `PointerDeviceKind` — plain enums, no `#[repr]`.
+- `PressSessionMode { Active, Suppressed { held_button } }` — drives the wndproc-level swallow path. See spec §4.2 for the press-session state machine.
+
+**Ownership.** Strip is `RefCell<Option<CaptionButtonStrip>>` on `Window`, populated in `initialize_window` for `Custom` titlebar windows. Construction failure short-circuits `window_create` — a `Custom` titlebar window must not appear without caption buttons (spec §6.1). The `RenderingDeviceReplacedRegistration` RAII guard lives on the strip; dropping the strip removes the WinRT subscription. The strip is dropped from the `WM_NCDESTROY` arm before the HWND is recycled.
+
+**Threading.** UI thread only. The `RenderingDeviceReplaced` callback is the single `Send + 'static` boundary; the registered closure `PostMessageW`s a private `WM_APP_*` to the owning HWND rather than touching strip state directly, so the WM_APP handler runs on the UI thread.
+
+**Gotchas.**
+- Hit-test routing dispatches into `caption_kind_at_screen` (caption_buttons.rs) for both `WM_NCHITTEST` and the `WM_NCPOINTER*` handlers — geometric, not `HIWORD(wParam)` — see spec §3.2.
+- Device-loss recovery is reactive only: `D2dContext::with_d2d_render_target` traps `DXGI_ERROR_DEVICE_REMOVED` from `BeginDraw`, calls `rebuild_d2d_device`, and a `RenderingDeviceReplaced` notification triggers re-rasterise — see spec §6.2.
+- Two cleanup APIs: `on_pointer_cancel(pointer_id)` for `WM_POINTERCAPTURECHANGED`; `cancel_any_press()` for `WM_CANCELMODE` and `WM_ACTIVATE`-deactivate — see spec §3.2 / §4.2.
+- `max_chrome_y` is `SM_CYSIZEFRAME` only on this toolkit's non-system titlebar style; the strip's resize-band exclusion (`is_in_top_resize_border`) uses the full `SM_CXPADDEDBORDER + SM_CYSIZEFRAME` — see spec §3.6.
+- Inactive caption-button hover and pressed render with the active palette — see spec §4.4.
+- Do not add `Commit()` to `Window::resize_backdrop_tint` — the strip's `on_resize` is the single commit point that publishes both the backdrop resize and the strip Y-shift atomically — see spec §5.5.
+
+**Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`), `event_loop` (wndproc dispatch into `caption_kind_at_screen` and the strip's lifecycle methods), `appearance` (`Appearance` / `HighContrast` seed values + change events), `geometry` (`PhysicalPoint` / `PhysicalSize`).
 
 ---
 
@@ -142,11 +173,11 @@ The DPI scale is owned by `Window` (`get_scale()` calls `GetDpiForWindow(hwnd)` 
 
 | Site | Payload | Why physical |
 |---|---|---|
-| `screen_map_to_client(WindowPtr, PhysicalPoint) -> PhysicalPoint` (`screen_api.rs:36`) | both input and result | Maps screen-space to client-space; both endpoints are physical and the conversion is a `ScreenToClient` call. |
-| `ScreenInfo.origin` (`screen.rs:27`) | should be `PhysicalPoint`; currently `LogicalPoint` (bug — see `TODO.md`) | Multi-monitor desktop origin: positions a monitor on a virtual desktop that may span multiple displays with different DPI scales, so no single monitor's scale converts losslessly. |
-| Pointer events `locationOnScreen` (Down/Entered/Exited/Updated/Up + ScrollWheel) (`events.rs:114, 124, 133, 148, 159, 170`) | `PhysicalPoint` | Screen-space coordinates; the per-window scale doesn't apply when the cursor is over another monitor. (The window-relative `location` sibling, when present, is logical.) |
-| `WindowMoveEvent.origin`, `WindowResizeEvent.size`, `WindowDrawEvent.size`, `WindowScaleChangedEvent.{origin,size}`, `NCCalcSizeEvent.{origin,size}` (`events.rs:84-85, 203, 216, 229, 242-243`) | `PhysicalPoint` / `PhysicalSize` | These events directly mirror Win32 messages whose payloads are physical-pixel `RECT`s. `WindowScaleChangedEvent` in particular precedes the new DPI taking effect, so converting via the *current* scale would give a stale value. The managed code is expected to either treat them as raw, or convert using a freshly-fetched scale. |
-| `DropTarget.onDragEnter / onDragOver / onDrop` `point: PhysicalPoint` (`DragDrop.kt:53, 57, 61`) | `PhysicalPoint` | OLE delivers the drag point as a screen-space `POINTL` in physical pixels; the toolkit passes it through unchanged so callers can decide how (and against which window) to convert. |
+| `screen_map_to_client(WindowPtr, PhysicalPoint) -> PhysicalPoint` (`screen_api.rs`) | both input and result | Maps screen-space to client-space; both endpoints are physical and the conversion is a `ScreenToClient` call. |
+| `ScreenInfo.origin` (`screen.rs`) | should be `PhysicalPoint`; currently `LogicalPoint` (bug — see `TODO.md`) | Multi-monitor desktop origin: positions a monitor on a virtual desktop that may span multiple displays with different DPI scales, so no single monitor's scale converts losslessly. |
+| Pointer events `locationOnScreen` (Down/Entered/Exited/Updated/Up + ScrollWheel) (`events.rs`) | `PhysicalPoint` | Screen-space coordinates; the per-window scale doesn't apply when the cursor is over another monitor. (The window-relative `location` sibling, when present, is logical.) |
+| `WindowMoveEvent.origin`, `WindowResizeEvent.size`, `WindowDrawEvent.size`, `WindowScaleChangedEvent.{origin,size}`, `NCCalcSizeEvent.{origin,size}` (`events.rs`) | `PhysicalPoint` / `PhysicalSize` | These events directly mirror Win32 messages whose payloads are physical-pixel `RECT`s. `WindowScaleChangedEvent` in particular precedes the new DPI taking effect, so converting via the *current* scale would give a stale value. The managed code is expected to either treat them as raw, or convert using a freshly-fetched scale. |
+| `DropTarget.onDragEnter / onDragOver / onDrop` `point: PhysicalPoint` (`DragDrop.kt`) | `PhysicalPoint` | OLE delivers the drag point as a screen-space `POINTL` in physical pixels; the toolkit passes it through unchanged so callers can decide how (and against which window) to convert. |
 
 When adding a new event or FFI return value carrying coordinates, default to `LogicalPoint` / `LogicalSize`. Use `PhysicalPoint` / `PhysicalSize` only when one of the above conditions applies — and document why at the call site.
 
@@ -169,10 +200,10 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **Mechanism for translate / unicode.** When `WM_KEYDOWN` arrives, the original `MSG` is stashed in the `KEYEVENT_MESSAGES: thread_local!<HashMap<u64, MSG>>` keyed on an auto-incrementing `u64` ID. The Kotlin `KeyDownEvent` carries that ID; calling `KeyDown.toUnicode()` or `KeyEvent.translate()` re-enters Rust which looks the message up. Restricted to the UI thread by the `thread_local!`.
 
 **Gotchas.**
-- `keydown_to_unicode` calls `ToUnicodeEx` with the "do not change keyboard state" flag (bit 2) — dead-key state in the OS is not consumed by the probe. But the negative return value (which signals "dead key stored") is collapsed via `unsigned_abs()` (events_api.rs:58), so the caller can't tell "dead key applied" from "regular character emitted".
+- `keydown_to_unicode` calls `ToUnicodeEx` with the "do not change keyboard state" flag (bit 2) — dead-key state in the OS is not consumed by the probe. But the negative return value (which signals "dead key stored") is collapsed via `unsigned_abs()` (events_api.rs), so the caller can't tell "dead key applied" from "regular character emitted".
 - No `WM_IME_*` handlers anywhere. IME composition characters arrive only through `WM_CHAR` / `WM_DEADCHAR`. Full IME composition window is unhandled.
 - `PhysicalKeyStatus.scan_code` is 8 bits (`LOBYTE(HIWORD(lparam))`). Extended scancodes (e0-prefixed) carry only the trailing byte; the prefix must be reconstructed from `is_extended_key`.
-- `VirtualKey` width inconsistency: Rust `u16` (keyboard.rs:10), FFI `i32` (keyboard_api.rs:29), Kotlin `Int` (`@JvmInline value class`).
+- `VirtualKey` width inconsistency: Rust `u16` (keyboard.rs), FFI `i32` (keyboard_api.rs), Kotlin `Int` (`@JvmInline value class`).
 - `keyboard_get_state` returns `AutoDropArray<u8>` (256 bytes); Kotlin reads into `KeyboardState(ByteArray)` with bit-mask helpers.
 
 **Cross-refs.** `events` (`KeyDownEvent`, `CharacterReceivedEvent`), `event_loop` (`thread_local!`, dispatcher), `desktop_common::ffi_utils` (`AutoDropArray`, `RustAllocatedStrPtr`).
@@ -190,13 +221,13 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `PointerState`, `PointerButton`, `PointerButtons` (bitmask), `PointerModifiers` (bitmask).
 - `PointerClickCounter` — tracks button identity, time window, move threshold (`SM_CXDOUBLECLK`/`SM_CYDOUBLECLK`).
 
-**Mechanism.** `EnableMouseInPointer(true)` routes `WM_MOUSE*` through the `WM_POINTER*` path process-wide. `PointerInfo::try_from_message` dispatches on `dwInputType` to call `GetPointerTouchInfo` / `GetPointerPenInfo` / `GetPointerInfo`. `PointerModifiers` is populated via `core::mem::transmute::<u32, PointerModifiers>(dwKeyStates)` (pointer.rs:153).
+**Mechanism.** `EnableMouseInPointer(true)` routes `WM_MOUSE*` through the `WM_POINTER*` path process-wide. `PointerInfo::try_from_message` dispatches on `dwInputType` to call `GetPointerTouchInfo` / `GetPointerPenInfo` / `GetPointerInfo`. `PointerModifiers` is populated via `core::mem::transmute::<u32, PointerModifiers>(dwKeyStates)` (pointer.rs).
 
 **Gotchas.**
 - WM_POINTERUPDATE + WM_POINTERDOWN both emit `PointerDown` for the same gesture (see "Application & event loop" gotchas).
 - `PointerClickCounter::register_click` uses `GetMessageTime()` (i32) — wraps every ~49 days. Wrap-safe for short intervals via `cast_unsigned()` subtraction.
-- `PointerModifiers` bit values (Shift=4, Ctrl=8) are documented only on the Kotlin side (`Pointer.kt:37-40`); Rust has no named constants.
-- `pointer.rs:162` carries `#[allow(clippy::cast_precision_loss)]` on a DPI-math expression — real precision concern at high resolutions; suppressed silently.
+- `PointerModifiers` bit values (Shift=4, Ctrl=8) are documented only on the Kotlin side (`Pointer.kt`); Rust has no named constants.
+- `pointer.rs` carries `#[allow(clippy::cast_precision_loss)]` on a DPI-math expression — real precision concern at high resolutions; suppressed silently.
 
 **Cross-refs.** `events`, `event_loop`, `window` (`PointerClickCounter` storage, `is_pointer_in_window`), `geometry`.
 
@@ -215,7 +246,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **Per-window cursor.** Stored as `RefCell<Option<Cursor>>` inside `Window`. Set via `Window::set_cursor`; the previous `Cursor` drops (and is freed if it was a file cursor). Initialised to `Arrow` in `initialize_window`. Re-applied to the DC on `WM_SETCURSOR` for the `HTCLIENT` hit.
 
 **Gotchas.**
-- `CursorIcon::Unknown` panics: `cursor.rs:52` — `panic!("Can't create Unknown cursor")`. Triggered if the integer 0 is ever passed across FFI from Kotlin.
+- `CursorIcon::Unknown` panics: `cursor.rs` — `panic!("Can't create Unknown cursor")`. Triggered if the integer 0 is ever passed across FFI from Kotlin.
 - `CursorDisplayCounter` semantics (counter goes negative; visible only when ≥ 0) are not documented at the Kotlin layer.
 - `cursor_api.rs` is incomplete relative to the cursor feature set — set-cursor APIs live elsewhere.
 
@@ -237,11 +268,11 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Gotchas.**
 - `EnumDisplayMonitors` aborts on first per-monitor failure (returns `FALSE` from the callback). One bad monitor → entire `screen_list` errors out.
-- `is_primary` detected by `dmPosition == (0,0)` (`screen.rs:97`) rather than the canonical `MONITORINFOF_PRIMARY` flag.
+- `is_primary` detected by `dmPosition == (0,0)` (`screen.rs`) rather than the canonical `MONITORINFOF_PRIMARY` flag.
 - `dpi_y` is fetched but discarded — asymmetric DPI silently mishandled.
 - No `WM_DISPLAYCHANGE` handler anywhere — monitor topology changes invisible. Stale data until caller re-invokes `screen_list`.
 - `screen_info_drop` is exported but never called from Kotlin — possibly vestigial.
-- `// todo color space?` and `// todo stable uuid?` at screen.rs:31-32.
+- `// todo color space?` and `// todo stable uuid?` at screen.rs.
 
 **Cross-refs.** `geometry` (point/size types), `strings` (monitor name), `window` (`window_get_screen_info`), `desktop_common::ffi_utils` (`AutoDropArray`, `AutoDropStrPtr`).
 
@@ -255,7 +286,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **FFI surface.** `application_get_appearance` → `Appearance` (C enum), `application_get_high_contrast` → `HighContrast` (C enum).
 
-**Mechanism.** `Appearance::get_current()` uses a cached WinRT `UISettings` (`static CACHED_UI_SETTINGS: OnceLock<UISettings>`, appearance.rs:35), reads `Foreground`, and applies a luminance heuristic `(5*G + 2*R + B) > 8*128` (appearance.rs:50). `HighContrast::get_current()` reads `SPI_GETHIGHCONTRAST` and maps `HCF_HIGHCONTRASTON` to `HighContrast::{Off, On}`.
+**Mechanism.** `Appearance::get_current()` uses a cached WinRT `UISettings` (`static CACHED_UI_SETTINGS: OnceLock<UISettings>`, appearance.rs), reads `Foreground`, and applies a luminance heuristic `(5*G + 2*R + B) > 8*128` (appearance.rs). `HighContrast::get_current()` reads `SPI_GETHIGHCONTRAST` and maps `HCF_HIGHCONTRASTON` to `HighContrast::{Off, On}`.
 
 **Change events.** `on_settingchange` emits:
 - `SystemAppearanceChangeEvent` on `WM_SETTINGCHANGE` with `wparam == 0 && lparam == "ImmersiveColorSet"`.
@@ -286,8 +317,8 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **Throwing vs `try_*`.** Both variants exist for every read: throwing version returns `R::default()` and surfaces an exception; `try_*` returns `FfiOption<R>` and (currently) swallows all errors to `None`. Per-user note: `try_*` should swallow only "format not found" — see TODO.md.
 
 **Gotchas.**
-- `ole_clipboard_set_data` calls `OleFlushClipboard` immediately (clipboard_api.rs:208-209). The original `IDataObject` is no longer the live clipboard object after the call; subsequent mutations to it have no effect.
-- `Clipboard::is_format_available` returns `Ok(false)` for the documented "ok HRESULT means false" Win32 quirk in `IsClipboardFormatAvailable` (clipboard.rs:55).
+- `ole_clipboard_set_data` calls `OleFlushClipboard` immediately (clipboard_api.rs). The original `IDataObject` is no longer the live clipboard object after the call; subsequent mutations to it have no effect.
+- `Clipboard::is_format_available` returns `Ok(false)` for the documented "ok HRESULT means false" Win32 quirk in `IsClipboardFormatAvailable` (clipboard.rs).
 - DataReader path is **not** used here — `GetClipboardData` always returns HGLOBAL, so `hglobal_reader` is called directly.
 
 **Cross-refs.** `window` (parent HWND for `OpenClipboard`), `data_object` (OLE path target), `data_reader` (used only by `data_object_api`, not here), `global_data` (HGLOBAL helpers), `data_transfer` (`DataFormat`).
@@ -313,8 +344,8 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **Gotchas.**
 - `tryRead*` collapses all errors to `None`; should be format-not-found only. See TODO.md.
 - `DataObject` Kotlin class is **not thread-safe**: `requireOpen` reads `comInterfacePtr` without sync; concurrent `close()` + `read*()` is a data race.
-- Module-blanket `#![allow(clippy::inline_always)]` and `#![allow(clippy::ref_as_ptr)]` (data_object.rs:1-2) — inherited from windows-core's `implement!` macro expansion.
-- Format-id casts: `data_format.id() as u16` (data_object.rs:159) carries `#[allow(clippy::cast_possible_truncation)]`. Registered IDs (0xC000–0xFFFF) and CF_* values fit, but the suppression is undocumented. Could use `try_into()` with an error.
+- Module-blanket `#![allow(clippy::inline_always)]` and `#![allow(clippy::ref_as_ptr)]` (data_object.rs) — inherited from windows-core's `implement!` macro expansion.
+- Format-id casts: `data_format.id() as u16` (data_object.rs) carries `#[allow(clippy::cast_possible_truncation)]`. Registered IDs (0xC000–0xFFFF) and CF_* values fit, but the suppression is undocumented. Could use `try_into()` with an error.
 
 **Cross-refs.** `com.rs` (`ComInterfaceRawPtr`), `data_reader` (read path), `data_transfer` (format IDs), `global_data` (HGLOBAL backing), `papaya`, `windows::Win32::System::Com::IDataObject`, `windows-core::implement`.
 
@@ -334,8 +365,8 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **Mechanism.** `DataReader::create(data_object, data_format)` requests `TYMED_HGLOBAL | TYMED_ISTREAM`. On HGLOBAL: `HGlobalData::copy_from(handle)` (deep copy). On IStream: clone (`AddRef` increment). Then dispatches `get_*` to `hglobal_reader` or `istream_reader` submodules.
 
 **Gotchas.**
-- `istream_reader::get_text` is **not** compatible with `IStream_ReadStr` (data_reader.rs:154-159 documents this) — `IStream_ReadStr` uses a 4-byte length prefix + UTF-16 wire format (a shlwapi-implementation convention for application-private persistence). This reader treats the stream as raw UTF-16 LE, correct for clipboard data. Mixing the two paths would corrupt reads.
-- `#[expect(dead_code, reason = "retained solely for its Drop side-effect")]` on `guard` (data_reader.rs:35-36) — legitimate, well-documented use.
+- `istream_reader::get_text` is **not** compatible with `IStream_ReadStr` (data_reader.rs documents this) — `IStream_ReadStr` uses a 4-byte length prefix + UTF-16 wire format (a shlwapi-implementation convention for application-private persistence). This reader treats the stream as raw UTF-16 LE, correct for clipboard data. Mixing the two paths would corrupt reads.
+- `#[expect(dead_code, reason = "retained solely for its Drop side-effect")]` on `guard` (data_reader.rs) — legitimate, well-documented use.
 
 **Cross-refs.** `data_object` (called via `IDataObject` trait), `global_data` (`HGlobalData`, `hglobal_reader`).
 
@@ -381,8 +412,8 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `drag_drop_revoke_target` calls `RevokeDragDrop`.
 
 **Gotchas.**
-- **`ComInterfaceRawPtr` lifetime in callbacks** (drag_drop.rs:97 — `// TODO: figure out lifetime`). The `DataObject(rawPtr)` Kotlin instance constructed inside `dragEnter` / `drop` wraps a pointer whose validity is bounded by the COM callback. If Kotlin stores that `DataObject` beyond the callback, the pointer escapes. Currently no enforcement.
-- Module-blanket `#![allow(clippy::inline_always)]` and `#![allow(clippy::ref_as_ptr)]` (drag_drop.rs:1-2) — same as `data_object.rs`, inherited from `implement!`.
+- **`ComInterfaceRawPtr` lifetime in callbacks** (drag_drop.rs). The `DataObject(rawPtr)` Kotlin instance constructed inside `dragEnter` / `drop` wraps a pointer whose validity is bounded by the COM callback. If Kotlin stores that `DataObject` beyond the callback, the pointer escapes. Currently no enforcement.
+- Module-blanket `#![allow(clippy::inline_always)]` and `#![allow(clippy::ref_as_ptr)]` (drag_drop.rs) — same as `data_object.rs`, inherited from `implement!`.
 - COM callbacks arrive on the STA thread; the confined `Arena` for callback stubs is single-thread, so this is consistent only as long as drag-drop stays on the STA thread.
 
 **Cross-refs.** `data_object` (the wrapped `IDataObject`), `com.rs` (`ComInterfaceRawPtr`), `geometry` (`PhysicalPoint` from `POINTL`), `window`.
@@ -402,7 +433,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `hglobal_reader::get_text` / `get_bytes` / `get_file_list` / `get_html` — lock, read, unlock.
 
 **Gotchas.**
-- `new_file_list` takes `&Vec<&str>` (global_data.rs:100) — should be `&[&str]` (clippy `ptr_arg` smell).
+- `new_file_list` takes `&Vec<&str>` (global_data.rs) — should be `&[&str]` (clippy `ptr_arg` smell).
 - `global_mem_copy` doesn't handle zero-length globals — `GlobalAlloc(GMEM_FIXED, 0)` semantics are platform-specific.
 - HTML format read/write goes through WinRT `HtmlFormatHelper::CreateHtmlFormat` / `GetStaticFragment` — a rare WinRT call in an otherwise pure-Win32 path.
 
@@ -448,7 +479,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Gotchas.**
 - **No file-type filter support.** `COMDLG_FILTERSPEC` / `SetFileTypes` not used. Capability gap vs. macOS. See TODO.md.
-- `filter_map` (file_dialog.rs:134) silently drops items that fail `GetDisplayName` or UTF-8 conversion — partial result returned with no caller signal.
+- `filter_map` (file_dialog.rs) silently drops items that fail `GetDisplayName` or UTF-8 conversion — partial result returned with no caller signal.
 - `retrieved_items` count from `IEnumShellItems::Next` is ignored.
 - `SetDefaultFolder` (not `SetFolder`) — shell MRU can override the suggested initial folder.
 - 14 unsafe blocks, no `// SAFETY` comments anywhere.
@@ -476,19 +507,19 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `strings.rs` provides the only UTF-16 ↔ UTF-8 converters in the crate (`copy_from_wide_string`, `copy_from_utf8_bytes`, `copy_from_utf8_string`). All three strip a trailing NUL if present and return `anyhow::Result`.
 - `utils.rs` exposes `LOWORD` / `HIWORD` / `LOBYTE` / `GET_X_LPARAM` / `GET_Y_LPARAM` / `GET_WHEEL_DELTA_WPARAM` macros (every body suppresses `cast_possible_truncation` + `cast_sign_loss`), plus `is_windows_11_build_22000_or_higher` / `is_windows_11_build_22621_or_higher` via `RoIsApiContractPresent`.
 - `desktop-common::ffi_utils` defines the entire pointer/array/option zoo (see `FFI_CONVENTIONS.md`).
-- `desktop-common::logger` implements `ffi_boundary`, `catch_panic`, `PanicDefault`, the panic hook, and `log4rs` setup. `RUST_LIB_BACKTRACE` is set via `unsafe { std::env::set_var(...) }` (logger.rs:157-158) — `set_var` became `unsafe` in Rust 1.81 due to multi-threaded data-race risk; no safety comment.
+- `desktop-common::logger` implements `ffi_boundary`, `catch_panic`, `PanicDefault`, the panic hook, and `log4rs` setup. `RUST_LIB_BACKTRACE` is set via `unsafe { std::env::set_var(...) }` (logger.rs) — `set_var` became `unsafe` in Rust 1.81 due to multi-threaded data-race risk; no safety comment.
 
 **Kotlin highlights.**
-- `KotlinDesktopToolkit.init` loads `desktop_win32_<arch>[+debug].dll` (resolved from `kdt.library.folder.path` system property). `AtomicBoolean`-guarded; double-init warns. `// todo check that native library version is consistent with Kotlin code` (KotlinDesktopToolkit.kt:19).
+- `KotlinDesktopToolkit.init` loads `desktop_win32_<arch>[+debug].dll` (resolved from `kdt.library.folder.path` system property). `AtomicBoolean`-guarded; double-init warns. `// todo check that native library version is consistent with Kotlin code` (KotlinDesktopToolkit.kt).
 - `Logger.kt` defines `ffiDownCall`, `ffiUpCall`, `NativeError`, `Logger` facade with `inline` lambda methods. Default appender writes to `System.err`; rolling file appender on the Rust side (2 MB trigger, 3 archives).
 - `Strings.kt`, `Arrays.kt` — marshalling helpers. `try { read } finally { ffiDownCall { drop(...) } }` is the established pattern for Rust-allocated returns.
 - `Converters.kt` — geometry struct conversions.
-- `Platform.kt` (in `org.jetbrains.desktop.common`) defines `isAarch64()`. **Apparently unused from the win32 layer** — `KotlinDesktopToolkit.kt:38` re-implements its own `isAarch64`. Investigate before removing.
+- `Platform.kt` (in `org.jetbrains.desktop.common`) defines `isAarch64()`. **Apparently unused from the win32 layer** — `KotlinDesktopToolkit.kt` re-implements its own `isAarch64`. Investigate before removing.
 
 **Smells (selected).**
-- `ffi_utils.rs:1`: `#![allow(clippy::missing_safety_doc)]` module-wide — all `unsafe fn` lack `# Safety` documentation.
-- `logger.rs:181`: typo `"File appender creatrion failed"`.
-- `logger.rs:195`: `// todo store handler and allow to change logger severity` — log levels frozen at init.
+- `ffi_utils.rs`: `#![allow(clippy::missing_safety_doc)]` module-wide — all `unsafe fn` lack `# Safety` documentation.
+- `logger.rs`: typo `"File appender creatrion failed"`.
+- `logger.rs`: `// todo store handler and allow to change logger severity` — log levels frozen at init.
 - Universal lack of `// SAFETY:` comments on `unsafe` blocks throughout the crate.
 
 **Cross-refs.** Every other subsystem uses these helpers. `ffi_boundary` wraps every `_api.rs` function. `RustAllocated*Ptr`, `BorrowedStrPtr`, `AutoDropArray`, `FfiOption` are the core FFI vocabulary.

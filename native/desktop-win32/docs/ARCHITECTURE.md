@@ -52,7 +52,7 @@ native/
       lib.rs                      DllMain → captures HINSTANCE; declares win32 + logger_api
       logger_api.rs               thin Win32 logger glue
       win32/
-        mod.rs                    declares 36 sibling pub mod entries
+        mod.rs                    declares 38 sibling pub mod entries
         application.rs            Application: OLE STA, DispatcherQueue, CompositorController
         application_api.rs        FFI: app lifecycle + dispatcher dispatch
         event_loop.rs             window_proc: WM_* → Event dispatch; thread_local key/exception stash
@@ -181,7 +181,7 @@ extern "C" fn foo_api(...) -> R {
 }
 ```
 
-Inside `ffi_boundary` (logger.rs:312):
+Inside `ffi_boundary` (logger.rs):
 1. `Ok(Ok(result))` → return result. **Designed happy path.**
 2. `Ok(Err(anyhow_err))` → `error!(…)` log; append message to `LAST_EXCEPTION_MSGS`; return `R::default()` via the `PanicDefault` trait. **Designed error path.**
 3. `Err(panic_payload)` (from `panic::catch_unwind(AssertUnwindSafe(closure))`) → append payload string; return `R::default()`. **Safety net only — should never fire in correct code.** `AssertUnwindSafe` is applied unconditionally, so partial mutation after a panic unwind is not protected against. Reaching this path means somewhere a `?` was missed, an `unwrap` slipped through, or an external API panicked unexpectedly.
@@ -329,9 +329,9 @@ A common conflation — these are distinct stacks that can both produce visual t
 | Used in this crate | **No** | **Yes** — exclusively |
 
 Where in the code:
-- `application.rs:6, 26, 38` — `CompositorController::new()` is owned by `Application` and cloned into each `Window` and `AngleDevice`.
+- `application.rs` — `CompositorController::new()` is owned by `Application` and cloned into each `Window` and `AngleDevice`.
 - `window.rs` — `ContainerVisual` / `SpriteVisual` / `DesktopWindowTarget`, with the HWND bridged via `ICompositorDesktopInterop` (the only Win32-flavoured COM interface in the rendering path).
-- `renderer_angle.rs:8, 43, 48` — ANGLE's EGL window surface targets the `SpriteVisual`.
+- `renderer_angle.rs` — ANGLE's EGL window surface targets the `SpriteVisual`.
 
 `Win32_Graphics_Dwm` is enabled in `Cargo.toml` (DWM titlebar attributes, extended frame bounds), but `Win32_Graphics_DirectComposition` is **not** enabled. Anyone tempted to "drop down to DComp for X" should first check whether the `Windows.UI.Composition` API (or Win2D) covers the case — the two cannot be mixed naively in the same visual tree.
 
@@ -339,11 +339,11 @@ Where in the code:
 
 This document so far focuses on the Rust side. The Kotlin counterpart at `kotlin-desktop-toolkit/src/main/kotlin/org/jetbrains/desktop/win32/` is covered subsystem-by-subsystem in `SUBSYSTEMS.md`. The conventions that span all classes are described in `FFI_CONVENTIONS.md`. At a glance:
 
-- **Bootstrap.** `KotlinDesktopToolkit.init(...)` loads `desktop_win32_<arch>[+debug].dll` via `System.load` (resolved from the `kdt.library.folder.path` system property) and then initialises the native logger. Init is `AtomicBoolean`-guarded; calling twice is a no-op with a warning. `// todo check that native library version is consistent with Kotlin code` (KotlinDesktopToolkit.kt:19) — there is no version handshake.
+- **Bootstrap.** `KotlinDesktopToolkit.init(...)` loads `desktop_win32_<arch>[+debug].dll` via `System.load` (resolved from the `kdt.library.folder.path` system property) and then initialises the native logger. Init is `AtomicBoolean`-guarded; calling twice is a no-op with a warning. `// todo check that native library version is consistent with Kotlin code` (KotlinDesktopToolkit.kt) — there is no version handshake.
 - **Lifecycle wrappers.** `Application`, `Window`, `AngleRenderer`, `DataObject`, `DragDropManager` are `AutoCloseable`. They hold an opaque `MemorySegment` returned by Rust and call the matching `*_drop` FFI on `close()`. Most internally expose an `internal inline fun withPointer(block)` to hand the raw segment to a caller without copying.
 - **FFI boundary.** Every native call is wrapped in `ffiDownCall { ... }` (Logger.kt) — must wrap **only** the native call itself. Callbacks invoked from Rust into Kotlin go through `ffiUpCall { defaultResult, body }`, which catches every `Throwable` and returns `defaultResult` (Kotlin exceptions never cross into Rust).
 - **Marshalling.** `Strings.kt`, `Arrays.kt`, and `Converters.kt` form the support layer used by the wrapper classes. `Arena.ofConfined().use { arena -> ... ffiDownCall { native(...) } ... }` is the canonical scope for native struct allocation.
-- **Use-after-close guard.** `DataObject.requireOpen` (DataObject.kt:121-125) is the prototype: an inline helper that throws `IllegalStateException` if the underlying pointer is `MemorySegment.NULL`. The pattern should be applied wherever a Kotlin wrapper holds an opaque Rust pointer with a documented lifetime.
+- **Use-after-close guard.** `DataObject.requireOpen` (DataObject.kt) is the prototype: an inline helper that throws `IllegalStateException` if the underlying pointer is `MemorySegment.NULL`. The pattern should be applied wherever a Kotlin wrapper holds an opaque Rust pointer with a documented lifetime.
 - **Builders for COM objects.** `DataObject.build { … }` is a block-scoped builder that hides the `data_object_create` / `data_object_into_com` lifecycle so callers never see a "half-built" `DataObject`.
 - **Two-tier event delivery.** The Rust event handler is one C function pointer per `Application`; on the Kotlin side `Event.fromNative(tag, segment)` reads the tag integer and dispatches to the matching `sealed class Event` subclass (22 variants mirror the Rust `Event` enum 1-to-1).
 

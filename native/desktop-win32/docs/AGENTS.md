@@ -25,7 +25,7 @@ If you only read one section before touching code, read this one.
 5. **Window starts at `1×1` and is then resized.** Intentional: managed code uses *logical* pixels but the DPI scale only exists once an `HWND` exists (`GetDpiForWindow`). Consequence: creation emits repeated `WM_WINDOWPOSCHANGED` notifications; this crate handles that message and returns `0`, so it does not rely on a downstream `DefWindowProc`-generated `WM_SIZE` path. Size/move handlers must be idempotent.
 6. **Coordinates are mostly logical, but with deliberate physical-pixel exceptions.** Pointer events' `locationOnScreen`, several Window events, drag-drop callbacks, and `screen_map_to_client` carry `PhysicalPoint` / `PhysicalSize`. See `SUBSYSTEMS.md` → Geometry → Exceptions.
 7. **`EnableMouseInPointer(true)` is process-wide and irreversible.** Anything in the same process expecting raw `WM_MOUSE*` will silently break.
-8. **The `borrow` pattern on `RustAllocatedRawPtr`** (ffi_utils.rs:105-112) reconstructs and immediately leaks a `Box` per call to produce a `&R`. Sound under the toolkit's single-thread-of-ownership assumption; soundness is by convention. Currently under deferred review.
+8. **The `borrow` pattern on `RustAllocatedRawPtr`** (ffi_utils.rs) reconstructs and immediately leaks a `Box` per call to produce a `&R`. Sound under the toolkit's single-thread-of-ownership assumption; soundness is by convention. Currently under deferred review.
 
 ## Watch out for in code reviews / edits
 
