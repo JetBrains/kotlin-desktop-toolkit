@@ -155,12 +155,30 @@ impl D2dContext {
     /// Called from device-loss paths inside `with_d2d_render_target`. Do
     /// not call from `RenderingDeviceReplaced`; that event is only the
     /// redraw notification after `SetRenderingDevice`.
+    ///
+    /// `build_d2d_device` is retried in a bounded loop so a transient
+    /// driver hiccup mid-rebuild doesn't leave the `CompositionGraphicsDevice`
+    /// stuck on the dead device. Per-frame device-loss storms are still
+    /// possible (each frame's call exhausts its own budget) but each call is
+    /// fast and the strip's caller logs via `inspect_err`.
     pub(crate) fn rebuild_d2d_device(&self) -> anyhow::Result<()> {
-        let d2d_device = build_d2d_device()?;
+        const MAX_REBUILD_ATTEMPTS: u32 = 3;
         let cgd_interop: windows::Win32::System::WinRT::Composition::ICompositionGraphicsDeviceInterop =
             self.composition_graphics_device.cast()?;
-        unsafe { cgd_interop.SetRenderingDevice(&d2d_device)? };
-        Ok(())
+        let mut last_err: Option<anyhow::Error> = None;
+        for attempt in 1..=MAX_REBUILD_ATTEMPTS {
+            match build_d2d_device() {
+                Ok(d2d_device) => {
+                    unsafe { cgd_interop.SetRenderingDevice(&d2d_device)? };
+                    return Ok(());
+                }
+                Err(err) => {
+                    log::warn!("D2D device rebuild attempt {attempt}/{MAX_REBUILD_ATTEMPTS} failed: {err}");
+                    last_err = Some(err);
+                }
+            }
+        }
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("D2D device rebuild exhausted attempts")))
     }
 
     /// Subscribe to `RenderingDeviceReplaced` (the redraw notification fired

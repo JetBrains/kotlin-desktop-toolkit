@@ -245,24 +245,16 @@ fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) 
         };
         event_loop.handle_event(window, event);
     }
-    // Both `Custom` and `None` shift the content layer to track the
-    // off-monitor window-rect top-left when maximized. `Custom` lets the
-    // strip's commit publish the offset; `None` has no strip, so the
-    // wndproc commits the composition directly.
-    let has_non_system_tb = window.has_non_system_title_bar();
-    if has_non_system_tb {
+    // `Custom` queues the content offset here so the strip's commit publishes
+    // it alongside the maximize-glyph swap; `None` has no companion state and
+    // WM_NCCALCSIZE already published this offset, so skip both queue + commit.
+    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         let _ = window
             .set_content_top_offset(window.max_chrome_y())
             .inspect_err(|err| log::warn!("set_content_top_offset failed: {err}"));
-    }
-    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         let _ = strip
             .on_max_state_change(window.is_maximized())
             .inspect_err(|err| log::warn!("strip on_max_state_change failed: {err}"));
-    } else if has_non_system_tb {
-        let _ = window
-            .commit_composition()
-            .inspect_err(|err| log::warn!("commit_composition failed: {err}"));
     }
     Some(LRESULT(0))
 }
@@ -686,7 +678,7 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
                     .ensure_nc_leave_tracking()
                     .inspect_err(|err| log::warn!("ensure_nc_leave_tracking failed: {err}"));
             }
-            let _ = strip.on_pointer_update(kind, pointer_info.pointer_id(), device);
+            let _ = strip.on_pointer_update(kind, device);
         }
         // First-NC-entry `PointerEntered` parity (spec §3.5): Kotlin must
         // see an entry even when the pointer's first appearance is over a

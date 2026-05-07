@@ -60,9 +60,12 @@ const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32Window");
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct WindowId(pub isize);
 
-/// Per-DPI metrics consumed by chrome / hit-test code. Recomputed from a
-/// single source — `WM_DPICHANGED`'s wparam — so readers never re-syscall
-/// `GetDpiForWindow` / `GetSystemMetricsForDpi` per call.
+/// Per-DPI metrics consumed by chrome / hit-test code. Seeded from
+/// `GetDpiForWindow` in `initialize_window`, then refreshed on
+/// `WM_DPICHANGED`'s wparam. Caches `dpi`, `scale`, `padded_border`
+/// (`SM_CXPADDEDBORDER`), and `size_frame` (`SM_CYSIZEFRAME`); other
+/// per-DPI metrics (e.g. `SM_CYSIZE` in `on_nchittest`) still call
+/// `GetSystemMetricsForDpi` per use.
 #[derive(Clone, Copy)]
 pub(crate) struct DpiMetrics {
     pub dpi: u32,
@@ -342,6 +345,9 @@ impl Window {
     }
 
     pub fn minimize(&self) {
+        if !self.style.borrow().is_minimizable {
+            return;
+        }
         self.send_system_command(SC_MINIMIZE);
     }
 

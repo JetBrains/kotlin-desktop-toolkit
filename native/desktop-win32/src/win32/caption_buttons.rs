@@ -682,15 +682,14 @@ impl CaptionButtonStrip {
         .hit_test(client_point)
     }
 
-    pub fn on_pointer_update(
-        &mut self,
-        kind: Option<CaptionButtonKind>,
-        _pointer_id: u32,
-        device: PointerDeviceKind,
-    ) -> anyhow::Result<()> {
-        if self.pointer_over_kind != kind || self.pointer_device != Some(device) {
+    pub fn on_pointer_update(&mut self, kind: Option<CaptionButtonKind>, device: PointerDeviceKind) -> anyhow::Result<()> {
+        // Mirror on_nc_mouse_leave: clearing kind also clears device, so a
+        // subsequent same-kind/same-device re-entry isn't suppressed by stale
+        // device state.
+        let new_device = kind.map(|_| device);
+        if self.pointer_over_kind != kind || self.pointer_device != new_device {
             self.pointer_over_kind = kind;
-            self.pointer_device = Some(device);
+            self.pointer_device = new_device;
             self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
@@ -1193,7 +1192,7 @@ mod tests {
     use crate::win32::geometry::PhysicalPixels;
     use crate::win32::window_api::{WindowStyle, WindowSystemBackdropType, WindowTitleBarKind};
 
-    fn session(kind: CaptionButtonKind, _device: PointerDeviceKind) -> PressSession {
+    fn session(kind: CaptionButtonKind) -> PressSession {
         PressSession {
             pointer_id: 1,
             captured_kind: kind,
@@ -1294,7 +1293,7 @@ mod tests {
 
     #[test]
     fn captured_self_with_pointer_inside_is_pressed() {
-        let s = session(CaptionButtonKind::Close, PointerDeviceKind::Mouse);
+        let s = session(CaptionButtonKind::Close);
         let r = resolve_interaction(
             CaptionButtonKind::Close,
             Availability::Enabled,
@@ -1307,7 +1306,7 @@ mod tests {
 
     #[test]
     fn captured_self_with_pointer_outside_is_pressed_dragged_off() {
-        let s = session(CaptionButtonKind::Close, PointerDeviceKind::Mouse);
+        let s = session(CaptionButtonKind::Close);
         let r = resolve_interaction(
             CaptionButtonKind::Close,
             Availability::Enabled,
@@ -1321,25 +1320,12 @@ mod tests {
     #[test]
     fn captured_other_button_keeps_self_idle_winui_capture_rule() {
         // Press is on Minimize; pointer moves over Close. Close stays Idle.
-        let s = session(CaptionButtonKind::Minimize, PointerDeviceKind::Mouse);
+        let s = session(CaptionButtonKind::Minimize);
         let r = resolve_interaction(
             CaptionButtonKind::Close,
             Availability::Enabled,
             Some(CaptionButtonKind::Close),
             Some(PointerDeviceKind::Mouse),
-            Some(&s),
-        );
-        assert_eq!(r, ButtonInteraction::Idle);
-    }
-
-    #[test]
-    fn captured_other_with_touch_keeps_self_idle() {
-        let s = session(CaptionButtonKind::Minimize, PointerDeviceKind::Touch);
-        let r = resolve_interaction(
-            CaptionButtonKind::Close,
-            Availability::Enabled,
-            Some(CaptionButtonKind::Close),
-            Some(PointerDeviceKind::Touch),
             Some(&s),
         );
         assert_eq!(r, ButtonInteraction::Idle);

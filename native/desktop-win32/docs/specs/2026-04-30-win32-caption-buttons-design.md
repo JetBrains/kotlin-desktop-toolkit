@@ -250,7 +250,7 @@ impl CaptionButtonStrip {
     // Pointer routing — called from event_loop's WM_NCPOINTER* handlers and
     // capture-loss cleanup path.
     pub fn on_pointer_update(
-        &mut self, kind: Option<CaptionButtonKind>, pointer_id: u32, device: PointerDeviceKind,
+        &mut self, kind: Option<CaptionButtonKind>, device: PointerDeviceKind,
     ) -> anyhow::Result<()>;
     pub fn on_pointer_down(
         &mut self,
@@ -579,7 +579,7 @@ Implementation: `ColorKeyFrameAnimation` started via `Compositor.CreateColorKeyF
 | Input | Strip method | Cost |
 |---|---|---|
 | `WM_NCHITTEST` | `hit_test(point)` | cheap (geometry math) |
-| `WM_NCPOINTERUPDATE` entering/staying in the window NC area | window arms NC leave tracking; strip receives `on_pointer_update(Some(kind), id, device)` over an enabled button or `on_pointer_update(None, id, device)` elsewhere | cheap (state + brush) |
+| `WM_NCPOINTERUPDATE` entering/staying in the window NC area | window arms NC leave tracking; strip receives `on_pointer_update(Some(kind), device)` over an enabled button or `on_pointer_update(None, device)` elsewhere | cheap (state + brush) |
 | `WM_NCPOINTERDOWN` over an enabled button (primary) | `on_pointer_down(kind, id, device)` | cheap |
 | `WM_NCPOINTERUP` or `WM_POINTERUP` after a caption-button press | `on_pointer_up(Some(kind) / None, id) -> Option<CaptionButtonAction>`; action fires when release is over the captured enabled button. UPs whose DOWN was on the strip are consumed (`Active` and `Suppressed`-`Left` via the primary branch, non-primary via `consume_swallowed_release`); releases whose press began outside the strip fall through to Kotlin as `PointerUp` events. | cheap |
 | `WM_POINTERCAPTURECHANGED` | `on_pointer_cancel(id)` for any session whose `pointer_id` matches (gated by `has_press_for`, covering `Active` and every `Suppressed` mode); cleanup only, no action | cheap |

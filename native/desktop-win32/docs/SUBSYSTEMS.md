@@ -74,7 +74,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Threading.** Single UI thread (the one that called `Application::new`). Not `Send` (uses `Rc`, `RefCell`, non-Send WinRT handles) — implicit, not type-asserted.
 
-**DPI.** `Window::get_scale` calls `GetDpiForWindow(hwnd) / USER_DEFAULT_SCREEN_DPI` live on every call (not cached). `get_rect` uses `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)` rather than `GetWindowRect` — correct for Win11 invisible resize borders.
+**DPI.** `Window::get_scale` reads from `Window::cached_dpi_metrics: Cell<DpiMetrics>`. The cache is seeded from `GetDpiForWindow(hwnd)` in `initialize_window` and refreshed on `WM_DPICHANGED` via `set_dpi_metrics`. The cache stores `dpi`, `scale`, `padded_border` (`SM_CXPADDEDBORDER`), and `size_frame` (`SM_CYSIZEFRAME`); metrics not cached here — e.g. `SM_CYSIZE` in `on_nchittest` — still call `GetSystemMetricsForDpi` per use. `get_rect` uses `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)` rather than `GetWindowRect` — correct for Win11 invisible resize borders.
 
 **Gotchas.**
 - `WNDCLASS_INIT: OnceLock<u16>` uses non-atomic `get().is_none()` + `get_or_init` — racy if windows are created concurrently (today they aren't, but the code reads racy).
@@ -168,7 +168,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - Anything coming *out* of Win32 (e.g. `GetClientRect`, `GetCursorPos`, pointer event coordinates) is in physical pixels and is converted to logical via `from_physical` once it crosses into the toolkit's `Event` payloads / API returns.
 - Anything going *into* Win32 (e.g. `SetWindowPos`, custom cursor positions) is converted from logical to physical via `to_physical` at the FFI boundary.
 
-The DPI scale is owned by `Window` (`get_scale()` calls `GetDpiForWindow(hwnd)` live, never cached). This has a knock-on consequence in window creation — see the Window subsystem's "1×1 then resize" note.
+The DPI scale is owned by `Window` (`get_scale()` reads `cached_dpi_metrics`; the cache is seeded once from `GetDpiForWindow` in `initialize_window` and updated on `WM_DPICHANGED`). This has a knock-on consequence in window creation — see the Window subsystem's "1×1 then resize" note.
 
 **Exceptions: physical pixels exposed to managed code.** Some FFI surfaces deliberately leak `PhysicalPoint` / `PhysicalSize` straight to Kotlin without any logical-pixel conversion. These are the cases where the Win32 source is inherently physical and applying a single window's DPI scale would either be wrong (cross-monitor coordinates) or pointless (raw frame geometry):
 
