@@ -665,6 +665,23 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
         }
     }
 
+    // Strip-owned implicit-capture pointer: suppress host dispatch.
+    // With `WindowTitleBarKind::Custom` the top NC inset is 0, so any
+    // twitch over the strip footprint arrives as `WM_POINTERUPDATE`
+    // (client variant) — the cursor sits inside `GetClientRect`. Without
+    // this gate the host sees `Event::PointerUpdated` with the held
+    // button in `state.pressedButtons` and starts a drag.
+    if window.has_custom_title_bar() {
+        let strip_owns_press = window
+            .caption_buttons
+            .borrow()
+            .as_ref()
+            .is_some_and(|s| s.has_press_for(pointer_info.pointer_id()));
+        if strip_owns_press {
+            return Some(LRESULT(0));
+        }
+    }
+
     let event = if window.is_pointer_in_window() {
         let button_change = pointer_info.get_pointer_button_change();
         match button_change.kind() {
