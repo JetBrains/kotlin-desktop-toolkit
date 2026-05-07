@@ -143,6 +143,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - Two cleanup APIs: `on_pointer_cancel(pointer_id)` for `WM_POINTERCAPTURECHANGED`; `cancel_any_press()` for `WM_CANCELMODE` and `WM_ACTIVATE`-deactivate — see spec §3.2 / §4.2.
 - `max_chrome_y` is `SM_CYSIZEFRAME` only on this toolkit's non-system titlebar style; the strip's resize-band exclusion (`is_in_top_resize_border`) uses the full `SM_CXPADDEDBORDER + SM_CYSIZEFRAME` — see spec §3.6.
 - Inactive caption-button hover and pressed render with the active palette — see spec §4.4.
+- Disabled visible Min/Max return `HTCAPTION` for `WM_NCHITTEST` but the strip still swallows DOWN / UP cycles (no hover, press, or action) — see spec §4.2.
 - Do not add `Commit()` to `Window::resize_backdrop_tint` — the strip's `on_resize` is the single commit point that publishes both the backdrop resize and the strip Y-shift atomically — see spec §5.5.
 
 **Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`), `event_loop` (wndproc dispatch into `caption_kind_at_screen` and the strip's lifecycle methods), `appearance` (`Appearance` / `HighContrast` seed values + change events), `geometry` (`PhysicalPoint` / `PhysicalSize`).

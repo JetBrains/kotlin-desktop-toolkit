@@ -209,8 +209,22 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let result = event_loop.handle_event(window, event);
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         let _ = strip
-            .on_dpi_change(window.get_scale())
+            .on_dpi_change(scale)
             .inspect_err(|err| log::warn!("strip on_dpi_change failed: {err}"));
+        // Re-anchor the strip to the (already-resized) client and the new
+        // chrome offset. `GetDpiForWindow` may still report the old DPI,
+        // so derive `max_chrome_y` from the wparam value.
+        let mut client_rect = RECT::default();
+        match unsafe { GetClientRect(window.hwnd(), &raw mut client_rect) } {
+            Ok(()) => {
+                let client_size = PhysicalSize::new(client_rect.right - client_rect.left, client_rect.bottom - client_rect.top);
+                let max_chrome_y = window.max_chrome_y_for_dpi(u32::from(dpi));
+                let _ = strip
+                    .on_resize(client_size, max_chrome_y)
+                    .inspect_err(|err| log::warn!("strip on_resize during DPI change failed: {err}"));
+            }
+            Err(err) => log::warn!("GetClientRect during WM_DPICHANGED failed: {err}"),
+        }
     }
     result
 }
@@ -231,17 +245,24 @@ fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) 
         };
         event_loop.handle_event(window, event);
     }
+    // Both `Custom` and `None` shift the content layer to track the
+    // off-monitor window-rect top-left when maximized. `Custom` lets the
+    // strip's commit publish the offset; `None` has no strip, so the
+    // wndproc commits the composition directly.
+    let has_non_system_tb = window.has_non_system_title_bar();
+    if has_non_system_tb {
+        let _ = window
+            .set_content_top_offset(window.max_chrome_y())
+            .inspect_err(|err| log::warn!("set_content_top_offset failed: {err}"));
+    }
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let now_maximized = window.is_maximized();
-        let max_chrome_y = window.max_chrome_y();
-        if window.has_custom_title_bar() {
-            let _ = window
-                .set_content_top_offset(max_chrome_y)
-                .inspect_err(|err| log::warn!("set_content_top_offset failed: {err}"));
-        }
         let _ = strip
-            .on_max_state_change(now_maximized)
+            .on_max_state_change(window.is_maximized())
             .inspect_err(|err| log::warn!("strip on_max_state_change failed: {err}"));
+    } else if has_non_system_tb {
+        let _ = window
+            .commit_composition()
+            .inspect_err(|err| log::warn!("commit_composition failed: {err}"));
     }
     Some(LRESULT(0))
 }
@@ -433,9 +454,11 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let event = NCCalcSizeEvent { origin, size, scale };
     event_loop.handle_event(window, event);
     let _ = window.resize_backdrop_tint(size);
-    // Custom only: the strip's commit publishes the queued offset. None /
-    // System have no strip, so queueing here would leak the mutation.
-    if window.has_custom_title_bar() {
+    // Both `Custom` and `None` queue the content-layer offset. `Custom`
+    // lets the strip's `on_resize` commit publish it; `None` has no strip,
+    // so the wndproc commits the composition directly.
+    let has_non_system_tb = window.has_non_system_title_bar();
+    if has_non_system_tb {
         let _ = window
             .set_content_top_offset(max_chrome_y)
             .inspect_err(|err| log::warn!("set_content_top_offset failed: {err}"));
@@ -444,6 +467,10 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         let _ = strip
             .on_resize(size, max_chrome_y)
             .inspect_err(|err| log::warn!("strip on_resize failed: {err}"));
+    } else if has_non_system_tb {
+        let _ = window
+            .commit_composition()
+            .inspect_err(|err| log::warn!("commit_composition failed: {err}"));
     }
     Some(LRESULT(0))
 }
@@ -637,17 +664,33 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
     let is_non_client = matches!(msg, WM_NCPOINTERUPDATE);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
 
-    if msg == WM_NCPOINTERUPDATE && window.has_custom_title_bar() {
+    if window.has_custom_title_bar() {
         let kind = caption_kind_at_screen(window, pointer_info.get_physical_location());
-        if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+        let strip_owns_press = window
+            .caption_buttons
+            .borrow()
+            .as_ref()
+            .is_some_and(|s| s.has_press_for(pointer_info.pointer_id()));
+        // Forward updates to the strip when:
+        //   - NC variant: drives hover state for caption buttons and the
+        //     title-bar drag region.
+        //   - Strip owns a press: client-variant updates drive the WinUI
+        //     capture rule (`Pressed → PressedDraggedOff` on drift,
+        //     reverse on return) while the implicit pointer capture
+        //     routes the message through the client-area path.
+        if (is_non_client || strip_owns_press)
+            && let Some(strip) = window.caption_buttons.borrow_mut().as_mut()
+        {
             let device = device_kind_for(&pointer_info);
-            let _ = window.ensure_nc_leave_tracking();
+            if is_non_client {
+                let _ = window.ensure_nc_leave_tracking();
+            }
             let _ = strip.on_pointer_update(kind, pointer_info.pointer_id(), device);
         }
-        if kind.is_some() {
-            // First-entry parity (spec §3.5): mirror `on_pointerupdate`'s
-            // else-branch so Kotlin gets a `PointerEntered` even when the
-            // pointer's first appearance is over a caption button.
+        // First-NC-entry `PointerEntered` parity (spec §3.5): Kotlin must
+        // see an entry even when the pointer's first appearance is over a
+        // caption button. Then suppress the strip-internal events.
+        if is_non_client && kind.is_some() {
             if !window.is_pointer_in_window() {
                 window.set_is_pointer_in_window(true);
                 event_loop.handle_event(
@@ -660,23 +703,14 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
                     }),
                 );
             }
-            // Strip events are private — suppress the Kotlin dispatch.
             return Some(LRESULT(0));
         }
-    }
-
-    // Strip-owned implicit-capture pointer: suppress host dispatch.
-    // With `WindowTitleBarKind::Custom` the top NC inset is 0, so any
-    // twitch over the strip footprint arrives as `WM_POINTERUPDATE`
-    // (client variant) — the cursor sits inside `GetClientRect`. Without
-    // this gate the host sees `Event::PointerUpdated` with the held
-    // button in `state.pressedButtons` and starts a drag.
-    if window.has_custom_title_bar() {
-        let strip_owns_press = window
-            .caption_buttons
-            .borrow()
-            .as_ref()
-            .is_some_and(|s| s.has_press_for(pointer_info.pointer_id()));
+        // Suppress host pointer-update dispatch while the strip owns a
+        // press; otherwise the host's drag source observes a held primary
+        // button without DOWN and starts `DoDragDrop`. With Custom the
+        // top NC inset is 0, so any twitch over the strip footprint
+        // arrives as `WM_POINTERUPDATE` (client variant) — the cursor
+        // sits inside `GetClientRect`.
         if strip_owns_press {
             return Some(LRESULT(0));
         }

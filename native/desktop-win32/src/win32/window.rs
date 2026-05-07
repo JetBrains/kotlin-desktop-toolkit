@@ -374,14 +374,24 @@ impl Window {
         unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) }
     }
 
+    /// Same as [`max_chrome_y`] but uses an explicit DPI. Use this from
+    /// `WM_DPICHANGED` handling, where `GetDpiForWindow` may still report
+    /// the previous DPI until the window is resized to the suggested rect.
+    pub(crate) fn max_chrome_y_for_dpi(&self, dpi: u32) -> i32 {
+        if !self.is_resizable() || !self.has_non_system_title_bar() || !self.is_maximized() {
+            return 0;
+        }
+        unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) }
+    }
+
     /// Queues a Y-offset on `content_layer` so Kotlin / ANGLE content lines
     /// up with the visible monitor edge when maximized — composition (0,0)
     /// tracks the (off-monitor) window-rect top-left, mirroring the
     /// strip's `composition_root` shift.
     ///
-    /// Does not commit; caller must arrange a strip commit to publish the
-    /// queued offset. See `TODO.md` `resize_backdrop_tint` / caption-button
-    /// resize commit ordering invariant.
+    /// Does not commit; the caller either relies on the caption-button
+    /// strip's own commit (`Custom`) or calls [`commit_composition`]
+    /// directly (`None`).
     pub(crate) fn set_content_top_offset(&self, top_offset_px: i32) -> anyhow::Result<()> {
         if let Some(layer) = self.content_layer.borrow().as_ref() {
             #[allow(clippy::cast_precision_loss)]
@@ -391,6 +401,15 @@ impl Window {
                 Z: 0.0,
             })?;
         }
+        Ok(())
+    }
+
+    /// Publishes any queued composition mutations through the window's
+    /// `CompositorController`. Used by the `None` titlebar path, which
+    /// queues a content-layer offset on maximize but has no caption-button
+    /// strip to bundle the commit into.
+    pub(crate) fn commit_composition(&self) -> anyhow::Result<()> {
+        self.compositor_controller.Commit()?;
         Ok(())
     }
 

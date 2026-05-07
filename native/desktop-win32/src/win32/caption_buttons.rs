@@ -384,9 +384,8 @@ impl StripGeometry {
 
 /// Map a caption-button hit to the `WM_NCHITTEST` return code per spec §4.2:
 /// enabled Min/Max/Close → HTMINBUTTON / HTMAXBUTTON / HTCLOSE; visible
-/// disabled Min/Max → HTCAPTION (drag region) so the rectangle stays in the
-/// title-bar surface and Snap Layouts is *not* advertised on a disabled
-/// Maximize.
+/// disabled Min/Max → HTCAPTION for caption-like hit-test semantics, while
+/// DOWN/UP remain swallowed by the strip with no hover, press, or action.
 pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_enabled: bool) -> u32 {
     use windows::Win32::UI::WindowsAndMessaging::{HTCAPTION, HTCLOSE, HTMAXBUTTON, HTMINBUTTON};
     match (kind, is_enabled) {
@@ -651,8 +650,8 @@ impl CaptionButtonStrip {
     /// Hit-test a point given in **client-space** coordinates (origin =
     /// client top-left). The strip is anchored at the right edge, so the
     /// caller passes the client area's full width as the reference. Returns
-    /// the caption-button kind under the point, or `None` if the point is
-    /// outside the strip's bounds (or no enabled button is hit).
+    /// the visible caption-button kind under the point, or `None` if the
+    /// point is outside the strip's bounds.
     pub fn hit_test(&self, client_point: PhysicalPoint, client_width: PhysicalPixels) -> Option<CaptionButtonKind> {
         StripGeometry {
             reference_width_px: client_width.0,
@@ -1774,7 +1773,7 @@ mod tests {
     #[test]
     fn disabled_min_max_collapse_to_htcaption_not_their_codes() {
         // Snap Layouts must not appear on a disabled Maximize button; the
-        // rectangle stays in the title-bar drag region.
+        // rectangle keeps caption-like hit-test semantics.
         use windows::Win32::UI::WindowsAndMessaging::{HTCAPTION, HTCLOSE};
         assert_eq!(hittest_for_caption_button_kind(CaptionButtonKind::Minimize, false), HTCAPTION);
         assert_eq!(hittest_for_caption_button_kind(CaptionButtonKind::Maximize, false), HTCAPTION);
