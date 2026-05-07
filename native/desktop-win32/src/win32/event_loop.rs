@@ -17,9 +17,9 @@ use windows::Win32::{
             AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
             GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS,
             SM_CXPADDEDBORDER, SM_CYSIZE, SM_CYSIZEFRAME, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-            SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_APP, WM_CHAR,
-            WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS,
-            WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT,
+            SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_APP,
+            WM_CANCELMODE, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_KEYUP,
+            WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT,
             WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL,
             WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSDEADCHAR, WM_SYSKEYDOWN,
             WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
@@ -122,6 +122,8 @@ impl EventLoop {
             WM_POINTERLEAVE => on_pointerleave(self, window, wparam),
 
             WM_POINTERCAPTURECHANGED => on_pointercapturechanged(window, wparam),
+
+            WM_CANCELMODE => on_cancelmode(window),
 
             WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED => on_caption_buttons_rdr(window),
 
@@ -355,6 +357,11 @@ fn on_activate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Optio
         let _ = strip
             .on_activate(is_active)
             .inspect_err(|err| log::warn!("strip on_activate failed: {err}"));
+        if !is_active {
+            let _ = strip
+                .cancel_any_press()
+                .inspect_err(|err| log::warn!("strip cancel_any_press on deactivation failed: {err}"));
+        }
     }
     let event = WindowActivatedEvent { is_active, is_minimized };
     event_loop.handle_event(window, event)
@@ -832,6 +839,20 @@ fn on_pointercapturechanged(window: &Window, wparam: WPARAM) -> Option<LRESULT> 
             return Some(LRESULT(0));
         }
     }
+    None
+}
+
+fn on_cancelmode(window: &Window) -> Option<LRESULT> {
+    if !window.has_custom_title_bar() {
+        return None;
+    }
+    if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
+        let _ = strip
+            .cancel_any_press()
+            .inspect_err(|err| log::warn!("strip cancel_any_press failed: {err}"));
+    }
+    // Returning `None` lets `DefWindowProc` complete the standard cancel
+    // (releases mouse capture, cancels menu / scrollbar tracking).
     None
 }
 

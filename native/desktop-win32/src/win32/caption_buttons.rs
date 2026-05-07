@@ -222,6 +222,15 @@ fn cancel_press_session(session: &mut Option<PressSession>, pointer_id: u32) -> 
     s.mode == PressSessionMode::Active
 }
 
+/// `WM_CANCELMODE` and `WM_ACTIVATE` deactivation deliver no pointer id, so
+/// cancellation has to be unconditional — a sibling of `cancel_press_session`
+/// minus the pointer-id gate.
+fn cancel_any_press_session(session: &mut Option<PressSession>) -> bool {
+    let Some(s) = *session else { return false };
+    *session = None;
+    s.mode == PressSessionMode::Active
+}
+
 struct CaptionTheme {
     backplate_rest: windows::UI::Color,
     backplate_hover: windows::UI::Color,
@@ -725,6 +734,16 @@ impl CaptionButtonStrip {
     pub fn on_pointer_cancel(&mut self, pointer_id: u32) -> anyhow::Result<()> {
         // Visuals only need reverting if Active had been engaged.
         if cancel_press_session(&mut self.press_session, pointer_id) {
+            self.apply_visuals_to_all_buttons()?;
+            self.compositor_controller.Commit()?;
+        }
+        Ok(())
+    }
+
+    /// Drop any owned press session. Used by the wndproc on `WM_CANCELMODE`
+    /// and on deactivation, where there is no pointer id to match against.
+    pub fn cancel_any_press(&mut self) -> anyhow::Result<()> {
+        if cancel_any_press_session(&mut self.press_session) {
             self.apply_visuals_to_all_buttons()?;
             self.compositor_controller.Commit()?;
         }
@@ -1499,6 +1518,50 @@ mod tests {
         let mut session = Some(original);
         let needs_visual_refresh = cancel_press_session(&mut session, 99);
         assert_eq!(session, Some(original));
+        assert!(!needs_visual_refresh);
+    }
+
+    #[test]
+    fn cancel_press_session_with_no_session_is_a_noop() {
+        let mut session: Option<PressSession> = None;
+        let needs_visual_refresh = cancel_press_session(&mut session, 0);
+        assert!(session.is_none());
+        assert!(!needs_visual_refresh);
+    }
+
+    #[test]
+    fn cancel_any_press_session_clears_active_regardless_of_pointer_id() {
+        // `WM_CANCELMODE` does not carry a pointer id, so the strip must
+        // drop the session unconditionally.
+        let mut session = Some(PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Maximize,
+            mode: PressSessionMode::Active,
+        });
+        let needs_visual_refresh = cancel_any_press_session(&mut session);
+        assert!(session.is_none());
+        assert!(needs_visual_refresh);
+    }
+
+    #[test]
+    fn cancel_any_press_session_clears_suppressed_without_visual_refresh() {
+        let mut session = Some(PressSession {
+            pointer_id: 7,
+            captured_kind: CaptionButtonKind::Close,
+            mode: PressSessionMode::Suppressed {
+                held_button: PointerButton::Left,
+            },
+        });
+        let needs_visual_refresh = cancel_any_press_session(&mut session);
+        assert!(session.is_none());
+        assert!(!needs_visual_refresh);
+    }
+
+    #[test]
+    fn cancel_any_press_session_with_no_session_is_a_noop() {
+        let mut session: Option<PressSession> = None;
+        let needs_visual_refresh = cancel_any_press_session(&mut session);
+        assert!(session.is_none());
         assert!(!needs_visual_refresh);
     }
 
