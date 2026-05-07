@@ -7,7 +7,7 @@ This list is point-in-time. Verify against current code before acting.
 ## Confirmed bugs (per code-owner review)
 
 ### `tryRead*` swallows too many error kinds
-- **Where**: `data_object_api.rs:32-44` (`IntoFfiOption` impl).
+- **Where**: `data_object_api.rs` (`IntoFfiOption` impl).
 - **What**: Every `Err(...)` from a read is converted to `FfiOption::none()` with a `trace!` log. This hides allocation failures, type mismatches, and other genuine errors behind the same `null` that "format not found" produces.
 - **Intended behaviour**: only `DV_E_FORMATETC` and `DV_E_TYMED` (i.e. format-not-available) should swallow to `None`. Everything else should propagate as an exception via `ffi_boundary` → `LAST_EXCEPTION_MSGS` → `NativeError`.
 - **Fix**: replace the blanket `IntoFfiOption` with a guard that inspects the error and only swallows the format-not-found variants. Consider matching on `WinError::code()` for `DV_E_FORMATETC` / `DV_E_TYMED`, plus an `Option`-returning helper in `data_object` that returns `Ok(None)` for those cases natively.
@@ -25,22 +25,22 @@ This list is point-in-time. Verify against current code before acting.
 - **Fix**: pick one handler as the source of truth for `PointerDown`; have the other one detect and skip the redundant emission.
 
 ### `ToUnicodeEx` dead-key vs character distinction lost
-- **Where**: `events_api.rs:58` — `char_count.unsigned_abs()`.
+- **Where**: `events_api.rs` — `char_count.unsigned_abs()`.
 - **What**: `ToUnicodeEx` returns negative when a dead key was stored (no character emitted yet). Collapsing the sign loses the distinction; the caller can't tell "dead key applied" from "regular character emitted".
 - **Fix**: branch on the sign before computing the buffer slice; expose the dead-key signal as a separate result variant.
 
 ### `DataObject` Kotlin class is not thread-safe
-- **Where**: `DataObject.kt:121-125` (`requireOpen`) + `close()`.
+- **Where**: `DataObject.kt` (`requireOpen`) + `close()`.
 - **What**: `requireOpen` reads `comInterfacePtr` without synchronisation; `close()` mutates it. Concurrent `close()` + `read*()` is a data race that can produce a use-after-free of the COM ref.
 - **Fix**: document single-threaded use and add a single-thread assert in `requireOpen`.
 
 ### `EnumDisplayMonitors` aborts on first per-monitor failure
-- **Where**: `screen.rs:50-53` (`monitor_enum_proc` returns `FALSE` on inner-call failure, which terminates enumeration).
+- **Where**: `screen.rs` (`monitor_enum_proc` returns `FALSE` on inner-call failure, which terminates enumeration).
 - **What**: A single bad monitor (e.g. detached, transient driver hiccup) makes `screen_list` fail entirely instead of returning the others.
 - **Fix**: collect successful entries and skip failures with a `log::warn!`, returning whatever we have. Decide if "no monitors at all" should still error.
 
 ### `file_dialog` `filter_map` silently drops items
-- **Where**: `file_dialog.rs:134` — `filter_map(|item| parse_shell_item(&item?).ok())`.
+- **Where**: `file_dialog.rs` — `filter_map(|item| parse_shell_item(&item?).ok())`.
 - **What**: Items that fail `GetDisplayName` or UTF-8 conversion are silently elided. Caller sees a shorter result list with no indication anything went wrong.
 - **Fix**: at minimum log each skipped item with the shell item's path/CLSID. Consider returning a typed partial-result error if the loss is meaningful.
 
@@ -56,8 +56,8 @@ This list is point-in-time. Verify against current code before acting.
 ### Verify `RenderingDeviceReplaced` fires synchronously on the `SetRenderingDevice` caller's thread
 
 - **Assumption**: spec `2026-04-30-win32-caption-buttons-design.md` §6.2 (and §4.1) state that `RenderingDeviceReplaced` fires synchronously on the thread that called `SetRenderingDevice`. Microsoft's Composition native-interop sample is consistent with this (its handler runs on the worker thread that triggered `SetRenderingDevice` from `SetThreadpoolWait`), but no Microsoft doc page documents the thread-affinity contract — `[Threading(Both)]` / `[MarshalingBehavior(Agile)]` are thread-safety attributes, not thread-affinity ones.
-- **Probe procedure**: instrument the strip's `RenderingDeviceReplaced` closure (registered inside `CaptionButtonStrip::new` per the caption-buttons plan, Task 5.x) to record `GetCurrentThreadId()` and a "fired during SetRenderingDevice?" flag. Trigger device loss (driver toggle / D3D11 device-lost test). Compare against the UI thread id captured at strip construction.
-- **Contingency**: if the probe shows off-UI-thread firing in some configuration, the strip's `WM_NCDESTROY` drop ordering (caption-buttons plan, Phase 6 Task 6.4 step 8) and the `Send` bound on the callback are still correct, but the spec §6.2 prose claiming the callback is on the UI thread "because the toolkit always invokes `SetRenderingDevice` from the UI thread" must be revised. Maintenance rule for the closure: keep `Send`-correct unless / until the assumption is empirically confirmed.
+- **Probe procedure**: instrument the strip's `RenderingDeviceReplaced` closure (registered inside `CaptionButtonStrip::new` per the spec §6.2) to record `GetCurrentThreadId()` and a "fired during SetRenderingDevice?" flag. Trigger device loss (driver toggle / D3D11 device-lost test). Compare against the UI thread id captured at strip construction.
+- **Contingency**: if the probe shows off-UI-thread firing in some configuration, the strip's `WM_NCDESTROY` drop ordering (the WM_NCDESTROY drop ordering in spec §6.2) and the `Send` bound on the callback are still correct, but the spec §6.2 prose claiming the callback is on the UI thread "because the toolkit always invokes `SetRenderingDevice` from the UI thread" must be revised. Maintenance rule for the closure: keep `Send`-correct unless / until the assumption is empirically confirmed.
 - **Sources**: spec §6.2.
 
 ### Caption-button RTL mirroring
@@ -67,7 +67,7 @@ This list is point-in-time. Verify against current code before acting.
 - **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §4.2 (visibility/availability table), [`WS_EX_LAYOUTRTL`](https://learn.microsoft.com/windows/win32/winmsg/extended-window-styles).
 
 ### Caption-button animation cadence — `CommitNeeded` fallback
-- **Where**: caption-button strip's `ColorKeyFrameAnimation` (caption-buttons plan, Task 5.4); strip's `compositor_controller.Commit()` callsite (spec §5.5).
+- **Where**: caption-button strip's `ColorKeyFrameAnimation` (spec §5.2); strip's `compositor_controller.Commit()` callsite (spec §5.5).
 - **What**: spec §5.2 / §5.5 commit once at `StartAnimation` and let the system compositor's thread advance the animation. Microsoft does not directly document whether `ColorKeyFrameAnimation` requires per-frame `Commit()` under the controlled-commit `CompositorController` variant; under-commit may produce visible stutter on idle windows (no ANGLE swap to drive frames).
 - **Trigger to add it back**: spec §7.3 hover-fade acceptance bullet reports stutter on a window with no active ANGLE rendering.
 - **Sketch when implementing**: subscribe to [`CompositorController.CommitNeeded`](https://learn.microsoft.com/uwp/api/windows.ui.composition.core.compositorcontroller.commitneeded) and call `Commit()` from the handler; alternatively run a UI-thread frame ticker for the duration of an in-flight strip animation.
@@ -86,7 +86,7 @@ This list is point-in-time. Verify against current code before acting.
 - **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §2 (out-of-scope handoff), [Microsoft `WM_SYSCOMMAND`](https://learn.microsoft.com/windows/win32/menurc/wm-syscommand), [Microsoft `TrackPopupMenu`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-trackpopupmenu).
 
 ### Tall-mode title bars
-- **Where**: caption-button strip — `CaptionButtonMetrics::new` returns a fixed 32 epx button height (spec `2026-04-30-win32-caption-buttons-design.md` §4.5). The caption-buttons plan already handles the maximised layout transition (NCCALCSIZE inset, strip Y-shift, glyph swap); only the button-height policy is missing.
+- **Where**: caption-button strip — `CaptionButtonMetrics::new` returns a fixed 32 epx button height (spec `2026-04-30-win32-caption-buttons-design.md` §4.5). Spec §3.6 / §5.3 already cover the maximised layout transition (NCCALCSIZE inset, strip Y-shift, glyph swap); only the button-height policy is missing.
 - **What**: Windows Terminal opts into the WinUI `AppWindowTitleBar.PreferredHeightOption.Tall` shape: 40 epx windowed, 32 epx maximised. The toolkit has no `WindowTitleBarHeight` enum and no `Standard` / `Tall` opt-in, so apps that want a tall title bar (Terminal-style tab strips, Edge-style chrome) cannot get one.
 - **Sketch when implementing**: introduce `WindowTitleBarHeight { Standard, Tall }` on `WindowStyle` (`window_api.rs`, Kotlin `win32/Window.kt`); plumb through FFI; replace the hard-coded 32 epx in `CaptionButtonMetrics::new` with `resolve_button_height(WindowTitleBarHeight, is_maximized)`; extend `on_max_state_change` to recompute metrics + relayout when in Tall mode (the hook already runs on every max-state flip — it just doesn't recompute size today).
 - **Sources**: [Microsoft `AppWindowTitleBar.PreferredHeightOption`](https://learn.microsoft.com/windows/windows-app-sdk/api/winrt/microsoft.ui.windowing.titlebarheightoption), [Windows Terminal `MinMaxCloseControl.xaml`](https://github.com/microsoft/terminal/blob/e4e3f08efca9d0ffba330eee12edbcb16897ddcb/src/cascadia/TerminalApp/MinMaxCloseControl.xaml), spec `2026-04-30-win32-caption-buttons-design.md` §4.5.
@@ -120,19 +120,19 @@ This list is point-in-time. Verify against current code before acting.
 - **Fix**: handle `WM_DISPLAYCHANGE` and emit a new `Event::ScreensChanged` variant.
 
 ### Asymmetric DPI silently mishandled
-- **Where**: `screen.rs:92-95` — `dpi_y` retrieved from `GetDpiForMonitor` then discarded.
+- **Where**: `screen.rs` — `dpi_y` retrieved from `GetDpiForMonitor` then discarded.
 - **Fix**: surface both axes (or document that the toolkit assumes square DPI and add an assertion / log when they differ).
 
 ### Color space and stable monitor UUID
-- **Where**: `screen.rs:31-32` — `// todo color space?` `// todo stable uuid?`. Fields not on `ScreenInfo`.
+- **Where**: `screen.rs` — `// todo color space?` `// todo stable uuid?`. Fields not on `ScreenInfo`.
 - **Fix**: when ready, add color-space metadata (HDR detection, sRGB vs. wide gamut) and a stable monitor identifier (e.g. EDID-derived) so apps can persist per-monitor user state.
 
 ### Native library version handshake
-- **Where**: `KotlinDesktopToolkit.kt:19` — `// todo check that native library version is consistent with Kotlin code`.
+- **Where**: `KotlinDesktopToolkit.kt` — `// todo check that native library version is consistent with Kotlin code`.
 - **Fix**: expose a `kdt_get_version() -> u32` (or struct) FFI; have Kotlin check on init and refuse to load on mismatch.
 
 ### Runtime log level changes
-- **Where**: `desktop-common::logger.rs:195` — `// todo store handler and allow to change logger severity`. The `log4rs::init_config` handle is dropped.
+- **Where**: `desktop-common::logger.rs` — `// todo store handler and allow to change logger severity`. The `log4rs::init_config` handle is dropped.
 - **Fix**: store the `Handle` in a static so `logger_set_level(...)` can adjust live.
 
 ### `cursor_api.rs` is incomplete
@@ -141,17 +141,16 @@ This list is point-in-time. Verify against current code before acting.
 
 ## Inline TODOs in the code
 
-| File:line | Comment |
+| File | Comment |
 |---|---|
-| `renderer_angle.rs:146` | `// TODO: 0 on resize` (swap_interval should switch to 0 during resize) |
-| `screen.rs:31-32` | `// todo color space?` and `// todo stable uuid?` |
-| `desktop-common::logger.rs:195` | `// todo store handler and allow to change logger severity` |
-| `KotlinDesktopToolkit.kt:19` | `// todo check that native library version is consistent with Kotlin code` |
+| `screen.rs` | `// todo color space?` and `// todo stable uuid?` |
+| `desktop-common::logger.rs` | `// todo store handler and allow to change logger severity` |
+| `KotlinDesktopToolkit.kt` | `// todo check that native library version is consistent with Kotlin code` |
 
 ## Performance concerns
 
 ### `glFinish` before every `eglSwapBuffers`
-- **Where**: `renderer_angle.rs:145`.
+- **Where**: `renderer_angle.rs`.
 - **What**: Forces the CPU to wait for all GPU work each frame, eliminating CPU/GPU pipelining.
 - **Investigation**: confirm whether composition correctness genuinely requires this. If only required for the first frame after a resize, gate it on a "needs-finish" flag.
 
@@ -162,7 +161,7 @@ This list is point-in-time. Verify against current code before acting.
 ## Code smells worth reviewing
 
 ### `borrow` / `borrow_mut` leaks Box every call (deferred)
-- **Where**: `desktop-common::ffi_utils.rs:105-112`.
+- **Where**: `desktop-common::ffi_utils.rs`.
 - **Status**: per code-owner — review later. Reading: intentional, gives `&R` from a raw `*mut T` without consuming the box (effectively `Box::leak(Box::from_raw(p))`). Sound under the toolkit's single-thread-of-ownership assumption; type-level safety is by convention.
 - **Open question**: whether to formalise the assumption (e.g. `!Send` newtype or a phantom marker) or to refactor to a different pattern (e.g. `Pin<&T>` from a stored `Pin<Box<T>>`).
 
@@ -171,16 +170,16 @@ This list is point-in-time. Verify against current code before acting.
 - **Fix (incremental)**: add `// SAFETY:` comments as files are touched. Remove the module-wide allow once the backlog is drained.
 
 ### Module-blanket clippy suppressions
-- `desktop-common::ffi_utils.rs:1` — `#![allow(clippy::missing_safety_doc)]`.
-- `data_object.rs:1-2` and `drag_drop.rs:1-2` — `#![allow(clippy::inline_always)]`, `#![allow(clippy::ref_as_ptr)]`. Inherited from windows-core's `implement!` macro expansion; keep but consider documenting why.
+- `desktop-common::ffi_utils.rs` — `#![allow(clippy::missing_safety_doc)]`.
+- `data_object.rs` and `drag_drop.rs` — `#![allow(clippy::inline_always)]`, `#![allow(clippy::ref_as_ptr)]`. Inherited from windows-core's `implement!` macro expansion; keep but consider documenting why.
 
 ### `unsafe { std::env::set_var(...) }` without safety comment
-- **Where**: `desktop-common::logger.rs:157-158`.
+- **Where**: `desktop-common::logger.rs`.
 - **What**: `set_var` became `unsafe` in Rust 1.81 due to multi-threaded data-race risk. Called from FFI init, which may run after other threads exist.
 - **Fix**: add a safety comment justifying the call (init is called once, before background threads), or move to a build-time `RUST_LIB_BACKTRACE` setting.
 
 ### Typo
-- `desktop-common::logger.rs:181` — `"File appender creatrion failed"` (creation).
+- `desktop-common::logger.rs` — `"File appender creatrion failed"` (creation).
 
 ### `Platform.kt` `INSTANCE` only consumed by macOS
 - **Where**: `org.jetbrains.desktop.common.Platform.kt`. Used by `macos/KotlinDesktopToolkit.kt:44+`; Win32 and Linux re-implement `isAarch64()` / library-name resolution locally.
@@ -191,27 +190,33 @@ This list is point-in-time. Verify against current code before acting.
 - **Fix**: either make `init()` eagerly resolve `DataFormat.Html`, or have the property check `KotlinDesktopToolkit.isInitialized` and throw a clearer error.
 
 ### `GetMessageTime` 49-day wrap
-- **Where**: `pointer.rs:250` — `PointerClickCounter::register_click` uses `GetMessageTime()` (i32). Subtraction is wrap-safe via `cast_unsigned()` for differences under 2^31 ms, but a 49-day gap silently mis-classifies clicks.
+- **Where**: `pointer.rs` — `PointerClickCounter::register_click` uses `GetMessageTime()` (i32). Subtraction is wrap-safe via `cast_unsigned()` for differences under 2^31 ms, but a 49-day gap silently mis-classifies clicks.
 - **Note**: practically never hit (Windows reboots before this matters), but document.
 
 ### `VirtualKey` width inconsistency
-- **Where**: Rust `VirtualKey(u16)` (keyboard.rs:10); FFI `keyboard_get_key_state(vkey: i32)` (keyboard_api.rs:29); Kotlin `Int` (`Keyboard.kt:44`).
+- **Where**: Rust `VirtualKey(u16)` (keyboard.rs); FFI `keyboard_get_key_state(vkey: i32)` (keyboard_api.rs); Kotlin `Int` (`Keyboard.kt`).
 - **Fix**: pick one width. `u16` matches Win32 `VK_*` constants exactly; `i32` is the JExtract-friendly width. Decide and document.
 
 ### Hardcoded CF values in Kotlin
-- **Where**: `DataFormat.kt:9-10` — `Text = 13`, `FileList = 15`.
+- **Where**: `DataFormat.kt` — `Text = 13`, `FileList = 15`.
 - **Note**: Win32 constants are stable, but the linkage to Rust `DataFormat::Text` / `::FileList` is by convention only. A future renumbering on either side wouldn't fail any test.
 - **Fix**: query both via FFI helpers (like `clipboard_get_html_format_id()` does), or generate Kotlin constants from the Rust enum.
 
+### `resize_backdrop_tint` / caption-button resize commit ordering invariant
+- **Where**: `event_loop.rs` (`on_nccalcsize`), `window.rs` (`Window::resize_backdrop_tint`), `caption_buttons.rs` (`CaptionButtonStrip::on_resize`).
+- **What**: `on_nccalcsize` calls `resize_backdrop_tint(size)` and then `CaptionButtonStrip::on_resize(size, max_chrome_y)`. The strip's `on_resize` performs the single `CompositorController::Commit()` that publishes the backdrop's new size and the strip's new offset together. If a future maintainer adds a commit to `resize_backdrop_tint`, the backdrop resize can publish before the strip move, surfacing one frame of visual mismatch.
+- **Fix**: lock down with a comment in `resize_backdrop_tint` (`// does not commit; see on_nccalcsize / CaptionButtonStrip::on_resize ordering`); consider an assertion path on `Window`'s `CompositorController` use that catches double commits inside a single resize.
+- **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §3.3 / §5.5.
+
 ## Commented-out features
 
-- `events.rs:31` — `//WindowFocusChange(WindowFocusChangeEvent)` and `//WindowFullScreenToggle(WindowFullScreenToggleEvent)`. The payload struct types are not defined anywhere. Either implement or delete.
+- `events.rs` — `//WindowFocusChange(WindowFocusChangeEvent)` and `//WindowFullScreenToggle(WindowFullScreenToggleEvent)`. The payload struct types are not defined anywhere. Either implement or delete.
 
 ## Open design questions
 
-- **`AssertUnwindSafe` applied universally** in `ffi_boundary` (`desktop-common::logger.rs:312`). Partial mutation after panic unwind is not protected against. Worth deciding whether the toolkit's "panics are unrecoverable" stance is the policy and documenting it, or to add per-callsite `UnwindSafe` bounds.
+- **`AssertUnwindSafe` applied universally** in `ffi_boundary` (`desktop-common::logger.rs`). Partial mutation after panic unwind is not protected against. Worth deciding whether the toolkit's "panics are unrecoverable" stance is the policy and documenting it, or to add per-callsite `UnwindSafe` bounds.
 - **Background-thread panics silently lost** (thread-local `LAST_EXCEPTION_MSGS`). Decide whether to introduce a process-wide fallback channel for panics on dispatcher worker threads.
-- **Physical-pixel exceptions in the FFI surface** (see `SUBSYSTEMS.md` → Geometry). Several events and callbacks expose `PhysicalPoint` / `PhysicalSize` directly to managed code. Some of these defensible (multi-monitor screen-space, pre-scale-change events); some are convenience-vs-fidelity tradeoffs that are worth re-evaluating one by one. The clearest candidate for conversion is the `DropTarget` callback `point` parameter (`DragDrop.kt:53, 57, 61`) — the target window has a well-defined scale and converting at the boundary would save every caller the same arithmetic. Decide per-call whether to convert at the boundary, expose both representations, or keep raw physical.
+- **Physical-pixel exceptions in the FFI surface** (see `SUBSYSTEMS.md` → Geometry). Several events and callbacks expose `PhysicalPoint` / `PhysicalSize` directly to managed code. Some of these defensible (multi-monitor screen-space, pre-scale-change events); some are convenience-vs-fidelity tradeoffs that are worth re-evaluating one by one. The clearest candidate for conversion is the `DropTarget` callback `point` parameter (`DragDrop.kt`) — the target window has a well-defined scale and converting at the boundary would save every caller the same arithmetic. Decide per-call whether to convert at the boundary, expose both representations, or keep raw physical.
 - **Migrate from `anyhow` to `thiserror` for library-public errors.** The crate currently uses `anyhow::Error` as the unified error type throughout. `thiserror` is the recommended approach for libraries: it produces typed errors with stable variant names, lets callers branch on error kinds, and avoids the per-construction allocation overhead of `anyhow::Error`. `anyhow` is appropriate for binaries and for purely internal helper paths where the caller really doesn't care about the variant — keep it in those niches. Migrate the library-public surface first (anything observable in `*_api.rs` return shapes or surfaced through `LAST_EXCEPTION_MSGS`).
 
 ## Documentation TODOs
