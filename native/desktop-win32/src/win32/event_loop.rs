@@ -43,6 +43,7 @@ use super::{
     window::Window,
 };
 
+/// cbindgen:ignore
 pub(crate) const WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED: u32 = WM_APP + 0x31;
 
 thread_local! {
