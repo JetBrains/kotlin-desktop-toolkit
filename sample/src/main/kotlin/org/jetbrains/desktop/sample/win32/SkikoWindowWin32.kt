@@ -231,8 +231,11 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
     private fun performDrawing(size: PhysicalSize, scale: Float) {
         angleRenderer.makeCurrent()
         if (isSizeChanged(size)) {
-            currentSize = size
+            // Update currentSize only after resizeSurface returns Ok. If the EGL
+            // call throws, currentSize stays at the old value so the next frame
+            // retries the resize against the same target size instead of skipping it.
             surfaceParams = angleRenderer.resizeSurface(size.width, size.height)
+            currentSize = size
         }
         BackendRenderTarget.makeGL(
             width = size.width,

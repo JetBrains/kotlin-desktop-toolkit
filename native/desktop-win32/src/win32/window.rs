@@ -43,7 +43,7 @@ use windows_core::{HSTRING, Interface, PCWSTR, Result as WinResult, w};
 use super::{
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
-    geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
+    geometry::{LogicalPoint, LogicalRect, LogicalSize},
     pointer::PointerClickCounter,
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
@@ -377,13 +377,6 @@ impl Window {
         let [a, r, g, b] = color.to_be_bytes();
         let backdrop_color = windows::UI::Color { A: a, R: r, G: g, B: b };
         let backdrop_brush = self.compositor_controller.Compositor()?.CreateColorBrushWithColor(backdrop_color)?;
-        let mut rect = RECT::default();
-        unsafe { GetClientRect(self.hwnd(), &raw mut rect)? };
-        #[allow(clippy::cast_precision_loss)]
-        let width = rect.right.max(0) as f32;
-        #[allow(clippy::cast_precision_loss)]
-        let height = rect.bottom.max(0) as f32;
-        backdrop_visual.SetSize(windows_numerics::Vector2::new(width, height))?;
         backdrop_visual.SetBrush(&backdrop_brush)?;
         backdrop_visual.SetOpacity(opacity)?;
         backdrop_visual.SetIsVisible(true)?;
@@ -399,14 +392,10 @@ impl Window {
         Ok(())
     }
 
-    pub(crate) fn resize_backdrop_tint(&self, size: PhysicalSize) -> anyhow::Result<()> {
-        if let Some(backdrop_visual) = self.backdrop_tint.borrow().as_ref() {
-            #[allow(clippy::cast_precision_loss)]
-            backdrop_visual.SetSize(windows_numerics::Vector2 {
-                X: size.width.0 as f32,
-                Y: size.height.0 as f32,
-            })?;
-        }
+    /// Publishes queued composition mutations. Used by the `None`-titlebar
+    /// path, which has no caption-button strip to bundle the commit into.
+    pub(crate) fn commit_composition(&self) -> anyhow::Result<()> {
+        self.compositor_controller.Commit()?;
         Ok(())
     }
 
@@ -421,13 +410,15 @@ impl Window {
     }
 
     /// Queues a Y-offset on `content_layer` so Kotlin / ANGLE content lines
-    /// up with the visible monitor edge when maximized — composition (0,0)
-    /// tracks the (off-monitor) window-rect top-left, mirroring the
-    /// strip's `composition_root` shift.
+    /// up with the visible monitor edge when maximized; composition (0,0)
+    /// tracks the off-monitor window-rect top-left.
     ///
-    /// Does not commit; the caller either relies on the caption-button
-    /// strip's own commit (`Custom`) or calls [`commit_composition`]
-    /// directly (`None`).
+    /// Does not commit. `Custom` callers piggyback on the strip's next
+    /// commit (`on_resize` from `WM_NCCALCSIZE`, `on_dpi_change` from
+    /// `WM_DPICHANGED`). `None` callers follow up with `commit_composition()`.
+    /// Same-value `SetOffset` calls are visually cheap — the compositor's
+    /// render pass diffs `Offset` by value — so callers do not need an
+    /// app-side dedup.
     pub(crate) fn set_content_top_offset(&self, top_offset_px: i32) -> anyhow::Result<()> {
         if let Some(layer) = self.content_layer.borrow().as_ref() {
             #[allow(clippy::cast_precision_loss)]
@@ -437,15 +428,6 @@ impl Window {
                 Z: 0.0,
             })?;
         }
-        Ok(())
-    }
-
-    /// Publishes any queued composition mutations through the window's
-    /// `CompositorController`. Used by the `None` titlebar path, which
-    /// queues a content-layer offset on maximize but has no caption-button
-    /// strip to bundle the commit into.
-    pub(crate) fn commit_composition(&self) -> anyhow::Result<()> {
-        self.compositor_controller.Commit()?;
         Ok(())
     }
 
@@ -641,16 +623,12 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
 
     if window.has_custom_title_bar() {
         let chrome_layer = window.chrome_layer()?;
-        let mut client_rect = RECT::default();
-        unsafe { GetClientRect(hwnd, &raw mut client_rect)? };
-        let client_size = PhysicalSize::new(client_rect.right - client_rect.left, client_rect.bottom - client_rect.top);
         let strip = crate::win32::caption_buttons::CaptionButtonStrip::new(
             &chrome_layer,
             window.get_scale(),
             &window.style.borrow(),
             window.compositor_controller.clone(),
             hwnd,
-            client_size,
         )?;
         window.caption_buttons.replace(Some(strip));
     }
@@ -669,6 +647,16 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     let content_layer = compositor.CreateContainerVisual()?;
     let chrome_layer = compositor.CreateContainerVisual()?;
 
+    // Auto-track HWND client size on the layers whose effective size is
+    // actually consumed: `root_visual` is the chain root; `chrome_layer`
+    // backs the strip's `RelativeOffsetAdjustment(1,0,0)` anchor;
+    // `backdrop_layer` carries the Mica tint. `content_layer` is left at
+    // default size because the ANGLE visual sets its own absolute `Size`
+    // in `resize_surface` and no other child reads the parent's size.
+    root_visual.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
+    chrome_layer.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
+    backdrop_layer.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
+
     // VisualCollection ordering is bottom-to-top; sequential `InsertAtTop`
     // calls put each new layer above the previous one. Final stacking:
     // backdrop (bottom) < content (middle) < chrome (top).
@@ -678,6 +666,7 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     root_children.InsertAtTop(&chrome_layer)?;
 
     let backdrop_visual = compositor.CreateSpriteVisual()?;
+    backdrop_visual.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
     backdrop_layer.Children()?.InsertAtBottom(&backdrop_visual)?;
 
     desktop_window_target.SetRoot(&root_visual)?;

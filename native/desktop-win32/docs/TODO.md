@@ -234,12 +234,6 @@ This list is point-in-time. Verify against current code before acting.
 - **Note**: Win32 constants are stable, but the linkage to Rust `DataFormat::Text` / `::FileList` is by convention only. A future renumbering on either side wouldn't fail any test.
 - **Fix**: query both via FFI helpers (like `clipboard_get_html_format_id()` does), or generate Kotlin constants from the Rust enum.
 
-### `resize_backdrop_tint` / caption-button resize commit ordering invariant
-- **Where**: `event_loop.rs` (`on_nccalcsize`), `window.rs` (`Window::resize_backdrop_tint`), `caption_buttons.rs` (`CaptionButtonStrip::on_resize`).
-- **What**: `on_nccalcsize` calls `resize_backdrop_tint(size)` and then `CaptionButtonStrip::on_resize(size, max_chrome_y)`. The strip's `on_resize` performs the single `CompositorController::Commit()` that publishes the backdrop's new size and the strip's new offset together. If a future maintainer adds a commit to `resize_backdrop_tint`, the backdrop resize can publish before the strip move, surfacing one frame of visual mismatch.
-- **Fix**: lock down with a comment in `resize_backdrop_tint` (`// does not commit; see on_nccalcsize / CaptionButtonStrip::on_resize ordering`); consider an assertion path on `Window`'s `CompositorController` use that catches double commits inside a single resize.
-- **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §3.3 / §5.5.
-
 ## Commented-out features
 
 - `events.rs` — `//WindowFocusChange(WindowFocusChangeEvent)` and `//WindowFullScreenToggle(WindowFullScreenToggleEvent)`. The payload struct types are not defined anywhere. Either implement or delete.

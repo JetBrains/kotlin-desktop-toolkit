@@ -493,7 +493,6 @@ impl CaptionButtonStrip {
         style: &crate::win32::window_api::WindowStyle,
         compositor_controller: CompositorController,
         hwnd: HWND,
-        client_size: PhysicalSize,
     ) -> anyhow::Result<Self> {
         let compositor = compositor_controller.Compositor()?;
         let d2d_context = crate::win32::composition::ensure_d2d_context(compositor.clone())?;
@@ -530,6 +529,13 @@ impl CaptionButtonStrip {
             )?);
         }
 
+        composition_root
+            .SetRelativeOffsetAdjustment(Vector3 { X: 1.0, Y: 0.0, Z: 0.0 })
+            .inspect_err(|err| log::warn!("composition_root SetRelativeOffsetAdjustment failed: {err}"))?;
+        composition_root
+            .SetAnchorPoint(Vector2::new(1.0, 0.0))
+            .inspect_err(|err| log::warn!("composition_root SetAnchorPoint failed: {err}"))?;
+
         // Seed appearance + HC from live state (spec §4.2); on failure, fall
         // back to Light / Off — the next appearance event self-corrects.
         let appearance = Appearance::get_current()
@@ -557,7 +563,7 @@ impl CaptionButtonStrip {
             compositor_controller,
         };
         strip.relayout();
-        strip.set_strip_position(client_size, 0);
+        strip.set_strip_position(0);
         strip.apply_visuals_to_all_buttons();
         strip.compositor_controller.Commit()?;
         Ok(strip)
@@ -567,8 +573,10 @@ impl CaptionButtonStrip {
         let bw = self.metrics.button_size_px.width.0;
         let bh = self.metrics.button_size_px.height.0;
         let total_width = bw * self.buttons.len() as i32;
-        // Buttons line up at increasing x within the strip's parent;
-        // `set_strip_position` places the parent at top-right of `chrome_layer`.
+        // Buttons line up at increasing x within the parent. The parent's
+        // right-edge auto-tracks `chrome_layer`'s right-edge via
+        // `RelativeOffsetAdjustment(1,0,0) + AnchorPoint(1,0)` set once in
+        // `new`; `set_strip_position` only mutates `Offset.Y`.
         let _ = self
             .composition_root
             .SetSize(Vector2::new(total_width as f32, bh as f32))
@@ -610,13 +618,14 @@ impl CaptionButtonStrip {
         }
     }
 
-    fn set_strip_position(&mut self, client_size: PhysicalSize, max_chrome_y: i32) {
-        let x = strip_offset_x(client_size.width.0, self.metrics.button_size_px.width.0, self.buttons.len());
+    fn set_strip_position(&mut self, max_chrome_y: i32) {
         self.top_offset_px = max_chrome_y;
+        // X is handled by the static `RelativeOffsetAdjustment + AnchorPoint`
+        // set in `new`; leave `Offset.X = 0` to avoid double-counting.
         let _ = self
             .composition_root
             .SetOffset(Vector3 {
-                X: x as f32,
+                X: 0.0,
                 Y: max_chrome_y as f32,
                 Z: 0.0,
             })
@@ -760,8 +769,14 @@ impl CaptionButtonStrip {
 
     /// Drop any owned press session. Used by the wndproc on `WM_CANCELMODE`
     /// and on deactivation, where there is no pointer id to match against.
+    /// Also clears `pointer_over_kind` / `pointer_device` so the cancelled
+    /// button returns to Rest (spec §7 "Focus-loss cancels the press"); the
+    /// next `WM_NCPOINTERUPDATE` re-establishes Hovered if the cursor is
+    /// still over a button.
     pub fn cancel_any_press(&mut self) -> anyhow::Result<()> {
         if cancel_any_press_session(&mut self.press_session) {
+            self.pointer_over_kind = None;
+            self.pointer_device = None;
             self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
@@ -863,17 +878,29 @@ impl CaptionButtonStrip {
         Ok(())
     }
 
-    pub fn on_dpi_change(&mut self, new_scale: f32) -> anyhow::Result<()> {
-        self.metrics = CaptionButtonMetrics::new(new_scale);
+    pub fn on_dpi_change(&mut self, new_scale: f32, max_chrome_y: i32) -> anyhow::Result<()> {
+        // Two-pass surface resize: pass 1 resizes all surfaces; pass 2 sets
+        // dirty flags and `self.metrics`. A mid-loop `Resize` failure
+        // propagates with `glyph_surface_dirty` and `self.metrics` unchanged;
+        // the next successful call re-Resizes (idempotent) and rasterises
+        // uniformly.
+        //
+        // `set_strip_position` runs before the commit so glyph metrics,
+        // strip Y, and any caller-queued content offset publish together.
+        let new_metrics = CaptionButtonMetrics::new(new_scale);
+        let new_size = SizeInt32 {
+            Width: new_metrics.glyph_extent_px.width.0,
+            Height: new_metrics.glyph_extent_px.height.0,
+        };
         for button in &mut self.buttons {
-            let new_size = SizeInt32 {
-                Width: self.metrics.glyph_extent_px.width.0,
-                Height: self.metrics.glyph_extent_px.height.0,
-            };
             button.visuals.glyph_surface.Resize(new_size)?;
+        }
+        for button in &mut self.buttons {
             button.glyph_surface_dirty = true;
         }
+        self.metrics = new_metrics;
         self.relayout();
+        self.set_strip_position(max_chrome_y);
         self.apply_visuals_to_all_buttons();
         self.compositor_controller.Commit()?;
         Ok(())
@@ -913,25 +940,17 @@ impl CaptionButtonStrip {
             }
             self.rasterise_all_glyphs();
         }
-        // Always commit: WM_WINDOWPOSCHANGED queues companion updates
-        // (e.g. `Window::set_content_top_offset`) on this controller and
-        // relies on this commit to publish them.
+        // Publishes the maximize-glyph swap. The content-offset queue rides
+        // the same-tick NCCALCSIZE-driven `on_resize` commit, not this one.
         self.compositor_controller.Commit()?;
         Ok(())
     }
 
-    pub fn on_resize(&mut self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
-        self.set_strip_position(client_size, max_chrome_y);
+    pub fn on_resize(&mut self, max_chrome_y: i32) -> anyhow::Result<()> {
+        self.set_strip_position(max_chrome_y);
         self.compositor_controller.Commit()?;
         Ok(())
     }
-}
-
-/// X offset that anchors the strip's right edge to the client area's right
-/// edge. Pure arithmetic; extracted so the layout invariant lives in one
-/// readable place.
-const fn strip_offset_x(client_width_px: i32, button_width_px: i32, button_count: usize) -> i32 {
-    client_width_px - button_width_px * button_count as i32
 }
 
 fn create_caption_button(

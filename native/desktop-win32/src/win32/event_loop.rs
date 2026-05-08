@@ -209,22 +209,26 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         scale,
     };
     let result = event_loop.handle_event(window, event);
+    // `max_chrome_y` is DPI-scaled, so a DPI change can alter it for any
+    // non-system titlebar. Queue `set_content_top_offset` first, then
+    // `on_dpi_change(scale, max_chrome_y)` fires a single commit publishing
+    // glyph re-rasterisation, strip Y, and the queued content offset
+    // together — avoids a one-frame metrics-vs-strip-Y mismatch on
+    // maximized DPI transitions.
+    let has_non_system_tb = window.has_non_system_title_bar();
+    if has_non_system_tb {
+        let _ = window
+            .set_content_top_offset(window.max_chrome_y())
+            .inspect_err(|err| log::warn!("set_content_top_offset on DPI change failed: {err}"));
+    }
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         let _ = strip
-            .on_dpi_change(scale)
+            .on_dpi_change(scale, window.max_chrome_y())
             .inspect_err(|err| log::warn!("strip on_dpi_change failed: {err}"));
-        // Re-anchor the strip; the cache is already fresh, so `max_chrome_y`
-        // reads the new DPI without re-syscalling.
-        let mut client_rect = RECT::default();
-        match unsafe { GetClientRect(window.hwnd(), &raw mut client_rect) } {
-            Ok(()) => {
-                let client_size = PhysicalSize::new(client_rect.right - client_rect.left, client_rect.bottom - client_rect.top);
-                let _ = strip
-                    .on_resize(client_size, window.max_chrome_y())
-                    .inspect_err(|err| log::warn!("strip on_resize during DPI change failed: {err}"));
-            }
-            Err(err) => log::warn!("GetClientRect during WM_DPICHANGED failed: {err}"),
-        }
+    } else if has_non_system_tb {
+        let _ = window
+            .commit_composition()
+            .inspect_err(|err| log::warn!("commit_composition during DPI change failed: {err}"));
     }
     result
 }
@@ -239,19 +243,29 @@ fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) 
         event_loop.handle_event(window, event);
     }
     if windowpos.flags.0 & SWP_NOSIZE.0 == 0 {
-        let event = WindowResizeEvent {
-            size: PhysicalSize::new(windowpos.cx, windowpos.cy),
-            scale: window.get_scale(),
-        };
-        event_loop.handle_event(window, event);
+        // Emit the client-area size: `windowpos.cx/cy` is the outer rect,
+        // which includes the off-monitor `max_chrome_y` overhang and system
+        // frame. Downstream consumers (Kotlin `performDrawing`, ANGLE
+        // swapchain) work in client coordinates.
+        let mut client_rect = RECT::default();
+        if unsafe { GetClientRect(window.hwnd(), &raw mut client_rect) }.is_ok() {
+            let event = WindowResizeEvent {
+                size: PhysicalSize::new(client_rect.right - client_rect.left, client_rect.bottom - client_rect.top),
+                scale: window.get_scale(),
+            };
+            event_loop.handle_event(window, event);
+        } else {
+            log::warn!("GetClientRect during WM_WINDOWPOSCHANGED failed; skipping WindowResizeEvent for this tick");
+        }
     }
-    // `Custom` queues the content offset here so the strip's commit publishes
-    // it alongside the maximize-glyph swap; `None` has no companion state and
-    // WM_NCCALCSIZE already published this offset, so skip both queue + commit.
+    // No `set_content_top_offset` here: every WM_WINDOWPOSCHANGED that can
+    // change `max_chrome_y` (DPI / maximize-state — both imply a size change)
+    // is preceded by WM_NCCALCSIZE on the same tick, where `on_nccalcsize`
+    // already queued the offset alongside the ANGLE redraw.
+    //
+    // `on_max_state_change` belongs here, not in NCCALCSIZE — it owns the
+    // E922↔E923 maximize-glyph swap, which is independent of `max_chrome_y`.
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let _ = window
-            .set_content_top_offset(window.max_chrome_y())
-            .inspect_err(|err| log::warn!("set_content_top_offset failed: {err}"));
         let _ = strip
             .on_max_state_change(window.is_maximized())
             .inspect_err(|err| log::warn!("strip on_max_state_change failed: {err}"));
@@ -425,10 +439,9 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     // down into the title-bar zone.
     let max_chrome_y = window.max_chrome_y();
     if max_chrome_y != 0 {
-        // The non-system-titlebar handler leaves the top inset at 0 so the
-        // title-bar area stays in the client rect; add the tested maximized
-        // top overhang back here. Manual verification showed that including
-        // SM_CXPADDEDBORDER over-insets this backend.
+        // Add the maximized off-monitor overhang back so the client top sits
+        // at the visible monitor edge. SM_CYSIZEFRAME only — see spec §3.6
+        // for the SM_CXPADDEDBORDER divergence from Windows Terminal.
         calcsize_params.rgrc[0].top += max_chrome_y;
 
         // GH#1438 / GH#5209: 2-px claw-back so the cursor can still reveal an
@@ -445,10 +458,12 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let scale = window.get_scale();
     let event = NCCalcSizeEvent { origin, size, scale };
     event_loop.handle_event(window, event);
-    let _ = window.resize_backdrop_tint(size);
-    // Both `Custom` and `None` queue the content-layer offset. `Custom`
-    // lets the strip's `on_resize` commit publish it; `None` has no strip,
-    // so the wndproc commits the composition directly.
+    // The `NCCalcSize` event dispatch above ran `performDrawing` (Kotlin →
+    // `swap_buffers` → `controller.Commit()`). The offset queued below rides
+    // the next commit on this tick (`strip.on_resize` for `Custom`,
+    // `commit_composition` for `None`), which fires synchronously before
+    // this handler returns. Same-value `SetOffset` calls during a regular
+    // drag (where `max_chrome_y` is unchanged) are render-pass-coalesced.
     let has_non_system_tb = window.has_non_system_title_bar();
     if has_non_system_tb {
         let _ = window
@@ -457,7 +472,7 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     }
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         let _ = strip
-            .on_resize(size, max_chrome_y)
+            .on_resize(max_chrome_y)
             .inspect_err(|err| log::warn!("strip on_resize failed: {err}"));
     } else if has_non_system_tb {
         let _ = window

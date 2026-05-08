@@ -110,7 +110,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Gotchas.**
 - `swap_buffers` calls `glFinish` unconditionally before `eglSwapBuffers` (renderer_angle.rs) — serialises the CPU on every frame, eliminating GPU/CPU pipelining. Intent is not documented here; perf concern worth re-evaluating.
-- `swap_interval` hardcoded to 1; TODO at renderer_angle.rs says "0 on resize" — no logic to detect resize.
+- `swap_interval` toggles between `0` (in `resize_surface`, around the `eglPostSubBufferNV` resize kick) and `1` (top of `swap_buffers`). Driven by Kotlin's `performDrawing` calling `resizeSurface` only when `isSizeChanged(size)` is true; no top-level `WM_SIZE` / `WM_NCCALCSIZE` detection needed.
 - `core::mem::transmute` in the `get_egl_proc!` macro (renderer_egl_utils.rs) — no `// SAFETY` comment; correctness rests on EGL spec matching the local function-pointer typedef.
 - `#[allow(clippy::bool_to_int_with_if)]` at renderer_angle.rs is dead — function body has no conditional; leftover from a refactor.
 - `libEGL.dll` lookup has no fallback — missing DLL surfaces as `ERROR_PATH_NOT_FOUND` with no helpful diagnostic.
@@ -145,7 +145,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - `max_chrome_y` is `SM_CYSIZEFRAME` only on this toolkit's non-system titlebar style; the strip's resize-band exclusion (`is_in_top_resize_border`) uses the full `SM_CXPADDEDBORDER + SM_CYSIZEFRAME` — see spec §3.6.
 - Inactive caption-button hover and pressed render with the active palette — see spec §4.4.
 - Disabled visible Min/Max return `HTCAPTION` for `WM_NCHITTEST` but the strip still swallows DOWN / UP cycles (no hover, press, or action) — see spec §4.2.
-- Do not add `Commit()` to `Window::resize_backdrop_tint` — the strip's `on_resize` is the single commit point that publishes both the backdrop resize and the strip Y-shift atomically — see spec §5.5.
+- `root_visual`, `chrome_layer`, `backdrop_layer`, and the backdrop tint `SpriteVisual` carry `RelativeSizeAdjustment(1,1)` set in `initialize_content`; per-resize `SetSize` is not required. `content_layer` is left at default — the ANGLE visual sets its own absolute `Size` and no other child reads the parent's effective size. The strip's `on_resize` is the single commit point per resize tick — see spec §5.5.
 
 **Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`), `event_loop` (wndproc dispatch into `caption_kind_at_screen` and the strip's lifecycle methods), `appearance` (`Appearance` / `HighContrast` seed values + change events), `geometry` (`PhysicalPoint` / `PhysicalSize`).
 
