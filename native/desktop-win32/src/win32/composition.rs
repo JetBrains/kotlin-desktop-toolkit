@@ -5,12 +5,23 @@
 //! `SetRenderingDevice`. Hides `BeginDraw`/`EndDraw`/device-loss behind a
 //! closure-shaped `with_d2d_render_target` chokepoint.
 //!
+//! `build_d2d_device` attempts `D3D_DRIVER_TYPE_HARDWARE` first and falls
+//! back to `D3D_DRIVER_TYPE_WARP` on failure, so headless / Remote Desktop /
+//! degraded-GPU sessions still get a usable D2D pipeline rather than failing
+//! window creation in `WM_NCCREATE`. The fallback applies to both initial
+//! construction and `rebuild_d2d_device` (both call `build_d2d_device`).
+//! Note: the `Rc<D2dContext>` thread-local at `D2D_CONTEXT` is a singleton
+//! cache — once WARP is selected, the `D2dContext` stays on WARP for the
+//! lifetime of the UI thread; there is no automatic upgrade-back to
+//! HARDWARE when a hardware GPU later becomes available.
+//!
 //! See `docs/specs/2026-04-30-win32-caption-buttons-design.md` § 4.1 for the
 //! full design rationale.
 
 use std::cell::OnceCell;
 use std::rc::Rc;
 
+use anyhow::Context;
 use windows::{
     Graphics::{
         DirectX::{DirectXAlphaMode, DirectXPixelFormat},
@@ -23,7 +34,10 @@ use windows::{
             Direct2D::{
                 D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1CreateFactory, ID2D1Device, ID2D1DeviceContext, ID2D1Factory1, ID2D1RenderTarget,
             },
-            Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1},
+            Direct3D::{
+                D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_WARP, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0,
+                D3D_FEATURE_LEVEL_11_1,
+            },
             Direct3D11::{D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11Device},
             DirectWrite::{
                 DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_REGULAR,
@@ -161,6 +175,11 @@ impl D2dContext {
     /// stuck on the dead device. Per-frame device-loss storms are still
     /// possible (each frame's call exhausts its own budget) but each call is
     /// fast and the strip's caller logs via `inspect_err`.
+    ///
+    /// Each attempt inherits the HARDWARE→WARP fallback inside
+    /// `build_d2d_device`, so a hardware-GPU loss that cannot be re-acquired
+    /// (TDR storm, undock during the rebuild window) lands the singleton on
+    /// WARP rather than exhausting attempts.
     pub(crate) fn rebuild_d2d_device(&self) -> anyhow::Result<()> {
         const MAX_REBUILD_ATTEMPTS: u32 = 3;
         let cgd_interop: windows::Win32::System::WinRT::Composition::ICompositionGraphicsDeviceInterop =
@@ -231,6 +250,16 @@ const fn is_device_lost_hresult(code: HRESULT) -> bool {
 
 fn build_d2d_device() -> anyhow::Result<ID2D1Device> {
     let feature_levels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
+    let d3d_device = create_d3d_device(D3D_DRIVER_TYPE_HARDWARE, &feature_levels).or_else(|err| {
+        log::warn!("D3D11CreateDevice (HARDWARE) failed, falling back to WARP: {err}");
+        create_d3d_device(D3D_DRIVER_TYPE_WARP, &feature_levels)
+    })?;
+    let d2d_factory: ID2D1Factory1 = unsafe { D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None)? };
+    let dxgi_device: IDXGIDevice = d3d_device.cast()?;
+    Ok(unsafe { d2d_factory.CreateDevice(&dxgi_device)? })
+}
+
+fn create_d3d_device(driver_type: D3D_DRIVER_TYPE, feature_levels: &[D3D_FEATURE_LEVEL]) -> anyhow::Result<ID3D11Device> {
     let mut d3d_device: Option<ID3D11Device> = None;
     let mut returned_level = D3D_FEATURE_LEVEL_11_0;
     unsafe {
@@ -238,20 +267,17 @@ fn build_d2d_device() -> anyhow::Result<ID2D1Device> {
             // Turbofish disambiguates `None` to `Option<&IDXGIAdapter>`
             // because `padapter: P0: Param<IDXGIAdapter>`.
             None::<&IDXGIAdapter>,
-            D3D_DRIVER_TYPE_HARDWARE,
+            driver_type,
             HMODULE::default(),
             D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-            Some(&feature_levels),
+            Some(feature_levels),
             D3D11_SDK_VERSION,
             Some(&raw mut d3d_device),
             Some(&raw mut returned_level),
             None,
         )?;
     }
-    let d3d_device = d3d_device.ok_or_else(|| anyhow::anyhow!("D3D11CreateDevice returned no device"))?;
-    let d2d_factory: ID2D1Factory1 = unsafe { D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None)? };
-    let dxgi_device: IDXGIDevice = d3d_device.cast()?;
-    Ok(unsafe { d2d_factory.CreateDevice(&dxgi_device)? })
+    d3d_device.context("D3D11CreateDevice returned no device")
 }
 
 thread_local! {

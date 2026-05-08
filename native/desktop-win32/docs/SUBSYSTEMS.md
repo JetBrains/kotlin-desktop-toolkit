@@ -140,6 +140,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Gotchas.**
 - Hit-test routing dispatches into `caption_kind_at_screen` (caption_buttons.rs) for both `WM_NCHITTEST` and the `WM_NCPOINTER*` handlers — geometric, not `HIWORD(wParam)` — see spec §3.2.
 - Device-loss recovery is reactive only: `D2dContext::with_d2d_render_target` traps the three loss-class HRESULTs (`DXGI_ERROR_DEVICE_REMOVED` / `DXGI_ERROR_DEVICE_RESET` / `D2DERR_RECREATE_TARGET`) on both `BeginDraw` and `EndDraw`, calls `rebuild_d2d_device`, and `RenderingDeviceReplaced` triggers re-rasterise — see spec §6.2.
+- `build_d2d_device` falls back from `D3D_DRIVER_TYPE_HARDWARE` to `D3D_DRIVER_TYPE_WARP` on failure, so headless / Remote Desktop / degraded-GPU sessions still get a `Custom` window (initial construction and `rebuild_d2d_device` share the fallback). Once WARP is selected, the cached `Rc<D2dContext>` stays on WARP for the rest of the UI thread's lifetime — no automatic upgrade-back to hardware — see spec §6.1.
 - Two cleanup APIs: `on_pointer_cancel(pointer_id)` for `WM_POINTERCAPTURECHANGED`; `cancel_any_press()` for `WM_CANCELMODE` and `WM_ACTIVATE`-deactivate — see spec §3.2 / §4.2.
 - `max_chrome_y` is `SM_CYSIZEFRAME` only on this toolkit's non-system titlebar style; the strip's resize-band exclusion (`is_in_top_resize_border`) uses the full `SM_CXPADDEDBORDER + SM_CYSIZEFRAME` — see spec §3.6.
 - Inactive caption-button hover and pressed render with the active palette — see spec §4.4.
