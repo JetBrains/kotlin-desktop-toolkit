@@ -67,7 +67,12 @@ pub(crate) fn get_screen_info(hmonitor: HMONITOR) -> anyhow::Result<ScreenInfo> 
     if !unsafe { GetMonitorInfoW(hmonitor, (&raw mut monitor_info).cast()).as_bool() } {
         anyhow::bail!("failed to get monitor info");
     }
-    let device_name = windows_core::HSTRING::from_wide(&monitor_info.szDevice);
+    let device_name_len = monitor_info
+        .szDevice
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(monitor_info.szDevice.len());
+    let device_name = windows_core::HSTRING::from_wide(&monitor_info.szDevice[..device_name_len]);
     let mut display_device = DISPLAY_DEVICEW {
         cb: size_of::<DISPLAY_DEVICEW>().try_into()?,
         ..Default::default()
