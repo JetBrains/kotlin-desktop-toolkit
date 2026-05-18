@@ -550,7 +550,7 @@ extern "C" fn event_handler(event: &Event) -> bool {
                         } else {
                             TEXT_MIME_TYPE
                         };
-                        let actions = DragAndDropActions(DragAndDropAction::Copy as u8 | DragAndDropAction::Move as u8);
+                        let actions = DragAndDropActions(DragAndDropAction::Copy as u32 | DragAndDropAction::Move as u32);
                         let drag_icon_size = LogicalSize { width: 300, height: 300 };
                         window_start_drag_and_drop(
                             app_ptr,
@@ -736,12 +736,12 @@ extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDrag
         const SUPPORTED_ACTIONS_PER_MIME: [FfiSupportedActionsForMime; 2] = [
             FfiSupportedActionsForMime {
                 supported_mime_type: BorrowedUtf8::new(URI_LIST_MIME_TYPE),
-                supported_actions: DragAndDropActions(DragAndDropAction::Copy as u8),
+                supported_actions: DragAndDropActions(DragAndDropAction::Copy as u32),
                 preferred_action: DragAndDropAction::Copy,
             },
             FfiSupportedActionsForMime {
                 supported_mime_type: BorrowedUtf8::new(TEXT_MIME_TYPE),
-                supported_actions: DragAndDropActions(DragAndDropAction::Move as u8 | DragAndDropAction::Copy as u8),
+                supported_actions: DragAndDropActions(DragAndDropAction::Move as u32 | DragAndDropAction::Copy as u32),
                 preferred_action: DragAndDropAction::Copy,
             },
         ];

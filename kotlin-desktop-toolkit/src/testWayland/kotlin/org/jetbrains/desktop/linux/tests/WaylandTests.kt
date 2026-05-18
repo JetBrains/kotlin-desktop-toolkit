@@ -4136,6 +4136,7 @@ text/plain;charset=utf-8
                     assertNotEquals(0.0, data.locationInWindow.x)
                     assertNotEquals(0.0, data.locationInWindow.y)
                     assertEquals(expectedSourceMimeTypes, data.mimeTypes)
+                    assertEquals(setOf(DragAndDropAction.Copy, DragAndDropAction.Move), data.actions)
                 }
 
                 var dragAndDropLeaveEvent: Event.DragAndDropLeave? = null
@@ -4167,6 +4168,7 @@ text/plain;charset=utf-8
                     assertNotEquals(0.0, data.locationInWindow.x)
                     assertNotEquals(0.0, data.locationInWindow.y)
                     assertEquals(expectedSourceMimeTypes, data.mimeTypes)
+                    assertEquals(setOf(DragAndDropAction.Copy, DragAndDropAction.Move), data.actions)
                 }
             }
 
@@ -4335,6 +4337,7 @@ text/plain;charset=utf-8
 
         for (e in queryDragAndDropTargetTriggered) {
             assertEquals(advertisedMimeTypes, e.mimeTypes)
+            assertEquals(setOf(DragAndDropAction.Copy, DragAndDropAction.Move), e.actions)
         }
 
         awaitEventOfType<Event.DropPerformed> { event ->

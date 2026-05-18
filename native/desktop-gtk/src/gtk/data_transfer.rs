@@ -28,7 +28,7 @@ impl From<DragAndDropAction> for gdk4::DragAction {
 
 impl From<DragAndDropActions> for gdk4::DragAction {
     fn from(value: DragAndDropActions) -> Self {
-        Self::from_bits_truncate(value.0.into())
+        Self::from_bits_truncate(value.0)
     }
 }
 
@@ -41,6 +41,12 @@ impl From<gdk4::DragAction> for DragAndDropAction {
             gdk4::DragAction::ASK => Self::Copy,  // TODO
             _ => Self::None,
         }
+    }
+}
+
+impl From<gdk4::DragAction> for DragAndDropActions {
+    fn from(value: gdk4::DragAction) -> Self {
+        Self(value.bits())
     }
 }
 
@@ -97,6 +103,7 @@ pub fn get_drag_offer_actions(
         window_id,
         location_in_window,
         mime_types: BorrowedArray::from_slice(&ffi_mime_types),
+        actions: DragAndDropActions::from(drop.actions()),
     };
 
     query_drag_and_drop_target.with(&drag_and_drop_query_data, |target_info| {

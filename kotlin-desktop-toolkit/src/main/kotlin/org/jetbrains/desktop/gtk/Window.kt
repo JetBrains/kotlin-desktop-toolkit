@@ -102,7 +102,7 @@ public class Window internal constructor(params: WindowParams) : AutoCloseable {
                 desktop_gtk_h.window_start_drag_and_drop(
                     windowId,
                     mimeTypesToNative(arena, params.mimeTypes),
-                    params.actions.toNative(),
+                    params.actions.toNativeDragAndDropActions(),
                     (params.dragIconParams?.renderingMode ?: RenderingMode.Auto).toNative(),
                     params.dragIconParams?.size.toNative(arena),
                 )

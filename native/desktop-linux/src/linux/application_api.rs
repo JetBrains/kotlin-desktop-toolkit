@@ -29,7 +29,7 @@ pub enum DragAndDropAction {
 
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
 #[repr(transparent)]
-pub struct DragAndDropActions(pub u8);
+pub struct DragAndDropActions(pub u32);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,6 +45,7 @@ pub struct DragAndDropQueryData<'a> {
     pub window_id: WindowId,
     pub location_in_window: LogicalPoint,
     pub mime_types: BorrowedArray<'a, BorrowedUtf8<'a>>,
+    pub actions: DragAndDropActions,
 }
 
 #[repr(C)]

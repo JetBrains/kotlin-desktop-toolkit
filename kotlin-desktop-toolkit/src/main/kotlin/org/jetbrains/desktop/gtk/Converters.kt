@@ -513,6 +513,7 @@ internal fun DragAndDropQueryData.Companion.fromNative(s: MemorySegment): DragAn
         windowId = NativeDragAndDropQueryData.window_id(s),
         locationInWindow = LogicalPoint.fromNative(NativeDragAndDropQueryData.location_in_window(s)),
         mimeTypes = readNativeBorrowedUtf8Array(NativeDragAndDropQueryData.mime_types(s)),
+        actions = dragAndDropActionsFromNative(NativeDragAndDropQueryData.actions(s)),
     )
 }
 
@@ -522,21 +523,31 @@ internal fun DragAndDropAction?.toNative(): Byte = when (this) {
     DragAndDropAction.Move -> desktop_gtk_h.NativeDragAndDropAction_Move()
 }.toByte()
 
-internal fun DragAndDropAction.Companion.fromNative(nativeVal: Int): DragAndDropAction? = when (nativeVal) {
+internal fun DragAndDropAction.Companion.fromNative(nativeVal: Byte): DragAndDropAction? = when (nativeVal.toInt()) {
     desktop_gtk_h.NativeDragAndDropAction_None() -> null
     desktop_gtk_h.NativeDragAndDropAction_Copy() -> DragAndDropAction.Copy
     desktop_gtk_h.NativeDragAndDropAction_Move() -> DragAndDropAction.Move
     else -> null
 }
 
-internal fun Set<DragAndDropAction>.toNative(): Byte {
-    var result = desktop_gtk_h.NativeDragAndDropAction_None().toByte()
+internal fun Set<DragAndDropAction>.toNativeDragAndDropActions(): Int {
+    var result = desktop_gtk_h.NativeDragAndDropAction_None()
     for (e in this) {
-        result = result or e.toNative()
+        result = result or e.toNative().toInt()
     }
     return result
 }
 
+internal fun dragAndDropActionsFromNative(raw: Int): Set<DragAndDropAction> {
+    return buildSet {
+        if (raw and desktop_gtk_h.NativeDragAndDropAction_Copy() > 0) {
+            add(DragAndDropAction.Copy)
+        }
+        if (raw and desktop_gtk_h.NativeDragAndDropAction_Move() > 0) {
+            add(DragAndDropAction.Move)
+        }
+    }
+}
 private fun Int.toUTF32ByteArray(): ByteArray {
     return byteArrayOf(
         ((this shr 24) and 0xFF).toByte(),
@@ -548,7 +559,7 @@ private fun Int.toUTF32ByteArray(): ByteArray {
 
 internal fun SupportedActionsForMime.toNative(result: MemorySegment, arena: Arena) {
     NativeFfiSupportedActionsForMime.supported_mime_type(result, supportedMimeType.toNativeUtf8(arena))
-    NativeFfiSupportedActionsForMime.supported_actions(result, supportedActions.toNative())
+    NativeFfiSupportedActionsForMime.supported_actions(result, supportedActions.toNativeDragAndDropActions())
     NativeFfiSupportedActionsForMime.preferred_action(result, preferredAction.toNative())
 }
 
@@ -640,7 +651,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             Event.DropPerformed(
                 windowId = NativeDropPerformedEvent.window_id(nativeEvent),
                 content = DataTransferContent.fromNative(NativeDropPerformedEvent.content(nativeEvent)),
-                action = DragAndDropAction.fromNative(NativeDropPerformedEvent.action(nativeEvent).toInt()),
+                action = DragAndDropAction.fromNative(NativeDropPerformedEvent.action(nativeEvent)),
                 locationInWindow = LogicalPoint.fromNative(NativeDropPerformedEvent.location_in_window(nativeEvent)),
             )
         }
@@ -656,7 +667,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.drag_and_drop_finished(s)
             Event.DragAndDropFinished(
                 windowId = NativeDragAndDropFinishedEvent.window_id(nativeEvent),
-                action = DragAndDropAction.fromNative(NativeDragAndDropFinishedEvent.action(nativeEvent).toInt()),
+                action = DragAndDropAction.fromNative(NativeDragAndDropFinishedEvent.action(nativeEvent)),
             )
         }
         desktop_gtk_h.NativeEvent_DragAndDropFeedbackFinished() -> {
