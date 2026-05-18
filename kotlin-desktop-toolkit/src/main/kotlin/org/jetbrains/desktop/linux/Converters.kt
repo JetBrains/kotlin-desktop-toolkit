@@ -60,7 +60,6 @@ import org.jetbrains.desktop.linux.generated.desktop_linux_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
-import kotlin.experimental.or
 import kotlin.streams.asSequence
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.DurationUnit
@@ -429,7 +428,7 @@ internal fun TextInputContentPurpose.toNative(): Int {
     }
 }
 
-internal fun Set<TextInputContentHint>.toNative(): Int {
+internal fun Set<TextInputContentHint>.toNativeTextInputContentHints(): Int {
     var nativeHints = 0
     for (hint in this) {
         nativeHints += when (hint) {
@@ -468,7 +467,7 @@ internal fun TextInputContext.toNative(arena: Arena): MemorySegment {
     NativeTextInputContext.surrounding_text(result, surroundingText.toNativeUtf8(arena))
     NativeTextInputContext.cursor_codepoint_offset(result, cursorCodepointOffset.toShort())
     NativeTextInputContext.selection_start_codepoint_offset(result, selectionStartCodepointOffset.toShort())
-    NativeTextInputContext.hints(result, hints.toNative())
+    NativeTextInputContext.hints(result, hints.toNativeTextInputContentHints())
     NativeTextInputContext.content_purpose(result, contentPurpose.toNative())
     NativeTextInputContext.cursor_rectangle(result, cursorRectangle.toNative(arena))
     NativeTextInputContext.change_caused_by_input_method(result, changeCausedByInputMethod)
@@ -540,6 +539,7 @@ internal fun DragAndDropQueryData.Companion.fromNative(s: MemorySegment): DragAn
         windowId = NativeDragAndDropQueryData.window_id(s),
         locationInWindow = LogicalPoint.fromNative(NativeDragAndDropQueryData.location_in_window(s)),
         mimeTypes = readNativeBorrowedUtf8Array(NativeDragAndDropQueryData.mime_types(s)),
+        actions = dragAndDropActionsFromNative(NativeDragAndDropQueryData.actions(s)),
     )
 }
 
@@ -556,17 +556,28 @@ internal fun DragAndDropAction.Companion.fromNative(nativeVal: Int): DragAndDrop
     else -> null
 }
 
-internal fun Set<DragAndDropAction>.toNative(): Byte {
-    var result = desktop_linux_h.NativeDragAndDropAction_None().toByte()
+internal fun Set<DragAndDropAction>.toNativeDragAndDropActions(): Int {
+    var result = desktop_linux_h.NativeDragAndDropAction_None()
     for (e in this) {
-        result = result or e.toNative()
+        result = result or e.toNative().toInt()
     }
     return result
 }
 
+internal fun dragAndDropActionsFromNative(raw: Int): Set<DragAndDropAction> {
+    return buildSet {
+        if (raw and desktop_linux_h.NativeDragAndDropAction_Copy() > 0) {
+            add(DragAndDropAction.Copy)
+        }
+        if (raw and desktop_linux_h.NativeDragAndDropAction_Move() > 0) {
+            add(DragAndDropAction.Move)
+        }
+    }
+}
+
 internal fun SupportedActionsForMime.toNative(result: MemorySegment, arena: Arena) {
     NativeFfiSupportedActionsForMime.supported_mime_type(result, supportedMimeType.toNativeUtf8(arena))
-    NativeFfiSupportedActionsForMime.supported_actions(result, supportedActions.toNative())
+    NativeFfiSupportedActionsForMime.supported_actions(result, supportedActions.toNativeDragAndDropActions())
     NativeFfiSupportedActionsForMime.preferred_action(result, preferredAction.toNative())
 }
 

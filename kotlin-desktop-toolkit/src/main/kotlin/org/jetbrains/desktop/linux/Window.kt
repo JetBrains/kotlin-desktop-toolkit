@@ -149,7 +149,7 @@ public class Window internal constructor(
                     appPtr,
                     windowId,
                     mimeTypesToNative(arena, params.mimeTypes),
-                    params.actions.toNative(),
+                    params.actions.toNativeDragAndDropActions(),
                     (params.dragIconParams?.renderingMode ?: RenderingMode.Auto).toNative(),
                     params.dragIconParams?.size.toNative(arena),
                 )

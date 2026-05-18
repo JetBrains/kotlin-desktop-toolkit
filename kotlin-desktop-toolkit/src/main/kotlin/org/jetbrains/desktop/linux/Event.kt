@@ -60,6 +60,7 @@ public data class DragAndDropQueryData internal constructor(
     public val windowId: WindowId,
     public val locationInWindow: LogicalPoint,
     public val mimeTypes: List<String>,
+    public val actions: Set<DragAndDropAction>,
 ) {
     internal companion object;
 }

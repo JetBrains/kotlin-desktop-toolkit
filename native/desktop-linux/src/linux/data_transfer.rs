@@ -57,7 +57,7 @@ impl From<DragAndDropAction> for DndAction {
 
 impl From<DragAndDropActions> for DndAction {
     fn from(value: DragAndDropActions) -> Self {
-        Self::from_bits_truncate(value.0.into())
+        Self::from_bits_truncate(value.0)
     }
 }
 
@@ -70,6 +70,12 @@ impl From<DndAction> for DragAndDropAction {
             DndAction::Ask => Self::Copy, // TODO
             _ => Self::None,
         }
+    }
+}
+
+impl From<DndAction> for DragAndDropActions {
+    fn from(value: DndAction) -> Self {
+        Self(value.bits())
     }
 }
 
@@ -126,6 +132,7 @@ impl ApplicationState {
                 window_id,
                 location_in_window: (x, y).into(),
                 mime_types: BorrowedArray::from_slice(&ffi_mime_types),
+                actions: DragAndDropActions::from(drag_offer.source_actions),
             };
             self.query_drag_and_drop_target.with(&drag_and_drop_query_data, |target_info| {
                 let supported_mime_with_actions = target_info

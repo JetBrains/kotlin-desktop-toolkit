@@ -4038,6 +4038,7 @@ text/plain;charset=utf-8
                     assertNotEquals(0f, data.locationInWindow.x)
                     assertNotEquals(0f, data.locationInWindow.y)
                     assertEquals(expectedSourceMimeTypes, data.mimeTypes)
+                    assertEquals(setOf(DragAndDropAction.Copy, DragAndDropAction.Move), data.actions)
                 }
 
                 mouseX = (physicalScreenSize.width / 2) + 100
@@ -4071,6 +4072,7 @@ text/plain;charset=utf-8
                     assertNotEquals(0f, data.locationInWindow.x)
                     assertNotEquals(0f, data.locationInWindow.y)
                     assertEquals(listOf(TEXT_UTF8_MIME_TYPE, "text/plain"), data.mimeTypes)
+                    assertEquals(setOf(DragAndDropAction.Copy, DragAndDropAction.Move), data.actions)
                 }
             }
 
