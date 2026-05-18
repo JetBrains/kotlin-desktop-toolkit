@@ -1,6 +1,5 @@
 package org.jetbrains.desktop.macos.tests
 
-import org.jetbrains.desktop.macos.NativeError
 import org.jetbrains.desktop.macos.UrlUtils
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
@@ -8,10 +7,8 @@ import java.nio.file.Files
 import kotlin.io.path.createTempFile
 import kotlin.io.path.deleteExisting
 import kotlin.io.path.writeText
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -127,17 +124,23 @@ class UrlUtilsTest : KDTTestBase() {
         assertEquals(renamedFile.toFile().canonicalPath, resolvedPath)
     }
 
-    @Ignore("Apparently macOS 15 which is used on CI is more tolerant of invalid URLs and doesn't throw an exception")
     @Test
-    fun `urlToFilePath throws for invalid URL`() {
-        assertFailsWith<NativeError> {
-            UrlUtils.urlToFilePath("not a valid url")
-        }
+    fun `urlToFilePath returns null for invalid URL`() {
+        assertNull(UrlUtils.urlToFilePath("not a valid url"))
     }
 
     @Test
     fun `urlToFilePath returns null for non-file URL`() {
         val result = UrlUtils.urlToFilePath("https://example.com/path")
         assertNull(result)
+    }
+
+    @Test
+    fun `urlToFilePath handles unencoded spaces in screenshot path`() {
+        val url = """
+            file:///var/folders/28/57z8g7393r7by22rsz_cb8y40000gn/T/TemporaryItems/NSIRD_screencaptureui_fmsG6x/Screenshot 2026-05-18 at 15.17.21.png
+        """.trimIndent()
+        val result = UrlUtils.urlToFilePath(url)
+        assertNotNull(result)
     }
 }

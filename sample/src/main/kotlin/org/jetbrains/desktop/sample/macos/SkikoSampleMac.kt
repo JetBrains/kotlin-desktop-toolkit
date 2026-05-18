@@ -417,7 +417,7 @@ class ApplicationState : AutoCloseable {
             LogicalPoint(0.0, 0.0),
             useCustomTitlebar,
         )
-        window.window.registerForDraggedTypes(listOf(Pasteboard.URL_TYPE))
+        window.window.registerForDraggedTypes(listOf(Pasteboard.FILE_URL_TYPE))
         windows.add(window)
     }
 
@@ -1135,19 +1135,19 @@ fun dragTargetCallbacks(): DragTargetCallbacks {
     return object : DragTargetCallbacks {
         override fun onDragEntered(info: DragInfo): DragOperation {
             val files = Pasteboard.readFileItemPaths(pasteboard = info.pasteboard)
-            println("Drag Entered: $info, files: $files")
+//            println("Drag Entered: $info, files: $files")
             return DragOperation.COPY
         }
 
         override fun onDragUpdated(info: DragInfo): DragOperation {
             val files = Pasteboard.readFileItemPaths(pasteboard = info.pasteboard)
-            println("Drag Updated: $info, files: $files")
+//            println("Drag Updated: $info, files: $files")
             return DragOperation.COPY
         }
 
         override fun onDragExited(info: DragInfo?) {
             val files = info?.pasteboard?.let { Pasteboard.readFileItemPaths(pasteboard = it) }
-            println("Drag Exited: $info files: $files")
+//            println("Drag Exited: $info files: $files")
         }
 
         override fun onDragPerformed(info: DragInfo): Boolean {
