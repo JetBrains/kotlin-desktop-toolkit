@@ -40,7 +40,7 @@ abstract class SkikoWindow(
     }
 
     val window = Window.create(windowParams)
-    var displayLink = DisplayLink.create(window.screenId(), onNextFrame = displayLinkCallback)
+    var displayLink: DisplayLink? = null
 
     private val directContext = DirectContext.makeMetal(device.pointerAddress, queue.pointerAddress)
     var view: MetalView = MetalView.create(device, onDisplayLayer = {
@@ -103,15 +103,29 @@ abstract class SkikoWindow(
     }
 
     private fun updateDisplayLink(screenId: ScreenId) {
-        val isRunning = displayLink.isRunning()
-        displayLink.setRunning(false)
-        displayLink.close()
+        val isRunning = displayLink?.let { displayLink ->
+            val isRunning = displayLink.isRunning()
+            displayLink.setRunning(false)
+            displayLink.close()
+            isRunning
+        } ?: true
         displayLink = DisplayLink.create(screenId, onNextFrame = displayLinkCallback)
-        displayLink.setRunning(isRunning)
+        displayLink?.setRunning(isRunning)
     }
 
     open fun handleEvent(event: Event): EventHandlerResult {
         return when (event) {
+            is Event.WindowChangedOcclusionState -> {
+                if (event.isVisible) {
+                    if (displayLink == null) {
+                        updateDisplayLink(screenId = window.screenId())
+                    }
+                    displayLink?.setRunning(true)
+                } else {
+                    displayLink?.setRunning(false)
+                }
+                EventHandlerResult.Continue
+            }
             is Event.WindowScreenChange -> {
                 updateDisplayLink(screenId = event.newScreenId)
                 EventHandlerResult.Continue
@@ -146,8 +160,8 @@ abstract class SkikoWindow(
     abstract fun Canvas.draw(size: PhysicalSize, time: Long)
 
     override fun close() {
-        displayLink.setRunning(false)
-        displayLink.close()
+        displayLink?.setRunning(false)
+        displayLink?.close()
         directContext.close()
         view.close()
         window.close()

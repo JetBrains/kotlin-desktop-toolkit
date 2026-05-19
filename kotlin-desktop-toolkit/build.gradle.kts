@@ -65,7 +65,7 @@ val skikoTargetArch = when (runTestsWithPlatform.arch) {
 
 dependencies {
     // To be able to inspect gradle source code
-    runtimeOnly(gradleApi())
+    compileOnly(gradleApi())
 
     // Use the Kotlin JUnit 5 integration.
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")

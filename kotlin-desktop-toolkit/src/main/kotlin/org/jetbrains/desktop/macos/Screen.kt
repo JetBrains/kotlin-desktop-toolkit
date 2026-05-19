@@ -22,7 +22,16 @@ public class DisplayLink internal constructor(
     desktop_macos_h::display_link_drop,
 ) {
     public companion object {
-        public fun create(screenId: ScreenId, onNextFrame: () -> Unit): DisplayLink {
+        /**
+         * Creates a [DisplayLink] tied to the given screen.
+         *
+         * Returns `null` if the underlying `CVDisplayLink` could not be created — for example
+         * when no active displays are currently attached (the machine is asleep, all displays
+         * are disconnected, or the system has otherwise no active `CGDisplay`s).
+         * In that case the failure is logged on the native side and the caller is expected
+         * to retry later (e.g. once a display becomes available).
+         */
+        public fun create(screenId: ScreenId, onNextFrame: () -> Unit): DisplayLink? {
             val arena = Arena.ofShared()
             val callback = NativeDisplayLinkCallback.allocate({
                 ffiUpCall {
@@ -32,6 +41,10 @@ public class DisplayLink internal constructor(
             }, arena)
             try {
                 val ptr = ffiDownCall { desktop_macos_h.display_link_create(screenId, callback) }
+                if (ptr == MemorySegment.NULL) {
+                    arena.close()
+                    return null
+                }
                 return DisplayLink(ptr, arena)
             } catch (e: Throwable) {
                 arena.close()

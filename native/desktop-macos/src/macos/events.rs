@@ -366,7 +366,7 @@ pub(crate) fn handle_window_screen_change(window: &NSWindow) {
     let _handled = AppState::with(|state| {
         let event = Event::WindowScreenChange(WindowScreenChangeEvent {
             window_id: window.window_id(),
-            // todo sometimes it panics when you close the lid
+            // when the window is not visible, it will be None
             new_screen_id: window.screen().unwrap().screen_id(),
         });
         (state.event_handler)(&event)
