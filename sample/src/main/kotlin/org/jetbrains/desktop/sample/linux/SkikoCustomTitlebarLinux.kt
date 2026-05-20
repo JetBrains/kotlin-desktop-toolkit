@@ -18,7 +18,6 @@ import org.jetbrains.skia.Paint
 import org.jetbrains.skia.Rect
 import kotlin.math.pow
 import kotlin.time.Duration
-import kotlin.use
 
 private fun LogicalPoint.isInsideCircle(center: LogicalPoint, radius: LogicalPixels): Boolean {
     val xDiff = this.x - center.x
@@ -109,9 +108,11 @@ internal class SkikoCustomTitlebarLinux(
             DesktopTitlebarAction.ToggleMaximize -> {
                 toggleMaximize(window, windowState)
             }
+
             DesktopTitlebarAction.Minimize -> {
                 window.minimize()
             }
+
             DesktopTitlebarAction.None -> {}
             DesktopTitlebarAction.Menu -> {
                 window.showMenu(locationInWindow)
@@ -133,6 +134,7 @@ internal class SkikoCustomTitlebarLinux(
                 window.showMenu(locationInWindow)
                 EventHandlerResult.Stop
             }
+
             WindowButtonType.Spacer,
             WindowButtonType.Title,
             -> when (mouseButton) {
@@ -140,20 +142,25 @@ internal class SkikoCustomTitlebarLinux(
                     executeTitlebarAction(xdgDesktopSettings.actionRightClickTitlebar, window, locationInWindow, windowState)
                     EventHandlerResult.Stop
                 }
+
                 MouseButton.MIDDLE -> {
                     executeTitlebarAction(xdgDesktopSettings.actionMiddleClickTitlebar, window, locationInWindow, windowState)
                     EventHandlerResult.Stop
                 }
+
                 else -> EventHandlerResult.Continue
             }
+
             WindowButtonType.Minimize -> {
                 window.minimize()
                 EventHandlerResult.Stop
             }
+
             WindowButtonType.Maximize -> {
                 toggleMaximize(window, windowState)
                 EventHandlerResult.Stop
             }
+
             WindowButtonType.Close -> {
                 requestClose()
                 EventHandlerResult.Stop
@@ -296,6 +303,7 @@ internal class SkikoCustomTitlebarLinux(
                     canvas.drawRect(Rect.makeXYWH(xOffset, yOffset, w, h), paint)
                 }
             }
+
             else -> {}
         }
 
@@ -313,6 +321,7 @@ internal class SkikoCustomTitlebarLinux(
                     canvas.drawLine(xLeft, yOffset + (h / 2), xRight, yOffset + (h / 2), paint)
                     canvas.drawLine(xLeft, yBottom, xRight, yBottom, paint)
                 }
+
                 WindowButtonType.Icon -> {
                     canvas.drawImageRect(
                         APP_ICON,
@@ -321,10 +330,12 @@ internal class SkikoCustomTitlebarLinux(
                         paint,
                     )
                 }
+
                 WindowButtonType.Spacer -> {}
                 WindowButtonType.Minimize -> {
                     canvas.drawLine(xLeft, yBottom, xRight, yBottom, paint)
                 }
+
                 WindowButtonType.Maximize -> {
                     if (windowState.maximized) {
                         drawUnfilledRect(Rect(xLeft + (w / 5), yTop, xRight, yBottom - (h / 5)), canvas, paint)
@@ -333,10 +344,12 @@ internal class SkikoCustomTitlebarLinux(
                         drawUnfilledRect(Rect(xLeft, yTop, xRight, yBottom), canvas, paint)
                     }
                 }
+
                 WindowButtonType.Close -> {
                     canvas.drawLine(xLeft, yTop, xRight, yBottom, paint)
                     canvas.drawLine(xRight, yTop, xLeft, yBottom, paint)
                 }
+
                 WindowButtonType.Title -> {
                     paint.color = if (windowState.active) Color.WHITE else COLOR_LIGHT_GRAY
                     canvas.drawTextLine(

@@ -60,14 +60,34 @@ import org.jetbrains.skia.makeGLWithInterface
 import java.lang.AutoCloseable
 import java.net.URI
 import java.text.BreakIterator
+import kotlin.Array
+import kotlin.Boolean
+import kotlin.ByteArray
+import kotlin.Double
+import kotlin.Float
+import kotlin.Int
+import kotlin.Long
+import kotlin.Pair
+import kotlin.String
+import kotlin.Suppress
+import kotlin.UInt
+import kotlin.UShort
+import kotlin.Unit
+import kotlin.also
+import kotlin.check
+import kotlin.error
 import kotlin.io.path.Path
+import kotlin.let
 import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.run
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.toUShort
+import kotlin.use
 
 const val TEXT_MIME_TYPE = "text/plain;charset=utf-8"
 const val URI_LIST_MIME_TYPE = "text/uri-list"
@@ -184,6 +204,7 @@ internal data class XdgDesktopSettings(
                 g = colorDoubleToInt(s.value.green),
                 b = colorDoubleToInt(s.value.blue),
             )
+
             is DesktopSetting.CursorSize -> cursorSize = s.value
             is DesktopSetting.CursorTheme -> cursorTheme = s.value
             is DesktopSetting.ActionDoubleClickTitlebar -> actionDoubleClickTitlebar = s.value
@@ -461,6 +482,7 @@ private class EditorState {
 
                 else -> EventHandlerResult.Continue
             }
+
             setOf(KeyModifiers.Shift) -> when (event.keyCode.value) {
                 KeyCode.Up -> {
                     if (selectionStartOffset == null) {
@@ -499,6 +521,7 @@ private class EditorState {
                     event.characters?.also(::typeIn)
                 }
             }
+
             else -> when (event.keyCode.value) {
                 KeyCode.BackSpace -> {
                     if (!deleteSelection() && cursorOffset > 0) {
@@ -967,6 +990,7 @@ private class WindowContainer(
                         WindowButtonType.Title,
                         WindowButtonType.Close,
                         -> true
+
                         WindowButtonType.Minimize -> capabilities.minimize
                         WindowButtonType.Maximize -> capabilities.maximize
                     }
@@ -1304,6 +1328,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 currentClipboard = content
                 app.clipboardPut(content.mimeTypes())
             }
+
             override fun copyToPrimarySelection(content: DataTransferContentType) {
                 currentPrimarySelectionContent = content
                 app.primarySelectionPut(content.mimeTypes())
@@ -1339,6 +1364,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 createWindow(useCustomTitlebar = true, renderingMode = RenderingMode.Auto)
                 EventHandlerResult.Stop
             }
+
             Event.ApplicationWantsToTerminate -> EventHandlerResult.Continue
             Event.ApplicationWillTerminate -> EventHandlerResult.Continue
             is Event.DisplayConfigurationChange -> EventHandlerResult.Continue
@@ -1346,12 +1372,14 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 settingChanged(event.setting)
                 EventHandlerResult.Stop
             }
+
             is Event.WindowCloseRequest -> {
                 val windowId = event.windowId
                 val window = windows[windowId] ?: return EventHandlerResult.Continue
                 window.close()
                 EventHandlerResult.Stop
             }
+
             is Event.WindowClosed -> {
                 val windowId = event.windowId
                 windows.remove(windowId)
@@ -1371,6 +1399,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 }
                 EventHandlerResult.Stop
             }
+
             is Event.WindowDraw -> {
                 if (windows[event.windowId]?.performDrawing(event) == true) {
                     EventHandlerResult.Stop
@@ -1378,20 +1407,25 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                     EventHandlerResult.Continue
                 }
             }
+
             is Event.WindowConfigure -> {
                 windows[event.windowId]?.configure(event) ?: EventHandlerResult.Continue
             }
+
             is Event.MouseMoved -> {
                 windows[event.windowId]?.onMouseMoved(event.locationInWindow) ?: EventHandlerResult.Continue
             }
+
             is Event.DataTransfer -> {
                 clipboardPasteSerialToWindow.remove(event.serial)?.let { windowId ->
                     windows[windowId]?.onDataTransfer(event.content, app)
                 } ?: EventHandlerResult.Continue
             }
+
             is Event.DropPerformed -> {
                 windows[event.windowId]?.onDataTransfer(event.content, app) ?: EventHandlerResult.Continue
             }
+
             is Event.DragAndDropLeave -> EventHandlerResult.Stop
             is Event.DragIconDraw -> {
                 currentDragIconDraw?.let { draw ->
@@ -1419,21 +1453,25 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                     EventHandlerResult.Stop
                 } ?: EventHandlerResult.Continue
             }
+
             is Event.DragAndDropFinished -> {
                 windows[event.windowId]?.onDragAndDropFinished(event.action) ?: EventHandlerResult.Continue
                 currentDragIconDraw = null
                 dragIconDirectContext = null
                 EventHandlerResult.Stop
             }
+
             is Event.DataTransferCancelled -> {
                 onDataTransferCancelled(event.dataSource)
                 EventHandlerResult.Stop
             }
+
             is Event.DataTransferAvailable -> EventHandlerResult.Continue
             is Event.FileChooserResponse -> {
                 Logger.info { "File chooser response: $event" }
                 EventHandlerResult.Stop
             }
+
             is Event.ActivationTokenResponse -> {
                 windows.keys.firstOrNull { it != keyWindowId }?.let { windowIdToActivate ->
                     val w = windows[windowIdToActivate]!!
@@ -1441,6 +1479,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 }
                 EventHandlerResult.Stop
             }
+
             is Event.KeyDown -> {
                 if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.N) {
                     createWindow(useCustomTitlebar = true, renderingMode = RenderingMode.Auto)
@@ -1461,11 +1500,13 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                         ?: EventHandlerResult.Continue
                 }
             }
+
             is Event.KeyUp -> EventHandlerResult.Continue
             is Event.ModifiersChanged -> {
                 modifiers = event.modifiers
                 EventHandlerResult.Stop
             }
+
             is Event.MouseDown -> windows[event.windowId]?.onMouseDown(
                 event,
                 modifiers,
@@ -1473,6 +1514,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 xdgDesktopSettings,
             )
                 ?: EventHandlerResult.Continue
+
             is Event.MouseEntered -> windows[event.windowId]?.onMouseEntered(event.locationInWindow) ?: EventHandlerResult.Continue
             is Event.MouseExited -> windows[event.windowId]?.onMouseExited() ?: EventHandlerResult.Continue
             is Event.MouseUp -> {
@@ -1481,6 +1523,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 }
                 windows[event.windowId]?.onMouseUp(event, xdgDesktopSettings) ?: EventHandlerResult.Continue
             }
+
             is Event.ScrollWheel -> EventHandlerResult.Continue
             is Event.TextInput -> windows[keyWindowId]?.onTextInput(event, app) ?: EventHandlerResult.Continue
             is Event.TextInputAvailability -> windows[event.windowId]?.onTextInputAvailability(event, app) ?: EventHandlerResult.Continue
@@ -1488,11 +1531,13 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 keyWindowId = event.windowId
                 EventHandlerResult.Continue
             }
+
             is Event.WindowKeyboardLeave -> {
                 check(keyWindowId == event.windowId)
                 keyWindowId = null
                 EventHandlerResult.Continue
             }
+
             is Event.WindowScaleChanged, is Event.WindowScreenChange -> EventHandlerResult.Continue
             is Event.NotificationShown -> {
                 event.notificationId?.let { notificationId ->
@@ -1504,6 +1549,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 }
                 EventHandlerResult.Stop
             }
+
             is Event.NotificationClosed -> {
                 notificationSources.remove(event.notificationId)?.let { windowIdToActivate ->
                     event.activationToken?.let { activationToken ->
@@ -1541,19 +1587,23 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 check(mimeType == TEXT_MIME_TYPE) { "Unsupported mime type for text content: $mimeType" }
                 content.text.encodeToByteArray()
             }
+
             is DataTransferContentType.UriList -> {
                 when (mimeType) {
                     TEXT_MIME_TYPE -> {
                         content.files.joinToString("\n").encodeToByteArray()
                     }
+
                     URI_LIST_MIME_TYPE -> {
                         content.files.joinToString("\r\n", postfix = "\r\n") { Path(it).toUri().toString() }.encodeToByteArray()
                     }
+
                     else -> {
                         error("Unsupported mime type: $mimeType")
                     }
                 }
             }
+
             null -> {
                 error("Trying to paste from $dataSource with empty content")
             }

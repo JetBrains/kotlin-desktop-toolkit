@@ -38,9 +38,9 @@ fn show_notification(
     let replaces_id = 0u32; // no replacement
     let expire_timeout = -1; // auto
     let actions = vec!["default", ""];
-    let mut hints = HashMap::<&str, glib::Variant>::new();
+    let mut hints = HashMap::new();
     if let Some(sound_file) = sound_file_path {
-        hints.insert("sound-file", sound_file.into());
+        hints.insert("sound-file", glib::Variant::from(sound_file));
     }
 
     proxy.call(

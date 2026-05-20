@@ -350,6 +350,7 @@ internal fun DesktopSetting.Companion.fromNative(s: MemorySegment): DesktopSetti
         desktop_linux_h.NativeFfiDesktopSetting_CursorSize() -> DesktopSetting.CursorSize(
             NativeFfiDesktopSetting.cursor_size(s).toUInt(),
         )
+
         desktop_linux_h.NativeFfiDesktopSetting_CursorTheme() -> DesktopSetting.CursorTheme(
             readStringFromNativeU8Array(NativeFfiDesktopSetting.cursor_theme(s))!!,
         )
@@ -370,15 +371,19 @@ internal fun DesktopSetting.Companion.fromNative(s: MemorySegment): DesktopSetti
         desktop_linux_h.NativeFfiDesktopSetting_MiddleClickPaste() -> DesktopSetting.MiddleClickPaste(
             NativeFfiDesktopSetting.middle_click_paste(s),
         )
+
         desktop_linux_h.NativeFfiDesktopSetting_DragThresholdPixels() -> DesktopSetting.DragThresholdPixels(
             NativeFfiDesktopSetting.drag_threshold_pixels(s),
         )
+
         desktop_linux_h.NativeFfiDesktopSetting_EnableAnimations() -> DesktopSetting.EnableAnimations(
             NativeFfiDesktopSetting.enable_animations(s),
         )
+
         desktop_linux_h.NativeFfiDesktopSetting_RecentFilesEnabled() -> DesktopSetting.RecentFilesEnabled(
             NativeFfiDesktopSetting.recent_files_enabled(s),
         )
+
         desktop_linux_h.NativeFfiDesktopSetting_RecentFilesMaxAgeDays() -> DesktopSetting.RecentFilesMaxAgeDays(
             NativeFfiDesktopSetting.recent_files_max_age_days(s),
         )
@@ -655,15 +660,19 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
         desktop_linux_h.NativeEvent_ApplicationStarted() -> {
             Event.ApplicationStarted
         }
+
         desktop_linux_h.NativeEvent_ApplicationWantsToTerminate() -> {
             Event.ApplicationWantsToTerminate
         }
+
         desktop_linux_h.NativeEvent_ApplicationWillTerminate() -> {
             Event.ApplicationWillTerminate
         }
+
         desktop_linux_h.NativeEvent_DisplayConfigurationChange() -> {
             Event.DisplayConfigurationChange(screens = app.allScreens())
         }
+
         desktop_linux_h.NativeEvent_DesktopSettingChange() -> {
             val nativeEvent = NativeEvent.desktop_setting_change(s)
             Event.DesktopSettingChange(
@@ -679,12 +688,14 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 mimeTypes = mimeTypesString.split(","),
             )
         }
+
         desktop_linux_h.NativeEvent_DataTransferCancelled() -> {
             val nativeEvent = NativeEvent.data_transfer_cancelled(s)
             Event.DataTransferCancelled(
                 dataSource = DataSource.fromNative(NativeDataTransferCancelledEvent.data_source(nativeEvent)),
             )
         }
+
         desktop_linux_h.NativeEvent_DataTransfer() -> {
             val nativeEvent = NativeEvent.data_transfer(s)
             val content = DataTransferContent.fromNative(NativeDataTransferEvent.content(nativeEvent))
@@ -693,10 +704,12 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 content = content,
             )
         }
+
         desktop_linux_h.NativeEvent_DragAndDropLeave() -> {
             val nativeEvent = NativeEvent.drag_and_drop_leave(s)
             Event.DragAndDropLeave(windowId = NativeDragAndDropLeaveEvent.window_id(nativeEvent))
         }
+
         desktop_linux_h.NativeEvent_DropPerformed() -> {
             val nativeEvent = NativeEvent.drop_performed(s)
             Event.DropPerformed(
@@ -706,6 +719,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 locationInWindow = LogicalPoint.fromNative(NativeDropPerformedEvent.location_in_window(nativeEvent)),
             )
         }
+
         desktop_linux_h.NativeEvent_DragIconDraw() -> {
             val nativeEvent = NativeEvent.drag_icon_draw(s)
             Event.DragIconDraw(
@@ -714,6 +728,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 scale = NativeDragIconDrawEvent.scale(nativeEvent),
             )
         }
+
         desktop_linux_h.NativeEvent_DragAndDropFinished() -> {
             val nativeEvent = NativeEvent.drag_and_drop_finished(s)
             Event.DragAndDropFinished(
@@ -721,6 +736,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 action = DragAndDropAction.fromNative(NativeDragAndDropFinishedEvent.action(nativeEvent).toInt()),
             )
         }
+
         desktop_linux_h.NativeEvent_FileChooserResponse() -> {
             val nativeEvent = NativeEvent.file_chooser_response(s)
             val filesString = readStringFromNativeU8Array(NativeFileChooserResponse.newline_separated_files(nativeEvent))
@@ -729,6 +745,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 files = filesString?.trimEnd()?.split("\r\n") ?: emptyList(),
             )
         }
+
         desktop_linux_h.NativeEvent_ActivationTokenResponse() -> {
             val nativeEvent = NativeEvent.activation_token_response(s)
             Event.ActivationTokenResponse(
@@ -736,6 +753,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 token = readStringFromNativeU8Array(NativeActivationTokenResponse.token(nativeEvent))!!,
             )
         }
+
         desktop_linux_h.NativeEvent_KeyDown() -> {
             val nativeEvent = NativeEvent.key_down(s)
             val nativeU8Array = NativeKeyDownEvent.characters(nativeEvent)
@@ -747,6 +765,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 isRepeat = NativeKeyDownEvent.is_repeat(nativeEvent),
             )
         }
+
         desktop_linux_h.NativeEvent_KeyUp() -> {
             val nativeEvent = NativeEvent.key_up(s)
             Event.KeyUp(
@@ -754,6 +773,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 keyCode = KeyCode(NativeKeyUpEvent.code(nativeEvent).toUInt()),
             )
         }
+
         desktop_linux_h.NativeEvent_TextInputAvailability() -> {
             val nativeEvent = NativeEvent.text_input(s)
             Event.TextInputAvailability(
@@ -761,6 +781,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 available = NativeTextInputAvailabilityEvent.available(nativeEvent),
             )
         }
+
         desktop_linux_h.NativeEvent_TextInput() -> {
             val nativeEvent = NativeEvent.text_input(s)
             Event.TextInput(
@@ -783,11 +804,13 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 },
             )
         }
+
         desktop_linux_h.NativeEvent_ModifiersChanged() -> {
             val nativeEvent = NativeEvent.modifiers_changed(s)
             val nativeModifiers = NativeModifiersChangedEvent.modifiers(nativeEvent)
             Event.ModifiersChanged(modifiers = keyModifiersFromNative(nativeModifiers))
         }
+
         desktop_linux_h.NativeEvent_MouseMoved() -> {
             val nativeEvent = NativeEvent.mouse_moved(s)
             Event.MouseMoved(
@@ -796,6 +819,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 timestamp = Timestamp.fromNative(NativeMouseMovedEvent.timestamp(nativeEvent)),
             )
         }
+
         desktop_linux_h.NativeEvent_MouseEntered() -> {
             val nativeEvent = NativeEvent.mouse_entered(s)
             Event.MouseEntered(
@@ -803,6 +827,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 locationInWindow = LogicalPoint.fromNative(NativeMouseEnteredEvent.location_in_window(nativeEvent)),
             )
         }
+
         desktop_linux_h.NativeEvent_MouseExited() -> {
             val nativeEvent = NativeEvent.mouse_exited(s)
             Event.MouseExited(
@@ -810,6 +835,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 locationInWindow = LogicalPoint.fromNative(NativeMouseExitedEvent.location_in_window(nativeEvent)),
             )
         }
+
         desktop_linux_h.NativeEvent_MouseUp() -> {
             val nativeEvent = NativeEvent.mouse_up(s)
             Event.MouseUp(
@@ -819,6 +845,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 timestamp = Timestamp.fromNative(NativeMouseUpEvent.timestamp(nativeEvent)),
             )
         }
+
         desktop_linux_h.NativeEvent_MouseDown() -> {
             val nativeEvent = NativeEvent.mouse_down(s)
             Event.MouseDown(
@@ -828,6 +855,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 timestamp = Timestamp.fromNative(NativeMouseDownEvent.timestamp(nativeEvent)),
             )
         }
+
         desktop_linux_h.NativeEvent_NotificationClosed() -> {
             val nativeEvent = NativeEvent.notification_closed(s)
             Event.NotificationClosed(
@@ -836,6 +864,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 activationToken = readStringFromNativeU8Array(NativeNotificationClosedEvent.activation_token(nativeEvent)),
             )
         }
+
         desktop_linux_h.NativeEvent_NotificationShown() -> {
             val nativeEvent = NativeEvent.notification_shown(s)
             val nativeNotificationId = NativeNotificationShownEvent.notification_id(nativeEvent)
@@ -844,6 +873,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 notificationId = if (nativeNotificationId == 0) null else nativeNotificationId.toUInt(),
             )
         }
+
         desktop_linux_h.NativeEvent_ScrollWheel() -> {
             val nativeEvent = NativeEvent.scroll_wheel(s)
             val horizontalScroll = ScrollData.fromNative(NativeScrollWheelEvent.horizontal_scroll(nativeEvent))
@@ -857,19 +887,23 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 horizontalScroll = horizontalScroll,
                 verticalScroll = verticalScroll,
             )
-        } desktop_linux_h.NativeEvent_WindowScreenChange() -> {
+        }
+
+        desktop_linux_h.NativeEvent_WindowScreenChange() -> {
             val nativeEvent = NativeEvent.window_screen_change(s)
             Event.WindowScreenChange(
                 windowId = NativeWindowScreenChangeEvent.window_id(nativeEvent),
                 newScreenId = NativeWindowScreenChangeEvent.new_screen_id(nativeEvent),
             )
         }
+
         desktop_linux_h.NativeEvent_WindowClosed() -> {
             val nativeEvent = NativeEvent.window_closed(s)
             Event.WindowClosed(
                 windowId = NativeWindowConfigureEvent.window_id(nativeEvent),
             )
         }
+
         desktop_linux_h.NativeEvent_WindowConfigure() -> {
             val nativeEvent = NativeEvent.window_configure(s)
             Event.WindowConfigure(
@@ -886,6 +920,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 capabilities = WindowCapabilities.fromNative(NativeWindowConfigureEvent.capabilities(nativeEvent)),
             )
         }
+
         desktop_linux_h.NativeEvent_WindowKeyboardEnter() -> {
             val nativeEvent = NativeEvent.window_keyboard_enter(s)
 
@@ -898,14 +933,17 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 keySyms,
             )
         }
+
         desktop_linux_h.NativeEvent_WindowKeyboardLeave() -> {
             val nativeEvent = NativeEvent.window_keyboard_leave(s)
             Event.WindowKeyboardLeave(windowId = NativeWindowKeyboardLeaveEvent.window_id(nativeEvent))
         }
+
         desktop_linux_h.NativeEvent_WindowCloseRequest() -> {
             val nativeEvent = NativeEvent.window_close_request(s)
             Event.WindowCloseRequest(windowId = NativeWindowCloseRequestEvent.window_id(nativeEvent))
         }
+
         desktop_linux_h.NativeEvent_WindowDraw() -> {
             val nativeEvent = NativeEvent.window_draw(s)
             Event.WindowDraw(
@@ -915,6 +953,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 scale = NativeWindowDrawEvent.scale(nativeEvent),
             )
         }
+
         desktop_linux_h.NativeEvent_WindowScaleChanged() -> {
             val nativeEvent = NativeEvent.window_scale_changed(s)
             Event.WindowScaleChanged(
@@ -922,6 +961,7 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 newScale = NativeWindowScaleChangedEvent.new_scale(nativeEvent),
             )
         }
+
         else -> {
             error("Unexpected Event tag $raw")
         }

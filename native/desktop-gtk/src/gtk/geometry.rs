@@ -20,20 +20,11 @@ pub struct LogicalPoint {
     pub y: LogicalPixels,
 }
 
-impl From<(i32, i32)> for LogicalPoint {
-    fn from(value: (i32, i32)) -> Self {
+impl LogicalPoint {
+    pub fn new<T: Into<f64>>(x: T, y: T) -> Self {
         Self {
-            x: LogicalPixels(value.0.into()),
-            y: LogicalPixels(value.1.into()),
-        }
-    }
-}
-
-impl From<(f64, f64)> for LogicalPoint {
-    fn from(value: (f64, f64)) -> Self {
-        Self {
-            x: LogicalPixels(value.0),
-            y: LogicalPixels(value.1),
+            x: LogicalPixels(x.into()),
+            y: LogicalPixels(y.into()),
         }
     }
 }
@@ -44,11 +35,6 @@ pub struct LogicalSize {
     pub width: i32,
     pub height: i32,
 }
-//
-// #[must_use]
-// pub fn to_logical_value<T: Into<f64>>(value: T, scale: f64) -> LogicalPixels {
-//     LogicalPixels(value.into() / scale)
-// }
 
 #[must_use]
 fn to_physical_value(value: i32, scale: f64) -> PhysicalPixels {
@@ -91,16 +77,6 @@ pub struct LogicalRect {
 }
 
 impl PhysicalRect {
-    // #[must_use]
-    // pub fn to_logical(&self, scale: f64) -> LogicalRect {
-    //     LogicalRect {
-    //         x: to_logical_value(self.x.0, scale),
-    //         y: to_logical_value(self.y.0, scale),
-    //         width: to_logical_value(self.width.0, scale),
-    //         height: to_logical_value(self.height.0, scale),
-    //     }
-    // }
-
     #[must_use]
     pub const fn as_size(&self) -> PhysicalSize {
         PhysicalSize {
@@ -129,13 +105,3 @@ impl LogicalRect {
         }
     }
 }
-
-// impl PhysicalSize {
-//     #[must_use]
-//     pub fn to_logical(&self, scale: f64) -> LogicalSize {
-//         LogicalSize {
-//             width: to_logical_value(self.width.0, scale),
-//             height: to_logical_value(self.height.0, scale),
-//         }
-//     }
-// }

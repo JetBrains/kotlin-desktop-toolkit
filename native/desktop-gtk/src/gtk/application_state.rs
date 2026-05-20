@@ -2,7 +2,7 @@ use crate::gtk::application::{Application, send_event, with_app_state_mut};
 use crate::gtk::application_api::{ApplicationCallbacks, FfiWindowCloseRequest, RenderingMode};
 use crate::gtk::async_event_result::AsyncEventResult;
 use crate::gtk::clipboard::{ClipboardContentProvider, KdtClipboard};
-use crate::gtk::data_transfer_api::DataSource;
+use crate::gtk::data_transfer_api::{DataSource, DragAndDropAction, DragAndDropActions};
 use crate::gtk::desktop_settings::DesktopSettings;
 use crate::gtk::desktop_settings_api::FfiDesktopSetting;
 use crate::gtk::events::Event::DragIconFrameTick;
@@ -357,13 +357,13 @@ impl ApplicationState {
         &self,
         window_id: WindowId,
         mime_types: &MimeTypes,
-        action: gdk4::DragAction,
+        actions: DragAndDropActions,
         drag_icon_rendering_mode: RenderingMode,
         drag_icon_size: LogicalSize,
     ) -> anyhow::Result<()> {
         let event_handler = self.event_handler;
         let provider = ClipboardContentProvider::new(mime_types, self.transfer_data_getter, DataSource::DragAndDrop, event_handler);
-        let drag = self.with_window(window_id, |w| w.start_drag_operation(action, &provider))?;
+        let drag = self.with_window(window_id, |w| w.start_drag_operation(gdk4::DragAction::from(actions), &provider))?;
         {
             let drag_icon = self.drag_icon.clone();
             let drag_content_provider = self.drag_content_provider.clone();
@@ -380,7 +380,7 @@ impl ApplicationState {
                 event_handler,
                 DragAndDropFinishedEvent {
                     window_id,
-                    action: action.into(),
+                    action: DragAndDropAction::from(action),
                 },
             );
         });

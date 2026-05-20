@@ -1,18 +1,18 @@
-use crate::linux::events::{DataTransferContent, EventHandler, WindowClosedEvent};
-use crate::linux::notifications::{NewNotificationData, NotificationAction, init_notifications_task};
 use crate::linux::{
-    application_api::{ApplicationCallbacks, RenderingMode},
+    application_api::{ApplicationCallbacks, DragAndDropActions, RenderingMode},
     application_state::{ApplicationState, KdtRequestData, get_egl},
     async_event_result::AsyncEventResult,
     data_transfer::MimeTypes,
     desktop_settings::init_desktop_settings_notifier_task,
     desktop_settings_api::FfiDesktopSetting,
     drag_icon::DragIcon,
-    events::{DataTransferEvent, Event, NotificationClosedEvent, RequestId, WindowId},
+    events::{
+        DataTransferContent, DataTransferEvent, Event, EventHandler, NotificationClosedEvent, RequestId, WindowClosedEvent, WindowId,
+    },
     file_dialog::{show_open_file_dialog_impl, show_save_file_dialog_impl},
     file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams},
     geometry::{LogicalPoint, LogicalSize},
-    notifications::NotificationData,
+    notifications::{NewNotificationData, NotificationAction, NotificationData, init_notifications_task},
     window::SimpleWindow,
     window_api::WindowParams,
     window_resize_edge_api::WindowResizeEdge,
@@ -464,7 +464,7 @@ impl Application {
         &mut self,
         window_id: WindowId,
         mime_types: MimeTypes,
-        action: DndAction,
+        actions: DragAndDropActions,
         drag_icon_rendering_mode: RenderingMode,
         drag_icon_size: LogicalSize,
     ) -> anyhow::Result<()> {
@@ -497,10 +497,10 @@ impl Application {
             .window
             .wl_surface();
 
-        let drag_source = self
-            .state
-            .data_device_manager_state
-            .create_drag_and_drop_source(&self.qh, mime_types.val, action);
+        let drag_source =
+            self.state
+                .data_device_manager_state
+                .create_drag_and_drop_source(&self.qh, mime_types.val, DndAction::from(actions));
 
         let device = self.state.data_device.as_ref().context("No data device found")?;
 

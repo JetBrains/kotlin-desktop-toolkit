@@ -1,13 +1,12 @@
-use bitflag_attr::bitflag;
-use core::f64;
-use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
-use desktop_common::logger::PanicDefault;
-
 use crate::gtk::{
     data_transfer_api::{DataSource, DragAndDropAction},
     desktop_settings_api::FfiDesktopSetting,
     geometry::{LogicalPixels, LogicalPoint, LogicalSize, PhysicalSize},
 };
+use bitflag_attr::bitflag;
+use core::f64;
+use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
+use desktop_common::logger::PanicDefault;
 
 pub type EventHandler = extern "C" fn(&Event) -> bool;
 

@@ -12,6 +12,7 @@ use crate::linux::{
         WindowCapabilities,
         WindowCloseRequestEvent,
         WindowConfigureEvent,
+        WindowDecorationMode,
         WindowDrawEvent,
         WindowId,
         WindowScaleChangedEvent,
@@ -273,8 +274,7 @@ impl ApplicationState {
     }
 
     pub fn send_event<'a, T: Into<Event<'a>>>(&self, event_data: T) -> bool {
-        let event: Event = event_data.into();
-        send_event(self.callbacks.event_handler, event)
+        send_event(self.callbacks.event_handler, event_data)
     }
 
     pub fn get_latest_pointer_button_seat_and_serial(&self) -> Option<(&WlSeat, u32)> {
@@ -417,7 +417,7 @@ impl CompositorHandler for ApplicationState {
         if self.fractional_scale_manager.is_none()
             && let Some(window) = self.windows.get_mut(&surface.id())
         {
-            let new_scale: f64 = new_factor.into();
+            let new_scale: f64 = f64::from(new_factor);
             window.scale_changed(new_scale, &self.shm_state);
 
             _ = send_event(
@@ -495,7 +495,7 @@ impl WindowHandler for ApplicationState {
                     tiled_right: configure.is_tiled_right(),
                     tiled_top: configure.is_tiled_top(),
                     tiled_bottom: configure.is_tiled_bottom(),
-                    decoration_mode: configure.decoration_mode.into(),
+                    decoration_mode: WindowDecorationMode::from(configure.decoration_mode),
                     capabilities: WindowCapabilities {
                         window_menu: configure.capabilities.contains(WindowManagerCapabilities::WINDOW_MENU),
                         maximize: configure.capabilities.contains(WindowManagerCapabilities::MAXIMIZE),

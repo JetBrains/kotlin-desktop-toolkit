@@ -41,6 +41,7 @@ public data class LogicalPoint(
     public companion object {
         public val Zero: LogicalPoint = LogicalPoint(0f, 0f)
     }
+
     public fun toPhysical(scale: Float): PhysicalPoint = PhysicalPoint((x * scale).roundToInt(), (y * scale).roundToInt())
 }
 

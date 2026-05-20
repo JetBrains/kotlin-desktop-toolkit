@@ -1,5 +1,5 @@
 use crate::gtk::events::ScreenId;
-use crate::gtk::geometry::{LogicalPixels, LogicalPoint, LogicalSize};
+use crate::gtk::geometry::{LogicalPoint, LogicalSize};
 use desktop_common::{
     ffi_utils::{AutoDropArray, AutoDropStrPtr, RustAllocatedStrPtr},
     logger::ffi_boundary,
@@ -40,10 +40,7 @@ impl ScreenInfo {
     #[must_use]
     fn new(monitor: &gdk4::Monitor) -> Self {
         let geometry = monitor.geometry();
-        let origin = LogicalPoint {
-            x: LogicalPixels(geometry.x().into()),
-            y: LogicalPixels(geometry.y().into()),
-        };
+        let origin = LogicalPoint::new(geometry.x(), geometry.y());
         let size = LogicalSize {
             width: geometry.width(),
             height: geometry.height(),
@@ -57,7 +54,7 @@ impl ScreenInfo {
             ),
             origin,
             size,
-            scale: monitor.scale_factor().into(),
+            scale: f64::from(monitor.scale_factor()),
             millihertz: u32::try_from(monitor.refresh_rate()).unwrap(),
         }
     }
