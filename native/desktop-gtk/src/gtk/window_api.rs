@@ -152,7 +152,7 @@ pub extern "C" fn window_start_drag_and_drop(
             app.start_drag(
                 window_id,
                 &MimeTypes::new(mime_types_str),
-                actions.into(),
+                actions,
                 drag_icon_rendering_mode,
                 drag_icon_size,
             )

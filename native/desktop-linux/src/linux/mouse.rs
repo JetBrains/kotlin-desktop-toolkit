@@ -1,17 +1,3 @@
-use log::debug;
-use smithay_client_toolkit::{
-    compositor::SurfaceData,
-    delegate_pointer,
-    reexports::client::{
-        Connection, Dispatch, Proxy as _, QueueHandle,
-        protocol::{
-            wl_pointer::{AxisRelativeDirection, WlPointer},
-            wl_surface::{self, WlSurface},
-        },
-    },
-    seat::pointer::{AxisScroll, PointerEvent, PointerEventKind, PointerHandler},
-};
-
 use crate::linux::{
     application_state::ApplicationState,
     events::{
@@ -26,7 +12,20 @@ use crate::linux::{
         Timestamp,
         //
     },
-    geometry::LogicalPixels,
+    geometry::{LogicalPixels, LogicalPoint},
+};
+use log::debug;
+use smithay_client_toolkit::{
+    compositor::SurfaceData,
+    delegate_pointer,
+    reexports::client::{
+        Connection, Dispatch, Proxy as _, QueueHandle,
+        protocol::{
+            wl_pointer::{AxisRelativeDirection, WlPointer},
+            wl_surface::{self, WlSurface},
+        },
+    },
+    seat::pointer::{AxisScroll, PointerEvent, PointerEventKind, PointerHandler},
 };
 
 impl From<AxisScroll> for ScrollData {
@@ -60,7 +59,7 @@ impl PointerHandler for ApplicationState {
                     window.set_cursor = true;
                     let res = self.send_event(MouseEnteredEvent {
                         window_id,
-                        location_in_window: event.position.into(),
+                        location_in_window: LogicalPoint::from(event.position),
                     });
                     if let Some(themed_pointer) = self.themed_pointer.take() {
                         let pointer_surface = themed_pointer.surface();
@@ -87,12 +86,12 @@ impl PointerHandler for ApplicationState {
                     window.num_pointer_buttons_down = 0;
                     self.send_event(MouseExitedEvent {
                         window_id,
-                        location_in_window: event.position.into(),
+                        location_in_window: LogicalPoint::from(event.position),
                     })
                 }
                 PointerEventKind::Motion { time } => self.send_event(MouseMovedEvent {
                     window_id,
-                    location_in_window: event.position.into(),
+                    location_in_window: LogicalPoint::from(event.position),
                     timestamp: Timestamp(time),
                 }),
                 PointerEventKind::Press { button, serial, time } => {
@@ -103,7 +102,7 @@ impl PointerHandler for ApplicationState {
                     self.send_event(MouseDownEvent {
                         window_id,
                         button: MouseButton(button),
-                        location_in_window: event.position.into(),
+                        location_in_window: LogicalPoint::from(event.position),
                         timestamp: Timestamp(time),
                     })
                 }
@@ -115,7 +114,7 @@ impl PointerHandler for ApplicationState {
                     self.send_event(MouseUpEvent {
                         window_id,
                         button: MouseButton(button),
-                        location_in_window: event.position.into(),
+                        location_in_window: LogicalPoint::from(event.position),
                         timestamp: Timestamp(time),
                     })
                 }
@@ -128,10 +127,10 @@ impl PointerHandler for ApplicationState {
                     debug!("wl_pointer vertical={vertical:?}");
                     self.send_event(ScrollWheelEvent {
                         window_id,
-                        location_in_window: event.position.into(),
+                        location_in_window: LogicalPoint::from(event.position),
                         timestamp: Timestamp(time),
-                        horizontal_scroll: horizontal.into(),
-                        vertical_scroll: vertical.into(),
+                        horizontal_scroll: ScrollData::from(horizontal),
+                        vertical_scroll: ScrollData::from(vertical),
                     })
                 }
             };

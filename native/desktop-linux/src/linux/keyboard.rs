@@ -1,3 +1,7 @@
+use crate::linux::{
+    application_state::ApplicationState,
+    events::{KeyCode, KeyDownEvent, KeyModifiers, KeyUpEvent, ModifiersChangedEvent, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent},
+};
 use log::debug;
 use smithay_client_toolkit::{
     delegate_keyboard,
@@ -6,11 +10,6 @@ use smithay_client_toolkit::{
         protocol::{wl_keyboard::WlKeyboard, wl_surface::WlSurface},
     },
     seat::keyboard::{KeyEvent, KeyboardData, KeyboardHandler, Keysym, Modifiers, RawModifiers},
-};
-
-use crate::linux::{
-    application_state::ApplicationState,
-    events::{KeyCode, KeyDownEvent, KeyModifiers, KeyUpEvent, ModifiersChangedEvent, WindowKeyboardEnterEvent, WindowKeyboardLeaveEvent},
 };
 
 pub fn send_key_down_event(state: &ApplicationState, event: &KeyEvent, is_repeat: bool) {

@@ -1,7 +1,7 @@
 use desktop_common::ffi_utils::BorrowedUtf8;
 use log::warn;
 
-use crate::gtk::events::{EventHandler, FileChooserResponse, NotificationShownEvent, RequestId};
+use crate::gtk::events::{Event, EventHandler, FileChooserResponse, NotificationShownEvent, RequestId};
 
 #[allow(clippy::enum_variant_names)]
 pub enum AsyncEventResult {
@@ -18,7 +18,7 @@ impl AsyncEventResult {
                         request_id,
                         newline_separated_files,
                     };
-                    event_handler(&response.into());
+                    event_handler(&Event::from(response));
                 };
                 match result {
                     Ok(Some(files)) => {

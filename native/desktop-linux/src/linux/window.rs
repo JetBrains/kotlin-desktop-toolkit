@@ -311,7 +311,7 @@ impl SimpleWindow {
     }
 
     pub fn set_cursor_icon(&mut self, pointer_shape: PointerShape) {
-        let cursor_icon = pointer_shape.into();
+        let cursor_icon = pointer_shape.to_wayland_cursor_icon();
         if self.decorations_cursor != cursor_icon {
             self.set_cursor = true;
             self.decorations_cursor = cursor_icon;

@@ -392,7 +392,7 @@ impl SimpleWindow {
             let scale = window.scale_factor();
             let event = WindowScaleChangedEvent {
                 window_id,
-                new_scale: scale.into(),
+                new_scale: f64::from(scale),
             };
             send_event(event_handler, event);
         });
@@ -496,8 +496,7 @@ impl SimpleWindow {
 
     pub fn set_cursor_icon(&self, pointer_shape: PointerShape) {
         if let Some(w) = self.window.upgrade() {
-            let cursor: Option<gdk4::Cursor> = pointer_shape.into();
-            if let Some(cursor) = cursor {
+            if let Some(cursor) = pointer_shape.to_gtk_cursor() {
                 w.set_cursor(Some(&cursor));
             } else {
                 warn!("Failed to set pointer shape {pointer_shape:?}");
@@ -535,9 +534,10 @@ impl SimpleWindow {
     }
 
     fn text_input_update_impl(&self, context: &TextInputContext) -> anyhow::Result<()> {
-        self.im_context.set_input_hints(context.hints.try_into()?);
-        self.im_context.set_input_purpose(context.content_purpose.into());
-        self.im_context.set_cursor_location(&context.cursor_rectangle.into());
+        self.im_context.set_input_hints(gtk4::InputHints::try_from(context.hints)?);
+        self.im_context.set_input_purpose(gtk4::InputPurpose::from(context.content_purpose));
+        self.im_context
+            .set_cursor_location(&gdk4::Rectangle::from(context.cursor_rectangle));
         Ok(())
     }
 

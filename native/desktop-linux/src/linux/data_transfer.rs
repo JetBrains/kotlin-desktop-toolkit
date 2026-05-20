@@ -123,14 +123,19 @@ impl ApplicationState {
     }
 
     #[must_use]
-    fn get_drag_offer_actions(&self, drag_offer: &DragOffer, x: f64, y: f64, window_id: WindowId) -> DragOfferMimetypeAndActions {
+    fn get_drag_offer_actions(
+        &self,
+        drag_offer: &DragOffer,
+        location_in_window: LogicalPoint,
+        window_id: WindowId,
+    ) -> DragOfferMimetypeAndActions {
         drag_offer.with_mime_types(|mime_types| {
-            debug!("Drop handler: {x}x{y}, mime_types={mime_types:?}");
+            debug!("Drop handler: {location_in_window:?}, mime_types={mime_types:?}");
 
             let ffi_mime_types = mime_types.iter().map(|s| BorrowedUtf8::new(s)).collect::<Vec<_>>();
             let drag_and_drop_query_data = DragAndDropQueryData {
                 window_id,
-                location_in_window: (x, y).into(),
+                location_in_window,
                 mime_types: BorrowedArray::from_slice(&ffi_mime_types),
                 actions: DragAndDropActions::from(drag_offer.source_actions),
             };
@@ -144,8 +149,8 @@ impl ApplicationState {
                 if let Some(v) = supported_mime_with_actions {
                     DragOfferMimetypeAndActions {
                         mime_type: Some(v.get_supported_mime_type().unwrap().to_owned()),
-                        supported_actions: v.supported_actions.into(),
-                        preferred_action: v.preferred_action.into(),
+                        supported_actions: DndAction::from(v.supported_actions),
+                        preferred_action: DndAction::from(v.preferred_action),
                     }
                 } else {
                     DragOfferMimetypeAndActions {
@@ -166,7 +171,7 @@ impl ApplicationState {
             warn!("Drop handler: couldn't find window for {surface:?}");
             return None;
         };
-        let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, x, y, window_id);
+        let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, (x, y).into(), window_id);
         drag_offer.set_actions(mime_type_and_actions.supported_actions, mime_type_and_actions.preferred_action);
         drag_offer.accept_mime_type(drag_offer.serial, mime_type_and_actions.mime_type);
         Some(window_id)
@@ -229,7 +234,7 @@ impl DataDeviceHandler for ApplicationState {
             y: LogicalPixels(y),
         };
 
-        let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, x, y, window_id);
+        let mime_type_and_actions = self.get_drag_offer_actions(&drag_offer, location_in_window, window_id);
         let Some(mime_type) = mime_type_and_actions.mime_type else {
             debug!("DataDeviceHandler::drop_performed: no matching MIME type");
             self.send_event(DropPerformedEvent {
@@ -260,7 +265,7 @@ impl DataDeviceHandler for ApplicationState {
         let event_handler = self.callbacks.event_handler;
         self.read_from_pipe("DataDeviceHandler::drop_performed", read_pipe, mime_type, move |data| {
             let action = if data.is_some() {
-                wl_action.into()
+                DragAndDropAction::from(wl_action)
             } else {
                 DragAndDropAction::None
             };
@@ -358,7 +363,7 @@ impl DataSourceHandler for ApplicationState {
         let action = self.current_drag_source_action.take().unwrap();
         self.send_event(DragAndDropFinishedEvent {
             window_id,
-            action: action.into(),
+            action: DragAndDropAction::from(action),
         });
         source.destroy();
     }

@@ -48,7 +48,7 @@ pub fn set_mouse_event_handlers(widget: &gtk4::Widget, window_id: WindowId, even
         event_controller_motion.connect_enter(move |_event_controller_motion, x, y| {
             let event = MouseEnteredEvent {
                 window_id,
-                location_in_window: (x, y).into(),
+                location_in_window: LogicalPoint::new(x, y),
             };
             send_event(event_handler, event);
         });

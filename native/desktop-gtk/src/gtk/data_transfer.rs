@@ -115,8 +115,8 @@ pub fn get_drag_offer_actions(
         if let Some(v) = supported_mime_with_actions {
             DragOfferMimetypeAndActions {
                 mime_type: Some(v.get_supported_mime_type().unwrap().to_owned()),
-                supported_actions: v.supported_actions.into(),
-                preferred_action: v.preferred_action.into(),
+                supported_actions: gdk4::DragAction::from(v.supported_actions),
+                preferred_action: gdk4::DragAction::from(v.preferred_action),
             }
         } else {
             DragOfferMimetypeAndActions {
@@ -183,7 +183,7 @@ pub fn handle_drop_target_drop(
                     let event = DropPerformedEvent {
                         window_id,
                         content: data.unwrap_or(DataTransferContent::null()),
-                        action: gtk_action.into(),
+                        action: DragAndDropAction::from(gtk_action),
                         location_in_window,
                     };
 
@@ -229,7 +229,7 @@ pub fn set_drag_and_drop_event_handlers(
 
     drop_target.connect_drag_motion(move |_drop_target, drop, x, y| {
         debug!("DropTarget::drag_motion: x={x}, y={y}");
-        let mime_type_and_actions = get_drag_offer_actions(query_drag_and_drop_target, drop, (x, y).into(), window_id);
+        let mime_type_and_actions = get_drag_offer_actions(query_drag_and_drop_target, drop, LogicalPoint::new(x, y), window_id);
         drop.status(mime_type_and_actions.supported_actions, mime_type_and_actions.preferred_action);
         mime_type_and_actions.preferred_action
     });

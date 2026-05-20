@@ -1,5 +1,8 @@
 package org.jetbrains.desktop.linux
 
+import org.jetbrains.desktop.linux.MouseButton.Companion.EXTRA
+import org.jetbrains.desktop.linux.MouseButton.Companion.SIDE
+
 @JvmInline
 public value class MouseButton internal constructor(public val value: Int) {
     /* From linux/input-event-codes.h - the buttons usually used by mice */
