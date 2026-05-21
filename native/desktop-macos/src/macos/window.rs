@@ -1008,7 +1008,7 @@ impl RootView {
     fn update_tracking_area_impl(&self, mtm: MainThreadMarker) {
         let rect = self.bounds();
         let options = NSTrackingAreaOptions::MouseEnteredAndExited
-            | NSTrackingAreaOptions::ActiveInKeyWindow
+            | NSTrackingAreaOptions::ActiveInActiveApp
             | NSTrackingAreaOptions::EnabledDuringMouseDrag
             | NSTrackingAreaOptions::CursorUpdate
             | NSTrackingAreaOptions::InVisibleRect
