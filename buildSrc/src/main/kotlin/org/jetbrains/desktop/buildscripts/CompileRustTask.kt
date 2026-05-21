@@ -135,7 +135,7 @@ private fun ExecOperations.compileRust(
     exec {
         workingDir = nativeDirectory.toFile()
         if (targetPlatform.os == Os.MACOS) {
-            environment("MACOSX_DEPLOYMENT_TARGET", "10.12")
+            environment("MACOSX_DEPLOYMENT_TARGET", "10.14")
         }
         executable = cargoCommand
         args = listOf(
