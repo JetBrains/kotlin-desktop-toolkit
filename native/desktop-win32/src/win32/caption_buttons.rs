@@ -41,6 +41,7 @@ use windows::{
         UI::WindowsAndMessaging::{GetClientRect, GetWindowRect, PostMessageW},
     },
 };
+use windows_core::Interface;
 use windows_numerics::{Vector2, Vector3};
 
 use super::{
@@ -471,12 +472,16 @@ struct CaptionButtonVisuals {
 }
 
 impl CaptionButtonStrip {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         chrome_layer: &ContainerVisual,
         initial_scale: f32,
         style: &crate::win32::window_api::WindowStyle,
         compositor_controller: CompositorController,
         hwnd: HWND,
+        initial_is_active: bool,
+        initial_is_maximized: bool,
+        initial_top_offset_px: i32,
     ) -> anyhow::Result<Self> {
         let compositor = compositor_controller.Compositor()?;
         let composition_context = crate::win32::composition::ensure_composition_context(compositor.clone())?;
@@ -532,21 +537,21 @@ impl CaptionButtonStrip {
             composition_root,
             buttons,
             visible_kinds,
-            is_active: false,
-            is_window_maximized: false,
+            is_active: initial_is_active,
+            is_window_maximized: initial_is_maximized,
             appearance,
             high_contrast,
             metrics,
             pointer_over_kind: None,
             pointer_device: None,
             press_sessions: Vec::new(),
-            top_offset_px: 0,
+            top_offset_px: initial_top_offset_px,
             composition_context,
             device_replaced_registration,
             compositor_controller,
         };
         strip.relayout();
-        strip.set_strip_position(0);
+        strip.set_strip_position(initial_top_offset_px);
         strip.apply_visuals_to_all_buttons();
         chrome_layer.Children()?.InsertAtTop(&strip.composition_root)?;
         strip.compositor_controller.Commit()?;
@@ -956,6 +961,20 @@ impl CaptionButtonStrip {
         self.set_strip_position(max_chrome_y);
         self.compositor_controller.Commit()?;
         Ok(())
+    }
+}
+
+impl Drop for CaptionButtonStrip {
+    fn drop(&mut self) {
+        // composition_root may not be parented if construction failed before the final InsertAtTop.
+        if let Ok(parent) = self.composition_root.Parent()
+            && let Ok(container) = parent.cast::<ContainerVisual>()
+            && let Ok(children) = container.Children()
+        {
+            let _ = children
+                .Remove(&self.composition_root)
+                .inspect_err(|err| log::warn!("CaptionButtonStrip drop: detach failed: {err}"));
+        }
     }
 }
 

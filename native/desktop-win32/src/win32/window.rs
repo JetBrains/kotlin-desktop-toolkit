@@ -29,12 +29,12 @@ use windows::{
             Input::KeyboardAndMouse::{TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT, TrackMouseEvent},
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
-                GetClientRect, GetPropW, GetWindowLongPtrW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW,
-                RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON,
-                SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
-                SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
-                USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW,
-                WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+                GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR,
+                PostMessageW, RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER,
+                SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
+                SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos,
+                SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WM_SYSCOMMAND,
+                WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -42,6 +42,7 @@ use windows::{
 use windows_core::{HSTRING, Interface, PCWSTR, Result as WinResult, w};
 
 use super::{
+    caption_buttons::CaptionButtonStrip,
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalRect, LogicalSize},
@@ -510,20 +511,50 @@ impl Window {
         unsafe { SetWindowTextW(self.hwnd(), title) }
     }
 
-    pub fn set_is_resizable(&self, value: bool) -> WinResult<()> {
+    pub fn set_is_resizable(&self, value: bool) -> anyhow::Result<()> {
         // Update cache before FRAMECHANGED so the synchronous NCCALCSIZE reads fresh state.
         self.style.borrow_mut().is_resizable = value;
-        self.update_style_flag(StyleFlag::Resizable, value)
+        self.update_style_flag(StyleFlag::Resizable, value)?;
+        self.rebuild_caption_strip()?;
+        Ok(())
     }
 
-    pub fn set_is_minimizable(&self, value: bool) -> WinResult<()> {
+    pub fn set_is_minimizable(&self, value: bool) -> anyhow::Result<()> {
         self.style.borrow_mut().is_minimizable = value;
-        self.update_style_flag(StyleFlag::Minimizable, value)
+        self.update_style_flag(StyleFlag::Minimizable, value)?;
+        self.rebuild_caption_strip()?;
+        Ok(())
     }
 
-    pub fn set_is_maximizable(&self, value: bool) -> WinResult<()> {
+    pub fn set_is_maximizable(&self, value: bool) -> anyhow::Result<()> {
         self.style.borrow_mut().is_maximizable = value;
-        self.update_style_flag(StyleFlag::Maximizable, value)
+        self.update_style_flag(StyleFlag::Maximizable, value)?;
+        self.rebuild_caption_strip()?;
+        Ok(())
+    }
+
+    // On error the style cache and Win32 style flag have already been updated;
+    // we surface the failure to the caller rather than rolling back, because a
+    // best-effort revert could itself fail and leave the window in an even more
+    // inconsistent state. The caller (FFI boundary) logs and returns to Kotlin.
+    fn rebuild_caption_strip(&self) -> anyhow::Result<()> {
+        if !self.has_custom_title_bar() {
+            return Ok(());
+        }
+        let chrome_layer = self.chrome_layer()?;
+        let is_active = unsafe { GetForegroundWindow() == self.hwnd() };
+        let new_strip = CaptionButtonStrip::new(
+            &chrome_layer,
+            self.get_scale(),
+            &self.style.borrow(),
+            self.compositor_controller.clone(),
+            self.hwnd(),
+            is_active,
+            self.is_maximized(),
+            self.max_chrome_y(),
+        )?;
+        self.caption_buttons.replace(Some(new_strip));
+        Ok(())
     }
 
     fn update_style_flag(&self, flag: StyleFlag, value: bool) -> WinResult<()> {
@@ -698,6 +729,9 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
             &window.style.borrow(),
             window.compositor_controller.clone(),
             hwnd,
+            false,
+            false,
+            0,
         )?;
         window.caption_buttons.replace(Some(strip));
     }
