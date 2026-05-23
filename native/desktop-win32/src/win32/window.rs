@@ -10,9 +10,7 @@ use std::{
 
 use anyhow::Context;
 use windows::{
-    UI::Composition::{
-        CompositionBackfaceVisibility, ContainerVisual, Core::CompositorController, Desktop::DesktopWindowTarget, SpriteVisual,
-    },
+    UI::Composition::{CompositionBackfaceVisibility, Compositor, ContainerVisual, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
         Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, RECT, WPARAM},
         Graphics::{
@@ -111,7 +109,7 @@ impl DpiMetrics {
 pub struct Window {
     id: WindowId,
     hwnd: AtomicPtr<core::ffi::c_void>,
-    compositor_controller: CompositorController,
+    compositor: Compositor,
     composition_target: RefCell<Option<DesktopWindowTarget>>,
     composition_root: RefCell<Option<ContainerVisual>>,
     backdrop_layer: RefCell<Option<ContainerVisual>>,
@@ -132,7 +130,7 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor_controller: CompositorController) -> anyhow::Result<Self> {
+    pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor: Compositor) -> anyhow::Result<Self> {
         static WNDCLASS_INIT: OnceLock<u16> = OnceLock::new();
         let wndclass_size = size_of::<WNDCLASSEXW>().try_into()?;
         let _ = WNDCLASS_INIT.get_or_init(|| {
@@ -149,7 +147,7 @@ impl Window {
         let window = Self {
             id: window_id,
             hwnd: AtomicPtr::default(),
-            compositor_controller,
+            compositor,
             composition_target: RefCell::new(None),
             composition_root: RefCell::new(None),
             backdrop_layer: RefCell::new(None),
@@ -208,7 +206,7 @@ impl Window {
 
     #[inline]
     pub(crate) fn add_visual(&self) -> anyhow::Result<SpriteVisual> {
-        let sprite_visual = self.compositor_controller.Compositor()?.CreateSpriteVisual()?;
+        let sprite_visual = self.compositor.CreateSpriteVisual()?;
         self.content_layer
             .borrow()
             .as_ref()
@@ -405,26 +403,17 @@ impl Window {
         let backdrop_visual = backdrop_tint.as_ref().context("Window has not been created yet")?;
         let [a, r, g, b] = color.to_be_bytes();
         let backdrop_color = windows::UI::Color { A: a, R: r, G: g, B: b };
-        let backdrop_brush = self.compositor_controller.Compositor()?.CreateColorBrushWithColor(backdrop_color)?;
+        let backdrop_brush = self.compositor.CreateColorBrushWithColor(backdrop_color)?;
         backdrop_visual.SetBrush(&backdrop_brush)?;
         backdrop_visual.SetOpacity(opacity)?;
         backdrop_visual.SetIsVisible(true)?;
-        self.compositor_controller.Commit()?;
         Ok(())
     }
 
     pub fn remove_backdrop_tint(&self) -> anyhow::Result<()> {
         if let Some(backdrop_visual) = self.backdrop_tint.borrow().as_ref() {
             backdrop_visual.SetIsVisible(false)?;
-            self.compositor_controller.Commit()?;
         }
-        Ok(())
-    }
-
-    /// Publishes queued composition mutations. Used by the `None`-titlebar
-    /// path, which has no caption-button strip to bundle the commit into.
-    pub(crate) fn commit_composition(&self) -> anyhow::Result<()> {
-        self.compositor_controller.Commit()?;
         Ok(())
     }
 
@@ -442,9 +431,8 @@ impl Window {
     /// up with the visible monitor edge when maximized; composition (0,0)
     /// tracks the off-monitor window-rect top-left.
     ///
-    /// Does not commit. `Custom` callers piggyback on the strip's next
-    /// commit (`on_resize` from `WM_NCCALCSIZE`, `on_dpi_change` from
-    /// `WM_DPICHANGED`). `None` callers follow up with `commit_composition()`.
+    /// Does not commit. The mutation fires `CommitNeeded`; the driver's
+    /// UI-thread fast-path publishes inline before the wndproc handler returns.
     /// Same-value `SetOffset` calls are visually cheap — the compositor's
     /// render pass diffs `Offset` by value — so callers do not need an
     /// app-side dedup.
@@ -547,7 +535,7 @@ impl Window {
             &chrome_layer,
             self.get_scale(),
             &self.style.borrow(),
-            self.compositor_controller.clone(),
+            &self.compositor,
             self.hwnd(),
             is_active,
             self.is_maximized(),
@@ -727,7 +715,7 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
             &chrome_layer,
             window.get_scale(),
             &window.style.borrow(),
-            window.compositor_controller.clone(),
+            &window.compositor,
             hwnd,
             false,
             false,
@@ -739,16 +727,15 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
 }
 
 fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
-    let compositor = window.compositor_controller.Compositor()?;
-    let compositor_interop: ICompositorDesktopInterop = compositor.cast()?;
+    let compositor_interop: ICompositorDesktopInterop = window.compositor.cast()?;
     let desktop_window_target = unsafe { compositor_interop.CreateDesktopWindowTarget(hwnd, false) }?;
 
-    let root_visual = compositor.CreateContainerVisual()?;
+    let root_visual = window.compositor.CreateContainerVisual()?;
     root_visual.SetBackfaceVisibility(CompositionBackfaceVisibility::Hidden)?;
 
-    let backdrop_layer = compositor.CreateContainerVisual()?;
-    let content_layer = compositor.CreateContainerVisual()?;
-    let chrome_layer = compositor.CreateContainerVisual()?;
+    let backdrop_layer = window.compositor.CreateContainerVisual()?;
+    let content_layer = window.compositor.CreateContainerVisual()?;
+    let chrome_layer = window.compositor.CreateContainerVisual()?;
 
     // Auto-track HWND client size on the layers whose effective size is
     // actually consumed: `root_visual` is the chain root; `chrome_layer`
@@ -768,7 +755,7 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     root_children.InsertAtTop(&content_layer)?;
     root_children.InsertAtTop(&chrome_layer)?;
 
-    let backdrop_visual = compositor.CreateSpriteVisual()?;
+    let backdrop_visual = window.compositor.CreateSpriteVisual()?;
     backdrop_visual.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
     backdrop_layer.Children()?.InsertAtBottom(&backdrop_visual)?;
 

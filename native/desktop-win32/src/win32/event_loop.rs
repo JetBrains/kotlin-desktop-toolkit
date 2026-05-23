@@ -224,11 +224,10 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     };
     let result = event_loop.handle_event(window, event);
     // `max_chrome_y` is DPI-scaled, so a DPI change can alter it for any
-    // non-system titlebar. Queue `set_content_top_offset` first, then
-    // `on_dpi_change(scale, max_chrome_y)` fires a single commit publishing
-    // glyph re-rasterisation, strip Y, and the queued content offset
-    // together — avoids a one-frame metrics-vs-strip-Y mismatch on
-    // maximized DPI transitions.
+    // non-system titlebar. `set_content_top_offset` and `strip.on_dpi_change`
+    // mutate the visual tree; the driver's `CommitNeeded` fast-path publishes
+    // inline on the UI thread before this handler returns, so the content
+    // offset, strip Y, and glyph re-rasterisation land on the same DWM tick.
     let has_non_system_tb = window.has_non_system_title_bar();
     if has_non_system_tb {
         let _ = window
@@ -239,10 +238,6 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         let _ = strip
             .on_dpi_change(scale, window.max_chrome_y())
             .inspect_err(|err| log::warn!("strip on_dpi_change failed: {err}"));
-    } else if has_non_system_tb {
-        let _ = window
-            .commit_composition()
-            .inspect_err(|err| log::warn!("commit_composition during DPI change failed: {err}"));
     }
     result
 }
@@ -280,9 +275,7 @@ fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) 
     // `on_max_state_change` belongs here, not in NCCALCSIZE — it owns the
     // E922↔E923 maximize-glyph swap, which is independent of `max_chrome_y`.
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let _ = strip
-            .on_max_state_change(window.is_maximized())
-            .inspect_err(|err| log::warn!("strip on_max_state_change failed: {err}"));
+        strip.on_max_state_change(window.is_maximized());
     }
     Some(LRESULT(0))
 }
@@ -395,13 +388,9 @@ fn on_activate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Optio
             .inspect_err(|err| log::error!("failed to apply the requested system backdrop: {err}"));
     }
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let _ = strip
-            .on_activate(is_active)
-            .inspect_err(|err| log::warn!("strip on_activate failed: {err}"));
+        strip.on_activate(is_active);
         if !is_active {
-            let _ = strip
-                .cancel_any_press()
-                .inspect_err(|err| log::warn!("strip cancel_any_press on deactivation failed: {err}"));
+            strip.cancel_any_press();
         }
     }
     let event = WindowActivatedEvent { is_active, is_minimized };
@@ -410,9 +399,7 @@ fn on_activate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Optio
 
 fn notify_strip_appearance(window: &Window, appearance: Appearance, high_contrast: HighContrast) {
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let _ = strip
-            .on_appearance_change(appearance, high_contrast)
-            .inspect_err(|err| log::warn!("strip on_appearance_change failed: {err}"));
+        strip.on_appearance_change(appearance, high_contrast);
     }
 }
 
@@ -472,26 +459,17 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let scale = window.get_scale();
     let event = NCCalcSizeEvent { origin, size, scale };
     event_loop.handle_event(window, event);
-    // The `NCCalcSize` event dispatch above ran `performDrawing` (Kotlin →
-    // `swap_buffers` → `controller.Commit()`). The offset queued below rides
-    // the next commit on this tick (`strip.on_resize` for `Custom`,
-    // `commit_composition` for `None`), which fires synchronously before
-    // this handler returns. Same-value `SetOffset` calls during a regular
-    // drag (where `max_chrome_y` is unchanged) are render-pass-coalesced.
-    let has_non_system_tb = window.has_non_system_title_bar();
-    if has_non_system_tb {
+    // `set_content_top_offset` and `strip.on_resize` mutate the visual tree;
+    // the driver's `CommitNeeded` fast-path publishes inline on the UI thread
+    // before this handler returns. Same-value `SetOffset` calls during a
+    // regular drag (where `max_chrome_y` is unchanged) are render-pass-coalesced.
+    if window.has_non_system_title_bar() {
         let _ = window
             .set_content_top_offset(max_chrome_y)
             .inspect_err(|err| log::warn!("set_content_top_offset failed: {err}"));
     }
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let _ = strip
-            .on_resize(max_chrome_y)
-            .inspect_err(|err| log::warn!("strip on_resize failed: {err}"));
-    } else if has_non_system_tb {
-        let _ = window
-            .commit_composition()
-            .inspect_err(|err| log::warn!("commit_composition failed: {err}"));
+        strip.on_resize(max_chrome_y);
     }
     Some(LRESULT(0))
 }
@@ -607,9 +585,7 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
 
 fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let _ = strip
-            .on_nc_mouse_leave()
-            .inspect_err(|err| log::warn!("strip on_nc_mouse_leave failed: {err}"));
+        strip.on_nc_mouse_leave();
     }
     window.nc_leave_tracking_fired();
     let mut dwm_result = LRESULT(0);
@@ -644,9 +620,7 @@ fn on_nclbuttondown(window: &Window, wparam: WPARAM) -> Option<LRESULT> {
         _ => return None,
     };
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let _ = strip
-            .on_pointer_down(kind, LEGACY_MOUSE_POINTER_ID, PointerDeviceKind::Mouse)
-            .inspect_err(|err| log::warn!("strip on_pointer_down (NCLBUTTONDOWN) failed: {err}"));
+        strip.on_pointer_down(kind, LEGACY_MOUSE_POINTER_ID, PointerDeviceKind::Mouse);
     }
     unsafe { SetCapture(window.hwnd()) };
     Some(LRESULT(0))
@@ -673,13 +647,11 @@ fn on_lbuttonup(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
     };
     let _ = unsafe { ClientToScreen(window.hwnd(), &raw mut pt) };
     let kind_under_pointer = caption_kind_at_screen(window, PhysicalPoint::new(pt.x, pt.y));
-    let action = window.caption_buttons.borrow_mut().as_mut().and_then(|strip| {
-        strip
-            .on_pointer_up(kind_under_pointer, LEGACY_MOUSE_POINTER_ID)
-            .inspect_err(|err| log::warn!("strip on_pointer_up (LBUTTONUP) failed: {err}"))
-            .ok()
-            .flatten()
-    });
+    let action = window
+        .caption_buttons
+        .borrow_mut()
+        .as_mut()
+        .and_then(|strip| strip.on_pointer_up(kind_under_pointer, LEGACY_MOUSE_POINTER_ID));
     let _ = unsafe { ReleaseCapture() };
     if let Some(action) = action {
         match action {
@@ -697,9 +669,7 @@ fn on_lbuttonup(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
         if unsafe { GetCursorPos(&raw mut cursor) }.is_ok() {
             let kind_now = caption_kind_at_screen(window, PhysicalPoint::new(cursor.x, cursor.y));
             if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-                let _ = strip
-                    .on_pointer_update(kind_now, PointerDeviceKind::Mouse)
-                    .inspect_err(|err| log::warn!("strip on_pointer_update (post-action) failed: {err}"));
+                strip.on_pointer_update(kind_now, PointerDeviceKind::Mouse);
             }
         }
     }
@@ -793,7 +763,7 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
                     .ensure_nc_leave_tracking()
                     .inspect_err(|err| log::warn!("ensure_nc_leave_tracking failed: {err}"));
             }
-            let _ = strip.on_pointer_update(kind, device);
+            strip.on_pointer_update(kind, device);
         }
         // First-NC-entry `PointerEntered` parity (spec §3.5): Kotlin must
         // see an entry even when the pointer's first appearance is over a
@@ -937,13 +907,11 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
             .is_some_and(|s| s.has_active_press_for(pointer_info.pointer_id()));
         if is_primary && strip_owns_press {
             let kind_under_pointer = caption_kind_at_screen(window, pointer_info.get_physical_location());
-            let action = window.caption_buttons.borrow_mut().as_mut().and_then(|strip| {
-                strip
-                    .on_pointer_up(kind_under_pointer, pointer_info.pointer_id())
-                    .inspect_err(|err| log::warn!("strip on_pointer_up failed: {err}"))
-                    .ok()
-                    .flatten()
-            });
+            let action = window
+                .caption_buttons
+                .borrow_mut()
+                .as_mut()
+                .and_then(|strip| strip.on_pointer_up(kind_under_pointer, pointer_info.pointer_id()));
             if let Some(action) = action {
                 match action {
                     CaptionButtonAction::Close => {
@@ -1000,7 +968,7 @@ fn on_pointercapturechanged(window: &Window, wparam: WPARAM) -> Option<LRESULT> 
         // Cleanup gate matches every owned session — `has_active_press_for`
         // would leak non-primary `Suppressed` sessions on capture loss.
         if strip.has_press_for(pointer_id) {
-            let _ = strip.on_pointer_cancel(pointer_id);
+            strip.on_pointer_cancel(pointer_id);
             // Cancellation only — must not fire `CaptionButtonAction`.
             return Some(LRESULT(0));
         }
@@ -1013,9 +981,7 @@ fn on_cancelmode(window: &Window) -> Option<LRESULT> {
         return None;
     }
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let _ = strip
-            .cancel_any_press()
-            .inspect_err(|err| log::warn!("strip cancel_any_press failed: {err}"));
+        strip.cancel_any_press();
     }
     // Returning `None` lets `DefWindowProc` complete the standard cancel
     // (releases mouse capture, cancels menu / scrollbar tracking).
@@ -1025,9 +991,7 @@ fn on_cancelmode(window: &Window) -> Option<LRESULT> {
 #[allow(clippy::unnecessary_wraps)]
 fn on_caption_buttons_rdr(window: &Window) -> Option<LRESULT> {
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
-        let _ = strip
-            .on_rendering_device_replaced()
-            .inspect_err(|err| log::warn!("strip on_rendering_device_replaced failed: {err}"));
+        strip.on_rendering_device_replaced();
     }
     Some(LRESULT(0))
 }

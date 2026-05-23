@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 
 use windows::{
     Foundation::TypedEventHandler,
@@ -15,6 +15,7 @@ use windows::{
 };
 
 use super::{
+    compositor_driver::CompositorDriver,
     event_loop::EventLoop,
     events::EventHandler,
     renderer_angle::AngleDevice,
@@ -22,9 +23,9 @@ use super::{
 };
 
 pub struct Application {
+    compositor_driver: Arc<CompositorDriver>,
     dispatcher_queue_controller: DispatcherQueueController,
     event_loop: Rc<EventLoop>,
-    compositor_controller: CompositorController,
     ui_thread_id: u32,
 }
 
@@ -38,10 +39,11 @@ impl Application {
         let dispatcher_queue_controller = create_dispatcher_queue()?;
         let event_loop = EventLoop::new(event_handler)?;
         let compositor_controller = CompositorController::new()?;
+        let compositor_driver = CompositorDriver::new(&compositor_controller, dispatcher_queue_controller.DispatcherQueue()?)?;
         Ok(Self {
+            compositor_driver,
             dispatcher_queue_controller,
             event_loop: Rc::new(event_loop),
-            compositor_controller,
             // SAFETY: GetCurrentThreadId has no preconditions.
             // INVARIANT: Application::new runs on the UI thread; ui_thread_id is the comparand for is_dispatcher_thread.
             ui_thread_id: unsafe { GetCurrentThreadId() },
@@ -75,16 +77,17 @@ impl Application {
     }
 
     pub fn shutdown(&self) -> anyhow::Result<()> {
+        self.compositor_driver.shutdown();
         let _ = self.dispatcher_queue_controller.ShutdownQueueAsync()?;
         Ok(())
     }
 
     pub(crate) fn new_window(&self, window_id: WindowId) -> anyhow::Result<Window> {
-        Window::new(window_id, Rc::downgrade(&self.event_loop), self.compositor_controller.clone())
+        Window::new(window_id, Rc::downgrade(&self.event_loop), self.compositor_driver.compositor()?)
     }
 
     pub(crate) fn create_angle_device(&self, window: &Window) -> anyhow::Result<AngleDevice> {
-        AngleDevice::create_for_window(window, self.compositor_controller.clone())
+        AngleDevice::create_for_window(window, Arc::clone(&self.compositor_driver))
     }
 }
 

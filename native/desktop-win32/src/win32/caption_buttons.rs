@@ -23,7 +23,7 @@ use std::rc::Rc;
 use windows::{
     Foundation::TimeSpan,
     Graphics::SizeInt32,
-    UI::Composition::{CompositionColorBrush, CompositionDrawingSurface, ContainerVisual, Core::CompositorController, SpriteVisual},
+    UI::Composition::{CompositionColorBrush, CompositionDrawingSurface, Compositor, ContainerVisual, SpriteVisual},
     Win32::{
         Foundation::{HWND, LPARAM, POINT, RECT, WPARAM},
         Graphics::{
@@ -452,7 +452,6 @@ pub(crate) struct CaptionButtonStrip {
     // for its `Drop` side-effect even though we never read it after construction.
     #[allow(dead_code)]
     device_replaced_registration: RenderingDeviceReplacedRegistration,
-    compositor_controller: CompositorController,
 }
 
 struct CaptionButton {
@@ -477,13 +476,12 @@ impl CaptionButtonStrip {
         chrome_layer: &ContainerVisual,
         initial_scale: f32,
         style: &crate::win32::window_api::WindowStyle,
-        compositor_controller: CompositorController,
+        compositor: &Compositor,
         hwnd: HWND,
         initial_is_active: bool,
         initial_is_maximized: bool,
         initial_top_offset_px: i32,
     ) -> anyhow::Result<Self> {
-        let compositor = compositor_controller.Compositor()?;
         let composition_context = crate::win32::composition::ensure_composition_context(compositor.clone())?;
 
         // Subscribe to RenderingDeviceReplaced; see spec §6.2 for the reentrancy contract.
@@ -508,7 +506,7 @@ impl CaptionButtonStrip {
         for kind in visible_kinds.iter_ordered() {
             let availability = availability_from_style(kind, style);
             buttons.push(create_caption_button(
-                &compositor,
+                compositor,
                 &composition_root,
                 &composition_context,
                 kind,
@@ -548,13 +546,11 @@ impl CaptionButtonStrip {
             top_offset_px: initial_top_offset_px,
             composition_context,
             device_replaced_registration,
-            compositor_controller,
         };
         strip.relayout();
         strip.set_strip_position(initial_top_offset_px);
         strip.apply_visuals_to_all_buttons();
         chrome_layer.Children()?.InsertAtTop(&strip.composition_root)?;
-        strip.compositor_controller.Commit()?;
         Ok(strip)
     }
 
@@ -694,7 +690,7 @@ impl CaptionButtonStrip {
         .hit_test(client_point)
     }
 
-    pub fn on_pointer_update(&mut self, kind: Option<CaptionButtonKind>, device: PointerDeviceKind) -> anyhow::Result<()> {
+    pub fn on_pointer_update(&mut self, kind: Option<CaptionButtonKind>, device: PointerDeviceKind) {
         // Mirror on_nc_mouse_leave: clearing kind also clears device, so a
         // subsequent same-kind/same-device re-entry isn't suppressed by stale
         // device state.
@@ -703,14 +699,12 @@ impl CaptionButtonStrip {
             self.pointer_over_kind = kind;
             self.pointer_device = new_device;
             self.apply_visuals_to_all_buttons();
-            self.compositor_controller.Commit()?;
         }
-        Ok(())
     }
 
-    pub fn on_pointer_down(&mut self, kind: CaptionButtonKind, pointer_id: u32, device: PointerDeviceKind) -> anyhow::Result<()> {
+    pub fn on_pointer_down(&mut self, kind: CaptionButtonKind, pointer_id: u32, device: PointerDeviceKind) {
         if self.primary_session().is_some() {
-            return Ok(());
+            return;
         }
         let is_enabled = self.button_for(kind).map(|b| b.availability) == Some(Availability::Enabled);
         // Disabled-primary records Suppressed{Left} so has_active_press_for
@@ -731,41 +725,26 @@ impl CaptionButtonStrip {
             self.pointer_over_kind = Some(kind);
             self.pointer_device = Some(device);
             self.apply_visuals_to_all_buttons();
-            self.compositor_controller.Commit()?;
         }
         // Suppressed: no visual side effects — disabled Min/Max never enter Hovered/Pressed.
-        Ok(())
     }
 
-    // Result kept for API symmetry; callers use .ok() — this never fails now.
-    #[allow(clippy::unnecessary_wraps)]
-    pub fn on_pointer_up(
-        &mut self,
-        kind_under_pointer: Option<CaptionButtonKind>,
-        pointer_id: u32,
-    ) -> anyhow::Result<Option<CaptionButtonAction>> {
-        let Some(idx) = self.press_sessions.iter().position(|s| is_real_release_match(s, pointer_id)) else {
-            return Ok(None);
-        };
+    pub fn on_pointer_up(&mut self, kind_under_pointer: Option<CaptionButtonKind>, pointer_id: u32) -> Option<CaptionButtonAction> {
+        let idx = self.press_sessions.iter().position(|s| is_real_release_match(s, pointer_id))?;
         let session = self.press_sessions.swap_remove(idx);
         match session.mode {
             PressSessionMode::Active => {
                 let action = (Some(session.captured_kind) == kind_under_pointer).then(|| self.action_for(session.captured_kind));
                 self.pointer_over_kind = kind_under_pointer;
                 self.apply_visuals_to_all_buttons();
-                // Commit failure must not swallow the action; press session already cleared.
-                let _ = self
-                    .compositor_controller
-                    .Commit()
-                    .inspect_err(|err| log::warn!("on_pointer_up Commit failed: {err}"));
-                Ok(action)
+                action
             }
             // Disabled-primary cycle (Suppressed{Left}); fire no action.
-            PressSessionMode::Suppressed { .. } => Ok(None),
+            PressSessionMode::Suppressed { .. } => None,
         }
     }
 
-    pub fn on_pointer_cancel(&mut self, pointer_id: u32) -> anyhow::Result<()> {
+    pub fn on_pointer_cancel(&mut self, pointer_id: u32) {
         // Visuals only need reverting if an Active session was canceled.
         let had_active = self
             .press_sessions
@@ -774,9 +753,7 @@ impl CaptionButtonStrip {
         self.press_sessions.retain(|s| s.pointer_id != pointer_id);
         if had_active {
             self.apply_visuals_to_all_buttons();
-            self.compositor_controller.Commit()?;
         }
-        Ok(())
     }
 
     /// Drop every owned press session. Used by the wndproc on `WM_CANCELMODE`
@@ -784,24 +761,20 @@ impl CaptionButtonStrip {
     /// Also clears `pointer_over_kind` / `pointer_device` so the cancelled
     /// button returns to Rest; the next `WM_NCPOINTERUPDATE` re-establishes
     /// Hovered if the cursor is still over a button.
-    pub fn cancel_any_press(&mut self) -> anyhow::Result<()> {
+    pub fn cancel_any_press(&mut self) {
         let had_active = self.press_sessions.iter().any(|s| s.mode == PressSessionMode::Active);
         self.press_sessions.clear();
         if had_active {
             self.pointer_over_kind = None;
             self.pointer_device = None;
             self.apply_visuals_to_all_buttons();
-            self.compositor_controller.Commit()?;
         }
-        Ok(())
     }
 
-    pub fn on_nc_mouse_leave(&mut self) -> anyhow::Result<()> {
+    pub fn on_nc_mouse_leave(&mut self) {
         self.pointer_over_kind = None;
         self.pointer_device = None;
         self.apply_visuals_to_all_buttons();
-        self.compositor_controller.Commit()?;
-        Ok(())
     }
 
     fn button_for(&self, kind: CaptionButtonKind) -> Option<&CaptionButton> {
@@ -881,7 +854,7 @@ impl CaptionButtonStrip {
         }
     }
 
-    pub fn on_activate(&mut self, is_active: bool) -> anyhow::Result<()> {
+    pub fn on_activate(&mut self, is_active: bool) {
         if self.is_active != is_active {
             self.is_active = is_active;
             // Spec §5.2: `is_active` flips never animate. Resetting per-button
@@ -890,9 +863,7 @@ impl CaptionButtonStrip {
                 button.last_applied_interaction = ButtonInteraction::Idle;
             }
             self.apply_visuals_to_all_buttons();
-            self.compositor_controller.Commit()?;
         }
-        Ok(())
     }
 
     pub fn on_dpi_change(&mut self, new_scale: f32, max_chrome_y: i32) -> anyhow::Result<()> {
@@ -913,11 +884,10 @@ impl CaptionButtonStrip {
         self.relayout();
         self.set_strip_position(max_chrome_y);
         self.apply_visuals_to_all_buttons();
-        self.compositor_controller.Commit()?;
         Ok(())
     }
 
-    pub fn on_appearance_change(&mut self, appearance: Appearance, hc: HighContrast) -> anyhow::Result<()> {
+    pub fn on_appearance_change(&mut self, appearance: Appearance, hc: HighContrast) {
         let glyph_invalidate = self.high_contrast != hc;
         self.appearance = appearance;
         self.high_contrast = hc;
@@ -927,21 +897,17 @@ impl CaptionButtonStrip {
             }
         }
         self.apply_visuals_to_all_buttons();
-        self.compositor_controller.Commit()?;
-        Ok(())
     }
 
-    pub fn on_rendering_device_replaced(&mut self) -> anyhow::Result<()> {
+    pub fn on_rendering_device_replaced(&mut self) {
         for button in &mut self.buttons {
             button.glyph_surface_dirty = true;
         }
         self.rasterise_all_glyphs();
         self.apply_visuals_to_all_buttons();
-        self.compositor_controller.Commit()?;
-        Ok(())
     }
 
-    pub fn on_max_state_change(&mut self, is_maximized: bool) -> anyhow::Result<()> {
+    pub fn on_max_state_change(&mut self, is_maximized: bool) {
         if self.is_window_maximized != is_maximized {
             self.is_window_maximized = is_maximized;
             for button in &mut self.buttons {
@@ -951,16 +917,12 @@ impl CaptionButtonStrip {
             }
             self.rasterise_all_glyphs();
         }
-        // Publishes the maximize-glyph swap. The content-offset queue rides
-        // the same-tick NCCALCSIZE-driven `on_resize` commit, not this one.
-        self.compositor_controller.Commit()?;
-        Ok(())
+        // The maximize-glyph swap and any pending visual mutations publish via
+        // the driver's CommitNeeded fast-path inline on the UI thread.
     }
 
-    pub fn on_resize(&mut self, max_chrome_y: i32) -> anyhow::Result<()> {
+    pub fn on_resize(&mut self, max_chrome_y: i32) {
         self.set_strip_position(max_chrome_y);
-        self.compositor_controller.Commit()?;
-        Ok(())
     }
 }
 

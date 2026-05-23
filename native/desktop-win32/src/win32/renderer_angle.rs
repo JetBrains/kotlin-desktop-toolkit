@@ -1,17 +1,23 @@
 #![allow(non_upper_case_globals)]
 
-use std::{ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf, sync::atomic::AtomicUsize};
+use std::{
+    ffi::OsString,
+    os::windows::ffi::OsStringExt,
+    path::PathBuf,
+    sync::{Arc, atomic::AtomicUsize},
+};
 
 use anyhow::Context;
 use khronos_egl as egl;
 use windows::{
-    UI::Composition::{Core::CompositorController, SpriteVisual},
+    UI::Composition::SpriteVisual,
     Win32::{Foundation::ERROR_PATH_NOT_FOUND, System::LibraryLoader::GetModuleFileNameW},
 };
 use windows_core::{Error as WinError, Interface};
 use windows_numerics::Vector2;
 
 use super::{
+    compositor_driver::CompositorDriver,
     renderer_api::EglSurfaceData,
     renderer_egl_utils::{EGLOk, EglInstance, GR_GL_FRAMEBUFFER_BINDING, GrGLFunctions, PostSubBufferNVFn, load_egl_function},
     window::Window,
@@ -40,12 +46,12 @@ pub struct AngleDevice {
     context: egl::Context,
     surface: egl::Surface,
     visual: SpriteVisual,
-    compositor_controller: CompositorController,
+    compositor_driver: Arc<CompositorDriver>,
     functions: GrGLFunctions,
 }
 
 impl AngleDevice {
-    pub fn create_for_window(window: &Window, compositor_controller: CompositorController) -> anyhow::Result<Self> {
+    pub fn create_for_window(window: &Window, compositor_driver: Arc<CompositorDriver>) -> anyhow::Result<Self> {
         let egl_instance = load_angle_egl_instance()?;
 
         let display = {
@@ -108,18 +114,24 @@ impl AngleDevice {
             context,
             surface,
             visual,
-            compositor_controller,
+            compositor_driver,
             functions,
         })
     }
 
     pub fn resize_surface(&self, width: egl::Int, height: egl::Int) -> anyhow::Result<EglSurfaceData> {
-        #[allow(clippy::cast_precision_loss)]
-        self.visual.SetSize(Vector2 {
-            X: width as f32,
-            Y: height as f32,
-        })?;
+        self.compositor_driver.pause_autocommit();
+        self.do_resize(width, height).inspect_err(|err| {
+            let _ = self.compositor_driver.publish_and_resume_autocommit().inspect_err(|publish_err| {
+                log::warn!("resize_surface error-path publish failed (original error: {err}): {publish_err}");
+            });
+        })
+    }
 
+    #[allow(clippy::cast_precision_loss)]
+    fn do_resize(&self, width: egl::Int, height: egl::Int) -> anyhow::Result<EglSurfaceData> {
+        // EGL calls run first (fallible). visual.SetSize is the LAST step so an
+        // EGL error returns without queueing an orphan visual-size mutation.
         self.egl_instance.surface_attrib(self.display, self.surface, egl::WIDTH, width)?;
         self.egl_instance.surface_attrib(self.display, self.surface, egl::HEIGHT, height)?;
 
@@ -131,6 +143,11 @@ impl AngleDevice {
         unsafe { (self.functions.fGetIntegerv)(GR_GL_FRAMEBUFFER_BINDING, &raw mut framebuffer_binding) };
         unsafe { (self.functions.fViewport)(0, 0, width, height) };
 
+        self.visual.SetSize(Vector2 {
+            X: width as f32,
+            Y: height as f32,
+        })?;
+
         Ok(EglSurfaceData { framebuffer_binding })
     }
 
@@ -140,12 +157,19 @@ impl AngleDevice {
         Ok(())
     }
 
-    #[allow(clippy::bool_to_int_with_if)]
     pub fn swap_buffers(&self) -> anyhow::Result<()> {
+        self.do_swap().inspect_err(|err| {
+            let _ = self.compositor_driver.publish_and_resume_autocommit().inspect_err(|publish_err| {
+                log::warn!("swap_buffers error-path publish failed (original error: {err}): {publish_err}");
+            });
+        })
+    }
+
+    fn do_swap(&self) -> anyhow::Result<()> {
         unsafe { (self.functions.fFinish)() };
         self.egl_instance.swap_interval(self.display, 1)?;
         self.egl_instance.swap_buffers(self.display, self.surface)?;
-        self.compositor_controller.Commit()?;
+        self.compositor_driver.publish_and_resume_autocommit()?;
         Ok(())
     }
 

@@ -6,6 +6,11 @@ This list is point-in-time. Verify against current code before acting.
 
 ## Confirmed bugs (per code-owner review)
 
+### `Application::is_dispatcher_thread` uses `HasThreadAccess` above toolkit floor
+- **Where**: `application.rs:57-58` — `Application::is_dispatcher_thread` calls `self.dispatcher_queue_controller.DispatcherQueue()?.HasThreadAccess()?`.
+- **What**: `DispatcherQueue.HasThreadAccess` was introduced in Windows 10 build 18362 (1903); the toolkit's stated minimum is build 17763 (1809). Calling this on 17763 fails at the WinRT activation layer.
+- **Fix**: replace with a stored UI-thread id captured at `Application::new` and a `GetCurrentThreadId() == ui_thread_id` comparison (same pattern `CompositorDriver` already uses for its fast-path; the `Win32_System_Threading` feature is already enabled by that work).
+
 ### `tryRead*` swallows too many error kinds
 - **Where**: `data_object_api.rs` (`IntoFfiOption` impl).
 - **What**: Every `Err(...)` from a read is converted to `FfiOption::none()` with a `trace!` log. This hides allocation failures, type mismatches, and other genuine errors behind the same `null` that "format not found" produces.
@@ -65,13 +70,6 @@ This list is point-in-time. Verify against current code before acting.
 - **What**: Win32 `WindowStyle` has no layout-direction or `WS_EX_LAYOUTRTL` source, so the caption-buttons strip implements only the LTR layout. Apps that want RTL mirroring (Arabic, Hebrew) get caption buttons on the wrong edge.
 - **Sketch when implementing**: add a layout-direction input on `WindowStyle` (Kotlin `WindowStyle.layoutDirection`, FFI plumbing); under `WS_EX_LAYOUTRTL`, either skip strip consultation in `on_nchittest` or anchor strip bounds at `client_rect.left` instead of `client_rect.right`. Add RTL test cases to the visibility/availability table (spec §4.2).
 - **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §4.2 (visibility/availability table), [`WS_EX_LAYOUTRTL`](https://learn.microsoft.com/windows/win32/winmsg/extended-window-styles).
-
-### Caption-button animation cadence — `CommitNeeded` fallback
-- **Where**: caption-button strip's `ColorKeyFrameAnimation` (spec §5.2); strip's `compositor_controller.Commit()` callsite (spec §5.5).
-- **What**: spec §5.2 / §5.5 commit once at `StartAnimation` and let the system compositor's thread advance the animation. Microsoft does not directly document whether `ColorKeyFrameAnimation` requires per-frame `Commit()` under the controlled-commit `CompositorController` variant; under-commit may produce visible stutter on idle windows (no ANGLE swap to drive frames).
-- **Trigger to add it back**: spec §7.3 hover-fade acceptance bullet reports stutter on a window with no active ANGLE rendering.
-- **Sketch when implementing**: subscribe to [`CompositorController.CommitNeeded`](https://learn.microsoft.com/uwp/api/windows.ui.composition.core.compositorcontroller.commitneeded) and call `Commit()` from the handler; alternatively run a UI-thread frame ticker for the duration of an in-flight strip animation.
-- **Sources**: spec §5.2 / §5.5 / §7.3.
 
 ### `WM_NCMOUSEMOVE` fallback if `WM_NCPOINTER*` is missing on a supported config
 - **Where**: `event_loop.rs` non-client pointer routing.
@@ -150,9 +148,10 @@ This list is point-in-time. Verify against current code before acting.
 ## Performance concerns
 
 ### `glFinish` before every `eglSwapBuffers`
-- **Where**: `renderer_angle.rs`.
+- **Where**: `renderer_angle.rs` — `AngleDevice::do_swap`.
 - **What**: Forces the CPU to wait for all GPU work each frame, eliminating CPU/GPU pipelining.
 - **Investigation**: confirm whether composition correctness genuinely requires this. If only required for the first frame after a resize, gate it on a "needs-finish" flag.
+- **Caveat**: the prior failed auto-commit attempt (`Compositor` without `CompositorController` + visual-tree reorder) suggested removing `glFinish` might surface a DXGI flip-model resize glitch under `EGL_EXPERIMENTAL_PRESENT_PATH_FAST_ANGLE` (back-buffers uninitialised after `IDXGISwapChain::ResizeBuffers`). Mechanism unverified; confirm before removal. See spec `2026-05-22-win32-compositor-driver-design.md` §3 non-goal.
 
 ### Per-call `GetDpiForWindow`
 - **Where**: `window.rs` — `Window::get_scale` is uncached.

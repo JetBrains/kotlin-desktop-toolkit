@@ -7,6 +7,7 @@ pub mod clipboard;
 pub mod clipboard_api;
 pub mod com;
 pub mod composition;
+pub mod compositor_driver;
 pub mod cursor;
 pub mod cursor_api;
 pub mod data_object;

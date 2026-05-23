@@ -15,6 +15,7 @@ anyhow.workspace = true
 khronos-egl = { version = "6.0", features = ["dynamic"] }
 log.workspace = true
 papaya = "0.2"
+static_assertions = "1"
 desktop-common = { path = "../desktop-common" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
