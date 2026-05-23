@@ -7,6 +7,7 @@ use windows::{
     Win32::{
         System::{
             Ole::OleInitialize,
+            Threading::GetCurrentThreadId,
             WinRT::{CreateDispatcherQueueController, DQTAT_COM_NONE, DQTYPE_THREAD_CURRENT, DispatcherQueueOptions},
         },
         UI::WindowsAndMessaging::PostQuitMessage,
@@ -24,6 +25,7 @@ pub struct Application {
     dispatcher_queue_controller: DispatcherQueueController,
     event_loop: Rc<EventLoop>,
     compositor_controller: CompositorController,
+    ui_thread_id: u32,
 }
 
 impl Application {
@@ -40,6 +42,9 @@ impl Application {
             dispatcher_queue_controller,
             event_loop: Rc::new(event_loop),
             compositor_controller,
+            // SAFETY: GetCurrentThreadId has no preconditions.
+            // INVARIANT: Application::new runs on the UI thread; ui_thread_id is the comparand for is_dispatcher_thread.
+            ui_thread_id: unsafe { GetCurrentThreadId() },
         })
     }
 
@@ -54,8 +59,15 @@ impl Application {
             .map_err(Into::into)
     }
 
-    pub fn is_dispatcher_thread(&self) -> anyhow::Result<bool> {
-        Ok(self.dispatcher_queue_controller.DispatcherQueue()?.HasThreadAccess()?)
+    #[must_use]
+    pub fn is_dispatcher_thread(&self) -> bool {
+        // `DispatcherQueue::HasThreadAccess` would be the natural WinRT call here,
+        // but it was introduced in Windows 10 build 18362 (1903); this toolkit
+        // supports down to 17763 (1809). `GetCurrentThreadId` works on every
+        // supported version.
+        //
+        // SAFETY: GetCurrentThreadId has no preconditions.
+        (unsafe { GetCurrentThreadId() }) == self.ui_thread_id
     }
 
     pub fn run_event_loop(&self) -> anyhow::Result<()> {
