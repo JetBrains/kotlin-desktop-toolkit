@@ -34,7 +34,7 @@ pub extern "C" fn application_init(callbacks: ApplicationCallbacks) -> AppPtr<'s
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_is_dispatcher_thread(app_ptr: AppPtr) -> bool {
-    with_app(&app_ptr, "application_is_dispatcher_thread", Application::is_dispatcher_thread)
+    with_app(&app_ptr, "application_is_dispatcher_thread", |app| Ok(app.is_dispatcher_thread()))
 }
 
 #[unsafe(no_mangle)]
