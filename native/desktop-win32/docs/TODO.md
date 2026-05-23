@@ -6,11 +6,6 @@ This list is point-in-time. Verify against current code before acting.
 
 ## Confirmed bugs (per code-owner review)
 
-### `Application::is_dispatcher_thread` uses `HasThreadAccess` above toolkit floor
-- **Where**: `application.rs:57-58` — `Application::is_dispatcher_thread` calls `self.dispatcher_queue_controller.DispatcherQueue()?.HasThreadAccess()?`.
-- **What**: `DispatcherQueue.HasThreadAccess` was introduced in Windows 10 build 18362 (1903); the toolkit's stated minimum is build 17763 (1809). Calling this on 17763 fails at the WinRT activation layer.
-- **Fix**: replace with a stored UI-thread id captured at `Application::new` and a `GetCurrentThreadId() == ui_thread_id` comparison (same pattern `CompositorDriver` already uses for its fast-path; the `Win32_System_Threading` feature is already enabled by that work).
-
 ### `tryRead*` swallows too many error kinds
 - **Where**: `data_object_api.rs` (`IntoFfiOption` impl).
 - **What**: Every `Err(...)` from a read is converted to `FfiOption::none()` with a `trace!` log. This hides allocation failures, type mismatches, and other genuine errors behind the same `null` that "format not found" produces.
