@@ -26,14 +26,15 @@ use windows::{
         UI::{
             Controls::MARGINS,
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
+            Input::KeyboardAndMouse::{TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT, TrackMouseEvent},
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
                 GetClientRect, GetPropW, GetWindowLongPtrW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW,
-                RegisterClassExW, RemovePropW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED,
-                SW_SHOWNORMAL, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW,
-                SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE,
-                WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
-                WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+                RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME,
+                SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER,
+                SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI,
+                WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX,
+                WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -84,11 +85,16 @@ pub struct Window {
     compositor_controller: CompositorController,
     composition_target: RefCell<Option<DesktopWindowTarget>>,
     composition_root: RefCell<Option<ContainerVisual>>,
+    backdrop_layer: RefCell<Option<ContainerVisual>>,
+    content_layer: RefCell<Option<ContainerVisual>>,
+    chrome_layer: RefCell<Option<ContainerVisual>>,
     min_size: Cell<Option<LogicalSize>>,
     origin: Cell<LogicalPoint>,
     size: Cell<LogicalSize>,
     style: RefCell<WindowStyle>,
     pointer_in_window: AtomicBool,
+    nc_leave_tracking_armed: AtomicBool,
+    pub(crate) caption_buttons: RefCell<Option<crate::win32::caption_buttons::CaptionButtonStrip>>,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
     backdrop_tint: RefCell<Option<SpriteVisual>>,
@@ -116,11 +122,16 @@ impl Window {
             compositor_controller,
             composition_target: RefCell::new(None),
             composition_root: RefCell::new(None),
+            backdrop_layer: RefCell::new(None),
+            content_layer: RefCell::new(None),
+            chrome_layer: RefCell::new(None),
             min_size: Cell::new(None),
             origin: Cell::default(),
             size: Cell::new(LogicalSize::new(0.0, 0.0)),
             style: RefCell::default(),
             pointer_in_window: AtomicBool::new(false),
+            nc_leave_tracking_armed: AtomicBool::new(false),
+            caption_buttons: RefCell::new(None),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
             backdrop_tint: RefCell::new(None),
@@ -167,13 +178,37 @@ impl Window {
     #[inline]
     pub(crate) fn add_visual(&self) -> anyhow::Result<SpriteVisual> {
         let sprite_visual = self.compositor_controller.Compositor()?.CreateSpriteVisual()?;
-        self.composition_root
+        self.content_layer
             .borrow()
             .as_ref()
             .context("Window has not been created yet")?
             .Children()?
             .InsertAtTop(&sprite_visual)?;
         Ok(sprite_visual)
+    }
+
+    #[inline]
+    pub(crate) fn chrome_layer(&self) -> anyhow::Result<ContainerVisual> {
+        let layer = self.chrome_layer.borrow();
+        let layer = layer.as_ref().context("Window has not been created yet")?;
+        Ok(layer.clone())
+    }
+
+    pub(crate) fn ensure_nc_leave_tracking(&self) -> anyhow::Result<()> {
+        if !self.nc_leave_tracking_armed.swap(true, Ordering::Relaxed) {
+            let mut tme = TRACKMOUSEEVENT {
+                cbSize: size_of::<TRACKMOUSEEVENT>().try_into()?,
+                dwFlags: TME_NONCLIENT | TME_LEAVE,
+                hwndTrack: self.hwnd(),
+                dwHoverTime: 0,
+            };
+            unsafe { TrackMouseEvent(&raw mut tme)? };
+        }
+        Ok(())
+    }
+
+    pub(crate) fn nc_leave_tracking_fired(&self) {
+        self.nc_leave_tracking_armed.store(false, Ordering::Relaxed);
     }
 
     pub fn get_client_size(&self) -> anyhow::Result<LogicalSize> {
@@ -215,6 +250,14 @@ impl Window {
     #[must_use]
     pub fn has_custom_title_bar(&self) -> bool {
         matches!(self.style.borrow().title_bar_kind, WindowTitleBarKind::Custom)
+    }
+
+    #[must_use]
+    pub fn has_non_system_title_bar(&self) -> bool {
+        matches!(
+            self.style.borrow().title_bar_kind,
+            WindowTitleBarKind::Custom | WindowTitleBarKind::None
+        )
     }
 
     #[must_use]
@@ -280,15 +323,27 @@ impl Window {
     }
 
     pub fn maximize(&self) {
-        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWMAXIMIZED) };
+        if !self.style.borrow().is_maximizable {
+            // Mirrors the strip-side availability gate so programmatic
+            // maximize agrees with the visible button state.
+            return;
+        }
+        self.send_system_command(SC_MAXIMIZE);
     }
 
     pub fn minimize(&self) {
-        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWMINIMIZED) };
+        self.send_system_command(SC_MINIMIZE);
     }
 
     pub fn restore(&self) {
-        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWNORMAL) };
+        self.send_system_command(SC_RESTORE);
+    }
+
+    #[inline]
+    fn send_system_command(&self, command: u32) {
+        // Route through the system-command path to preserve standard shell
+        // transitions (including minimize/maximize/restore animations).
+        let _ = unsafe { SendMessageW(self.hwnd(), WM_SYSCOMMAND, Some(WPARAM(command as usize)), Some(LPARAM(0))) };
     }
 
     pub fn show(&self) {
@@ -331,6 +386,37 @@ impl Window {
             backdrop_visual.SetSize(windows_numerics::Vector2 {
                 X: size.width.0 as f32,
                 Y: size.height.0 as f32,
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Win11 maximize-overhang inset in physical pixels: `SM_CYSIZEFRAME`
+    /// (DPI-aware) when resizable, maximized, and non-system title bar;
+    /// `0` otherwise.
+    pub(crate) fn max_chrome_y(&self) -> i32 {
+        if !self.is_resizable() || !self.has_non_system_title_bar() || !self.is_maximized() {
+            return 0;
+        }
+        let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
+        unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) }
+    }
+
+    /// Queues a Y-offset on `content_layer` so Kotlin / ANGLE content lines
+    /// up with the visible monitor edge when maximized — composition (0,0)
+    /// tracks the (off-monitor) window-rect top-left, mirroring the
+    /// strip's `composition_root` shift.
+    ///
+    /// Does not commit; caller must arrange a strip commit to publish the
+    /// queued offset. See `TODO.md` `resize_backdrop_tint` / caption-button
+    /// resize commit ordering invariant.
+    pub(crate) fn set_content_top_offset(&self, top_offset_px: i32) -> anyhow::Result<()> {
+        if let Some(layer) = self.content_layer.borrow().as_ref() {
+            #[allow(clippy::cast_precision_loss)]
+            layer.SetOffset(windows_numerics::Vector3 {
+                X: 0.0,
+                Y: top_offset_px as f32,
+                Z: 0.0,
             })?;
         }
         Ok(())
@@ -511,7 +597,13 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
     if msg == WM_NCDESTROY {
         if let Ok(raw) = unsafe { RemovePropW(hwnd, WINDOW_PTR_PROP_NAME) } {
-            let _ = unsafe { Weak::from_raw(raw.0.cast::<Window>()) };
+            let weak = unsafe { Weak::from_raw(raw.0.cast::<Window>()) };
+            // Drop the strip (and its `RenderingDeviceReplacedRegistration`)
+            // before the HWND is recycled — otherwise an in-flight WinRT
+            // callback could `PostMessageW` to a stale or recycled handle.
+            if let Some(window) = weak.upgrade() {
+                window.caption_buttons.replace(None);
+            }
         }
         return LRESULT(0);
     }
@@ -560,6 +652,24 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.set_position(window.origin.get(), window.size.get())?;
     initialize_content(window, hwnd).context("failed to initialize the content")?;
     window.set_cursor(Cursor::load_from_system(CursorIcon::Arrow)?);
+
+    if window.has_custom_title_bar() {
+        let chrome_layer = window.chrome_layer()?;
+        let mut strip = crate::win32::caption_buttons::CaptionButtonStrip::new(
+            &chrome_layer,
+            window.get_scale(),
+            &window.style.borrow(),
+            window.compositor_controller.clone(),
+            hwnd,
+        )?;
+        let mut client_rect = RECT::default();
+        unsafe { GetClientRect(hwnd, &raw mut client_rect)? };
+        strip.set_strip_position(
+            PhysicalSize::new(client_rect.right - client_rect.left, client_rect.bottom - client_rect.top),
+            0,
+        )?;
+        window.caption_buttons.replace(Some(strip));
+    }
     Ok(())
 }
 
@@ -567,13 +677,32 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     let compositor = window.compositor_controller.Compositor()?;
     let compositor_interop: ICompositorDesktopInterop = compositor.cast()?;
     let desktop_window_target = unsafe { compositor_interop.CreateDesktopWindowTarget(hwnd, false) }?;
+
     let root_visual = compositor.CreateContainerVisual()?;
     root_visual.SetBackfaceVisibility(CompositionBackfaceVisibility::Hidden)?;
-    desktop_window_target.SetRoot(&root_visual)?;
+
+    let backdrop_layer = compositor.CreateContainerVisual()?;
+    let content_layer = compositor.CreateContainerVisual()?;
+    let chrome_layer = compositor.CreateContainerVisual()?;
+
+    // VisualCollection ordering is bottom-to-top; sequential `InsertAtTop`
+    // calls put each new layer above the previous one. Final stacking:
+    // backdrop (bottom) < content (middle) < chrome (top).
+    let root_children = root_visual.Children()?;
+    root_children.InsertAtTop(&backdrop_layer)?;
+    root_children.InsertAtTop(&content_layer)?;
+    root_children.InsertAtTop(&chrome_layer)?;
+
     let backdrop_visual = compositor.CreateSpriteVisual()?;
-    root_visual.Children()?.InsertAtBottom(&backdrop_visual)?;
+    backdrop_layer.Children()?.InsertAtBottom(&backdrop_visual)?;
+
+    desktop_window_target.SetRoot(&root_visual)?;
+
     window.backdrop_tint.replace(Some(backdrop_visual));
     window.composition_target.replace(Some(desktop_window_target));
     window.composition_root.replace(Some(root_visual));
+    window.backdrop_layer.replace(Some(backdrop_layer));
+    window.content_layer.replace(Some(content_layer));
+    window.chrome_layer.replace(Some(chrome_layer));
     Ok(())
 }
