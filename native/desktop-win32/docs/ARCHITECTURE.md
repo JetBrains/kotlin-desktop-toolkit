@@ -20,6 +20,8 @@ This crate is **the Win32-focused backend**. Window creation, message pump, inpu
 - Do not propose `XamlRoot`, `ContentDialog`, `WinRT.Microsoft.UI.Xaml.*`, or any XAML-island bridging.
 - If a feature seems to require WinUI 3, the answer in this crate is "we don't support that here" — surface it for review and consider whether a separate WinUI 3 backend is the right home, not a partial dependency in this one.
 
+**Distinction worth holding onto.** "Don't depend on WinUI APIs" is *not* the same as "don't read WinUI docs." When the toolkit needs to replicate Win11-native UX behaviour (caption-button colours, hover/pressed semantics, animation curves, RTL mirroring rules, etc.), WinUI / Windows App SDK documentation and source are valid references for the *behavioural contract* — we cite them as conventions to follow, not as APIs we consume. Where WinUI describes a behaviour but does not expose concrete values, fall back to other public Win32-host implementations chosen on a per-feature basis, citing each value by repo path and revision. The rule: WinUI for the contract; Win32 / WinRT for the implementation; per-feature reference implementations only for values that WinUI keeps closed-source.
+
 ### WinRT exceptions in this crate (and why)
 
 The four WinRT subsystems used here, each with explicit rationale:
@@ -139,7 +141,7 @@ Per-thread state stored in `thread_local!`:
 - `desktop-common/logger.rs`: `LAST_EXCEPTION_MSGS: RefCell<...>` — pending exception strings, capacity 10.
 
 Process-wide one-shot calls during init:
-- `EnableMouseInPointer(true)` (event_loop.rs:55) — process-wide and irreversible. WM_MOUSE* are synthesised through WM_POINTER*. Third-party code in the same process expecting raw mouse messages will silently break.
+- `EnableMouseInPointer(true)` — process-wide and irreversible. WM_MOUSE* are synthesised through WM_POINTER*. Third-party code in the same process expecting raw mouse messages will silently break.
 - `SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)` — per-thread, set in `EventLoop::new`.
 
 Cross-thread work uses `application_dispatcher_invoke`, which posts a Kotlin trampoline (`pollCallbacks`) onto the WinRT `DispatcherQueue`. The Kotlin side queues lambdas in a `ConcurrentLinkedQueue` and drains it on the UI thread. Note: the `bool` returned by `application_dispatcher_invoke` is silently discarded by `Application.invokeOnDispatcher` — enqueues after dispatcher shutdown drop the work.
@@ -267,7 +269,7 @@ Kotlin: Window.new(appPtr) → Window.create(params)
        WM_NCDESTROY → RemovePropW; the recovered Weak is dropped.
   → DwmExtendFrameIntoClientArea / SetWindowAttribute(IMMERSIVE_DARK_MODE / SYSTEMBACKDROP_TYPE)
   → CompositorController (WinRT Windows.UI.Composition) → ContainerVisual + SpriteVisual;
-    HWND bridge via ICompositorDesktopInterop::CreateDesktopWindowTarget (window.rs:493-494)
+    HWND bridge via ICompositorDesktopInterop::CreateDesktopWindowTarget
 ```
 
 ### 3. ANGLE rendering
@@ -328,7 +330,7 @@ A common conflation — these are distinct stacks that can both produce visual t
 
 Where in the code:
 - `application.rs:6, 26, 38` — `CompositorController::new()` is owned by `Application` and cloned into each `Window` and `AngleDevice`.
-- `window.rs:13-14, 25, 66-67, 493-494` — `ContainerVisual` / `SpriteVisual` / `DesktopWindowTarget`, with the HWND bridged via `ICompositorDesktopInterop` (the only Win32-flavoured COM interface in the rendering path).
+- `window.rs` — `ContainerVisual` / `SpriteVisual` / `DesktopWindowTarget`, with the HWND bridged via `ICompositorDesktopInterop` (the only Win32-flavoured COM interface in the rendering path).
 - `renderer_angle.rs:8, 43, 48` — ANGLE's EGL window surface targets the `SpriteVisual`.
 
 `Win32_Graphics_Dwm` is enabled in `Cargo.toml` (DWM titlebar attributes, extended frame bounds), but `Win32_Graphics_DirectComposition` is **not** enabled. Anyone tempted to "drop down to DComp for X" should first check whether the `Windows.UI.Composition` API (or Win2D) covers the case — the two cannot be mixed naively in the same visual tree.
