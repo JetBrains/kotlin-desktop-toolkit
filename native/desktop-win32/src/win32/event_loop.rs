@@ -212,8 +212,7 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         LOWORD!(wparam.0),
         "The DPI values of the X-axis and the Y-axis should be identical for Windows apps."
     );
-    // Refresh the DPI cache from wparam before any handler reads it; downstream
-    // `Window::max_chrome_y` / `get_scale` / hit-test math see the new DPI.
+    // Refresh DPI cache from wparam before any downstream handler reads it.
     window.set_dpi_metrics(u32::from(dpi));
     let scale = f32::from(dpi) / (USER_DEFAULT_SCREEN_DPI as f32);
     let rect = unsafe { *(lparam.0 as *const RECT) };
@@ -223,11 +222,7 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         scale,
     };
     let result = event_loop.handle_event(window, event);
-    // `max_chrome_y` is DPI-scaled, so a DPI change can alter it for any
-    // non-system titlebar. `set_content_top_offset` and `strip.on_dpi_change`
-    // mutate the visual tree; the driver's `CommitNeeded` fast-path publishes
-    // inline on the UI thread before this handler returns, so the content
-    // offset, strip Y, and glyph re-rasterisation land on the same DWM tick.
+    // `max_chrome_y` is DPI-scaled; update content offset and strip on the same tick.
     let has_non_system_tb = window.has_non_system_title_bar();
     if has_non_system_tb {
         let _ = window
@@ -252,10 +247,8 @@ fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) 
         event_loop.handle_event(window, event);
     }
     if windowpos.flags.0 & SWP_NOSIZE.0 == 0 {
-        // Emit the client-area size: `windowpos.cx/cy` is the outer rect,
-        // which includes the off-monitor `max_chrome_y` overhang and system
-        // frame. Downstream consumers (Kotlin `performDrawing`, ANGLE
-        // swapchain) work in client coordinates.
+        // `windowpos.cx/cy` is the outer rect; use GetClientRect for the
+        // client-area size that ANGLE / Kotlin drawing actually consume.
         let mut client_rect = RECT::default();
         if unsafe { GetClientRect(window.hwnd(), &raw mut client_rect) }.is_ok() {
             let event = WindowResizeEvent {
@@ -267,13 +260,10 @@ fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) 
             log::warn!("GetClientRect during WM_WINDOWPOSCHANGED failed; skipping WindowResizeEvent for this tick");
         }
     }
-    // No `set_content_top_offset` here: every WM_WINDOWPOSCHANGED that can
-    // change `max_chrome_y` (DPI / maximize-state — both imply a size change)
-    // is preceded by WM_NCCALCSIZE on the same tick, where `on_nccalcsize`
-    // already queued the offset alongside the ANGLE redraw.
-    //
-    // `on_max_state_change` belongs here, not in NCCALCSIZE — it owns the
-    // E922↔E923 maximize-glyph swap, which is independent of `max_chrome_y`.
+    // `set_content_top_offset` is skipped here: WM_NCCALCSIZE precedes every
+    // WM_WINDOWPOSCHANGED that can change `max_chrome_y`, so the offset is
+    // already committed. `on_max_state_change` belongs here — it owns the
+    // maximize-glyph swap, which is independent of `max_chrome_y`.
     if let Some(strip) = window.caption_buttons.borrow_mut().as_mut() {
         strip.on_max_state_change(window.is_maximized());
     }
@@ -340,7 +330,6 @@ fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lpa
             }
         }
     }
-    // High-contrast change: WM_SETTINGCHANGE wParam == SPI_SETHIGHCONTRAST.
     if wparam.0 == SPI_SETHIGHCONTRAST.0 as usize {
         match HighContrast::get_current() {
             Ok(new_high_contrast) => {
@@ -433,8 +422,8 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         calcsize_params.rgrc[0].top -= rc.top;
     }
 
-    // The off-monitor overhang only exists when `WS_THICKFRAME` is set
-    // (spec §3.6); `WindowStyle::to_system` clears it when `!is_resizable`.
+    // The off-monitor overhang only exists when `WS_THICKFRAME` is set;
+    // `WindowStyle::to_system` clears it when `!is_resizable`.
     // `max_chrome_y` stays 0 for non-resizable / system-titlebar / non-maximized
     // windows so the strip's `set_strip_position` does not shift buttons
     // down into the title-bar zone.
@@ -459,10 +448,6 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let scale = window.get_scale();
     let event = NCCalcSizeEvent { origin, size, scale };
     event_loop.handle_event(window, event);
-    // `set_content_top_offset` and `strip.on_resize` mutate the visual tree;
-    // the driver's `CommitNeeded` fast-path publishes inline on the UI thread
-    // before this handler returns. Same-value `SetOffset` calls during a
-    // regular drag (where `max_chrome_y` is unchanged) are render-pass-coalesced.
     if window.has_non_system_title_bar() {
         let _ = window
             .set_content_top_offset(max_chrome_y)
@@ -544,8 +529,7 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     let mouse_x = GET_X_LPARAM!(lparam.0);
     let mouse_y = GET_Y_LPARAM!(lparam.0);
 
-    // Consult the caption-button strip first; the screen→client conversion
-    // and hit-test math live in `caption_buttons::caption_kind_at_screen`.
+    // Caption-button hit-test takes priority over the generic NC hit-test.
     if let Some(kind) = caption_kind_at_screen(window, PhysicalPoint::new(mouse_x, mouse_y)) {
         let is_enabled = window.caption_buttons.borrow().as_ref().is_some_and(|s| s.is_enabled(kind));
         return Some(LRESULT(hittest_for_caption_button_kind(kind, is_enabled) as _));
@@ -565,9 +549,9 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     let m = window.dpi_metrics();
     let resize_handle_height = m.padded_border + m.size_frame;
     let title_bar_height = resize_handle_height + unsafe { GetSystemMetricsForDpi(SM_CYSIZE, m.dpi) };
-    // Spec §3.2: only the resize-border match is gated on `is_resizable`; the
-    // title-bar drag region applies to non-resizable custom-titlebar windows
-    // too so they remain draggable by their title bar.
+    // Only the resize-border match is gated on `is_resizable`; the title-bar
+    // drag region applies to non-resizable custom-titlebar windows too so they
+    // remain draggable by their title bar.
     //
     // `WindowTitleBarKind::None` must not expose a synthetic drag band.
     let allow_titlebar_drag = window.has_custom_title_bar();
@@ -747,13 +731,8 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
             .borrow()
             .as_ref()
             .is_some_and(|s| s.has_press_for(pointer_info.pointer_id()));
-        // Forward updates to the strip when:
-        //   - NC variant: drives hover state for caption buttons and the
-        //     title-bar drag region.
-        //   - Strip owns a press: client-variant updates drive the WinUI
-        //     capture rule (`Pressed → PressedDraggedOff` on drift,
-        //     reverse on return) while the implicit pointer capture
-        //     routes the message through the client-area path.
+        // Forward to the strip when NC (drives hover) or strip owns the press
+        // (drives WinUI `Pressed → PressedDraggedOff` on cursor drift).
         if (is_non_client || strip_owns_press)
             && let Some(strip) = window.caption_buttons.borrow_mut().as_mut()
         {
@@ -765,9 +744,8 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
             }
             strip.on_pointer_update(kind, device);
         }
-        // First-NC-entry `PointerEntered` parity (spec §3.5): Kotlin must
-        // see an entry even when the pointer's first appearance is over a
-        // caption button. Then suppress the strip-internal events.
+        // Emit `PointerEntered` even when the first NC hit is a caption button,
+        // then suppress strip-internal events for parity with the title-bar path.
         if is_non_client && kind.is_some() {
             if !window.is_pointer_in_window() {
                 window.set_is_pointer_in_window(true);
@@ -783,12 +761,10 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
             }
             return Some(LRESULT(0));
         }
-        // Suppress host pointer-update dispatch while the strip owns a
-        // press; otherwise the host's drag source observes a held primary
-        // button without DOWN and starts `DoDragDrop`. With Custom the
-        // top NC inset is 0, so any twitch over the strip footprint
-        // arrives as `WM_POINTERUPDATE` (client variant) — the cursor
-        // sits inside `GetClientRect`.
+        // Suppress host dispatch while strip owns a press; otherwise the
+        // host drag source sees a held button without a matching DOWN and
+        // starts DoDragDrop. With Custom titlebar the NC inset is 0, so
+        // movement over the strip arrives as the client-variant message.
         if strip_owns_press {
             return Some(LRESULT(0));
         }
@@ -853,10 +829,9 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPA
                 // working.
                 return None;
             }
-            // Track the non-primary press so [`on_pointerup`] can
-            // swallow its release; otherwise kotlin's host drag source
-            // sees a held button without a paired DOWN and starts
-            // `DoDragDrop`.
+            // Track non-primary press so on_pointerup can swallow its
+            // release and prevent the host drag source from seeing an
+            // unpaired button-down (which triggers DoDragDrop).
             if button_change.kind() == PointerButtonChangeKind::Pressed
                 && button_change.button() != PointerButton::None
                 && let Some(strip) = window.caption_buttons.borrow_mut().as_mut()
@@ -892,11 +867,8 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
     let is_non_client = matches!(msg, WM_NCPOINTERUP);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
 
-    // Claim either WM_POINTERUP or WM_NCPOINTERUP when the strip has an active
-    // press: a press that started on a caption button (NC) but released after
-    // the cursor crossed into the client area arrives as WM_POINTERUP, and
-    // gating on WM_NCPOINTERUP alone would leave `press_session` stuck until
-    // WM_POINTERCAPTURECHANGED fires on deactivation.
+    // Handle both WM_POINTERUP and WM_NCPOINTERUP: a press that starts on a
+    // caption button but releases in the client area arrives as WM_POINTERUP.
     if window.has_custom_title_bar() {
         let button_change = pointer_info.get_pointer_button_change();
         let is_primary = button_change.kind() == PointerButtonChangeKind::Released && button_change.button() == PointerButton::Left;
@@ -924,8 +896,7 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
             }
             return Some(LRESULT(0));
         }
-        // Drain tracked Suppressed sessions; press-elsewhere cycles fall
-        // through symmetrically with their PointerDown.
+        // Drain swallowed non-primary sessions tracked in on_pointerdown.
         if !is_primary && button_change.kind() == PointerButtonChangeKind::Released {
             let consumed = window
                 .caption_buttons

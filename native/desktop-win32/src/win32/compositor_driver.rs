@@ -27,7 +27,6 @@ impl CompositorDriver {
         let driver = Arc::new(Self {
             controller: controller.clone(),
             dispatcher_queue,
-            // SAFETY: `GetCurrentThreadId` has no preconditions and is always safe to call.
             ui_thread_id: unsafe { GetCurrentThreadId() },
             autocommit_enabled: AtomicBool::new(true),
             enqueue_pending: AtomicBool::new(false),
@@ -72,7 +71,6 @@ impl CompositorDriver {
     }
 
     fn on_commit_needed(self: &Arc<Self>) {
-        // SAFETY: `GetCurrentThreadId` has no preconditions and is always safe to call.
         if unsafe { GetCurrentThreadId() } == self.ui_thread_id {
             self.drain();
             return;

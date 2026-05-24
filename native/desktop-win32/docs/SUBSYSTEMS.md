@@ -7,7 +7,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - [Application & event loop](#application--event-loop)
 - [Window](#window)
 - [Renderer (ANGLE)](#renderer-angle)
-- [Caption buttons & D2D context](#caption-buttons--d2d-context)
+- [Caption buttons & Composition context](#caption-buttons--composition-context)
 - [Geometry](#geometry)
 - [Keyboard](#keyboard)
 - [Pointer](#pointer)
@@ -28,7 +28,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 ## Application & event loop
 
-**Purpose.** UI-thread runtime for the whole toolkit. Initialises the OLE STA, creates a WinRT `DispatcherQueue` and a `CompositorController`, then runs a `GetMessage`/`DispatchMessage` pump. Translates raw `WM_*` messages to typed `Event` variants and forwards to a single Kotlin-supplied callback.
+**Purpose.** UI-thread runtime for the whole toolkit. Initialises the OLE STA, creates a WinRT `DispatcherQueue` and a `CompositorDriver`, then runs a `GetMessage`/`DispatchMessage` pump. Translates raw `WM_*` messages to typed `Event` variants and forwards to a single Kotlin-supplied callback.
 
 **Files.** `application.rs`, `application_api.rs`, `event_loop.rs`, `events.rs`, `events_api.rs` + Kotlin `Application.kt`, `Event.kt`.
 
@@ -38,7 +38,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Kotlin surface.** `Application` (`AutoCloseable`) — `runEventLoop`, `stopEventLoop`, `invokeOnDispatcher`, `onStartup`, `isDispatcherThread`, `newWindow`, `createAngleRenderer`. Companion extension `openURL`. `Event` `sealed class` with 22 subclasses 1-to-1 with the Rust enum.
 
 **Key types.**
-- `Application` (Rust) — owns `Rc<EventLoop>`, the `DispatcherQueueController`, `DispatcherQueue`, `CompositorController`. Heap-boxed; opaque to Kotlin as `AppPtr<'a> = RustAllocatedRawPtr<'a>` (alias).
+- `Application` (Rust) — owns `Rc<EventLoop>`, the `DispatcherQueueController`, `compositor_driver: Arc<CompositorDriver>`. Heap-boxed; opaque to Kotlin as `AppPtr<'a> = RustAllocatedRawPtr<'a>` (alias). The `DispatcherQueue` is accessed via `dispatcher_queue_controller.DispatcherQueue()` rather than stored as a separate field.
 - `EventLoop` — the message pump. `Window` keeps `Weak<EventLoop>` to avoid cycles.
 - `Event` — `#[repr(C)]` enum, 22 variants. Mirrored 1-to-1 in Kotlin. Has `#[allow(dead_code)]` on the whole enum because variants are constructed by Rust but consumed only across FFI.
 - `EventHandler = extern "C" fn(WindowId, &Event) -> bool` (returns "handled?")
@@ -50,7 +50,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Gotchas.**
 - `application_dispatcher_invoke` returns a `bool` (enqueue succeeded?) — `Application.invokeOnDispatcher` discards it. Enqueues after dispatcher shutdown silently lose the lambda.
 - `EnableMouseInPointer(true)` is process-wide and irreversible — third-party libs in the same process expecting raw `WM_MOUSE*` will silently break.
-- `WM_NCPOINTERUP` returns `None` outside the caption-button strip's hit-test area (`event_loop.rs` in the current tree) so DefWindowProc can handle default NC behavior. For non-system titlebar kinds (`WindowTitleBarKind::Custom` / `WindowTitleBarKind::None`), `WindowStyle::to_system` keeps `WS_CAPTION` for native transitions but clears `WS_SYSMENU`, so system caption buttons are not surfaced. Inside the strip's hit-test area or while a caption-button press session is active, `on_pointerup` returns `Some(LRESULT(0))` to suppress both the system path and the Kotlin-facing `PointerUp` event — see the caption-buttons spec §3.2.
+- `WM_NCPOINTERUP` (and `WM_POINTERUP` when the strip holds an active press) returns `Some(LRESULT(0))` to suppress both the system path and the Kotlin-facing `PointerUp` event; otherwise `on_pointerup` returns `None` so DefWindowProc handles default NC behavior — see the caption-buttons spec §3.2. For non-system titlebar kinds (`WindowTitleBarKind::Custom` / `WindowTitleBarKind::None`), `WindowStyle::to_system` keeps `WS_CAPTION` for native transitions but clears `WS_SYSMENU`, so system caption buttons are not surfaced.
 - `WM_POINTERUPDATE` and `WM_POINTERDOWN` can both emit `Event::PointerDown` for the same gesture (button press inside an update message + dedicated down handler) → possible duplicate events. See TODO.md.
 - Two commented-out variants in `events.rs`: `//WindowFocusChange`, `//WindowFullScreenToggle` — stale scaffolding.
 
@@ -67,7 +67,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **FFI surface.** `window_new`, `window_create`, `window_drop`, `window_destroy`, `window_show`, `window_maximize`, `window_minimize`, `window_restore`, `window_request_redraw`, `window_request_close`, `window_get_client_size`, `window_get_rect`, `window_get_scale_factor`, `window_get_screen_info`, `window_is_maximized`, `window_is_minimized`, `window_set_backdrop_tint`, `window_remove_backdrop_tint`, `window_set_cursor_from_file`, `window_set_cursor_from_system`, `window_set_icon`, `window_set_immersive_dark_mode`, `window_set_min_size`, `window_set_title`, `window_set_rect`.
 
 **Key types.**
-- `Window` — `Rc<Window>` on Rust side. Holds `HWND` (via `AtomicPtr` set during `WM_NCCREATE`), `Weak<EventLoop>`, `CompositorController`, `composition_target: RefCell<Option<DesktopWindowTarget>>`, root `ContainerVisual`, backdrop `SpriteVisual`, cursor `RefCell<Option<Cursor>>`, `PointerClickCounter`. Opaque to Kotlin as `WindowPtr<'a> = RustAllocatedRcPtr<'a>` (alias).
+- `Window` — `Rc<Window>` on Rust side. Holds `HWND` (via `AtomicPtr` set during `WM_NCCREATE`), `Weak<EventLoop>`, `compositor: Compositor`, `composition_target: RefCell<Option<DesktopWindowTarget>>`, root `ContainerVisual`, backdrop `SpriteVisual`, cursor `RefCell<Option<Cursor>>`, `PointerClickCounter`. Opaque to Kotlin as `WindowPtr<'a> = RustAllocatedRcPtr<'a>` (alias).
 - `WindowParams`, `WindowStyle`, `WindowTitleBarKind`, `WindowSystemBackdropType` — `#[repr(C)]` enums/structs.
 
 **Ownership.** `window_new` does `Rc::new` → `Rc::into_raw`. `CreateWindowExW` is called with `lpCreateParams = Rc::downgrade(window).into_raw()`. In `WM_NCCREATE`, the `Weak` is reconstructed, upgraded, used to call `initialize_window`, then re-serialised via `Weak::into_raw` and stored as a Win32 window property under `KDT_WINDOW_PTR`. On every wndproc message, `GetPropW` retrieves this raw pointer and wraps it in `ManuallyDrop::new(Weak::from_raw(...))` to avoid dropping the weak per message. On `WM_NCDESTROY`, `RemovePropW` recovers the raw pointer and the weak is dropped. `window_drop` calls `to_rc::<Window>()` → `Rc::from_raw` → drop.
@@ -83,7 +83,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - `WindowTitleBarKind::Custom` is reachable from Kotlin; `extend_content_into_titlebar` is invoked from `on_activate` whenever `is_active && !is_minimized` (regardless of title-bar kind), not specifically gated on `Custom`. `WindowStyle::to_system` keeps `WS_CAPTION` but clears `WS_SYSMENU` for non-system titlebar kinds (`Custom` / `None`); the caption-buttons path layers toolkit-drawn buttons on top while preserving native transition behavior.
 - `#[allow(dead_code)]` on `WindowTitleBarKind` (window_api.rs) and `WindowSystemBackdropType` (window_api.rs) — false positives because cbindgen reads them but rustc can't see that.
 
-**Cross-refs.** `application` (`CompositorController` source, `Weak<EventLoop>`), `event_loop` (wndproc dispatcher), `events` (event payloads), `geometry`, `cursor` (per-window cursor), `pointer` (`PointerClickCounter` storage), `screen` (`window_get_screen_info`), `strings`, `utils` (Win11 build probes).
+**Cross-refs.** `application` (`CompositorDriver` / `Compositor` source, `Weak<EventLoop>`), `event_loop` (wndproc dispatcher), `events` (event payloads), `geometry`, `cursor` (per-window cursor), `pointer` (`PointerClickCounter` storage), `screen` (`window_get_screen_info`), `strings`, `utils` (Win11 build probes).
 
 ---
 
@@ -96,7 +96,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **FFI surface.** `renderer_angle_device_create`, `renderer_angle_drop`, `renderer_angle_resize_surface`, `renderer_angle_make_current`, `renderer_angle_swap_buffers`, `renderer_angle_get_egl_get_proc_func`.
 
 **Key types.**
-- `AngleDevice` (renderer_angle.rs) — owns the EGL `Display`, `Context`, `Surface`, the `CompositorController`, and a `SpriteVisual`. Box-allocated, opaque pointer.
+- `AngleDevice` (renderer_angle.rs) — owns the EGL `Display`, `Context`, `Surface`, `compositor_driver: Arc<CompositorDriver>`, and a `SpriteVisual`. Box-allocated, opaque pointer.
 - `EglInstance` (`renderer_egl_utils.rs`) — `khronos_egl::DynamicInstance<EGL1_5>` type alias.
 - `EglGetProcFuncData`, `EglSurfaceData`, `SurfaceParams` — small `#[repr(C)]` structs returned to Kotlin.
 
@@ -119,17 +119,17 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 ---
 
-## Caption buttons & D2D context
+## Caption buttons & Composition context
 
 **Purpose.** Toolkit-managed Min / Max / Restore / Close buttons for `WindowTitleBarKind::Custom` windows. Pure-state-machine strip rasterised via Direct2D / DirectWrite onto a per-window `CaptionButtonStrip` in the window's `chrome_layer`. Win11 Snap Layouts integration via `HTMAXBUTTON`. Design lives in `docs/specs/2026-04-30-win32-caption-buttons-design.md` — this section navigates the implementation, not the design.
 
-**Files.** `caption_buttons.rs` (strip + state machine + theme + metrics), `composition.rs` (`D2dContext`).
+**Files.** `caption_buttons.rs` (strip + state machine + theme + metrics), `composition.rs` (`CompositionContext`), `compositor_driver.rs` (`CompositorDriver`).
 
 **FFI surface.** None. Both modules are `pub(crate)` only — no Kotlin-facing API. Click side-effects route through existing `Window::request_close` / `minimize` / `maximize` / `restore`.
 
 **Key types.**
-- `CaptionButtonStrip` (caption_buttons.rs) — owns its `composition_root`, the per-button visuals, the press-session state machine, and an `Rc<D2dContext>` clone. `pub(crate)`. `!Send`.
-- `D2dContext` (composition.rs) — gateway to D3D11 / D2D / DirectWrite / `CompositionGraphicsDevice`. UI-thread singleton via `composition::ensure_d2d_context` (thread-local `OnceCell<Rc<D2dContext>>`). `!Send`.
+- `CaptionButtonStrip` (caption_buttons.rs) — owns its `composition_root`, the per-button visuals, the press-session state machine (`press_sessions: Vec<PressSession>`), and an `Rc<CompositionContext>` clone. `pub(crate)`. `!Send`.
+- `CompositionContext` (composition.rs) — gateway to D3D11 / D2D / DirectWrite / `CompositionGraphicsDevice`. UI-thread singleton via `composition::ensure_composition_context` (thread-local `OnceCell<Rc<CompositionContext>>`). `!Send`.
 - `CaptionButtonKind` — `#[repr(u8)]` (discriminants are load-bearing for the bitset). `CaptionButtonAction`, `PointerDeviceKind` — plain enums, no `#[repr]`.
 - `PressSessionMode { Active, Suppressed { held_button } }` — drives the wndproc-level swallow path. See spec §4.2 for the press-session state machine.
 
@@ -139,12 +139,12 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Gotchas.**
 - Hit-test routing dispatches into `caption_kind_at_screen` (caption_buttons.rs) for both `WM_NCHITTEST` and the `WM_NCPOINTER*` handlers — geometric, not `HIWORD(wParam)` — see spec §3.2.
-- Device-loss recovery is reactive only: `D2dContext::with_d2d_render_target` traps the three loss-class HRESULTs (`DXGI_ERROR_DEVICE_REMOVED` / `DXGI_ERROR_DEVICE_RESET` / `D2DERR_RECREATE_TARGET`) on both `BeginDraw` and `EndDraw`, calls `rebuild_d2d_device`, and `RenderingDeviceReplaced` triggers re-rasterise — see spec §6.2.
-- `build_d2d_device` falls back from `D3D_DRIVER_TYPE_HARDWARE` to `D3D_DRIVER_TYPE_WARP` on failure, so headless / Remote Desktop / degraded-GPU sessions still get a `Custom` window (initial construction and `rebuild_d2d_device` share the fallback). Once WARP is selected, the cached `Rc<D2dContext>` stays on WARP for the rest of the UI thread's lifetime — no automatic upgrade-back to hardware — see spec §6.1.
+- Device-loss recovery is reactive only: `CompositionContext::with_d2d_render_target` traps the three loss-class HRESULTs (`DXGI_ERROR_DEVICE_REMOVED` / `DXGI_ERROR_DEVICE_RESET` / `D2DERR_RECREATE_TARGET`) on both `BeginDraw` and `EndDraw`, calls `rebuild_d2d_device`, and `RenderingDeviceReplaced` triggers re-rasterise — see spec §6.2.
+- `build_d2d_device` falls back from `D3D_DRIVER_TYPE_HARDWARE` to `D3D_DRIVER_TYPE_WARP` on failure, so headless / Remote Desktop / degraded-GPU sessions still get a `Custom` window (initial construction and `rebuild_d2d_device` share the fallback). Once WARP is selected, the cached `Rc<CompositionContext>` stays on WARP for the rest of the UI thread's lifetime — no automatic upgrade-back to hardware — see spec §6.1.
 - Two cleanup APIs: `on_pointer_cancel(pointer_id)` for `WM_POINTERCAPTURECHANGED`; `cancel_any_press()` for `WM_CANCELMODE` and `WM_ACTIVATE`-deactivate — see spec §3.2 / §4.2.
 - `max_chrome_y` is `SM_CYSIZEFRAME` only on this toolkit's non-system titlebar style; the strip's resize-band exclusion (`is_in_top_resize_border`) uses the full `SM_CXPADDEDBORDER + SM_CYSIZEFRAME` — see spec §3.6.
 - Inactive caption-button hover and pressed render with the active palette — see spec §4.4.
-- Disabled visible Min/Max return `HTCAPTION` for `WM_NCHITTEST` but the strip still swallows DOWN / UP cycles (no hover, press, or action) — see spec §4.2.
+- Disabled visible Min/Max return `HTCAPTION` for `WM_NCHITTEST`. The OS therefore sends `WM_NCLBUTTONDOWN` with `wparam = HTCAPTION`, which `on_nclbuttondown` does not intercept; those clicks fall through to DefWindowProc. The pointer path (`WM_NCPOINTERDOWN`) routes the primary press to `on_nclbuttondown` via the same `HTCAPTION` wParam — also not intercepted. No hover, press, or action fires — see spec §4.2.
 - `root_visual`, `chrome_layer`, `backdrop_layer`, and the backdrop tint `SpriteVisual` carry `RelativeSizeAdjustment(1,1)` set in `initialize_content`; per-resize `SetSize` is not required. `content_layer` is left at default — the ANGLE visual sets its own absolute `Size` and no other child reads the parent's effective size. The strip's `on_resize` is the single commit point per resize tick — see spec §5.5.
 
 **Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`), `event_loop` (wndproc dispatch into `caption_kind_at_screen` and the strip's lifecycle methods), `appearance` (`Appearance` / `HighContrast` seed values + change events), `geometry` (`PhysicalPoint` / `PhysicalSize`).

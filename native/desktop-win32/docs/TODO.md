@@ -50,14 +50,14 @@ This list is point-in-time. Verify against current code before acting.
 - **Where**: `composition.rs` — `with_d2d_render_target` device-loss recovery (caption-buttons spec §6.2).
 - **What**: idle Custom-titlebar windows don't notice device loss until the next state change rasterises; worst case one frame of stale visuals.
 - **Trigger to add it back**: acceptance testing or production telemetry showing noticeable visual glitches under real device loss (driver reset, GPU swap, hardware change).
-- **Sketch when implementing**: `std::thread::spawn` is the simplest closure-capable wait — capture `dispatcher_queue.clone()` by move into the thread closure, `WaitForMultipleObjects` on `[device_removed_event, cancel_event]`, dispatch via `DispatcherQueue::TryEnqueue` on the device-removed branch, drop signals the cancel event and joins. Win32 threadpool wait (`CreateThreadpoolWait`) is the documented Microsoft pattern but its `extern "system" fn` callback boundary forces a `*mut c_void` context dance that's unnecessary for our scale (one wait per `D2dContext` per process).
+- **Sketch when implementing**: `std::thread::spawn` is the simplest closure-capable wait — capture `dispatcher_queue.clone()` by move into the thread closure, `WaitForMultipleObjects` on `[device_removed_event, cancel_event]`, dispatch via `DispatcherQueue::TryEnqueue` on the device-removed branch, drop signals the cancel event and joins. Win32 threadpool wait (`CreateThreadpoolWait`) is the documented Microsoft pattern but its `extern "system" fn` callback boundary forces a `*mut c_void` context dance that's unnecessary for our scale (one wait per `CompositionContext` per process).
 - **Sources**: [`ID3D11Device4::RegisterDeviceRemovedEvent`](https://learn.microsoft.com/windows/win32/api/d3d11_4/nf-d3d11_4-id3d11device4-registerdeviceremovedevent), [Composition native interop](https://learn.microsoft.com/windows/apps/develop/composition/composition-native-interop), spec §6.2.
 
 ### Verify `RenderingDeviceReplaced` fires synchronously on the `SetRenderingDevice` caller's thread
 
 - **Assumption**: spec `2026-04-30-win32-caption-buttons-design.md` §6.2 (and §4.1) state that `RenderingDeviceReplaced` fires synchronously on the thread that called `SetRenderingDevice`. Microsoft's Composition native-interop sample is consistent with this (its handler runs on the worker thread that triggered `SetRenderingDevice` from `SetThreadpoolWait`), but no Microsoft doc page documents the thread-affinity contract — `[Threading(Both)]` / `[MarshalingBehavior(Agile)]` are thread-safety attributes, not thread-affinity ones.
 - **Probe procedure**: instrument the strip's `RenderingDeviceReplaced` closure (registered inside `CaptionButtonStrip::new` per the spec §6.2) to record `GetCurrentThreadId()` and a "fired during SetRenderingDevice?" flag. Trigger device loss (driver toggle / D3D11 device-lost test). Compare against the UI thread id captured at strip construction.
-- **Contingency**: if the probe shows off-UI-thread firing in some configuration, the strip's `WM_NCDESTROY` drop ordering (the WM_NCDESTROY drop ordering in spec §6.2) and the `Send` bound on the callback are still correct, but the spec §6.2 prose claiming the callback is on the UI thread "because the toolkit always invokes `SetRenderingDevice` from the UI thread" must be revised. Maintenance rule for the closure: keep `Send`-correct unless / until the assumption is empirically confirmed.
+- **Contingency**: if the probe shows off-UI-thread firing in some configuration, the strip's `WM_NCDESTROY` drop ordering (spec §6.2) and the `Send` bound on the callback are still correct, but the spec §6.2 prose claiming the callback is on the UI thread "because the toolkit always invokes `SetRenderingDevice` from the UI thread" must be revised. Maintenance rule for the closure: keep `Send`-correct unless / until the assumption is empirically confirmed.
 - **Sources**: spec §6.2.
 
 ### Caption-button RTL mirroring
@@ -147,10 +147,6 @@ This list is point-in-time. Verify against current code before acting.
 - **What**: Forces the CPU to wait for all GPU work each frame, eliminating CPU/GPU pipelining.
 - **Investigation**: confirm whether composition correctness genuinely requires this. If only required for the first frame after a resize, gate it on a "needs-finish" flag.
 - **Caveat**: the prior failed auto-commit attempt (`Compositor` without `CompositorController` + visual-tree reorder) suggested removing `glFinish` might surface a DXGI flip-model resize glitch under `EGL_EXPERIMENTAL_PRESENT_PATH_FAST_ANGLE` (back-buffers uninitialised after `IDXGISwapChain::ResizeBuffers`). Mechanism unverified; confirm before removal. See spec `2026-05-22-win32-compositor-driver-design.md` §3 non-goal.
-
-### Per-call `GetDpiForWindow`
-- **Where**: `window.rs` — `Window::get_scale` is uncached.
-- **Note**: deliberate to reflect per-monitor DPI changes in real time. Worth measuring under high message-rate scenarios (heavy pointer input, animations).
 
 ## Code smells worth reviewing
 

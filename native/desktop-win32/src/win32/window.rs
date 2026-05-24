@@ -77,12 +77,9 @@ const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32Window");
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct WindowId(pub isize);
 
-/// Per-DPI metrics consumed by chrome / hit-test code. Seeded from
-/// `GetDpiForWindow` in `initialize_window`, then refreshed on
-/// `WM_DPICHANGED`'s wparam. Caches `dpi`, `scale`, `padded_border`
-/// (`SM_CXPADDEDBORDER`), and `size_frame` (`SM_CYSIZEFRAME`); other
-/// per-DPI metrics (e.g. `SM_CYSIZE` in `on_nchittest`) still call
-/// `GetSystemMetricsForDpi` per use.
+/// Per-DPI metrics for chrome and hit-test code. Seeded in `initialize_window`,
+/// refreshed on `WM_DPICHANGED`. Fields not cached here (e.g. `SM_CYSIZE`)
+/// are queried via `GetSystemMetricsForDpi` at point of use.
 #[derive(Clone, Copy)]
 pub(crate) struct DpiMetrics {
     pub dpi: u32,
@@ -94,8 +91,7 @@ pub(crate) struct DpiMetrics {
 impl DpiMetrics {
     #[allow(clippy::cast_precision_loss)]
     fn for_dpi(dpi: u32) -> Self {
-        // Per-monitor DPI maxes at a few hundred; truncating to u16 covers the OS range.
-        let dpi_u16 = u16::try_from(dpi).unwrap_or(u16::MAX);
+        let dpi_u16 = u16::try_from(dpi).unwrap_or(u16::MAX); // OS DPI range fits u16
         Self {
             dpi,
             scale: f32::from(dpi_u16) / (USER_DEFAULT_SCREEN_DPI as f32),
@@ -224,9 +220,8 @@ impl Window {
     }
 
     pub(crate) fn ensure_nc_leave_tracking(&self) -> anyhow::Result<()> {
-        // Set the armed flag only after `TrackMouseEvent` succeeds. The old
-        // `swap(true)`-then-call pattern left the flag stuck at `true` if
-        // the syscall failed, permanently disabling NC leave tracking.
+        // Set the flag only after TrackMouseEvent succeeds so a syscall
+        // failure doesn't permanently disable NC leave tracking.
         if self.nc_leave_tracking_armed.load(Ordering::Relaxed) {
             return Ok(());
         }
@@ -427,15 +422,9 @@ impl Window {
         self.dpi_metrics().size_frame
     }
 
-    /// Queues a Y-offset on `content_layer` so Kotlin / ANGLE content lines
-    /// up with the visible monitor edge when maximized; composition (0,0)
-    /// tracks the off-monitor window-rect top-left.
-    ///
-    /// Does not commit. The mutation fires `CommitNeeded`; the driver's
-    /// UI-thread fast-path publishes inline before the wndproc handler returns.
-    /// Same-value `SetOffset` calls are visually cheap — the compositor's
-    /// render pass diffs `Offset` by value — so callers do not need an
-    /// app-side dedup.
+    /// Offsets `content_layer` by `top_offset_px` so content aligns with the
+    /// visible monitor edge when maximized (composition origin is at the
+    /// off-monitor window-rect top-left). Does not commit; fires `CommitNeeded`.
     pub(crate) fn set_content_top_offset(&self, top_offset_px: i32) -> anyhow::Result<()> {
         if let Some(layer) = self.content_layer.borrow().as_ref() {
             #[allow(clippy::cast_precision_loss)]
@@ -737,12 +726,9 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     let content_layer = window.compositor.CreateContainerVisual()?;
     let chrome_layer = window.compositor.CreateContainerVisual()?;
 
-    // Auto-track HWND client size on the layers whose effective size is
-    // actually consumed: `root_visual` is the chain root; `chrome_layer`
-    // backs the strip's `RelativeOffsetAdjustment(1,0,0)` anchor;
-    // `backdrop_layer` carries the Mica tint. `content_layer` is left at
-    // default size because the ANGLE visual sets its own absolute `Size`
-    // in `resize_surface` and no other child reads the parent's size.
+    // Track HWND client size on root, chrome, and backdrop layers.
+    // `content_layer` is excluded: the ANGLE visual sets its own absolute
+    // size in `resize_surface` and no other child reads the parent's size.
     root_visual.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
     chrome_layer.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
     backdrop_layer.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;

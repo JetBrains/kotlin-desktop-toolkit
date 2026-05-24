@@ -2,20 +2,14 @@
 //!
 //! See `docs/specs/2026-04-30-win32-caption-buttons-design.md` for the design.
 //!
-//! The strip itself is a state machine driven by typed inputs from the
-//! wndproc layer (`kind`, pointer id, theme, etc.) and produces typed
-//! outputs (`Option<CaptionButtonAction>`). It does call `WinRT` Composition
-//! APIs to manage its visuals, plus a small set of Win32 coord-transform
-//! utilities (`ScreenToClient` / `GetClientRect`) inside `caption_kind_at_screen`
-//! so that the strip-anchoring math has a single home — wndproc-level
-//! `WM_*` message decoding stays in `event_loop.rs`.
+//! State machine driven by typed inputs from the wndproc layer (kind, pointer
+//! id, theme, etc.) producing typed outputs (`Option<CaptionButtonAction>`).
+//! Win32 coord-transform utilities (`ScreenToClient` / `GetClientRect`) live in
+//! `caption_kind_at_screen`; `WM_*` message decoding stays in `event_loop.rs`.
 //!
-//! Module-level lint allowances: this is graphics-math code that bridges
-//! pixel-bounded `i32` geometry into `WinRT` `Vector2`/`Vector3` (`f32`) and
-//! into surface sizes (`SizeInt32` / `i32`). Caption-button counts (≤ 3) and
-//! pixel sizes (≤ a few hundred) never approach the lossy ranges of these
-//! casts, so we silence them at the module level rather than peppering each
-//! site with `#[allow]`.
+//! Lint allowances: pixel-bounded `i32` geometry cast to `f32` (`Vector2` / `Vector3`)
+//! and `SizeInt32`. Button counts (≤ 3) and pixel sizes (≤ a few hundred) never
+//! approach lossy cast ranges.
 #![allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use std::rc::Rc;
@@ -55,9 +49,8 @@ use super::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub(crate) enum CaptionButtonKind {
-    // Discriminants are load-bearing: `CaptionButtonKinds::with` /
-    // `::contains` use `1 << kind as u8` as a bitmask. Reordering or
-    // inserting a variant silently breaks every consumer.
+    // Discriminants are load-bearing: `CaptionButtonKinds` uses `1 << kind as u8`
+    // as a bitmask. Reordering or inserting a variant silently breaks every consumer.
     Minimize = 0,
     Maximize = 1,
     Close = 2,
@@ -110,8 +103,7 @@ struct PressSession {
     mode: PressSessionMode,
 }
 
-/// Bitset of which caption-button kinds are visible on a window. Derived from
-/// `WindowStyle` flags at strip-construction time.
+/// Bitset of which caption-button kinds are visible on a window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct CaptionButtonKinds(u8);
 
@@ -128,10 +120,7 @@ impl CaptionButtonKinds {
         (self.0 & (1 << kind as u8)) != 0
     }
 
-    /// Yields the visible kinds in left-to-right system order
-    /// (Minimize → Maximize → Close). Single source of truth used by
-    /// both hit-testing (`StripGeometry::hit_test`) and layout
-    /// (`CaptionButtonStrip::relayout`, `CaptionButtonStrip::new`).
+    /// Yields the visible kinds in left-to-right system order (Minimize → Maximize → Close).
     pub fn iter_ordered(self) -> impl Iterator<Item = CaptionButtonKind> {
         [CaptionButtonKind::Minimize, CaptionButtonKind::Maximize, CaptionButtonKind::Close]
             .into_iter()
@@ -188,16 +177,13 @@ fn resolve_interaction(
     }
 }
 
-/// Predicate behind `CaptionButtonStrip::consume_swallowed_release`. Free
-/// so unit tests can exercise it without constructing a full
-/// `CaptionButtonStrip` (which requires live Composition / D2D resources).
+/// Free predicate behind `CaptionButtonStrip::consume_swallowed_release` (unit-testable without live resources).
 fn is_swallowed_release_match(session: &PressSession, pointer_id: u32, button: PointerButton) -> bool {
     session.pointer_id == pointer_id && matches!(session.mode, PressSessionMode::Suppressed { held_button } if held_button == button)
 }
 
-/// True iff `session` is a real primary release for `pointer_id`: `Active`
-/// or `Suppressed { held_button: Left }`. Non-primary `Suppressed` is
-/// drained via `consume_swallowed_release` instead.
+/// True iff `session` is a primary release for `pointer_id` (`Active` or `Suppressed{Left}`).
+/// Non-primary `Suppressed` sessions are drained by `consume_swallowed_release`.
 const fn is_real_release_match(session: &PressSession, pointer_id: u32) -> bool {
     session.pointer_id == pointer_id
         && matches!(
@@ -237,12 +223,10 @@ impl CaptionTheme {
         }
     }
 
-    // WinUI Fluent palette: `microsoft/microsoft-ui-xaml@5f9e851133b…`.
-    // Close-specific reds: `microsoft/terminal@e4e3f08efca…` MinMaxCloseControl.xaml
-    // (`Opacity 0.9` → α=0xE6; `Opacity 0.7` → α=0xB3 — valid only because the
-    // source RGB is fully opaque; both rounded to nearest).
-    // Inactive foreground: `TitleBarDeactivatedForegroundBrush` →
-    // `TextFillColorTertiary` (microsoft-ui-xaml `TitleBar` resources).
+    // WinUI Fluent palette: microsoft/microsoft-ui-xaml@5f9e851133b.
+    // Close reds: microsoft/terminal@e4e3f08efca MinMaxCloseControl.xaml
+    // (Opacity 0.9 → α=0xE6; Opacity 0.7 → α=0xB3; source RGB fully opaque, rounded to nearest).
+    // Inactive: TitleBarDeactivatedForegroundBrush → TextFillColorTertiary.
     const fn light() -> Self {
         Self {
             backplate_rest: rgba(0, 0, 0, 0),
@@ -327,14 +311,10 @@ impl CaptionButtonMetrics {
 }
 
 struct StripGeometry {
-    /// Width of the coordinate space `point` is in. The strip's right edge sits
-    /// at `reference_width_px`; the strip-left is computed by subtracting
-    /// `button_count * button_width`. For client-space points, pass the full
-    /// client width.
+    /// Strip right edge; strip-left = `reference_width_px - button_count * button_width`.
     reference_width_px: i32,
-    /// Vertical offset of the strip within the same coordinate space as `point`.
-    /// Maximized custom-titlebar windows shift the strip down by their chrome
-    /// overhang, so hit-testing must subtract this before checking button y.
+    /// Vertical offset of the strip. Maximized windows shift the strip down by
+    /// their chrome overhang; hit-testing subtracts this before checking button y.
     top_offset_px: i32,
     metrics: CaptionButtonMetrics,
     visible_kinds: CaptionButtonKinds,
@@ -360,10 +340,8 @@ impl StripGeometry {
     }
 }
 
-/// Map a caption-button hit to the `WM_NCHITTEST` return code per spec §4.2:
-/// enabled Min/Max/Close → HTMINBUTTON / HTMAXBUTTON / HTCLOSE; visible
-/// disabled Min/Max → HTCAPTION for caption-like hit-test semantics, while
-/// DOWN/UP remain swallowed by the strip with no hover, press, or action.
+/// `WM_NCHITTEST` return code for an enabled button (`HTMINBUTTON` / `HTMAXBUTTON`
+/// / `HTCLOSE`); disabled `Minimize` / `Maximize` collapse to `HTCAPTION`.
 pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_enabled: bool) -> u32 {
     use windows::Win32::UI::WindowsAndMessaging::{HTCAPTION, HTCLOSE, HTMAXBUTTON, HTMINBUTTON};
     match (kind, is_enabled) {
@@ -374,19 +352,12 @@ pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_
     }
 }
 
-/// Hit-test the caption-button strip from the pointer's screen-space
-/// coordinates. Returns the caption-button kind under the point, or `None`
-/// if no strip exists, the point falls outside the strip's bounds, or the
-/// point is inside the top resize-border band on a restored, resizable
-/// window — that band must reach `DefWindowProc` so the system resize
-/// cursor and drag loop fire instead of the strip claiming the hit.
-///
-/// This is the single source of truth for "screen coords → caption-button
-/// kind" — `WM_NCHITTEST` and the caption-button pointer handlers go through
-/// it so the geometry stays in one place. The Win32 coordinate-transform
-/// calls (`ScreenToClient`, `GetClientRect`) live here rather than in the
-/// wndproc layer because they're a tightly-coupled pair with the strip's
-/// own hit-test math.
+/// Hit-test the caption-button strip from screen-space coordinates.
+/// Returns `None` if no strip exists, the point is outside strip bounds, or
+/// the point is inside the top resize-border band on a restored resizable window
+/// (that band must reach `DefWindowProc` for the system resize cursor/drag loop).
+/// Win32 coord-transform calls (`ScreenToClient`, `GetClientRect`) live here
+/// because they're tightly coupled with the strip's hit-test math.
 pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> Option<CaptionButtonKind> {
     let strip_ref = window.caption_buttons.borrow();
     let strip = strip_ref.as_ref()?;
@@ -412,9 +383,8 @@ pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> 
     )
 }
 
-/// True when `mouse_y` (screen-space) lands inside the top resize-border band
-/// of a restored, resizable window. Maximized and non-resizable windows have
-/// no resize band so the strip wins by default.
+/// True when `mouse_y` (screen-space) is inside the top resize-border band
+/// of a restored resizable window.
 fn is_in_top_resize_border(window: &Window, mouse_y: i32) -> bool {
     if !window.is_resizable() || window.is_maximized() {
         return false;
@@ -441,15 +411,13 @@ pub(crate) struct CaptionButtonStrip {
     metrics: CaptionButtonMetrics,
     pointer_over_kind: Option<CaptionButtonKind>,
     pointer_device: Option<PointerDeviceKind>,
-    /// All live press sessions. At most one is `Active` (or `Suppressed{Left}`
-    /// from a primary-on-disabled cycle) — drained via `on_pointer_up`. Any
-    /// number of non-primary `Suppressed{Right|Middle|…}` entries may coexist,
-    /// drained via `consume_swallowed_release`.
+    /// Active press sessions. At most one `Active` (or `Suppressed{Left}`) at a time,
+    /// drained by `on_pointer_up`. Non-primary `Suppressed` entries coexist,
+    /// drained by `consume_swallowed_release`.
     press_sessions: Vec<PressSession>,
     top_offset_px: i32,
     composition_context: Rc<CompositionContext>,
-    // Dropping the registration removes the RDR subscription (spec §6.2). Field is held
-    // for its `Drop` side-effect even though we never read it after construction.
+    // Held for Drop side-effect: removes the RDR subscription.
     #[allow(dead_code)]
     device_replaced_registration: RenderingDeviceReplacedRegistration,
 }
@@ -484,7 +452,8 @@ impl CaptionButtonStrip {
     ) -> anyhow::Result<Self> {
         let composition_context = crate::win32::composition::ensure_composition_context(compositor.clone())?;
 
-        // Subscribe to RenderingDeviceReplaced; see spec §6.2 for the reentrancy contract.
+        // RDR callback is `Send` and may fire on any thread; post to the HWND so
+        // re-rasterisation runs on the UI thread (avoids nested `BeginDraw`).
         let device_replaced_registration = {
             let hwnd_value = hwnd.0 as isize;
             composition_context.add_rendering_device_replaced_callback(move || unsafe {
@@ -522,8 +491,6 @@ impl CaptionButtonStrip {
             .SetAnchorPoint(Vector2::new(1.0, 0.0))
             .inspect_err(|err| log::warn!("composition_root SetAnchorPoint failed: {err}"))?;
 
-        // Seed appearance + HC from live state (spec §4.2); on failure, fall
-        // back to Light / Off — the next appearance event self-corrects.
         let appearance = Appearance::get_current()
             .inspect_err(|err| log::warn!("CaptionButtonStrip: failed to read initial appearance, defaulting to Light: {err}"))
             .unwrap_or(Appearance::Light);
@@ -558,10 +525,8 @@ impl CaptionButtonStrip {
         let bw = self.metrics.button_size_px.width.0;
         let bh = self.metrics.button_size_px.height.0;
         let total_width = bw * self.buttons.len() as i32;
-        // Buttons line up at increasing x within the parent. The parent's
-        // right-edge auto-tracks `chrome_layer`'s right-edge via
-        // `RelativeOffsetAdjustment(1,0,0) + AnchorPoint(1,0)` set once in
-        // `new`; `set_strip_position` only mutates `Offset.Y`.
+        // Right-edge auto-tracks chrome_layer via RelativeOffsetAdjustment(1,0,0) +
+        // AnchorPoint(1,0) set in `new`; `set_strip_position` only mutates Offset.Y.
         let _ = self
             .composition_root
             .SetSize(Vector2::new(total_width as f32, bh as f32))
@@ -605,8 +570,6 @@ impl CaptionButtonStrip {
 
     fn set_strip_position(&mut self, max_chrome_y: i32) {
         self.top_offset_px = max_chrome_y;
-        // X is handled by the static `RelativeOffsetAdjustment + AnchorPoint`
-        // set in `new`; leave `Offset.X = 0` to avoid double-counting.
         let _ = self
             .composition_root
             .SetOffset(Vector3 {
@@ -622,8 +585,6 @@ impl CaptionButtonStrip {
             if !button.glyph_surface_dirty {
                 continue;
             }
-            // Spec §6.3: glyph failure logs and leaves dirty for retry next frame.
-            // Both `Err` and `Ok(false)` (device lost) keep `glyph_surface_dirty = true`.
             let drew = rasterise_glyph(
                 &self.composition_context,
                 &button.visuals.glyph_surface,
@@ -641,7 +602,6 @@ impl CaptionButtonStrip {
     }
 
     fn apply_visuals_to_all_buttons(&mut self) {
-        // Re-rasterise dirty glyphs (spec §6.2 reactive device-loss heal).
         self.rasterise_all_glyphs();
 
         let theme = CaptionTheme::resolve(self.appearance, self.high_contrast);
@@ -661,8 +621,7 @@ impl CaptionButtonStrip {
         }
     }
 
-    /// The session that the primary-UP path will drain (`Active` or
-    /// `Suppressed{Left}`). At most one exists at a time.
+    /// Session drained by primary-UP (`Active` or `Suppressed{Left}`). At most one exists.
     fn primary_session(&self) -> Option<&PressSession> {
         self.press_sessions.iter().find(|s| {
             matches!(
@@ -675,11 +634,8 @@ impl CaptionButtonStrip {
         })
     }
 
-    /// Hit-test a point given in **client-space** coordinates (origin =
-    /// client top-left). The strip is anchored at the right edge, so the
-    /// caller passes the client area's full width as the reference. Returns
-    /// the visible caption-button kind under the point, or `None` if the
-    /// point is outside the strip's bounds.
+    /// Hit-test a client-space point. `client_width` is the reference right edge.
+    /// Returns the caption-button kind under the point, or `None` if outside.
     pub fn hit_test(&self, client_point: PhysicalPoint, client_width: PhysicalPixels) -> Option<CaptionButtonKind> {
         StripGeometry {
             reference_width_px: client_width.0,
@@ -691,9 +647,7 @@ impl CaptionButtonStrip {
     }
 
     pub fn on_pointer_update(&mut self, kind: Option<CaptionButtonKind>, device: PointerDeviceKind) {
-        // Mirror on_nc_mouse_leave: clearing kind also clears device, so a
-        // subsequent same-kind/same-device re-entry isn't suppressed by stale
-        // device state.
+        // Clear device along with kind so a same-device re-entry isn't suppressed by stale state.
         let new_device = kind.map(|_| device);
         if self.pointer_over_kind != kind || self.pointer_device != new_device {
             self.pointer_over_kind = kind;
@@ -707,8 +661,7 @@ impl CaptionButtonStrip {
             return;
         }
         let is_enabled = self.button_for(kind).map(|b| b.availability) == Some(Availability::Enabled);
-        // Disabled-primary records Suppressed{Left} so has_active_press_for
-        // matches and the existing primary-release branch consumes silently.
+        // Disabled-primary records Suppressed{Left} so the primary-release branch consumes it silently.
         let mode = if is_enabled {
             PressSessionMode::Active
         } else {
@@ -726,7 +679,6 @@ impl CaptionButtonStrip {
             self.pointer_device = Some(device);
             self.apply_visuals_to_all_buttons();
         }
-        // Suppressed: no visual side effects — disabled Min/Max never enter Hovered/Pressed.
     }
 
     pub fn on_pointer_up(&mut self, kind_under_pointer: Option<CaptionButtonKind>, pointer_id: u32) -> Option<CaptionButtonAction> {
@@ -739,7 +691,7 @@ impl CaptionButtonStrip {
                 self.apply_visuals_to_all_buttons();
                 action
             }
-            // Disabled-primary cycle (Suppressed{Left}); fire no action.
+            // Suppressed{Left}: disabled-primary cycle, no action.
             PressSessionMode::Suppressed { .. } => None,
         }
     }
@@ -756,11 +708,9 @@ impl CaptionButtonStrip {
         }
     }
 
-    /// Drop every owned press session. Used by the wndproc on `WM_CANCELMODE`
-    /// and on deactivation, where there is no pointer id to match against.
-    /// Also clears `pointer_over_kind` / `pointer_device` so the cancelled
-    /// button returns to Rest; the next `WM_NCPOINTERUPDATE` re-establishes
-    /// Hovered if the cursor is still over a button.
+    /// Drop every owned press session. Used on `WM_CANCELMODE` and deactivation,
+    /// where there is no pointer id to match against. Clears hover state; the next
+    /// `WM_NCPOINTERUPDATE` re-establishes Hovered if the cursor is still over a button.
     pub fn cancel_any_press(&mut self) {
         let had_active = self.press_sessions.iter().any(|s| s.mode == PressSessionMode::Active);
         self.press_sessions.clear();
@@ -785,25 +735,19 @@ impl CaptionButtonStrip {
         self.button_for(kind).map(|b| b.availability) == Some(Availability::Enabled)
     }
 
-    /// Release-gate predicate: true iff the strip owns a session whose
-    /// matching primary (Left) UP must be consumed by the wndproc. Pair
-    /// with `has_press_for` for the broader cleanup gate.
+    /// True iff the strip owns a session whose primary (Left) UP the wndproc must consume.
     pub(crate) fn has_active_press_for(&self, pointer_id: u32) -> bool {
         self.press_sessions.iter().any(|s| is_real_release_match(s, pointer_id))
     }
 
-    /// Cleanup-gate predicate: true iff the strip owns any press session
-    /// for `pointer_id`, regardless of mode (capture loss, deactivation).
+    /// True iff the strip owns any press session for `pointer_id`, regardless of mode.
     pub(crate) fn has_press_for(&self, pointer_id: u32) -> bool {
         self.press_sessions.iter().any(|s| s.pointer_id == pointer_id)
     }
 
-    /// Record a wndproc-consumed non-primary DOWN as a `Suppressed` session
-    /// keyed by `held_button`; the matching UP is drained by
-    /// `consume_swallowed_release`. May coexist with an active session.
-    /// Idempotent: skips if the same `(pointer_id, button)` is already tracked.
-    /// `kind` populates `captured_kind` for struct-shape uniformity with
-    /// `Active`; Suppressed-mode consumers don't read it.
+    /// Record a wndproc-consumed non-primary DOWN as a `Suppressed` session keyed by `held_button`.
+    /// Idempotent: skips if `(pointer_id, button)` is already tracked.
+    /// `kind` fills `captured_kind` for struct uniformity; Suppressed consumers don't read it.
     pub(crate) fn track_swallowed_press(&mut self, kind: CaptionButtonKind, pointer_id: u32, button: PointerButton) {
         debug_assert!(button != PointerButton::None, "track_swallowed_press got None button");
         let already_tracked = self
@@ -820,13 +764,9 @@ impl CaptionButtonStrip {
         });
     }
 
-    /// Drain a `Suppressed` session whose pointer-id matches and whose
-    /// held button is `button`. Returns `true` iff the session was found
-    /// and dropped — callers swallowing the matching UP should treat
-    /// `true` as the signal to suppress further dispatch.
-    ///
-    /// Active sessions are drained by `on_pointer_up`'s primary-action
-    /// path; this drain only removes `Suppressed`-mode entries.
+    /// Drain a `Suppressed` session matching `(pointer_id, button)`.
+    /// Returns `true` iff a session was found and removed.
+    /// Active sessions are drained by `on_pointer_up`; this only removes `Suppressed` entries.
     pub(crate) fn consume_swallowed_release(&mut self, pointer_id: u32, button: PointerButton) -> bool {
         if let Some(idx) = self
             .press_sessions
@@ -857,8 +797,8 @@ impl CaptionButtonStrip {
     pub fn on_activate(&mut self, is_active: bool) {
         if self.is_active != is_active {
             self.is_active = is_active;
-            // Spec §5.2: `is_active` flips never animate. Resetting per-button
-            // history keeps the `Hovered → Idle` predicate false across the flip.
+            // Activation flips never animate; reset history so the Hovered→Idle
+            // predicate doesn't fire across the flip.
             for button in &mut self.buttons {
                 button.last_applied_interaction = ButtonInteraction::Idle;
             }
@@ -917,8 +857,7 @@ impl CaptionButtonStrip {
             }
             self.rasterise_all_glyphs();
         }
-        // The maximize-glyph swap and any pending visual mutations publish via
-        // the driver's CommitNeeded fast-path inline on the UI thread.
+        // Visual mutations publish via the driver's CommitNeeded fast-path.
     }
 
     pub fn on_resize(&mut self, max_chrome_y: i32) {
@@ -928,7 +867,7 @@ impl CaptionButtonStrip {
 
 impl Drop for CaptionButtonStrip {
     fn drop(&mut self) {
-        // composition_root may not be parented if construction failed before the final InsertAtTop.
+        // composition_root may be unparented if construction failed before InsertAtTop.
         if let Ok(parent) = self.composition_root.Parent()
             && let Ok(container) = parent.cast::<ContainerVisual>()
             && let Ok(children) = container.Children()
@@ -957,10 +896,7 @@ fn create_caption_button(
     ))?;
     parent.Children()?.InsertAtTop(&backplate)?;
 
-    // Mask-brush topology: see spec §4.3. The `CompositionMaskBrush` and the
-    // wrapping `CompositionSurfaceBrush` for the glyph surface aren't stored
-    // on the visuals — the `glyph` SpriteVisual's `SetBrush(&mask_brush)`
-    // keeps the chain alive.
+    // Mask-brush chain is kept alive by `glyph.SetBrush(&mask_brush)`; intermediates aren't stored.
     let glyph_surface = composition_context.create_drawing_surface(SizeInt32 {
         Width: metrics.glyph_extent_px.width.0,
         Height: metrics.glyph_extent_px.height.0,
@@ -1006,8 +942,7 @@ const fn glyph_for(kind: CaptionButtonKind, is_maximised: bool, hc: HighContrast
     }
 }
 
-/// Compute the DirectWrite font size (DIPs) at which the glyph's visible
-/// black-box fits within `target_extent_px`. Algorithm per spec §4.5.
+/// DirectWrite font size (DIPs) that fits the glyph's black-box within `target_extent_px`.
 fn compute_glyph_font_size(face: &IDWriteFontFace, glyph_char: char, target_extent_px: PhysicalSize) -> anyhow::Result<f32> {
     let codepoint = glyph_char as u32;
     let mut glyph_index: u16 = 0;
@@ -1027,8 +962,7 @@ fn compute_glyph_font_size(face: &IDWriteFontFace, glyph_char: char, target_exte
     }
 
     let bbox_w = (glyph_metrics.advanceWidth as i32) - glyph_metrics.leftSideBearing - glyph_metrics.rightSideBearing;
-    // Horizontal-layout cell height per DWRITE_FONT_METRICS — `ascent + descent`,
-    // not `glyph_metrics.advanceHeight` (which is the *vertical* advance).
+    // Cell height = ascent + descent, not advanceHeight (which is the vertical advance).
     let cell_height_du = i32::from(font_metrics.ascent) + i32::from(font_metrics.descent);
     let bbox_h = cell_height_du - glyph_metrics.topSideBearing - glyph_metrics.bottomSideBearing;
     if bbox_w <= 0 || bbox_h <= 0 {
@@ -1073,8 +1007,7 @@ fn rasterise_glyph(
     let drew = composition_context
         .with_d2d_render_target(surface, |rt, offset| {
             unsafe {
-                // Pin to 96 DPI so 1 DIP == 1 pixel; `compute_glyph_font_size`
-                // assumes that mapping.
+                // 96 DPI so 1 DIP == 1 pixel; compute_glyph_font_size assumes this.
                 rt.SetDpi(96.0, 96.0);
                 let clear_color = D2D1_COLOR_F {
                     r: 0.0,
@@ -1115,7 +1048,7 @@ fn rasterise_glyph(
 fn apply_button_visuals(button: &mut CaptionButton, new_interaction: ButtonInteraction, theme: &CaptionTheme, is_active: bool) {
     let (backplate, foreground) = colours_for(button.kind, button.availability, new_interaction, theme, is_active);
     let prev = button.last_applied_interaction;
-    // Spec §5.2: animate only `Hovered → Idle` on Enabled buttons; everything else jumps.
+    // Only Hovered→Idle on Enabled buttons animates; everything else jumps.
     let is_hover_leave =
         prev == ButtonInteraction::Hovered && new_interaction == ButtonInteraction::Idle && button.availability == Availability::Enabled;
 
@@ -1137,8 +1070,6 @@ fn apply_button_visuals(button: &mut CaptionButton, new_interaction: ButtonInter
     button.last_applied_interaction = new_interaction;
 }
 
-/// Spec §6.3: `StartAnimation` failure logs at warning level and falls
-/// back to an instant `SetColor`. The visual jumps instead of fading.
 fn animate_color_or_set(brush: &CompositionColorBrush, target: windows::UI::Color, duration: std::time::Duration) {
     if let Err(err) = animate_color(brush, target, duration) {
         log::warn!("CaptionButtonStrip: color animation failed; applying target colour directly: {err}");
@@ -1153,8 +1084,6 @@ fn animate_color(brush: &CompositionColorBrush, target: windows::UI::Color, dura
     anim.SetDuration(TimeSpan {
         Duration: (duration.as_nanos() / 100) as i64,
     })?;
-    // Both keyframes set explicitly (docs don't pin the implicit start);
-    // matches Terminal's behaviour on rapid restart.
     anim.InsertKeyFrame(0.0, brush.Color()?)?;
     anim.InsertKeyFrame(1.0, target)?;
     brush.StartAnimation(windows::core::h!("Color"), &anim)?;
@@ -1339,10 +1268,7 @@ mod tests {
 
     #[test]
     fn suppressed_session_does_not_drive_pressed_state_on_captured() {
-        // A Suppressed session — e.g. non-primary press over Close —
-        // must not render Close as Pressed even though the cursor is
-        // over the captured button. Verifies the `mode == Active` gate
-        // on the first match arm.
+        // Suppressed session must not render the captured button as Pressed (verifies `mode == Active` gate).
         let suppressed = PressSession {
             pointer_id: 1,
             captured_kind: CaptionButtonKind::Close,
@@ -1362,10 +1288,8 @@ mod tests {
 
     #[test]
     fn suppressed_session_does_not_suppress_neighbour_hover() {
-        // A Suppressed session over Close must not force Maximize to
-        // Idle when the cursor moves over Maximize. Primary presses
-        // suppress neighbour hover (existing rule, preserved by the
-        // `mode == Active` second-arm gate); non-primary swallows do not.
+        // Suppressed session must not force Maximize to Idle when cursor is over it
+        // (verifies the `mode == Active` second-arm gate; primary presses do suppress).
         let suppressed = PressSession {
             pointer_id: 1,
             captured_kind: CaptionButtonKind::Close,
@@ -1385,8 +1309,7 @@ mod tests {
 
     #[test]
     fn active_session_still_suppresses_neighbour_hover() {
-        // Regression check: the existing rule ("primary press over X
-        // suppresses hover on every other button") must still hold.
+        // Primary press over X must suppress hover on every other button.
         let active = PressSession {
             pointer_id: 1,
             captured_kind: CaptionButtonKind::Close,
@@ -1414,7 +1337,7 @@ mod tests {
             },
         };
         assert!(!is_swallowed_release_match(&s, 7, PointerButton::Left)); // wrong button
-        assert!(!is_swallowed_release_match(&s, 8, PointerButton::Right)); // wrong pointer
+        assert!(!is_swallowed_release_match(&s, 8, PointerButton::Right)); // wrong pointer id
         assert!(is_swallowed_release_match(&s, 7, PointerButton::Right)); // match
     }
 
@@ -1425,8 +1348,7 @@ mod tests {
             captured_kind: CaptionButtonKind::Close,
             mode: PressSessionMode::Active,
         };
-        // Active sessions must NOT match — the primary-action path owns
-        // their drainage.
+        // Active sessions must not match; primary-action path drains them.
         assert!(!is_swallowed_release_match(&s, 7, PointerButton::Left));
     }
 
@@ -1517,13 +1439,11 @@ mod tests {
 
     #[test]
     fn non_primary_press_during_active_session_coexists() {
-        // Active on Min; non-primary Right press over Close is appended; primary drain
-        // leaves the Suppressed{Right} entry in place.
         let mut sessions = vec![active(1, CaptionButtonKind::Minimize)];
         sessions.push(suppressed(1, CaptionButtonKind::Close, PointerButton::Right));
         assert_eq!(sessions.len(), 2);
 
-        // consume_swallowed_release for (p=1, Right) removes only the Suppressed entry.
+        // consume_swallowed_release(p=1, Right) removes only the Suppressed entry.
         let idx = sessions.iter().position(|s| is_swallowed_release_match(s, 1, PointerButton::Right));
         sessions.swap_remove(idx.expect("Suppressed{Right} not found"));
         assert_eq!(sessions.len(), 1);
@@ -1537,7 +1457,7 @@ mod tests {
             suppressed(1, CaptionButtonKind::Close, PointerButton::Right),
         ];
 
-        // Primary-UP drain finds and removes the Active entry only.
+        // Primary-UP drain removes only the Active entry.
         let idx = sessions.iter().position(|s| is_real_release_match(s, 1));
         sessions.swap_remove(idx.expect("Active not found"));
 
@@ -1648,7 +1568,7 @@ mod tests {
 
     #[test]
     fn close_pressed_alpha_is_e6_in_both_themes() {
-        // Brush.Opacity 0.9 → alpha 0xE6 (0.9 × 255 = 229.5, rounded to nearest).
+        // Opacity 0.9 → α=0xE6 (0.9 × 255 = 229.5, rounded to nearest).
         let light = CaptionTheme::resolve(Appearance::Light, HighContrast::Off);
         let dark = CaptionTheme::resolve(Appearance::Dark, HighContrast::Off);
         assert_eq!(light.close_backplate_pressed.A, 0xE6);
@@ -1657,8 +1577,7 @@ mod tests {
 
     #[test]
     fn pressed_backplate_is_more_subtle_than_hover_in_off_branch() {
-        // Fluent invariant: SubtleFillColorTertiary (pressed) has lower alpha
-        // than SubtleFillColorSecondary (hover).
+        // Fluent: SubtleFillColorTertiary (pressed) has lower alpha than SubtleFillColorSecondary (hover).
         let light = CaptionTheme::resolve(Appearance::Light, HighContrast::Off);
         assert!(light.backplate_pressed.A < light.backplate_hover.A);
         let dark = CaptionTheme::resolve(Appearance::Dark, HighContrast::Off);
@@ -1675,8 +1594,7 @@ mod tests {
 
     #[test]
     fn high_contrast_pressed_matches_hover() {
-        // HC reads system colours, so absolute bytes vary; what holds across
-        // all four shipped HC themes is hover == pressed.
+        // System colours vary by HC theme; hover == pressed holds across all four shipped themes.
         let hc = CaptionTheme::resolve(Appearance::Light, HighContrast::On);
         assert_eq!(hc.backplate_hover, hc.backplate_pressed);
         assert_eq!(hc.foreground_hover, hc.foreground_pressed);
@@ -1696,8 +1614,7 @@ mod tests {
     #[test]
     fn metrics_at_150_percent_dpi_round_correctly() {
         let m = CaptionButtonMetrics::new(1.5);
-        // Values match LogicalSize::to_physical's rounding
-        // (floor(v.mul_add(scale, 0.5))).
+        // LogicalSize::to_physical rounding: floor(v.mul_add(scale, 0.5)).
         assert_eq!((m.button_size_px.width.0, m.button_size_px.height.0), (69, 48));
         assert_eq!((m.glyph_extent_px.width.0, m.glyph_extent_px.height.0), (15, 15));
     }
@@ -1760,8 +1677,7 @@ mod tests {
     #[test]
     fn no_hit_for_hidden_button_kinds_not_in_visible_set() {
         let g = ltr_geometry(800, CaptionButtonKinds::empty().with(CaptionButtonKind::Close));
-        // Maximize would have lived at x in [708, 753] if visible. With Maximize
-        // hidden the layout shifts left; (753) is now outside Close.
+        // Maximize absent → layout shifts left; x=753 is outside Close's range.
         assert_eq!(g.hit_test(pt(753, 16)), None);
     }
 
@@ -1777,30 +1693,17 @@ mod tests {
 
     #[test]
     fn disabled_min_max_collapse_to_htcaption_not_their_codes() {
-        // Snap Layouts must not appear on a disabled Maximize button; the
-        // rectangle keeps caption-like hit-test semantics.
+        // Disabled Max must not trigger Snap Layouts; HTCAPTION keeps caption-drag semantics.
         use windows::Win32::UI::WindowsAndMessaging::{HTCAPTION, HTCLOSE};
         assert_eq!(hittest_for_caption_button_kind(CaptionButtonKind::Minimize, false), HTCAPTION);
         assert_eq!(hittest_for_caption_button_kind(CaptionButtonKind::Maximize, false), HTCAPTION);
-        // Close is always enabled, but the policy still returns HTCLOSE for completeness.
         assert_eq!(hittest_for_caption_button_kind(CaptionButtonKind::Close, false), HTCLOSE);
     }
 
     // --- caption_kind_at_screen exercise via StripGeometry ---
-    //
-    // `caption_kind_at_screen` is the wndproc-facing wrapper. Its body is:
-    //
-    //   ScreenToClient(hwnd, &mut p);
-    //   GetClientRect(hwnd, &mut r);
-    //   strip.hit_test(client_pt, client_width)
-    //
-    // `strip.hit_test` constructs a `StripGeometry` with `reference_width_px =
-    // client_width` and forwards to `StripGeometry::hit_test`. The Win32
-    // calls themselves can't be exercised without a real HWND, but the math
-    // they feed into is the same code path the tests below already cover —
-    // a client-space hit-test against an 800-px-wide reference. The cases
-    // here pin the client-space-coordinates contract (origin = client
-    // top-left, strip anchored at the right edge).
+    // Win32 calls require a real HWND; the math they feed is the same StripGeometry
+    // path tested below. These cases pin the client-space contract
+    // (origin = client top-left, strip anchored at right edge).
 
     #[test]
     fn client_space_hit_test_anchors_strip_at_right_edge() {
@@ -1814,22 +1717,17 @@ mod tests {
             metrics: CaptionButtonMetrics::new(1.0),
             visible_kinds: kinds,
         };
-        // Strip = three 46-px-wide buttons anchored at x=800.
-        // Min: [662, 708), Max: [708, 754), Close: [754, 800).
+        // Three 46-px buttons: Min [662,708), Max [708,754), Close [754,800).
         assert_eq!(g.hit_test(pt(799, 0)), Some(CaptionButtonKind::Close));
         assert_eq!(g.hit_test(pt(708, 0)), Some(CaptionButtonKind::Maximize));
         assert_eq!(g.hit_test(pt(662, 0)), Some(CaptionButtonKind::Minimize));
-        // x just left of the strip → no hit.
-        assert_eq!(g.hit_test(pt(661, 0)), None);
-        // y outside the button height (32 px) → no hit, even within x range.
-        assert_eq!(g.hit_test(pt(799, 32)), None);
+        assert_eq!(g.hit_test(pt(661, 0)), None); // just left of strip
+        assert_eq!(g.hit_test(pt(799, 32)), None); // outside button height (32 px)
     }
 
     #[test]
     fn client_space_hit_test_handles_negative_y_above_client() {
-        // Negative y can occur if the cursor is above the client area
-        // (e.g., NC pointer events near the top edge after the overhang
-        // inset). Should always return `None`.
+        // Negative y from NC pointer events near the top edge after overhang inset.
         let kinds = CaptionButtonKinds::empty().with(CaptionButtonKind::Close);
         let g = StripGeometry {
             reference_width_px: 800,

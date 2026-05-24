@@ -5,17 +5,9 @@
 //! `SetRenderingDevice`. Hides `BeginDraw`/`EndDraw`/device-loss behind a
 //! closure-shaped `with_d2d_render_target` chokepoint.
 //!
-//! `build_d2d_device` attempts the full HARDWARE chain (`D3D11CreateDevice`,
-//! `D2D1CreateFactory`, DXGI cast, `CreateDevice`) first and falls back to
-//! the same chain with `D3D_DRIVER_TYPE_WARP` on any failure, so headless /
-//! Remote Desktop / degraded-GPU sessions still get a usable D2D pipeline
-//! rather than failing window creation in `WM_NCCREATE`. The fallback applies
-//! to both initial construction and `rebuild_d2d_device` (both call
-//! `build_d2d_device`).
-//! Note: the `Rc<CompositionContext>` thread-local at `COMPOSITION_CONTEXT` is
-//! a singleton cache — once WARP is selected, the `CompositionContext` stays
-//! on WARP for the lifetime of the UI thread; there is no automatic
-//! upgrade-back to HARDWARE when a hardware GPU later becomes available.
+//! `build_d2d_device` tries HARDWARE first, falling back to WARP on any
+//! failure so headless / Remote Desktop / degraded-GPU sessions remain usable.
+//! Both initial construction and `rebuild_d2d_device` use the same fallback.
 //!
 //! See `docs/specs/2026-04-30-win32-caption-buttons-design.md` § 4.1 for the
 //! full design rationale.
@@ -59,13 +51,11 @@ pub(crate) struct CompositionContext {
 }
 
 impl CompositionContext {
-    /// Eagerly constructs the D3D11 / D2D devices, the DirectWrite factory,
-    /// and the `CompositionGraphicsDevice`. The `Rc<CompositionContext>`
-    /// singleton wrapping happens once at `composition::ensure_composition_context`.
-    // Takes `Compositor` by value to mirror the singleton-accessor signature
-    // (`ensure_composition_context(compositor: Compositor)`); the WinRT smart
-    // pointer is cheap to clone, so we accept the shadow rather than thread
-    // `&` through the public surface.
+    /// Constructs the D3D11 / D2D devices, the DirectWrite factory, and the
+    /// `CompositionGraphicsDevice`. Singleton wrapping via `Rc` happens at
+    /// `ensure_composition_context`.
+    // `Compositor` is taken by value to match the public `ensure_composition_context`
+    // signature; WinRT ref-counts make this cheap.
     #[allow(clippy::needless_pass_by_value)]
     pub fn new(compositor: Compositor) -> anyhow::Result<Self> {
         let d2d_device = build_d2d_device()?;
@@ -168,20 +158,12 @@ impl CompositionContext {
 
     /// Rebuild the D3D/D2D devices after device loss is detected.
     ///
-    /// Called from device-loss paths inside `with_d2d_render_target`. Do
-    /// not call from `RenderingDeviceReplaced`; that event is only the
-    /// redraw notification after `SetRenderingDevice`.
+    /// Called from device-loss paths in `with_d2d_render_target`. Do not
+    /// call from `RenderingDeviceReplaced`; that event is the redraw
+    /// notification fired after `SetRenderingDevice`, not a loss signal.
     ///
-    /// `build_d2d_device` is retried in a bounded loop so a transient
-    /// driver hiccup mid-rebuild doesn't leave the `CompositionGraphicsDevice`
-    /// stuck on the dead device. Per-frame device-loss storms are still
-    /// possible (each frame's call exhausts its own budget) but each call is
-    /// fast and the strip's caller logs via `inspect_err`.
-    ///
-    /// Each attempt inherits the HARDWARE→WARP fallback inside
-    /// `build_d2d_device`, so a hardware-GPU loss that cannot be re-acquired
-    /// (TDR storm, undock during the rebuild window) lands the singleton on
-    /// WARP rather than exhausting attempts.
+    /// Retried up to `MAX_REBUILD_ATTEMPTS` times; each attempt inherits
+    /// the HARDWARE→WARP fallback from `build_d2d_device`.
     pub(crate) fn rebuild_d2d_device(&self) -> anyhow::Result<()> {
         const MAX_REBUILD_ATTEMPTS: u32 = 3;
         let cgd_interop: windows::Win32::System::WinRT::Composition::ICompositionGraphicsDeviceInterop =
@@ -202,11 +184,10 @@ impl CompositionContext {
         Err(last_err.unwrap_or_else(|| anyhow::anyhow!("D2D device rebuild exhausted attempts")))
     }
 
-    /// Subscribe to `RenderingDeviceReplaced` (the redraw notification fired
-    /// synchronously inside `SetRenderingDevice`). Callbacks must post a
-    /// `WM_APP_*` message rather than call the strip directly — the event
-    /// fires nested inside `with_d2d_render_target → rebuild_d2d_device`, so a
-    /// direct re-entry would nest `BeginDraw` on the active surface.
+    /// Subscribe to `RenderingDeviceReplaced`. Callbacks must post a
+    /// `WM_APP_*` message rather than draw directly — the event fires nested
+    /// inside `with_d2d_render_target → rebuild_d2d_device`, so re-entering
+    /// `BeginDraw` would deadlock the surface.
     pub(crate) fn add_rendering_device_replaced_callback<F>(&self, callback: F) -> anyhow::Result<RenderingDeviceReplacedRegistration>
     where
         F: Fn() + Send + 'static,
@@ -233,8 +214,9 @@ pub(crate) struct RenderingDeviceReplacedRegistration {
 
 impl Drop for RenderingDeviceReplacedRegistration {
     fn drop(&mut self) {
-        // Spec §3.4: RDR callback runs on UI thread; no concurrent
-        // delivery against this Drop. See TODO.md for the affinity probe.
+        // RDR callback runs on the UI thread (the toolkit always calls
+        // `SetRenderingDevice` from the UI thread); no concurrent delivery
+        // against this Drop. See TODO.md for the affinity probe.
         if let Err(err) = self.composition_graphics_device.RemoveRenderingDeviceReplaced(self.token) {
             log::warn!("RemoveRenderingDeviceReplaced failed on Drop: {err}");
         }
