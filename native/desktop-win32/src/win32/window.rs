@@ -118,7 +118,7 @@ pub struct Window {
     pointer_in_window: AtomicBool,
     nc_leave_tracking_armed: AtomicBool,
     cached_dpi_metrics: Cell<DpiMetrics>,
-    pub(crate) caption_buttons: RefCell<Option<crate::win32::caption_buttons::CaptionButtonStrip>>,
+    caption_buttons: RefCell<Option<CaptionButtonStrip>>,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
     backdrop_tint: RefCell<Option<SpriteVisual>>,
@@ -584,6 +584,16 @@ impl Window {
         f(&mut pointer_click_counter)
     }
 
+    #[inline]
+    pub(crate) fn with_strip<R>(&self, f: impl FnOnce(&CaptionButtonStrip) -> R) -> Option<R> {
+        self.caption_buttons.borrow().as_ref().map(f)
+    }
+
+    #[inline]
+    pub(crate) fn with_strip_mut<R>(&self, f: impl FnOnce(&mut CaptionButtonStrip) -> R) -> Option<R> {
+        self.caption_buttons.borrow_mut().as_mut().map(f)
+    }
+
     pub fn request_redraw(&self) -> WinResult<()> {
         unsafe { RedrawWindow(Some(self.hwnd()), None, None, RDW_INVALIDATE | RDW_NOFRAME | RDW_NOERASE) }.ok()
     }
@@ -700,7 +710,7 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
 
     if window.has_custom_title_bar() {
         let chrome_layer = window.chrome_layer()?;
-        let strip = crate::win32::caption_buttons::CaptionButtonStrip::new(
+        let strip = CaptionButtonStrip::new(
             &chrome_layer,
             window.get_scale(),
             &window.style.borrow(),

@@ -123,7 +123,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Purpose.** Toolkit-managed Min / Max / Restore / Close buttons for `WindowTitleBarKind::Custom` windows. Pure-state-machine strip rasterised via Direct2D / DirectWrite onto a per-window `CaptionButtonStrip` in the window's `chrome_layer`. Win11 Snap Layouts integration via `HTMAXBUTTON`. Design lives in `docs/specs/2026-04-30-win32-caption-buttons-design.md` — this section navigates the implementation, not the design.
 
-**Files.** `caption_buttons.rs` (strip + state machine + theme + metrics), `composition.rs` (`CompositionContext`), `compositor_driver.rs` (`CompositorDriver`).
+**Files.** `caption_buttons.rs` (strip + state machine + theme + metrics + wndproc dispatch helpers), `composition.rs` (`CompositionContext`), `compositor_driver.rs` (`CompositorDriver`).
 
 **FFI surface.** None. Both modules are `pub(crate)` only — no Kotlin-facing API. Click side-effects route through existing `Window::request_close` / `minimize` / `maximize` / `restore`.
 
@@ -147,7 +147,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - Disabled visible Min/Max return `HTCAPTION` for `WM_NCHITTEST`. The OS therefore sends `WM_NCLBUTTONDOWN` with `wparam = HTCAPTION`, which `on_nclbuttondown` does not intercept; those clicks fall through to DefWindowProc. The pointer path (`WM_NCPOINTERDOWN`) routes the primary press to `on_nclbuttondown` via the same `HTCAPTION` wParam — also not intercepted. No hover, press, or action fires — see spec §4.2.
 - `root_visual`, `chrome_layer`, `backdrop_layer`, and the backdrop tint `SpriteVisual` carry `RelativeSizeAdjustment(1,1)` set in `initialize_content`; per-resize `SetSize` is not required. `content_layer` is left at default — the ANGLE visual sets its own absolute `Size` and no other child reads the parent's effective size. The strip's `on_resize` is the single commit point per resize tick — see spec §5.5.
 
-**Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`), `event_loop` (wndproc dispatch into `caption_kind_at_screen` and the strip's lifecycle methods), `appearance` (`Appearance` / `HighContrast` seed values + change events), `geometry` (`PhysicalPoint` / `PhysicalSize`).
+**Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`, `Window::with_strip[_mut]` accessor), `event_loop` (wndproc dispatch into `caption_kind_at_screen`, `dispatch_caption_action`, `notify_strip_appearance_refresh`, and the strip's lifecycle methods), `appearance` (`Appearance` / `HighContrast` seed values + change events), `geometry` (`PhysicalPoint` / `PhysicalSize`).
 
 ---
 

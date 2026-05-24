@@ -32,7 +32,7 @@ use windows::{
             },
             Gdi::{GetSysColor, SYS_COLOR_INDEX, ScreenToClient},
         },
-        UI::WindowsAndMessaging::{GetClientRect, GetWindowRect, PostMessageW},
+        UI::WindowsAndMessaging::{GetClientRect, GetWindowRect, PostMessageW, WM_APP},
     },
 };
 use windows_core::Interface;
@@ -42,9 +42,17 @@ use super::{
     appearance::{Appearance, HighContrast},
     composition::{CompositionContext, RenderingDeviceReplacedRegistration},
     geometry::{LogicalSize, PhysicalPixels, PhysicalPoint, PhysicalSize},
-    pointer::PointerButton,
+    pointer::{PointerButton, PointerInfo},
     window::Window,
 };
+
+/// cbindgen:ignore
+pub(crate) const WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED: u32 = WM_APP + 0x31;
+
+/// cbindgen:ignore
+/// Real Windows pointer ids start at 1, so 0 cannot collide with a
+/// touch or pen session pushed via the pointer-down handler.
+pub(crate) const LEGACY_MOUSE_POINTER_ID: u32 = 0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -225,7 +233,7 @@ impl CaptionTheme {
 
     // WinUI Fluent palette: microsoft/microsoft-ui-xaml@5f9e851133b.
     // Close reds: microsoft/terminal@e4e3f08efca MinMaxCloseControl.xaml
-    // (Opacity 0.9 → α=0xE6; Opacity 0.7 → α=0xB3; source RGB fully opaque, rounded to nearest).
+    // (Opacity 0.9 → α=0xE6; Opacity 0.7 → α=0xB3; source RGB fully opaque).
     // Inactive: TitleBarDeactivatedForegroundBrush → TextFillColorTertiary.
     const fn light() -> Self {
         Self {
@@ -352,6 +360,44 @@ pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_
     }
 }
 
+/// Refresh the strip's appearance after a system appearance or high-contrast change.
+///
+/// Pass the known half as `Some`; the function queries the current value for whichever
+/// parameter is `None`. Defaults to `Appearance::Light` / `HighContrast::Off` on query failure.
+pub(crate) fn notify_strip_appearance_refresh(window: &Window, override_appearance: Option<Appearance>, override_hc: Option<HighContrast>) {
+    let appearance = override_appearance.unwrap_or_else(|| {
+        Appearance::get_current()
+            .inspect_err(|err| log::warn!("strip appearance notify: failed to read appearance: {err}"))
+            .unwrap_or(Appearance::Light)
+    });
+    let hc = override_hc.unwrap_or_else(|| {
+        HighContrast::get_current()
+            .inspect_err(|err| log::warn!("strip appearance notify: failed to read high-contrast state: {err}"))
+            .unwrap_or(HighContrast::Off)
+    });
+    window.with_strip_mut(|strip| strip.on_appearance_change(appearance, hc));
+}
+
+/// Dispatch a resolved `CaptionButtonAction` to the corresponding `Window` method.
+pub(crate) fn dispatch_caption_action(window: &Window, action: CaptionButtonAction) {
+    match action {
+        CaptionButtonAction::Close => {
+            let _ = window.request_close();
+        }
+        CaptionButtonAction::Minimize => window.minimize(),
+        CaptionButtonAction::Maximize => window.maximize(),
+        CaptionButtonAction::Restore => window.restore(),
+    }
+}
+
+pub(crate) const fn device_kind_for(pointer_info: &PointerInfo) -> PointerDeviceKind {
+    match pointer_info {
+        PointerInfo::Touch(_) => PointerDeviceKind::Touch,
+        PointerInfo::Pen(_) => PointerDeviceKind::Pen,
+        PointerInfo::Common(_) => PointerDeviceKind::Mouse,
+    }
+}
+
 /// Hit-test the caption-button strip from screen-space coordinates.
 /// Returns `None` if no strip exists, the point is outside strip bounds, or
 /// the point is inside the top resize-border band on a restored resizable window
@@ -359,12 +405,10 @@ pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_
 /// Win32 coord-transform calls (`ScreenToClient`, `GetClientRect`) live here
 /// because they're tightly coupled with the strip's hit-test math.
 pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> Option<CaptionButtonKind> {
-    let strip_ref = window.caption_buttons.borrow();
-    let strip = strip_ref.as_ref()?;
-    let hwnd = window.hwnd();
     if is_in_top_resize_border(window, screen.y.0) {
         return None;
     }
+    let hwnd = window.hwnd();
     let mut client_point = POINT {
         x: screen.x.0,
         y: screen.y.0,
@@ -377,10 +421,14 @@ pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> 
     unsafe { GetClientRect(hwnd, &raw mut client_rect) }
         .inspect_err(|err| log::warn!("GetClientRect failed: {err}"))
         .ok()?;
-    strip.hit_test(
-        PhysicalPoint::new(client_point.x, client_point.y),
-        PhysicalPixels(client_rect.right),
-    )
+    window
+        .with_strip(|strip| {
+            strip.hit_test(
+                PhysicalPoint::new(client_point.x, client_point.y),
+                PhysicalPixels(client_rect.right),
+            )
+        })
+        .flatten()
 }
 
 /// True when `mouse_y` (screen-space) is inside the top resize-border band
@@ -459,7 +507,7 @@ impl CaptionButtonStrip {
             composition_context.add_rendering_device_replaced_callback(move || unsafe {
                 let _ = PostMessageW(
                     Some(HWND(hwnd_value as _)),
-                    crate::win32::event_loop::WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED,
+                    WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED,
                     WPARAM(0),
                     LPARAM(0),
                 );
@@ -537,34 +585,8 @@ impl CaptionButtonStrip {
         let gy = (bh - gh) / 2;
         for (i, button) in self.buttons.iter_mut().enumerate() {
             let x = (i as i32) * bw;
-            let _ = button
-                .visuals
-                .backplate
-                .SetOffset(Vector3 {
-                    X: x as f32,
-                    Y: 0.0,
-                    Z: 0.0,
-                })
-                .inspect_err(|err| log::warn!("backplate SetOffset failed: {err}"));
-            let _ = button
-                .visuals
-                .backplate
-                .SetSize(Vector2::new(bw as f32, bh as f32))
-                .inspect_err(|err| log::warn!("backplate SetSize failed: {err}"));
-            let _ = button
-                .visuals
-                .glyph
-                .SetOffset(Vector3 {
-                    X: gx as f32,
-                    Y: gy as f32,
-                    Z: 0.0,
-                })
-                .inspect_err(|err| log::warn!("glyph SetOffset failed: {err}"));
-            let _ = button
-                .visuals
-                .glyph
-                .SetSize(Vector2::new(gw as f32, gh as f32))
-                .inspect_err(|err| log::warn!("glyph SetSize failed: {err}"));
+            set_visual_rect(&button.visuals.backplate, x, 0, bw, bh, "backplate");
+            set_visual_rect(&button.visuals.glyph, gx, gy, gw, gh, "glyph");
         }
     }
 
@@ -877,6 +899,19 @@ impl Drop for CaptionButtonStrip {
                 .inspect_err(|err| log::warn!("CaptionButtonStrip drop: detach failed: {err}"));
         }
     }
+}
+
+fn set_visual_rect(visual: &SpriteVisual, x: i32, y: i32, w: i32, h: i32, label: &'static str) {
+    let _ = visual
+        .SetOffset(Vector3 {
+            X: x as f32,
+            Y: y as f32,
+            Z: 0.0,
+        })
+        .inspect_err(|err| log::warn!("{label} SetOffset failed: {err}"));
+    let _ = visual
+        .SetSize(Vector2::new(w as f32, h as f32))
+        .inspect_err(|err| log::warn!("{label} SetSize failed: {err}"));
 }
 
 fn create_caption_button(
