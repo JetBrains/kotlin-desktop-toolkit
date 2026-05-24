@@ -38,17 +38,14 @@ use windows::{
             },
             Gdi::{GetSysColor, SYS_COLOR_INDEX, ScreenToClient},
         },
-        UI::{
-            HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
-            WindowsAndMessaging::{GetClientRect, GetWindowRect, PostMessageW, SM_CXPADDEDBORDER, SM_CYSIZEFRAME},
-        },
+        UI::WindowsAndMessaging::{GetClientRect, GetWindowRect, PostMessageW},
     },
 };
 use windows_numerics::{Vector2, Vector3};
 
 use super::{
     appearance::{Appearance, HighContrast},
-    composition::{D2dContext, RenderingDeviceReplacedRegistration},
+    composition::{CompositionContext, RenderingDeviceReplacedRegistration},
     geometry::{LogicalSize, PhysicalPixels, PhysicalPoint, PhysicalSize},
     pointer::PointerButton,
     window::Window,
@@ -211,26 +208,6 @@ const fn is_real_release_match(session: &PressSession, pointer_id: u32) -> bool 
         )
 }
 
-/// Clears `*session` if it matches `pointer_id` and returns `true` iff the
-/// cleared session was `Active` (i.e. visuals must be refreshed).
-fn cancel_press_session(session: &mut Option<PressSession>, pointer_id: u32) -> bool {
-    let Some(s) = *session else { return false };
-    if s.pointer_id != pointer_id {
-        return false;
-    }
-    *session = None;
-    s.mode == PressSessionMode::Active
-}
-
-/// `WM_CANCELMODE` and `WM_ACTIVATE` deactivation deliver no pointer id, so
-/// cancellation has to be unconditional — a sibling of `cancel_press_session`
-/// minus the pointer-id gate.
-fn cancel_any_press_session(session: &mut Option<PressSession>) -> bool {
-    let Some(s) = *session else { return false };
-    *session = None;
-    s.mode == PressSessionMode::Active
-}
-
 struct CaptionTheme {
     backplate_rest: windows::UI::Color,
     backplate_hover: windows::UI::Color,
@@ -384,9 +361,8 @@ impl StripGeometry {
 
 /// Map a caption-button hit to the `WM_NCHITTEST` return code per spec §4.2:
 /// enabled Min/Max/Close → HTMINBUTTON / HTMAXBUTTON / HTCLOSE; visible
-/// disabled Min/Max → HTCAPTION (drag region) so the rectangle stays in the
-/// title-bar surface and Snap Layouts is *not* advertised on a disabled
-/// Maximize.
+/// disabled Min/Max → HTCAPTION for caption-like hit-test semantics, while
+/// DOWN/UP remain swallowed by the strip with no hover, press, or action.
 pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_enabled: bool) -> u32 {
     use windows::Win32::UI::WindowsAndMessaging::{HTCAPTION, HTCLOSE, HTMAXBUTTON, HTMINBUTTON};
     match (kind, is_enabled) {
@@ -414,7 +390,7 @@ pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> 
     let strip_ref = window.caption_buttons.borrow();
     let strip = strip_ref.as_ref()?;
     let hwnd = window.hwnd();
-    if is_in_top_resize_border(window, hwnd, screen.y.0) {
+    if is_in_top_resize_border(window, screen.y.0) {
         return None;
     }
     let mut client_point = POINT {
@@ -438,20 +414,19 @@ pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> 
 /// True when `mouse_y` (screen-space) lands inside the top resize-border band
 /// of a restored, resizable window. Maximized and non-resizable windows have
 /// no resize band so the strip wins by default.
-fn is_in_top_resize_border(window: &Window, hwnd: HWND, mouse_y: i32) -> bool {
+fn is_in_top_resize_border(window: &Window, mouse_y: i32) -> bool {
     if !window.is_resizable() || window.is_maximized() {
         return false;
     }
     let mut window_rect = RECT::default();
-    if unsafe { GetWindowRect(hwnd, &raw mut window_rect) }
+    if unsafe { GetWindowRect(window.hwnd(), &raw mut window_rect) }
         .inspect_err(|err| log::warn!("GetWindowRect failed during resize-border check: {err}"))
         .is_err()
     {
         return false;
     }
-    let dpi = unsafe { GetDpiForWindow(hwnd) };
-    let resize_handle_height = unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) + GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) };
-    mouse_y < window_rect.top + resize_handle_height
+    let m = window.dpi_metrics();
+    mouse_y < window_rect.top + m.padded_border + m.size_frame
 }
 
 pub(crate) struct CaptionButtonStrip {
@@ -465,9 +440,13 @@ pub(crate) struct CaptionButtonStrip {
     metrics: CaptionButtonMetrics,
     pointer_over_kind: Option<CaptionButtonKind>,
     pointer_device: Option<PointerDeviceKind>,
-    press_session: Option<PressSession>,
+    /// All live press sessions. At most one is `Active` (or `Suppressed{Left}`
+    /// from a primary-on-disabled cycle) — drained via `on_pointer_up`. Any
+    /// number of non-primary `Suppressed{Right|Middle|…}` entries may coexist,
+    /// drained via `consume_swallowed_release`.
+    press_sessions: Vec<PressSession>,
     top_offset_px: i32,
-    d2d_context: Rc<D2dContext>,
+    composition_context: Rc<CompositionContext>,
     // Dropping the registration removes the RDR subscription (spec §6.2). Field is held
     // for its `Drop` side-effect even though we never read it after construction.
     #[allow(dead_code)]
@@ -500,12 +479,12 @@ impl CaptionButtonStrip {
         hwnd: HWND,
     ) -> anyhow::Result<Self> {
         let compositor = compositor_controller.Compositor()?;
-        let d2d_context = crate::win32::composition::ensure_d2d_context(compositor.clone())?;
+        let composition_context = crate::win32::composition::ensure_composition_context(compositor.clone())?;
 
         // Subscribe to RenderingDeviceReplaced; see spec §6.2 for the reentrancy contract.
         let device_replaced_registration = {
             let hwnd_value = hwnd.0 as isize;
-            d2d_context.add_rendering_device_replaced_callback(move || unsafe {
+            composition_context.add_rendering_device_replaced_callback(move || unsafe {
                 let _ = PostMessageW(
                     Some(HWND(hwnd_value as _)),
                     crate::win32::event_loop::WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED,
@@ -516,7 +495,6 @@ impl CaptionButtonStrip {
         };
 
         let composition_root = compositor.CreateContainerVisual()?;
-        chrome_layer.Children()?.InsertAtTop(&composition_root)?;
 
         let visible_kinds = CaptionButtonKinds::from_style(style);
         let metrics = CaptionButtonMetrics::new(initial_scale);
@@ -527,12 +505,19 @@ impl CaptionButtonStrip {
             buttons.push(create_caption_button(
                 &compositor,
                 &composition_root,
-                &d2d_context,
+                &composition_context,
                 kind,
                 availability,
                 &metrics,
             )?);
         }
+
+        composition_root
+            .SetRelativeOffsetAdjustment(Vector3 { X: 1.0, Y: 0.0, Z: 0.0 })
+            .inspect_err(|err| log::warn!("composition_root SetRelativeOffsetAdjustment failed: {err}"))?;
+        composition_root
+            .SetAnchorPoint(Vector2::new(1.0, 0.0))
+            .inspect_err(|err| log::warn!("composition_root SetAnchorPoint failed: {err}"))?;
 
         // Seed appearance + HC from live state (spec §4.2); on failure, fall
         // back to Light / Off — the next appearance event self-corrects.
@@ -554,86 +539,114 @@ impl CaptionButtonStrip {
             metrics,
             pointer_over_kind: None,
             pointer_device: None,
-            press_session: None,
+            press_sessions: Vec::new(),
             top_offset_px: 0,
-            d2d_context,
+            composition_context,
             device_replaced_registration,
             compositor_controller,
         };
-        strip.relayout()?;
-        strip.apply_visuals_to_all_buttons()?;
+        strip.relayout();
+        strip.set_strip_position(0);
+        strip.apply_visuals_to_all_buttons();
+        chrome_layer.Children()?.InsertAtTop(&strip.composition_root)?;
         strip.compositor_controller.Commit()?;
         Ok(strip)
     }
 
-    fn relayout(&mut self) -> anyhow::Result<()> {
+    fn relayout(&mut self) {
         let bw = self.metrics.button_size_px.width.0;
         let bh = self.metrics.button_size_px.height.0;
         let total_width = bw * self.buttons.len() as i32;
-        // Buttons line up at increasing x within the strip's parent;
-        // `set_strip_position` places the parent at top-right of `chrome_layer`.
-        self.composition_root.SetSize(Vector2::new(total_width as f32, bh as f32))?;
+        // Buttons line up at increasing x within the parent. The parent's
+        // right-edge auto-tracks `chrome_layer`'s right-edge via
+        // `RelativeOffsetAdjustment(1,0,0) + AnchorPoint(1,0)` set once in
+        // `new`; `set_strip_position` only mutates `Offset.Y`.
+        let _ = self
+            .composition_root
+            .SetSize(Vector2::new(total_width as f32, bh as f32))
+            .inspect_err(|err| log::warn!("composition_root SetSize failed: {err}"));
         let gw = self.metrics.glyph_extent_px.width.0;
         let gh = self.metrics.glyph_extent_px.height.0;
         let gx = (bw - gw) / 2;
         let gy = (bh - gh) / 2;
         for (i, button) in self.buttons.iter_mut().enumerate() {
             let x = (i as i32) * bw;
-            button.visuals.backplate.SetOffset(Vector3 {
-                X: x as f32,
-                Y: 0.0,
-                Z: 0.0,
-            })?;
-            button.visuals.backplate.SetSize(Vector2::new(bw as f32, bh as f32))?;
-            button.visuals.glyph.SetOffset(Vector3 {
-                X: gx as f32,
-                Y: gy as f32,
-                Z: 0.0,
-            })?;
-            button.visuals.glyph.SetSize(Vector2::new(gw as f32, gh as f32))?;
+            let _ = button
+                .visuals
+                .backplate
+                .SetOffset(Vector3 {
+                    X: x as f32,
+                    Y: 0.0,
+                    Z: 0.0,
+                })
+                .inspect_err(|err| log::warn!("backplate SetOffset failed: {err}"));
+            let _ = button
+                .visuals
+                .backplate
+                .SetSize(Vector2::new(bw as f32, bh as f32))
+                .inspect_err(|err| log::warn!("backplate SetSize failed: {err}"));
+            let _ = button
+                .visuals
+                .glyph
+                .SetOffset(Vector3 {
+                    X: gx as f32,
+                    Y: gy as f32,
+                    Z: 0.0,
+                })
+                .inspect_err(|err| log::warn!("glyph SetOffset failed: {err}"));
+            let _ = button
+                .visuals
+                .glyph
+                .SetSize(Vector2::new(gw as f32, gh as f32))
+                .inspect_err(|err| log::warn!("glyph SetSize failed: {err}"));
         }
-        Ok(())
     }
 
-    pub(crate) fn set_strip_position(&mut self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
-        let bw = self.metrics.button_size_px.width.0;
-        let total_width = bw * self.buttons.len() as i32;
-        let x = client_size.width.0 - total_width;
+    fn set_strip_position(&mut self, max_chrome_y: i32) {
         self.top_offset_px = max_chrome_y;
-        self.composition_root.SetOffset(Vector3 {
-            X: x as f32,
-            Y: max_chrome_y as f32,
-            Z: 0.0,
-        })?;
-        Ok(())
+        // X is handled by the static `RelativeOffsetAdjustment + AnchorPoint`
+        // set in `new`; leave `Offset.X = 0` to avoid double-counting.
+        let _ = self
+            .composition_root
+            .SetOffset(Vector3 {
+                X: 0.0,
+                Y: max_chrome_y as f32,
+                Z: 0.0,
+            })
+            .inspect_err(|err| log::warn!("composition_root SetOffset failed: {err}"));
     }
 
-    fn rasterise_all_glyphs(&mut self) -> anyhow::Result<()> {
+    fn rasterise_all_glyphs(&mut self) {
         for button in &mut self.buttons {
-            if button.glyph_surface_dirty
-                && rasterise_glyph(
-                    &self.d2d_context,
-                    &button.visuals.glyph_surface,
-                    button.kind,
-                    self.is_window_maximized,
-                    self.high_contrast,
-                    &self.metrics,
-                )?
-            {
+            if !button.glyph_surface_dirty {
+                continue;
+            }
+            // Spec §6.3: glyph failure logs and leaves dirty for retry next frame.
+            // Both `Err` and `Ok(false)` (device lost) keep `glyph_surface_dirty = true`.
+            let drew = rasterise_glyph(
+                &self.composition_context,
+                &button.visuals.glyph_surface,
+                button.kind,
+                self.is_window_maximized,
+                self.high_contrast,
+                &self.metrics,
+            )
+            .inspect_err(|err| log::warn!("rasterise_glyph failed for {:?}: {err}", button.kind))
+            .unwrap_or(false);
+            if drew {
                 button.glyph_surface_dirty = false;
             }
         }
-        Ok(())
     }
 
-    fn apply_visuals_to_all_buttons(&mut self) -> anyhow::Result<()> {
+    fn apply_visuals_to_all_buttons(&mut self) {
         // Re-rasterise dirty glyphs (spec §6.2 reactive device-loss heal).
-        self.rasterise_all_glyphs()?;
+        self.rasterise_all_glyphs();
 
         let theme = CaptionTheme::resolve(self.appearance, self.high_contrast);
         let pointer_over_kind = self.pointer_over_kind;
         let pointer_device = self.pointer_device;
-        let press_session = self.press_session;
+        let primary_session = self.primary_session().copied();
         let is_active = self.is_active;
         for button in &mut self.buttons {
             let new_interaction = resolve_interaction(
@@ -641,18 +654,31 @@ impl CaptionButtonStrip {
                 button.availability,
                 pointer_over_kind,
                 pointer_device,
-                press_session.as_ref(),
+                primary_session.as_ref(),
             );
-            apply_button_visuals(button, new_interaction, &theme, is_active)?;
+            apply_button_visuals(button, new_interaction, &theme, is_active);
         }
-        Ok(())
+    }
+
+    /// The session that the primary-UP path will drain (`Active` or
+    /// `Suppressed{Left}`). At most one exists at a time.
+    fn primary_session(&self) -> Option<&PressSession> {
+        self.press_sessions.iter().find(|s| {
+            matches!(
+                s.mode,
+                PressSessionMode::Active
+                    | PressSessionMode::Suppressed {
+                        held_button: PointerButton::Left
+                    }
+            )
+        })
     }
 
     /// Hit-test a point given in **client-space** coordinates (origin =
     /// client top-left). The strip is anchored at the right edge, so the
     /// caller passes the client area's full width as the reference. Returns
-    /// the caption-button kind under the point, or `None` if the point is
-    /// outside the strip's bounds (or no enabled button is hit).
+    /// the visible caption-button kind under the point, or `None` if the
+    /// point is outside the strip's bounds.
     pub fn hit_test(&self, client_point: PhysicalPoint, client_width: PhysicalPixels) -> Option<CaptionButtonKind> {
         StripGeometry {
             reference_width_px: client_width.0,
@@ -663,23 +689,22 @@ impl CaptionButtonStrip {
         .hit_test(client_point)
     }
 
-    pub fn on_pointer_update(
-        &mut self,
-        kind: Option<CaptionButtonKind>,
-        _pointer_id: u32,
-        device: PointerDeviceKind,
-    ) -> anyhow::Result<()> {
-        if self.pointer_over_kind != kind || self.pointer_device != Some(device) {
+    pub fn on_pointer_update(&mut self, kind: Option<CaptionButtonKind>, device: PointerDeviceKind) -> anyhow::Result<()> {
+        // Mirror on_nc_mouse_leave: clearing kind also clears device, so a
+        // subsequent same-kind/same-device re-entry isn't suppressed by stale
+        // device state.
+        let new_device = kind.map(|_| device);
+        if self.pointer_over_kind != kind || self.pointer_device != new_device {
             self.pointer_over_kind = kind;
-            self.pointer_device = Some(device);
-            self.apply_visuals_to_all_buttons()?;
+            self.pointer_device = new_device;
+            self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
         Ok(())
     }
 
     pub fn on_pointer_down(&mut self, kind: CaptionButtonKind, pointer_id: u32, device: PointerDeviceKind) -> anyhow::Result<()> {
-        if self.press_session.is_some() {
+        if self.primary_session().is_some() {
             return Ok(());
         }
         let is_enabled = self.button_for(kind).map(|b| b.availability) == Some(Availability::Enabled);
@@ -692,7 +717,7 @@ impl CaptionButtonStrip {
                 held_button: PointerButton::Left,
             }
         };
-        self.press_session = Some(PressSession {
+        self.press_sessions.push(PressSession {
             pointer_id,
             captured_kind: kind,
             mode,
@@ -700,30 +725,34 @@ impl CaptionButtonStrip {
         if mode == PressSessionMode::Active {
             self.pointer_over_kind = Some(kind);
             self.pointer_device = Some(device);
-            self.apply_visuals_to_all_buttons()?;
+            self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
-        // Suppressed: no visual side effects (spec §4.3 — disabled Min/Max
-        // never enter Hovered / Pressed).
+        // Suppressed: no visual side effects — disabled Min/Max never enter Hovered/Pressed.
         Ok(())
     }
 
+    // Result kept for API symmetry; callers use .ok() — this never fails now.
+    #[allow(clippy::unnecessary_wraps)]
     pub fn on_pointer_up(
         &mut self,
         kind_under_pointer: Option<CaptionButtonKind>,
         pointer_id: u32,
     ) -> anyhow::Result<Option<CaptionButtonAction>> {
-        let session = match self.press_session {
-            Some(s) if is_real_release_match(&s, pointer_id) => s,
-            _ => return Ok(None),
+        let Some(idx) = self.press_sessions.iter().position(|s| is_real_release_match(s, pointer_id)) else {
+            return Ok(None);
         };
-        self.press_session = None;
+        let session = self.press_sessions.swap_remove(idx);
         match session.mode {
             PressSessionMode::Active => {
                 let action = (Some(session.captured_kind) == kind_under_pointer).then(|| self.action_for(session.captured_kind));
                 self.pointer_over_kind = kind_under_pointer;
-                self.apply_visuals_to_all_buttons()?;
-                self.compositor_controller.Commit()?;
+                self.apply_visuals_to_all_buttons();
+                // Commit failure must not swallow the action; press session already cleared.
+                let _ = self
+                    .compositor_controller
+                    .Commit()
+                    .inspect_err(|err| log::warn!("on_pointer_up Commit failed: {err}"));
                 Ok(action)
             }
             // Disabled-primary cycle (Suppressed{Left}); fire no action.
@@ -732,19 +761,31 @@ impl CaptionButtonStrip {
     }
 
     pub fn on_pointer_cancel(&mut self, pointer_id: u32) -> anyhow::Result<()> {
-        // Visuals only need reverting if Active had been engaged.
-        if cancel_press_session(&mut self.press_session, pointer_id) {
-            self.apply_visuals_to_all_buttons()?;
+        // Visuals only need reverting if an Active session was canceled.
+        let had_active = self
+            .press_sessions
+            .iter()
+            .any(|s| s.pointer_id == pointer_id && s.mode == PressSessionMode::Active);
+        self.press_sessions.retain(|s| s.pointer_id != pointer_id);
+        if had_active {
+            self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
         Ok(())
     }
 
-    /// Drop any owned press session. Used by the wndproc on `WM_CANCELMODE`
+    /// Drop every owned press session. Used by the wndproc on `WM_CANCELMODE`
     /// and on deactivation, where there is no pointer id to match against.
+    /// Also clears `pointer_over_kind` / `pointer_device` so the cancelled
+    /// button returns to Rest; the next `WM_NCPOINTERUPDATE` re-establishes
+    /// Hovered if the cursor is still over a button.
     pub fn cancel_any_press(&mut self) -> anyhow::Result<()> {
-        if cancel_any_press_session(&mut self.press_session) {
-            self.apply_visuals_to_all_buttons()?;
+        let had_active = self.press_sessions.iter().any(|s| s.mode == PressSessionMode::Active);
+        self.press_sessions.clear();
+        if had_active {
+            self.pointer_over_kind = None;
+            self.pointer_device = None;
+            self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
         Ok(())
@@ -753,7 +794,7 @@ impl CaptionButtonStrip {
     pub fn on_nc_mouse_leave(&mut self) -> anyhow::Result<()> {
         self.pointer_over_kind = None;
         self.pointer_device = None;
-        self.apply_visuals_to_all_buttons()?;
+        self.apply_visuals_to_all_buttons();
         self.compositor_controller.Commit()?;
         Ok(())
     }
@@ -769,28 +810,32 @@ impl CaptionButtonStrip {
     /// Release-gate predicate: true iff the strip owns a session whose
     /// matching primary (Left) UP must be consumed by the wndproc. Pair
     /// with `has_press_for` for the broader cleanup gate.
-    pub(crate) const fn has_active_press_for(&self, pointer_id: u32) -> bool {
-        matches!(self.press_session, Some(s) if is_real_release_match(&s, pointer_id))
+    pub(crate) fn has_active_press_for(&self, pointer_id: u32) -> bool {
+        self.press_sessions.iter().any(|s| is_real_release_match(s, pointer_id))
     }
 
     /// Cleanup-gate predicate: true iff the strip owns any press session
     /// for `pointer_id`, regardless of mode (capture loss, deactivation).
-    pub(crate) const fn has_press_for(&self, pointer_id: u32) -> bool {
-        matches!(self.press_session, Some(s) if s.pointer_id == pointer_id)
+    pub(crate) fn has_press_for(&self, pointer_id: u32) -> bool {
+        self.press_sessions.iter().any(|s| s.pointer_id == pointer_id)
     }
 
     /// Record a wndproc-consumed non-primary DOWN as a `Suppressed` session
     /// keyed by `held_button`; the matching UP is drained by
-    /// `consume_swallowed_release`. No-op if a session already exists
-    /// (concurrent multi-button presses drop the second DOWN — its UP will
-    /// leak; consistent with `on_pointer_down`'s single-press limitation).
+    /// `consume_swallowed_release`. May coexist with an active session.
+    /// Idempotent: skips if the same `(pointer_id, button)` is already tracked.
     /// `kind` populates `captured_kind` for struct-shape uniformity with
     /// `Active`; Suppressed-mode consumers don't read it.
-    pub(crate) const fn track_swallowed_press(&mut self, kind: CaptionButtonKind, pointer_id: u32, button: PointerButton) {
-        if self.press_session.is_some() {
+    pub(crate) fn track_swallowed_press(&mut self, kind: CaptionButtonKind, pointer_id: u32, button: PointerButton) {
+        debug_assert!(button != PointerButton::None, "track_swallowed_press got None button");
+        let already_tracked = self
+            .press_sessions
+            .iter()
+            .any(|s| s.pointer_id == pointer_id && matches!(s.mode, PressSessionMode::Suppressed { held_button } if held_button == button));
+        if already_tracked {
             return;
         }
-        self.press_session = Some(PressSession {
+        self.press_sessions.push(PressSession {
             pointer_id,
             captured_kind: kind,
             mode: PressSessionMode::Suppressed { held_button: button },
@@ -802,15 +847,15 @@ impl CaptionButtonStrip {
     /// and dropped — callers swallowing the matching UP should treat
     /// `true` as the signal to suppress further dispatch.
     ///
-    /// Only `Suppressed` sessions are drained here; `Active` sessions
-    /// continue to flow through `on_pointer_up`'s primary-action path.
+    /// Active sessions are drained by `on_pointer_up`'s primary-action
+    /// path; this drain only removes `Suppressed`-mode entries.
     pub(crate) fn consume_swallowed_release(&mut self, pointer_id: u32, button: PointerButton) -> bool {
-        let matches_session = self
-            .press_session
-            .as_ref()
-            .is_some_and(|s| is_swallowed_release_match(s, pointer_id, button));
-        if matches_session {
-            self.press_session = None;
+        if let Some(idx) = self
+            .press_sessions
+            .iter()
+            .position(|s| is_swallowed_release_match(s, pointer_id, button))
+        {
+            self.press_sessions.swap_remove(idx);
             true
         } else {
             false
@@ -839,24 +884,30 @@ impl CaptionButtonStrip {
             for button in &mut self.buttons {
                 button.last_applied_interaction = ButtonInteraction::Idle;
             }
-            self.apply_visuals_to_all_buttons()?;
+            self.apply_visuals_to_all_buttons();
             self.compositor_controller.Commit()?;
         }
         Ok(())
     }
 
-    pub fn on_dpi_change(&mut self, new_scale: f32) -> anyhow::Result<()> {
-        self.metrics = CaptionButtonMetrics::new(new_scale);
+    pub fn on_dpi_change(&mut self, new_scale: f32, max_chrome_y: i32) -> anyhow::Result<()> {
+        let new_metrics = CaptionButtonMetrics::new(new_scale);
+        let new_size = SizeInt32 {
+            Width: new_metrics.glyph_extent_px.width.0,
+            Height: new_metrics.glyph_extent_px.height.0,
+        };
         for button in &mut self.buttons {
-            let new_size = SizeInt32 {
-                Width: self.metrics.glyph_extent_px.width.0,
-                Height: self.metrics.glyph_extent_px.height.0,
-            };
-            button.visuals.glyph_surface.Resize(new_size)?;
+            button
+                .visuals
+                .glyph_surface
+                .Resize(new_size)
+                .inspect_err(|err| log::warn!("glyph_surface Resize failed: {err}"))?;
             button.glyph_surface_dirty = true;
         }
-        self.relayout()?;
-        self.apply_visuals_to_all_buttons()?;
+        self.metrics = new_metrics;
+        self.relayout();
+        self.set_strip_position(max_chrome_y);
+        self.apply_visuals_to_all_buttons();
         self.compositor_controller.Commit()?;
         Ok(())
     }
@@ -870,7 +921,7 @@ impl CaptionButtonStrip {
                 button.glyph_surface_dirty = true;
             }
         }
-        self.apply_visuals_to_all_buttons()?;
+        self.apply_visuals_to_all_buttons();
         self.compositor_controller.Commit()?;
         Ok(())
     }
@@ -879,8 +930,8 @@ impl CaptionButtonStrip {
         for button in &mut self.buttons {
             button.glyph_surface_dirty = true;
         }
-        self.rasterise_all_glyphs()?;
-        self.apply_visuals_to_all_buttons()?;
+        self.rasterise_all_glyphs();
+        self.apply_visuals_to_all_buttons();
         self.compositor_controller.Commit()?;
         Ok(())
     }
@@ -893,17 +944,16 @@ impl CaptionButtonStrip {
                     button.glyph_surface_dirty = true;
                 }
             }
-            self.rasterise_all_glyphs()?;
+            self.rasterise_all_glyphs();
         }
-        // Always commit: WM_WINDOWPOSCHANGED queues companion updates
-        // (e.g. `Window::set_content_top_offset`) on this controller and
-        // relies on this commit to publish them.
+        // Publishes the maximize-glyph swap. The content-offset queue rides
+        // the same-tick NCCALCSIZE-driven `on_resize` commit, not this one.
         self.compositor_controller.Commit()?;
         Ok(())
     }
 
-    pub fn on_resize(&mut self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()> {
-        self.set_strip_position(client_size, max_chrome_y)?;
+    pub fn on_resize(&mut self, max_chrome_y: i32) -> anyhow::Result<()> {
+        self.set_strip_position(max_chrome_y);
         self.compositor_controller.Commit()?;
         Ok(())
     }
@@ -912,7 +962,7 @@ impl CaptionButtonStrip {
 fn create_caption_button(
     compositor: &windows::UI::Composition::Compositor,
     parent: &ContainerVisual,
-    d2d_context: &Rc<D2dContext>,
+    composition_context: &Rc<CompositionContext>,
     kind: CaptionButtonKind,
     availability: Availability,
     metrics: &CaptionButtonMetrics,
@@ -930,7 +980,7 @@ fn create_caption_button(
     // wrapping `CompositionSurfaceBrush` for the glyph surface aren't stored
     // on the visuals — the `glyph` SpriteVisual's `SetBrush(&mask_brush)`
     // keeps the chain alive.
-    let glyph_surface = d2d_context.create_drawing_surface(SizeInt32 {
+    let glyph_surface = composition_context.create_drawing_surface(SizeInt32 {
         Width: metrics.glyph_extent_px.width.0,
         Height: metrics.glyph_extent_px.height.0,
     })?;
@@ -1011,7 +1061,7 @@ fn compute_glyph_font_size(face: &IDWriteFontFace, glyph_char: char, target_exte
 }
 
 fn rasterise_glyph(
-    d2d_context: &Rc<D2dContext>,
+    composition_context: &Rc<CompositionContext>,
     surface: &CompositionDrawingSurface,
     kind: CaptionButtonKind,
     is_maximised: bool,
@@ -1019,9 +1069,9 @@ fn rasterise_glyph(
     metrics: &CaptionButtonMetrics,
 ) -> anyhow::Result<bool> {
     let glyph_char = glyph_for(kind, is_maximised, hc);
-    let (font_family, font_face) = d2d_context.caption_glyph_font()?;
+    let (font_family, font_face) = composition_context.caption_glyph_font()?;
     let font_size = compute_glyph_font_size(font_face, glyph_char, metrics.glyph_extent_px)?;
-    let dwrite = d2d_context.dwrite_factory();
+    let dwrite = composition_context.dwrite_factory();
     let format = unsafe {
         dwrite.CreateTextFormat(
             *font_family,
@@ -1039,7 +1089,7 @@ fn rasterise_glyph(
     }
     let mut text_buf = [0u16; 2];
     let text: &[u16] = glyph_char.encode_utf16(&mut text_buf);
-    let drew = d2d_context
+    let drew = composition_context
         .with_d2d_render_target(surface, |rt, offset| {
             unsafe {
                 // Pin to 96 DPI so 1 DIP == 1 pixel; `compute_glyph_font_size`
@@ -1081,12 +1131,7 @@ fn rasterise_glyph(
     Ok(drew)
 }
 
-fn apply_button_visuals(
-    button: &mut CaptionButton,
-    new_interaction: ButtonInteraction,
-    theme: &CaptionTheme,
-    is_active: bool,
-) -> anyhow::Result<()> {
+fn apply_button_visuals(button: &mut CaptionButton, new_interaction: ButtonInteraction, theme: &CaptionTheme, is_active: bool) {
     let (backplate, foreground) = colours_for(button.kind, button.availability, new_interaction, theme, is_active);
     let prev = button.last_applied_interaction;
     // Spec §5.2: animate only `Hovered → Idle` on Enabled buttons; everything else jumps.
@@ -1094,14 +1139,32 @@ fn apply_button_visuals(
         prev == ButtonInteraction::Hovered && new_interaction == ButtonInteraction::Idle && button.availability == Availability::Enabled;
 
     if is_hover_leave {
-        animate_color(&button.visuals.backplate_brush, backplate, std::time::Duration::from_millis(150))?;
-        animate_color(&button.visuals.glyph_brush, foreground, std::time::Duration::from_millis(100))?;
+        animate_color_or_set(&button.visuals.backplate_brush, backplate, std::time::Duration::from_millis(150));
+        animate_color_or_set(&button.visuals.glyph_brush, foreground, std::time::Duration::from_millis(100));
     } else {
-        button.visuals.backplate_brush.SetColor(backplate)?;
-        button.visuals.glyph_brush.SetColor(foreground)?;
+        let _ = button
+            .visuals
+            .backplate_brush
+            .SetColor(backplate)
+            .inspect_err(|err| log::warn!("backplate_brush SetColor failed: {err}"));
+        let _ = button
+            .visuals
+            .glyph_brush
+            .SetColor(foreground)
+            .inspect_err(|err| log::warn!("glyph_brush SetColor failed: {err}"));
     }
     button.last_applied_interaction = new_interaction;
-    Ok(())
+}
+
+/// Spec §6.3: `StartAnimation` failure logs at warning level and falls
+/// back to an instant `SetColor`. The visual jumps instead of fading.
+fn animate_color_or_set(brush: &CompositionColorBrush, target: windows::UI::Color, duration: std::time::Duration) {
+    if let Err(err) = animate_color(brush, target, duration) {
+        log::warn!("CaptionButtonStrip: color animation failed; applying target colour directly: {err}");
+        let _ = brush
+            .SetColor(target)
+            .inspect_err(|err| log::warn!("animate_color_or_set fallback SetColor failed: {err}"));
+    }
 }
 
 fn animate_color(brush: &CompositionColorBrush, target: windows::UI::Color, duration: std::time::Duration) -> anyhow::Result<()> {
@@ -1154,7 +1217,7 @@ mod tests {
     use crate::win32::geometry::PhysicalPixels;
     use crate::win32::window_api::{WindowStyle, WindowSystemBackdropType, WindowTitleBarKind};
 
-    fn session(kind: CaptionButtonKind, _device: PointerDeviceKind) -> PressSession {
+    fn session(kind: CaptionButtonKind) -> PressSession {
         PressSession {
             pointer_id: 1,
             captured_kind: kind,
@@ -1255,7 +1318,7 @@ mod tests {
 
     #[test]
     fn captured_self_with_pointer_inside_is_pressed() {
-        let s = session(CaptionButtonKind::Close, PointerDeviceKind::Mouse);
+        let s = session(CaptionButtonKind::Close);
         let r = resolve_interaction(
             CaptionButtonKind::Close,
             Availability::Enabled,
@@ -1268,7 +1331,7 @@ mod tests {
 
     #[test]
     fn captured_self_with_pointer_outside_is_pressed_dragged_off() {
-        let s = session(CaptionButtonKind::Close, PointerDeviceKind::Mouse);
+        let s = session(CaptionButtonKind::Close);
         let r = resolve_interaction(
             CaptionButtonKind::Close,
             Availability::Enabled,
@@ -1282,25 +1345,12 @@ mod tests {
     #[test]
     fn captured_other_button_keeps_self_idle_winui_capture_rule() {
         // Press is on Minimize; pointer moves over Close. Close stays Idle.
-        let s = session(CaptionButtonKind::Minimize, PointerDeviceKind::Mouse);
+        let s = session(CaptionButtonKind::Minimize);
         let r = resolve_interaction(
             CaptionButtonKind::Close,
             Availability::Enabled,
             Some(CaptionButtonKind::Close),
             Some(PointerDeviceKind::Mouse),
-            Some(&s),
-        );
-        assert_eq!(r, ButtonInteraction::Idle);
-    }
-
-    #[test]
-    fn captured_other_with_touch_keeps_self_idle() {
-        let s = session(CaptionButtonKind::Minimize, PointerDeviceKind::Touch);
-        let r = resolve_interaction(
-            CaptionButtonKind::Close,
-            Availability::Enabled,
-            Some(CaptionButtonKind::Close),
-            Some(PointerDeviceKind::Touch),
             Some(&s),
         );
         assert_eq!(r, ButtonInteraction::Idle);
@@ -1466,103 +1516,76 @@ mod tests {
         assert!(press_session.is_some());
     }
 
-    // --- cancel_press_session (capture-loss / deactivation cleanup) ---
+    // --- press_sessions Vec: Active + Suppressed coexistence ---
 
-    #[test]
-    fn cancel_clears_active_session_and_signals_visual_refresh() {
-        let mut session = Some(PressSession {
-            pointer_id: 7,
-            captured_kind: CaptionButtonKind::Close,
+    fn active(pointer_id: u32, kind: CaptionButtonKind) -> PressSession {
+        PressSession {
+            pointer_id,
+            captured_kind: kind,
             mode: PressSessionMode::Active,
-        });
-        let needs_visual_refresh = cancel_press_session(&mut session, 7);
-        assert!(session.is_none());
-        assert!(needs_visual_refresh);
+        }
+    }
+
+    fn suppressed(pointer_id: u32, kind: CaptionButtonKind, button: PointerButton) -> PressSession {
+        PressSession {
+            pointer_id,
+            captured_kind: kind,
+            mode: PressSessionMode::Suppressed { held_button: button },
+        }
     }
 
     #[test]
-    fn cancel_clears_suppressed_left_session_without_visual_refresh() {
-        let mut session = Some(PressSession {
-            pointer_id: 7,
-            captured_kind: CaptionButtonKind::Close,
-            mode: PressSessionMode::Suppressed {
-                held_button: PointerButton::Left,
-            },
-        });
-        let needs_visual_refresh = cancel_press_session(&mut session, 7);
-        assert!(session.is_none());
-        assert!(!needs_visual_refresh);
+    fn non_primary_press_during_active_session_coexists() {
+        // Active on Min; non-primary Right press over Close is appended; primary drain
+        // leaves the Suppressed{Right} entry in place.
+        let mut sessions = vec![active(1, CaptionButtonKind::Minimize)];
+        sessions.push(suppressed(1, CaptionButtonKind::Close, PointerButton::Right));
+        assert_eq!(sessions.len(), 2);
+
+        // consume_swallowed_release for (p=1, Right) removes only the Suppressed entry.
+        let idx = sessions.iter().position(|s| is_swallowed_release_match(s, 1, PointerButton::Right));
+        sessions.swap_remove(idx.expect("Suppressed{Right} not found"));
+        assert_eq!(sessions.len(), 1);
+        assert!(matches!(sessions[0].mode, PressSessionMode::Active));
     }
 
     #[test]
-    fn cancel_clears_suppressed_right_session_regression_for_capture_loss_leak() {
-        let mut session = Some(PressSession {
-            pointer_id: 7,
-            captured_kind: CaptionButtonKind::Close,
-            mode: PressSessionMode::Suppressed {
-                held_button: PointerButton::Right,
-            },
-        });
-        let needs_visual_refresh = cancel_press_session(&mut session, 7);
-        assert!(session.is_none());
-        assert!(!needs_visual_refresh);
+    fn active_release_does_not_drain_concurrent_suppressed() {
+        let mut sessions = vec![
+            active(1, CaptionButtonKind::Minimize),
+            suppressed(1, CaptionButtonKind::Close, PointerButton::Right),
+        ];
+
+        // Primary-UP drain finds and removes the Active entry only.
+        let idx = sessions.iter().position(|s| is_real_release_match(s, 1));
+        sessions.swap_remove(idx.expect("Active not found"));
+
+        assert_eq!(sessions.len(), 1);
+        assert!(is_swallowed_release_match(&sessions[0], 1, PointerButton::Right));
     }
 
     #[test]
-    fn cancel_with_mismatched_pointer_id_is_a_noop() {
-        let original = PressSession {
-            pointer_id: 7,
-            captured_kind: CaptionButtonKind::Close,
-            mode: PressSessionMode::Active,
-        };
-        let mut session = Some(original);
-        let needs_visual_refresh = cancel_press_session(&mut session, 99);
-        assert_eq!(session, Some(original));
-        assert!(!needs_visual_refresh);
+    fn cancel_any_press_drops_active_and_suppressed_together() {
+        let mut sessions = vec![
+            active(1, CaptionButtonKind::Minimize),
+            suppressed(1, CaptionButtonKind::Close, PointerButton::Right),
+        ];
+        let had_active = sessions.iter().any(|s| s.mode == PressSessionMode::Active);
+        sessions.clear();
+        assert!(had_active);
+        assert!(sessions.is_empty());
     }
 
     #[test]
-    fn cancel_press_session_with_no_session_is_a_noop() {
-        let mut session: Option<PressSession> = None;
-        let needs_visual_refresh = cancel_press_session(&mut session, 0);
-        assert!(session.is_none());
-        assert!(!needs_visual_refresh);
-    }
-
-    #[test]
-    fn cancel_any_press_session_clears_active_regardless_of_pointer_id() {
-        // `WM_CANCELMODE` does not carry a pointer id, so the strip must
-        // drop the session unconditionally.
-        let mut session = Some(PressSession {
-            pointer_id: 7,
-            captured_kind: CaptionButtonKind::Maximize,
-            mode: PressSessionMode::Active,
-        });
-        let needs_visual_refresh = cancel_any_press_session(&mut session);
-        assert!(session.is_none());
-        assert!(needs_visual_refresh);
-    }
-
-    #[test]
-    fn cancel_any_press_session_clears_suppressed_without_visual_refresh() {
-        let mut session = Some(PressSession {
-            pointer_id: 7,
-            captured_kind: CaptionButtonKind::Close,
-            mode: PressSessionMode::Suppressed {
-                held_button: PointerButton::Left,
-            },
-        });
-        let needs_visual_refresh = cancel_any_press_session(&mut session);
-        assert!(session.is_none());
-        assert!(!needs_visual_refresh);
-    }
-
-    #[test]
-    fn cancel_any_press_session_with_no_session_is_a_noop() {
-        let mut session: Option<PressSession> = None;
-        let needs_visual_refresh = cancel_any_press_session(&mut session);
-        assert!(session.is_none());
-        assert!(!needs_visual_refresh);
+    fn on_pointer_cancel_drains_only_matching_pointer() {
+        let mut sessions = vec![
+            active(1, CaptionButtonKind::Minimize),
+            suppressed(1, CaptionButtonKind::Close, PointerButton::Right),
+            suppressed(2, CaptionButtonKind::Close, PointerButton::Right),
+        ];
+        sessions.retain(|s| s.pointer_id != 1);
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].pointer_id, 2);
     }
 
     // --- visible-button derivation ---
@@ -1774,7 +1797,7 @@ mod tests {
     #[test]
     fn disabled_min_max_collapse_to_htcaption_not_their_codes() {
         // Snap Layouts must not appear on a disabled Maximize button; the
-        // rectangle stays in the title-bar drag region.
+        // rectangle keeps caption-like hit-test semantics.
         use windows::Win32::UI::WindowsAndMessaging::{HTCAPTION, HTCLOSE};
         assert_eq!(hittest_for_caption_button_kind(CaptionButtonKind::Minimize, false), HTCAPTION);
         assert_eq!(hittest_for_caption_button_kind(CaptionButtonKind::Maximize, false), HTCAPTION);

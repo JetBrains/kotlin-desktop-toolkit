@@ -74,7 +74,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Threading.** Single UI thread (the one that called `Application::new`). Not `Send` (uses `Rc`, `RefCell`, non-Send WinRT handles) — implicit, not type-asserted.
 
-**DPI.** `Window::get_scale` calls `GetDpiForWindow(hwnd) / USER_DEFAULT_SCREEN_DPI` live on every call (not cached). `get_rect` uses `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)` rather than `GetWindowRect` — correct for Win11 invisible resize borders.
+**DPI.** `Window::get_scale` reads from `Window::cached_dpi_metrics: Cell<DpiMetrics>`. The cache is seeded from `GetDpiForWindow(hwnd)` in `initialize_window` and refreshed on `WM_DPICHANGED` via `set_dpi_metrics`. The cache stores `dpi`, `scale`, `padded_border` (`SM_CXPADDEDBORDER`), and `size_frame` (`SM_CYSIZEFRAME`); metrics not cached here — e.g. `SM_CYSIZE` in `on_nchittest` — still call `GetSystemMetricsForDpi` per use. `get_rect` uses `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)` rather than `GetWindowRect` — correct for Win11 invisible resize borders.
 
 **Gotchas.**
 - `WNDCLASS_INIT: OnceLock<u16>` uses non-atomic `get().is_none()` + `get_or_init` — racy if windows are created concurrently (today they aren't, but the code reads racy).
@@ -110,7 +110,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Gotchas.**
 - `swap_buffers` calls `glFinish` unconditionally before `eglSwapBuffers` (renderer_angle.rs) — serialises the CPU on every frame, eliminating GPU/CPU pipelining. Intent is not documented here; perf concern worth re-evaluating.
-- `swap_interval` hardcoded to 1; TODO at renderer_angle.rs says "0 on resize" — no logic to detect resize.
+- `swap_interval` toggles between `0` (in `resize_surface`, around the `eglPostSubBufferNV` resize kick) and `1` (top of `swap_buffers`). Driven by Kotlin's `performDrawing` calling `resizeSurface` only when `isSizeChanged(size)` is true; no top-level `WM_SIZE` / `WM_NCCALCSIZE` detection needed.
 - `core::mem::transmute` in the `get_egl_proc!` macro (renderer_egl_utils.rs) — no `// SAFETY` comment; correctness rests on EGL spec matching the local function-pointer typedef.
 - `#[allow(clippy::bool_to_int_with_if)]` at renderer_angle.rs is dead — function body has no conditional; leftover from a refactor.
 - `libEGL.dll` lookup has no fallback — missing DLL surfaces as `ERROR_PATH_NOT_FOUND` with no helpful diagnostic.
@@ -139,11 +139,13 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 **Gotchas.**
 - Hit-test routing dispatches into `caption_kind_at_screen` (caption_buttons.rs) for both `WM_NCHITTEST` and the `WM_NCPOINTER*` handlers — geometric, not `HIWORD(wParam)` — see spec §3.2.
-- Device-loss recovery is reactive only: `D2dContext::with_d2d_render_target` traps `DXGI_ERROR_DEVICE_REMOVED` from `BeginDraw`, calls `rebuild_d2d_device`, and a `RenderingDeviceReplaced` notification triggers re-rasterise — see spec §6.2.
+- Device-loss recovery is reactive only: `D2dContext::with_d2d_render_target` traps the three loss-class HRESULTs (`DXGI_ERROR_DEVICE_REMOVED` / `DXGI_ERROR_DEVICE_RESET` / `D2DERR_RECREATE_TARGET`) on both `BeginDraw` and `EndDraw`, calls `rebuild_d2d_device`, and `RenderingDeviceReplaced` triggers re-rasterise — see spec §6.2.
+- `build_d2d_device` falls back from `D3D_DRIVER_TYPE_HARDWARE` to `D3D_DRIVER_TYPE_WARP` on failure, so headless / Remote Desktop / degraded-GPU sessions still get a `Custom` window (initial construction and `rebuild_d2d_device` share the fallback). Once WARP is selected, the cached `Rc<D2dContext>` stays on WARP for the rest of the UI thread's lifetime — no automatic upgrade-back to hardware — see spec §6.1.
 - Two cleanup APIs: `on_pointer_cancel(pointer_id)` for `WM_POINTERCAPTURECHANGED`; `cancel_any_press()` for `WM_CANCELMODE` and `WM_ACTIVATE`-deactivate — see spec §3.2 / §4.2.
 - `max_chrome_y` is `SM_CYSIZEFRAME` only on this toolkit's non-system titlebar style; the strip's resize-band exclusion (`is_in_top_resize_border`) uses the full `SM_CXPADDEDBORDER + SM_CYSIZEFRAME` — see spec §3.6.
 - Inactive caption-button hover and pressed render with the active palette — see spec §4.4.
-- Do not add `Commit()` to `Window::resize_backdrop_tint` — the strip's `on_resize` is the single commit point that publishes both the backdrop resize and the strip Y-shift atomically — see spec §5.5.
+- Disabled visible Min/Max return `HTCAPTION` for `WM_NCHITTEST` but the strip still swallows DOWN / UP cycles (no hover, press, or action) — see spec §4.2.
+- `root_visual`, `chrome_layer`, `backdrop_layer`, and the backdrop tint `SpriteVisual` carry `RelativeSizeAdjustment(1,1)` set in `initialize_content`; per-resize `SetSize` is not required. `content_layer` is left at default — the ANGLE visual sets its own absolute `Size` and no other child reads the parent's effective size. The strip's `on_resize` is the single commit point per resize tick — see spec §5.5.
 
 **Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`), `event_loop` (wndproc dispatch into `caption_kind_at_screen` and the strip's lifecycle methods), `appearance` (`Appearance` / `HighContrast` seed values + change events), `geometry` (`PhysicalPoint` / `PhysicalSize`).
 
@@ -167,7 +169,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - Anything coming *out* of Win32 (e.g. `GetClientRect`, `GetCursorPos`, pointer event coordinates) is in physical pixels and is converted to logical via `from_physical` once it crosses into the toolkit's `Event` payloads / API returns.
 - Anything going *into* Win32 (e.g. `SetWindowPos`, custom cursor positions) is converted from logical to physical via `to_physical` at the FFI boundary.
 
-The DPI scale is owned by `Window` (`get_scale()` calls `GetDpiForWindow(hwnd)` live, never cached). This has a knock-on consequence in window creation — see the Window subsystem's "1×1 then resize" note.
+The DPI scale is owned by `Window` (`get_scale()` reads `cached_dpi_metrics`; the cache is seeded once from `GetDpiForWindow` in `initialize_window` and updated on `WM_DPICHANGED`). This has a knock-on consequence in window creation — see the Window subsystem's "1×1 then resize" note.
 
 **Exceptions: physical pixels exposed to managed code.** Some FFI surfaces deliberately leak `PhysicalPoint` / `PhysicalSize` straight to Kotlin without any logical-pixel conversion. These are the cases where the Win32 source is inherently physical and applying a single window's DPI scale would either be wrong (cross-monitor coordinates) or pointless (raw frame geometry):
 

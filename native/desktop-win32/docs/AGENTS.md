@@ -45,6 +45,7 @@ The high-impact conventions for collaborating on this crate:
 - **Use authoritative-docs lookup skills when your agent platform exposes them.** For Win32 / WinRT questions, Claude Code provides `microsoft-docs:microsoft-docs` (concept lookup) and `microsoft-docs:microsoft-code-reference` (API / SDK code verification). Prefer these over speculating from internal knowledge — especially when distinguishing documented contract from observed behaviour (above).
 - **Don't add redundant explanatory clauses** on top of content that already conveys the same point. Trust the prose to do its job.
 - **A wrong claim about current state may still be a valid design suggestion.** When you (or a reviewer) correct a factual error of yours, check whether the *wrong* version was nonetheless what the code *should* be. If so, voice both halves: "I was wrong that X is Y, but X should be Y, and here's why." Don't silently retract — your hallucination may have surfaced a real bug.
+- **Doc-fix sweeps can introduce new overreach.** When tightening a stale doc claim, verify the replacement against every reader the claim now covers — a fix scoped to one function can over-promise for a class of callers that doesn't share the new property. Example: a `Window::get_scale` cache fix restated as "chrome / hit-test code never re-syscalls per frame", missing that `on_nchittest` still calls `GetSystemMetricsForDpi(SM_CYSIZE)` live. Enumerate cached fields explicitly rather than relying on broad "never" claims.
 
 ## When to update this doc set
 

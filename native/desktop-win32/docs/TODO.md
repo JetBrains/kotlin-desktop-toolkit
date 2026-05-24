@@ -82,7 +82,7 @@ This list is point-in-time. Verify against current code before acting.
 ### Win32 system-menu restoration
 - **Where**: `event_loop.rs` — no Alt+Space or system-menu `WM_SYSCOMMAND` keyboard-system-command paths for non-system titlebar kinds (`WindowTitleBarKind::Custom` / `WindowTitleBarKind::None`). For `WindowTitleBarKind::Custom`, `WM_NCRBUTTONUP` over `HTCAPTION` still does nothing (no title-bar right-click system menu path). `WindowTitleBarKind::None` does not expose a synthetic `HTCAPTION` drag band.
 - **What**: native windows show the system menu on Alt+Space and on right-click of the title-bar drag region (and over caption buttons in some configurations). Non-system titlebar windows lose the Alt+Space keyboard path; `WindowTitleBarKind::Custom` also loses the title-bar right-click path. Users cannot reliably reach Move / Size / Minimize / Maximize / Close from these affordances, and UIA invoke patterns on caption buttons also depend on the system-menu surface for accessibility tools.
-- **Sketch when implementing**: `GetSystemMenu(hwnd, FALSE)` + `TrackPopupMenu(... TPM_RIGHTBUTTON | TPM_RETURNCMD ...)` + `SendMessageW(hwnd, WM_SYSCOMMAND, cmd, 0)` is the documented Win32 recipe. Hook `WM_NCRBUTTONUP` (caption-button strip non-primary fall-through path documented in caption-buttons spec §4.2) and `WM_SYSCOMMAND` for `SC_KEYMENU` (Alt+Space). Coordinate with the Close-disable entry above so `SC_CLOSE` state stays aligned with caption-Close availability.
+- **Sketch when implementing**: `GetSystemMenu(hwnd, FALSE)` + `TrackPopupMenu(... TPM_RIGHTBUTTON | TPM_RETURNCMD ...)` + `SendMessageW(hwnd, WM_SYSCOMMAND, cmd, 0)` is the documented Win32 recipe. Hook `WM_NCRBUTTONUP` for the title-bar drag region; for the strip's hit-test area, add an explicit right-click / non-primary path before or inside the swallow path — current strip code tracks non-primary presses (`track_swallowed_press`) and drains the matching release (`consume_swallowed_release`), so a fall-through doesn't exist today. Also hook `WM_SYSCOMMAND` for `SC_KEYMENU` (Alt+Space). Coordinate with the Close-disable entry above so `SC_CLOSE` state stays aligned with caption-Close availability.
 - **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §2 (out-of-scope handoff), [Microsoft `WM_SYSCOMMAND`](https://learn.microsoft.com/windows/win32/menurc/wm-syscommand), [Microsoft `TrackPopupMenu`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-trackpopupmenu).
 
 ### Tall-mode title bars
@@ -201,12 +201,6 @@ This list is point-in-time. Verify against current code before acting.
 - **Where**: `DataFormat.kt` — `Text = 13`, `FileList = 15`.
 - **Note**: Win32 constants are stable, but the linkage to Rust `DataFormat::Text` / `::FileList` is by convention only. A future renumbering on either side wouldn't fail any test.
 - **Fix**: query both via FFI helpers (like `clipboard_get_html_format_id()` does), or generate Kotlin constants from the Rust enum.
-
-### `resize_backdrop_tint` / caption-button resize commit ordering invariant
-- **Where**: `event_loop.rs` (`on_nccalcsize`), `window.rs` (`Window::resize_backdrop_tint`), `caption_buttons.rs` (`CaptionButtonStrip::on_resize`).
-- **What**: `on_nccalcsize` calls `resize_backdrop_tint(size)` and then `CaptionButtonStrip::on_resize(size, max_chrome_y)`. The strip's `on_resize` performs the single `CompositorController::Commit()` that publishes the backdrop's new size and the strip's new offset together. If a future maintainer adds a commit to `resize_backdrop_tint`, the backdrop resize can publish before the strip move, surfacing one frame of visual mismatch.
-- **Fix**: lock down with a comment in `resize_backdrop_tint` (`// does not commit; see on_nccalcsize / CaptionButtonStrip::on_resize ordering`); consider an assertion path on `Window`'s `CompositorController` use that catches double commits inside a single resize.
-- **Sources**: spec `2026-04-30-win32-caption-buttons-design.md` §3.3 / §5.5.
 
 ## Commented-out features
 

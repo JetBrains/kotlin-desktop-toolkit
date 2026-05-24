@@ -30,11 +30,11 @@ use windows::{
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
                 GetClientRect, GetPropW, GetWindowLongPtrW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW,
-                RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME,
-                SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER,
-                SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI,
-                WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX,
-                WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+                RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON,
+                SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
+                SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
+                USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW,
+                WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -44,7 +44,7 @@ use windows_core::{HSTRING, Interface, PCWSTR, Result as WinResult, w};
 use super::{
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
-    geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
+    geometry::{LogicalPoint, LogicalRect, LogicalSize},
     pointer::PointerClickCounter,
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
@@ -78,6 +78,34 @@ const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32Window");
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct WindowId(pub isize);
 
+/// Per-DPI metrics consumed by chrome / hit-test code. Seeded from
+/// `GetDpiForWindow` in `initialize_window`, then refreshed on
+/// `WM_DPICHANGED`'s wparam. Caches `dpi`, `scale`, `padded_border`
+/// (`SM_CXPADDEDBORDER`), and `size_frame` (`SM_CYSIZEFRAME`); other
+/// per-DPI metrics (e.g. `SM_CYSIZE` in `on_nchittest`) still call
+/// `GetSystemMetricsForDpi` per use.
+#[derive(Clone, Copy)]
+pub(crate) struct DpiMetrics {
+    pub dpi: u32,
+    pub scale: f32,
+    pub padded_border: i32,
+    pub size_frame: i32,
+}
+
+impl DpiMetrics {
+    #[allow(clippy::cast_precision_loss)]
+    fn for_dpi(dpi: u32) -> Self {
+        // Per-monitor DPI maxes at a few hundred; truncating to u16 covers the OS range.
+        let dpi_u16 = u16::try_from(dpi).unwrap_or(u16::MAX);
+        Self {
+            dpi,
+            scale: f32::from(dpi_u16) / (USER_DEFAULT_SCREEN_DPI as f32),
+            padded_border: unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) },
+            size_frame: unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) },
+        }
+    }
+}
+
 #[allow(clippy::struct_field_names)]
 pub struct Window {
     id: WindowId,
@@ -94,6 +122,7 @@ pub struct Window {
     style: RefCell<WindowStyle>,
     pointer_in_window: AtomicBool,
     nc_leave_tracking_armed: AtomicBool,
+    cached_dpi_metrics: Cell<DpiMetrics>,
     pub(crate) caption_buttons: RefCell<Option<crate::win32::caption_buttons::CaptionButtonStrip>>,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
@@ -131,6 +160,7 @@ impl Window {
             style: RefCell::default(),
             pointer_in_window: AtomicBool::new(false),
             nc_leave_tracking_armed: AtomicBool::new(false),
+            cached_dpi_metrics: Cell::new(DpiMetrics::for_dpi(USER_DEFAULT_SCREEN_DPI)),
             caption_buttons: RefCell::new(None),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
@@ -195,15 +225,20 @@ impl Window {
     }
 
     pub(crate) fn ensure_nc_leave_tracking(&self) -> anyhow::Result<()> {
-        if !self.nc_leave_tracking_armed.swap(true, Ordering::Relaxed) {
-            let mut tme = TRACKMOUSEEVENT {
-                cbSize: size_of::<TRACKMOUSEEVENT>().try_into()?,
-                dwFlags: TME_NONCLIENT | TME_LEAVE,
-                hwndTrack: self.hwnd(),
-                dwHoverTime: 0,
-            };
-            unsafe { TrackMouseEvent(&raw mut tme)? };
+        // Set the armed flag only after `TrackMouseEvent` succeeds. The old
+        // `swap(true)`-then-call pattern left the flag stuck at `true` if
+        // the syscall failed, permanently disabling NC leave tracking.
+        if self.nc_leave_tracking_armed.load(Ordering::Relaxed) {
+            return Ok(());
         }
+        let mut tme = TRACKMOUSEEVENT {
+            cbSize: size_of::<TRACKMOUSEEVENT>().try_into()?,
+            dwFlags: TME_NONCLIENT | TME_LEAVE,
+            hwndTrack: self.hwnd(),
+            dwHoverTime: 0,
+        };
+        unsafe { TrackMouseEvent(&raw mut tme)? };
+        self.nc_leave_tracking_armed.store(true, Ordering::Relaxed);
         Ok(())
     }
 
@@ -235,11 +270,17 @@ impl Window {
         Ok(LogicalRect { origin, size })
     }
 
-    #[allow(clippy::cast_precision_loss)]
     #[must_use]
-    pub fn get_scale(&self) -> f32 {
-        let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
-        (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
+    pub const fn get_scale(&self) -> f32 {
+        self.dpi_metrics().scale
+    }
+
+    pub(crate) const fn dpi_metrics(&self) -> DpiMetrics {
+        self.cached_dpi_metrics.get()
+    }
+
+    pub(crate) fn set_dpi_metrics(&self, dpi: u32) {
+        self.cached_dpi_metrics.set(DpiMetrics::for_dpi(dpi));
     }
 
     pub fn get_screen_info(&self) -> anyhow::Result<ScreenInfo> {
@@ -332,6 +373,9 @@ impl Window {
     }
 
     pub fn minimize(&self) {
+        if !self.style.borrow().is_minimizable {
+            return;
+        }
         self.send_system_command(SC_MINIMIZE);
     }
 
@@ -361,10 +405,6 @@ impl Window {
         let [a, r, g, b] = color.to_be_bytes();
         let backdrop_color = windows::UI::Color { A: a, R: r, G: g, B: b };
         let backdrop_brush = self.compositor_controller.Compositor()?.CreateColorBrushWithColor(backdrop_color)?;
-        let mut rect = RECT::default();
-        unsafe { GetClientRect(self.hwnd(), &raw mut rect)? };
-        #[allow(clippy::cast_precision_loss)]
-        backdrop_visual.SetSize(windows_numerics::Vector2::new(rect.right as f32, rect.bottom as f32))?;
         backdrop_visual.SetBrush(&backdrop_brush)?;
         backdrop_visual.SetOpacity(opacity)?;
         backdrop_visual.SetIsVisible(true)?;
@@ -380,14 +420,10 @@ impl Window {
         Ok(())
     }
 
-    pub(crate) fn resize_backdrop_tint(&self, size: PhysicalSize) -> anyhow::Result<()> {
-        if let Some(backdrop_visual) = self.backdrop_tint.borrow().as_ref() {
-            #[allow(clippy::cast_precision_loss)]
-            backdrop_visual.SetSize(windows_numerics::Vector2 {
-                X: size.width.0 as f32,
-                Y: size.height.0 as f32,
-            })?;
-        }
+    /// Publishes queued composition mutations. Used by the `None`-titlebar
+    /// path, which has no caption-button strip to bundle the commit into.
+    pub(crate) fn commit_composition(&self) -> anyhow::Result<()> {
+        self.compositor_controller.Commit()?;
         Ok(())
     }
 
@@ -398,18 +434,19 @@ impl Window {
         if !self.is_resizable() || !self.has_non_system_title_bar() || !self.is_maximized() {
             return 0;
         }
-        let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
-        unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) }
+        self.dpi_metrics().size_frame
     }
 
     /// Queues a Y-offset on `content_layer` so Kotlin / ANGLE content lines
-    /// up with the visible monitor edge when maximized — composition (0,0)
-    /// tracks the (off-monitor) window-rect top-left, mirroring the
-    /// strip's `composition_root` shift.
+    /// up with the visible monitor edge when maximized; composition (0,0)
+    /// tracks the off-monitor window-rect top-left.
     ///
-    /// Does not commit; caller must arrange a strip commit to publish the
-    /// queued offset. See `TODO.md` `resize_backdrop_tint` / caption-button
-    /// resize commit ordering invariant.
+    /// Does not commit. `Custom` callers piggyback on the strip's next
+    /// commit (`on_resize` from `WM_NCCALCSIZE`, `on_dpi_change` from
+    /// `WM_DPICHANGED`). `None` callers follow up with `commit_composition()`.
+    /// Same-value `SetOffset` calls are visually cheap — the compositor's
+    /// render pass diffs `Offset` by value — so callers do not need an
+    /// app-side dedup.
     pub(crate) fn set_content_top_offset(&self, top_offset_px: i32) -> anyhow::Result<()> {
         if let Some(layer) = self.content_layer.borrow().as_ref() {
             #[allow(clippy::cast_precision_loss)]
@@ -474,21 +511,19 @@ impl Window {
     }
 
     pub fn set_is_resizable(&self, value: bool) -> WinResult<()> {
-        self.update_style_flag(StyleFlag::Resizable, value)?;
+        // Update cache before FRAMECHANGED so the synchronous NCCALCSIZE reads fresh state.
         self.style.borrow_mut().is_resizable = value;
-        Ok(())
+        self.update_style_flag(StyleFlag::Resizable, value)
     }
 
     pub fn set_is_minimizable(&self, value: bool) -> WinResult<()> {
-        self.update_style_flag(StyleFlag::Minimizable, value)?;
         self.style.borrow_mut().is_minimizable = value;
-        Ok(())
+        self.update_style_flag(StyleFlag::Minimizable, value)
     }
 
     pub fn set_is_maximizable(&self, value: bool) -> WinResult<()> {
-        self.update_style_flag(StyleFlag::Maximizable, value)?;
         self.style.borrow_mut().is_maximizable = value;
-        Ok(())
+        self.update_style_flag(StyleFlag::Maximizable, value)
     }
 
     fn update_style_flag(&self, flag: StyleFlag, value: bool) -> WinResult<()> {
@@ -648,6 +683,8 @@ fn on_nccreate(hwnd: HWND, lparam: LPARAM) -> anyhow::Result<()> {
 
 fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.hwnd.store(hwnd.0, Ordering::Release);
+    let dpi = unsafe { GetDpiForWindow(hwnd) };
+    window.set_dpi_metrics(dpi);
     unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.borrow().to_system().0 as _) };
     window.set_position(window.origin.get(), window.size.get())?;
     initialize_content(window, hwnd).context("failed to initialize the content")?;
@@ -655,18 +692,12 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
 
     if window.has_custom_title_bar() {
         let chrome_layer = window.chrome_layer()?;
-        let mut strip = crate::win32::caption_buttons::CaptionButtonStrip::new(
+        let strip = crate::win32::caption_buttons::CaptionButtonStrip::new(
             &chrome_layer,
             window.get_scale(),
             &window.style.borrow(),
             window.compositor_controller.clone(),
             hwnd,
-        )?;
-        let mut client_rect = RECT::default();
-        unsafe { GetClientRect(hwnd, &raw mut client_rect)? };
-        strip.set_strip_position(
-            PhysicalSize::new(client_rect.right - client_rect.left, client_rect.bottom - client_rect.top),
-            0,
         )?;
         window.caption_buttons.replace(Some(strip));
     }
@@ -685,6 +716,16 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     let content_layer = compositor.CreateContainerVisual()?;
     let chrome_layer = compositor.CreateContainerVisual()?;
 
+    // Auto-track HWND client size on the layers whose effective size is
+    // actually consumed: `root_visual` is the chain root; `chrome_layer`
+    // backs the strip's `RelativeOffsetAdjustment(1,0,0)` anchor;
+    // `backdrop_layer` carries the Mica tint. `content_layer` is left at
+    // default size because the ANGLE visual sets its own absolute `Size`
+    // in `resize_surface` and no other child reads the parent's size.
+    root_visual.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
+    chrome_layer.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
+    backdrop_layer.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
+
     // VisualCollection ordering is bottom-to-top; sequential `InsertAtTop`
     // calls put each new layer above the previous one. Final stacking:
     // backdrop (bottom) < content (middle) < chrome (top).
@@ -694,6 +735,7 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     root_children.InsertAtTop(&chrome_layer)?;
 
     let backdrop_visual = compositor.CreateSpriteVisual()?;
+    backdrop_visual.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
     backdrop_layer.Children()?.InsertAtBottom(&backdrop_visual)?;
 
     desktop_window_target.SetRoot(&root_visual)?;

@@ -40,15 +40,15 @@ Two crate-internal modules, both `pub(crate)` only — no FFI surface, no `_api.
   - Strip consultation in `on_nchittest` after the initial `DwmDefWindowProc` / `DefWindowProcW` consultation, but before preserving a default non-`HTCLIENT` result for points inside the strip.
   - Current `on_nchittest` returns early when `!window.is_resizable()`. Split that guard: resize-border math stays conditional on `is_resizable`, but custom caption-button hit-testing and draggable titlebar fallback must still run for non-resizable Custom-titlebar windows.
   - The existing pointer handlers (`on_pointerupdate`, `on_pointerdown`, `on_pointerup`) — which already merge client and non-client pointer messages via the `WM_POINTERUPDATE | WM_NCPOINTERUPDATE` / `_DOWN` / `_UP` arms in the wndproc dispatch — are extended to dispatch into the free function `caption_kind_at_screen(window, screen)`, which converts screen coordinates to strip-local coordinates and runs the strip's geometric hit-test. The documented [`WM_NCPOINTERDOWN`](https://learn.microsoft.com/windows/win32/inputmsg/wm-ncpointerdown) contract — `HIWORD(wParam)` carries the prior `WM_NCHITTEST` result — is unreliable on Windows 11: implementation-observed, the upper word arrives muxed with `POINTER_FLAG_*` bits and never matches `HTCLOSE` / `HTMAXBUTTON` / `HTMINBUTTON` for `WM_NCPOINTER*` messages. Geometric hit-testing in the strip is the workaround; an earlier draft of this spec mandated the `HIWORD(wParam)` route.
-  - On `WM_NCPOINTERUPDATE` the dispatch returns `Some(LRESULT(0))` for caption-button hit-test areas to suppress Kotlin-facing pointer events for the toolkit-owned gesture; non-caption NC areas (e.g. title-bar drag region) still fall through to the existing dispatch. The client-variant `WM_POINTERUPDATE` is gated by `strip.has_press_for(pointer_id)` while the strip owns a press: implicit pointer capture can drift from non-client to client mid-press, and an unsuppressed UPDATE on that path lets the host's drag source observe a held primary button without the matching DOWN, kicking off `DoDragDrop`.
+  - On `WM_NCPOINTERUPDATE` the dispatch returns `Some(LRESULT(0))` for caption-button hit-test areas to suppress Kotlin-facing pointer events for the toolkit-owned gesture; non-caption NC areas (e.g. title-bar drag region) still fall through to the existing dispatch. The client-variant `WM_POINTERUPDATE` is gated by `strip.has_press_for(pointer_id)` while the strip owns a press: implicit pointer capture can drift from non-client to client mid-press, and an unsuppressed UPDATE on that path lets the host's drag source observe a held primary button without the matching DOWN, kicking off `DoDragDrop`. While suppressing the host event, the wndproc still forwards `strip.on_pointer_update(caption_kind_at_screen(...), ...)` so the WinUI capture rule (`Pressed → PressedDraggedOff` on drift, reverse on return) fires for client-side movement.
   - Beyond the primary path, `on_pointerup` drains tracked `Suppressed` sessions via `strip.consume_swallowed_release(pointer_id, button)` — keyed by `(pointer_id, PointerButton)` so the drain works regardless of where the implicit pointer capture delivers the UP (`WM_NCPOINTERUP` off the strip, or `WM_POINTERUP` in the client area). Releases whose press began outside the strip fall through to Kotlin: chrome ownership scopes to cycles whose DOWN was on the strip.
   - `WM_POINTERCAPTURECHANGED` gets a cleanup-only arm. The handler matches every owned session — `Active` plus any `Suppressed` mode, via `strip.has_press_for(pointer_id)` — and calls `strip.on_pointer_cancel(id)` without firing a caption-button action. Microsoft documents [`WM_POINTERCAPTURECHANGED`](https://learn.microsoft.com/windows/win32/inputmsg/wm-pointercapturechanged) as the cleanup signal and warns not to depend on paired pointer notifications, but does not state that it is always delivered for implicit `WM_NCPOINTER*` capture loss — hence the defensive cleanup arms below.
   - `WM_CANCELMODE` and `WM_ACTIVATE`-deactivate call `strip.cancel_any_press()` (no `pointer_id` available) and return `None`. [`WM_CANCELMODE`](https://learn.microsoft.com/windows/win32/winmsg/wm-cancelmode) doc says `DefWindowProc` "cancels internal processing of standard scroll bar input, cancels internal menu processing, and releases the mouse capture" — letting it run preserves that. These arms backstop focus-loss paths Windows does not deliver `WM_POINTERCAPTURECHANGED` on (ALT-TAB, `EnableWindow(FALSE)`, RDP disconnect); without them a press session can stay live on return.
   - `TrackMouseEvent(TME_NONCLIENT | TME_LEAVE)` is armed at the window/event-loop layer when an NC pointer update enters the window non-client area, not when it enters a specific caption button.
   - Existing `on_ncmouseleave` extended to call `strip.on_nc_mouse_leave()` and `window.nc_leave_tracking_fired()` before the existing `DwmDefWindowProc` pass-through.
-  - `on_dpichanged` and `on_settingchange` extended to call the strip's invalidation methods.
+  - `on_dpichanged` and `on_settingchange` extended to call the strip's invalidation methods. `WM_DPICHANGED` calls `Window::set_dpi_metrics(new_dpi)` (wparam-derived) before any nested handler runs so downstream readers (`Window::max_chrome_y`, `Window::get_scale`, `is_in_top_resize_border`, `on_nchittest`) consume the freshly cached metrics without re-syscalling.
   - `on_windowposchanged` extended to call `strip.on_max_state_change(IsZoomed(hwnd).as_bool())` when the cached maximize state has changed. The toolkit's wndproc dispatch already routes `WM_WINDOWPOSCHANGED`, and `on_windowposchanged` currently returns `Some(LRESULT(0))`; the dispatch path therefore does not rely on downstream `DefWindowProc`-generated `WM_SIZE`. Do not introduce a new `WM_SIZE` arm. [`IsZoomed`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-iszoomed) is the documented Win32 API for checking maximized state.
-  - `on_nccalcsize` extended (a) to apply the maximized client-area inset described in §3.6 *before* the existing `NCCalcSizeEvent` is emitted, and (b) to call `strip.on_resize(client_size, max_chrome_y)` after the inset-aware client-rect calculation and after `resize_backdrop_tint`. The strip's in-method `Commit()` then publishes the backdrop's queued size and the strip's new offset together — a single coupled commit rather than two visible frames.
+  - `on_nccalcsize` extended (a) to apply the maximized client-area inset described in §3.6 *before* the existing `NCCalcSizeEvent` is emitted, and (b) to call `strip.on_resize(max_chrome_y)` after the inset-aware client-rect calculation. The strip's in-method `Commit()` then publishes the strip's new offset and any queued companion mutations together — a single coupled commit rather than two visible frames. The backdrop tint `SpriteVisual` auto-tracks via `RelativeSizeAdjustment(1,1)` and no longer requires a per-tick `SetSize`.
 
 ### 3.3 Composition tree restructure
 
@@ -115,9 +115,9 @@ This keeps the strip a pure state machine with no OS-call dependencies.
 
 When a `WS_THICKFRAME`-having window is maximized, Windows positions it so that its window rect extends past the monitor's work area on all four sides. The overhang exists so the resize border / drop shadow remains off-screen when the window is maximized; the system clips the window to the monitor edge for display.
 
-For the toolkit's `WindowTitleBarKind::Custom` path, the existing `on_nccalcsize` handler leaves the top inset at 0 so the title-bar area is part of the client area. **In maximized state two effects compound: (a) the OS positions the window so that its top sits `max_chrome_y` pixels above the visible monitor; (b) per [Visual.Offset](https://learn.microsoft.com/uwp/api/windows.ui.composition.visual.offset), composition (0,0) tracks the HWND window-rect top-left, so a strip at composition Y=0 sits the same distance off-monitor.**
+For the toolkit's non-system titlebar paths (`WindowTitleBarKind::Custom` / `WindowTitleBarKind::None`), the existing `on_nccalcsize` handler leaves the top inset at 0 so the title-bar area is part of the client area. **In maximized state two effects compound: (a) the OS positions the window so that its top sits `max_chrome_y` pixels above the visible monitor; (b) per [Visual.Offset](https://learn.microsoft.com/uwp/api/windows.ui.composition.visual.offset), composition (0,0) tracks the HWND window-rect top-left, so the content layer (and, for `Custom`, the strip's `composition_root`) at composition Y=0 sits the same distance off-monitor.**
 
-The fix has two pieces. (1) `WM_NCCALCSIZE` adjusts `rgrc[0].top += max_chrome_y` so the client rect's top sits at the monitor edge (snippet below). (2) The composition tree shifts in lockstep — `set_strip_position` offsets the strip's `composition_root` and `Window::set_content_top_offset` offsets the content layer, both by the same `max_chrome_y` — so the strip's top edge and Skiko-rendered content both land on the monitor edge. For non-resizable maximized windows `max_chrome_y` is `0`, the inset is skipped, and both layers stay at composition Y=0 matching the OS-positioned window-rect top. The wndproc derives `max_chrome_y` from [`GetSystemMetricsForDpi`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-getsystemmetricsfordpi) and passes it per call, so resize-while-maximized events preserve the offset.
+The fix has two pieces. (1) `WM_NCCALCSIZE` adjusts `rgrc[0].top += max_chrome_y` so the client rect's top sits at the monitor edge (snippet below). (2) The composition tree shifts in lockstep — `Window::set_content_top_offset` offsets the content layer for both `Custom` and `None`, and `set_strip_position` additionally offsets the strip's `composition_root` for `Custom` — both by the same `max_chrome_y`. The publish path differs: `Custom` queues `set_content_top_offset` from `WM_NCCALCSIZE` and lets the strip's `on_resize` commit publish both the content-layer offset and the strip Y in one batch (the maximize-glyph swap rides `on_max_state_change` from `WM_WINDOWPOSCHANGED` separately); `None` has no strip, so `WM_NCCALCSIZE` queues the offset and `Window::commit_composition` publishes it. For non-resizable maximized windows `max_chrome_y` is `0`, the inset is skipped, and both layers stay at composition Y=0 matching the OS-positioned window-rect top. The wndproc derives `max_chrome_y` from [`GetSystemMetricsForDpi`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-getsystemmetricsfordpi) and passes it per call, so resize-while-maximized events preserve the offset.
 
 `max_chrome_y` is the per-monitor DPI-scaled `SM_CYSIZEFRAME` only. The original spec drafted it as `SM_CYSIZEFRAME + SM_CXPADDEDBORDER`, mirroring [Windows Terminal's `_OnNcCalcSize`](https://github.com/microsoft/terminal/blob/e4e3f08efca9d0ffba330eee12edbcb16897ddcb/src/cascadia/WindowsTerminal/NonClientIslandWindow.cpp). Manual verification on Windows 11 showed the padded border over-insets for this toolkit's non-system titlebar style (`WS_CAPTION` retained, `WS_SYSMENU` cleared — see §2 / §4.6 for the style policy): the title-bar area sat below the monitor edge by exactly `SM_CXPADDEDBORDER` pixels. The divergence from Terminal is consistent with the [`SM_CXPADDEDBORDER`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-getsystemmetrics) docs, which describe it as "border padding for captioned windows" — a metric whose semantics depend on which caption-style bits are set. Terminal retains `WS_SYSMENU`; the toolkit does not.
 
@@ -125,17 +125,18 @@ The inset only runs when `window.is_resizable()` (i.e., `WS_THICKFRAME` is prese
 
 ```text
 if (wParam == TRUE && window.is_resizable() && IsZoomed(hwnd)) {
-    if (window.has_custom_title_bar()) {
+    if (window.has_non_system_title_bar()) {
         UINT dpi = GetDpiForWindow(hwnd);
         int max_chrome_y = GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi);
-        // The Custom-titlebar handler leaves the top inset at 0 so the
-        // title-bar area stays in the client rect. The maximized
-        // off-monitor overhang on top is added back here so the strip's
-        // top edge sits at the monitor edge.
+        // The non-system-titlebar handler leaves the top inset at 0 so
+        // the title-bar area stays in the client rect. The maximized
+        // off-monitor overhang on top is added back here so the strip
+        // (Custom) and content layer (Custom / None) sit at the visible
+        // monitor edge.
         rgrc[0].top += max_chrome_y;
     }
     // Auto-hide-taskbar claw-back applies to maximized resizable
-    // Custom-titlebar windows only — see Notes below.
+    // non-system-titlebar windows only — see Notes below.
 }
 ```
 
@@ -178,9 +179,11 @@ impl D2dContext {
     // Internally requests `BeginDraw::<ID2D1DeviceContext>` (the documented
     // IID per the Composition native-interop sample) then upcasts to
     // `&ID2D1RenderTarget` for the closure.
-    // Ok(None) on DXGI_ERROR_DEVICE_REMOVED — caller skips this frame.
-    // Callers must preserve dirty state when Ok(None) is returned; no pixels were drawn.
-    // Other errors propagate as anyhow::Error.
+    // Ok(None) when device loss is detected on either BeginDraw or EndDraw —
+    // caller skips this frame. The trap matches three HRESULTs:
+    // DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET, D2DERR_RECREATE_TARGET
+    // (see §6.2). Callers must preserve dirty state when Ok(None) is returned;
+    // no pixels were drawn. Other errors propagate as anyhow::Error.
 
     /// Cheap WinRT smart-pointer clone — the factory is a plain field, so this is infallible.
     pub fn dwrite_factory(&self) -> IDWriteFactory;
@@ -247,7 +250,7 @@ impl CaptionButtonStrip {
     // Pointer routing — called from event_loop's WM_NCPOINTER* handlers and
     // capture-loss cleanup path.
     pub fn on_pointer_update(
-        &mut self, kind: Option<CaptionButtonKind>, pointer_id: u32, device: PointerDeviceKind,
+        &mut self, kind: Option<CaptionButtonKind>, device: PointerDeviceKind,
     ) -> anyhow::Result<()>;
     pub fn on_pointer_down(
         &mut self,
@@ -287,13 +290,13 @@ impl CaptionButtonStrip {
 
     // Theming / metric / state changes.
     pub fn on_activate(&mut self, is_active: bool) -> anyhow::Result<()>;
-    pub fn on_dpi_change(&mut self, new_scale: f32) -> anyhow::Result<()>;
+    pub fn on_dpi_change(&mut self, new_scale: f32, max_chrome_y: i32) -> anyhow::Result<()>;
     pub fn on_appearance_change(
         &mut self, appearance: Appearance, high_contrast: HighContrast,
     ) -> anyhow::Result<()>;
     pub fn on_rendering_device_replaced(&mut self) -> anyhow::Result<()>;
     pub fn on_max_state_change(&mut self, is_maximized: bool) -> anyhow::Result<()>;
-    pub fn on_resize(&mut self, client_size: PhysicalSize, max_chrome_y: i32) -> anyhow::Result<()>;
+    pub fn on_resize(&mut self, max_chrome_y: i32) -> anyhow::Result<()>;
 }
 
 // The wndproc filters primary at the call site, but suppression is
@@ -371,7 +374,7 @@ Maximize requires `is_maximizable`. `Window::maximize()` is a no-op when `!is_ma
 
 For Minimize / Maximize, visibility and actionability are separate: if exactly one of `is_minimizable` / `is_maximizable` is true, both occupy strip geometry and the false one renders Disabled. `TITLEBARINFOEX` documents the corresponding accessibility states (index 2 Minimize, index 3 Maximize, `STATE_SYSTEM_UNAVAILABLE` / `STATE_SYSTEM_INVISIBLE`).
 
-Disabled Minimize / Maximize buttons are suppressed from action and interaction, not from layout: they never enter Hovered / Pressed, `on_pointer_down` ignores them, and `on_pointer_up` never returns an action for them. Do not collapse disabled buttons out of the strip; collapse only when both Minimize and Maximize are hidden.
+Disabled Minimize / Maximize buttons are suppressed from action and interaction, not from layout: they never enter Hovered / Pressed, `on_pointer_down` records a `Suppressed { held_button: Left }` primary session for them, and `on_pointer_up` never returns an action for them. Do not collapse disabled buttons out of the strip; collapse only when both Minimize and Maximize are hidden.
 
 **Primary-button-only activation; full-press suppression.** The strip *acts* only on the primary action of a pointer ([`POINTER_CHANGE_FIRSTBUTTON_DOWN`](https://learn.microsoft.com/windows/win32/api/winuser/ne-winuser-pointer_button_change_type) / `..._UP` for mouse / pen, contact for touch). The wndproc computes `is_primary` from `POINTER_INFO.ButtonChangeType` and only invokes `strip.on_pointer_down` / `strip.on_pointer_up` for primary events. *Suppression* is broader. Acceptance criteria, by case:
 
@@ -396,7 +399,7 @@ These outcomes are produced by two wndproc branches (the primary-action path and
 
 `WM_POINTERCAPTURECHANGED` requires no `event_loop.rs` change: the existing call to `strip.on_pointer_cancel(pointer_id)` already drops any session for the cancelled pointer regardless of mode. The wndproc also short-circuits `on_pointerupdate`'s Kotlin-event dispatch for caption-button hit-test areas regardless of pointer state, so `Event::PointerUpdated` / `PointerEntered` / mid-contact button-change events never surface for the strip's region. The strip owns its hit-test rectangle end-to-end: Kotlin never sees `PointerDown` / `PointerUp` / `PointerUpdated` with `non_client_area = true` for points inside the strip, nor any release whose press began there. Right-click on a caption button remains an unhandled gesture — that surface is owned by the system-menu work tracked separately in `TODO.md`. The single-`Option<PressSession>` design retains the strip's existing single-press-at-a-time limitation: concurrent multi-button or multi-pointer presses (e.g. holding right while pressing left, or a touch + mouse hold) drop the second DOWN; its matching UP will leak.
 
-Disabled visible Minimize / Maximize map to `HTCAPTION`. This matches Win32's native default: `DefWindowProcW(WM_NCHITTEST)` returns `HTCAPTION` for native Min/Max button rectangles (including the *enabled* ones in `min && max`), and `DwmDefWindowProc(WM_NCHITTEST)` does not handle these hit-tests — implementation-observed on Windows 11. The strip therefore must return `HTMINBUTTON` / `HTMAXBUTTON` for *enabled* buttons (Snap Layouts requires `HTMAXBUTTON` per the doc) and `HTCAPTION` for disabled ones. Manual acceptance verifies disabled Min/Max fire no actions and disabled Maximize shows no Snap Layouts.
+Disabled visible Minimize / Maximize map to `HTCAPTION`. This matches Win32's native default: `DefWindowProcW(WM_NCHITTEST)` returns `HTCAPTION` for native Min/Max button rectangles (including the *enabled* ones in `min && max`), and `DwmDefWindowProc(WM_NCHITTEST)` does not handle these hit-tests — implementation-observed on Windows 11. The strip therefore must return `HTMINBUTTON` / `HTMAXBUTTON` for *enabled* buttons (Snap Layouts requires `HTMAXBUTTON` per the doc) and `HTCAPTION` for disabled ones. The strip still owns the pointer cycle for presses that begin on a disabled visible button: DOWN / UP are swallowed by the `Suppressed` session above, no hover or press visuals appear, and no action fires. Manual acceptance verifies disabled Min/Max fire no actions and disabled Maximize shows no Snap Layouts.
 
 ### 4.3 `CaptionButton` (private to `caption_buttons.rs`)
 
@@ -504,7 +507,7 @@ The actual draw call uses `ID2D1RenderTarget::DrawText` with an `IDWriteTextForm
 - `D2dContext` knows nothing about caption buttons in its method signatures, but is private to caption-button rasterisation; if a future Composition+D2D consumer materialises in the crate, lift `D2dContext` to a shared module then.
 - `CaptionButtonStrip` knows nothing about Win32 messages or wndproc. Inputs are typed (kind, pointer id, device kind, theme, etc.); outputs are typed (`Option<CaptionButtonAction>`).
 - `CaptionButton`, `CaptionTheme`, `CaptionButtonMetrics`, `Availability`, `ButtonInteraction`, `PressSession` are private to `caption_buttons.rs`.
-- `Window` only knows how to insert a `ContainerVisual` into its `chrome_layer` and how to call the strip's lifecycle methods. No new public methods leak through FFI.
+- `Window` only knows how to insert a `ContainerVisual` into its `chrome_layer` and how to call the strip's lifecycle methods. No new public methods leak through FFI. Initial strip layout (the first `set_strip_position` call) happens inside `CaptionButtonStrip::new` with `max_chrome_y = 0`; `Window` never invokes positioning directly. The strip's right-edge auto-tracks the chrome-layer effective size via `composition_root.RelativeOffsetAdjustment(1,0,0) + AnchorPoint(1,0)`; only `Offset.Y` mutates per resize tick.
 
 ## 5. Data flow
 
@@ -576,18 +579,18 @@ Implementation: `ColorKeyFrameAnimation` started via `Compositor.CreateColorKeyF
 | Input | Strip method | Cost |
 |---|---|---|
 | `WM_NCHITTEST` | `hit_test(point)` | cheap (geometry math) |
-| `WM_NCPOINTERUPDATE` entering/staying in the window NC area | window arms NC leave tracking; strip receives `on_pointer_update(Some(kind), id, device)` over an enabled button or `on_pointer_update(None, id, device)` elsewhere | cheap (state + brush) |
+| `WM_NCPOINTERUPDATE` entering/staying in the window NC area | window arms NC leave tracking; strip receives `on_pointer_update(Some(kind), device)` over an enabled button or `on_pointer_update(None, device)` elsewhere | cheap (state + brush) |
 | `WM_NCPOINTERDOWN` over an enabled button (primary) | `on_pointer_down(kind, id, device)` | cheap |
 | `WM_NCPOINTERUP` or `WM_POINTERUP` after a caption-button press | `on_pointer_up(Some(kind) / None, id) -> Option<CaptionButtonAction>`; action fires when release is over the captured enabled button. UPs whose DOWN was on the strip are consumed (`Active` and `Suppressed`-`Left` via the primary branch, non-primary via `consume_swallowed_release`); releases whose press began outside the strip fall through to Kotlin as `PointerUp` events. | cheap |
 | `WM_POINTERCAPTURECHANGED` | `on_pointer_cancel(id)` for any session whose `pointer_id` matches (gated by `has_press_for`, covering `Active` and every `Suppressed` mode); cleanup only, no action | cheap |
 | `WM_CANCELMODE` | `cancel_any_press()`; returns `None` so `DefWindowProc` performs the standard cancel (mouse capture, scroll/menu tracking) | cheap |
 | `WM_NCMOUSELEAVE` | `on_nc_mouse_leave()` (also: window clears tracking armed) | cheap |
-| `WM_NCCALCSIZE` (after client-rect calc) | `Window::set_content_top_offset(max_chrome_y)` (Custom only) and `on_resize(client_size, max_chrome_y)` | cheap (`SetOffset` per button + strip-position set + content-layer offset; single `Commit` from `on_resize`) |
-| `WM_DPICHANGED` | `on_dpi_change(new_scale)` | **expensive** (re-rasterise all glyph surfaces) |
+| `WM_NCCALCSIZE` (after client-rect calc) | `Window::set_content_top_offset(max_chrome_y)` for any non-system titlebar; `Custom` then calls `on_resize(max_chrome_y)`, `None` calls `Window::commit_composition` | cheap (strip `composition_root.SetOffset` + content-layer offset; single commit per kind) |
+| `WM_DPICHANGED` | `set_dpi_metrics(new_dpi)` first. `Custom`: queue `set_content_top_offset(max_chrome_y)` → `on_dpi_change(scale, max_chrome_y)` (single commit publishes glyph re-rasterisation, strip Y, and queued content offset together). `None`: queue `set_content_top_offset`, then `commit_composition`. | **expensive** (re-rasterise all glyph surfaces; one commit per kind) |
 | `Appearance` event | `on_appearance_change(appearance, hc)` | **expensive iff foreground-rest colour changed** |
 | `HighContrast` event | same as above with new `hc` | **expensive** (glyph code points swap E921↔EF2D etc.) |
 | `WM_ACTIVATE` | `on_activate(is_active)`; on deactivate, also `cancel_any_press()` to backstop focus-loss paths Windows does not deliver `WM_POINTERCAPTURECHANGED` on (ALT-TAB, `EnableWindow(FALSE)`, RDP) | cheap (theme re-resolve, brush updates) |
-| `WM_WINDOWPOSCHANGED` | `Window::set_content_top_offset(max_chrome_y)` (Custom only) and `on_max_state_change(IsZoomed(hwnd))` | **expensive for Maximize button only** (E922 ↔ E923) on actual transitions; strip + content-layer Y-shift published by `on_max_state_change`'s commit |
+| `WM_WINDOWPOSCHANGED` | `Custom`: `on_max_state_change(is_maximized)`. `None`: no-op (the matching offset / commit already fired in WM_NCCALCSIZE on this tick). `WindowResizeEvent` emitted from `GetClientRect` when `SWP_NOSIZE` is clear. | **expensive for Maximize button only** on actual transitions (E922 ↔ E923); content-offset companion mutations ride the same-tick WM_NCCALCSIZE commit, not this one. |
 
 The `WM_WINDOWPOSCHANGED` row covers both user-driven (button click) and programmatic (`Window::maximize` / `Window::restore`) maximize-state transitions.
 
@@ -645,6 +648,7 @@ Three tiers. Construction of a `Custom` titlebar window must fail closed if capt
 ### 6.1 Construction-time
 
 - **`composition::ensure_d2d_context` failure** (D3D11 / D2D / DWrite / `CompositionGraphicsDevice` creation): the error propagates out of `CaptionButtonStrip::new`, which propagates out of `initialize_window`, causing `WM_NCCREATE` / `CreateWindowExW` / `window_create` to fail through the existing `ffi_boundary` path. The thread-local singleton cell stays empty on failure — failure is *not* memoised. Subsequent `Custom`-titlebar windows retry through the same cell.
+- **D3D11 driver-type fallback.** `build_d2d_device` attempts `D3D_DRIVER_TYPE_HARDWARE` first and, on failure, retries with `D3D_DRIVER_TYPE_WARP` (Microsoft's in-box high-performance software rasterizer). Headless / Remote Desktop / degraded-GPU sessions where hardware-D3D11 creation fails therefore complete window creation against WARP rather than failing `WM_NCCREATE`. The fallback is shared by both initial construction and `D2dContext::rebuild_d2d_device` because both call `build_d2d_device`. **One-way characteristic:** the `Rc<D2dContext>` thread-local singleton caches whichever driver type was selected; once WARP is chosen, the `D2dContext` stays on WARP for the lifetime of the UI thread (no automatic upgrade-back to HARDWARE when a hardware GPU later becomes available — e.g., Remote Desktop reconnect to local console, GPU resume after sleep). Mitigation is out of scope for this spec.
 - **`CaptionButtonStrip::new` failure** (e.g., `CompositionGraphicsDevice::CreateDrawingSurface` returns failure): planned behavior is to propagate the error out of `initialize_window`; the custom window is not shown without caption buttons.
 - Construction-time caption-button errors for `Custom` titlebars are fatal to window creation. Do not silently leave `Window.caption_buttons` as `None` after a successful `window_create`.
 
@@ -652,13 +656,13 @@ Three tiers. Construction of a `Custom` titlebar window must fail closed if capt
 
 ### 6.2 Runtime: device loss
 
-Device loss is detected **only via `BeginDraw` returning `DXGI_ERROR_DEVICE_REMOVED`** (the reactive path inside `with_d2d_render_target`). The proactive path through `ID3D11Device4::RegisterDeviceRemovedEvent` plus a threadpool wait callback is deferred — see `TODO.md` *Caption-button proactive device-loss detection*.
+Device loss is detected reactively inside `with_d2d_render_target` on both [`ID2D1RenderTarget::BeginDraw`](https://learn.microsoft.com/en-us/windows/win32/api/d2d1/nf-d2d1-id2d1rendertarget-begindraw) and [`ID2D1RenderTarget::EndDraw`](https://learn.microsoft.com/en-us/windows/win32/api/d2d1/nf-d2d1-id2d1rendertarget-enddraw). `EndDraw`'s doc explicitly returns `D2DERR_RECREATE_TARGET` when the underlying device is lost, so the chokepoint must trap there too — not only on `BeginDraw`. The proactive path through `ID3D11Device4::RegisterDeviceRemovedEvent` plus a threadpool wait callback is deferred — see `TODO.md` *Caption-button proactive device-loss detection*.
 
-Recovery sequence (single path): `BeginDraw` returns `DXGI_ERROR_DEVICE_REMOVED` → `with_d2d_render_target` calls `D2dContext::rebuild_d2d_device` synchronously on the UI thread → builds a fresh `ID2D1Device` (D3D11 + D2D only — DirectWrite factory and `CompositionGraphicsDevice` survive device loss) → calls `ICompositionGraphicsDeviceInterop::SetRenderingDevice` on the existing `CompositionGraphicsDevice`, which retains the new device. The original `BeginDraw` returns `Ok(None)` so the calling glyph-rasterise function leaves `glyph_surface_dirty = true`; the next `RenderingDeviceReplaced` notification fires the strip's redraw subscription (below) which re-rasterises and commits.
+Recovery sequence (single path): a device-loss HRESULT on `BeginDraw` or `EndDraw` → `with_d2d_render_target` calls `D2dContext::rebuild_d2d_device` synchronously on the UI thread → builds a fresh `ID2D1Device` (D3D11 + D2D only — DirectWrite factory and `CompositionGraphicsDevice` survive device loss; rebuild inherits the HARDWARE→WARP fallback documented in §6.1) → calls `ICompositionGraphicsDeviceInterop::SetRenderingDevice` on the existing `CompositionGraphicsDevice`, which retains the new device. The chokepoint returns `Ok(None)` so the calling glyph-rasterise function leaves `glyph_surface_dirty = true`; the next `RenderingDeviceReplaced` notification fires the strip's redraw subscription (below) which re-rasterises and commits. When `EndDraw` reports device loss after a successful body closure, the body's return value is dropped — the device is gone, so the closure's outputs are no longer trustworthy.
 
 The expectation that `RenderingDeviceReplaced` fires on the UI thread holds only because the toolkit always invokes `SetRenderingDevice` from the UI thread — agile marshalling lets the callback fire on the caller's thread, not on a thread of the framework's choosing. Microsoft's Composition native-interop sample demonstrates the inverse pattern: when its `SetRenderingDevice` runs from a `SetThreadpoolWait` worker, the handler runs on that worker. See `TODO.md` *Verify `RenderingDeviceReplaced` fires synchronously*.
 
-**HRESULT match.** The check matches exactly `DXGI_ERROR_DEVICE_REMOVED` (`0x887A0005`), matching the [Composition native interop](https://learn.microsoft.com/windows/apps/develop/composition/composition-native-interop) sample's `BeginDraw` check.
+**HRESULT match.** Three documented loss-class HRESULTs are trapped: `DXGI_ERROR_DEVICE_REMOVED` (`0x887A0005`), `DXGI_ERROR_DEVICE_RESET` (`0x887A0007`), and `D2DERR_RECREATE_TARGET` (`0x8899000C`). The first two come from the underlying DXGI / D3D11 device; the third is D2D-specific and is the canonical signal `EndDraw` returns when the device is gone. The [Composition native interop](https://learn.microsoft.com/windows/apps/develop/composition/composition-native-interop) sample only covers the `DXGI_ERROR_DEVICE_REMOVED` case; the broader set comes from each API's documented return-values table.
 
 **Surface lifetime.** `CompositionDrawingSurface` instances stay usable after `SetRenderingDevice` — only their contents need re-rasterising. The Composition native-interop sample reuses every surface across device replacement.
 
@@ -706,15 +710,15 @@ These tests live in `caption_buttons.rs` `#[cfg(test)] mod tests { ... }`. No Wi
 `:sample:runSkikoSampleWin32` already runs with `WindowTitleBarKind.Custom` in this repo. Acceptance checklist for review:
 
 - Rest / Hover / Pressed for enabled buttons, plus Disabled for Minimize / Maximize table rows, in light and dark themes.
-- Disabled Minimize / Maximize never fire actions; disabled Maximize does not show the Win11 Snap Layout flyout.
+- Disabled Minimize / Maximize never fire actions, never show hover / press visuals, swallow their DOWN / UP cycle, and disabled Maximize does not show the Win11 Snap Layout flyout.
 - Window inactive vs active — colour modulation visible on `Idle` and `PressedDraggedOff` only. Hover and pressed on caption buttons of an inactive window render with the active palette (matches Terminal's `MinMaxCloseControl` and WinUI 3's `TitleBar`).
 - **High contrast** — `HighContrast { Off, On }` is binary; the strip does not distinguish among the four shipped HC themes (HC #1, HC #2, HC White, HC Black). The actual colours come from `GetSysColor` reads (§4.4) and therefore vary per theme even though the toolkit's enum is binary. Manually verify: (a) glyph code points swap to the contrast variants U+EF2C / EF2D / EF2E / EF2F when HC turns On; (b) cycling through all four shipped HC themes under HC On — the strip's backplate, glyph foreground, hover, and pressed colours read from `COLOR_BTNFACE` / `COLOR_BTNTEXT` / `COLOR_HIGHLIGHT` / `COLOR_HIGHLIGHTTEXT` / `COLOR_GRAYTEXT`, so each theme paints a visibly different palette and no colour is hard-coded; (c) a side-by-side visual comparison against a native Win32 chrome window (e.g., File Explorer) under each HC theme — caption-button colours match. Divergence from native colour pairs (e.g., hover not using `HIGHLIGHT` / `HIGHLIGHTTEXT`) is a bug, not acceptable variance.
 - Maximize → Restore via the button — glyph swap U+E922 ↔ U+E923.
 - **Maximized window edge inset** — when the window is maximized on each of (a) a single-monitor setup, (b) a primary monitor with the taskbar at bottom, (c) a primary monitor with the taskbar at top, (d) a secondary monitor at a different DPI scale than the primary: every caption button is fully visible (no clipping at right or top edge), the strip's right edge sits flush against the inset client area, the Close button's top edge sits flush with the visible monitor edge (no clip, no excess gap above the buttons). The close button hover region maps correctly under the cursor, and Snap Layouts pop on the maximize button at the visually-correct location. Verifies §3.6 inset and strip-side Y-shift.
-- **Maximized Custom-titlebar content placement** — render Skiko content at client y=0 (e.g. a coloured rect), maximize, and confirm the rect's top sits flush with the visible monitor edge.
+- **Maximized Custom / None content placement** — under both `WindowTitleBarKind::Custom` and `WindowTitleBarKind::None`, render Skiko content at client y=0 (e.g. a coloured rect), maximize, and confirm the rect's top sits flush with the visible monitor edge for each titlebar mode.
 - Snap-layout flyout appears on Win11 hover over the maximize button.
 - Mouse, touch, and pen input — touch correctly skips the hover state.
-- DPI change by dragging across monitors with different scales — glyph re-rasterised crisply at the new scale; deterministic font size from `GetDesignGlyphMetrics` per §4.5 produces glyphs whose visible bbox matches the 10-epx target on each monitor.
+- DPI change by dragging across monitors with different scales — glyph re-rasterised crisply at the new scale; deterministic font size from `GetDesignGlyphMetrics` per §4.5 produces glyphs whose visible bbox matches the 10-epx target on each monitor; the strip re-anchors so its right edge stays flush with the new client width and `max_chrome_y` is recomputed at the new DPI.
 - Drag the title bar (drag region between strip and left edge) to move the window.
 - Press a button, drag off, release outside — no action fires; button visually returns to Rest.
 - Press button A, drag over button B — B does *not* react (WinUI capture rule).
