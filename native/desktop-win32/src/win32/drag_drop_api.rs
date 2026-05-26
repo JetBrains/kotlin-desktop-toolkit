@@ -18,7 +18,7 @@ pub extern "C" fn drag_drop_register_target(window_ptr: WindowPtr, callbacks: Dr
 #[unsafe(no_mangle)]
 pub extern "C" fn drag_drop_start(data_object: ComInterfaceRawPtr, allowed_effects: u32, callbacks: DragSourceCallbacks) -> u32 {
     ffi_boundary("drag_drop_start", || {
-        let data_object = data_object.borrow::<IDataObject>()?;
+        let data_object = data_object.cast::<IDataObject>()?;
         start_drag_drop(&data_object, allowed_effects, callbacks)
     })
 }

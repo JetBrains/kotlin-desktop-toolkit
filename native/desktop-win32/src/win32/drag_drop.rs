@@ -94,7 +94,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
     ) -> WinResult<()> {
         let effect = unsafe { effect.as_mut() }.ok_or(E_POINTER)?;
         let data_object = data_obj.as_ref().ok_or(E_POINTER)?;
-        let data_obj_ptr = ComInterfaceRawPtr::new(data_object)?;
+        let data_obj_ptr = ComInterfaceRawPtr::from_interface(data_object)?;
         let result = (self.callbacks.drag_enter_handler)(data_obj_ptr, key_state.0, PhysicalPoint::new(pt.x, pt.y), effect.0);
         *effect = DROPEFFECT(result);
         Ok(())
@@ -115,7 +115,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
     fn Drop(&self, data_obj: WinRef<IDataObject>, key_state: MODIFIERKEYS_FLAGS, pt: &POINTL, effect: *mut DROPEFFECT) -> WinResult<()> {
         let effect = unsafe { effect.as_mut() }.ok_or(E_POINTER)?;
         let data_object = data_obj.as_ref().ok_or(E_POINTER)?;
-        let data_obj_ptr = ComInterfaceRawPtr::new(data_object)?;
+        let data_obj_ptr = ComInterfaceRawPtr::from_interface(data_object)?;
         let result = (self.callbacks.drop_handler)(data_obj_ptr, key_state.0, PhysicalPoint::new(pt.x, pt.y), effect.0);
         *effect = DROPEFFECT(result);
         Ok(())
