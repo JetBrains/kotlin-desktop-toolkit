@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     mem::ManuallyDrop,
     rc::{Rc, Weak},
     sync::{
@@ -84,9 +84,9 @@ pub struct Window {
     compositor_controller: CompositorController,
     composition_target: RefCell<Option<DesktopWindowTarget>>,
     composition_root: RefCell<Option<ContainerVisual>>,
-    min_size: RefCell<Option<LogicalSize>>,
-    origin: RefCell<LogicalPoint>,
-    size: RefCell<LogicalSize>,
+    min_size: Cell<Option<LogicalSize>>,
+    origin: Cell<LogicalPoint>,
+    size: Cell<LogicalSize>,
     style: RefCell<WindowStyle>,
     pointer_in_window: AtomicBool,
     pointer_click_counter: RefCell<PointerClickCounter>,
@@ -116,9 +116,9 @@ impl Window {
             compositor_controller,
             composition_target: RefCell::new(None),
             composition_root: RefCell::new(None),
-            min_size: RefCell::new(None),
-            origin: RefCell::default(),
-            size: RefCell::new(LogicalSize::new(0.0, 0.0)),
+            min_size: Cell::new(None),
+            origin: Cell::default(),
+            size: Cell::new(LogicalSize::new(0.0, 0.0)),
             style: RefCell::default(),
             pointer_in_window: AtomicBool::new(false),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
@@ -131,8 +131,8 @@ impl Window {
 
     pub fn create(window: &Rc<Self>, creation_params: &WindowParams) -> anyhow::Result<()> {
         let instance = crate::get_dll_instance();
-        window.origin.replace(creation_params.origin);
-        window.size.replace(creation_params.size);
+        window.origin.set(creation_params.origin);
+        window.size.set(creation_params.size);
         window.style.replace(creation_params.style);
         let title = copy_from_utf8_string(&creation_params.title)?;
         unsafe {
@@ -431,12 +431,12 @@ impl Window {
     }
 
     #[must_use]
-    pub fn get_min_size(&self) -> Option<LogicalSize> {
-        *self.min_size.borrow()
+    pub const fn get_min_size(&self) -> Option<LogicalSize> {
+        self.min_size.get()
     }
 
     pub fn set_min_size(&self, size: LogicalSize) {
-        self.min_size.replace(Some(size));
+        self.min_size.set(Some(size));
     }
 
     #[inline]
@@ -557,7 +557,7 @@ fn on_nccreate(hwnd: HWND, lparam: LPARAM) -> anyhow::Result<()> {
 fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.hwnd.store(hwnd.0, Ordering::Release);
     unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.borrow().to_system().0 as _) };
-    window.set_position(*window.origin.borrow(), *window.size.borrow())?;
+    window.set_position(window.origin.get(), window.size.get())?;
     initialize_content(window, hwnd).context("failed to initialize the content")?;
     window.set_cursor(Cursor::load_from_system(CursorIcon::Arrow)?);
     Ok(())

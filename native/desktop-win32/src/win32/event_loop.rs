@@ -1,4 +1,7 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+};
 
 use desktop_common::ffi_utils::RustAllocatedStrPtr;
 
@@ -43,7 +46,7 @@ use super::{
 
 thread_local! {
     static KEYEVENT_MESSAGES: RefCell<HashMap<u64, MSG>> = RefCell::new(HashMap::new());
-    static LAST_KEYEVENT_MESSAGE_ID: RefCell<u64> = const { RefCell::new(0) };
+    static LAST_KEYEVENT_MESSAGE_ID: Cell<u64> = const { Cell::new(0) };
 }
 
 pub struct EventLoop {
@@ -411,9 +414,9 @@ fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM
     let virtual_key = VirtualKey::from(wparam);
     let timestamp = unsafe { GetMessageTime() }.cast_unsigned();
     let pos = unsafe { GetMessagePos() };
-    let original_msg_id = LAST_KEYEVENT_MESSAGE_ID.with_borrow_mut(|msg_id| {
-        *msg_id = msg_id.wrapping_add(1);
-        *msg_id
+    let original_msg_id = LAST_KEYEVENT_MESSAGE_ID.with(|c| {
+        c.update(|v| v.wrapping_add(1));
+        c.get()
     });
     KEYEVENT_MESSAGES.with_borrow_mut(|map| {
         map.insert(
