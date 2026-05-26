@@ -127,7 +127,7 @@ pub extern "C" fn data_object_drop(data_object_id: i64) {
 #[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_is_format_available(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> bool {
     ffi_boundary("com_data_object_is_format_available", || {
-        let data_object = data_object_ptr.borrow::<IDataObject>()?;
+        let data_object = data_object_ptr.cast::<IDataObject>()?;
         is_data_object_format_available(&data_object, DataFormat::Other(data_format))
     })
 }
@@ -135,7 +135,7 @@ pub extern "C" fn com_data_object_is_format_available(data_object_ptr: ComInterf
 #[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_enum_formats(data_object_ptr: ComInterfaceRawPtr) -> AutoDropUInt32Array {
     ffi_boundary("com_data_object_enum_formats", || {
-        let data_object = data_object_ptr.borrow::<IDataObject>()?;
+        let data_object = data_object_ptr.cast::<IDataObject>()?;
         let formats = enum_data_object_format_ids(&data_object)?;
         Ok(AutoDropArray::new(formats))
     })
@@ -156,7 +156,7 @@ pub extern "C" fn com_data_object_try_read_bytes(data_object_ptr: ComInterfaceRa
 }
 
 fn com_data_object_read_bytes_impl(data_object_ptr: &ComInterfaceRawPtr, data_format: u32) -> anyhow::Result<AutoDropByteArray> {
-    let data_object = data_object_ptr.borrow::<IDataObject>()?;
+    let data_object = data_object_ptr.cast::<IDataObject>()?;
     DataReader::create(&data_object, DataFormat::Other(data_format))
         .and_then(|reader| reader.get_bytes())
         .map(|bytes| AutoDropArray::new(bytes.into_boxed_slice()))
@@ -177,7 +177,7 @@ pub extern "C" fn com_data_object_try_read_file_list(data_object_ptr: ComInterfa
 }
 
 fn com_data_object_read_file_list_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<AutoDropArray<RustAllocatedStrPtr>> {
-    let data_object = data_object_ptr.borrow::<IDataObject>()?;
+    let data_object = data_object_ptr.cast::<IDataObject>()?;
     DataReader::create(&data_object, DataFormat::FileList)
         .and_then(|reader| reader.get_file_list())
         .map(|file_list| file_list.into_iter().map(RustAllocatedStrPtr::from_c_string).collect())
@@ -199,7 +199,7 @@ pub extern "C" fn com_data_object_try_read_html_fragment(data_object_ptr: ComInt
 }
 
 fn com_data_object_read_html_fragment_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<RustAllocatedStrPtr> {
-    let data_object = data_object_ptr.borrow::<IDataObject>()?;
+    let data_object = data_object_ptr.cast::<IDataObject>()?;
     DataReader::create(&data_object, DataFormat::HtmlFragment)
         .and_then(|reader| reader.get_html())
         .map(RustAllocatedStrPtr::from_c_string)
@@ -218,7 +218,7 @@ pub extern "C" fn com_data_object_try_read_text(data_object_ptr: ComInterfaceRaw
 }
 
 fn com_data_object_read_text_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<RustAllocatedStrPtr> {
-    let data_object = data_object_ptr.borrow::<IDataObject>()?;
+    let data_object = data_object_ptr.cast::<IDataObject>()?;
     DataReader::create(&data_object, DataFormat::Text)
         .and_then(|reader| reader.get_text())
         .map(RustAllocatedStrPtr::from_c_string)
@@ -227,7 +227,7 @@ fn com_data_object_read_text_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyho
 #[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_release(data_object_ptr: ComInterfaceRawPtr) {
     ffi_boundary("com_data_object_release", || {
-        drop(data_object_ptr);
+        data_object_ptr.release();
         Ok(())
     });
 }

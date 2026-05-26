@@ -196,14 +196,14 @@ pub extern "C" fn ole_clipboard_empty() {
 pub extern "C" fn ole_clipboard_get_data() -> ComInterfaceRawPtr {
     ffi_boundary("ole_clipboard_get_data", || {
         let data_object = unsafe { OleGetClipboard()? };
-        Ok(ComInterfaceRawPtr::new(&data_object)?)
+        Ok(ComInterfaceRawPtr::from_interface(&data_object)?)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn ole_clipboard_set_data(data_object_ptr: ComInterfaceRawPtr) {
     ffi_boundary("ole_clipboard_set_data", || {
-        let data_object = data_object_ptr.borrow::<IDataObject>()?;
+        let data_object = data_object_ptr.cast::<IDataObject>()?;
         unsafe { OleSetClipboard(&data_object)? };
         unsafe { OleFlushClipboard()? };
         Ok(())
