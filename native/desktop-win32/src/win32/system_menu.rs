@@ -4,8 +4,8 @@
 use windows::Win32::{
     Foundation::HWND,
     UI::WindowsAndMessaging::{
-        EnableMenuItem, GWL_STYLE, GetSystemMenu, GetWindowLongPtrW, HMENU, MF_BYCOMMAND, MF_ENABLED, MF_GRAYED, SC_CLOSE, SC_MAXIMIZE,
-        SC_MINIMIZE, SC_MOVE, SC_RESTORE, SC_SIZE, SetWindowLongPtrW, WS_SYSMENU,
+        EnableMenuItem, GetSystemMenu, HMENU, MF_BYCOMMAND, MF_ENABLED, MF_GRAYED, SC_CLOSE, SC_MAXIMIZE, SC_MINIMIZE, SC_MOVE, SC_RESTORE,
+        SC_SIZE,
     },
 };
 
@@ -35,36 +35,15 @@ pub(crate) const fn system_menu_enable_table(style: &WindowStyle, is_maximized: 
     }
 }
 
-/// Materialise the per-window system-menu copy. The first
+/// Materialise the per-window system-menu copy and return its `HMENU`. The first
 /// `GetSystemMenu(hwnd, FALSE)` promotes the window from the shared global-default
 /// menu to its own copy; the copy then persists until the window is destroyed.
 /// Must be called while `WS_SYSMENU` is still set — i.e. before
 /// `initialize_window` narrows the style.
-pub(crate) fn seed_system_menu(hwnd: HWND) {
-    let _ = unsafe { GetSystemMenu(hwnd, false) };
-}
-
-/// Return the window-menu `HMENU` for `hwnd`. Fast path returns the per-window
-/// copy created by [`seed_system_menu`]. If the seed never ran, falls back to
-/// toggling `WS_SYSMENU` around `GetSystemMenu` (no `SWP_FRAMECHANGED`); the
-/// style is restored unconditionally so the bit cannot leak.
-pub(crate) fn ensure_system_menu(hwnd: HWND) -> anyhow::Result<HMENU> {
+pub(crate) fn seed_system_menu(hwnd: HWND) -> anyhow::Result<HMENU> {
     let h_menu = unsafe { GetSystemMenu(hwnd, false) };
-    if !h_menu.is_invalid() {
-        return Ok(h_menu);
-    }
-
-    log::warn!("GetSystemMenu fast path returned NULL; falling back to WS_SYSMENU toggle");
-
-    let prev_style_bits = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) };
-    let prev_style: u32 = prev_style_bits.try_into().unwrap();
-    let with_sysmenu = prev_style | WS_SYSMENU.0;
-    unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, with_sysmenu.try_into().unwrap()) };
-    let h_menu = unsafe { GetSystemMenu(hwnd, false) };
-    unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, prev_style_bits) };
-
     if h_menu.is_invalid() {
-        anyhow::bail!("GetSystemMenu returned NULL even after WS_SYSMENU toggle");
+        anyhow::bail!("GetSystemMenu returned NULL");
     }
     Ok(h_menu)
 }

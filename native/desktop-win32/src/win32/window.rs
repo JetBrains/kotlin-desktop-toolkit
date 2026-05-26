@@ -27,13 +27,13 @@ use windows::{
             Input::KeyboardAndMouse::{TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT, TrackMouseEvent},
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
-                GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR,
-                PostMessageW, RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER,
-                SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
-                SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetForegroundWindow, SetPropW, SetWindowLongPtrW,
-                SetWindowPos, SetWindowTextW, ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, USER_DEFAULT_SCREEN_DPI,
-                WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_NULL, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
-                WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+                GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW, HMENU, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed,
+                LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON,
+                SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+                SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetForegroundWindow, SetPropW,
+                SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
+                USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_NULL, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW,
+                WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -48,7 +48,7 @@ use super::{
     pointer::PointerClickCounter,
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
-    system_menu::{ensure_system_menu, seed_system_menu, sync_system_menu_state},
+    system_menu::{seed_system_menu, sync_system_menu_state},
     utils,
     window_api::{WindowParams, WindowStyle, WindowTitleBarKind},
 };
@@ -120,6 +120,7 @@ pub struct Window {
     pointer_in_window: AtomicBool,
     nc_leave_tracking_armed: AtomicBool,
     cached_dpi_metrics: Cell<DpiMetrics>,
+    system_menu: Cell<HMENU>,
     caption_buttons: RefCell<Option<CaptionButtonStrip>>,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
@@ -158,6 +159,7 @@ impl Window {
             pointer_in_window: AtomicBool::new(false),
             nc_leave_tracking_armed: AtomicBool::new(false),
             cached_dpi_metrics: Cell::new(DpiMetrics::for_dpi(USER_DEFAULT_SCREEN_DPI)),
+            system_menu: Cell::new(HMENU::default()),
             caption_buttons: RefCell::new(None),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
@@ -384,13 +386,27 @@ impl Window {
         self.send_system_command(SC_RESTORE);
     }
 
+    #[inline]
+    pub(crate) const fn system_menu(&self) -> HMENU {
+        self.system_menu.get()
+    }
+
+    /// Apply enable state to the cached `HMENU`. Called from the
+    /// `WM_INITMENUPOPUP` arm so we run after `DefWindowProc`'s default
+    /// auto-gray.
+    pub(crate) fn sync_system_menu(&self) {
+        sync_system_menu_state(self.system_menu(), &self.style.borrow(), self.is_maximized(), self.is_minimized());
+    }
+
     /// Show the system menu at `screen_pt` and dispatch the user's choice via
-    /// `WM_SYSCOMMAND`.
+    /// `WM_SYSCOMMAND`. Enable state is applied by the `WM_INITMENUPOPUP` arm
+    /// during `TrackPopupMenu`'s popup-init phase.
     pub(crate) fn show_system_menu(&self, screen_pt: PhysicalPoint) -> anyhow::Result<()> {
         let hwnd = self.hwnd();
-        let h_menu = ensure_system_menu(hwnd)?;
-
-        sync_system_menu_state(h_menu, &self.style.borrow(), self.is_maximized(), self.is_minimized());
+        let h_menu = self.system_menu();
+        if h_menu.is_invalid() {
+            anyhow::bail!("system menu not initialized for this window");
+        }
 
         let _ = unsafe { SetForegroundWindow(hwnd) };
         // TrackPopupMenu with TPM_RETURNCMD returns 0 for both cancel and
@@ -752,9 +768,11 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     let dpi = unsafe { GetDpiForWindow(hwnd) };
     window.set_dpi_metrics(dpi);
     // Materialise the system-menu copy while WS_SYSMENU is still set, before
-    // the style narrow below clears it.
+    // the style narrow below clears it. Cache the HMENU for reuse on every
+    // show — Win32 owns the lifetime (destroyed with the window).
     if window.has_non_system_title_bar() {
-        seed_system_menu(hwnd);
+        let h_menu = seed_system_menu(hwnd).context("failed to seed system menu")?;
+        window.system_menu.set(h_menu);
     }
     unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.borrow().to_system().0 as _) };
     window.set_position(window.origin.get(), window.size.get())?;
