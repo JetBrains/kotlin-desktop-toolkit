@@ -8,6 +8,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - [Window](#window)
 - [Renderer (ANGLE)](#renderer-angle)
 - [Caption buttons & Composition context](#caption-buttons--composition-context)
+- [System menu](#system-menu)
 - [Geometry](#geometry)
 - [Keyboard](#keyboard)
 - [Pointer](#pointer)
@@ -148,6 +149,33 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - `root_visual`, `chrome_layer`, `backdrop_layer`, and the backdrop tint `SpriteVisual` carry `RelativeSizeAdjustment(1,1)` set in `initialize_content`; per-resize `SetSize` is not required. `content_layer` is left at default — the ANGLE visual sets its own absolute `Size` and no other child reads the parent's effective size. The strip's `on_resize` is the single commit point per resize tick — see spec §5.5.
 
 **Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`, `Window::with_strip[_mut]` accessor), `event_loop` (wndproc dispatch into `caption_kind_at_screen`, `dispatch_caption_action`, `notify_strip_appearance_refresh`, and the strip's lifecycle methods), `appearance` (`Appearance` / `HighContrast` seed values + change events), `geometry` (`PhysicalPoint` / `PhysicalSize`).
+
+---
+
+## System menu
+
+**Purpose.** Alt+Space and title-bar right-click → system menu (Move / Size / Minimize / Maximize / Restore / Close) on `WindowTitleBarKind::Custom` and `WindowTitleBarKind::None`, with `WS_SYSMENU` cleared at runtime.
+
+**Files.** `system_menu.rs` (decision table + `seed_system_menu` / `ensure_system_menu` / `sync_system_menu_state`), `window.rs` (`Window::show_system_menu`), `event_loop.rs` (`WM_NCRBUTTONUP` / `WM_SYSCOMMAND` arms).
+
+**FFI surface.** None.
+
+**Key types.**
+- `SystemMenuEnableTable` — six bools (`SC_RESTORE` / `SC_MOVE` / `SC_SIZE` / `SC_MINIMIZE` / `SC_MAXIMIZE` / `SC_CLOSE`). Built by the pure `const fn system_menu_enable_table(&WindowStyle, is_maximized, is_minimized)` and applied to the `HMENU` by `sync_system_menu_state` via `EnableMenuItem`.
+
+**Ownership.** `HMENU` owned by Win32. Allocated on the first `GetSystemMenu(hwnd, FALSE)` call (lazy per [Raymond Chen](https://devblogs.microsoft.com/oldnewthing/20100528-00/?p=13893)), persists until the window is destroyed — we never call `GetSystemMenu(hwnd, TRUE)` (the documented way to destroy the copy mid-lifetime).
+
+**Threading.** UI thread only.
+
+**Gotchas.**
+- `WindowStyle::to_system` clears `WS_SYSMENU` for non-system title-bar kinds, otherwise Windows draws native caption buttons over the toolkit-drawn strip even at zero title-bar height (empirically verified). To keep `GetSystemMenu` working after the style narrow, `initialize_window` calls `seed_system_menu` **before** narrowing — the dummy `GetSystemMenu` call promotes the window from the shared global-default menu to its own copy while `WS_SYSMENU` is still live. Subsequent `GetSystemMenu` calls return the cached copy even after `WS_SYSMENU` is cleared (empirically verified; Microsoft docs are silent on this interaction).
+- `ensure_system_menu` toggles `WS_SYSMENU` around `GetSystemMenu` as a defence-in-depth fallback if the seed didn't run. `log::warn!` fires once on use; the style is restored unconditionally so the bit cannot leak on the error path. `SWP_FRAMECHANGED` is deliberately omitted — no frame redraw, no transient native caption surface.
+- `alt_space_anchor` returns the top-left of the visible window frame via `Window::get_physical_rect` (`DWMWA_EXTENDED_FRAME_BOUNDS`). `GetWindowRect` is the fallback path only — its outer rect includes the invisible resize border / drop-shadow margin.
+- Caption-button right-clicks never reach `on_ncrbuttonup`. The strip's non-primary swallow in `on_pointerdown` / `on_pointerup` gates on `caption_kind_at_screen(...).is_some()` — button-kind-agnostic, so every visible caption button is covered (enabled or disabled, including the disabled-`Minimize` / disabled-`Maximize` cases where `WM_NCHITTEST` returns `HTCAPTION` per `caption_buttons.rs:333`). The swallow returns `Some(LRESULT(0))` without forwarding to `DefWindowProc`, so the legacy `WM_NCRBUTTONUP` is never delivered. The exact mechanism (whether `DefWindowProc` declines to synthesise the legacy message, or pointer-input routing suppresses it upstream) is not documented. Spot-checked empirically on the disabled-`Maximize` case.
+- Dispatch goes through `send_system_command` for native min / max / restore animations.
+- `TrackPopupMenu` with `TPM_RETURNCMD` returns 0 for both cancel and failure; `show_system_menu` distinguishes via `GetLastError` cleared before the call. On failure both wndproc arms return `None` so `DefWindowProc` runs — pre-restoration behaviour, no crash.
+
+**Cross-refs.** `window` (`show_system_menu`, `send_system_command`, `style`, `is_maximized` / `is_minimized`), `event_loop` (`on_ncrbuttonup`, `on_syscommand`, `alt_space_anchor`), `window_api` (`WindowStyle`).
 
 ---
 

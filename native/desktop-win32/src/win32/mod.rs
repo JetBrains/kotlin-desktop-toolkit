@@ -34,6 +34,7 @@ pub mod screen;
 pub mod screen_api;
 pub mod strings;
 pub mod strings_api;
+pub mod system_menu;
 pub mod utils;
 pub mod window;
 pub mod window_api;

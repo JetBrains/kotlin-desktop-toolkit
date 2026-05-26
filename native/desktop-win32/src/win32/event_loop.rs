@@ -25,13 +25,14 @@ use windows::Win32::{
         WindowsAndMessaging::{
             AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetMessagePos,
             GetMessageTime, GetMessageW, GetWindowLongPtrW, GetWindowRect, HTCAPTION, HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, HTTOP,
-            MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SM_CYSIZE, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-            SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE,
-            WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN,
-            WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE,
-            WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL,
-            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
-            WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SC_KEYMENU, SM_CYSIZE, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE,
+            SWP_NOZORDER, SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE,
+            WM_CANCELMODE, WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO,
+            WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE,
+            WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN,
+            WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT,
+            WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP,
+            WM_WINDOWPOSCHANGED,
         },
     },
 };
@@ -151,6 +152,8 @@ impl EventLoop {
 
             WM_NCLBUTTONDOWN => on_nclbuttondown(window, wparam, lparam),
 
+            WM_NCRBUTTONUP => on_ncrbuttonup(window, wparam, lparam),
+
             WM_LBUTTONUP => on_lbuttonup(window, lparam),
 
             WM_MOUSEMOVE => on_mousemove(window, wparam, lparam),
@@ -162,6 +165,8 @@ impl EventLoop {
             WM_SETTINGCHANGE => on_settingchange(self, window, wparam, lparam),
 
             WM_SYSCOLORCHANGE => on_syscolorchange(self, window),
+
+            WM_SYSCOMMAND => on_syscommand(window, wparam, lparam),
 
             WM_CLOSE => self.handle_event(window, Event::WindowCloseRequest),
 
@@ -597,6 +602,58 @@ fn on_nclbuttondown(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<L
     window.with_strip_mut(|strip| strip.on_pointer_down(kind));
     unsafe { SetCapture(window.hwnd()) };
     Some(LRESULT(0))
+}
+
+/// Title-bar right-click → system menu.
+fn on_ncrbuttonup(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    if !window.has_custom_title_bar() {
+        return None;
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    let ht = wparam.0 as u32;
+    if ht != HTCAPTION {
+        return None;
+    }
+    let pt = PhysicalPoint::new(GET_X_LPARAM!(lparam.0), GET_Y_LPARAM!(lparam.0));
+    match window.show_system_menu(pt) {
+        Ok(()) => Some(LRESULT(0)),
+        Err(err) => {
+            log::warn!("show_system_menu (WM_NCRBUTTONUP) failed: {err}");
+            None
+        }
+    }
+}
+
+/// Alt+Space → system menu, via `SC_KEYMENU` synthesised by `DefWindowProc`.
+/// Other `SC_*` codes fall through.
+fn on_syscommand(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    if !window.has_non_system_title_bar() {
+        return None;
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    let cmd = (wparam.0 & 0xFFF0) as u32;
+    if cmd != SC_KEYMENU || lparam.0 != ' ' as isize {
+        return None;
+    }
+    let anchor = alt_space_anchor(window);
+    match window.show_system_menu(anchor) {
+        Ok(()) => Some(LRESULT(0)),
+        Err(err) => {
+            log::warn!("show_system_menu (Alt+Space) failed: {err}");
+            None
+        }
+    }
+}
+
+/// Alt+Space anchor: top-left of the visible window frame.
+fn alt_space_anchor(window: &Window) -> PhysicalPoint {
+    let rect = window.get_physical_rect().unwrap_or_else(|err| {
+        log::warn!("get_physical_rect failed, falling back to GetWindowRect: {err}");
+        let mut r = RECT::default();
+        let _ = unsafe { GetWindowRect(window.hwnd(), &raw mut r) };
+        r
+    });
+    PhysicalPoint::new(rect.left, rect.top)
 }
 
 /// Release path for the press cycle started in [`on_nclbuttondown`].

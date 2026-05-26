@@ -12,7 +12,7 @@ use anyhow::Context;
 use windows::{
     UI::Composition::{CompositionBackfaceVisibility, Compositor, ContainerVisual, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
-        Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, RECT, WPARAM},
+        Foundation::{COLORREF, ERROR_SUCCESS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, RECT, SetLastError, WIN32_ERROR, WPARAM},
         Graphics::{
             Dwm::{
                 DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_EXTENDED_FRAME_BOUNDS, DWMWA_SYSTEMBACKDROP_TYPE,
@@ -30,9 +30,10 @@ use windows::{
                 GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR,
                 PostMessageW, RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER,
                 SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
-                SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos,
-                SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WM_SYSCOMMAND,
-                WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+                SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetForegroundWindow, SetPropW, SetWindowLongPtrW,
+                SetWindowPos, SetWindowTextW, ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, USER_DEFAULT_SCREEN_DPI,
+                WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_NULL, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP,
+                WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -43,10 +44,11 @@ use super::{
     caption_buttons::CaptionButtonStrip,
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
-    geometry::{LogicalPoint, LogicalRect, LogicalSize},
+    geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint},
     pointer::PointerClickCounter,
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
+    system_menu::{ensure_system_menu, seed_system_menu, sync_system_menu_state},
     utils,
     window_api::{WindowParams, WindowStyle, WindowTitleBarKind},
 };
@@ -248,7 +250,7 @@ impl Window {
         Ok(LogicalSize::from_physical(rect.right, rect.bottom, self.get_scale()))
     }
 
-    pub fn get_rect(&self) -> anyhow::Result<LogicalRect> {
+    pub(crate) fn get_physical_rect(&self) -> anyhow::Result<RECT> {
         let mut rect = RECT::default();
         unsafe {
             DwmGetWindowAttribute(
@@ -258,6 +260,11 @@ impl Window {
                 size_of::<RECT>().try_into()?,
             )?;
         };
+        Ok(rect)
+    }
+
+    pub fn get_rect(&self) -> anyhow::Result<LogicalRect> {
+        let rect = self.get_physical_rect()?;
         let scale = self.get_scale();
         let origin = LogicalPoint::from_physical(rect.left, rect.top, scale);
         let size = LogicalSize::from_physical(rect.right - rect.left, rect.bottom - rect.top, scale);
@@ -375,6 +382,47 @@ impl Window {
 
     pub fn restore(&self) {
         self.send_system_command(SC_RESTORE);
+    }
+
+    /// Show the system menu at `screen_pt` and dispatch the user's choice via
+    /// `WM_SYSCOMMAND`.
+    pub(crate) fn show_system_menu(&self, screen_pt: PhysicalPoint) -> anyhow::Result<()> {
+        let hwnd = self.hwnd();
+        let h_menu = ensure_system_menu(hwnd)?;
+
+        sync_system_menu_state(h_menu, &self.style.borrow(), self.is_maximized(), self.is_minimized());
+
+        let _ = unsafe { SetForegroundWindow(hwnd) };
+        // TrackPopupMenu with TPM_RETURNCMD returns 0 for both cancel and
+        // failure; distinguish via GetLastError.
+        unsafe { SetLastError(WIN32_ERROR(0)) };
+        let cmd = unsafe {
+            TrackPopupMenu(
+                h_menu,
+                TPM_RIGHTBUTTON | TPM_RETURNCMD,
+                screen_pt.x.0,
+                screen_pt.y.0,
+                None,
+                hwnd,
+                None,
+            )
+        };
+        let last_error = unsafe { GetLastError() };
+        // Docs-recommended post-show null-message flush.
+        let _ = unsafe { PostMessageW(Some(hwnd), WM_NULL, WPARAM(0), LPARAM(0)) };
+
+        // `TPM_RETURNCMD` makes `TrackPopupMenu` return the selected menu-item ID
+        // or 0 for cancel-OR-failure. Distinguish via GetLastError.
+        if cmd.0 == 0 && last_error != ERROR_SUCCESS {
+            anyhow::bail!("TrackPopupMenu failed: {last_error:?}");
+        }
+        // Mask to the standard SC_* range before forwarding.
+        if let Ok(cmd_id) = u32::try_from(cmd.0)
+            && cmd_id != 0
+        {
+            self.send_system_command(cmd_id & 0xFFF0);
+        }
+        Ok(())
     }
 
     #[inline]
@@ -703,6 +751,11 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.hwnd.store(hwnd.0, Ordering::Release);
     let dpi = unsafe { GetDpiForWindow(hwnd) };
     window.set_dpi_metrics(dpi);
+    // Materialise the system-menu copy while WS_SYSMENU is still set, before
+    // the style narrow below clears it.
+    if window.has_non_system_title_bar() {
+        seed_system_menu(hwnd);
+    }
     unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.borrow().to_system().0 as _) };
     window.set_position(window.origin.get(), window.size.get())?;
     initialize_content(window, hwnd).context("failed to initialize the content")?;
