@@ -98,18 +98,18 @@ pub struct Window {
 impl Window {
     pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor_controller: CompositorController) -> anyhow::Result<Self> {
         static WNDCLASS_INIT: OnceLock<u16> = OnceLock::new();
-        if WNDCLASS_INIT.get().is_none() {
+        let wndclass_size = size_of::<WNDCLASSEXW>().try_into()?;
+        let _ = WNDCLASS_INIT.get_or_init(|| {
             let wndclass = WNDCLASSEXW {
-                cbSize: size_of::<WNDCLASSEXW>().try_into()?,
+                cbSize: wndclass_size,
                 hInstance: crate::get_dll_instance(),
                 lpszClassName: WNDCLASS_NAME,
                 lpfnWndProc: Some(wndproc),
                 style: CS_HREDRAW | CS_VREDRAW,
                 ..Default::default()
             };
-            let atom = unsafe { RegisterClassExW(&raw const wndclass) };
-            WNDCLASS_INIT.get_or_init(|| atom);
-        }
+            unsafe { RegisterClassExW(&raw const wndclass) }
+        });
         let window = Self {
             id: window_id,
             hwnd: AtomicPtr::default(),

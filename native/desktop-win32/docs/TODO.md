@@ -19,11 +19,6 @@ This list is point-in-time. Verify against current code before acting.
 - **What**: Only logs a trace; doesn't check `hwnd.is_null()` or call `DestroyWindow`. If the `Rc<Window>` drops without a prior `window_destroy`, the HWND leaks (and the window stays visible).
 - **Fix**: assert (or call `DestroyWindow` defensively) in `Drop`, or document that `window_destroy` is mandatory before drop and have the Kotlin `AutoCloseable` enforce it.
 
-### `WNDCLASS_INIT` registration race
-- **Where**: `window.rs:82-94`.
-- **What**: `OnceLock<u16>` checked with `get().is_none()` then populated via `get_or_init`. The two operations are not atomic together; concurrent window creation could call `RegisterClassExW` twice and lose the first atom.
-- **Fix**: use `get_or_init` alone (it's race-free) and remove the redundant `is_none` precheck.
-
 ### Duplicate `PointerDown` events
 - **Where**: `event_loop.rs:432` (`on_pointerupdate`) + `event_loop.rs:490` (`on_pointerdown`); also click-counter increment at both sites (`event_loop.rs:440`, `:490`).
 - **What**: A single physical button press can produce both a `WM_POINTERUPDATE` with a button-press change and a dedicated `WM_POINTERDOWN`. Both handlers emit `Event::PointerDown` and update the click counter, leading to a double `PointerDown` and an inflated click count for the same gesture.
@@ -107,7 +102,6 @@ This list is point-in-time. Verify against current code before acting.
 
 | File:line | Comment |
 |---|---|
-| `drag_drop.rs:97` | `// TODO: figure out lifetime` (see Likely bugs above) |
 | `renderer_angle.rs:146` | `// TODO: 0 on resize` (swap_interval should switch to 0 during resize) |
 | `screen.rs:31-32` | `// todo color space?` and `// todo stable uuid?` |
 | `desktop-common::logger.rs:195` | `// todo store handler and allow to change logger severity` |
@@ -147,25 +141,9 @@ This list is point-in-time. Verify against current code before acting.
 ### Typo
 - `desktop-common::logger.rs:181` — `"File appender creatrion failed"` (creation).
 
-### `&Vec<&str>` instead of `&[&str]`
-- **Where**: `global_data.rs:100` — `pub fn new_file_list(file_names: &Vec<&str>)`.
-- **Fix**: take `&[&str]` (clippy `ptr_arg`).
-
-### `screen_info_drop` has no caller
-- **Where**: `screen_api.rs:51`. Kotlin calls `screen_list_drop` (which recursively drops elements via `AutoDropArray`). The single-element drop is exported but never invoked from Kotlin.
-- **Fix**: remove if vestigial, or document the use case (e.g. future per-element marshalling).
-
-### `PointerModifiers` flag values only documented in Kotlin
-- **Where**: `pointer.rs` + `Pointer.kt:37-40`. Rust `PointerModifiers(u32)` populated via `core::mem::transmute` (`pointer.rs:153`) without named constants.
-- **Fix**: add `pub const SHIFT: u32 = 4;` and `pub const CTRL: u32 = 8;` (and any others) on `PointerModifiers`, replacing the transmute with a typed mask.
-
-### `CursorIcon::Unknown` panics
-- **Where**: `cursor.rs:52` — `panic!("Can't create Unknown cursor")`. Triggered if the integer 0 ever crosses FFI from Kotlin (Kotlin omits `Unknown`, but the discriminant 0 is reachable).
-- **Fix**: either remove `Unknown` (no defaultable variant exists), or treat 0 as a no-op error path and let the Kotlin side enforce the absence of `Unknown`.
-
-### `Platform.kt` `INSTANCE` apparently unused
-- **Where**: `org.jetbrains.desktop.common.Platform.kt`. `KotlinDesktopToolkit.kt:38` re-implements `isAarch64()` locally.
-- **Investigate**: is `Platform.INSTANCE` consumed by macOS / Linux only? If so, document; if not, delete.
+### `Platform.kt` `INSTANCE` only consumed by macOS
+- **Where**: `org.jetbrains.desktop.common.Platform.kt`. Used by `macos/KotlinDesktopToolkit.kt:44+`; Win32 and Linux re-implement `isAarch64()` / library-name resolution locally.
+- **Fix**: consolidate the per-platform `KotlinDesktopToolkit.kt` helpers onto a single shared `Platform.INSTANCE`-based path, or move `Platform` into the `macos` package and drop the `common` location.
 
 ### `DataFormat.Html` lazy + native call → potential pre-init crash
 - **Where**: `DataFormat.kt`. The `Html` lazy property triggers `clipboard_get_html_format_id()` on first read. Accessing it before `KotlinDesktopToolkit.init()` will crash.
@@ -192,7 +170,6 @@ This list is point-in-time. Verify against current code before acting.
 
 - **`AssertUnwindSafe` applied universally** in `ffi_boundary` (`desktop-common::logger.rs:312`). Partial mutation after panic unwind is not protected against. Worth deciding whether the toolkit's "panics are unrecoverable" stance is the policy and documenting it, or to add per-callsite `UnwindSafe` bounds.
 - **Background-thread panics silently lost** (thread-local `LAST_EXCEPTION_MSGS`). Decide whether to introduce a process-wide fallback channel for panics on dispatcher worker threads.
-- **`Platform.kt` orphan** (see smell above) — clarify ownership and use site.
 - **Physical-pixel exceptions in the FFI surface** (see `SUBSYSTEMS.md` → Geometry). Several events and callbacks expose `PhysicalPoint` / `PhysicalSize` directly to managed code. Some of these defensible (multi-monitor screen-space, pre-scale-change events); some are convenience-vs-fidelity tradeoffs that are worth re-evaluating one by one. The clearest candidate for conversion is the `DropTarget` callback `point` parameter (`DragDrop.kt:53, 57, 61`) — the target window has a well-defined scale and converting at the boundary would save every caller the same arithmetic. Decide per-call whether to convert at the boundary, expose both representations, or keep raw physical.
 - **Migrate from `anyhow` to `thiserror` for library-public errors.** The crate currently uses `anyhow::Error` as the unified error type throughout. `thiserror` is the recommended approach for libraries: it produces typed errors with stable variant names, lets callers branch on error kinds, and avoids the per-construction allocation overhead of `anyhow::Error`. `anyhow` is appropriate for binaries and for purely internal helper paths where the caller really doesn't care about the variant — keep it in those niches. Migrate the library-public surface first (anything observable in `*_api.rs` return shapes or surfaced through `LAST_EXCEPTION_MSGS`).
 

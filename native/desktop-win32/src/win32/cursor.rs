@@ -8,8 +8,6 @@ use windows_core::{Free, HSTRING, PCWSTR, Result as WinResult};
 #[repr(C)]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum CursorIcon {
-    Unknown,
-
     Arrow,
     IBeam,
     Wait,
@@ -31,7 +29,7 @@ pub enum CursorIcon {
 }
 
 impl CursorIcon {
-    pub(crate) fn to_native(self) -> PCWSTR {
+    pub(crate) const fn to_native(self) -> PCWSTR {
         match self {
             Self::Arrow => IDC_ARROW,
             Self::IBeam => IDC_IBEAM,
@@ -49,7 +47,6 @@ impl CursorIcon {
             Self::Help => IDC_HELP,
             Self::Pin => IDC_PIN,
             Self::Person => IDC_PERSON,
-            Self::Unknown => panic!("Can't create Unknown cursor"),
         }
     }
 }
