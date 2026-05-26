@@ -150,7 +150,7 @@ impl PointerInfo {
         };
         PointerState {
             pressed_buttons,
-            modifiers: unsafe { core::mem::transmute::<u32, PointerModifiers>(native_pointer_info.dwKeyStates) },
+            modifiers: PointerModifiers(native_pointer_info.dwKeyStates),
         }
     }
 

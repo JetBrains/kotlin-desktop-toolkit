@@ -97,7 +97,7 @@ pub(crate) mod hglobal_writer {
         HGlobalData::alloc_from(content)
     }
 
-    pub fn new_file_list(file_names: &Vec<&str>) -> anyhow::Result<HGlobalData> {
+    pub fn new_file_list(file_names: &[&str]) -> anyhow::Result<HGlobalData> {
         let header = DROPFILES {
             pFiles: size_of::<DROPFILES>().try_into()?,
             pt: POINT { x: 0, y: 0 },
