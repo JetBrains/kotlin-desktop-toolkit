@@ -4,6 +4,7 @@ import org.jetbrains.desktop.win32.AngleRenderer
 import org.jetbrains.desktop.win32.Appearance
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.CursorIcon
+import org.jetbrains.desktop.win32.DataFormat
 import org.jetbrains.desktop.win32.DataObject
 import org.jetbrains.desktop.win32.DragDropContinueResult
 import org.jetbrains.desktop.win32.DragDropEffect
@@ -89,9 +90,14 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                         effect: DragDropEffect,
                     ): DragDropEffect {
                         Logger.debug { "Drop" }
-                        val html = dataObject.readHtmlFragment()
-                        val text = dataObject.readTextItem()
-                        Logger.debug { "html: $html -- text: $text" }
+                        if (dataObject.isFormatAvailable(DataFormat.Html)) {
+                            val html = dataObject.readHtmlFragment()
+                            Logger.debug { "html: $html" }
+                        }
+                        if (dataObject.isFormatAvailable(DataFormat.Text)) {
+                            val text = dataObject.readTextItem()
+                            Logger.debug { "text: $text" }
+                        }
                         return effect
                     }
                 },
