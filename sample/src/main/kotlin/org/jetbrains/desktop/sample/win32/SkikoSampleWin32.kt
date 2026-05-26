@@ -38,6 +38,7 @@ fun legoAnimation(): String {
 class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
     companion object {
         private const val ANIMATION_FRAME_COUNT: Int = 151
+        private val timer: Timer = Timer(true)
     }
 
     private val animation: Animation by lazy {
@@ -68,9 +69,14 @@ class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
         val frame = (time.toFloat() % animationDuration) / animation.fPS
         animation.seekFrame(frame)
         animation.render(canvas, (size.width.toFloat() / 2) - (animation.width / 2), (size.height.toFloat() / 2) - (animation.height / 2))
-        Timer(true).schedule(floor(1000f / animation.fPS).toLong()) {
+        timer.schedule(floor(1000f / animation.fPS).toLong()) {
             window.requestRedraw()
         }
+    }
+
+    override fun close() {
+        timer.cancel()
+        super.close()
     }
 }
 
