@@ -10,6 +10,26 @@
 //!    [`ComInterfaceRawPtr::from_object`] takes ownership of one reference.
 //! 2. [`ComInterfaceRawPtr::cast`] reads the handle as a typed interface.
 //! 3. [`ComInterfaceRawPtr::release`] releases the owned reference.
+//!
+//! # Borrow-receipt rule
+//!
+//! Borrowing FFI functions that accept `ComInterfaceRawPtr` by value must
+//! NOT call [`release`](ComInterfaceRawPtr::release): Kotlin still owns the
+//! reference. Use [`cast`](ComInterfaceRawPtr::cast) to borrow the interface
+//! and let the handle fall out of scope without action. Releasing here
+//! double-frees the reference Kotlin will release on `DataObject.close()`.
+//! The dedicated release endpoint `com_data_object_release` is the one
+//! consuming exception.
+//!
+//! ```ignore
+//! pub extern "C" fn example(ptr: ComInterfaceRawPtr) {
+//!     ffi_boundary("example", || {
+//!         let iface = ptr.cast::<IDataObject>()?;
+//!         // use iface; do not call ptr.release()
+//!         Ok(())
+//!     });
+//! }
+//! ```
 
 use desktop_common::logger::PanicDefault;
 
