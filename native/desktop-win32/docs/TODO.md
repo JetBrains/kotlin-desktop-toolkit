@@ -14,11 +14,6 @@ This list is point-in-time. Verify against current code before acting.
 
 ## Likely bugs / suspect designs (verify before fixing)
 
-### `ComInterfaceRawPtr` lifetime in drag-drop callbacks
-- **Where**: `drag_drop.rs:97` — `// TODO: figure out lifetime` on `ComInterfaceRawPtr::new(data_object)?` inside `IDropTarget::DragEnter`. Same pattern in `Drop`.
-- **What**: The `IDataObject` reference is valid only for the duration of the COM callback. The `DataObject(rawPtr)` Kotlin wrapper constructed from it can be stored beyond the callback, leaving Kotlin holding a dangling pointer.
-- **Options**: (a) document that the `DataObject` passed to drop callbacks is callback-scoped only and add a Kotlin-side guard that closes it on callback return; (b) deep-copy / clone the IDataObject inside the callback so the wrapped pointer is independently AddRef'd.
-
 ### `Window::drop` doesn't verify HWND destruction
 - **Where**: `window.rs:414-418`.
 - **What**: Only logs a trace; doesn't check `hwnd.is_null()` or call `DestroyWindow`. If the `Rc<Window>` drops without a prior `window_destroy`, the HWND leaks (and the window stays visible).
@@ -42,7 +37,7 @@ This list is point-in-time. Verify against current code before acting.
 ### `DataObject` Kotlin class is not thread-safe
 - **Where**: `DataObject.kt:121-125` (`requireOpen`) + `close()`.
 - **What**: `requireOpen` reads `comInterfacePtr` without synchronisation; `close()` mutates it. Concurrent `close()` + `read*()` is a data race that can produce a use-after-free of the COM ref.
-- **Fix**: make access serialised — either document single-threaded use and add an assert, or add a `synchronized` / `AtomicReference` guard. The latter has perf cost on the hot read path; choose based on whether callers really do cross threads.
+- **Fix**: document single-threaded use and add a single-thread assert in `requireOpen`.
 
 ### `EnumDisplayMonitors` aborts on first per-monitor failure
 - **Where**: `screen.rs:50-53` (`monitor_enum_proc` returns `FALSE` on inner-call failure, which terminates enumeration).
