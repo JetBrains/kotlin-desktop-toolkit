@@ -9,7 +9,7 @@ import java.lang.foreign.MemorySegment
 public data class Screen(
     val isPrimary: Boolean,
     val name: String?,
-    val origin: LogicalPoint,
+    val origin: PhysicalPoint,
     val size: LogicalSize,
     val scale: Float,
     val maximumFramesPerSecond: Int,
@@ -19,7 +19,7 @@ public data class Screen(
             return Screen(
                 isPrimary = NativeScreenInfo.is_primary(s),
                 name = NativeScreenInfo.name(s).getString(0),
-                origin = LogicalPoint.fromNative(NativeScreenInfo.origin(s)),
+                origin = PhysicalPoint.fromNative(NativeScreenInfo.origin(s)),
                 size = LogicalSize.fromNative(NativeScreenInfo.size(s)),
                 scale = NativeScreenInfo.scale(s),
                 maximumFramesPerSecond = NativeScreenInfo.maximum_frames_per_second(s),

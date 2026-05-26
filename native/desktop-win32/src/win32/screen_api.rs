@@ -4,7 +4,7 @@ use desktop_common::{
 };
 
 use super::{
-    geometry::{LogicalPoint, LogicalSize, PhysicalPoint},
+    geometry::{LogicalSize, PhysicalPoint},
     screen::{self, ScreenInfo},
     window_api::{WindowPtr, with_window},
 };
@@ -16,7 +16,7 @@ impl PanicDefault for ScreenInfo {
         Self {
             is_primary: Default::default(),
             name: RustAllocatedStrPtr::null().to_auto_drop(),
-            origin: LogicalPoint::default(),
+            origin: PhysicalPoint::default(),
             size: LogicalSize::default(),
             scale: Default::default(),
             maximum_frames_per_second: Default::default(),

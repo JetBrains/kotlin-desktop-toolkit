@@ -54,12 +54,6 @@ This list is point-in-time. Verify against current code before acting.
 - **What**: Items that fail `GetDisplayName` or UTF-8 conversion are silently elided. Caller sees a shorter result list with no indication anything went wrong.
 - **Fix**: at minimum log each skipped item with the shell item's path/CLSID. Consider returning a typed partial-result error if the loss is meaningful.
 
-### `ScreenInfo.origin` should be `PhysicalPoint`, not `LogicalPoint`
-- **Where**: `screen.rs:27` declares `pub origin: LogicalPoint`; assigned at `screen.rs:98` via `LogicalPoint::from_physical(…)`.
-- **What**: A monitor's origin on the virtual desktop positions it on a coordinate space that may span multiple displays, each with a different DPI scale. Converting via any single monitor's scale loses precision — `LogicalPoint` for screen-space data is misleading because no one scale applies losslessly. The toolkit's own Geometry-exceptions rule (see `SUBSYSTEMS.md` → Geometry → Exceptions) calls out this case explicitly.
-- **Fix**: change the field type to `PhysicalPoint`. Drop the `LogicalPoint::from_physical` conversion at the assignment site; pass the raw physical origin through. Kotlin callers that need logical coordinates within a specific monitor can convert using that monitor's `scale`. Verify no existing Kotlin caller assumes the value is logical.
-- **Note**: `ScreenInfo.size` is also currently `LogicalSize`; it's defensible (a single monitor's size in its own logical pixels makes sense), but consider whether the same cross-monitor argument applies — discuss when fixing.
-
 ## Capability gaps
 
 ### IME support (WM_IME_*)
