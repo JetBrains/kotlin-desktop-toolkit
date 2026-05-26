@@ -24,10 +24,11 @@ Preconditions:
 
 ### 3.1 Modules
 
-Two crate-internal modules, both `pub(crate)` only — no FFI surface, no `_api.rs` partner.
+Three crate-internal modules, all `pub(crate)` only — no FFI surface, no `_api.rs` partner.
 
 - **`composition.rs`** — defines `CompositionContext`, private to caption-button rasterisation. Holds the `IDWriteFactory` and `CompositionGraphicsDevice` (both survive device loss); CGD retains the D3D11 / D2D rendering device, swapped on device loss via `SetRenderingDevice`. Hides `BeginDraw` / `EndDraw` and device-loss handling behind a single `with_d2d_render_target(surface, |rt, offset| -> ...)` chokepoint.
-- **`caption_buttons.rs`** — owns the per-window strip. Pure state-machine over typed inputs; no Win32 calls itself. The wndproc layer in `event_loop.rs` is the only place that touches both messages and the strip.
+- **`compositor_driver.rs`** — wraps `CompositorController`, subscribes to `CommitNeeded` and drains `Commit()` on the UI thread (inline if already on it, otherwise via `DispatcherQueue`). Provides the `pause_autocommit` / `publish_and_resume_autocommit` gate used by `renderer_angle.rs` to bracket resizes.
+- **`caption_buttons.rs`** — owns the per-window strip. State machine over typed inputs, with the `caption_kind_at_screen` hit-test helper performing the screen→client transform. The wndproc layer in `event_loop.rs` is the only place that handles raw `WM_*` messages and routes them into the strip.
 
 ### 3.2 Hook points
 
@@ -38,10 +39,13 @@ Two crate-internal modules, both `pub(crate)` only — no FFI surface, no `_api.
 - **`event_loop.rs`** handles:
   - Strip consultation in `on_nchittest` after the initial `DwmDefWindowProc` / `DefWindowProcW` consultation, but before preserving a default non-`HTCLIENT` result for points inside the strip.
   - The `on_nchittest` resize-border guard is split: resize-border math is conditional on `is_resizable`, but custom caption-button hit-testing and draggable titlebar fallback run for non-resizable Custom-titlebar windows too.
+  - `on_nclbuttondown` takes `lparam: LPARAM`. For `HTMAXBUTTON` / `HTMINBUTTON` / `HTCLOSE` wParams it routes to `strip.on_pointer_down(kind)` as before. For `HTCAPTION` wParam it re-hit-tests via `caption_kind_at_screen(window, pt)`: if the point lands on a disabled strip button, the wndproc calls `strip.on_pointer_down(k)` (creates `PrimaryPress { suppressed: true }`) + `SetCapture` and returns `LRESULT(0)` to swallow the click; if the point is not over any button, `None` is returned and DefWindowProc handles title-bar drag.
   - The pointer handlers (`on_pointerupdate`, `on_pointerdown`, `on_pointerup`) dispatch geometrically into `caption_kind_at_screen(window, screen)`, which converts screen coordinates to strip-local coordinates and runs the strip's geometric hit-test. The `HIWORD(wParam)` value documented for `WM_NCPOINTER*` is unreliable on Win11 — it arrives muxed with `POINTER_FLAG_*` bits and does not match `HTCLOSE` / `HTMAXBUTTON` / `HTMINBUTTON`.
-  - On `WM_NCPOINTERUPDATE` the dispatch returns `Some(LRESULT(0))` for caption-button hit-test areas to suppress Kotlin-facing pointer events for the toolkit-owned gesture; non-caption NC areas (e.g. title-bar drag region) still fall through to the standard dispatch. The client-variant `WM_POINTERUPDATE` is gated by `strip.has_press_for(pointer_id)` while the strip owns a press: implicit pointer capture can drift from non-client to client mid-press, and an unsuppressed UPDATE on that path lets the host's drag source observe a held primary button without the matching DOWN, kicking off `DoDragDrop`. While suppressing the host event, the wndproc still forwards `strip.on_pointer_update(caption_kind_at_screen(...), ...)` so the WinUI capture rule (`Pressed → PressedDraggedOff` on drift, reverse on return) fires for client-side movement.
-  - `on_pointerup` drains tracked `Suppressed` sessions via `strip.consume_swallowed_release(pointer_id, button)` — keyed by `(pointer_id, PointerButton)` so the drain works regardless of where the implicit pointer capture delivers the UP (`WM_NCPOINTERUP` off the strip, or `WM_POINTERUP` in the client area). Releases whose press began outside the strip fall through to Kotlin: chrome ownership scopes to cycles whose DOWN was on the strip.
-  - `WM_POINTERCAPTURECHANGED` matches every owned session — `Active` plus any `Suppressed` mode, via `strip.has_press_for(pointer_id)` — and calls `strip.on_pointer_cancel(id)` without firing a caption-button action. Microsoft documents [`WM_POINTERCAPTURECHANGED`](https://learn.microsoft.com/windows/win32/inputmsg/wm-pointercapturechanged) as the cleanup signal and warns not to depend on paired pointer notifications.
+  - On `WM_NCPOINTERUPDATE` the dispatch returns `Some(LRESULT(0))` for caption-button hit-test areas to suppress Kotlin-facing pointer events for the toolkit-owned gesture; non-caption NC areas (e.g. title-bar drag region) still fall through to the standard dispatch. The client-variant `WM_POINTERUPDATE` is gated by `strip.has_press_for(pointer_id)` while the strip owns a **non-primary** press: implicit pointer capture can drift from non-client to client mid-press, and an unsuppressed UPDATE on that path lets the host's drag source observe a held button without the matching DOWN, kicking off `DoDragDrop`. While suppressing the host event, the wndproc still forwards `strip.on_pointer_update(caption_kind_at_screen(...), ...)` so the WinUI capture rule fires for client-side movement.
+  - `on_mousemove` drives the WinUI `Pressed ↔ PressedDraggedOff` rule for a **primary** caption press. Returning `None` from `on_pointerdown` for primary (to keep Snap Layouts functional) lets `DefWindowProc` promote the primary contact to the legacy mouse stream per [`ConvertPrimaryPointerToMouseDrag`](https://learn.microsoft.com/windows/win32/winmsg/winuser/nf-winuser-convertprimarypointertomousedrag), so `WM_POINTERUPDATE` no longer fires for that contact — `WM_MOUSEMOVE` carries drift instead (legacy `SetCapture` from `on_nclbuttondown` keeps it routed). Gated on `strip.has_primary_press()`. `lparam` carries client-space coords; `ClientToScreen` feeds `caption_kind_at_screen`. If `wparam` indicates `MK_LBUTTON` is no longer held while a primary press is in flight, `cancel_primary_press()` is called and the handler bails — defensive cleanup for the pathological case where the release was missed without `WM_LBUTTONUP` or `WM_CAPTURECHANGED` arriving. Handler returns `None` so `DefWindowProc` performs default cursor processing.
+  - `on_pointerup` for a primary release while `strip.has_primary_press()` is true returns `None` early (lets `DefWindowProc` synthesize `WM_LBUTTONUP`, which `on_lbuttonup` drains canonically). This gate suppresses the Kotlin-facing `PointerUp` event while the strip owns a primary press. For non-primary releases: drains tracked `NonPrimaryPress` sessions via `strip.consume_swallowed_release(pointer_id, button)` — keyed by `(pointer_id, PointerButton)` so the drain works regardless of where the implicit pointer capture delivers the UP. Releases whose press began outside the strip fall through to Kotlin.
+  - `WM_POINTERCAPTURECHANGED` matches non-primary owned sessions via `strip.has_press_for(pointer_id)` and calls `strip.on_pointer_cancel(id)` without firing a caption-button action. Microsoft documents [`WM_POINTERCAPTURECHANGED`](https://learn.microsoft.com/windows/win32/inputmsg/wm-pointercapturechanged) as the cleanup signal and warns not to depend on paired pointer notifications. The active (primary) press is not pointer-id-keyed and is handled by `WM_CAPTURECHANGED` instead.
+  - `WM_CAPTURECHANGED` calls `strip.cancel_primary_press()` to clear the `PrimaryPress` when mouse capture is lost to another window or stolen by a `SetCapture` call elsewhere. Idempotent — also fires after `on_lbuttonup`'s own `ReleaseCapture`, which is harmless.
   - `WM_CANCELMODE` and `WM_ACTIVATE`-deactivate call `strip.cancel_any_press()` (no `pointer_id` available) and return `None`. [`WM_CANCELMODE`](https://learn.microsoft.com/windows/win32/winmsg/wm-cancelmode) doc says `DefWindowProc` "cancels internal processing of standard scroll bar input, cancels internal menu processing, and releases the mouse capture" — letting it run preserves that. These arms backstop focus-loss paths Windows does not deliver `WM_POINTERCAPTURECHANGED` on (ALT-TAB, `EnableWindow(FALSE)`, RDP disconnect).
   - `TrackMouseEvent(TME_NONCLIENT | TME_LEAVE)` is armed when an NC pointer update enters the window non-client area, not when it enters a specific caption button.
   - `on_ncmouseleave` calls `strip.on_nc_mouse_leave()` and `window.nc_leave_tracking_fired()` before the `DwmDefWindowProc` pass-through.
@@ -73,7 +77,7 @@ Single UI thread, consistent with the rest of the crate. `CompositionContext` an
 
 `EnableMouseInPointer(true)` routes `WM_MOUSE*` through `WM_POINTER*`. The wndproc dispatch merges `WM_NCPOINTER*` with their client-area counterparts. No `WM_NCMOUSEMOVE` / `WM_NCLBUTTON*` fallback.
 
-[`WM_POINTERLEAVE`](https://learn.microsoft.com/windows/win32/inputmsg/wm-pointerleave) fires *"when a pointer moves outside the boundaries of the window"* — covering NC→outside transitions for hovering pointers. `on_pointerleave` clears `is_pointer_in_window` on this message regardless of which area the pointer was over.
+[`WM_POINTERLEAVE`](https://learn.microsoft.com/windows/win32/inputmsg/wm-pointerleave) fires *"when a pointer moves outside the boundaries of the window"* — covering NC→outside transitions for hovering pointers. `on_pointerleave` clears `is_pointer_in_window` and calls `strip.on_nc_mouse_leave()` on Custom-titlebar windows so pen/touch hover state doesn't persist (mouse leave clears via `WM_NCMOUSELEAVE` on the legacy stream).
 
 **`PointerEntered` parity for entries via the strip.** `on_pointerupdate` fires `Event::PointerEntered` whenever `is_pointer_in_window` transitions false→true. When the first appearance is over a caption button, the wndproc fires a synthesised `PointerEntered` before returning `Some(LRESULT(0))` to suppress the strip-internal events.
 
@@ -173,14 +177,14 @@ Owns the per-window visual strip and its press-session state machine.
 
 `Close` is always visible and enabled. Close-disable support is deferred; see [TODO.md](../TODO.md#win32-close-button-disable-support). Minimize / Maximize follow Win32's paired-button behaviour (Microsoft KB Q130760): when exactly one of `is_minimizable` / `is_maximizable` is true, both buttons appear and the absent one renders Disabled.
 
-Disabled Minimize / Maximize buttons are visible and occupy strip geometry, but never enter Hovered / Pressed and return no action. `on_pointer_down` records a `Suppressed { held_button: Left }` session for them; `on_pointer_up` returns `None`. Disabled visible Minimize / Maximize map to `HTCAPTION` in `on_nchittest`, not `HTMINBUTTON` / `HTMAXBUTTON` — matching Win32's native default and preventing Snap Layouts from appearing on a disabled Maximize.
+Disabled Minimize / Maximize buttons are visible and occupy strip geometry, but never enter Hovered / Pressed and return no action. `on_pointer_down` creates an `PrimaryPress { kind, suppressed: true }` for them; `on_pointer_up` returns `None`. Disabled visible Minimize / Maximize map to `HTCAPTION` in `on_nchittest`, not `HTMINBUTTON` / `HTMAXBUTTON` — matching Win32's native default and preventing Snap Layouts from appearing on a disabled Maximize.
 
-**Press sessions.** Two modes populate `press_sessions: Vec<PressSession>`:
+**Press state.** The strip holds two fields for in-flight presses:
 
-- `PressSessionMode::Active` — primary press on an enabled button. Visual capture engaged; matched primary UP dispatches a `CaptionButtonAction` if released over the same button.
-- `PressSessionMode::Suppressed { held_button }` — wndproc-level swallow. No visual capture. `held_button = Left` for primary-on-disabled; `Right` / `Middle` / `XButton1` / `XButton2` for non-primary presses.
+- `primary_press: Option<PrimaryPress>` — at most one primary (Left) press at a time. Populated via the legacy `WM_NCLBUTTONDOWN` funnel (all mouse primary presses arrive here). `suppressed = false` for enabled buttons (visual capture, action on matched UP); `suppressed = true` for disabled buttons (no visual capture, no action — wndproc consumed the click via the HTCAPTION arm).
+- `non_primary_presses: Vec<NonPrimaryPress>` — non-primary button presses swallowed by the wndproc; keyed on real `pointer_id`. Multiple concurrent non-primary presses may coexist.
 
-At most one `Active` (or `Suppressed{Left}`) entry exists at a time; any number of non-primary `Suppressed` entries may coexist.
+The disabled-primary path: `WM_NCLBUTTONDOWN(HTCAPTION)` → `on_nclbuttondown` re-hit-tests via `caption_kind_at_screen`; if it lands on a disabled button, the wndproc calls `strip.on_pointer_down(k)` (creates `PrimaryPress { suppressed: true }`) + `SetCapture` + returns `LRESULT(0)`. The matching release arrives as `WM_LBUTTONUP` (capture redirected) → `on_lbuttonup` → `strip.on_pointer_up(kind_under_pointer)` → returns `None` (suppressed).
 
 **Suppression truth table:**
 
@@ -193,7 +197,7 @@ At most one `Active` (or `Suppressed{Left}`) entry exists at a time; any number 
 | Non-primary | Any strip button | Anywhere | no | no |
 | Non-primary | Elsewhere | Any strip button | no | yes (DOWN and UP both) |
 
-`WM_POINTERCAPTURECHANGED` requires no special handling: `strip.on_pointer_cancel(pointer_id)` drops any session for the cancelled pointer regardless of mode.
+`WM_POINTERCAPTURECHANGED` drains non-primary sessions: `strip.on_pointer_cancel(pointer_id)` drops any `NonPrimaryPress` entries for that pointer. The active press (no pointer-id key) is cancelled via `WM_CAPTURECHANGED` → `cancel_primary_press()` instead.
 
 Right-click on a caption button is an unhandled gesture — that surface is owned by the system-menu work tracked in `TODO.md`.
 
@@ -217,15 +221,17 @@ pub fn is_enabled(&self, kind: CaptionButtonKind) -> bool;
 
 // Pointer routing
 pub fn on_pointer_update(&mut self, kind: Option<CaptionButtonKind>, device: PointerDeviceKind);
-pub fn on_pointer_down(&mut self, kind: CaptionButtonKind, pointer_id: u32, device: PointerDeviceKind);
-pub fn on_pointer_up(&mut self, kind_under_pointer: Option<CaptionButtonKind>, pointer_id: u32) -> Option<CaptionButtonAction>;
+pub fn on_pointer_down(&mut self, kind: CaptionButtonKind);  // no pointer-id; sets PrimaryPress
+pub fn on_pointer_up(&mut self, kind_under_pointer: Option<CaptionButtonKind>) -> Option<CaptionButtonAction>;  // no pointer-id; drains PrimaryPress
 pub fn on_pointer_cancel(&mut self, pointer_id: u32);
+pub fn cancel_primary_press(&mut self);   // NEW — clears PrimaryPress only (WM_CAPTURECHANGED)
 pub fn cancel_any_press(&mut self);
 
-// Press-session helpers
-pub fn track_swallowed_press(&mut self, kind: CaptionButtonKind, pointer_id: u32, button: PointerButton);
+// Press-session helpers (act on NonPrimaryPress / non-primary only)
+pub fn track_swallowed_press(&mut self, pointer_id: u32, button: PointerButton);
+pub fn handle_non_primary_button_change(&mut self, pointer_id: u32, change_kind: PointerButtonChangeKind, button: PointerButton, over_strip: bool) -> bool;
 pub fn consume_swallowed_release(&mut self, pointer_id: u32, button: PointerButton) -> bool;
-pub fn has_active_press_for(&self, pointer_id: u32) -> bool;
+pub fn has_primary_press(&self) -> bool;
 pub fn has_press_for(&self, pointer_id: u32) -> bool;
 
 pub fn on_nc_mouse_leave(&mut self);
@@ -283,7 +289,7 @@ The 10 × 10 epx is a **rendered extent**, not a font point size. Font size is c
 
 - `CompositionContext` knows nothing about caption buttons in its method signatures; if a future D2D consumer materialises, lift it to a shared module.
 - `CaptionButtonStrip` knows nothing about Win32 messages or wndproc. Inputs are typed; outputs are typed (`Option<CaptionButtonAction>`).
-- `CaptionButton`, `CaptionTheme`, `CaptionButtonMetrics`, `Availability`, `ButtonInteraction`, `PressSession` are private to `caption_buttons.rs`.
+- `CaptionButton`, `CaptionTheme`, `CaptionButtonMetrics`, `Availability`, `ButtonInteraction`, `PrimaryPress`, `NonPrimaryPress` are private to `caption_buttons.rs`.
 - `Window` only knows how to insert a `ContainerVisual` into its `chrome_layer` and call the strip's lifecycle methods. The strip's right-edge auto-tracks via `composition_root.RelativeOffsetAdjustment(1,0,0) + AnchorPoint(1,0)`; only `Offset.Y` mutates per resize tick.
 
 ## 5. Data flow
@@ -292,18 +298,19 @@ The 10 × 10 epx is a **rendered extent**, not a font point size. Font size is c
 
 Per-button interaction state is derived from strip-level state each frame. The `Some(Active) => Idle` branch for a non-captured button is the WinUI capture-derived rule: when a press is owned by button A, button B does not enter Hovered state. Touch skips Hovered entirely (`Idle → Pressed → action → Idle`).
 
-`resolve_interaction` truth table — inputs: `(Availability, kind, pointer_over_kind, pointer_device, press_session)`:
+`resolve_interaction` truth table — inputs: `(Availability, kind, pointer_over_kind, pointer_device, primary_press)`:
 
-| press_session | is_pointer_over_self | result |
+| primary_press | is_pointer_over_self | result |
 |---|---|---|
-| None | true, Mouse/Pen | `Hovered` |
-| None | true, Touch | `Idle` |
-| None | false | `Idle` |
-| `Active`, captured_kind == kind | true | `Pressed` |
-| `Active`, captured_kind == kind | false | `PressedDraggedOff` |
-| `Active`, captured_kind != kind | — | `Idle` |
-| `Suppressed` (any) | true, Mouse/Pen | `Hovered` |
-| `Suppressed` (any) | false | `Idle` |
+| `None` | true, Mouse/Pen | `Hovered` |
+| `None` | true, Touch | `Idle` |
+| `None` | false | `Idle` |
+| `Some { suppressed: false, kind == self }` | true | `Pressed` |
+| `Some { suppressed: false, kind == self }` | false | `PressedDraggedOff` |
+| `Some { suppressed: false, kind != self }` | — | `Idle` |
+| `Some { suppressed: true }` (any kind) | true, Mouse/Pen | `Hovered` |
+| `Some { suppressed: true }` (any kind) | true, Touch | `Idle` |
+| `Some { suppressed: true }` (any kind) | false | `Idle` |
 | Disabled (any state) | — | `Idle` |
 
 ### 5.2 Animation contract
@@ -331,9 +338,11 @@ Sourced from `microsoft/terminal:MinMaxCloseControl.xaml` `CommonStates` `Visual
 |---|---|---|
 | `WM_NCHITTEST` | `hit_test(point)` | cheap (geometry math) |
 | `WM_NCPOINTERUPDATE` entering NC area | window arms NC leave tracking; strip receives `on_pointer_update(kind, device)` | cheap (state + brush) |
-| `WM_NCPOINTERDOWN` over enabled button (primary) | `on_pointer_down(kind, id, device)` | cheap |
-| `WM_NCPOINTERUP` / `WM_POINTERUP` after strip press | `on_pointer_up(kind, id) → Option<CaptionButtonAction>` | cheap |
-| `WM_POINTERCAPTURECHANGED` | `on_pointer_cancel(id)` for any matching session | cheap |
+| `WM_NCLBUTTONDOWN` over strip button (primary) | `on_pointer_down(kind)` — sets `PrimaryPress` (suppressed=false for enabled, suppressed=true for disabled) | cheap |
+| `WM_LBUTTONUP` after strip press (capture-redirected) | `on_pointer_up(kind_under) → Option<CaptionButtonAction>` — drains `PrimaryPress` | cheap |
+| `WM_MOUSEMOVE` while `has_primary_press()` | `on_pointer_update(kind, Mouse)` — drives `Pressed ↔ PressedDraggedOff` on the promoted-to-mouse primary contact | cheap |
+| `WM_CAPTURECHANGED` | `cancel_primary_press()` — clears `PrimaryPress` on capture theft; idempotent | cheap |
+| `WM_POINTERCAPTURECHANGED` | `on_pointer_cancel(id)` for matching `NonPrimaryPress` (non-primary only) | cheap |
 | `WM_CANCELMODE` | `cancel_any_press()`; returns `None` so `DefWindowProc` performs standard cancel | cheap |
 | `WM_NCMOUSELEAVE` | `on_nc_mouse_leave()`; window clears tracking armed | cheap |
 | `WM_NCCALCSIZE` (after client-rect calc) | `set_content_top_offset(max_chrome_y)`; `Custom` calls `on_resize(max_chrome_y)`. `CommitNeeded` fast-path publishes inline. | cheap |
@@ -462,13 +471,7 @@ Tests are in `caption_buttons.rs` under `#[cfg(test)] mod tests { ... }`.
 
 Observations on system-menu restoration, keyboard system-command parity, and UIA/accessibility from the sample run go to `TODO.md`.
 
-## 8. Open questions
-
-1. **Animation cadence under `CompositorController`.** Microsoft documents Visual-Layer animations run on the system compositor's own thread independent of the UI thread, but does not directly address whether `ColorKeyFrameAnimation` requires per-frame `Commit()` under the controlled-commit variant. The simplest reading: commit once at `StartAnimation` and let the compositor's thread advance the animation. §7.3 acceptance verifies hover-fade smoothness; if stutter is observed, see TODO `Caption-button animation cadence — CommitNeeded fallback`.
-
-Future work tracked in `TODO.md`: RTL mirroring; `WM_NCMOUSEMOVE` fallback; system-menu restoration; Tall-mode title bars; Close-button disable; proactive device-loss detection; `RenderingDeviceReplaced` thread-affinity probe.
-
-## 9. References
+## 8. References
 
 ### Microsoft documentation
 

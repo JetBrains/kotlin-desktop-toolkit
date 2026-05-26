@@ -182,6 +182,12 @@ impl AngleDevice {
 
 impl Drop for AngleDevice {
     fn drop(&mut self) {
+        // Resume autocommit so a paused resize-gate doesn't outlive the device on
+        // the shared CompositorDriver. Idempotent if the gate is already open.
+        let _ = self
+            .compositor_driver
+            .publish_and_resume_autocommit()
+            .inspect_err(|err| log::warn!("AngleDevice Drop: resume autocommit failed: {err}"));
         let _ = self.egl_instance.make_current(self.display, None, None, None);
         if self.context.as_ptr() != egl::NO_CONTEXT {
             let _ = self.egl_instance.destroy_context(self.display, self.context);

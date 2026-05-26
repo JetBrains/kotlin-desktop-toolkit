@@ -165,6 +165,8 @@ pub fn swap_buffers(&self) -> anyhow::Result<()> {
 
 **Kotlin-side gap.** `resize_surface` and `swap_buffers` are separate FFI calls. If Kotlin code between them panics or skips `swap_buffers`, the gate stays paused — all subsequent drain Commits skip. Self-heals on the next successful `swap_buffers`. See §7.9.
 
+**`AngleDevice::Drop`** calls `publish_and_resume_autocommit` before the EGL teardown so a `Drop` between `pause_autocommit` and the matching `swap_buffers` (device-loss recovery, window close mid-resize) does not strand the shared `CompositorController` gate in the paused state for surviving windows.
+
 ### 6.4 `CaptionButtonStrip`
 
 The strip takes `&Compositor` at construction; no field stored. Mutations fire `CommitNeeded` and publish via the driver's fast-path on the UI thread.

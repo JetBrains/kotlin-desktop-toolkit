@@ -29,8 +29,8 @@ use windows::{
                 D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1CreateFactory, ID2D1Device, ID2D1DeviceContext, ID2D1Factory1, ID2D1RenderTarget,
             },
             Direct3D::{
-                D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_WARP, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_11_0,
-                D3D_FEATURE_LEVEL_11_1,
+                D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_WARP, D3D_FEATURE_LEVEL, D3D_FEATURE_LEVEL_9_3,
+                D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1,
             },
             Direct3D11::{D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, D3D11CreateDevice, ID3D11Device},
             DirectWrite::{
@@ -233,7 +233,13 @@ const fn is_device_lost_hresult(code: HRESULT) -> bool {
 }
 
 fn build_d2d_device() -> anyhow::Result<ID2D1Device> {
-    let feature_levels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
+    let feature_levels = [
+        D3D_FEATURE_LEVEL_11_1,
+        D3D_FEATURE_LEVEL_11_0,
+        D3D_FEATURE_LEVEL_10_1,
+        D3D_FEATURE_LEVEL_10_0,
+        D3D_FEATURE_LEVEL_9_3,
+    ];
     build_d2d_device_with(D3D_DRIVER_TYPE_HARDWARE, &feature_levels).or_else(|err| {
         log::warn!("D2D device build (HARDWARE) failed, falling back to WARP: {err}");
         build_d2d_device_with(D3D_DRIVER_TYPE_WARP, &feature_levels)
@@ -265,7 +271,9 @@ fn create_d3d_device(driver_type: D3D_DRIVER_TYPE, feature_levels: &[D3D_FEATURE
             None,
         )?;
     }
-    d3d_device.context("D3D11CreateDevice returned no device")
+    d3d_device
+        .inspect(|_| log::trace!("D3D11CreateDevice picked feature level {returned_level:?} on {driver_type:?}"))
+        .context("D3D11CreateDevice returned no device")
 }
 
 thread_local! {
