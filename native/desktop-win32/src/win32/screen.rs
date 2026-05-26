@@ -14,7 +14,7 @@ use windows::Win32::{
 };
 
 use super::{
-    geometry::{LogicalPoint, LogicalSize, PhysicalPoint},
+    geometry::{LogicalSize, PhysicalPoint},
     window::Window,
 };
 
@@ -23,8 +23,9 @@ use super::{
 pub struct ScreenInfo {
     pub is_primary: bool,
     pub name: AutoDropStrPtr,
-    // relative to primary screen
-    pub origin: LogicalPoint,
+    // Virtual-desktop coordinate relative to the primary screen.
+    // Callers convert per-monitor using `scale` if needed.
+    pub origin: PhysicalPoint,
     pub size: LogicalSize,
     pub scale: f32,
     pub maximum_frames_per_second: u32,
@@ -100,7 +101,7 @@ pub(crate) fn get_screen_info(hmonitor: HMONITOR) -> anyhow::Result<ScreenInfo> 
     let screen_info = ScreenInfo {
         is_primary: (device_position.x == 0 && device_position.y == 0),
         name: RustAllocatedStrPtr::from_c_string(device_name).to_auto_drop(),
-        origin: LogicalPoint::from_physical(device_position.x, device_position.y, scale),
+        origin: PhysicalPoint::new(device_position.x, device_position.y),
         size: LogicalSize::from_physical(device_mode.dmPelsWidth as _, device_mode.dmPelsHeight as _, scale),
         scale,
         maximum_frames_per_second: device_mode.dmDisplayFrequency,
