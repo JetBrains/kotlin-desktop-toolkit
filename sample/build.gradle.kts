@@ -15,8 +15,9 @@ plugins {
 }
 
 repositories {
+    mavenLocal()
     mavenCentral()
-    maven("https://maven.pkg.jetbrains.space/public/p/compose/dev")
+    maven("https://cache-redirector.jetbrains.com/maven.pkg.jetbrains.space/public/p/compose/dev")
 }
 
 val skikoTargetOs = hostOs().normalizedName
@@ -26,8 +27,26 @@ val skikoTargetArch = when (targetArch(project) ?: hostArch()) {
     Arch.x86_64 -> "x64"
 }
 
-val skikoVersion = "0.9.37.3"
+// val skikoVersion = "0.9.37.3+debug"
+val skikoVersion = "0.148.1+debug"
+// val skikoVersion = "0.0.0-SNAPSHOT+debug"
 val skikoTarget = "$skikoTargetOs-$skikoTargetArch"
+val skikoAwtVersion = skikoVersion.substringBefore("+")
+
+configurations.all {
+    resolutionStrategy {
+        // skiko-awt has no +debug variant, so swap the request for the pure-JVM API jar
+        // to the release version. The JVM API surface is identical across debug/release.
+        dependencySubstitution {
+            substitute(module("org.jetbrains.skiko:skiko-awt:$skikoVersion"))
+                .using(module("org.jetbrains.skiko:skiko-awt:$skikoAwtVersion"))
+        }
+        // skiko-awt:0.148.1's module metadata pins skiko-awt-runtime to {strictly 0.148.1},
+        // which beats `dependencySubstitution`. force() overrides strict constraints.
+        force("org.jetbrains.skiko:skiko-awt-runtime-$skikoTarget:$skikoVersion")
+    }
+}
+
 dependencies {
     implementation(project(":kotlin-desktop-toolkit"))
     implementation("org.jetbrains.skiko:skiko-awt-runtime-$skikoTarget:$skikoVersion")
