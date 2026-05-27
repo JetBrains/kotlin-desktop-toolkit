@@ -41,7 +41,7 @@ use super::{
     appearance::{Appearance, HighContrast},
     caption_buttons::{
         CaptionButtonKind, CaptionButtonStrip, PointerDeviceKind, WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED, caption_kind_at_screen,
-        device_kind_for, dispatch_caption_action, hittest_for_caption_button_kind, notify_strip_appearance_refresh,
+        device_kind_for, dispatch_caption_action, hittest_for_caption_button_kind,
     },
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
@@ -331,7 +331,6 @@ fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lpa
                 Ok(new_appearance) => {
                     let event = SystemAppearanceChangeEvent { new_appearance };
                     event_loop.handle_event(window, event);
-                    notify_strip_appearance_refresh(window, Some(new_appearance), None);
                 }
                 Err(err) => log::error!("failed to get current system appearance: {err}"),
             }
@@ -342,7 +341,7 @@ fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lpa
             Ok(new_high_contrast) => {
                 let event = SystemHighContrastChangeEvent { new_high_contrast };
                 event_loop.handle_event(window, event);
-                notify_strip_appearance_refresh(window, None, Some(new_high_contrast));
+                window.with_strip_mut(|strip| strip.on_high_contrast_change(new_high_contrast));
             }
             Err(err) => log::error!("failed to get high-contrast state: {err}"),
         }
@@ -361,7 +360,7 @@ fn on_syscolorchange(event_loop: &EventLoop, window: &Window) -> Option<LRESULT>
         .ok()?;
     let event = SystemHighContrastChangeEvent { new_high_contrast };
     event_loop.handle_event(window, event);
-    notify_strip_appearance_refresh(window, None, Some(new_high_contrast));
+    window.with_strip_mut(|strip| strip.on_high_contrast_change(new_high_contrast));
     None
 }
 

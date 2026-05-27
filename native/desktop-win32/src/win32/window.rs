@@ -41,6 +41,7 @@ use windows::{
 use windows_core::{HSTRING, Interface, PCWSTR, Result as WinResult, w};
 
 use super::{
+    appearance::Appearance,
     caption_buttons::CaptionButtonStrip,
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
@@ -122,6 +123,7 @@ pub struct Window {
     cached_dpi_metrics: Cell<DpiMetrics>,
     system_menu: Cell<HMENU>,
     caption_buttons: RefCell<Option<CaptionButtonStrip>>,
+    immersive_dark: Cell<bool>,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
     backdrop_tint: RefCell<Option<SpriteVisual>>,
@@ -161,6 +163,7 @@ impl Window {
             cached_dpi_metrics: Cell::new(DpiMetrics::for_dpi(USER_DEFAULT_SCREEN_DPI)),
             system_menu: Cell::new(HMENU::default()),
             caption_buttons: RefCell::new(None),
+            immersive_dark: Cell::new(false),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
             backdrop_tint: RefCell::new(None),
@@ -513,21 +516,24 @@ impl Window {
     }
 
     pub fn set_immersive_dark_mode(&self, enabled: bool) -> WinResult<()> {
-        if utils::is_windows_11_build_22000_or_higher() {
-            let enablement = if enabled {
-                windows::Win32::Foundation::TRUE
-            } else {
-                windows::Win32::Foundation::FALSE
-            };
-            unsafe {
-                DwmSetWindowAttribute(
-                    self.hwnd(),
-                    DWMWA_USE_IMMERSIVE_DARK_MODE,
-                    (&raw const enablement).cast(),
-                    size_of::<windows_core::BOOL>().try_into()?,
-                )?;
-            }
+        if !utils::is_windows_11_build_22000_or_higher() {
+            return Ok(());
         }
+        if self.immersive_dark.get() == enabled {
+            return Ok(());
+        }
+        let enablement = windows_core::BOOL::from(enabled);
+        unsafe {
+            DwmSetWindowAttribute(
+                self.hwnd(),
+                DWMWA_USE_IMMERSIVE_DARK_MODE,
+                (&raw const enablement).cast(),
+                size_of::<windows_core::BOOL>().try_into()?,
+            )?;
+        }
+        self.immersive_dark.set(enabled);
+        let appearance = if enabled { Appearance::Dark } else { Appearance::Light };
+        self.with_strip_mut(|strip| strip.on_appearance_change(appearance));
         Ok(())
     }
 
@@ -584,6 +590,11 @@ impl Window {
         }
         let chrome_layer = self.chrome_layer()?;
         let is_active = unsafe { GetForegroundWindow() == self.hwnd() };
+        let initial_appearance = if self.immersive_dark.get() {
+            Appearance::Dark
+        } else {
+            Appearance::Light
+        };
         let new_strip = CaptionButtonStrip::new(
             &chrome_layer,
             self.get_scale(),
@@ -592,6 +603,7 @@ impl Window {
             self.hwnd(),
             is_active,
             self.is_maximized(),
+            initial_appearance,
             self.max_chrome_y(),
         )?;
         self.caption_buttons.replace(Some(new_strip));
@@ -789,6 +801,7 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
             hwnd,
             false,
             false,
+            Appearance::Light,
             0,
         )?;
         window.caption_buttons.replace(Some(strip));

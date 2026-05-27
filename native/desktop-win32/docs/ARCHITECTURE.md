@@ -226,6 +226,8 @@ Conventions:
                 │                                                 │
                 │  Input  : keyboard / pointer / cursor ◀─ event_loop dispatches
                 │  Display: screen / appearance         ◀─ on demand / WM_SETTINGCHANGE
+                │  Per-window chrome dark/light: DWMWA_USE_IMMERSIVE_DARK_MODE
+                │    cache on Window, set by app via setImmersiveDarkMode.
                 │  Geometry types are shared by everything that has coordinates.
                 │                                                 │
                 │  Data transfer:                                 │

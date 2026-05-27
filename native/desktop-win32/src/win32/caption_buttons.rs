@@ -334,24 +334,6 @@ pub(crate) const fn hittest_for_caption_button_kind(kind: CaptionButtonKind, is_
     }
 }
 
-/// Refresh the strip's appearance after a system appearance or high-contrast change.
-///
-/// Pass the known half as `Some`; the function queries the current value for whichever
-/// parameter is `None`. Defaults to `Appearance::Light` / `HighContrast::Off` on query failure.
-pub(crate) fn notify_strip_appearance_refresh(window: &Window, override_appearance: Option<Appearance>, override_hc: Option<HighContrast>) {
-    let appearance = override_appearance.unwrap_or_else(|| {
-        Appearance::get_current()
-            .inspect_err(|err| log::warn!("strip appearance notify: failed to read appearance: {err}"))
-            .unwrap_or(Appearance::Light)
-    });
-    let hc = override_hc.unwrap_or_else(|| {
-        HighContrast::get_current()
-            .inspect_err(|err| log::warn!("strip appearance notify: failed to read high-contrast state: {err}"))
-            .unwrap_or(HighContrast::Off)
-    });
-    window.with_strip_mut(|strip| strip.on_appearance_change(appearance, hc));
-}
-
 /// Dispatch a resolved `CaptionButtonAction` to the corresponding `Window` method.
 pub(crate) fn dispatch_caption_action(window: &Window, action: CaptionButtonAction) {
     match action {
@@ -468,6 +450,7 @@ impl CaptionButtonStrip {
         hwnd: HWND,
         initial_is_active: bool,
         initial_is_maximized: bool,
+        initial_appearance: Appearance,
         initial_top_offset_px: i32,
     ) -> anyhow::Result<Self> {
         let composition_context = crate::win32::composition::ensure_composition_context(compositor.clone())?;
@@ -511,9 +494,7 @@ impl CaptionButtonStrip {
             .SetAnchorPoint(Vector2::new(1.0, 0.0))
             .inspect_err(|err| log::warn!("composition_root SetAnchorPoint failed: {err}"))?;
 
-        let appearance = Appearance::get_current()
-            .inspect_err(|err| log::warn!("CaptionButtonStrip: failed to read initial appearance, defaulting to Light: {err}"))
-            .unwrap_or(Appearance::Light);
+        // If the initial query fails we fall back to `Off`; the next `WM_SETTINGCHANGE` or `WM_SYSCOLORCHANGE` reseeds the correct value.
         let high_contrast = HighContrast::get_current()
             .inspect_err(|err| log::warn!("CaptionButtonStrip: failed to read initial high-contrast state, defaulting to Off: {err}"))
             .unwrap_or(HighContrast::Off);
@@ -524,7 +505,7 @@ impl CaptionButtonStrip {
             visible_kinds,
             is_active: initial_is_active,
             is_window_maximized: initial_is_maximized,
-            appearance,
+            appearance: initial_appearance,
             high_contrast,
             metrics,
             pointer_over_kind: None,
@@ -817,14 +798,23 @@ impl CaptionButtonStrip {
         Ok(())
     }
 
-    pub fn on_appearance_change(&mut self, appearance: Appearance, hc: HighContrast) {
-        let glyph_invalidate = self.high_contrast != hc;
+    /// Glyph surfaces deliberately untouched: only the palette varies on this axis.
+    pub fn on_appearance_change(&mut self, appearance: Appearance) {
+        if self.appearance == appearance {
+            return;
+        }
         self.appearance = appearance;
+        self.apply_visuals_to_all_buttons();
+    }
+
+    /// Dirties every glyph surface: HC swaps glyph code points / fill style alongside the palette.
+    pub fn on_high_contrast_change(&mut self, hc: HighContrast) {
+        if self.high_contrast == hc {
+            return;
+        }
         self.high_contrast = hc;
-        if glyph_invalidate {
-            for button in &mut self.buttons {
-                button.glyph_surface_dirty = true;
-            }
+        for button in &mut self.buttons {
+            button.glyph_surface_dirty = true;
         }
         self.apply_visuals_to_all_buttons();
     }
