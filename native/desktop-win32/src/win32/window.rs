@@ -10,11 +10,9 @@ use std::{
 
 use anyhow::Context;
 use windows::{
-    UI::Composition::{
-        CompositionBackfaceVisibility, ContainerVisual, Core::CompositorController, Desktop::DesktopWindowTarget, SpriteVisual,
-    },
+    UI::Composition::{CompositionBackfaceVisibility, Compositor, ContainerVisual, Desktop::DesktopWindowTarget, SpriteVisual},
     Win32::{
-        Foundation::{COLORREF, HANDLE, HWND, LPARAM, LRESULT, RECT, WPARAM},
+        Foundation::{COLORREF, ERROR_SUCCESS, GetLastError, HANDLE, HWND, LPARAM, LRESULT, RECT, SetLastError, WIN32_ERROR, WPARAM},
         Graphics::{
             Dwm::{
                 DWM_SYSTEMBACKDROP_TYPE, DWMWA_CAPTION_COLOR, DWMWA_COLOR_NONE, DWMWA_EXTENDED_FRAME_BOUNDS, DWMWA_SYSTEMBACKDROP_TYPE,
@@ -26,14 +24,16 @@ use windows::{
         UI::{
             Controls::MARGINS,
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
+            Input::KeyboardAndMouse::{TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT, TrackMouseEvent},
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
-                GetClientRect, GetPropW, GetWindowLongPtrW, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW,
-                RegisterClassExW, RemovePropW, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED,
-                SW_SHOWNORMAL, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW,
-                SetCursor, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE,
-                WM_NCCREATE, WM_NCDESTROY, WM_SETICON, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
-                WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+                GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW, HMENU, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed,
+                LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON,
+                SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+                SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetForegroundWindow, SetPropW,
+                SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
+                USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_NULL, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW,
+                WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -41,12 +41,14 @@ use windows::{
 use windows_core::{HSTRING, Interface, PCWSTR, Result as WinResult, w};
 
 use super::{
+    caption_buttons::CaptionButtonStrip,
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
-    geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalSize},
+    geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint},
     pointer::PointerClickCounter,
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
+    system_menu::{seed_system_menu, sync_system_menu_state},
     utils,
     window_api::{WindowParams, WindowStyle, WindowTitleBarKind},
 };
@@ -77,18 +79,49 @@ const WNDCLASS_NAME: PCWSTR = w!("KotlinDesktopToolkitWin32Window");
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct WindowId(pub isize);
 
+/// Per-DPI metrics for chrome and hit-test code. Seeded in `initialize_window`,
+/// refreshed on `WM_DPICHANGED`. Fields not cached here (e.g. `SM_CYSIZE`)
+/// are queried via `GetSystemMetricsForDpi` at point of use.
+#[derive(Clone, Copy)]
+pub(crate) struct DpiMetrics {
+    pub dpi: u32,
+    pub scale: f32,
+    pub padded_border: i32,
+    pub size_frame: i32,
+}
+
+impl DpiMetrics {
+    #[allow(clippy::cast_precision_loss)]
+    fn for_dpi(dpi: u32) -> Self {
+        let dpi_u16 = u16::try_from(dpi).unwrap_or(u16::MAX); // OS DPI range fits u16
+        Self {
+            dpi,
+            scale: f32::from(dpi_u16) / (USER_DEFAULT_SCREEN_DPI as f32),
+            padded_border: unsafe { GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi) },
+            size_frame: unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) },
+        }
+    }
+}
+
 #[allow(clippy::struct_field_names)]
 pub struct Window {
     id: WindowId,
     hwnd: AtomicPtr<core::ffi::c_void>,
-    compositor_controller: CompositorController,
+    compositor: Compositor,
     composition_target: RefCell<Option<DesktopWindowTarget>>,
     composition_root: RefCell<Option<ContainerVisual>>,
+    backdrop_layer: RefCell<Option<ContainerVisual>>,
+    content_layer: RefCell<Option<ContainerVisual>>,
+    chrome_layer: RefCell<Option<ContainerVisual>>,
     min_size: Cell<Option<LogicalSize>>,
     origin: Cell<LogicalPoint>,
     size: Cell<LogicalSize>,
     style: RefCell<WindowStyle>,
     pointer_in_window: AtomicBool,
+    nc_leave_tracking_armed: AtomicBool,
+    cached_dpi_metrics: Cell<DpiMetrics>,
+    system_menu: Cell<HMENU>,
+    caption_buttons: RefCell<Option<CaptionButtonStrip>>,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
     backdrop_tint: RefCell<Option<SpriteVisual>>,
@@ -96,7 +129,7 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor_controller: CompositorController) -> anyhow::Result<Self> {
+    pub fn new(window_id: WindowId, event_loop: Weak<EventLoop>, compositor: Compositor) -> anyhow::Result<Self> {
         static WNDCLASS_INIT: OnceLock<u16> = OnceLock::new();
         let wndclass_size = size_of::<WNDCLASSEXW>().try_into()?;
         let _ = WNDCLASS_INIT.get_or_init(|| {
@@ -113,14 +146,21 @@ impl Window {
         let window = Self {
             id: window_id,
             hwnd: AtomicPtr::default(),
-            compositor_controller,
+            compositor,
             composition_target: RefCell::new(None),
             composition_root: RefCell::new(None),
+            backdrop_layer: RefCell::new(None),
+            content_layer: RefCell::new(None),
+            chrome_layer: RefCell::new(None),
             min_size: Cell::new(None),
             origin: Cell::default(),
             size: Cell::new(LogicalSize::new(0.0, 0.0)),
             style: RefCell::default(),
             pointer_in_window: AtomicBool::new(false),
+            nc_leave_tracking_armed: AtomicBool::new(false),
+            cached_dpi_metrics: Cell::new(DpiMetrics::for_dpi(USER_DEFAULT_SCREEN_DPI)),
+            system_menu: Cell::new(HMENU::default()),
+            caption_buttons: RefCell::new(None),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
             backdrop_tint: RefCell::new(None),
@@ -166,14 +206,42 @@ impl Window {
 
     #[inline]
     pub(crate) fn add_visual(&self) -> anyhow::Result<SpriteVisual> {
-        let sprite_visual = self.compositor_controller.Compositor()?.CreateSpriteVisual()?;
-        self.composition_root
+        let sprite_visual = self.compositor.CreateSpriteVisual()?;
+        self.content_layer
             .borrow()
             .as_ref()
             .context("Window has not been created yet")?
             .Children()?
             .InsertAtTop(&sprite_visual)?;
         Ok(sprite_visual)
+    }
+
+    #[inline]
+    pub(crate) fn chrome_layer(&self) -> anyhow::Result<ContainerVisual> {
+        let layer = self.chrome_layer.borrow();
+        let layer = layer.as_ref().context("Window has not been created yet")?;
+        Ok(layer.clone())
+    }
+
+    pub(crate) fn ensure_nc_leave_tracking(&self) -> anyhow::Result<()> {
+        // Set the flag only after TrackMouseEvent succeeds so a syscall
+        // failure doesn't permanently disable NC leave tracking.
+        if self.nc_leave_tracking_armed.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        let mut tme = TRACKMOUSEEVENT {
+            cbSize: size_of::<TRACKMOUSEEVENT>().try_into()?,
+            dwFlags: TME_NONCLIENT | TME_LEAVE,
+            hwndTrack: self.hwnd(),
+            dwHoverTime: 0,
+        };
+        unsafe { TrackMouseEvent(&raw mut tme)? };
+        self.nc_leave_tracking_armed.store(true, Ordering::Relaxed);
+        Ok(())
+    }
+
+    pub(crate) fn nc_leave_tracking_fired(&self) {
+        self.nc_leave_tracking_armed.store(false, Ordering::Relaxed);
     }
 
     pub fn get_client_size(&self) -> anyhow::Result<LogicalSize> {
@@ -184,7 +252,7 @@ impl Window {
         Ok(LogicalSize::from_physical(rect.right, rect.bottom, self.get_scale()))
     }
 
-    pub fn get_rect(&self) -> anyhow::Result<LogicalRect> {
+    pub(crate) fn get_physical_rect(&self) -> anyhow::Result<RECT> {
         let mut rect = RECT::default();
         unsafe {
             DwmGetWindowAttribute(
@@ -194,17 +262,28 @@ impl Window {
                 size_of::<RECT>().try_into()?,
             )?;
         };
+        Ok(rect)
+    }
+
+    pub fn get_rect(&self) -> anyhow::Result<LogicalRect> {
+        let rect = self.get_physical_rect()?;
         let scale = self.get_scale();
         let origin = LogicalPoint::from_physical(rect.left, rect.top, scale);
         let size = LogicalSize::from_physical(rect.right - rect.left, rect.bottom - rect.top, scale);
         Ok(LogicalRect { origin, size })
     }
 
-    #[allow(clippy::cast_precision_loss)]
     #[must_use]
-    pub fn get_scale(&self) -> f32 {
-        let dpi = unsafe { GetDpiForWindow(self.hwnd()) };
-        (dpi as f32) / (USER_DEFAULT_SCREEN_DPI as f32)
+    pub const fn get_scale(&self) -> f32 {
+        self.dpi_metrics().scale
+    }
+
+    pub(crate) const fn dpi_metrics(&self) -> DpiMetrics {
+        self.cached_dpi_metrics.get()
+    }
+
+    pub(crate) fn set_dpi_metrics(&self, dpi: u32) {
+        self.cached_dpi_metrics.set(DpiMetrics::for_dpi(dpi));
     }
 
     pub fn get_screen_info(&self) -> anyhow::Result<ScreenInfo> {
@@ -215,6 +294,14 @@ impl Window {
     #[must_use]
     pub fn has_custom_title_bar(&self) -> bool {
         matches!(self.style.borrow().title_bar_kind, WindowTitleBarKind::Custom)
+    }
+
+    #[must_use]
+    pub fn has_non_system_title_bar(&self) -> bool {
+        matches!(
+            self.style.borrow().title_bar_kind,
+            WindowTitleBarKind::Custom | WindowTitleBarKind::None
+        )
     }
 
     #[must_use]
@@ -280,15 +367,85 @@ impl Window {
     }
 
     pub fn maximize(&self) {
-        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWMAXIMIZED) };
+        if !self.style.borrow().is_maximizable {
+            // Mirrors the strip-side availability gate so programmatic
+            // maximize agrees with the visible button state.
+            return;
+        }
+        self.send_system_command(SC_MAXIMIZE);
     }
 
     pub fn minimize(&self) {
-        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWMINIMIZED) };
+        if !self.style.borrow().is_minimizable {
+            return;
+        }
+        self.send_system_command(SC_MINIMIZE);
     }
 
     pub fn restore(&self) {
-        let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOWNORMAL) };
+        self.send_system_command(SC_RESTORE);
+    }
+
+    #[inline]
+    pub(crate) const fn system_menu(&self) -> HMENU {
+        self.system_menu.get()
+    }
+
+    /// Apply enable state to the cached `HMENU`. Called from the
+    /// `WM_INITMENUPOPUP` arm so we run after `DefWindowProc`'s default
+    /// auto-gray.
+    pub(crate) fn sync_system_menu(&self) {
+        sync_system_menu_state(self.system_menu(), &self.style.borrow(), self.is_maximized(), self.is_minimized());
+    }
+
+    /// Show the system menu at `screen_pt` and dispatch the user's choice via
+    /// `WM_SYSCOMMAND`. Enable state is applied by the `WM_INITMENUPOPUP` arm
+    /// during `TrackPopupMenu`'s popup-init phase.
+    pub(crate) fn show_system_menu(&self, screen_pt: PhysicalPoint) -> anyhow::Result<()> {
+        let hwnd = self.hwnd();
+        let h_menu = self.system_menu();
+        if h_menu.is_invalid() {
+            anyhow::bail!("system menu not initialized for this window");
+        }
+
+        let _ = unsafe { SetForegroundWindow(hwnd) };
+        // TrackPopupMenu with TPM_RETURNCMD returns 0 for both cancel and
+        // failure; distinguish via GetLastError.
+        unsafe { SetLastError(WIN32_ERROR(0)) };
+        let cmd = unsafe {
+            TrackPopupMenu(
+                h_menu,
+                TPM_RIGHTBUTTON | TPM_RETURNCMD,
+                screen_pt.x.0,
+                screen_pt.y.0,
+                None,
+                hwnd,
+                None,
+            )
+        };
+        let last_error = unsafe { GetLastError() };
+        // Docs-recommended post-show null-message flush.
+        let _ = unsafe { PostMessageW(Some(hwnd), WM_NULL, WPARAM(0), LPARAM(0)) };
+
+        // `TPM_RETURNCMD` makes `TrackPopupMenu` return the selected menu-item ID
+        // or 0 for cancel-OR-failure. Distinguish via GetLastError.
+        if cmd.0 == 0 && last_error != ERROR_SUCCESS {
+            anyhow::bail!("TrackPopupMenu failed: {last_error:?}");
+        }
+        // Mask to the standard SC_* range before forwarding.
+        if let Ok(cmd_id) = u32::try_from(cmd.0)
+            && cmd_id != 0
+        {
+            self.send_system_command(cmd_id & 0xFFF0);
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn send_system_command(&self, command: u32) {
+        // Route through the system-command path to preserve standard shell
+        // transitions (including minimize/maximize/restore animations).
+        let _ = unsafe { SendMessageW(self.hwnd(), WM_SYSCOMMAND, Some(WPARAM(command as usize)), Some(LPARAM(0))) };
     }
 
     pub fn show(&self) {
@@ -305,32 +462,40 @@ impl Window {
         let backdrop_visual = backdrop_tint.as_ref().context("Window has not been created yet")?;
         let [a, r, g, b] = color.to_be_bytes();
         let backdrop_color = windows::UI::Color { A: a, R: r, G: g, B: b };
-        let backdrop_brush = self.compositor_controller.Compositor()?.CreateColorBrushWithColor(backdrop_color)?;
-        let mut rect = RECT::default();
-        unsafe { GetClientRect(self.hwnd(), &raw mut rect)? };
-        #[allow(clippy::cast_precision_loss)]
-        backdrop_visual.SetSize(windows_numerics::Vector2::new(rect.right as f32, rect.bottom as f32))?;
+        let backdrop_brush = self.compositor.CreateColorBrushWithColor(backdrop_color)?;
         backdrop_visual.SetBrush(&backdrop_brush)?;
         backdrop_visual.SetOpacity(opacity)?;
         backdrop_visual.SetIsVisible(true)?;
-        self.compositor_controller.Commit()?;
         Ok(())
     }
 
     pub fn remove_backdrop_tint(&self) -> anyhow::Result<()> {
         if let Some(backdrop_visual) = self.backdrop_tint.borrow().as_ref() {
             backdrop_visual.SetIsVisible(false)?;
-            self.compositor_controller.Commit()?;
         }
         Ok(())
     }
 
-    pub(crate) fn resize_backdrop_tint(&self, size: PhysicalSize) -> anyhow::Result<()> {
-        if let Some(backdrop_visual) = self.backdrop_tint.borrow().as_ref() {
+    /// Win11 maximize-overhang inset in physical pixels: `SM_CYSIZEFRAME`
+    /// (DPI-aware) when resizable, maximized, and non-system title bar;
+    /// `0` otherwise.
+    pub(crate) fn max_chrome_y(&self) -> i32 {
+        if !self.is_resizable() || !self.has_non_system_title_bar() || !self.is_maximized() {
+            return 0;
+        }
+        self.dpi_metrics().size_frame
+    }
+
+    /// Offsets `content_layer` by `top_offset_px` so content aligns with the
+    /// visible monitor edge when maximized (composition origin is at the
+    /// off-monitor window-rect top-left). Does not commit; fires `CommitNeeded`.
+    pub(crate) fn set_content_top_offset(&self, top_offset_px: i32) -> anyhow::Result<()> {
+        if let Some(layer) = self.content_layer.borrow().as_ref() {
             #[allow(clippy::cast_precision_loss)]
-            backdrop_visual.SetSize(windows_numerics::Vector2 {
-                X: size.width.0 as f32,
-                Y: size.height.0 as f32,
+            layer.SetOffset(windows_numerics::Vector3 {
+                X: 0.0,
+                Y: top_offset_px as f32,
+                Z: 0.0,
             })?;
         }
         Ok(())
@@ -387,21 +552,49 @@ impl Window {
         unsafe { SetWindowTextW(self.hwnd(), title) }
     }
 
-    pub fn set_is_resizable(&self, value: bool) -> WinResult<()> {
-        self.update_style_flag(StyleFlag::Resizable, value)?;
+    pub fn set_is_resizable(&self, value: bool) -> anyhow::Result<()> {
+        // Update cache before FRAMECHANGED so the synchronous NCCALCSIZE reads fresh state.
         self.style.borrow_mut().is_resizable = value;
+        self.update_style_flag(StyleFlag::Resizable, value)?;
+        self.rebuild_caption_strip()?;
         Ok(())
     }
 
-    pub fn set_is_minimizable(&self, value: bool) -> WinResult<()> {
-        self.update_style_flag(StyleFlag::Minimizable, value)?;
+    pub fn set_is_minimizable(&self, value: bool) -> anyhow::Result<()> {
         self.style.borrow_mut().is_minimizable = value;
+        self.update_style_flag(StyleFlag::Minimizable, value)?;
+        self.rebuild_caption_strip()?;
         Ok(())
     }
 
-    pub fn set_is_maximizable(&self, value: bool) -> WinResult<()> {
-        self.update_style_flag(StyleFlag::Maximizable, value)?;
+    pub fn set_is_maximizable(&self, value: bool) -> anyhow::Result<()> {
         self.style.borrow_mut().is_maximizable = value;
+        self.update_style_flag(StyleFlag::Maximizable, value)?;
+        self.rebuild_caption_strip()?;
+        Ok(())
+    }
+
+    // On error the style cache and Win32 style flag have already been updated;
+    // we surface the failure to the caller rather than rolling back, because a
+    // best-effort revert could itself fail and leave the window in an even more
+    // inconsistent state. The caller (FFI boundary) logs and returns to Kotlin.
+    fn rebuild_caption_strip(&self) -> anyhow::Result<()> {
+        if !self.has_custom_title_bar() {
+            return Ok(());
+        }
+        let chrome_layer = self.chrome_layer()?;
+        let is_active = unsafe { GetForegroundWindow() == self.hwnd() };
+        let new_strip = CaptionButtonStrip::new(
+            &chrome_layer,
+            self.get_scale(),
+            &self.style.borrow(),
+            &self.compositor,
+            self.hwnd(),
+            is_active,
+            self.is_maximized(),
+            self.max_chrome_y(),
+        )?;
+        self.caption_buttons.replace(Some(new_strip));
         Ok(())
     }
 
@@ -453,6 +646,16 @@ impl Window {
     pub(crate) fn with_mut_pointer_click_counter<R>(&self, f: impl FnOnce(&mut PointerClickCounter) -> R) -> R {
         let mut pointer_click_counter = self.pointer_click_counter.borrow_mut();
         f(&mut pointer_click_counter)
+    }
+
+    #[inline]
+    pub(crate) fn with_strip<R>(&self, f: impl FnOnce(&CaptionButtonStrip) -> R) -> Option<R> {
+        self.caption_buttons.borrow().as_ref().map(f)
+    }
+
+    #[inline]
+    pub(crate) fn with_strip_mut<R>(&self, f: impl FnOnce(&mut CaptionButtonStrip) -> R) -> Option<R> {
+        self.caption_buttons.borrow_mut().as_mut().map(f)
     }
 
     pub fn request_redraw(&self) -> WinResult<()> {
@@ -511,7 +714,13 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
     if msg == WM_NCDESTROY {
         if let Ok(raw) = unsafe { RemovePropW(hwnd, WINDOW_PTR_PROP_NAME) } {
-            let _ = unsafe { Weak::from_raw(raw.0.cast::<Window>()) };
+            let weak = unsafe { Weak::from_raw(raw.0.cast::<Window>()) };
+            // Drop the strip (and its `RenderingDeviceReplacedRegistration`)
+            // before the HWND is recycled — otherwise an in-flight WinRT
+            // callback could `PostMessageW` to a stale or recycled handle.
+            if let Some(window) = weak.upgrade() {
+                window.caption_buttons.replace(None);
+            }
         }
         return LRESULT(0);
     }
@@ -556,24 +765,74 @@ fn on_nccreate(hwnd: HWND, lparam: LPARAM) -> anyhow::Result<()> {
 
 fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.hwnd.store(hwnd.0, Ordering::Release);
+    let dpi = unsafe { GetDpiForWindow(hwnd) };
+    window.set_dpi_metrics(dpi);
+    // Materialise the system-menu copy while WS_SYSMENU is still set, before
+    // the style narrow below clears it. Cache the HMENU for reuse on every
+    // show — Win32 owns the lifetime (destroyed with the window).
+    if window.has_non_system_title_bar() {
+        let h_menu = seed_system_menu(hwnd).context("failed to seed system menu")?;
+        window.system_menu.set(h_menu);
+    }
     unsafe { SetWindowLongPtrW(hwnd, GWL_STYLE, window.style.borrow().to_system().0 as _) };
     window.set_position(window.origin.get(), window.size.get())?;
     initialize_content(window, hwnd).context("failed to initialize the content")?;
     window.set_cursor(Cursor::load_from_system(CursorIcon::Arrow)?);
+
+    if window.has_custom_title_bar() {
+        let chrome_layer = window.chrome_layer()?;
+        let strip = CaptionButtonStrip::new(
+            &chrome_layer,
+            window.get_scale(),
+            &window.style.borrow(),
+            &window.compositor,
+            hwnd,
+            false,
+            false,
+            0,
+        )?;
+        window.caption_buttons.replace(Some(strip));
+    }
     Ok(())
 }
 
 fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
-    let compositor = window.compositor_controller.Compositor()?;
-    let compositor_interop: ICompositorDesktopInterop = compositor.cast()?;
+    let compositor_interop: ICompositorDesktopInterop = window.compositor.cast()?;
     let desktop_window_target = unsafe { compositor_interop.CreateDesktopWindowTarget(hwnd, false) }?;
-    let root_visual = compositor.CreateContainerVisual()?;
+
+    let root_visual = window.compositor.CreateContainerVisual()?;
     root_visual.SetBackfaceVisibility(CompositionBackfaceVisibility::Hidden)?;
+
+    let backdrop_layer = window.compositor.CreateContainerVisual()?;
+    let content_layer = window.compositor.CreateContainerVisual()?;
+    let chrome_layer = window.compositor.CreateContainerVisual()?;
+
+    // Track HWND client size on root, chrome, and backdrop layers.
+    // `content_layer` is excluded: the ANGLE visual sets its own absolute
+    // size in `resize_surface` and no other child reads the parent's size.
+    root_visual.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
+    chrome_layer.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
+    backdrop_layer.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
+
+    // VisualCollection ordering is bottom-to-top; sequential `InsertAtTop`
+    // calls put each new layer above the previous one. Final stacking:
+    // backdrop (bottom) < content (middle) < chrome (top).
+    let root_children = root_visual.Children()?;
+    root_children.InsertAtTop(&backdrop_layer)?;
+    root_children.InsertAtTop(&content_layer)?;
+    root_children.InsertAtTop(&chrome_layer)?;
+
+    let backdrop_visual = window.compositor.CreateSpriteVisual()?;
+    backdrop_visual.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
+    backdrop_layer.Children()?.InsertAtBottom(&backdrop_visual)?;
+
     desktop_window_target.SetRoot(&root_visual)?;
-    let backdrop_visual = compositor.CreateSpriteVisual()?;
-    root_visual.Children()?.InsertAtBottom(&backdrop_visual)?;
+
     window.backdrop_tint.replace(Some(backdrop_visual));
     window.composition_target.replace(Some(desktop_window_target));
     window.composition_root.replace(Some(root_visual));
+    window.backdrop_layer.replace(Some(backdrop_layer));
+    window.content_layer.replace(Some(content_layer));
+    window.chrome_layer.replace(Some(chrome_layer));
     Ok(())
 }

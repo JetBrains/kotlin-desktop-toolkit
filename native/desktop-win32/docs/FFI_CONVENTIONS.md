@@ -61,7 +61,7 @@ Mixing `BorrowedStrPtr` (NUL-terminated) and `BorrowedUtf8` (length-delimited) s
 
 `FfiOption<T: PanicDefault>` = `{ is_some: bool, value: T }`. The `value` slot always holds a valid `T` (`T::default()` when `is_some == false`). Used to return nullable strings / arrays / structs without a separate sentinel.
 
-The `IntoFfiOption` trait (data_object_api.rs:32-44) converts `anyhow::Result<T>` → `anyhow::Result<FfiOption<T>>`. **Current scope is too wide** — it swallows every error to `None` (with a `trace!` log only). It should swallow only "format not found" (`DV_E_FORMATETC` / `DV_E_TYMED`); allocation failures and type mismatches should surface as exceptions. See `TODO.md`.
+The `IntoFfiOption` trait (data_object_api.rs) converts `anyhow::Result<T>` → `anyhow::Result<FfiOption<T>>`. **Current scope is too wide** — it swallows every error to `None` (with a `trace!` log only). It should swallow only "format not found" (`DV_E_FORMATETC` / `DV_E_TYMED`); allocation failures and type mismatches should surface as exceptions. See `TODO.md`.
 
 ### Opaque pointers (Rust-allocated objects)
 
@@ -76,16 +76,16 @@ The `IntoFfiOption` trait (data_object_api.rs:32-44) converts `anyhow::Result<T>
 The wrappers don't carry the inner Rust type — the type is supplied at the use site via turbofish (`borrow::<Application>()`, `to_rc::<Window>()`, etc.). To make call sites readable, each subsystem defines a thin convenience alias in its `_api.rs`, e.g.:
 
 ```rust
-// application_api.rs:9
+// application_api.rs
 pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
 
-// window_api.rs:23
+// window_api.rs
 pub type WindowPtr<'a> = RustAllocatedRcPtr<'a>;
 ```
 
 These aliases are purely for naming — they don't bind the inner type, change the ABI, or alter ownership semantics. `AppPtr` and `WindowPtr` are interchangeable with their underlying `RustAllocated*Ptr` everywhere they appear; the alias just signals intent at the FFI-call site. `ComInterfaceRawPtr` is *not* an alias — it's a distinct struct in `com.rs` with its own `Drop` impl that releases the COM ref.
 
-The `borrow::<R>()` / `borrow_mut::<R>()` methods on `RustAllocatedRawPtr` produce a `&R` / `&mut R` from the raw pointer **without consuming the box**. They do this by `Box::leak(self.to_owned())` (ffi_utils.rs:105-112) — i.e. reconstruct the `Box` and immediately leak it. Soundness depends on caller discipline (no concurrent `to_owned`, single thread of ownership). **Marked open for review (see `TODO.md`).**
+The `borrow::<R>()` / `borrow_mut::<R>()` methods on `RustAllocatedRawPtr` produce a `&R` / `&mut R` from the raw pointer **without consuming the box**. They do this by `Box::leak(self.to_owned())` (ffi_utils.rs) — i.e. reconstruct the `Box` and immediately leak it. Soundness depends on caller discipline (no concurrent `to_owned`, single thread of ownership). **Marked open for review (see `TODO.md`).**
 
 Asymmetric pair: `RcPtr` has only `to_rc` (consumes) and `borrow` via cloning the `Rc` semantically; `RawPtr` separates `to_owned` (consume) from `borrow` / `borrow_mut` (non-consuming view).
 
@@ -151,8 +151,8 @@ Allocate the upcall stub in an `Arena.ofShared()` whose lifetime matches the Rus
 |---|---|
 | Opaque Rust object on Kotlin side | `class X(internal val ptr: MemorySegment) : AutoCloseable` |
 | Drop on close | `override fun close() { if (ptr != MemorySegment.NULL) ffiDownCall { x_drop(ptr) }; ptr = MemorySegment.NULL }` (where `ptr` is `var`) |
-| Pass the raw segment to a callee | `internal inline fun <R> withPointer(block: (MemorySegment) -> R): R = block(ptr)` (defined per class, e.g. Window.kt:69) |
-| Use-after-close guard | `private inline fun <R> requireOpen(block: (MemorySegment) -> R): R` — throws `IllegalStateException` if `ptr == NULL`, otherwise invokes `block` with the captured pointer (DataObject.kt:121-125 prototype). The lambda-taking shape captures the pointer **once**, avoiding TOCTOU between the null-check and the use; prefer it over the two-step `val captured = requireOpen(); use(captured)` form. |
+| Pass the raw segment to a callee | `internal inline fun <R> withPointer(block: (MemorySegment) -> R): R = block(ptr)` (defined per class, e.g. Window.kt) |
+| Use-after-close guard | `private inline fun <R> requireOpen(block: (MemorySegment) -> R): R` — throws `IllegalStateException` if `ptr == NULL`, otherwise invokes `block` with the captured pointer (DataObject.kt prototype). The lambda-taking shape captures the pointer **once**, avoiding TOCTOU between the null-check and the use; prefer it over the two-step `val captured = requireOpen(); use(captured)` form. |
 | Block-scoped builder | `companion object { fun build(block: Builder.() -> Unit): X = … }` — used by `DataObject.build { … }` to hide the multi-step create / configure / convert flow |
 | Pre-init deferred work | `Application.onStartup(action)` — queues into a `ConcurrentLinkedQueue` until first `runEventLoop` dispatch tick; subsequent calls go through `invokeOnDispatcher` |
 
@@ -170,12 +170,12 @@ The Win32 OLE / drag-drop / clipboard subsystems use `windows-core` to implement
 | Release | `Drop for ComInterfaceRawPtr` calls `IUnknown::from_raw(self.0).Release()` — refcount → 0 → struct drops |
 | Borrow back into a typed interface | `let iface: IDataObject = unsafe { raw.borrow() };` — does not change refcount |
 
-Apartment requirement: **STA**. `OleInitialize(None)` is called by `Application::init_apartment` (application.rs:31). Any drag-drop or OLE clipboard operation must run on the same STA thread.
+Apartment requirement: **STA**. `OleInitialize(None)` is called by `Application::init_apartment` (application.rs). Any drag-drop or OLE clipboard operation must run on the same STA thread.
 
 `STGMEDIUM` ownership rules (per Win32 docs):
 - `pUnkForRelease == None` → caller owns the medium and must call `ReleaseStgMedium` (which dispatches based on `tymed`) or free the medium directly.
 - `pUnkForRelease == Some(unknown)` → `ReleaseStgMedium` releases the unknown.
-- `StgMediumGuard::drop` (data_reader.rs:23-25) calls `ReleaseStgMedium` unconditionally — correct in both cases per the rules above.
+- `StgMediumGuard::drop` (data_reader.rs) calls `ReleaseStgMedium` unconditionally — correct in both cases per the rules above.
 
 ## Decision flow for a new FFI function
 

@@ -20,14 +20,16 @@ This crate is **the Win32-focused backend**. Window creation, message pump, inpu
 - Do not propose `XamlRoot`, `ContentDialog`, `WinRT.Microsoft.UI.Xaml.*`, or any XAML-island bridging.
 - If a feature seems to require WinUI 3, the answer in this crate is "we don't support that here" — surface it for review and consider whether a separate WinUI 3 backend is the right home, not a partial dependency in this one.
 
+**Note:** "Don't depend on WinUI APIs" is *not* the same as "don't read WinUI docs." When the toolkit needs to replicate Win11-native UX behaviour (caption-button colours, hover/pressed semantics, animation curves, RTL mirroring rules, etc.), WinUI / Windows App SDK documentation and source are valid references for the *behavioural contract* — we cite them as conventions to follow, not as APIs we consume. Where WinUI describes a behaviour but does not expose concrete values, fall back to other public Win32-host implementations chosen on a per-feature basis, citing each value by repo path and revision. The rule: WinUI for the contract; Win32 / WinRT for the implementation; per-feature reference implementations only for values that WinUI keeps closed-source.
+
 ### WinRT exceptions in this crate (and why)
 
 The four WinRT subsystems used here, each with explicit rationale:
 
 | WinRT API | Where | Why a Win32 alternative isn't used |
 |---|---|---|
-| `Windows.UI.Composition` (`Compositor`, `ContainerVisual`, `SpriteVisual`, `DesktopWindowTarget`) — controlled-commit variant via `Core::CompositorController` | `application.rs`, `window.rs`, `renderer_angle.rs` | This is the modern composition surface DWM uses natively. It integrates correctly with `WS_EX_NOREDIRECTIONBITMAP`, with DWM's Mica / Acrylic / dark-mode titlebar effects, and with ANGLE's window-surface targeting — none of which classic Win32 GDI / layered windows / DirectComposition support without significant manual work. The HWND ↔ visual-tree bridge uses `ICompositorDesktopInterop::CreateDesktopWindowTarget`, which is the official Win32-interop interface for hosting a WinRT visual tree in a classic Win32 window. We deliberately use `CompositorController` (controlled commit) rather than `Compositor` (auto-commit) so swap-buffers and backdrop changes can commit atomically. |
-| `Windows.System.DispatcherQueueController` (with `DQTYPE_THREAD_CURRENT`) | `application.rs` | The toolkit posts cross-thread work back to the UI thread. The Win32 alternative — `PostMessageW` to a hidden owner window — is workable, but the WinRT `DispatcherQueue` is required anyway for `CompositorController` to schedule its commits, and once it's present it's the natural primitive for `application_dispatcher_invoke`. Not introducing a second mechanism keeps the threading model uniform. |
+| `Windows.UI.Composition` (`Compositor`, `ContainerVisual`, `SpriteVisual`, `DesktopWindowTarget`) — controlled-commit variant via `Core::CompositorController`, wrapped by `CompositorDriver` | `application.rs`, `window.rs`, `renderer_angle.rs`, `compositor_driver.rs` | This is the modern composition surface DWM uses natively. It integrates correctly with `WS_EX_NOREDIRECTIONBITMAP`, with DWM's Mica / Acrylic / dark-mode titlebar effects, and with ANGLE's window-surface targeting — none of which classic Win32 GDI / layered windows / DirectComposition support without significant manual work. The HWND ↔ visual-tree bridge uses `ICompositorDesktopInterop::CreateDesktopWindowTarget`, which is the official Win32-interop interface for hosting a WinRT visual tree in a classic Win32 window. `CompositorController` (controlled commit) is used rather than `Compositor` (auto-commit) so swap-buffers and backdrop changes can commit atomically. `CompositorDriver` wraps the controller, subscribes to `CommitNeeded`, and drives `Commit()` via a UI-thread fast-path or dispatcher-queue drain — concentrating explicit commit sites to one (`swap_buffers` resize handshake) plus the driver-internal path. |
+| `Windows.System.DispatcherQueueController` (with `DQTYPE_THREAD_CURRENT`) | `application.rs` | The toolkit posts cross-thread work back to the UI thread. The Win32 alternative — `PostMessageW` to a hidden owner window — is workable, but the WinRT `DispatcherQueue` is required for `CompositorDriver` to marshal off-thread `CommitNeeded` fires back to the UI thread, and once it's present it's the natural primitive for `application_dispatcher_invoke`. Not introducing a second mechanism keeps the threading model uniform. |
 | `Windows.UI.ViewManagement.UISettings` (`GetColorValue(Foreground)`) | `appearance.rs` | The canonical signal for "is the user in dark mode" on Windows is the foreground colour returned by `UISettings`. The Win32 alternative is reading `HKCU\…\Personalize\AppsUseLightTheme` from the registry, which only covers Win10+ apps mode (not the full system mode), is undocumented as a stable API, and misses the auto-update on theme switch. We still consume the `WM_SETTINGCHANGE` (`ImmersiveColorSet`) Win32 signal to trigger re-query — but the answer comes from WinRT. |
 | `Windows.ApplicationModel.DataTransfer.HtmlFormatHelper` (`CreateHtmlFormat`, `GetStaticFragment`) | `global_data.rs` (HTML clipboard format encode / decode) | The "HTML Format" clipboard payload requires a specific header with `Version:` / `StartHTML:` / `EndHTML:` / `StartFragment:` / `EndFragment:` byte offsets. Computing those offsets by hand is error-prone (encoding rules, byte-level placement, the spec's tolerance for absent fields). The WinRT helper does it correctly per the documented Windows clipboard contract. Win32 has no equivalent helper. |
 
@@ -44,23 +46,26 @@ native/
       logger_api.rs               LogLevel, LoggerConfiguration, ExceptionsArray (#[repr(C)])
       lib.rs                      re-exports the three modules above
   desktop-win32/
-    Cargo.toml                    deps: windows 0.62.x, windows-core, khronos-egl, papaya, anyhow
+    Cargo.toml                    deps: windows 0.62.x, windows-core, khronos-egl, papaya, anyhow, static_assertions
     cbindgen.toml                 prefix=Native, parse_deps=true (parses desktop-common too)
     src/
       lib.rs                      DllMain → captures HINSTANCE; declares win32 + logger_api
       logger_api.rs               thin Win32 logger glue
       win32/
-        mod.rs                    declares 36 sibling pub mod entries
-        application.rs            Application: OLE STA, DispatcherQueue, CompositorController
+        mod.rs                    declares 39 sibling pub mod entries
+        application.rs            Application: OLE STA, DispatcherQueue, CompositorDriver
         application_api.rs        FFI: app lifecycle + dispatcher dispatch
         event_loop.rs             window_proc: WM_* → Event dispatch; thread_local key/exception stash
         events.rs                 Event enum (22 variants, #[repr(C)]) + payload structs
         events_api.rs             FFI: keyevent_translate_message, keydown_to_unicode
         window.rs                 Window struct: HWND, WinRT composition tree, DWM, cursor, icon
         window_api.rs             FFI: window lifecycle + per-window setters
-        renderer_angle.rs         AngleDevice: ANGLE/EGL on D3D11, surface=SpriteVisual
+        renderer_angle.rs         AngleDevice: ANGLE/EGL on D3D11, surface=SpriteVisual; holds Arc<CompositorDriver>
         renderer_api.rs           FFI: angle device create/drop/resize/make_current/swap
         renderer_egl_utils.rs     EglInstance type alias, get_egl_proc! macro
+        caption_buttons.rs        CaptionButtonStrip: state machine + WinRT visuals + press sessions
+        composition.rs            CompositionContext: D3D11/D2D/DirectWrite/CompositionGraphicsDevice gateway
+        compositor_driver.rs      CompositorDriver: CommitNeeded subscriber, autocommit gate, Arc<Self>
         geometry.rs               PhysicalPixels/LogicalPixels + Point/Size/Rect (#[repr(C)])
         keyboard.rs               VirtualKey, PhysicalKeyStatus (LPARAM decode)
         keyboard_api.rs           FFI: keyboard_get_key_state, keyboard_get_state
@@ -139,14 +144,14 @@ Per-thread state stored in `thread_local!`:
 - `desktop-common/logger.rs`: `LAST_EXCEPTION_MSGS: RefCell<...>` — pending exception strings, capacity 10.
 
 Process-wide one-shot calls during init:
-- `EnableMouseInPointer(true)` (event_loop.rs:55) — process-wide and irreversible. WM_MOUSE* are synthesised through WM_POINTER*. Third-party code in the same process expecting raw mouse messages will silently break.
+- `EnableMouseInPointer(true)` — process-wide and irreversible. WM_MOUSE* are synthesised through WM_POINTER*. Third-party code in the same process expecting raw mouse messages will silently break.
 - `SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)` — per-thread, set in `EventLoop::new`.
 
 Cross-thread work uses `application_dispatcher_invoke`, which posts a Kotlin trampoline (`pollCallbacks`) onto the WinRT `DispatcherQueue`. The Kotlin side queues lambdas in a `ConcurrentLinkedQueue` and drains it on the UI thread. Note: the `bool` returned by `application_dispatcher_invoke` is silently discarded by `Application.invokeOnDispatcher` — enqueues after dispatcher shutdown drop the work.
 
 `OleInitialize` is required for COM/OLE drag-drop, the OLE clipboard path, and the IFileOpen/Save dialogs. `CoInitializeEx` is not called separately (`OleInitialize` calls it internally for an STA).
 
-WinRT `UISettings` (appearance) and `CompositorController` (composition) live in the same STA.
+WinRT `UISettings` (appearance) and `CompositorDriver` / `CompositorController` (composition) live in the same STA.
 
 ## Ownership model
 
@@ -179,7 +184,7 @@ extern "C" fn foo_api(...) -> R {
 }
 ```
 
-Inside `ffi_boundary` (logger.rs:312):
+Inside `ffi_boundary` (logger.rs):
 1. `Ok(Ok(result))` → return result. **Designed happy path.**
 2. `Ok(Err(anyhow_err))` → `error!(…)` log; append message to `LAST_EXCEPTION_MSGS`; return `R::default()` via the `PanicDefault` trait. **Designed error path.**
 3. `Err(panic_payload)` (from `panic::catch_unwind(AssertUnwindSafe(closure))`) → append payload string; return `R::default()`. **Safety net only — should never fire in correct code.** `AssertUnwindSafe` is applied unconditionally, so partial mutation after a panic unwind is not protected against. Reaching this path means somewhere a `?` was missed, an `unwrap` slipped through, or an external API panicked unexpectedly.
@@ -266,8 +271,8 @@ Kotlin: Window.new(appPtr) → Window.create(params)
        …
        WM_NCDESTROY → RemovePropW; the recovered Weak is dropped.
   → DwmExtendFrameIntoClientArea / SetWindowAttribute(IMMERSIVE_DARK_MODE / SYSTEMBACKDROP_TYPE)
-  → CompositorController (WinRT Windows.UI.Composition) → ContainerVisual + SpriteVisual;
-    HWND bridge via ICompositorDesktopInterop::CreateDesktopWindowTarget (window.rs:493-494)
+  → Compositor (from CompositorDriver) → ContainerVisual + SpriteVisual;
+    HWND bridge via ICompositorDesktopInterop::CreateDesktopWindowTarget
 ```
 
 ### 3. ANGLE rendering
@@ -281,7 +286,7 @@ Kotlin: Application.createAngleRenderer(window)
        └── eglCreateContext (OpenGL ES 2.0)
        └── eglCreateWindowSurface targeting the SpriteVisual
   → renderer_angle_make_current(...)
-  → render frame, glFinish (note: kills CPU/GPU pipelining), eglSwapBuffers → CompositorController::Commit
+  → render frame, glFinish (note: kills CPU/GPU pipelining), eglSwapBuffers → compositor_driver.publish_and_resume_autocommit() (Commit only if resize gate was paused)
 ```
 
 ### 4. Drag-and-drop (drop side)
@@ -327,9 +332,10 @@ A common conflation — these are distinct stacks that can both produce visual t
 | Used in this crate | **No** | **Yes** — exclusively |
 
 Where in the code:
-- `application.rs:6, 26, 38` — `CompositorController::new()` is owned by `Application` and cloned into each `Window` and `AngleDevice`.
-- `window.rs:13-14, 25, 66-67, 493-494` — `ContainerVisual` / `SpriteVisual` / `DesktopWindowTarget`, with the HWND bridged via `ICompositorDesktopInterop` (the only Win32-flavoured COM interface in the rendering path).
-- `renderer_angle.rs:8, 43, 48` — ANGLE's EGL window surface targets the `SpriteVisual`.
+- `application.rs` — owns `compositor_driver: Arc<CompositorDriver>`. The driver wraps `CompositorController`, subscribes to `CommitNeeded`, and drives `Commit()` via a UI-thread fast-path (inline in the same wndproc invocation) or a dispatcher-queue drain for off-thread fires.
+- `window.rs` — holds `compositor: Compositor` (no driver — `Window` only creates visuals, never calls `Commit()`). `ContainerVisual` / `SpriteVisual` / `DesktopWindowTarget`, with the HWND bridged via `ICompositorDesktopInterop`.
+- `renderer_angle.rs` — holds `compositor_driver: Arc<CompositorDriver>`. ANGLE's EGL window surface targets the `SpriteVisual`. `resize_surface` calls `pause_autocommit` then `do_resize`; `swap_buffers` calls `publish_and_resume_autocommit` (Commit fires only when the gate was paused, so non-resize swaps don't pay an extra Commit).
+- `caption_buttons.rs` — `CaptionButtonStrip` takes `&Compositor` at construction; no driver field. Mutations rely on the driver's `CommitNeeded` event for publishing — drained inline on the UI thread when the wndproc dispatch is already there, or via dispatcher-queue handoff otherwise. The strip never calls `Commit()` directly.
 
 `Win32_Graphics_Dwm` is enabled in `Cargo.toml` (DWM titlebar attributes, extended frame bounds), but `Win32_Graphics_DirectComposition` is **not** enabled. Anyone tempted to "drop down to DComp for X" should first check whether the `Windows.UI.Composition` API (or Win2D) covers the case — the two cannot be mixed naively in the same visual tree.
 
@@ -337,11 +343,11 @@ Where in the code:
 
 This document so far focuses on the Rust side. The Kotlin counterpart at `kotlin-desktop-toolkit/src/main/kotlin/org/jetbrains/desktop/win32/` is covered subsystem-by-subsystem in `SUBSYSTEMS.md`. The conventions that span all classes are described in `FFI_CONVENTIONS.md`. At a glance:
 
-- **Bootstrap.** `KotlinDesktopToolkit.init(...)` loads `desktop_win32_<arch>[+debug].dll` via `System.load` (resolved from the `kdt.library.folder.path` system property) and then initialises the native logger. Init is `AtomicBoolean`-guarded; calling twice is a no-op with a warning. `// todo check that native library version is consistent with Kotlin code` (KotlinDesktopToolkit.kt:19) — there is no version handshake.
+- **Bootstrap.** `KotlinDesktopToolkit.init(...)` loads `desktop_win32_<arch>[+debug].dll` via `System.load` (resolved from the `kdt.library.folder.path` system property) and then initialises the native logger. Init is `AtomicBoolean`-guarded; calling twice is a no-op with a warning. `// todo check that native library version is consistent with Kotlin code` (KotlinDesktopToolkit.kt) — there is no version handshake.
 - **Lifecycle wrappers.** `Application`, `Window`, `AngleRenderer`, `DataObject`, `DragDropManager` are `AutoCloseable`. They hold an opaque `MemorySegment` returned by Rust and call the matching `*_drop` FFI on `close()`. Most internally expose an `internal inline fun withPointer(block)` to hand the raw segment to a caller without copying.
 - **FFI boundary.** Every native call is wrapped in `ffiDownCall { ... }` (Logger.kt) — must wrap **only** the native call itself. Callbacks invoked from Rust into Kotlin go through `ffiUpCall { defaultResult, body }`, which catches every `Throwable` and returns `defaultResult` (Kotlin exceptions never cross into Rust).
 - **Marshalling.** `Strings.kt`, `Arrays.kt`, and `Converters.kt` form the support layer used by the wrapper classes. `Arena.ofConfined().use { arena -> ... ffiDownCall { native(...) } ... }` is the canonical scope for native struct allocation.
-- **Use-after-close guard.** `DataObject.requireOpen` (DataObject.kt:121-125) is the prototype: an inline helper that throws `IllegalStateException` if the underlying pointer is `MemorySegment.NULL`. The pattern should be applied wherever a Kotlin wrapper holds an opaque Rust pointer with a documented lifetime.
+- **Use-after-close guard.** `DataObject.requireOpen` (DataObject.kt) is the prototype: an inline helper that throws `IllegalStateException` if the underlying pointer is `MemorySegment.NULL`. The pattern should be applied wherever a Kotlin wrapper holds an opaque Rust pointer with a documented lifetime.
 - **Builders for COM objects.** `DataObject.build { … }` is a block-scoped builder that hides the `data_object_create` / `data_object_into_com` lifecycle so callers never see a "half-built" `DataObject`.
 - **Two-tier event delivery.** The Rust event handler is one C function pointer per `Application`; on the Kotlin side `Event.fromNative(tag, segment)` reads the tag integer and dispatches to the matching `sealed class Event` subclass (22 variants mirror the Rust `Event` enum 1-to-1).
 
@@ -353,4 +359,4 @@ This document so far focuses on the Rust side. The Kotlin counterpart at `kotlin
 
 ANGLE depends on a co-located `libEGL.dll`; `GetModuleFileNameW(get_dll_instance())` is used to resolve the path. No fallback if it's missing.
 
-The crate uses `windows` crate v0.62.x, `windows-core` 0.62.x, `khronos-egl` 6.0 (dynamic), and `papaya` 0.2 (concurrent hash map, used by `data_object` and `data_object_api`).
+The crate uses `windows` crate v0.62.x, `windows-core` 0.62.x, `khronos-egl` 6.0 (dynamic), `papaya` 0.2 (concurrent hash map, used by `data_object` and `data_object_api`), and `static_assertions` 1.x (asserts `CompositorDriver: Send + Sync`).
