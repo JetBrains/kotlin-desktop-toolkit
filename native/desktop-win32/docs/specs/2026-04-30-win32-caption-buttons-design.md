@@ -49,7 +49,7 @@ Three crate-internal modules, all `pub(crate)` only — no FFI surface, no `_api
   - `WM_CANCELMODE` and `WM_ACTIVATE`-deactivate call `strip.cancel_any_press()` (no `pointer_id` available) and return `None`. [`WM_CANCELMODE`](https://learn.microsoft.com/windows/win32/winmsg/wm-cancelmode) doc says `DefWindowProc` "cancels internal processing of standard scroll bar input, cancels internal menu processing, and releases the mouse capture" — letting it run preserves that. These arms backstop focus-loss paths Windows does not deliver `WM_POINTERCAPTURECHANGED` on (ALT-TAB, `EnableWindow(FALSE)`, RDP disconnect).
   - `TrackMouseEvent(TME_NONCLIENT | TME_LEAVE)` is armed when an NC pointer update enters the window non-client area, not when it enters a specific caption button.
   - `on_ncmouseleave` calls `strip.on_nc_mouse_leave()` and `window.nc_leave_tracking_fired()` before the `DwmDefWindowProc` pass-through.
-  - `on_dpichanged` and `on_settingchange` call the strip's invalidation methods. `WM_DPICHANGED` calls `Window::set_dpi_metrics(new_dpi)` (wparam-derived) before any nested handler runs so downstream readers consume the freshly cached metrics without re-syscalling.
+  - `on_dpichanged` calls the strip's DPI invalidation (`on_dpi_change`). `on_settingchange` and `on_syscolorchange` forward high-contrast updates to the strip via `on_high_contrast_change`; the `WM_SETTINGCHANGE/ImmersiveColorSet` branch raises `SystemAppearanceChangeEvent` to Kotlin only; strip dark/light is app-driven via `setImmersiveDarkMode`. `WM_DPICHANGED` calls `Window::set_dpi_metrics(new_dpi)` (wparam-derived) before any nested handler runs so downstream readers consume the freshly cached metrics without re-syscalling.
   - `on_windowposchanged` calls `strip.on_max_state_change(IsZoomed(hwnd).as_bool())` when the cached maximize state has changed. `on_windowposchanged` returns `Some(LRESULT(0))`; no separate `WM_SIZE` arm. [`IsZoomed`](https://learn.microsoft.com/windows/win32/api/winuser/nf-winuser-iszoomed) is the documented Win32 API for checking maximized state.
   - `on_nccalcsize` (a) applies the maximized client-area inset described in §3.6 *before* emitting `NCCalcSizeEvent`, and (b) calls `strip.on_resize(max_chrome_y)` after the inset-aware client-rect calculation. Strip mutations queue; the driver's `CommitNeeded` fast-path publishes inline on the UI thread before the wndproc returns. The backdrop tint `SpriteVisual` auto-tracks via `RelativeSizeAdjustment(1,1)` and does not require a per-tick `SetSize`.
 
@@ -239,19 +239,32 @@ pub fn on_nc_mouse_leave(&mut self);
 // Theming / state changes
 pub fn on_activate(&mut self, is_active: bool);
 pub fn on_dpi_change(&mut self, new_scale: f32, max_chrome_y: i32) -> anyhow::Result<()>;
-pub fn on_appearance_change(&mut self, appearance: Appearance, high_contrast: HighContrast);
+pub fn on_appearance_change(&mut self, appearance: Appearance);
+pub fn on_high_contrast_change(&mut self, high_contrast: HighContrast);
 pub fn on_rendering_device_replaced(&mut self);
 pub fn on_max_state_change(&mut self, is_maximized: bool);
 pub fn on_resize(&mut self, max_chrome_y: i32);
 ```
 
-`CaptionButtonStrip::new` seeds `appearance` and `high_contrast` from `Appearance::get_current()` and `HighContrast::get_current()`. Both queries are non-fatal: a failed query logs at warning level and falls back to `Appearance::Light` / `HighContrast::Off`, and the strip self-corrects on the next appearance event.
+`CaptionButtonStrip::new` takes `initial_appearance: Appearance` from the caller.
+
+On window create (`initialize_window`), `Window` always passes `Appearance::Light`. The `immersive_dark` cache is seeded to `false` in `Window::new`, and `setImmersiveDarkMode` cannot run before `window_create` returns, so the cache is guaranteed `false` at this point.
+
+On strip rebuild (`rebuild_caption_strip`, triggered by `WindowStyle` mutations after the window has been created), `Window` reads the cache and passes the current value.
+
+`high_contrast` is seeded from `HighContrast::get_current()`. If the initial query fails the strip falls back to `HighContrast::Off` and logs a warning; the next `WM_SETTINGCHANGE` or `WM_SYSCOLORCHANGE` reseeds the correct value.
+
+`setImmersiveDarkMode` is a no-op on Windows builds below 11 22000. On those builds DWM ignores `DWMWA_USE_IMMERSIVE_DARK_MODE`, so the system-drawn title-bar background stays light no matter what the app requests. The cache is left at `false` so the caption-button strip stays light too, matching the title-bar background.
+
+The cache lives on `Window` as `immersive_dark: Cell<bool>`. The [`DWMWINDOWATTRIBUTE`](https://learn.microsoft.com/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute) enum documents `DWMWA_USE_IMMERSIVE_DARK_MODE` as a set-only attribute, so there is no reliable `DwmGetWindowAttribute` call to read the current value back from DWM — the toolkit has to remember it.
+
+The cache is updated only after `DwmSetWindowAttribute` succeeds, so it reflects the state DWM actually applied rather than what the app most recently requested. `set_immersive_dark_mode` short-circuits when the requested value already matches the cache; that short-circuit is safe only because a failed syscall leaves the cache unchanged, which lets a retry with the same value run the syscall again.
 
 The strip never invokes `Window::request_close` and friends directly — it returns `CaptionButtonAction` and the wndproc dispatches. This keeps the strip independent of `Window`'s broader state and unit-testable in isolation.
 
 ### 4.3 `CaptionButton` (private to `caption_buttons.rs`)
 
-Each button holds a `backplate: SpriteVisual` with a `CompositionColorBrush` and a `glyph: SpriteVisual` whose brush is a `CompositionMaskBrush` combining a `CompositionSurfaceBrush` (wrapping the pre-rasterised `glyph_surface`) as `Mask` with a `CompositionColorBrush` as `Source`. State transitions only mutate the `Source` colour; glyph re-rasterisation happens only on DPI / theme / high-contrast / max-state changes.
+Each button holds a `backplate: SpriteVisual` with a `CompositionColorBrush` and a `glyph: SpriteVisual` whose brush is a `CompositionMaskBrush` combining a `CompositionSurfaceBrush` (wrapping the pre-rasterised `glyph_surface`) as `Mask` with a `CompositionColorBrush` as `Source`. State transitions only mutate the `Source` colour; glyph re-rasterisation happens only on DPI, high-contrast, and max-state changes; light/dark appearance changes only swap the palette.
 
 The intermediate `CompositionSurfaceBrush` / `CompositionMaskBrush` aren't stored — `SpriteVisual.SetBrush(&mask_brush)` keeps the chain alive. Surface format is BGRA8 premultiplied.
 
@@ -347,8 +360,8 @@ Sourced from `microsoft/terminal:MinMaxCloseControl.xaml` `CommonStates` `Visual
 | `WM_NCMOUSELEAVE` | `on_nc_mouse_leave()`; window clears tracking armed | cheap |
 | `WM_NCCALCSIZE` (after client-rect calc) | `set_content_top_offset(max_chrome_y)`; `Custom` calls `on_resize(max_chrome_y)`. `CommitNeeded` fast-path publishes inline. | cheap |
 | `WM_DPICHANGED` | `set_dpi_metrics(new_dpi)` first; `Custom`: `set_content_top_offset` → `on_dpi_change(scale, max_chrome_y)` | **expensive** (re-rasterise all glyph surfaces) |
-| `Appearance` event | `on_appearance_change(appearance, hc)` | **expensive iff foreground-rest colour changed** |
-| `HighContrast` event | same as above with new `hc` | **expensive** (glyph code points swap E921↔EF2D etc.) |
+| `setImmersiveDarkMode` call | `on_appearance_change(appearance)` | cheap (palette swap only; glyph surfaces untouched) |
+| `HighContrast` event (`WM_SETTINGCHANGE/SPI_SETHIGHCONTRAST` or `WM_SYSCOLORCHANGE`) | `on_high_contrast_change(hc)` | **expensive** (glyph code points swap E921↔EF2D etc.; full glyph re-raster) |
 | `WM_ACTIVATE` | `on_activate(is_active)`; deactivate also calls `cancel_any_press()` | cheap (theme re-resolve, brush updates) |
 | `WM_WINDOWPOSCHANGED` | `Custom`: `on_max_state_change(is_maximized)` | **expensive for Maximize button only** on actual transitions (E922 ↔ E923) |
 

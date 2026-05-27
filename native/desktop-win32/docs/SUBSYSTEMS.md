@@ -148,7 +148,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - Disabled visible Min/Max return `HTCAPTION` for `WM_NCHITTEST`. The OS therefore sends `WM_NCLBUTTONDOWN` with `wparam = HTCAPTION`; `on_nclbuttondown`'s HTCAPTION arm re-hit-tests via `caption_kind_at_screen` and swallows the click (creates `PrimaryPress { suppressed: true }` + SetCapture). The matching release drains via `WM_LBUTTONUP` → `on_lbuttonup` → no action fires. No hover, press, or Kotlin event for disabled clicks — see spec §4.2.
 - `root_visual`, `chrome_layer`, `backdrop_layer`, and the backdrop tint `SpriteVisual` carry `RelativeSizeAdjustment(1,1)` set in `initialize_content`; per-resize `SetSize` is not required. `content_layer` is left at default — the ANGLE visual sets its own absolute `Size` and no other child reads the parent's effective size. The strip's `on_resize` is the single commit point per resize tick — see spec §5.5.
 
-**Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`, `Window::with_strip[_mut]` accessor), `event_loop` (wndproc dispatch into `caption_kind_at_screen`, `dispatch_caption_action`, `notify_strip_appearance_refresh`, and the strip's lifecycle methods), `appearance` (`Appearance` / `HighContrast` seed values + change events), `geometry` (`PhysicalPoint` / `PhysicalSize`).
+**Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`, `Window::with_strip[_mut]` accessor), `event_loop` (wndproc dispatch into `caption_kind_at_screen`, `dispatch_caption_action`, and the strip's lifecycle methods), `appearance` (the strip's `Appearance` mirrors the per-window `DWMWA_USE_IMMERSIVE_DARK_MODE` cache; `HighContrast` is seeded from the system and refreshed on system events), `geometry` (`PhysicalPoint` / `PhysicalSize`).
 
 ---
 
@@ -310,7 +310,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 ## Appearance
 
-**Purpose.** Detect system appearance state used by window chrome and caption-button rendering: light/dark theme plus high-contrast On/Off.
+**Purpose.** Detect the system's light/dark theme and high-contrast On/Off state. The light/dark theme is forwarded to Kotlin as `SystemAppearanceChangeEvent`. Per-window chrome dark/light is controlled separately by `DWMWA_USE_IMMERSIVE_DARK_MODE` — see the `window` subsystem. High-contrast feeds the caption-button strip palette and refreshes whenever Windows reports a high-contrast change.
 
 **Files.** `appearance.rs`, `appearance_api.rs` + Kotlin `Appearance.kt`.
 
@@ -326,7 +326,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **Gotchas.**
 - High-contrast changes can produce both `WM_SETTINGCHANGE` (`SPI_SETHIGHCONTRAST`) and `WM_SYSCOLORCHANGE`; the toolkit intentionally treats events as idempotent snapshots.
 - `WM_SETTINGCHANGE` is broadcast per-window, so the appearance event fires once per window. Apps with multiple windows see N redundant events for one OS change.
-- No registry / `DwmSetWindowAttribute` consultation here — DWM titlebar tinting is handled in `window.rs` / `event_loop.rs`, not in `appearance.rs`.
+- No registry / `DwmSetWindowAttribute` consultation here — DWM titlebar tinting is handled in `window.rs` (the `set_immersive_dark_mode` call site), not in `appearance.rs`.
 
 **Cross-refs.** `events` (`SystemAppearanceChangeEvent`), `event_loop` (`on_settingchange`), `window` (DWM dark titlebar), WinRT `Windows.UI.ViewManagement`.
 
