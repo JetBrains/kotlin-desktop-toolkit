@@ -532,31 +532,26 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
     }
 
     let event = NCHitTestEvent { mouse_x, mouse_y };
-    let handled = event_loop.handle_event(window, event);
-    if handled.is_some() {
+    if event_loop.handle_event(window, event).is_some() {
         return Some(LRESULT(HTCLIENT as _));
     }
     let mut window_rect = RECT::default();
     let _ = unsafe { GetWindowRect(hwnd, &raw mut window_rect) };
     let m = window.dpi_metrics();
-    let resize_handle_height = m.padded_border + m.size_frame;
-    let title_bar_height = resize_handle_height + unsafe { GetSystemMetricsForDpi(SM_CYSIZE, m.dpi) };
-    // Only the resize-border match is gated on `is_resizable`; the title-bar
-    // drag region applies to non-resizable custom-titlebar windows too so they
-    // remain draggable by their title bar.
-    //
-    // `WindowTitleBarKind::None` must not expose a synthetic drag band.
-    let allow_titlebar_drag = window.has_custom_title_bar();
-    let is_on_resize_border = window.is_resizable() && mouse_y < (window_rect.top + resize_handle_height) as _;
-    let is_within_title_bar = mouse_y < (window_rect.top + title_bar_height) as _;
-    let hit_test_result = if is_on_resize_border {
-        HTTOP
-    } else if allow_titlebar_drag && is_within_title_bar {
-        HTCAPTION
-    } else {
-        HTCLIENT
-    };
-    Some(LRESULT(hit_test_result as _))
+    let top = window_rect.top;
+    let resize_band = m.resize_handle_height();
+    // Resize border is gated on `is_resizable`; the title-bar drag region applies to
+    // non-resizable custom titlebars too. `WindowTitleBarKind::None` gets no drag band.
+    if window.is_resizable() && mouse_y < (top + resize_band) as _ {
+        return Some(LRESULT(HTTOP as _));
+    }
+    if window.has_custom_title_bar() {
+        let title_bar_height = resize_band + unsafe { GetSystemMetricsForDpi(SM_CYSIZE, m.dpi) };
+        if mouse_y < (top + title_bar_height) as _ {
+            return Some(LRESULT(HTCAPTION as _));
+        }
+    }
+    Some(LRESULT(HTCLIENT as _))
 }
 
 fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {

@@ -102,6 +102,12 @@ impl DpiMetrics {
             size_frame: unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) },
         }
     }
+
+    /// Height of the top resize-handle band: `SM_CXPADDEDBORDER + SM_CYSIZEFRAME`.
+    /// There is no `SM_CYPADDEDBORDER`; the X padded-border value is used on both axes.
+    pub(crate) const fn resize_handle_height(self) -> i32 {
+        self.padded_border + self.size_frame
+    }
 }
 
 #[allow(clippy::struct_field_names)]
