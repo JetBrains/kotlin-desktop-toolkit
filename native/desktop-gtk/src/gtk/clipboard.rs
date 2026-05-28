@@ -44,7 +44,9 @@ impl gdk4::subclass::content_provider::ContentProviderImpl for ClipboardContentP
         debug!("ContentProviderImpl::detach_clipboard");
         let event_handler = *self.event_handler.get().expect("EventHandler must be set");
         let data_source = *self.clipboard_type.get().expect("Clipboard type must be set");
-        send_event(event_handler, DataTransferCancelledEvent { data_source });
+        if !clipboard.is_local() {
+            send_event(event_handler, DataTransferCancelledEvent { data_source });
+        }
         self.parent_detach_clipboard(clipboard);
     }
 

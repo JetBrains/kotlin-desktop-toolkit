@@ -2661,6 +2661,13 @@ text/plain;charset=utf-8
 
 //            assertContentEquals(htmlContent, getClipboardContent(HTML_TEXT_MIME_TYPE))
             assertContentEquals(textContent, getClipboardContent(TEXT_UTF8_MIME_TYPE))
+
+            ui { app.clipboardPut(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) }
+            withNextEvent { event ->
+                assertIs<Event.DataTransferAvailable>(event)
+                assertEquals(DataSource.Clipboard, event.dataSource)
+                assertContentEquals(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE), event.mimeTypes)
+            }
         }
         testSuccessful = true
     }
@@ -2822,7 +2829,8 @@ text/plain;charset=utf-8
         )
         createWindowAndWaitForFocus(defaultWindowParams())
 
-        withSetPrimarySelectionContent(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) {
+        val mimeTypes = listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)
+        withSetPrimarySelectionContent(mimeTypes) {
             listPrimarySelectionFormats().also {
                 val expected = """text/html
 text/plain;charset=utf-8
@@ -2832,6 +2840,13 @@ text/plain;charset=utf-8
 
             assertContentEquals(htmlContent, getPrimarySelectionContent(HTML_TEXT_MIME_TYPE))
             assertContentEquals(textContent, getPrimarySelectionContent(TEXT_UTF8_MIME_TYPE))
+
+            ui { app.primarySelectionPut(mimeTypes) }
+            withNextEvent { event ->
+                assertIs<Event.DataTransferAvailable>(event)
+                assertEquals(DataSource.PrimarySelection, event.dataSource)
+                assertContentEquals(mimeTypes, event.mimeTypes)
+            }
         }
         testSuccessful = true
     }

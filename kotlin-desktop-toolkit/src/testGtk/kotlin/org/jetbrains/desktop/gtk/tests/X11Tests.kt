@@ -2255,6 +2255,13 @@ text/plain;charset=utf-8
             assertContentEquals(textContent, getClipboardContent("UTF8_STRING"))
             assertContentEquals(textContent + 0.toByte(), getClipboardContent("TEXT"))
             assertContentEquals(textContent + 0.toByte(), getClipboardContent("STRING"))
+
+            ui { app.clipboardPut(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) }
+            withNextEvent { event ->
+                assertIs<Event.DataTransferAvailable>(event)
+                assertEquals(DataSource.Clipboard, event.dataSource)
+                assertContentEquals(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE), event.mimeTypes)
+            }
         }
     }
 
@@ -2450,7 +2457,8 @@ text/plain;charset=utf-8
             ),
         )
 
-        withSetPrimarySelectionContent(listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)) {
+        val mimeTypes = listOf(HTML_TEXT_MIME_TYPE, TEXT_UTF8_MIME_TYPE)
+        withSetPrimarySelectionContent(mimeTypes) {
             runCommandWithOutput(listOf("xclip", "-selection", "primary", "-o", "-t", "TARGETS")).also {
                 val expected = """SAVE_TARGETS
 TIMESTAMP
@@ -2470,6 +2478,13 @@ text/plain;charset=utf-8
             assertContentEquals(textContent, getPrimarySelectionContent("UTF8_STRING"))
             assertContentEquals(textContent + 0.toByte(), getPrimarySelectionContent("TEXT"))
             assertContentEquals(textContent + 0.toByte(), getPrimarySelectionContent("STRING"))
+
+            ui { app.primarySelectionPut(mimeTypes) }
+            withNextEvent { event ->
+                assertIs<Event.DataTransferAvailable>(event)
+                assertEquals(DataSource.PrimarySelection, event.dataSource)
+                assertContentEquals(mimeTypes, event.mimeTypes)
+            }
         }
     }
 
