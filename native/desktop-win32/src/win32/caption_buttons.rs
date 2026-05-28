@@ -177,6 +177,7 @@ fn resolve_interaction(
     }
 }
 
+#[derive(Clone, Copy)]
 struct CaptionTheme {
     backplate_rest: windows::UI::Color,
     backplate_hover: windows::UI::Color,
@@ -310,7 +311,7 @@ impl StripGeometry {
         if y < 0 || y >= bh {
             return None;
         }
-        let count = self.visible_kinds.0.count_ones() as i32;
+        let count = self.visible_kinds.iter_ordered().count() as i32;
         let strip_left = self.reference_width_px - bw * count;
         for (i, kind) in self.visible_kinds.iter_ordered().enumerate() {
             let x_left = strip_left + (i as i32) * bw;
@@ -369,10 +370,10 @@ pub(crate) fn caption_kind_at_screen(window: &Window, screen: PhysicalPoint) -> 
         x: screen.x.0,
         y: screen.y.0,
     };
-    unsafe { ScreenToClient(hwnd, &raw mut client_point) }
-        .ok()
-        .inspect_err(|err| log::warn!("ScreenToClient failed: {err}"))
-        .ok()?;
+    if let Err(err) = unsafe { ScreenToClient(hwnd, &raw mut client_point) }.ok() {
+        log::warn!("ScreenToClient failed: {err}");
+        return None;
+    }
     let mut client_rect = RECT::default();
     unsafe { GetClientRect(hwnd, &raw mut client_rect) }
         .inspect_err(|err| log::warn!("GetClientRect failed: {err}"))
@@ -400,8 +401,7 @@ fn is_in_top_resize_border(window: &Window, mouse_y: i32) -> bool {
     {
         return false;
     }
-    let m = window.dpi_metrics();
-    mouse_y < window_rect.top + m.padded_border + m.size_frame
+    mouse_y < window_rect.top + window.dpi_metrics().resize_handle_height()
 }
 
 pub(crate) struct CaptionButtonStrip {
@@ -412,6 +412,7 @@ pub(crate) struct CaptionButtonStrip {
     is_window_maximized: bool,
     appearance: Appearance,
     high_contrast: HighContrast,
+    theme: CaptionTheme,
     metrics: CaptionButtonMetrics,
     pointer_over_kind: Option<CaptionButtonKind>,
     pointer_device: Option<PointerDeviceKind>,
@@ -507,6 +508,7 @@ impl CaptionButtonStrip {
             is_window_maximized: initial_is_maximized,
             appearance: initial_appearance,
             high_contrast,
+            theme: CaptionTheme::resolve(initial_appearance, high_contrast),
             metrics,
             pointer_over_kind: None,
             pointer_device: None,
@@ -580,7 +582,7 @@ impl CaptionButtonStrip {
     fn apply_visuals_to_all_buttons(&mut self) {
         self.rasterise_all_glyphs();
 
-        let theme = CaptionTheme::resolve(self.appearance, self.high_contrast);
+        let theme = self.theme;
         let pointer_over_kind = self.pointer_over_kind;
         let pointer_device = self.pointer_device;
         let primary_press = self.primary_press;
@@ -804,17 +806,20 @@ impl CaptionButtonStrip {
             return;
         }
         self.appearance = appearance;
+        self.theme = CaptionTheme::resolve(appearance, self.high_contrast);
         self.apply_visuals_to_all_buttons();
     }
 
-    /// Dirties every glyph surface: HC swaps glyph code points / fill style alongside the palette.
+    /// Re-resolves the cached palette; re-rasterises glyph surfaces only on an actual HC on/off toggle.
     pub fn on_high_contrast_change(&mut self, hc: HighContrast) {
-        if self.high_contrast == hc {
-            return;
-        }
+        let hc_toggled = self.high_contrast != hc;
         self.high_contrast = hc;
-        for button in &mut self.buttons {
-            button.glyph_surface_dirty = true;
+        // WM_SYSCOLORCHANGE can change HC colours without toggling the on/off state.
+        self.theme = CaptionTheme::resolve(self.appearance, hc);
+        if hc_toggled {
+            for button in &mut self.buttons {
+                button.glyph_surface_dirty = true;
+            }
         }
         self.apply_visuals_to_all_buttons();
     }
