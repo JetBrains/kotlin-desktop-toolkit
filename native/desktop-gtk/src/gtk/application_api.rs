@@ -51,8 +51,8 @@ pub struct FfiTransferDataResponse {
 pub struct FfiTextInputSurroundingText {
     pub obj_id: i64,
     pub surrounding_text: BorrowedUtf8<'static>,
-    pub cursor_codepoint_offset: u16,
-    pub selection_start_codepoint_offset: u16,
+    pub cursor_codepoint_offset: i32,
+    pub selection_start_codepoint_offset: i32,
 }
 
 pub type FfiObjDealloc = extern "C" fn(i64);

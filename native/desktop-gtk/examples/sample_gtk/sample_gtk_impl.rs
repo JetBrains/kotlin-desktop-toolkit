@@ -729,7 +729,7 @@ extern "C" fn retrieve_surrounding_text(window_id: WindowId) -> FfiTextInputSurr
             .with_mut_window_state(window_id, |window_state| window_state.text.clone())
             .unwrap()
     });
-    let codepoints_count = u16::try_from(text.chars().count()).unwrap();
+    let codepoints_count = i32::try_from(text.chars().count()).unwrap();
     let (static_str, obj_id) = leak_string_data(text);
     let surrounding_text = BorrowedUtf8::new(str::from_utf8(static_str).unwrap());
     FfiTextInputSurroundingText {

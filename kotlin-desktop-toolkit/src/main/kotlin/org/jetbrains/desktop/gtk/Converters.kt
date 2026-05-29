@@ -446,8 +446,17 @@ internal fun TextInputSurroundingText?.toNative(arena: Arena, objId: Long): Memo
     } else {
         NativeFfiTextInputSurroundingText.obj_id(result, objId)
         NativeFfiTextInputSurroundingText.surrounding_text(result, surroundingText.toNativeUtf8(arena))
-        NativeFfiTextInputSurroundingText.cursor_codepoint_offset(result, cursorCodepointOffset.toShort())
-        NativeFfiTextInputSurroundingText.selection_start_codepoint_offset(result, selectionStartCodepointOffset.toShort())
+        val textLen = surroundingText.length.toUInt()
+
+        require(cursorCodepointOffset <= textLen) {
+            "cursorCodepointOffset cannot be larger than the text length ($textLen): $this)"
+        }
+        NativeFfiTextInputSurroundingText.cursor_codepoint_offset(result, cursorCodepointOffset.toInt())
+
+        require(selectionStartCodepointOffset <= textLen) {
+            "selectionStartCodepointOffset cannot be larger than the text length ($textLen): $this)"
+        }
+        NativeFfiTextInputSurroundingText.selection_start_codepoint_offset(result, selectionStartCodepointOffset.toInt())
     }
     return result
 }
@@ -494,7 +503,7 @@ internal fun String?.toNativeUtf8(arena: Arena): MemorySegment {
         val byteArray = encodeToByteArray()
         val byteArraySize = byteArray.size
         require(byteArraySize <= Application.MAX_STRING_SIZE_BYTES) {
-            "String too long (max ${Application.MAX_STRING_SIZE_BYTES} bytes, but was $byteArraySize bytes): $this)"
+            "String too long (max ${Application.MAX_STRING_SIZE_BYTES} bytes, but was $byteArraySize bytes): $this"
         }
         NativeBorrowedUtf8.len(native, byteArraySize.toLong())
 
