@@ -1,15 +1,23 @@
+use std::sync::OnceLock;
+
 use desktop_common::logger::PanicDefault;
 use windows::{
     UI::{
         Color as WUColor,
         ViewManagement::{UIColorType, UISettings},
     },
-    Win32::UI::{
-        Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW, HIGHCONTRASTW_FLAGS},
-        WindowsAndMessaging::{SPI_GETHIGHCONTRAST, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW},
+    Win32::{
+        Foundation::HMODULE,
+        System::LibraryLoader::{GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW},
+        UI::{
+            Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW, HIGHCONTRASTW_FLAGS},
+            WindowsAndMessaging::{SPI_GETHIGHCONTRAST, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW},
+        },
     },
 };
-use windows_core::{PWSTR, Result as WinResult};
+use windows_core::{PCSTR, PWSTR, Result as WinResult, w};
+
+use super::utils;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,4 +102,78 @@ impl HighContrast {
 #[inline]
 const fn is_color_light(clr: WUColor) -> bool {
     ((5 * clr.G as u32) + (2 * clr.R as u32) + clr.B as u32) > (8 * 128)
+}
+
+type RawProcFn = unsafe extern "system" fn() -> isize;
+// Returns the previous mode as `i32`, not `PreferredAppMode`: an out-of-range enum from FFI would be UB.
+type SetPreferredAppModeFn = unsafe extern "system" fn(PreferredAppMode) -> i32;
+type FlushMenuThemesFn = unsafe extern "system" fn();
+
+#[repr(i32)]
+#[allow(dead_code)]
+enum PreferredAppMode {
+    Default = 0,
+    AllowDark = 1,
+    ForceDark = 2,
+    ForceLight = 3,
+    Max = 4,
+}
+
+/// `uxtheme.dll` dark-mode ordinals #135 and #136, resolved as a pair (both shipped
+/// in Windows 10 1903, below our 22000 gate).
+struct UxThemeFns {
+    set_preferred_app_mode: SetPreferredAppModeFn,
+    flush_menu_themes: FlushMenuThemesFn,
+}
+
+/// Resolve and cache the ordinals once. `None` (logged, non-fatal) on pre-22000
+/// Windows, DLL-load failure, or either ordinal missing — the popup then stays light.
+fn ux_theme_fns() -> Option<&'static UxThemeFns> {
+    static FNS: OnceLock<Option<UxThemeFns>> = OnceLock::new();
+    FNS.get_or_init(|| {
+        if !utils::is_windows_11_build_22000_or_higher() {
+            return None;
+        }
+        let module = match unsafe { LoadLibraryExW(w!("uxtheme.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32) } {
+            Ok(module) => module,
+            Err(err) => {
+                log::warn!("LoadLibraryExW(uxtheme.dll) failed: {err}");
+                return None;
+            }
+        };
+        let set_preferred_app_mode = resolve_ordinal(module, 135, "SetPreferredAppMode")?;
+        let flush_menu_themes = resolve_ordinal(module, 136, "FlushMenuThemes")?;
+        Some(UxThemeFns {
+            // SAFETY: ordinal #135 signature per Chromium base/win/dark_mode_support.cc
+            // and ysc3839/win32-darkmode. Both stub and target are `extern "system"`.
+            set_preferred_app_mode: unsafe { std::mem::transmute::<RawProcFn, SetPreferredAppModeFn>(set_preferred_app_mode) },
+            // SAFETY: ordinal #136 signature per ysc3839/win32-darkmode (`void()`).
+            flush_menu_themes: unsafe { std::mem::transmute::<RawProcFn, FlushMenuThemesFn>(flush_menu_themes) },
+        })
+    })
+    .as_ref()
+}
+
+fn resolve_ordinal(module: HMODULE, n: u16, name: &str) -> Option<RawProcFn> {
+    // MAKEINTRESOURCEA: the ordinal sits in the low word of an otherwise-null PCSTR.
+    let ordinal = PCSTR(n as usize as *const u8);
+    let raw = unsafe { GetProcAddress(module, ordinal) };
+    if raw.is_none() {
+        log::warn!("uxtheme ordinal #{n} ({name}) missing");
+    }
+    raw
+}
+
+pub(crate) fn set_preferred_app_mode(appearance: Appearance) {
+    let Some(fns) = ux_theme_fns() else {
+        return;
+    };
+    let mode = match appearance {
+        Appearance::Dark => PreferredAppMode::ForceDark,
+        Appearance::Light => PreferredAppMode::ForceLight,
+    };
+    unsafe { (fns.set_preferred_app_mode)(mode) };
+    // SetPreferredAppMode leaves already-themed menus on their old cache; flush so
+    // the next TrackPopupMenu re-themes the system-menu HMENU.
+    unsafe { (fns.flush_menu_themes)() };
 }

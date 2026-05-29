@@ -57,6 +57,13 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
 
     private var dragDropManager: DragDropManager? = null
 
+    private var immersiveDark = false
+
+    fun setImmersiveDarkMode(enabled: Boolean) {
+        immersiveDark = enabled
+        window.setImmersiveDarkMode(enabled)
+    }
+
     private fun isSizeChanged(size: PhysicalSize): Boolean {
         return (size.width != currentSize.width || size.height != currentSize.height)
     }
@@ -142,6 +149,11 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                         window.removeBackdropTint()
                     }
 
+                    VirtualKey.D -> {
+                        setImmersiveDarkMode(!immersiveDark)
+                        Logger.debug { "Immersive dark mode: $immersiveDark" }
+                    }
+
                     VirtualKey.C -> {
                         if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
                             DataObject.build {
@@ -203,8 +215,7 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
 
             is Event.SystemAppearanceChange -> with(event) {
                 Logger.debug { "Setting change: new appearance: $newAppearance" }
-                val enableImmersiveDarkMode = newAppearance == Appearance.Dark
-                window.setImmersiveDarkMode(enableImmersiveDarkMode)
+                setImmersiveDarkMode(newAppearance == Appearance.Dark)
                 EventHandlerResult.Stop
             }
 

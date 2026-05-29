@@ -810,11 +810,15 @@ impl CaptionButtonStrip {
         self.apply_visuals_to_all_buttons();
     }
 
-    /// Re-resolves the cached palette; re-rasterises glyph surfaces only on an actual HC on/off toggle.
+    /// Refreshes the cached palette and repaints, re-rasterising glyphs only on an on/off toggle.
+    /// The high-contrast palette can change while it stays on, so it refreshes whenever HC is on
+    /// and skips an unchanged off state (its palette is fixed).
     pub fn on_high_contrast_change(&mut self, hc: HighContrast) {
         let hc_toggled = self.high_contrast != hc;
+        if !hc_toggled && hc == HighContrast::Off {
+            return;
+        }
         self.high_contrast = hc;
-        // WM_SYSCOLORCHANGE can change HC colours without toggling the on/off state.
         self.theme = CaptionTheme::resolve(self.appearance, hc);
         if hc_toggled {
             for button in &mut self.buttons {

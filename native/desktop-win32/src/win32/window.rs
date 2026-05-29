@@ -41,7 +41,7 @@ use windows::{
 use windows_core::{HSTRING, Interface, PCWSTR, Result as WinResult, w};
 
 use super::{
-    appearance::Appearance,
+    appearance::{self, Appearance},
     caption_buttons::CaptionButtonStrip,
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
@@ -525,9 +525,6 @@ impl Window {
         if !utils::is_windows_11_build_22000_or_higher() {
             return Ok(());
         }
-        if self.immersive_dark.get() == enabled {
-            return Ok(());
-        }
         let enablement = windows_core::BOOL::from(enabled);
         unsafe {
             DwmSetWindowAttribute(
@@ -537,9 +534,10 @@ impl Window {
                 size_of::<windows_core::BOOL>().try_into()?,
             )?;
         }
-        self.immersive_dark.set(enabled);
         let appearance = if enabled { Appearance::Dark } else { Appearance::Light };
         self.with_strip_mut(|strip| strip.on_appearance_change(appearance));
+        appearance::set_preferred_app_mode(appearance);
+        self.immersive_dark.set(enabled);
         Ok(())
     }
 
