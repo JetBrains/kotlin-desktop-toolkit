@@ -103,7 +103,7 @@ class ApplicationState(private val app: Application) : AutoCloseable {
         val appearance = Appearance.getCurrent()
         Logger.debug { "Current appearance: $appearance" }
         if (appearance == Appearance.Dark) {
-            window.window.setImmersiveDarkMode(true)
+            window.setImmersiveDarkMode(true)
         }
 
         window.initializeDropManager()
