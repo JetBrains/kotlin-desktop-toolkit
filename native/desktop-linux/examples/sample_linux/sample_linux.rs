@@ -147,7 +147,7 @@ impl State {
 fn create_text_input_context(text: &str, change_caused_by_input_method: bool) -> TextInputContext<'_> {
     let codepoints_count = u16::try_from(text.chars().count()).unwrap();
     TextInputContext {
-        surrounding_text: BorrowedArray::from_slice(text.as_bytes()),
+        surrounding_text: BorrowedUtf8::new(text),
         cursor_codepoint_offset: codepoints_count,
         selection_start_codepoint_offset: codepoints_count,
         hints: TextInputContentHints::Multiline,

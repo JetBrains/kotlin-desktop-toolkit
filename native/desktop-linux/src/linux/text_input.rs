@@ -69,7 +69,7 @@ impl TextInputContext<'_> {
     }
 
     pub fn apply(&self, text_input: &ZwpTextInputV3) -> anyhow::Result<()> {
-        let surrounding_text = str::from_utf8(self.surrounding_text.as_slice()?)?;
+        let surrounding_text = self.surrounding_text.get("TextInputContext::surrounding_text")?;
 
         let cursor_pos_bytes = Self::get_byte_offset(surrounding_text, self.cursor_codepoint_offset);
 
