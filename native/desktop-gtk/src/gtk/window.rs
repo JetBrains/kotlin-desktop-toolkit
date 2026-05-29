@@ -335,6 +335,8 @@ impl SimpleWindow {
             min_size,
             last_window_configure_event.clone(),
         );
+        let im_context = create_im_context(window_id, event_handler, retrieve_surrounding_text);
+        let im_context_weak_ref = im_context.downgrade();
 
         match decoration_mode {
             WindowDecorationMode::Server => {
@@ -361,25 +363,26 @@ impl SimpleWindow {
         let event_controller_key_weak = event_controller_key.downgrade();
         window.add_controller(event_controller_key);
 
-        let im_context = create_im_context(window_id, event_handler, retrieve_surrounding_text);
-        let im_context_weak_ref = im_context.downgrade();
-        window.connect_is_active_notify(move |window| {
-            let active = window.is_active();
-            // Do this first to prevent a deadlock if `text_input_disable` is called as a result of the following events.
-            if let Some(im_context) = im_context_weak_ref.upgrade() {
-                if active {
-                    im_context.focus_in();
-                } else {
-                    im_context.focus_out();
+        {
+            let im_context_weak_ref = im_context_weak_ref.clone();
+            window.connect_is_active_notify(move |window| {
+                let active = window.is_active();
+                // Do this first to prevent a deadlock if `text_input_disable` is called as a result of the following events.
+                if let Some(im_context) = im_context_weak_ref.upgrade() {
+                    if active {
+                        im_context.focus_in();
+                    } else {
+                        im_context.focus_out();
+                    }
                 }
-            }
 
-            if active {
-                send_event(event_handler, WindowKeyboardEnterEvent { window_id });
-            } else {
-                send_event(event_handler, WindowKeyboardLeaveEvent { window_id });
-            }
-        });
+                if active {
+                    send_event(event_handler, WindowKeyboardEnterEvent { window_id });
+                } else {
+                    send_event(event_handler, WindowKeyboardLeaveEvent { window_id });
+                }
+            });
+        }
 
         set_window_configure_event_handlers(
             &window,
@@ -397,12 +400,14 @@ impl SimpleWindow {
             send_event(event_handler, event);
         });
 
-        let im_context_weak_ref = im_context.downgrade();
-        gl_widget.connect_realize(move |gl_widget| {
-            if let Some(im_context) = im_context_weak_ref.upgrade() {
-                im_context.set_client_widget(Some(gl_widget));
-            }
-        });
+        {
+            let im_context_weak_ref = im_context_weak_ref.clone();
+            gl_widget.connect_realize(move |gl_widget| {
+                if let Some(im_context) = im_context_weak_ref.upgrade() {
+                    im_context.set_client_widget(Some(gl_widget));
+                }
+            });
+        }
 
         window.connect_realize(move |window| on_realize(window, window_id, event_handler, last_window_configure_event.clone()));
 
@@ -415,14 +420,11 @@ impl SimpleWindow {
             }
         });
 
-        {
-            let im_context_weak_ref = im_context.downgrade();
-            window.connect_unrealize(move |_window| {
-                if let Some(im_context) = im_context_weak_ref.upgrade() {
-                    im_context.set_client_widget(gtk4::Widget::NONE);
-                }
-            });
-        }
+        window.connect_unrealize(move |_window| {
+            if let Some(im_context) = im_context_weak_ref.upgrade() {
+                im_context.set_client_widget(gtk4::Widget::NONE);
+            }
+        });
 
         window.add_weak_ref_notify_local(move || {
             debug!("destroy for {window_id:?}");
