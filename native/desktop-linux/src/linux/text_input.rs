@@ -3,7 +3,7 @@ use crate::linux::{
     application_state::ApplicationState,
     events::{TextInputAvailabilityEvent, TextInputDeleteSurroundingTextData, TextInputEvent, TextInputPreeditStringData},
 };
-use anyhow::bail;
+use anyhow::{Context, bail};
 use desktop_common::ffi_utils::BorrowedUtf8;
 use log::{debug, warn};
 use smithay_client_toolkit::reexports::{
@@ -60,33 +60,29 @@ impl TextInputContentHints {
 }
 
 impl TextInputContext<'_> {
-    fn get_byte_offset(text: &str, offset: u16) -> usize {
+    fn get_byte_offset(text: &str, offset: u16) -> anyhow::Result<i32> {
         let mut it = text.char_indices();
         for _ in 0..offset {
             it.next();
         }
-        it.offset()
+        i32::try_from(it.offset()).with_context(|| format!("offset={offset}, text={text}"))
     }
 
     pub fn apply(&self, text_input: &ZwpTextInputV3) -> anyhow::Result<()> {
         let surrounding_text = self.surrounding_text.get("TextInputContext::surrounding_text")?;
 
-        let cursor_pos_bytes = Self::get_byte_offset(surrounding_text, self.cursor_codepoint_offset);
+        let cursor_pos_bytes = Self::get_byte_offset(surrounding_text, self.cursor_codepoint_offset)?;
 
         let selection_start_pos_bytes = if self.selection_start_codepoint_offset == self.cursor_codepoint_offset {
             cursor_pos_bytes
         } else {
-            Self::get_byte_offset(surrounding_text, self.selection_start_codepoint_offset)
+            Self::get_byte_offset(surrounding_text, self.selection_start_codepoint_offset)?
         };
 
         debug!(
             "Calling set_surrounding_text with cursor_pos_bytes={cursor_pos_bytes}, selection_start_pos_bytes={selection_start_pos_bytes}, surrounding_text={surrounding_text}"
         );
-        text_input.set_surrounding_text(
-            surrounding_text.to_owned(),
-            i32::try_from(cursor_pos_bytes)?,
-            i32::try_from(selection_start_pos_bytes)?,
-        );
+        text_input.set_surrounding_text(surrounding_text.to_owned(), cursor_pos_bytes, selection_start_pos_bytes);
         text_input.set_content_type(self.hints.to_system()?, self.content_purpose.to_system());
         text_input.set_text_change_cause(if self.change_caused_by_input_method {
             zwp_text_input_v3::ChangeCause::InputMethod

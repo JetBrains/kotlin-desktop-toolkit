@@ -61,7 +61,7 @@ impl TryFrom<TextInputContextHints> for gtk4::InputHints {
 #[derive(Debug)]
 pub struct SurroundingTextWithSelection<'a> {
     text: &'a str,
-    cursor_char_pos: u16,
+    cursor_char_pos: i32,
     cursor_byte_index: i32,
     anchor_byte_index: i32,
 }
@@ -73,17 +73,17 @@ impl<'a> SurroundingTextWithSelection<'a> {
         let anchor_char_pos = context.selection_start_codepoint_offset;
         let (cursor_byte_index, anchor_byte_index) = match cursor_char_pos.cmp(&anchor_char_pos) {
             Ordering::Equal => {
-                let (cursor_byte_index, _) = get_byte_offset(text, cursor_char_pos.into());
+                let (cursor_byte_index, _) = get_byte_offset(text, cursor_char_pos);
                 (cursor_byte_index, cursor_byte_index)
             }
             Ordering::Less => {
-                let (cursor_byte_index, text_from_cursor) = get_byte_offset(text, cursor_char_pos.into());
-                let (anchor_bytes_diff, _) = get_byte_offset(text_from_cursor, (anchor_char_pos - cursor_char_pos).into());
+                let (cursor_byte_index, text_from_cursor) = get_byte_offset(text, cursor_char_pos);
+                let (anchor_bytes_diff, _) = get_byte_offset(text_from_cursor, anchor_char_pos - cursor_char_pos);
                 (cursor_byte_index, cursor_byte_index + anchor_bytes_diff)
             }
             Ordering::Greater => {
-                let (anchor_byte_index, text_from_anchor) = get_byte_offset(text, anchor_char_pos.into());
-                let (cursor_bytes_diff, _) = get_byte_offset(text_from_anchor, (cursor_char_pos - anchor_char_pos).into());
+                let (anchor_byte_index, text_from_anchor) = get_byte_offset(text, anchor_char_pos);
+                let (cursor_bytes_diff, _) = get_byte_offset(text_from_anchor, cursor_char_pos - anchor_char_pos);
                 (anchor_byte_index + cursor_bytes_diff, anchor_byte_index)
             }
         };
@@ -244,7 +244,7 @@ fn create_text_input_delete_surrounding_text_data(
     debug!("delete_surrounding for {window_id:?}:, offset_in_chars={offset_in_chars}, n_chars={n_chars}, surrounding={surrounding:?}");
     let text_string = &surrounding.text;
     assert!(offset_in_chars <= 0);
-    let (offset_byte_pos, string_from_offset) = get_byte_offset(text_string, i32::from(surrounding.cursor_char_pos) + offset_in_chars);
+    let (offset_byte_pos, string_from_offset) = get_byte_offset(text_string, surrounding.cursor_char_pos + offset_in_chars);
     let (end_bytes_diff, _) = get_byte_offset(string_from_offset, n_chars);
     let end_byte_pos = offset_byte_pos + end_bytes_diff;
 
