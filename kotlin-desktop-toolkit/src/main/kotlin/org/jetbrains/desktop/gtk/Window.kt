@@ -177,6 +177,16 @@ public class Window internal constructor(params: WindowParams) : AutoCloseable {
         }
     }
 
+    /** Notify the input method that a change such as a change in cursor position has been made.
+     *
+     * This will typically cause the input method to clear the preedit state.
+     */
+    public fun textInputReset() {
+        ffiDownCall {
+            desktop_gtk_h.window_text_input_reset(windowId)
+        }
+    }
+
     override fun close() {
         Logger.trace { "Window: closing window with id $windowId" }
         ffiDownCall {

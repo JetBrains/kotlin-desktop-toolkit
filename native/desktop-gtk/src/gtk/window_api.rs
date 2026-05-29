@@ -211,3 +211,11 @@ pub extern "C" fn window_text_input_disable(window_id: WindowId) {
         Ok(())
     });
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn window_text_input_reset(window_id: WindowId) {
+    with_window(window_id, "window_text_input_reset", |w| {
+        w.text_input_reset();
+        Ok(())
+    });
+}

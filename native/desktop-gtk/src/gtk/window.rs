@@ -564,4 +564,9 @@ impl SimpleWindow {
         debug!("{:?}: text_input_update: {context:?}", self.window_id);
         self.text_input_update_impl(context)
     }
+
+    pub fn text_input_reset(&self) {
+        debug!("{:?}: text_input_reset", self.window_id);
+        self.im_context.reset();
+    }
 }
