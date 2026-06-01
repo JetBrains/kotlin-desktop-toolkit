@@ -1,6 +1,45 @@
-use desktop_common::logger::ffi_boundary;
+use desktop_common::logger::{PanicDefault, ffi_boundary};
 
-use super::font_settings::{FontSmoothing, FontSmoothingOrientation, FontSmoothingType, get_font_smoothing_contrast};
+use super::font_settings::get_font_smoothing_contrast;
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontSmoothing {
+    Disabled,
+    Enabled,
+}
+
+impl PanicDefault for FontSmoothing {
+    fn default() -> Self {
+        Self::Disabled
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontSmoothingType {
+    Standard,
+    ClearType,
+}
+
+impl PanicDefault for FontSmoothingType {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontSmoothingOrientation {
+    Rgb,
+    Bgr,
+}
+
+impl PanicDefault for FontSmoothingOrientation {
+    fn default() -> Self {
+        Self::Rgb
+    }
+}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_get_font_smoothing() -> FontSmoothing {

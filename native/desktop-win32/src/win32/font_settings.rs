@@ -1,22 +1,10 @@
-use desktop_common::logger::PanicDefault;
 use windows::Win32::UI::WindowsAndMessaging::{
     FE_FONTSMOOTHINGCLEARTYPE, FE_FONTSMOOTHINGORIENTATIONBGR, FE_FONTSMOOTHINGORIENTATIONRGB, FE_FONTSMOOTHINGSTANDARD,
     SPI_GETFONTSMOOTHING, SPI_GETFONTSMOOTHINGCONTRAST, SPI_GETFONTSMOOTHINGORIENTATION, SPI_GETFONTSMOOTHINGTYPE,
     SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW,
 };
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FontSmoothing {
-    Disabled,
-    Enabled,
-}
-
-impl PanicDefault for FontSmoothing {
-    fn default() -> Self {
-        Self::Disabled
-    }
-}
+use super::font_settings_api::{FontSmoothing, FontSmoothingOrientation, FontSmoothingType};
 
 impl FontSmoothing {
     pub(crate) fn get_current() -> anyhow::Result<Self> {
@@ -30,19 +18,6 @@ impl FontSmoothing {
             )?;
         }
         if enabled != 0 { Ok(Self::Enabled) } else { Ok(Self::Disabled) }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FontSmoothingType {
-    Standard,
-    ClearType,
-}
-
-impl PanicDefault for FontSmoothingType {
-    fn default() -> Self {
-        Self::Standard
     }
 }
 
@@ -76,19 +51,6 @@ pub(crate) fn get_font_smoothing_contrast() -> anyhow::Result<u32> {
         )?;
     }
     Ok(contrast)
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FontSmoothingOrientation {
-    Rgb,
-    Bgr,
-}
-
-impl PanicDefault for FontSmoothingOrientation {
-    fn default() -> Self {
-        Self::Rgb
-    }
 }
 
 impl FontSmoothingOrientation {
