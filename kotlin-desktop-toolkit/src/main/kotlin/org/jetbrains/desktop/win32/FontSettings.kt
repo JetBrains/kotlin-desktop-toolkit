@@ -10,7 +10,7 @@ public enum class FontSmoothing {
     public companion object {
         public fun getCurrent(): FontSmoothing {
             val native = ffiDownCall {
-                desktop_win32_h.application_get_font_smoothing()
+                desktop_win32_h.font_settings_get_font_smoothing()
             }
             return fromNative(native)
         }
@@ -40,7 +40,7 @@ public enum class FontSmoothingType {
     public companion object {
         public fun getCurrent(): FontSmoothingType {
             val native = ffiDownCall {
-                desktop_win32_h.application_get_font_smoothing_type()
+                desktop_win32_h.font_settings_get_font_smoothing_type()
             }
             return fromNative(native)
         }
@@ -63,7 +63,7 @@ public enum class FontSmoothingType {
 }
 
 public fun getFontSmoothingContrast(): Int = ffiDownCall {
-    desktop_win32_h.application_get_font_smoothing_contrast()
+    desktop_win32_h.font_settings_get_font_smoothing_contrast()
 }
 
 public enum class FontSmoothingOrientation {
@@ -74,7 +74,7 @@ public enum class FontSmoothingOrientation {
     public companion object {
         public fun getCurrent(): FontSmoothingOrientation {
             val native = ffiDownCall {
-                desktop_win32_h.application_get_font_smoothing_orientation()
+                desktop_win32_h.font_settings_get_font_smoothing_orientation()
             }
             return fromNative(native)
         }
