@@ -418,21 +418,30 @@ impl Window {
         }
 
         let _ = unsafe { SetForegroundWindow(hwnd) };
-        // TrackPopupMenu with TPM_RETURNCMD returns 0 for both cancel and
-        // failure; distinguish via GetLastError.
-        unsafe { SetLastError(WIN32_ERROR(0)) };
-        let cmd = unsafe {
-            TrackPopupMenu(
-                h_menu,
-                TPM_RIGHTBUTTON | TPM_RETURNCMD,
-                screen_pt.x.0,
-                screen_pt.y.0,
-                None,
-                hwnd,
-                None,
-            )
+        // Theme the popup from this window's own state; the mode is process-global,
+        // so force it only around TrackPopupMenu and restore it afterward.
+        let appearance = if self.immersive_dark.get() {
+            Appearance::Dark
+        } else {
+            Appearance::Light
         };
-        let last_error = unsafe { GetLastError() };
+        // TrackPopupMenu with TPM_RETURNCMD returns 0 for both cancel and
+        // failure; distinguish via GetLastError (read inside the closure, before restore).
+        let (cmd, last_error) = appearance::with_preferred_app_mode(appearance, || {
+            unsafe { SetLastError(WIN32_ERROR(0)) };
+            let cmd = unsafe {
+                TrackPopupMenu(
+                    h_menu,
+                    TPM_RIGHTBUTTON | TPM_RETURNCMD,
+                    screen_pt.x.0,
+                    screen_pt.y.0,
+                    None,
+                    hwnd,
+                    None,
+                )
+            };
+            (cmd, unsafe { GetLastError() })
+        });
         // Docs-recommended post-show null-message flush.
         let _ = unsafe { PostMessageW(Some(hwnd), WM_NULL, WPARAM(0), LPARAM(0)) };
 
@@ -525,6 +534,9 @@ impl Window {
         if !utils::is_windows_11_build_22000_or_higher() {
             return Ok(());
         }
+        if self.immersive_dark.get() == enabled {
+            return Ok(());
+        }
         let enablement = windows_core::BOOL::from(enabled);
         unsafe {
             DwmSetWindowAttribute(
@@ -536,7 +548,6 @@ impl Window {
         }
         let appearance = if enabled { Appearance::Dark } else { Appearance::Light };
         self.with_strip_mut(|strip| strip.on_appearance_change(appearance));
-        appearance::set_preferred_app_mode(appearance);
         self.immersive_dark.set(enabled);
         Ok(())
     }

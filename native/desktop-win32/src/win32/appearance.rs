@@ -105,8 +105,9 @@ const fn is_color_light(clr: WUColor) -> bool {
 }
 
 type RawProcFn = unsafe extern "system" fn() -> isize;
-// Returns the previous mode as `i32`, not `PreferredAppMode`: an out-of-range enum from FFI would be UB.
-type SetPreferredAppModeFn = unsafe extern "system" fn(PreferredAppMode) -> i32;
+// Raw `i32` both ways: pass `PreferredAppMode as i32` going in, feed the returned previous
+// mode straight back when restoring, without rebuilding a `#[repr(i32)]` enum from it.
+type SetPreferredAppModeFn = unsafe extern "system" fn(i32) -> i32;
 type FlushMenuThemesFn = unsafe extern "system" fn();
 
 #[repr(i32)]
@@ -164,16 +165,37 @@ fn resolve_ordinal(module: HMODULE, n: u16, name: &str) -> Option<RawProcFn> {
     raw
 }
 
-pub(crate) fn set_preferred_app_mode(appearance: Appearance) {
-    let Some(fns) = ux_theme_fns() else {
-        return;
-    };
-    let mode = match appearance {
-        Appearance::Dark => PreferredAppMode::ForceDark,
-        Appearance::Light => PreferredAppMode::ForceLight,
-    };
-    unsafe { (fns.set_preferred_app_mode)(mode) };
-    // SetPreferredAppMode leaves already-themed menus on their old cache; flush so
-    // the next TrackPopupMenu re-themes the system-menu HMENU.
-    unsafe { (fns.flush_menu_themes)() };
+/// Forces the menu palette, flushes cached menu themes, and captures the previous
+/// process mode; the previous mode is restored (and flushed again) on drop.
+struct PreferredAppModeGuard {
+    fns: &'static UxThemeFns,
+    previous: i32,
+}
+
+impl PreferredAppModeGuard {
+    fn set(appearance: Appearance) -> Option<Self> {
+        let fns = ux_theme_fns()?;
+        let mode = match appearance {
+            Appearance::Dark => PreferredAppMode::ForceDark,
+            Appearance::Light => PreferredAppMode::ForceLight,
+        };
+        let previous = unsafe { (fns.set_preferred_app_mode)(mode as i32) };
+        unsafe { (fns.flush_menu_themes)() };
+        Some(Self { fns, previous })
+    }
+}
+
+impl Drop for PreferredAppModeGuard {
+    fn drop(&mut self) {
+        unsafe { (self.fns.set_preferred_app_mode)(self.previous) };
+        unsafe { (self.fns.flush_menu_themes)() };
+    }
+}
+
+/// Runs `f` with the menu palette forced to `appearance`, restoring the previous
+/// process mode afterward. On pre-22000 Windows (or resolution failure) the mode is
+/// left untouched and `f` still runs, so the menu opens unthemed.
+pub(crate) fn with_preferred_app_mode<R>(appearance: Appearance, f: impl FnOnce() -> R) -> R {
+    let _guard = PreferredAppModeGuard::set(appearance);
+    f()
 }
