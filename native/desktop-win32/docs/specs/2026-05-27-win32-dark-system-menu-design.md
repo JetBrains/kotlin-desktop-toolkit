@@ -6,7 +6,7 @@
 
 Make the native `HMENU` system-menu popup honour Windows 11's dark theme. The popup opens from `WindowTitleBarKind::Custom` and `WindowTitleBarKind::None` windows via Alt+Space and a right-click on the title bar (see [2026-05-26-win32-system-menu-restoration-design.md](2026-05-26-win32-system-menu-restoration-design.md)). By default it paints with the classic light `COLOR_MENU` palette regardless of the system theme.
 
-To recolour it, drive the OS's immersive dark-mode pipeline through the undocumented `uxtheme.dll` ordinal #135 `SetPreferredAppMode` — the same mechanism Chromium ([`base/win/dark_mode_support.cc`](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/win/dark_mode_support.cc)), Edge, Electron, WinAppSDK, and the Windows Settings app rely on. Each `Window.setImmersiveDarkMode(enabled)` call sets `PreferredAppMode::ForceDark` when `enabled`, `ForceLight` otherwise; the next `TrackPopupMenu` paints the popup in that colour.
+To recolour it, drive the OS's immersive dark-mode pipeline through the undocumented `uxtheme.dll` ordinal #135 `SetPreferredAppMode` — the same mechanism Chromium ([`base/win/dark_mode_support.cc`](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/base/win/dark_mode_support.cc)), Edge, Electron, WinAppSDK, and the Windows Settings app rely on. The mode is process-global, so each window's menu is themed at the moment it opens: the popup path forces `ForceDark`/`ForceLight` to match the opening window's own state, shows the menu, then restores the prior mode.
 
 ### What this design is NOT
 
@@ -20,7 +20,7 @@ Two independent Windows APIs govern the two surfaces (popup and title-bar frame)
 
 | API | Scope | Documented? | Role |
 |-----|-------|-------------|------|
-| `SetPreferredAppMode(Force*)` — `uxtheme.dll` ordinal #135 | Process | No | Sole governor of the `HMENU` popup colour; paired with `FlushMenuThemes` (#136) so already-open menus pick up a change (§3.1). |
+| `SetPreferredAppMode(Force*)` — `uxtheme.dll` ordinal #135 | Process | No | Sole governor of the `HMENU` popup colour. Scoped around each `TrackPopupMenu` and paired with `FlushMenuThemes` (#136) so the menu re-themes for the opening window (§3, §4). |
 | `DwmSetWindowAttribute(DWMWA_USE_IMMERSIVE_DARK_MODE, …)` | Per HWND | Yes (Win11 22000+) | Governs the title-bar dark frame only. Called from [`Window::set_immersive_dark_mode`](../../src/win32/window.rs). |
 
 The popup remains a native `HMENU`: same handle, same hit-testing, same accessibility tree, same `TrackPopupMenu` codepath.
@@ -28,24 +28,25 @@ The popup remains a native `HMENU`: same handle, same hit-testing, same accessib
 ### Caveats
 
 - **The ordinals are undocumented.** Microsoft's [undocumented-APIs policy](https://learn.microsoft.com/windows/compatibility/undocumented-apis) warns against ordinal lookups, but #135 and #136 have been stable since Windows 10 1903 across the consumers named in §1. Resolution failure is non-fatal (§6); worst case, the menu stays light.
-- **`SetPreferredAppMode` is process-wide.** Calling `set_immersive_dark_mode` on any window flips the popup mode for every menu opened by the process. A multi-window app with mixed light and dark windows therefore sees last-call-wins on popup colour; every call re-asserts the mode for its window's appearance, so a window can reclaim the popup colour at any time (`set_immersive_dark_mode` does not early-return on an unchanged state). Title-bar frames stay correct per window because the DWM bit is per-HWND. A follow-up in §9 describes how to scope the mode per popup so concurrent windows no longer contend.
+- **`SetPreferredAppMode` is process-global.** The popup path forces the opening window's mode only for the duration of its `TrackPopupMenu` and restores the prior mode afterward, so each window's menu matches that window and the process is left as it was found. `TrackPopupMenu` is modal, so two windows never theme a menu at once. Title-bar frames are independent — the DWM bit is per-HWND.
 - **`ForceDark` / `ForceLight` ignore the system theme.** The popup colour follows the Kotlin caller, not the user's Windows theme setting.
 - **The popup is not visually Windows 11.** It is a classic flat menu — no Mica, no rounded corners, no reveal animation. Those treatments exist only on XAML `MenuFlyout`, not on native HMENU.
 
 ## 3. Module layout
 
-The code lives in [`appearance.rs`](../../src/win32/appearance.rs) alongside the `Appearance` and `HighContrast` types, exposing one `pub(crate)` entry point:
+The code lives in [`appearance.rs`](../../src/win32/appearance.rs) alongside the `Appearance` and `HighContrast` types, exposing one `pub(crate)` entry point — a scope function that forces a menu palette for the duration of a closure:
 
 ```rust
-pub(crate) fn set_preferred_app_mode(appearance: Appearance);
+pub(crate) fn with_preferred_app_mode<R>(appearance: Appearance, f: impl FnOnce() -> R) -> R;
 ```
 
 ### 3.1 Internal state
 
 ```rust
 type RawProcFn = unsafe extern "system" fn() -> isize;
-// Returns the previous mode as `i32`, not `PreferredAppMode`: an out-of-range enum from FFI would be UB.
-type SetPreferredAppModeFn = unsafe extern "system" fn(PreferredAppMode) -> i32;
+// Raw `i32` both ways: pass `PreferredAppMode as i32` going in, feed the returned previous
+// mode straight back when restoring, without rebuilding a `#[repr(i32)]` enum from it.
+type SetPreferredAppModeFn = unsafe extern "system" fn(i32) -> i32;
 type FlushMenuThemesFn = unsafe extern "system" fn();
 
 #[repr(i32)]
@@ -59,25 +60,45 @@ enum PreferredAppMode {
 }
 ```
 
-Both pointers are resolved once and cached together in a function-scoped `static OnceLock<Option<UxThemeFns>>` (the `UxThemeFns` struct and its loader follow in §3.2). Resolution is all-or-nothing: #135 and #136 shipped together in Windows 10 1903, below our 22000 gate, so they are present as a pair. `SetPreferredAppMode` flips the *process* preferred mode but leaves an already-opened menu — including the cached per-window system-menu `HMENU` — painted in its previous theme. `FlushMenuThemes` (ordinal #136) drops that cached menu theme so the next `TrackPopupMenu` re-themes; it is called immediately after every `SetPreferredAppMode`.
+Both pointers are resolved once and cached together in a function-scoped `static OnceLock<Option<UxThemeFns>>` (the `UxThemeFns` struct and its loader follow in §3.2). Resolution is all-or-nothing: #135 and #136 shipped together in Windows 10 1903, below our 22000 gate, so they are present as a pair. `SetPreferredAppMode` flips the *process* preferred mode, and `FlushMenuThemes` (ordinal #136) drops the cached menu theme so the next `TrackPopupMenu` re-themes. The guard in §3.2 pairs them: it forces a mode and flushes on creation, then restores the previous mode and flushes again on drop.
 
-### 3.2 `set_preferred_app_mode`
+### 3.2 `with_preferred_app_mode` and the scope guard
+
+`with_preferred_app_mode` runs a closure with the menu palette forced to `appearance`. A private RAII guard forces the mode (and flushes) when constructed and restores the previous mode (and flushes) on drop, so the closure — the `TrackPopupMenu` call — sees the forced palette and the process mode is left as it was.
 
 ```rust
-pub(crate) fn set_preferred_app_mode(appearance: Appearance) {
-    let Some(fns) = ux_theme_fns() else {
-        return;
-    };
-    let mode = match appearance {
-        Appearance::Dark => PreferredAppMode::ForceDark,
-        Appearance::Light => PreferredAppMode::ForceLight,
-    };
-    unsafe { (fns.set_preferred_app_mode)(mode) };
-    // SetPreferredAppMode leaves already-themed menus on their old cache; flush so
-    // the next TrackPopupMenu re-themes the system-menu HMENU.
-    unsafe { (fns.flush_menu_themes)() };
+struct PreferredAppModeGuard {
+    fns: &'static UxThemeFns,
+    previous: i32,
+}
+
+impl PreferredAppModeGuard {
+    fn set(appearance: Appearance) -> Option<Self> {
+        let fns = ux_theme_fns()?;
+        let mode = match appearance {
+            Appearance::Dark => PreferredAppMode::ForceDark,
+            Appearance::Light => PreferredAppMode::ForceLight,
+        };
+        let previous = unsafe { (fns.set_preferred_app_mode)(mode as i32) };
+        unsafe { (fns.flush_menu_themes)() };
+        Some(Self { fns, previous })
+    }
+}
+
+impl Drop for PreferredAppModeGuard {
+    fn drop(&mut self) {
+        unsafe { (self.fns.set_preferred_app_mode)(self.previous) };
+        unsafe { (self.fns.flush_menu_themes)() };
+    }
+}
+
+pub(crate) fn with_preferred_app_mode<R>(appearance: Appearance, f: impl FnOnce() -> R) -> R {
+    let _guard = PreferredAppModeGuard::set(appearance);
+    f()
 }
 ```
+
+When uxtheme is unavailable (pre-22000, resolution failure) `set` returns `None` and the closure still runs, so the menu opens unthemed.
 
 The version probe, single DLL load, and per-ordinal resolution sit in `ux_theme_fns`, which caches the pair in one `OnceLock` and returns `None` unless both resolve:
 
@@ -128,20 +149,18 @@ fn resolve_ordinal(module: HMODULE, n: u16, name: &str) -> Option<RawProcFn> {
 
 ## 4. Wire-up — [`window.rs`](../../src/win32/window.rs)
 
-`Window::set_immersive_dark_mode` toggles `DWMWA_USE_IMMERSIVE_DARK_MODE`, derives an `Appearance` from the new state, and propagates it to the caption-button strip. The popup-mode call joins that pipeline at the same point:
+`show_system_menu` owns the popup colour. It reads the window's dark/light state — `self.immersive_dark`, maintained by the existing `set_immersive_dark_mode` alongside the DWM frame and caption strip — and wraps just the `TrackPopupMenu` call, so the menu is themed from the window that opened it. `GetLastError` is read inside the closure, before the guard's restore runs (which calls `SetPreferredAppMode` again and sets the last error):
 
 ```rust
-pub fn set_immersive_dark_mode(&self, enabled: bool) -> WinResult<()> {
-    // …existing DWM toggle…
-    let appearance = if enabled { Appearance::Dark } else { Appearance::Light };
-    self.with_strip_mut(|strip| strip.on_appearance_change(appearance));
-    appearance::set_preferred_app_mode(appearance);
-    self.immersive_dark.set(enabled); // commit state after the side effects land
-    Ok(())
-}
+let appearance = if self.immersive_dark.get() { Appearance::Dark } else { Appearance::Light };
+let (cmd, last_error) = appearance::with_preferred_app_mode(appearance, || {
+    unsafe { SetLastError(WIN32_ERROR(0)) };
+    let cmd = unsafe {
+        TrackPopupMenu(h_menu, TPM_RIGHTBUTTON | TPM_RETURNCMD, screen_pt.x.0, screen_pt.y.0, None, hwnd, None)
+    };
+    (cmd, unsafe { GetLastError() })
+});
 ```
-
-The process-wide mode flip happens whenever a Kotlin caller sets immersive dark/light on a window — `set_immersive_dark_mode` no longer early-returns on an unchanged state, so a window always re-asserts its popup colour (the caption strip still skips repainting when the appearance is unchanged).
 
 ## 5. Cargo.toml
 
@@ -154,14 +173,14 @@ No new dependencies. The imports come from the `windows` features already enable
 
 ## 6. Error handling
 
-Every failure path is non-fatal; the toolkit falls back to a light popup.
+Every failure path is non-fatal; `with_preferred_app_mode` still runs the closure, so the menu just opens unthemed (light).
 
 | Failure | Reaction |
 |---------|----------|
-| Pre-22000 Windows | The version gate returns `None`, which `OnceLock` caches. Subsequent calls take the cached path with no further probe. |
-| `LoadLibraryExW("uxtheme.dll")` fails | `.inspect_err` emits a single `log::warn!` carrying the underlying `WinError`; `OnceLock` caches `None`. |
-| Ordinal #135 or #136 missing | A single `log::warn!` naming the ordinal; `ux_theme_fns` caches `None` (resolved as a pair). The toolkit falls back to a light popup. |
-| `SetPreferredAppMode` returns a value | Discarded — the return register is read as `i32`, never as a `PreferredAppMode` enum, so an out-of-range value cannot trigger UB. The return is the previous app mode, not a failure code. |
+| Pre-22000 Windows | The version gate returns `None`, cached in `OnceLock`; `set` yields no guard and the closure runs unthemed. |
+| `LoadLibraryExW("uxtheme.dll")` fails | A single `log::warn!` carrying the `WinError`; `OnceLock` caches `None`. |
+| Ordinal #135 or #136 missing | A single `log::warn!` naming the ordinal; `ux_theme_fns` caches `None` (resolved as a pair). |
+| `SetPreferredAppMode` previous mode | Captured as a raw `i32` and fed back verbatim when the guard drops — never rebuilt into a `PreferredAppMode`, so an out-of-range value cannot trigger UB. |
 
 ## 7. Tests
 
@@ -172,10 +191,10 @@ Every failure path is non-fatal; the toolkit falls back to a light popup.
 1. Launch [`SkikoSampleWin32`](../../../../sample/src/main/kotlin/org/jetbrains/desktop/sample/win32/SkikoSampleWin32.kt) and ensure the window is dark — automatic when the system theme is dark, otherwise press `D` (step 5).
 2. Right-click the title bar of a `Custom`-title-bar window. The system-menu popup should appear with a dark background, light item text, and visible separators.
 3. Press Alt+Space on the same window. The popup should match step 2.
-4. Call `setImmersiveDarkMode(false)` from Kotlin. The title bar reverts to light; the next menu opens in `ForceLight` mode (light popup) regardless of the Windows system theme.
+4. Call `setImmersiveDarkMode(false)` from Kotlin. The title bar reverts to light, and the window's system menu now opens light regardless of the Windows system theme.
 5. **Re-toggle.** Press the sample's `D` key (in [`SkikoWindowWin32`](../../../../sample/src/main/kotlin/org/jetbrains/desktop/sample/win32/SkikoWindowWin32.kt)) to flip dark↔light repeatedly, reopening the system menu after each flip on a window whose menu was already opened once. The popup must recolour on every reopen.
 6. Toggle the Windows system theme. Popups should *not* track the change — `ForceDark` / `ForceLight` overrides the system setting until the next `setImmersiveDarkMode` call.
-7. In a multi-window scenario, set window A to dark and window B to light. Confirm last-call-wins on popup colour: opening the menu on either window paints in the mode last requested.
+7. Multi-window: set window A dark and window B light. Open each window's system menu in both orders — each popup matches its own window, independent of order. After a popup closes, a menu opened by an unrelated control (or the other window) is unaffected, confirming the process mode was restored.
 8. Verify that `SC_*` dispatch still works (existing minimize, maximize, restore, and close behaviour from the system-menu restoration design).
 9. On Windows 10 (any build < 22000), confirm menus stay light, nothing is logged, and the toolkit functions normally.
 
@@ -185,16 +204,12 @@ Every failure path is non-fatal; the toolkit falls back to a light popup.
 
 ## 8. Out of scope
 
-- **Windows 10 (pre-22000) support.** Ordinals #135/#136 work from Windows 10 1903+, but the popup call sits inside `Window::set_immersive_dark_mode`, which early-returns on pre-22000.
+- **Windows 10 (pre-22000) support.** Ordinals #135/#136 work from Windows 10 1903+, but the version gate in `ux_theme_fns` returns early below build 22000, so the menu opens unthemed there.
 - **Per-window `AllowDarkModeForWindow` (ordinal #133).** This ordinal opts an HWND into dark theming for its own child Win32 controls (buttons, scrollbars, edits, listviews). KDT renders via Windows.UI.Composition + Skia and hosts no Win32 child controls, so the call would be a no-op here.
 - **Following the system theme (`AllowDark` + `RefreshImmersiveColorPolicyState`, ordinal #104).** Chromium and ysc3839 set `AllowDark`/`Default` and refresh #104 on `WM_SETTINGCHANGE("ImmersiveColorSet")` to track the system theme. This design forces `ForceDark`/`ForceLight` per `setImmersiveDarkMode` call, so #104 does not apply.
 - **Rounded corners, Mica, reveal animation.** These treatments exist only on XAML `MenuFlyout`, not on native HMENU.
 - **Menu-bar dark theming** (`WM_UAHDRAWMENU` / `WM_UAHDRAWMENUITEM`). The toolkit ships no menu bar.
 - **New Kotlin API.** The design reuses the existing `Window.setImmersiveDarkMode(enabled)`.
-
-## 9. Follow-ups (not in this design)
-
-- **Per-popup scoping for multi-window apps.** Inside `Window::show_system_menu` (called from `WM_NCRBUTTONUP` and the Alt+Space arm), capture the previous app mode, set the window's intended mode via `set_preferred_app_mode`, call `TrackPopupMenu`, and then restore the previous mode. This removes the last-call-wins behaviour at the cost of two extra ordinal calls per popup.
 
 ## References
 
