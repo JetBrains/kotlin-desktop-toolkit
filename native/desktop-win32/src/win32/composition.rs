@@ -12,7 +12,7 @@
 //! See `docs/specs/2026-04-30-win32-caption-buttons-design.md` § 4.1 for the
 //! full design rationale.
 
-use std::cell::OnceCell;
+use std::cell::{OnceCell, RefCell};
 use std::rc::Rc;
 
 use anyhow::Context;
@@ -279,18 +279,39 @@ fn create_d3d_device(driver_type: D3D_DRIVER_TYPE, feature_levels: &[D3D_FEATURE
 thread_local! {
     /// UI-thread singleton for caption-button rasterisation. Lazy on first
     /// `ensure_composition_context` call; failure is not memoised —
-    /// `CompositionContext::new`'s `Err` propagates via `?` before
-    /// `get_or_init` runs, leaving the cell empty for retry.
-    static COMPOSITION_CONTEXT: OnceCell<Rc<CompositionContext>> = const { OnceCell::new() };
+    /// `CompositionContext::new`'s `Err` propagates via `?` before the cell
+    /// is populated, leaving it empty for retry.
+    ///
+    /// Released by [`release_composition_context`] during application
+    /// shutdown. Left to its own thread-local destructor, the cached
+    /// `CompositionGraphicsDevice` / D3D11 device would only drop at
+    /// JVM-thread teardown — by which point the `DispatcherQueue` is shut
+    /// down and the apartment/compositor is being torn down, so the WinRT/D3D
+    /// release deadlocks waiting on infrastructure that is already gone. That
+    /// wedges the UI thread and blocks process exit. Releasing it here, while
+    /// the message pump and dispatcher are still live, completes cleanly.
+    static COMPOSITION_CONTEXT: RefCell<Option<Rc<CompositionContext>>> = const { RefCell::new(None) };
 }
 
 pub(crate) fn ensure_composition_context(compositor: Compositor) -> anyhow::Result<Rc<CompositionContext>> {
     COMPOSITION_CONTEXT.with(|cell| {
-        if let Some(ctx) = cell.get() {
+        if let Some(ctx) = cell.borrow().as_ref() {
             return Ok(Rc::clone(ctx));
         }
-        let ctx = CompositionContext::new(compositor)?;
-        let cached = cell.get_or_init(|| Rc::new(ctx));
-        Ok(Rc::clone(cached))
+        // `CompositionContext::new` runs with no outstanding borrow; it never
+        // re-enters `ensure_composition_context`, so the later `borrow_mut`
+        // cannot conflict.
+        let ctx = Rc::new(CompositionContext::new(compositor)?);
+        *cell.borrow_mut() = Some(Rc::clone(&ctx));
+        Ok(ctx)
     })
+}
+
+/// Drop the cached [`CompositionContext`], releasing its D3D11 / D2D
+/// rendering device and `CompositionGraphicsDevice`. Called on the UI thread
+/// during `Application::shutdown`. Any [`CaptionButtonStrip`] still open holds
+/// its own `Rc` clone, so the device is released once those strips drop with
+/// their windows during teardown.
+pub(crate) fn release_composition_context() {
+    COMPOSITION_CONTEXT.with(|cell| cell.borrow_mut().take());
 }

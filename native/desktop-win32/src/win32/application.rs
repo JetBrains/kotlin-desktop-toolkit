@@ -78,6 +78,7 @@ impl Application {
 
     pub fn shutdown(&self) -> anyhow::Result<()> {
         self.compositor_driver.shutdown();
+        super::composition::release_composition_context();
         let _ = self.dispatcher_queue_controller.ShutdownQueueAsync()?;
         Ok(())
     }
