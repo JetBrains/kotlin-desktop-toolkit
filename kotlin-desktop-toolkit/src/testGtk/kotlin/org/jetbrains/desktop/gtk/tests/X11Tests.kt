@@ -3265,6 +3265,25 @@ text/plain;charset=utf-8
             )
 
             val window = createWindowAndWaitForFocus(windowParams).window
+
+            withKeyPress(KeyCode.A) {
+                withNextEvent { event ->
+                    // We should receive KeyDown events before text input is enabled
+                    assertInstanceOf<Event.KeyDown>(event)
+                    assertEquals(windowParams.windowId, event.windowId)
+                    assertEquals("a", event.characters)
+                    assertEquals(KeyCode.A, event.keyCode.value)
+                    assertEquals(KeySym.a, event.key.value)
+                    assertEquals(emptySet(), event.modifiers)
+                }
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyUp>(event)
+                assertEquals(windowParams.windowId, event.windowId)
+                assertEquals(KeyCode.A, event.keyCode.value)
+                assertEquals(KeySym.a, event.key.value)
+            }
+
             ui { window.textInputEnable(defaultTextInputContext) }
 
             val keyCodes = mapOf(
