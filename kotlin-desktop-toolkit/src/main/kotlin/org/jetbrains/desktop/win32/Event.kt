@@ -92,7 +92,16 @@ public sealed class Event {
     public data class NCHitTest internal constructor(
         val mouseX: Int,
         val mouseY: Int,
-    ) : Event()
+        internal val originalMsgId: Long,
+    ) : Event() {
+        /** Assign the hit-test region for this `WM_NCHITTEST`, overriding the default result. */
+        public fun setHitTestResult(result: NCHitTestResult): Unit = ffiDownCall {
+            desktop_win32_h.nchittest_set_hit_test_result(originalMsgId, result.toNative())
+        }
+    }
+
+    @ConsistentCopyVisibility
+    public data object NCPointerLeave : Event()
 
     @ConsistentCopyVisibility
     public data class PointerDown internal constructor(
@@ -205,12 +214,53 @@ public sealed class Event {
     public data class WindowTitleChanged internal constructor(val title: String) : Event()
 }
 
+/** Non-client region returned for a `WM_NCHITTEST`, assigned via [Event.NCHitTest.setHitTestResult]. */
+public enum class NCHitTestResult {
+    Client,
+    Caption,
+    Top,
+    Bottom,
+    Left,
+    Right,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    MinButton,
+    MaxButton,
+    Close,
+    SysMenu,
+    Nowhere,
+    Transparent,
+    ;
+
+    internal fun toNative(): Int = when (this) {
+        Client -> desktop_win32_h.NativeNCHitTestResult_Client()
+        Caption -> desktop_win32_h.NativeNCHitTestResult_Caption()
+        Top -> desktop_win32_h.NativeNCHitTestResult_Top()
+        Bottom -> desktop_win32_h.NativeNCHitTestResult_Bottom()
+        Left -> desktop_win32_h.NativeNCHitTestResult_Left()
+        Right -> desktop_win32_h.NativeNCHitTestResult_Right()
+        TopLeft -> desktop_win32_h.NativeNCHitTestResult_TopLeft()
+        TopRight -> desktop_win32_h.NativeNCHitTestResult_TopRight()
+        BottomLeft -> desktop_win32_h.NativeNCHitTestResult_BottomLeft()
+        BottomRight -> desktop_win32_h.NativeNCHitTestResult_BottomRight()
+        MinButton -> desktop_win32_h.NativeNCHitTestResult_MinButton()
+        MaxButton -> desktop_win32_h.NativeNCHitTestResult_MaxButton()
+        Close -> desktop_win32_h.NativeNCHitTestResult_Close()
+        SysMenu -> desktop_win32_h.NativeNCHitTestResult_SysMenu()
+        Nowhere -> desktop_win32_h.NativeNCHitTestResult_Nowhere()
+        Transparent -> desktop_win32_h.NativeNCHitTestResult_Transparent()
+    }
+}
+
 internal fun Event.Companion.fromNative(s: MemorySegment): Event = when (NativeEvent.tag(s)) {
     desktop_win32_h.NativeEvent_CharacterReceived() -> characterReceived(s)
     desktop_win32_h.NativeEvent_KeyDown() -> keyDown(s)
     desktop_win32_h.NativeEvent_KeyUp() -> keyUp(s)
     desktop_win32_h.NativeEvent_NCCalcSize() -> ncCalcSize(s)
     desktop_win32_h.NativeEvent_NCHitTest() -> ncHitTest(s)
+    desktop_win32_h.NativeEvent_NCPointerLeave() -> Event.NCPointerLeave
     desktop_win32_h.NativeEvent_PointerDown() -> pointerDown(s)
     desktop_win32_h.NativeEvent_PointerEntered() -> pointerEntered(s)
     desktop_win32_h.NativeEvent_PointerExited() -> pointerExited(s)
@@ -278,6 +328,7 @@ private fun ncHitTest(s: MemorySegment): Event {
     return Event.NCHitTest(
         mouseX = NativeNCHitTestEvent.mouse_x(nativeEvent),
         mouseY = NativeNCHitTestEvent.mouse_y(nativeEvent),
+        originalMsgId = NativeNCHitTestEvent.original_msg_id(nativeEvent),
     )
 }
 

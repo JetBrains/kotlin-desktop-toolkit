@@ -1,4 +1,4 @@
-//! System-menu helpers for `WindowTitleBarKind::Custom` / `None` windows.
+//! System-menu helpers for `WindowTitleBarKind::Custom` windows.
 //! See `docs/specs/2026-05-26-win32-system-menu-restoration-design.md`.
 
 use windows::Win32::{

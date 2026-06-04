@@ -10,39 +10,31 @@ use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::{
         Dwm::DwmDefWindowProc,
-        Gdi::{
-            BeginPaint, ClientToScreen, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT,
-        },
+        Gdi::{BeginPaint, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT},
     },
-    System::SystemServices::MK_LBUTTON,
     UI::{
-        HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetSystemMetricsForDpi, SetThreadDpiAwarenessContext},
+        HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
         Input::{
-            KeyboardAndMouse::{ReleaseCapture, SetCapture},
+            KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture},
             Pointer::EnableMouseInPointer,
         },
         Shell::{ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
         WindowsAndMessaging::{
-            AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetMessagePos,
-            GetMessageTime, GetMessageW, GetWindowLongPtrW, GetWindowRect, HMENU, HTCAPTION, HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON,
-            HTTOP, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SC_KEYMENU, SM_CYSIZE, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE,
-            SWP_NOSIZE, SWP_NOZORDER, SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS,
-            WM_ACTIVATE, WM_CANCELMODE, WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND,
-            WM_GETMINMAXINFO, WM_INITMENUPOPUP, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCCALCSIZE,
-            WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NCRBUTTONUP,
-            WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE,
-            WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSCOMMAND,
-            WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
+            GetMessageW, GetWindowLongPtrW, GetWindowRect, HMENU, HTCAPTION, HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, MINMAXINFO, MSG,
+            NCCALCSIZE_PARAMS, SC_KEYMENU, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
+            USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE, WM_CAPTURECHANGED,
+            WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_INITMENUPOPUP, WM_KEYDOWN,
+            WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP,
+            WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE,
+            WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR,
+            WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
 };
-
+use windows::Win32::UI::WindowsAndMessaging::HTTOP;
 use super::{
     appearance::{Appearance, HighContrast},
-    caption_buttons::{
-        CaptionButtonKind, CaptionButtonStrip, PointerDeviceKind, WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED, caption_kind_at_screen,
-        device_kind_for, dispatch_caption_action, hittest_for_caption_button_kind,
-    },
     events::{
         CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
         PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
@@ -51,7 +43,7 @@ use super::{
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
+    pointer::{PointerButtonChangeKind, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
@@ -60,6 +52,8 @@ use super::{
 thread_local! {
     static KEYEVENT_MESSAGES: RefCell<HashMap<u64, MSG>> = RefCell::new(HashMap::new());
     static LAST_KEYEVENT_MESSAGE_ID: Cell<u64> = const { Cell::new(0) };
+    static NCHITTEST_RESULTS: RefCell<HashMap<u64, Option<i32>>> = RefCell::new(HashMap::new());
+    static LAST_NCHITTEST_MESSAGE_ID: Cell<u64> = const { Cell::new(0) };
 }
 
 pub struct EventLoop {
@@ -95,6 +89,17 @@ impl EventLoop {
         KEYEVENT_MESSAGES.with_borrow(|map| map.get(&msg_id).context("unknown message id").and_then(f))
     }
 
+    /// Records the explicit hit-test result an `NCHitTest` handler requested. The slot is
+    /// registered by `on_nchittest` for the duration of the handler call, so an unknown
+    /// `msg_id` means the call happened outside the active hit-test.
+    pub fn set_nchittest_result(msg_id: u64, result: i32) -> anyhow::Result<()> {
+        NCHITTEST_RESULTS.with_borrow_mut(|map| {
+            let slot = map.get_mut(&msg_id).context("unknown nc hit-test message id")?;
+            *slot = Some(result);
+            Ok(())
+        })
+    }
+
     #[inline]
     fn handle_event<T: Into<Event>>(&self, window: &Window, event: T) -> Option<LRESULT> {
         (self.event_handler)(window.id(), &event.into()).then_some(LRESULT(0))
@@ -122,6 +127,7 @@ impl EventLoop {
 
             WM_CHAR | WM_DEADCHAR | WM_SYSCHAR | WM_SYSDEADCHAR => on_char(self, window, msg, wparam, lparam),
 
+            // Pointer events start
             WM_POINTERUPDATE | WM_NCPOINTERUPDATE => on_pointerupdate(self, window, msg, wparam),
 
             WM_POINTERDOWN | WM_NCPOINTERDOWN => on_pointerdown(self, window, msg, wparam),
@@ -133,12 +139,10 @@ impl EventLoop {
             WM_POINTERLEAVE => on_pointerleave(self, window, wparam),
 
             WM_POINTERCAPTURECHANGED => on_pointercapturechanged(window, wparam),
-
+            // Pointer event end
             WM_CANCELMODE => on_cancelmode(window),
 
             WM_CAPTURECHANGED => on_capturechanged(window),
-
-            WM_APP_CAPTION_BUTTONS_RENDERING_DEVICE_REPLACED => on_caption_buttons_rdr(window),
 
             WM_ACTIVATE => on_activate(self, window, wparam),
 
@@ -148,16 +152,13 @@ impl EventLoop {
 
             // we still have to handle this message because we manually hit-test the non-client area
             // see https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/nf-dwmapi-dwmdefwindowproc
-            WM_NCMOUSELEAVE => on_ncmouseleave(window, wparam, lparam),
+            WM_NCMOUSELEAVE => on_ncmouseleave(self, window, wparam, lparam),
 
+            // NC
             WM_NCLBUTTONDOWN => on_nclbuttondown(window, wparam, lparam),
 
             WM_NCRBUTTONUP => on_ncrbuttonup(window, wparam, lparam),
-
-            WM_LBUTTONUP => on_lbuttonup(window, lparam),
-
-            WM_MOUSEMOVE => on_mousemove(window, wparam, lparam),
-
+            // NC
             WM_SETCURSOR => on_setcursor(window, lparam),
 
             WM_SETTEXT => on_settext(self, window, wparam, lparam),
@@ -235,17 +236,12 @@ fn on_dpichanged(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     };
     let result = event_loop.handle_event(window, event);
     // `max_chrome_y` is DPI-scaled; update content offset and strip on the same tick.
-    let has_non_system_tb = window.has_non_system_title_bar();
-    if has_non_system_tb {
+    let has_custom_tb = window.has_custom_title_bar();
+    if has_custom_tb {
         let _ = window
             .set_content_top_offset(window.max_chrome_y())
             .inspect_err(|err| log::warn!("set_content_top_offset on DPI change failed: {err}"));
     }
-    window.with_strip_mut(|strip| {
-        let _ = strip
-            .on_dpi_change(scale, window.max_chrome_y())
-            .inspect_err(|err| log::warn!("strip on_dpi_change failed: {err}"));
-    });
     result
 }
 
@@ -272,11 +268,6 @@ fn on_windowposchanged(event_loop: &EventLoop, window: &Window, lparam: LPARAM) 
             log::warn!("GetClientRect during WM_WINDOWPOSCHANGED failed; skipping WindowResizeEvent for this tick");
         }
     }
-    // `set_content_top_offset` is skipped here: WM_NCCALCSIZE precedes every
-    // WM_WINDOWPOSCHANGED that can change `max_chrome_y`, so the offset is
-    // already committed. `on_max_state_change` belongs here — it owns the
-    // maximize-glyph swap, which is independent of `max_chrome_y`.
-    window.with_strip_mut(|strip| strip.on_max_state_change(window.is_maximized()));
     Some(LRESULT(0))
 }
 
@@ -341,7 +332,6 @@ fn on_settingchange(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lpa
             Ok(new_high_contrast) => {
                 let event = SystemHighContrastChangeEvent { new_high_contrast };
                 event_loop.handle_event(window, event);
-                window.with_strip_mut(|strip| strip.on_high_contrast_change(new_high_contrast));
             }
             Err(err) => log::error!("failed to get high-contrast state: {err}"),
         }
@@ -360,7 +350,6 @@ fn on_syscolorchange(event_loop: &EventLoop, window: &Window) -> Option<LRESULT>
         .ok()?;
     let event = SystemHighContrastChangeEvent { new_high_contrast };
     event_loop.handle_event(window, event);
-    window.with_strip_mut(|strip| strip.on_high_contrast_change(new_high_contrast));
     None
 }
 
@@ -376,12 +365,6 @@ fn on_activate(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Optio
             .apply_system_backdrop()
             .inspect_err(|err| log::error!("failed to apply the requested system backdrop: {err}"));
     }
-    window.with_strip_mut(|strip| {
-        strip.on_activate(is_active);
-        if !is_active {
-            strip.cancel_any_press();
-        }
-    });
     let event = WindowActivatedEvent { is_active, is_minimized };
     event_loop.handle_event(window, event)
 }
@@ -409,10 +392,10 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     calcsize_params.rgrc[0].left -= rc.left;
     calcsize_params.rgrc[0].right -= rc.right;
     calcsize_params.rgrc[0].bottom -= rc.bottom;
-    // For non-system title bars (`Custom` / `None`), leave the top inset at 0 so
-    // the title-bar area is part of the client area. Even when `WS_CAPTION` is
-    // present, returning 0 for `WM_NCCALCSIZE` removes the standard frame/caption.
-    if !window.has_non_system_title_bar() {
+    // For a custom title bar, leave the top inset at 0 so the title-bar area is
+    // part of the client area. Even when `WS_CAPTION` is present, returning 0 for
+    // `WM_NCCALCSIZE` removes the standard frame/caption.
+    if !window.has_custom_title_bar() {
         calcsize_params.rgrc[0].top -= rc.top;
     }
 
@@ -429,7 +412,7 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
         calcsize_params.rgrc[0].top += max_chrome_y;
 
         // GH#1438 / GH#5209: 2-px claw-back so the cursor can still reveal an
-        // auto-hide taskbar for non-system title bars.
+        // auto-hide taskbar for a custom title bar.
         let _ = apply_autohide_taskbar_inset(hwnd, &mut calcsize_params.rgrc[0])
             .inspect_err(|err| log::warn!("autohide taskbar inset failed: {err}"));
     }
@@ -442,12 +425,11 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let scale = window.get_scale();
     let event = NCCalcSizeEvent { origin, size, scale };
     event_loop.handle_event(window, event);
-    if window.has_non_system_title_bar() {
+    if window.has_custom_title_bar() {
         let _ = window
             .set_content_top_offset(max_chrome_y)
             .inspect_err(|err| log::warn!("set_content_top_offset failed: {err}"));
     }
-    window.with_strip_mut(|strip| strip.on_resize(max_chrome_y));
     Some(LRESULT(0))
 }
 
@@ -505,10 +487,33 @@ fn apply_autohide_taskbar_inset(hwnd: windows::Win32::Foundation::HWND, rect: &m
     Ok(())
 }
 
-fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    if !window.has_non_system_title_bar() {
-        return None;
+/// Dispatch an [`NCHitTestEvent`] to userspace and return the hit-test result it
+/// decided, if any. Userspace can answer either explicitly (by recording a hit-test
+/// code keyed on `original_msg_id`) or implicitly (by merely consuming the event, in
+/// which case the area is treated as `HTCLIENT`). Returns `None` when userspace leaves
+/// the hit test to the default handling.
+fn query_userspace_hit_test(event_loop: &EventLoop, window: &Window, mouse_x: i32, mouse_y: i32) -> Option<i32> {
+    let original_msg_id = LAST_NCHITTEST_MESSAGE_ID.with(|c| {
+        c.update(|v| v.wrapping_add(1));
+        c.get()
+    });
+    NCHITTEST_RESULTS.with_borrow_mut(|map| map.insert(original_msg_id, None));
+    let event = NCHitTestEvent {
+        mouse_x,
+        mouse_y,
+        original_msg_id,
+    };
+    if let Some(_result) = event_loop.handle_event(window, event) {
+        // The stored code is `i32` on purpose: `HTTRANSPARENT` is `-1` and must
+        // reach `LRESULT` as `-1`, not as a large positive `u32`.
+        NCHITTEST_RESULTS.with_borrow_mut(|map| map.remove(&original_msg_id)).flatten()
+    } else {
+        None
     }
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     let hwnd = window.hwnd();
     let original_ht = {
         let mut dwm_result = LRESULT(0);
@@ -518,45 +523,33 @@ fn on_nchittest(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam:
             unsafe { DefWindowProcW(hwnd, WM_NCHITTEST, wparam, lparam) }
         }
     };
-    let mouse_x = GET_X_LPARAM!(lparam.0);
-    let mouse_y = GET_Y_LPARAM!(lparam.0);
-
-    // Caption-button hit-test takes priority over the generic NC hit-test.
-    if let Some(kind) = caption_kind_at_screen(window, PhysicalPoint::new(mouse_x, mouse_y)) {
-        let is_enabled = window.with_strip(|s| s.is_enabled(kind)).unwrap_or(false);
-        return Some(LRESULT(hittest_for_caption_button_kind(kind, is_enabled) as _));
-    }
 
     if original_ht != LRESULT(HTCLIENT as _) {
         return Some(original_ht);
     }
 
-    let event = NCHitTestEvent { mouse_x, mouse_y };
-    if event_loop.handle_event(window, event).is_some() {
-        return Some(LRESULT(HTCLIENT as _));
-    }
+    // TODO [pavel.sergeev] Check what coordinate system is used here
+    let mouse_x = GET_X_LPARAM!(lparam.0);
+    let mouse_y = GET_Y_LPARAM!(lparam.0);
+
     let mut window_rect = RECT::default();
     let _ = unsafe { GetWindowRect(hwnd, &raw mut window_rect) };
     let m = window.dpi_metrics();
-    let top = window_rect.top;
-    let resize_band = m.resize_handle_height();
-    // Resize border is gated on `is_resizable`; the title-bar drag region applies to
-    // non-resizable custom titlebars too. `WindowTitleBarKind::None` gets no drag band.
-    if window.is_resizable() && mouse_y < (top + resize_band) as _ {
+    let resize_handle_height = m.padded_border + m.size_frame;
+    let is_on_resize_border = window.is_resizable() && mouse_y < (window_rect.top + resize_handle_height) as _;
+    if is_on_resize_border {
         return Some(LRESULT(HTTOP as _));
     }
-    if window.has_custom_title_bar() {
-        let title_bar_height = resize_band + unsafe { GetSystemMetricsForDpi(SM_CYSIZE, m.dpi) };
-        if mouse_y < (top + title_bar_height) as _ {
-            return Some(LRESULT(HTCAPTION as _));
-        }
+
+    if let Some(ht) = query_userspace_hit_test(event_loop, window, mouse_x, mouse_y) {
+        return Some(LRESULT(ht as _));
     }
+
     Some(LRESULT(HTCLIENT as _))
 }
 
-fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    window.with_strip_mut(CaptionButtonStrip::on_nc_mouse_leave);
-    window.nc_leave_tracking_fired();
+fn on_ncmouseleave(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+    event_loop.handle_event(window, Event::NCPointerLeave);
     let mut dwm_result = LRESULT(0);
     if unsafe { DwmDefWindowProc(window.hwnd(), WM_NCMOUSELEAVE, wparam, lparam, &raw mut dwm_result) }.as_bool() {
         Some(dwm_result)
@@ -566,38 +559,29 @@ fn on_ncmouseleave(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LR
 }
 
 /// Bypass `DefWindowProc`'s NC modal click loop, which wedges under Win11
-/// Snap Layouts + `EnableMouseInPointer` until the window deactivates. Chromium
-/// pattern: consume the press, `SetCapture`, drain release in `on_lbuttonup`
-/// (client variant — capture redirects). `lparam` is the screen click point
-/// for the HTCAPTION disabled-button arm.
-fn on_nclbuttondown(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
+/// Snap Layouts + `EnableMouseInPointer` until the window deactivates. The
+/// consumed-press path (`on_pointerdown` → `SetCapture`, release drained in
+/// `on_pointerup` as the capture-redirected client variant) handles the common
+/// case; this arm is the fallback for presses userspace left unhandled.
+fn on_nclbuttondown(window: &Window, wparam: WPARAM, _lparam: LPARAM) -> Option<LRESULT> {
     if !window.has_custom_title_bar() {
         return None;
     }
+
+    // Mouse capture for *consumed* presses is taken in `on_pointerdown` (the pointer-input
+    // path). This legacy `WM_NCLBUTTONDOWN` arm only runs when userspace left the press
+    // unhandled, where there is no userspace press to deliver a release to — we just stop
+    // `DefWindowProc`'s NC button loop from wedging.
+
+    // If we are here it means that user space code haven't handled the `PointerDownEvent`
+    // We want to prevent blocking of the event loop in `DefWindowProc` so we handle it here for caption buttons
     #[allow(clippy::cast_possible_truncation)]
     let ht = wparam.0 as u32;
-    let kind = match ht {
-        HTMAXBUTTON => CaptionButtonKind::Maximize,
-        HTMINBUTTON => CaptionButtonKind::Minimize,
-        HTCLOSE => CaptionButtonKind::Close,
-        HTCAPTION => {
-            // HTCAPTION is returned for disabled Min/Max (see `hittest_for_caption_button_kind`).
-            // If the click lands on a disabled button, consume it ourselves so
-            // DefWindowProc doesn't start a caption-drag loop.
-            let pt = PhysicalPoint::new(GET_X_LPARAM!(lparam.0), GET_Y_LPARAM!(lparam.0));
-            let Some(k) = caption_kind_at_screen(window, pt) else {
-                return None; // not over a button — let DefWindowProc handle title-bar drag
-            };
-            if window.with_strip(|s| s.is_enabled(k)).unwrap_or(true) {
-                return None; // enabled button hit via HTCAPTION is unexpected; pass through
-            }
-            k
-        }
-        _ => return None,
-    };
-    window.with_strip_mut(|strip| strip.on_pointer_down(kind));
-    unsafe { SetCapture(window.hwnd()) };
-    Some(LRESULT(0))
+    if matches!(ht, HTMINBUTTON | HTMAXBUTTON | HTCLOSE) {
+        Some(LRESULT(0))
+    } else {
+        None
+    }
 }
 
 /// Title-bar right-click → system menu.
@@ -623,7 +607,7 @@ fn on_ncrbuttonup(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRE
 /// Alt+Space → system menu, via `SC_KEYMENU` synthesised by `DefWindowProc`.
 /// Other `SC_*` codes fall through.
 fn on_syscommand(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    if !window.has_non_system_title_bar() {
+    if !window.has_custom_title_bar() {
         return None;
     }
     #[allow(clippy::cast_possible_truncation)]
@@ -660,66 +644,6 @@ fn alt_space_anchor(window: &Window) -> PhysicalPoint {
         r
     });
     PhysicalPoint::new(rect.left, rect.top)
-}
-
-/// Release path for the press cycle started in [`on_nclbuttondown`].
-/// `lparam` is in client coords (capture redirected this from the NC
-/// area) — map to screen to find the button under the cursor.
-fn on_lbuttonup(window: &Window, lparam: LPARAM) -> Option<LRESULT> {
-    if !window.has_custom_title_bar() {
-        return None;
-    }
-    let strip_owns_press = window.with_strip(CaptionButtonStrip::has_primary_press).unwrap_or(false);
-    if !strip_owns_press {
-        return None;
-    }
-    let mut pt = POINT {
-        x: GET_X_LPARAM!(lparam.0),
-        y: GET_Y_LPARAM!(lparam.0),
-    };
-    let _ = unsafe { ClientToScreen(window.hwnd(), &raw mut pt) };
-    let kind_under_pointer = caption_kind_at_screen(window, PhysicalPoint::new(pt.x, pt.y));
-    let action = window.with_strip_mut(|strip| strip.on_pointer_up(kind_under_pointer)).flatten();
-    let _ = unsafe { ReleaseCapture() };
-    if let Some(action) = action {
-        dispatch_caption_action(window, action);
-        // The action shifts button positions but no
-        // `WM_NCPOINTERUPDATE` fires until the user moves the mouse,
-        // so refresh hover state against the new geometry.
-        let mut cursor = POINT::default();
-        if unsafe { GetCursorPos(&raw mut cursor) }.is_ok() {
-            let kind_now = caption_kind_at_screen(window, PhysicalPoint::new(cursor.x, cursor.y));
-            window.with_strip_mut(|strip| strip.on_pointer_update(kind_now, PointerDeviceKind::Mouse));
-        }
-    }
-    Some(LRESULT(0))
-}
-
-/// Drive `Pressed ↔ PressedDraggedOff` while a primary caption press is held.
-/// `on_pointerdown` returns `None` for primary (Snap Layouts), so
-/// `DefWindowProc` promotes the contact to legacy mouse — drift arrives here
-/// as `WM_MOUSEMOVE` (capture from `on_nclbuttondown` routes it).
-fn on_mousemove(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-    if !window.has_custom_title_bar() || !window.with_strip(CaptionButtonStrip::has_primary_press).unwrap_or(false) {
-        return None;
-    }
-    // Defensive: if MK_LBUTTON is clear we missed the release (no WM_LBUTTONUP
-    // or WM_CAPTURECHANGED arrived). Release the orphaned capture from
-    // `on_nclbuttondown`, drop the press, and bail.
-    #[allow(clippy::cast_possible_truncation)]
-    if (wparam.0 as u32) & MK_LBUTTON.0 == 0 {
-        window.with_strip_mut(CaptionButtonStrip::cancel_primary_press);
-        let _ = unsafe { ReleaseCapture() };
-        return None;
-    }
-    let mut pt = POINT {
-        x: GET_X_LPARAM!(lparam.0),
-        y: GET_Y_LPARAM!(lparam.0),
-    };
-    let _ = unsafe { ClientToScreen(window.hwnd(), &raw mut pt) };
-    let kind = caption_kind_at_screen(window, PhysicalPoint::new(pt.x, pt.y));
-    window.with_strip_mut(|s| s.on_pointer_update(kind, PointerDeviceKind::Mouse));
-    None
 }
 
 fn on_keyevent(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
@@ -774,72 +698,51 @@ fn on_char(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM, lp
     event_loop.handle_event(window, event)
 }
 
+/// Take an explicit mouse capture when userspace *consumes* a non-client press, so the rest of
+/// the gesture — moves and the release — is redirected back to this window as the client
+/// `WM_POINTER*` variants even when the pointer is dragged outside its bounds.
+///
+/// Non-client pointer input is not implicitly captured the way client input is, and we
+/// deliberately bypass `DefWindowProc`'s NC modal loop (which would otherwise hold the capture)
+/// to avoid wedging under Snap Layouts + `EnableMouseInPointer`. Without this, the matching
+/// `WM_NCPOINTERUP` is hit-tested to whatever window is under the cursor on release, so we never
+/// see `PointerUp` and e.g. a custom caption button sticks.
+///
+/// No-op for client presses (already implicitly captured by the OS) and for unconsumed presses
+/// (where `DefWindowProc` — e.g. the window-move loop — manages capture itself). Released in
+/// [`release_self_captured_pointer`].
+fn capture_consumed_nc_press(window: &Window, non_client_area: bool, consumed: bool) {
+    if non_client_area && consumed {
+        unsafe {
+            SetCapture(window.hwnd());
+        }
+        window.set_self_captured_pointer(true);
+    }
+}
+
+/// Release the capture taken by [`capture_consumed_nc_press`], but only if we still own it.
+/// `DefWindowProc`'s window-move/resize modal loop also `SetCapture`s to this hwnd; releasing
+/// *that* would cancel the drag and snap the window back, so we guard on our own ownership flag.
+fn release_self_captured_pointer(window: &Window) {
+    if window.take_self_captured_pointer() && unsafe { GetCapture() } == window.hwnd() {
+        let _ = unsafe { ReleaseCapture() };
+    }
+}
+
+// Called when additional pressed some pointer button, or mouse was moved
 fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
     let is_non_client = matches!(msg, WM_NCPOINTERUPDATE);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
 
-    if window.has_custom_title_bar() {
-        let kind = caption_kind_at_screen(window, pointer_info.get_physical_location());
-        let strip_owns_press = window
-            .with_strip(|s| s.has_primary_press() || s.has_press_for(pointer_info.pointer_id()))
-            .unwrap_or(false);
-        // Forward to the strip on NC (hover) or while strip owns a press
-        // (WinUI `Pressed → PressedDraggedOff`). Primary press is pointer-id-
-        // less (legacy WM_NCLBUTTONDOWN funnel), so it gates every pointer's
-        // update — pointer subsystem keeps firing WM_POINTERUPDATE during
-        // implicit pointer capture, and without the gate those leak to the
-        // host as unpaired PointerUpdated, triggering DoDragDrop.
-        if is_non_client || strip_owns_press {
-            window.with_strip_mut(|strip| {
-                let device = device_kind_for(&pointer_info);
-                if is_non_client {
-                    let _ = window
-                        .ensure_nc_leave_tracking()
-                        .inspect_err(|err| log::warn!("ensure_nc_leave_tracking failed: {err}"));
-                }
-                // `ButtonChangeType` can carry a coalesced non-primary DOWN or UP.
-                // Hand it to the strip so an unpaired UP never reaches the host
-                // drag source (which would kick off `DoDragDrop`).
-                let button_change = pointer_info.get_pointer_button_change();
-                strip.handle_non_primary_button_change(
-                    pointer_info.pointer_id(),
-                    button_change.kind(),
-                    button_change.button(),
-                    kind.is_some(),
-                );
-                strip.on_pointer_update(kind, device);
-            });
-        }
-        // Emit `PointerEntered` even when the first NC hit is a caption button,
-        // then suppress strip-internal events for parity with the title-bar path.
-        if is_non_client && kind.is_some() {
-            if !window.is_pointer_in_window() {
-                window.set_is_pointer_in_window(true);
-                event_loop.handle_event(
-                    window,
-                    Event::PointerEntered(PointerEnteredEvent {
-                        location_in_window: pointer_info.get_location_in_window(),
-                        location_on_screen: pointer_info.get_physical_location(),
-                        state: pointer_info.get_pointer_state(),
-                        timestamp: pointer_info.get_timestamp(),
-                    }),
-                );
-            }
-            return Some(LRESULT(0));
-        }
-        // Suppress host dispatch while strip owns a press; otherwise the
-        // host drag source sees a held button without a matching DOWN and
-        // starts DoDragDrop. With Custom titlebar the NC inset is 0, so
-        // movement over the strip arrives as the client-variant message.
-        if strip_owns_press {
-            return Some(LRESULT(0));
-        }
-    }
-
+    // A button transition while the pointer is already in contact (e.g. pressing a second,
+    // chorded button) arrives here as `WM_*POINTERUPDATE`, not `WM_*POINTERDOWN`. Track when
+    // this update is such a press so we can take the same capture as `on_pointerdown` does.
+    let mut is_press = false;
     let event = if window.is_pointer_in_window() {
         let button_change = pointer_info.get_pointer_button_change();
         match button_change.kind() {
             PointerButtonChangeKind::Pressed => {
+                is_press = true;
                 let click_location = pointer_info.get_physical_location();
                 let click_count = window.with_mut_pointer_click_counter(|c| c.register_click(button_change.button(), click_location));
                 Event::PointerDown(PointerDownEvent {
@@ -878,30 +781,18 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
             timestamp: pointer_info.get_timestamp(),
         })
     };
-    event_loop.handle_event(window, event)
+    let result = event_loop.handle_event(window, event);
+    if is_press {
+        // Capture a consumed chorded press here just as `on_pointerdown` does for the first
+        // button. We don't release on an intermediate button-up (the `Released` arm): contact —
+        // and our capture — ends at the last button up, delivered as `WM_POINTERUP`.
+        capture_consumed_nc_press(window, is_non_client, result.is_some());
+    }
+    result
 }
 
 fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
-
-    if msg == WM_NCPOINTERDOWN
-        && window.has_custom_title_bar()
-        && caption_kind_at_screen(window, pointer_info.get_physical_location()).is_some()
-    {
-        let button_change = pointer_info.get_pointer_button_change();
-        let is_primary = button_change.kind() == PointerButtonChangeKind::Pressed && button_change.button() == PointerButton::Left;
-        if is_primary {
-            // Primary press routes through `on_nclbuttondown` / `on_lbuttonup`;
-            // forwarding here keeps Snap Layouts working.
-            return None;
-        }
-        // Track non-primary press so the matching release can be swallowed and
-        // never reach the host drag source as an unpaired UP (DoDragDrop).
-        window.with_strip_mut(|s| {
-            s.handle_non_primary_button_change(pointer_info.pointer_id(), button_change.kind(), button_change.button(), true)
-        });
-        return Some(LRESULT(0));
-    }
 
     let pointer_button = match pointer_info.get_pointer_button_change() {
         change if change.kind() == PointerButtonChangeKind::Pressed => change.button(),
@@ -912,46 +803,24 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPA
     };
     let click_location = pointer_info.get_physical_location();
     let click_count = window.with_mut_pointer_click_counter(|c| c.register_click(pointer_button, click_location));
+    let non_client_area = matches!(msg, WM_NCPOINTERDOWN);
     let event = PointerDownEvent {
         button: pointer_button,
         click_count,
         location_in_window: pointer_info.get_location_in_window(),
         location_on_screen: pointer_info.get_physical_location(),
-        non_client_area: matches!(msg, WM_NCPOINTERDOWN),
+        non_client_area,
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
     };
-    event_loop.handle_event(window, Event::PointerDown(event))
+    let result = event_loop.handle_event(window, Event::PointerDown(event));
+    capture_consumed_nc_press(window, non_client_area, result.is_some());
+    result
 }
 
 fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
     let is_non_client = matches!(msg, WM_NCPOINTERUP);
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
-
-    // Handle both WM_POINTERUP and WM_NCPOINTERUP: a press that starts on a
-    // caption button but releases in the client area arrives as WM_POINTERUP.
-    if window.has_custom_title_bar() {
-        let button_change = pointer_info.get_pointer_button_change();
-        let is_primary = button_change.kind() == PointerButtonChangeKind::Released && button_change.button() == PointerButton::Left;
-
-        // Primary release with strip-owned press: defer to DefWindowProc →
-        // WM_LBUTTONUP → `on_lbuttonup` for canonical drain (no Kotlin event).
-        if is_primary && window.with_strip(CaptionButtonStrip::has_primary_press).unwrap_or(false) {
-            return None;
-        }
-
-        // Non-primary swallowed-release drain.
-        if !is_primary {
-            let drained = window
-                .with_strip_mut(|s| {
-                    s.handle_non_primary_button_change(pointer_info.pointer_id(), button_change.kind(), button_change.button(), false)
-                })
-                .unwrap_or(false);
-            if drained {
-                return Some(LRESULT(0));
-            }
-        }
-    }
 
     let pointer_button = match pointer_info.get_pointer_button_change() {
         change if change.kind() == PointerButtonChangeKind::Released => change.button(),
@@ -968,55 +837,33 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
         state: pointer_info.get_pointer_state(),
         timestamp: pointer_info.get_timestamp(),
     };
-    let result = event_loop.handle_event(window, Event::PointerUp(event));
-    // Strip-claimed primary releases return early above; other NC releases pass
-    // through so DefWindowProc handles them.
-    if is_non_client { None } else { result }
+    // `WM_POINTERUP` is the last-button-up / contact-end message, so this is where any capture we
+    // took for the gesture is dropped (the client variant the capture redirected it into).
+    release_self_captured_pointer(window);
+    event_loop.handle_event(window, Event::PointerUp(event))
 }
 
-fn on_pointercapturechanged(window: &Window, wparam: WPARAM) -> Option<LRESULT> {
-    if !window.has_custom_title_bar() {
-        return None;
-    }
-    let pointer_id = u32::from(LOWORD!(wparam.0));
-    // Drain non-primary session for this pointer id. Primary is pointer-
-    // id-less and is cancelled via WM_CAPTURECHANGED → on_capturechanged.
-    let cancelled = window
-        .with_strip_mut(|strip| {
-            let owns = strip.has_press_for(pointer_id);
-            if owns {
-                strip.on_pointer_cancel(pointer_id);
-            }
-            owns
-        })
-        .unwrap_or(false);
-    // Cancellation only — must not fire `CaptionButtonAction`.
-    cancelled.then_some(LRESULT(0))
+fn on_pointercapturechanged(_window: &Window, _wparam: WPARAM) -> Option<LRESULT> {
+    log::debug!("on_pointercapturechanged");
+    None
 }
 
-fn on_cancelmode(window: &Window) -> Option<LRESULT> {
-    if !window.has_custom_title_bar() {
-        return None;
-    }
-    window.with_strip_mut(CaptionButtonStrip::cancel_any_press);
+fn on_capturechanged(window: &Window) -> Option<LRESULT> {
+    log::debug!("on_capturechanged");
+    // We've lost the mouse capture (released by us, or stolen). Clear our ownership flag so
+    // `on_pointerup` won't later mistake someone else's capture for ours.
+    window.set_self_captured_pointer(false);
+    None
+}
+
+fn on_cancelmode(_window: &Window) -> Option<LRESULT> {
+    // Usually is triggered when dialog is shown
+    // We should notify user space to drop tooltips and hovered states
+    log::debug!("on_cancelmode");
+
     // Returning `None` lets `DefWindowProc` complete the standard cancel
     // (releases mouse capture, cancels menu / scrollbar tracking).
     None
-}
-
-/// Cancel the active press on capture loss. Idempotent — also fires after
-/// our own `ReleaseCapture` in `on_lbuttonup`, harmless.
-fn on_capturechanged(window: &Window) -> Option<LRESULT> {
-    if window.has_custom_title_bar() {
-        window.with_strip_mut(CaptionButtonStrip::cancel_primary_press);
-    }
-    None
-}
-
-#[allow(clippy::unnecessary_wraps)]
-fn on_caption_buttons_rdr(window: &Window) -> Option<LRESULT> {
-    window.with_strip_mut(CaptionButtonStrip::on_rendering_device_replaced);
-    Some(LRESULT(0))
 }
 
 fn on_pointerwheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
@@ -1038,12 +885,6 @@ fn on_pointerwheel(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WP
 
 fn on_pointerleave(event_loop: &EventLoop, window: &Window, wparam: WPARAM) -> Option<LRESULT> {
     let pointer_info = PointerInfo::try_from_message(wparam).ok()?;
-    // Mouse hover clears via `WM_NCMOUSELEAVE` → `on_ncmouseleave`. Pen/touch
-    // do not emit legacy NC-leave, so the pointer path must explicitly clear
-    // strip hover here or a caption button stays visibly hovered after exit.
-    if window.has_custom_title_bar() {
-        window.with_strip_mut(CaptionButtonStrip::on_nc_mouse_leave);
-    }
     window.set_is_pointer_in_window(false);
     let event = PointerExitedEvent {
         location_in_window: pointer_info.get_location_in_window(),

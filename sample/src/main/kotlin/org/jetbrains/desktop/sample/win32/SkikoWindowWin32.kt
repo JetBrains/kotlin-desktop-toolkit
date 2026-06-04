@@ -18,6 +18,7 @@ import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.FileDialog
 import org.jetbrains.desktop.win32.Keyboard
 import org.jetbrains.desktop.win32.Logger
+import org.jetbrains.desktop.win32.NCHitTestResult
 import org.jetbrains.desktop.win32.OleClipboard
 import org.jetbrains.desktop.win32.PhysicalPoint
 import org.jetbrains.desktop.win32.PhysicalSize
@@ -57,7 +58,9 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
 
     private var dragDropManager: DragDropManager? = null
 
-    private var immersiveDark = false
+    private val captionButtons = CaptionButtonsBar()
+    private val counterButton = CounterButton()
+    private var immersiveDark = Appearance.getCurrent() == Appearance.Dark
 
     fun setImmersiveDarkMode(enabled: Boolean) {
         immersiveDark = enabled
@@ -67,6 +70,12 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
     private fun isSizeChanged(size: PhysicalSize): Boolean {
         return (size.width != currentSize.width || size.height != currentSize.height)
     }
+
+    /** Snapshot of which caption buttons to show / enable, from the window's current capabilities. */
+    private fun captionButtonModel(): CaptionButtonModel = CaptionButtonModel(window.isMinimizable(), window.isMaximizable())
+
+    /** Logical-pixel height of the custom title-bar band; window content should start below it. */
+    protected val titleBarHeight: Float get() = captionButtons.titleBarHeight
 
     fun initializeDropManager() {
         dragDropManager = DragDropManager(window).apply {
@@ -182,11 +191,13 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                     VirtualKey.N -> {
                         window.setMinimizable(!window.isMinimizable())
                         Logger.debug { "Minimizable: ${window.isMinimizable()}" }
+                        window.requestRedraw() // reflect the minimize button's new enabled/visible state
                     }
 
                     VirtualKey.M -> {
                         window.setMaximizable(!window.isMaximizable())
                         Logger.debug { "Maximizable: ${window.isMaximizable()}" }
+                        window.requestRedraw() // reflect the maximize button's new enabled/visible state
                     }
 
                     VirtualKey.V -> {
@@ -216,6 +227,7 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
             is Event.SystemAppearanceChange -> with(event) {
                 Logger.debug { "Setting change: new appearance: $newAppearance" }
                 setImmersiveDarkMode(newAppearance == Appearance.Dark)
+                window.requestRedraw()
                 EventHandlerResult.Stop
             }
 
@@ -230,7 +242,28 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
             }
 
             is Event.PointerUpdated -> with(event) {
-                if (!nonClientArea && state.pressedButtons.hasFlag(PointerButton.Left)) {
+                // The Win11 Snap Layouts flyover can swallow a caption-button release (the up lands on
+                // the flyover window, so we never get PointerUp). If a press is still recorded but the
+                // left button is no longer down, that release was lost — abandon the press so the button
+                // doesn't stay stuck "pressed". Do not activate it: the pointer is not over the button.
+                if (captionButtons.pressed != null && !state.pressedButtons.hasFlag(PointerButton.Left)) {
+                    if (captionButtons.cancelPress()) {
+                        window.requestRedraw()
+                    }
+                }
+                val clientSize = window.getClientSize()
+                if (captionButtons.onPointerMove(locationInWindow, clientSize.width, captionButtonModel())) {
+                    window.requestRedraw()
+                }
+                if (counterButton.onPointerMove(locationInWindow, clientSize.height)) {
+                    window.requestRedraw()
+                }
+                if (captionButtons.pressed == null &&
+                    !counterButton.pressed &&
+                    dragDropManager != null &&
+                    !nonClientArea &&
+                    state.pressedButtons.hasFlag(PointerButton.Left)
+                ) {
                     DataObject.build {
                         addHtmlFragment("<b>HTML</b> <i>fragment</i>")
                         addTextItem("Hello drag and drop!")
@@ -254,6 +287,93 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                     }
                 }
                 EventHandlerResult.Continue
+            }
+
+            is Event.PointerDown -> with(event) {
+                println("Pointer down $event")
+                // The caption buttons are reported as non-client (see the NCHitTest handler), so the
+                // press arrives here with nonClientArea = true and `locationInWindow` in logical
+                // client space. Consume it (Stop) so it never reaches DefWindowProc: its legacy
+                // NC-button modal loop wedges under EnableMouseInPointer + Snap Layouts, stalling
+                // the render loop. The button is activated on release, in PointerUp.
+                val clientSize = window.getClientSize()
+                val pressedCaption = button == PointerButton.Left &&
+                    captionButtons.onPointerDown(locationInWindow, clientSize.width, captionButtonModel())
+                // The counter button lives in the client area, so its press arrives here too.
+                // Consume it (Stop) so it activates on release without reaching DefWindowProc.
+                val pressedCounter = !pressedCaption &&
+                    button == PointerButton.Left &&
+                    counterButton.onPointerDown(locationInWindow, clientSize.height)
+                if (pressedCaption || pressedCounter) {
+                    window.requestRedraw()
+                    EventHandlerResult.Stop
+                } else {
+                    EventHandlerResult.Continue
+                }
+            }
+
+            is Event.PointerUp -> with(event) {
+                println("Pointer up $event")
+                val clientSize = window.getClientSize()
+                when {
+                    captionButtons.pressed != null -> {
+                        when (captionButtons.onPointerUp(locationInWindow, clientSize.width, captionButtonModel())) {
+                            CaptionButtonKind.Minimize -> window.minimize()
+                            CaptionButtonKind.Maximize -> if (window.isMaximized()) window.restore() else window.maximize()
+                            CaptionButtonKind.Close -> window.requestClose()
+                            null -> {}
+                        }
+                        window.requestRedraw()
+                        EventHandlerResult.Stop
+                    }
+                    counterButton.pressed -> {
+                        if (counterButton.onPointerUp(locationInWindow, clientSize.height)) {
+                            Logger.debug { "Counter incremented to ${counterButton.count}" }
+                        }
+                        window.requestRedraw()
+                        EventHandlerResult.Stop
+                    }
+                    else -> EventHandlerResult.Continue
+                }
+            }
+
+            is Event.PointerExited -> {
+                var redraw = captionButtons.onPointerExit()
+                redraw = counterButton.onPointerExit() || redraw
+                if (redraw) {
+                    window.requestRedraw()
+                }
+                EventHandlerResult.Continue
+            }
+
+            is Event.NCHitTest -> with(event) {
+                // WM_NCHITTEST coordinates are physical screen pixels; map them into logical
+                // client space to reuse the caption-button layout. An enabled button reports its
+                // HT* code, handing the Snap Layouts flyover (on Maximize) to Windows; a visible
+                // but disabled button reports Caption so its area still drags the window (matching
+                // the system title bar); the rest of the title-bar band reports Caption so it drags
+                // too. Anything below the title bar is left to the client: returning Continue lets
+                // the toolkit fall back to its HTCLIENT default.
+                val model = captionButtonModel()
+                val clientPoint = Screen.mapToClient(window, PhysicalPoint(mouseX, mouseY)).toLogical(window.getScaleFactor())
+                val kind = captionButtons.hitTest(clientPoint, window.getClientSize().width)?.takeIf { model.isVisible(it) }
+                when {
+                    kind == null -> {
+                        // Not over a button. Drag only within the title-bar band; below it is client.
+                        if (clientPoint.y !in 0f..captionButtons.titleBarHeight) {
+                            return@with EventHandlerResult.Continue
+                        }
+                        setHitTestResult(NCHitTestResult.Caption)
+                    }
+                    else -> setHitTestResult(
+                        when (kind) {
+                            CaptionButtonKind.Minimize -> NCHitTestResult.MinButton
+                            CaptionButtonKind.Maximize -> NCHitTestResult.MaxButton
+                            CaptionButtonKind.Close -> NCHitTestResult.Close
+                        },
+                    )
+                }
+                EventHandlerResult.Stop
             }
 
             else -> EventHandlerResult.Continue
@@ -286,8 +406,10 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                 surfaceProps = null,
             )!!.use { surface ->
                 val time = creationTime.elapsedNow().inWholeMilliseconds
-                surface.canvas.clear(Color.TRANSPARENT)
+                surface.canvas.clear(Color.TRANSPARENT) // TODO  [pavel.sergeev] use Color.GREEN to debug AIR-5409
                 surface.canvas.draw(size, scale, time)
+                captionButtons.draw(surface.canvas, size, scale, immersiveDark, window.isMaximized(), captionButtonModel())
+                counterButton.draw(surface.canvas, size, scale, immersiveDark)
                 surface.flushAndSubmit()
                 angleRenderer.swapBuffers()
             }

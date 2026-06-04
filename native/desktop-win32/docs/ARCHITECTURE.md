@@ -63,8 +63,6 @@ native/
         renderer_angle.rs         AngleDevice: ANGLE/EGL on D3D11, surface=SpriteVisual; holds Arc<CompositorDriver>
         renderer_api.rs           FFI: angle device create/drop/resize/make_current/swap
         renderer_egl_utils.rs     EglInstance type alias, get_egl_proc! macro
-        caption_buttons.rs        CaptionButtonStrip: state machine + WinRT visuals + press sessions
-        composition.rs            CompositionContext: D3D11/D2D/DirectWrite/CompositionGraphicsDevice gateway
         compositor_driver.rs      CompositorDriver: CommitNeeded subscriber, autocommit gate, Arc<Self>
         geometry.rs               PhysicalPixels/LogicalPixels + Point/Size/Rect (#[repr(C)])
         keyboard.rs               VirtualKey, PhysicalKeyStatus (LPARAM decode)
@@ -337,7 +335,6 @@ Where in the code:
 - `application.rs` — owns `compositor_driver: Arc<CompositorDriver>`. The driver wraps `CompositorController`, subscribes to `CommitNeeded`, and drives `Commit()` via a UI-thread fast-path (inline in the same wndproc invocation) or a dispatcher-queue drain for off-thread fires.
 - `window.rs` — holds `compositor: Compositor` (no driver — `Window` only creates visuals, never calls `Commit()`). `ContainerVisual` / `SpriteVisual` / `DesktopWindowTarget`, with the HWND bridged via `ICompositorDesktopInterop`.
 - `renderer_angle.rs` — holds `compositor_driver: Arc<CompositorDriver>`. ANGLE's EGL window surface targets the `SpriteVisual`. `resize_surface` calls `pause_autocommit` then `do_resize`; `swap_buffers` calls `publish_and_resume_autocommit` (Commit fires only when the gate was paused, so non-resize swaps don't pay an extra Commit).
-- `caption_buttons.rs` — `CaptionButtonStrip` takes `&Compositor` at construction; no driver field. Mutations rely on the driver's `CommitNeeded` event for publishing — drained inline on the UI thread when the wndproc dispatch is already there, or via dispatcher-queue handoff otherwise. The strip never calls `Commit()` directly.
 
 `Win32_Graphics_Dwm` is enabled in `Cargo.toml` (DWM titlebar attributes, extended frame bounds), but `Win32_Graphics_DirectComposition` is **not** enabled. Anyone tempted to "drop down to DComp for X" should first check whether the `Windows.UI.Composition` API (or Win2D) covers the case — the two cannot be mixed naively in the same visual tree.
 
