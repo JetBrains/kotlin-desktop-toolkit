@@ -363,26 +363,13 @@ impl SimpleWindow {
         let event_controller_key_weak = event_controller_key.downgrade();
         window.add_controller(event_controller_key);
 
-        {
-            let im_context_weak_ref = im_context_weak_ref.clone();
-            window.connect_is_active_notify(move |window| {
-                let active = window.is_active();
-                // Do this first to prevent a deadlock if `text_input_disable` is called as a result of the following events.
-                if let Some(im_context) = im_context_weak_ref.upgrade() {
-                    if active {
-                        im_context.focus_in();
-                    } else {
-                        im_context.focus_out();
-                    }
-                }
-
-                if active {
-                    send_event(event_handler, WindowKeyboardEnterEvent { window_id });
-                } else {
-                    send_event(event_handler, WindowKeyboardLeaveEvent { window_id });
-                }
-            });
-        }
+        window.connect_is_active_notify(move |window| {
+            if window.is_active() {
+                send_event(event_handler, WindowKeyboardEnterEvent { window_id });
+            } else {
+                send_event(event_handler, WindowKeyboardLeaveEvent { window_id });
+            }
+        });
 
         set_window_configure_event_handlers(
             &window,
@@ -409,6 +396,12 @@ impl SimpleWindow {
             });
         }
 
+        gl_widget.connect_unrealize(move |_window| {
+            if let Some(im_context) = im_context_weak_ref.upgrade() {
+                im_context.set_client_widget(gtk4::Widget::NONE);
+            }
+        });
+
         window.connect_realize(move |window| on_realize(window, window_id, event_handler, last_window_configure_event.clone()));
 
         window.connect_close_request(move |_window| {
@@ -417,12 +410,6 @@ impl SimpleWindow {
                 glib::Propagation::Proceed
             } else {
                 glib::Propagation::Stop
-            }
-        });
-
-        window.connect_unrealize(move |_window| {
-            if let Some(im_context) = im_context_weak_ref.upgrade() {
-                im_context.set_client_widget(gtk4::Widget::NONE);
             }
         });
 
