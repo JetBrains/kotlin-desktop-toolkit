@@ -8,6 +8,7 @@ use desktop_common::{ffi_utils::RustAllocatedStrPtr, logger::ffi_boundary};
 
 use super::{
     event_loop::EventLoop,
+    events::NCHitTestResult,
     keyboard::{PhysicalKeyStatus, VirtualKey},
 };
 
@@ -24,6 +25,13 @@ pub extern "C" fn keyevent_translate_message(msg_id: u64) -> bool {
             Ok(result.as_bool())
         })
     })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn nchittest_set_hit_test_result(msg_id: u64, result: NCHitTestResult) {
+    ffi_boundary("nchittest_set_hit_test_result", || {
+        EventLoop::set_nchittest_result(msg_id, result.to_native_ht())
+    });
 }
 
 #[unsafe(no_mangle)]

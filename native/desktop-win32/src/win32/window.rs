@@ -24,16 +24,15 @@ use windows::{
         UI::{
             Controls::MARGINS,
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
-            Input::KeyboardAndMouse::{TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT, TrackMouseEvent},
             WindowsAndMessaging::{
                 CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
-                GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW, HMENU, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed,
-                LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON,
-                SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-                SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW, SetCursor, SetForegroundWindow, SetPropW,
-                SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu,
-                USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_NULL, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW,
-                WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+                GetClientRect, GetPropW, GetWindowLongPtrW, HMENU, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW,
+                RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON,
+                SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
+                SWP_NOZORDER, SendMessageW, SetCursor, SetForegroundWindow, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
+                ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY,
+                WM_NULL, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+                WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -42,7 +41,6 @@ use windows_core::{HSTRING, Interface, PCWSTR, Result as WinResult, w};
 
 use super::{
     appearance::{self, Appearance},
-    caption_buttons::CaptionButtonStrip,
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint},
@@ -85,6 +83,7 @@ pub struct WindowId(pub isize);
 /// are queried via `GetSystemMetricsForDpi` at point of use.
 #[derive(Clone, Copy)]
 pub(crate) struct DpiMetrics {
+    #[allow(unused)]
     pub dpi: u32,
     pub scale: f32,
     pub padded_border: i32,
@@ -102,12 +101,6 @@ impl DpiMetrics {
             size_frame: unsafe { GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi) },
         }
     }
-
-    /// Height of the top resize-handle band: `SM_CXPADDEDBORDER + SM_CYSIZEFRAME`.
-    /// There is no `SM_CYPADDEDBORDER`; the X padded-border value is used on both axes.
-    pub(crate) const fn resize_handle_height(self) -> i32 {
-        self.padded_border + self.size_frame
-    }
 }
 
 #[allow(clippy::struct_field_names)]
@@ -119,16 +112,18 @@ pub struct Window {
     composition_root: RefCell<Option<ContainerVisual>>,
     backdrop_layer: RefCell<Option<ContainerVisual>>,
     content_layer: RefCell<Option<ContainerVisual>>,
-    chrome_layer: RefCell<Option<ContainerVisual>>,
     min_size: Cell<Option<LogicalSize>>,
     origin: Cell<LogicalPoint>,
     size: Cell<LogicalSize>,
     style: RefCell<WindowStyle>,
     pointer_in_window: AtomicBool,
-    nc_leave_tracking_armed: AtomicBool,
+    /// True while we hold an explicit `SetCapture` taken for a consumed non-client press
+    /// (see `on_pointerdown`). Lets `on_pointerup` release only *our* capture and never the
+    /// one `DefWindowProc`'s move/resize modal loop sets for itself (releasing that would
+    /// cancel the drag and snap the window back).
+    self_captured_pointer: AtomicBool,
     cached_dpi_metrics: Cell<DpiMetrics>,
     system_menu: Cell<HMENU>,
-    caption_buttons: RefCell<Option<CaptionButtonStrip>>,
     immersive_dark: Cell<bool>,
     pointer_click_counter: RefCell<PointerClickCounter>,
     cursor: RefCell<Option<Cursor>>,
@@ -159,16 +154,14 @@ impl Window {
             composition_root: RefCell::new(None),
             backdrop_layer: RefCell::new(None),
             content_layer: RefCell::new(None),
-            chrome_layer: RefCell::new(None),
             min_size: Cell::new(None),
             origin: Cell::default(),
             size: Cell::new(LogicalSize::new(0.0, 0.0)),
             style: RefCell::default(),
             pointer_in_window: AtomicBool::new(false),
-            nc_leave_tracking_armed: AtomicBool::new(false),
+            self_captured_pointer: AtomicBool::new(false),
             cached_dpi_metrics: Cell::new(DpiMetrics::for_dpi(USER_DEFAULT_SCREEN_DPI)),
             system_menu: Cell::new(HMENU::default()),
-            caption_buttons: RefCell::new(None),
             immersive_dark: Cell::new(false),
             pointer_click_counter: RefCell::new(PointerClickCounter::new()),
             cursor: RefCell::new(None),
@@ -225,34 +218,6 @@ impl Window {
         Ok(sprite_visual)
     }
 
-    #[inline]
-    pub(crate) fn chrome_layer(&self) -> anyhow::Result<ContainerVisual> {
-        let layer = self.chrome_layer.borrow();
-        let layer = layer.as_ref().context("Window has not been created yet")?;
-        Ok(layer.clone())
-    }
-
-    pub(crate) fn ensure_nc_leave_tracking(&self) -> anyhow::Result<()> {
-        // Set the flag only after TrackMouseEvent succeeds so a syscall
-        // failure doesn't permanently disable NC leave tracking.
-        if self.nc_leave_tracking_armed.load(Ordering::Relaxed) {
-            return Ok(());
-        }
-        let mut tme = TRACKMOUSEEVENT {
-            cbSize: size_of::<TRACKMOUSEEVENT>().try_into()?,
-            dwFlags: TME_NONCLIENT | TME_LEAVE,
-            hwndTrack: self.hwnd(),
-            dwHoverTime: 0,
-        };
-        unsafe { TrackMouseEvent(&raw mut tme)? };
-        self.nc_leave_tracking_armed.store(true, Ordering::Relaxed);
-        Ok(())
-    }
-
-    pub(crate) fn nc_leave_tracking_fired(&self) {
-        self.nc_leave_tracking_armed.store(false, Ordering::Relaxed);
-    }
-
     pub fn get_client_size(&self) -> anyhow::Result<LogicalSize> {
         let mut rect = RECT::default();
         unsafe { GetClientRect(self.hwnd(), &raw mut rect)? };
@@ -303,14 +268,6 @@ impl Window {
     #[must_use]
     pub fn has_custom_title_bar(&self) -> bool {
         matches!(self.style.borrow().title_bar_kind, WindowTitleBarKind::Custom)
-    }
-
-    #[must_use]
-    pub fn has_non_system_title_bar(&self) -> bool {
-        matches!(
-            self.style.borrow().title_bar_kind,
-            WindowTitleBarKind::Custom | WindowTitleBarKind::None
-        )
     }
 
     #[must_use]
@@ -377,8 +334,6 @@ impl Window {
 
     pub fn maximize(&self) {
         if !self.style.borrow().is_maximizable {
-            // Mirrors the strip-side availability gate so programmatic
-            // maximize agrees with the visible button state.
             return;
         }
         self.send_system_command(SC_MAXIMIZE);
@@ -495,10 +450,10 @@ impl Window {
     }
 
     /// Win11 maximize-overhang inset in physical pixels: `SM_CYSIZEFRAME`
-    /// (DPI-aware) when resizable, maximized, and non-system title bar;
+    /// (DPI-aware) when resizable, maximized, and a custom title bar;
     /// `0` otherwise.
     pub(crate) fn max_chrome_y(&self) -> i32 {
-        if !self.is_resizable() || !self.has_non_system_title_bar() || !self.is_maximized() {
+        if !self.is_resizable() || !self.has_custom_title_bar() || !self.is_maximized() {
             return 0;
         }
         self.dpi_metrics().size_frame
@@ -546,8 +501,6 @@ impl Window {
                 size_of::<windows_core::BOOL>().try_into()?,
             )?;
         }
-        let appearance = if enabled { Appearance::Dark } else { Appearance::Light };
-        self.with_strip_mut(|strip| strip.on_appearance_change(appearance));
         self.immersive_dark.set(enabled);
         Ok(())
     }
@@ -577,51 +530,18 @@ impl Window {
         // Update cache before FRAMECHANGED so the synchronous NCCALCSIZE reads fresh state.
         self.style.borrow_mut().is_resizable = value;
         self.update_style_flag(StyleFlag::Resizable, value)?;
-        self.rebuild_caption_strip()?;
         Ok(())
     }
 
     pub fn set_is_minimizable(&self, value: bool) -> anyhow::Result<()> {
         self.style.borrow_mut().is_minimizable = value;
         self.update_style_flag(StyleFlag::Minimizable, value)?;
-        self.rebuild_caption_strip()?;
         Ok(())
     }
 
     pub fn set_is_maximizable(&self, value: bool) -> anyhow::Result<()> {
         self.style.borrow_mut().is_maximizable = value;
         self.update_style_flag(StyleFlag::Maximizable, value)?;
-        self.rebuild_caption_strip()?;
-        Ok(())
-    }
-
-    // On error the style cache and Win32 style flag have already been updated;
-    // we surface the failure to the caller rather than rolling back, because a
-    // best-effort revert could itself fail and leave the window in an even more
-    // inconsistent state. The caller (FFI boundary) logs and returns to Kotlin.
-    fn rebuild_caption_strip(&self) -> anyhow::Result<()> {
-        if !self.has_custom_title_bar() {
-            return Ok(());
-        }
-        let chrome_layer = self.chrome_layer()?;
-        let is_active = unsafe { GetForegroundWindow() == self.hwnd() };
-        let initial_appearance = if self.immersive_dark.get() {
-            Appearance::Dark
-        } else {
-            Appearance::Light
-        };
-        let new_strip = CaptionButtonStrip::new(
-            &chrome_layer,
-            self.get_scale(),
-            &self.style.borrow(),
-            &self.compositor,
-            self.hwnd(),
-            is_active,
-            self.is_maximized(),
-            initial_appearance,
-            self.max_chrome_y(),
-        )?;
-        self.caption_buttons.replace(Some(new_strip));
         Ok(())
     }
 
@@ -670,19 +590,21 @@ impl Window {
     }
 
     #[inline]
+    pub(crate) fn set_self_captured_pointer(&self, value: bool) {
+        self.self_captured_pointer.store(value, Ordering::Relaxed);
+    }
+
+    /// Atomically clears the self-capture flag, returning its previous value. True means we
+    /// took the capture ourselves and are responsible for releasing it.
+    #[inline]
+    pub(crate) fn take_self_captured_pointer(&self) -> bool {
+        self.self_captured_pointer.swap(false, Ordering::Relaxed)
+    }
+
+    #[inline]
     pub(crate) fn with_mut_pointer_click_counter<R>(&self, f: impl FnOnce(&mut PointerClickCounter) -> R) -> R {
         let mut pointer_click_counter = self.pointer_click_counter.borrow_mut();
         f(&mut pointer_click_counter)
-    }
-
-    #[inline]
-    pub(crate) fn with_strip<R>(&self, f: impl FnOnce(&CaptionButtonStrip) -> R) -> Option<R> {
-        self.caption_buttons.borrow().as_ref().map(f)
-    }
-
-    #[inline]
-    pub(crate) fn with_strip_mut<R>(&self, f: impl FnOnce(&mut CaptionButtonStrip) -> R) -> Option<R> {
-        self.caption_buttons.borrow_mut().as_mut().map(f)
     }
 
     pub fn request_redraw(&self) -> WinResult<()> {
@@ -741,13 +663,9 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     // WM_NCDESTROY is a special case: this is when we must clean up the extra resources used by the window
     if msg == WM_NCDESTROY {
         if let Ok(raw) = unsafe { RemovePropW(hwnd, WINDOW_PTR_PROP_NAME) } {
-            let weak = unsafe { Weak::from_raw(raw.0.cast::<Window>()) };
-            // Drop the strip (and its `RenderingDeviceReplacedRegistration`)
-            // before the HWND is recycled — otherwise an in-flight WinRT
-            // callback could `PostMessageW` to a stale or recycled handle.
-            if let Some(window) = weak.upgrade() {
-                window.caption_buttons.replace(None);
-            }
+            // Reclaim and drop the `Weak` leaked via `into_raw` in `on_nccreate`,
+            // before the HWND is recycled.
+            drop(unsafe { Weak::from_raw(raw.0.cast::<Window>()) });
         }
         return LRESULT(0);
     }
@@ -797,7 +715,7 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     // Materialise the system-menu copy while WS_SYSMENU is still set, before
     // the style narrow below clears it. Cache the HMENU for reuse on every
     // show — Win32 owns the lifetime (destroyed with the window).
-    if window.has_non_system_title_bar() {
+    if window.has_custom_title_bar() {
         let h_menu = seed_system_menu(hwnd).context("failed to seed system menu")?;
         window.system_menu.set(h_menu);
     }
@@ -805,22 +723,6 @@ fn initialize_window(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.set_position(window.origin.get(), window.size.get())?;
     initialize_content(window, hwnd).context("failed to initialize the content")?;
     window.set_cursor(Cursor::load_from_system(CursorIcon::Arrow)?);
-
-    if window.has_custom_title_bar() {
-        let chrome_layer = window.chrome_layer()?;
-        let strip = CaptionButtonStrip::new(
-            &chrome_layer,
-            window.get_scale(),
-            &window.style.borrow(),
-            &window.compositor,
-            hwnd,
-            false,
-            false,
-            Appearance::Light,
-            0,
-        )?;
-        window.caption_buttons.replace(Some(strip));
-    }
     Ok(())
 }
 
@@ -833,22 +735,19 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
 
     let backdrop_layer = window.compositor.CreateContainerVisual()?;
     let content_layer = window.compositor.CreateContainerVisual()?;
-    let chrome_layer = window.compositor.CreateContainerVisual()?;
 
-    // Track HWND client size on root, chrome, and backdrop layers.
+    // Track HWND client size on root and backdrop layers.
     // `content_layer` is excluded: the ANGLE visual sets its own absolute
     // size in `resize_surface` and no other child reads the parent's size.
     root_visual.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
-    chrome_layer.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
     backdrop_layer.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
 
     // VisualCollection ordering is bottom-to-top; sequential `InsertAtTop`
     // calls put each new layer above the previous one. Final stacking:
-    // backdrop (bottom) < content (middle) < chrome (top).
+    // backdrop (bottom) < content (top).
     let root_children = root_visual.Children()?;
     root_children.InsertAtTop(&backdrop_layer)?;
     root_children.InsertAtTop(&content_layer)?;
-    root_children.InsertAtTop(&chrome_layer)?;
 
     let backdrop_visual = window.compositor.CreateSpriteVisual()?;
     backdrop_visual.SetRelativeSizeAdjustment(windows_numerics::Vector2::one())?;
@@ -861,6 +760,5 @@ fn initialize_content(window: &Window, hwnd: HWND) -> anyhow::Result<()> {
     window.composition_root.replace(Some(root_visual));
     window.backdrop_layer.replace(Some(backdrop_layer));
     window.content_layer.replace(Some(content_layer));
-    window.chrome_layer.replace(Some(chrome_layer));
     Ok(())
 }

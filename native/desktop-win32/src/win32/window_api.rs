@@ -46,13 +46,13 @@ impl WindowStyle {
     #[must_use]
     pub const fn to_system(&self) -> WINDOW_STYLE {
         let mut style = WS_OVERLAPPEDWINDOW.0;
-        // `Custom` and `None` intentionally keep `WS_CAPTION`: the non-client frame is still
+        // `Custom` intentionally keeps `WS_CAPTION`: the non-client frame is still
         // removed in `WM_NCCALCSIZE` (see `event_loop.rs`), but retaining caption
         // semantics preserves native window transitions for min/max/restore.
         //
-        // Do not expose system caption controls for non-system title bars; toolkit
-        // owns these surfaces for `Custom`, and `None` has no title-bar controls.
-        if matches!(self.title_bar_kind, WindowTitleBarKind::Custom | WindowTitleBarKind::None) {
+        // Do not expose system caption controls for a custom title bar; the toolkit
+        // owns these surfaces.
+        if matches!(self.title_bar_kind, WindowTitleBarKind::Custom) {
             style &= !WS_SYSMENU.0;
         }
         if !self.is_resizable {
@@ -86,7 +86,6 @@ impl Default for WindowStyle {
 pub enum WindowTitleBarKind {
     System,
     Custom,
-    None,
 }
 
 #[repr(C)]

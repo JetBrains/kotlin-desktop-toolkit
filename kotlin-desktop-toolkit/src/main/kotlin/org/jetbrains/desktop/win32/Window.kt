@@ -256,13 +256,11 @@ public class Window internal constructor(
 public enum class WindowTitleBarKind {
     System,
     Custom,
-    None,
     ;
 
     public fun toNative(): Int = when (this) {
         System -> desktop_win32_h.NativeWindowTitleBarKind_System()
         Custom -> desktop_win32_h.NativeWindowTitleBarKind_Custom()
-        None -> desktop_win32_h.NativeWindowTitleBarKind_None()
     }
 }
 

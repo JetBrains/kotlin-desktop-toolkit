@@ -15,7 +15,6 @@ use windows::{
 };
 
 use super::{
-    composition,
     compositor_driver::CompositorDriver,
     dispatcher::Dispatcher,
     event_loop::EventLoop,
@@ -76,7 +75,6 @@ impl Application {
 
     pub fn shutdown(&self) -> anyhow::Result<()> {
         self.compositor_driver.shutdown();
-        composition::release_composition_context();
         self.dispatcher.shutdown();
         let _ = self.dispatcher_queue_controller.ShutdownQueueAsync()?;
         Ok(())

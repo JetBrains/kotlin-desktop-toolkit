@@ -17,6 +17,7 @@ pub enum Event {
     KeyUp(KeyEvent),
     NCCalcSize(NCCalcSizeEvent),
     NCHitTest(NCHitTestEvent),
+    NCPointerLeave,
     PointerDown(PointerDownEvent),
     PointerEntered(PointerEnteredEvent),
     PointerExited(PointerExitedEvent),
@@ -98,11 +99,64 @@ impl From<NCCalcSizeEvent> for Event {
 pub struct NCHitTestEvent {
     pub mouse_x: i32,
     pub mouse_y: i32,
+    pub original_msg_id: u64,
 }
 
 impl From<NCHitTestEvent> for Event {
     fn from(value: NCHitTestEvent) -> Self {
         Self::NCHitTest(value)
+    }
+}
+
+/// Hit-test region an `NCHitTest` handler can assign via `nchittest_set_hit_test_result`.
+/// Each variant maps to a `WM_NCHITTEST` `HT*` return code.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub enum NCHitTestResult {
+    Client,
+    Caption,
+    Top,
+    Bottom,
+    Left,
+    Right,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    MinButton,
+    MaxButton,
+    Close,
+    SysMenu,
+    Nowhere,
+    Transparent,
+}
+
+impl NCHitTestResult {
+    /// Returns the `HT*` code as `i32` because `HTTRANSPARENT` is `-1`; carrying it as `u32`
+    /// would surface at `LRESULT` as a large positive value instead of `-1`.
+    pub(crate) const fn to_native_ht(self) -> i32 {
+        use windows::Win32::UI::WindowsAndMessaging::{
+            HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION, HTCLIENT, HTCLOSE, HTLEFT, HTMAXBUTTON, HTMINBUTTON, HTNOWHERE, HTRIGHT,
+            HTSYSMENU, HTTOP, HTTOPLEFT, HTTOPRIGHT, HTTRANSPARENT,
+        };
+        match self {
+            Self::Client => HTCLIENT as i32,
+            Self::Caption => HTCAPTION as i32,
+            Self::Top => HTTOP as i32,
+            Self::Bottom => HTBOTTOM as i32,
+            Self::Left => HTLEFT as i32,
+            Self::Right => HTRIGHT as i32,
+            Self::TopLeft => HTTOPLEFT as i32,
+            Self::TopRight => HTTOPRIGHT as i32,
+            Self::BottomLeft => HTBOTTOMLEFT as i32,
+            Self::BottomRight => HTBOTTOMRIGHT as i32,
+            Self::MinButton => HTMINBUTTON as i32,
+            Self::MaxButton => HTMAXBUTTON as i32,
+            Self::Close => HTCLOSE as i32,
+            Self::SysMenu => HTSYSMENU as i32,
+            Self::Nowhere => HTNOWHERE as i32,
+            Self::Transparent => HTTRANSPARENT,
+        }
     }
 }
 

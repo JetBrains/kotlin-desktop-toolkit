@@ -26,6 +26,7 @@ use super::{
     utils::LOWORD,
 };
 
+#[derive(Debug)]
 pub(crate) enum PointerInfo {
     Touch(POINTER_TOUCH_INFO),
     Pen(POINTER_PEN_INFO),
@@ -124,10 +125,6 @@ impl PointerInfo {
             Self::Pen(pen_info) => &pen_info.pointerInfo,
             Self::Common(pointer_info) => pointer_info,
         }
-    }
-
-    pub(crate) const fn pointer_id(&self) -> u32 {
-        self.get_native_pointer_info().pointerId
     }
 
     pub(crate) fn get_pointer_state(&self) -> PointerState {

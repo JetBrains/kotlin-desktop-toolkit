@@ -7,7 +7,6 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - [Application & event loop](#application--event-loop)
 - [Window](#window)
 - [Renderer (ANGLE)](#renderer-angle)
-- [Caption buttons & Composition context](#caption-buttons--composition-context)
 - [System menu](#system-menu)
 - [Geometry](#geometry)
 - [Keyboard](#keyboard)
@@ -51,7 +50,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Gotchas.**
 - `application_dispatcher_invoke` returns a `bool` (enqueue succeeded?) — `Application.invokeOnDispatcher` discards it. Enqueues after dispatcher shutdown silently lose the lambda.
 - `EnableMouseInPointer(true)` is process-wide and irreversible — third-party libs in the same process expecting raw `WM_MOUSE*` will silently break.
-- Primary release (`WM_POINTERUP` / `WM_NCPOINTERUP`) while the strip holds an active press returns `None` so `DefWindowProc` synthesizes `WM_LBUTTONUP`, which `on_lbuttonup` drains canonically (no Kotlin-facing `PointerUp` for that release). Other NC releases also fall through to `DefWindowProc` for default NC behavior — see the caption-buttons spec §3.2. For non-system titlebar kinds (`WindowTitleBarKind::Custom` / `WindowTitleBarKind::None`), `WindowStyle::to_system` keeps `WS_CAPTION` for native transitions but clears `WS_SYSMENU`, so system caption buttons are not surfaced.
+- NC releases fall through to `DefWindowProc` for default NC behavior. For a custom title bar (`WindowTitleBarKind::Custom`), `WindowStyle::to_system` keeps `WS_CAPTION` for native transitions but clears `WS_SYSMENU`, so system caption buttons are not surfaced.
 - `WM_POINTERUPDATE` and `WM_POINTERDOWN` can both emit `Event::PointerDown` for the same gesture (button press inside an update message + dedicated down handler) → possible duplicate events. See TODO.md.
 - Two commented-out variants in `events.rs`: `//WindowFocusChange`, `//WindowFullScreenToggle` — stale scaffolding.
 
@@ -81,7 +80,7 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 - `WNDCLASS_INIT: OnceLock<u16>` uses non-atomic `get().is_none()` + `get_or_init` — racy if windows are created concurrently (today they aren't, but the code reads racy).
 - Window is created at `1×1` then resized in `initialize_window`. **This is intentional**: the managed layer specifies the requested size in *logical* pixels, but the DPI scale needed to convert to *physical* pixels can only be read from a real `HWND` (`GetDpiForWindow`). The minimal-size window is created first to obtain the HWND, then `set_position` applies the logical→physical conversion. Consequence: creation emits repeated `WM_WINDOWPOSCHANGED` notifications. Size/move handlers must be idempotent.
 - `Window::drop` only logs a trace; doesn't verify the HWND was destroyed. If the `Rc` drops without `window_destroy`, the HWND leaks.
-- `WindowTitleBarKind::Custom` is reachable from Kotlin; `extend_content_into_titlebar` is invoked from `on_activate` whenever `is_active && !is_minimized` (regardless of title-bar kind), not specifically gated on `Custom`. `WindowStyle::to_system` keeps `WS_CAPTION` but clears `WS_SYSMENU` for non-system titlebar kinds (`Custom` / `None`); the caption-buttons path layers toolkit-drawn buttons on top while preserving native transition behavior.
+- `WindowTitleBarKind::Custom` is reachable from Kotlin; `extend_content_into_titlebar` is invoked from `on_activate` whenever `is_active && !is_minimized` (regardless of title-bar kind), not specifically gated on `Custom`. `WindowStyle::to_system` keeps `WS_CAPTION` but clears `WS_SYSMENU` for a custom title bar (`Custom`); the application draws its own caption buttons (Skiko) into the client area while native transition behavior is preserved.
 - `#[allow(dead_code)]` on `WindowTitleBarKind` (window_api.rs) and `WindowSystemBackdropType` (window_api.rs) — false positives because cbindgen reads them but rustc can't see that.
 
 **Cross-refs.** `application` (`CompositorDriver` / `Compositor` source, `Weak<EventLoop>`), `event_loop` (wndproc dispatcher), `events` (event payloads), `geometry`, `cursor` (per-window cursor), `pointer` (`PointerClickCounter` storage), `screen` (`window_get_screen_info`), `strings`, `utils` (Win11 build probes).
@@ -120,41 +119,9 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 ---
 
-## Caption buttons & Composition context
-
-**Purpose.** Toolkit-managed Min / Max / Restore / Close buttons for `WindowTitleBarKind::Custom` windows. Pure-state-machine strip rasterised via Direct2D / DirectWrite onto a per-window `CaptionButtonStrip` in the window's `chrome_layer`. Win11 Snap Layouts integration via `HTMAXBUTTON`. Design lives in `docs/specs/2026-04-30-win32-caption-buttons-design.md` — this section navigates the implementation, not the design.
-
-**Files.** `caption_buttons.rs` (strip + state machine + theme + metrics + wndproc dispatch helpers), `composition.rs` (`CompositionContext`), `compositor_driver.rs` (`CompositorDriver`).
-
-**FFI surface.** None. Both modules are `pub(crate)` only — no Kotlin-facing API. Click side-effects route through existing `Window::request_close` / `minimize` / `maximize` / `restore`.
-
-**Key types.**
-- `CaptionButtonStrip` (caption_buttons.rs) — owns its `composition_root`, the per-button visuals, the press-session state machine (`primary_press: Option<PrimaryPress>`, `non_primary_presses: Vec<NonPrimaryPress>`), and an `Rc<CompositionContext>` clone. `pub(crate)`. `!Send`.
-- `CompositionContext` (composition.rs) — gateway to D3D11 / D2D / DirectWrite / `CompositionGraphicsDevice`. UI-thread singleton via `composition::ensure_composition_context` (thread-local `OnceCell<Rc<CompositionContext>>`). `!Send`.
-- `CaptionButtonKind` — `#[repr(u8)]` (discriminants are load-bearing for the bitset). `CaptionButtonAction`, `PointerDeviceKind` — plain enums, no `#[repr]`.
-- `PrimaryPress { kind, suppressed }` — singleton primary press; `suppressed = true` when the pressed button was disabled. `NonPrimaryPress { pointer_id, button }` — per-pointer non-primary swallow, stored in a `Vec`. See spec §4.2.
-
-**Ownership.** Strip is `RefCell<Option<CaptionButtonStrip>>` on `Window`, populated in `initialize_window` for `Custom` titlebar windows. Construction failure short-circuits `window_create` — a `Custom` titlebar window must not appear without caption buttons (spec §6.1). The `RenderingDeviceReplacedRegistration` RAII guard lives on the strip; dropping the strip removes the WinRT subscription. The strip is dropped from the `WM_NCDESTROY` arm before the HWND is recycled.
-
-**Threading.** UI thread only. The `RenderingDeviceReplaced` callback is the single `Send + 'static` boundary; the registered closure `PostMessageW`s a private `WM_APP_*` to the owning HWND rather than touching strip state directly, so the WM_APP handler runs on the UI thread.
-
-**Gotchas.**
-- Hit-test routing dispatches into `caption_kind_at_screen` (caption_buttons.rs) for both `WM_NCHITTEST` and the `WM_NCPOINTER*` handlers — geometric, not `HIWORD(wParam)` — see spec §3.2.
-- Device-loss recovery is reactive only: `CompositionContext::with_d2d_render_target` traps the three loss-class HRESULTs (`DXGI_ERROR_DEVICE_REMOVED` / `DXGI_ERROR_DEVICE_RESET` / `D2DERR_RECREATE_TARGET`) on both `BeginDraw` and `EndDraw`, calls `rebuild_d2d_device`, and `RenderingDeviceReplaced` triggers re-rasterise — see spec §6.2.
-- `build_d2d_device` falls back from `D3D_DRIVER_TYPE_HARDWARE` to `D3D_DRIVER_TYPE_WARP` on failure, so headless / Remote Desktop / degraded-GPU sessions still get a `Custom` window (initial construction and `rebuild_d2d_device` share the fallback). Once WARP is selected, the cached `Rc<CompositionContext>` stays on WARP for the rest of the UI thread's lifetime — no automatic upgrade-back to hardware — see spec §6.1.
-- Three cleanup paths: `on_pointer_cancel(pointer_id)` for `WM_POINTERCAPTURECHANGED` (drops matching `NonPrimaryPress`); `cancel_primary_press()` for `WM_CAPTURECHANGED` (mouse-capture loss; clears `PrimaryPress` only); `cancel_any_press()` for `WM_CANCELMODE` and `WM_ACTIVATE`-deactivate (clears both) — see spec §3.2 / §4.2.
-- `max_chrome_y` is `SM_CYSIZEFRAME` only on this toolkit's non-system titlebar style; the strip's resize-band exclusion (`is_in_top_resize_border`) uses the full `SM_CXPADDEDBORDER + SM_CYSIZEFRAME` — see spec §3.6.
-- Inactive caption-button hover and pressed render with the active palette — see spec §4.4.
-- Disabled visible Min/Max return `HTCAPTION` for `WM_NCHITTEST`. The OS therefore sends `WM_NCLBUTTONDOWN` with `wparam = HTCAPTION`; `on_nclbuttondown`'s HTCAPTION arm re-hit-tests via `caption_kind_at_screen` and swallows the click (creates `PrimaryPress { suppressed: true }` + SetCapture). The matching release drains via `WM_LBUTTONUP` → `on_lbuttonup` → no action fires. No hover, press, or Kotlin event for disabled clicks — see spec §4.2.
-- `root_visual`, `chrome_layer`, `backdrop_layer`, and the backdrop tint `SpriteVisual` carry `RelativeSizeAdjustment(1,1)` set in `initialize_content`; per-resize `SetSize` is not required. `content_layer` is left at default — the ANGLE visual sets its own absolute `Size` and no other child reads the parent's effective size. The strip's `on_resize` is the single commit point per resize tick — see spec §5.5.
-
-**Cross-refs.** `window` (`chrome_layer` parent, `Window::set_content_top_offset`, `Window::with_strip[_mut]` accessor), `event_loop` (wndproc dispatch into `caption_kind_at_screen`, `dispatch_caption_action`, and the strip's lifecycle methods), `appearance` (the strip's `Appearance` mirrors the per-window `DWMWA_USE_IMMERSIVE_DARK_MODE` cache; `HighContrast` is seeded from the system and refreshed on system events), `geometry` (`PhysicalPoint` / `PhysicalSize`).
-
----
-
 ## System menu
 
-**Purpose.** Alt+Space and title-bar right-click → system menu (Move / Size / Minimize / Maximize / Restore / Close) on `WindowTitleBarKind::Custom` and `WindowTitleBarKind::None`, with `WS_SYSMENU` cleared at runtime.
+**Purpose.** Alt+Space and title-bar right-click → system menu (Move / Size / Minimize / Maximize / Restore / Close) on `WindowTitleBarKind::Custom`, with `WS_SYSMENU` cleared at runtime.
 
 **Files.** `system_menu.rs` (decision table + `seed_system_menu` / `sync_system_menu_state`), `window.rs` (`Window::show_system_menu` + cached `HMENU` field + `sync_system_menu`), `event_loop.rs` (`WM_NCRBUTTONUP` / `WM_SYSCOMMAND` / `WM_INITMENUPOPUP` arms).
 
@@ -168,9 +135,8 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Threading.** UI thread only.
 
 **Gotchas.**
-- `WindowStyle::to_system` clears `WS_SYSMENU` for non-system title-bar kinds, otherwise Windows draws native caption buttons over the toolkit-drawn strip even at zero title-bar height. `initialize_window` calls `seed_system_menu` **before** narrowing the style; `GetSystemMenu(hwnd, FALSE)` promotes the window to its own menu copy while `WS_SYSMENU` is still live, and the returned `HMENU` is cached in `Window::system_menu`.
+- `WindowStyle::to_system` clears `WS_SYSMENU` for a custom title bar, otherwise Windows draws native caption buttons over the client area even at zero title-bar height. `initialize_window` calls `seed_system_menu` **before** narrowing the style; `GetSystemMenu(hwnd, FALSE)` promotes the window to its own menu copy while `WS_SYSMENU` is still live, and the returned `HMENU` is cached in `Window::system_menu`.
 - `alt_space_anchor` returns the top-left of the visible window frame via `Window::get_physical_rect` (`DWMWA_EXTENDED_FRAME_BOUNDS`). `GetWindowRect` is the fallback path only — its outer rect includes the invisible resize border / drop-shadow margin.
-- Caption-button right-clicks never reach `on_ncrbuttonup`. The strip's non-primary swallow in `on_pointerdown` / `on_pointerup` gates on `caption_kind_at_screen(...).is_some()` and returns `Some(LRESULT(0))` without forwarding to `DefWindowProc`; the legacy `WM_NCRBUTTONUP` is never synthesised. Covers every visible caption button, including disabled `Minimize` / `Maximize` (which hit-test as `HTCAPTION` per `caption_buttons.rs:333`).
 - Enable state is applied from the `WM_INITMENUPOPUP` arm via `Window::sync_system_menu`, gated on `wParam` matching the cached `HMENU`. `WM_INITMENU` is documented for menu-bar / menu-key activation only; `WM_INITMENUPOPUP` is what `TrackPopupMenu` delivers. The docs' `HIWORD(lParam)` window-menu flag is `0` when the toolkit calls `TrackPopupMenu` itself, so the `HMENU` match is the only gate. The arm returns `Some(LRESULT(0))`, so our sync is the last write before display.
 - Dispatch goes through `send_system_command` for native min / max / restore animations.
 - `TrackPopupMenu` with `TPM_RETURNCMD` returns 0 for both cancel and failure; `show_system_menu` distinguishes via `GetLastError` cleared before the call. On failure both wndproc arms return `None` so `DefWindowProc` runs — pre-restoration behaviour, no crash.
@@ -310,7 +276,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 ## Appearance
 
-**Purpose.** Detect the system's light/dark theme and high-contrast On/Off state. The light/dark theme is forwarded to Kotlin as `SystemAppearanceChangeEvent`. Per-window chrome dark/light is controlled separately by `DWMWA_USE_IMMERSIVE_DARK_MODE` — see the `window` subsystem. High-contrast feeds the caption-button strip palette and refreshes whenever Windows reports a high-contrast change.
+**Purpose.** Detect the system's light/dark theme and high-contrast On/Off state. The light/dark theme is forwarded to Kotlin as `SystemAppearanceChangeEvent`. Per-window chrome dark/light is controlled separately by `DWMWA_USE_IMMERSIVE_DARK_MODE` — see the `window` subsystem. High-contrast state is forwarded to Kotlin as `SystemHighContrastChangeEvent` and refreshes whenever Windows reports a high-contrast change.
 
 **Files.** `appearance.rs`, `appearance_api.rs` + Kotlin `Appearance.kt`.
 
