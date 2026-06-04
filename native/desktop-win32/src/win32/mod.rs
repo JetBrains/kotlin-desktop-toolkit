@@ -22,6 +22,8 @@ pub mod events;
 pub mod events_api;
 pub mod file_dialog;
 pub mod file_dialog_api;
+pub mod font_settings;
+pub mod font_settings_api;
 pub mod geometry;
 pub mod global_data;
 pub mod keyboard;
