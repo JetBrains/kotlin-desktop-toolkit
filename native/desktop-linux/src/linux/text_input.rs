@@ -163,13 +163,6 @@ impl Dispatch<ZwpTextInputV3, i32> for ApplicationState {
             }
             zwp_text_input_v3::Event::Done { serial } => {
                 debug!("zwp_text_input_v3::Event::Done: serial={serial}");
-                if this.pending_text_input_event.commit_string.is_none()
-                    && this.pending_text_input_event.delete_surrounding_text.is_none()
-                    && this.pending_text_input_event.preedit_string.is_none()
-                {
-                    return;
-                }
-
                 let v = std::mem::take(&mut this.pending_text_input_event);
 
                 let (has_commit_string, commit_string) = match v.commit_string {
