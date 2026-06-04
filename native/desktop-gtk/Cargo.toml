@@ -26,7 +26,7 @@ khronos-egl = { version = "6.0.0", features = ["dynamic"] }
 libloading = "0.9.0"
 gtk4 = { version = "0.11.0", features = ["v4_2"] }
 glib-unix =  { version = "0.22.0" }
-skia-safe = { optional = true, version = "0.93.0", default-features = true, features = ["gl"] }
+skia-safe = { optional = true, version = "0.97.0", default-features = true, features = ["gl"] }
 
 [target.'cfg(target_os="linux")'.dev-dependencies]
 url = "2.5.8"
