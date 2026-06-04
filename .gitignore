@@ -9,6 +9,8 @@
 # Claude Code per-machine settings and ephemeral worktrees
 .claude/
 
+/docs/private/
+
 # Ignore Gradle build output directory
 build
 
