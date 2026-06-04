@@ -268,7 +268,7 @@ private class EditorState {
         }
     }
 
-    fun createTextInputContext(changeCausedByInputMethod: Boolean): TextInputContext {
+    private fun createTextInputContext(changeCausedByInputMethod: Boolean): TextInputContext {
         Logger.info { "createTextInputContext: $text" }
         val cursorCodepoint = codepointFromOffset(text, cursorOffset)
         return TextInputContext(
@@ -288,10 +288,29 @@ private class EditorState {
         if (selectionStartOffset != null && selectionEndOffset != null) {
             s.append(", selection: $selectionStartOffset - $selectionEndOffset")
         }
+        if (!textInputEnabled) {
+            s.append(", IME disabled (press TAB to enable)")
+        }
         composedTextRange?.let { (composedTextStartOffset, composedTextEndOffset) ->
             s.append(", compose: $composedTextStartOffset - $composedTextEndOffset")
         }
         return s.toString()
+    }
+
+    fun getSubstringBeforeCursor(len: UInt): CharSequence {
+        val len = len.toInt()
+        if (len > cursorOffset) {
+            return ""
+        }
+        return text.subSequence(cursorOffset - len, cursorOffset)
+    }
+
+    fun getSubstringAfterCursor(len: UInt): CharSequence {
+        val len = len.toInt()
+        if (cursorOffset + len > text.length) {
+            return ""
+        }
+        return text.subSequence(cursorOffset, cursorOffset + len)
     }
 
     fun draw(canvas: Canvas, y: Float, scale: Float) {
@@ -409,17 +428,17 @@ private class EditorState {
         clipboardHandler: ClipboardHandler,
     ): EventHandlerResult {
         val shortcutModifiers = modifiers.shortcutModifiers()
-        when (shortcutModifiers) {
-            setOf(KeyModifiers.Logo) -> EventHandlerResult.Continue
+        val handled = when (shortcutModifiers) {
+            setOf(KeyModifiers.Logo) -> false
             setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
                 KeyCode.V -> {
                     clipboardHandler.paste(listOf(PNG_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
-                    EventHandlerResult.Stop
+                    return EventHandlerResult.Stop
                 }
 
                 KeyCode.C -> {
                     clipboardHandler.copy(DataTransferContentType.UriList(EXAMPLE_FILES))
-                    EventHandlerResult.Stop
+                    return EventHandlerResult.Stop
                 }
 
                 KeyCode.O -> {
@@ -435,23 +454,23 @@ private class EditorState {
                             selectDirectories = true,
                         ),
                     )
-                    EventHandlerResult.Stop
+                    return EventHandlerResult.Stop
                 }
 
-                else -> EventHandlerResult.Continue
+                else -> false
             }
 
             setOf(KeyModifiers.Control) -> when (event.keyCode.value) {
                 KeyCode.V -> {
                     clipboardHandler.paste(listOf(PNG_MIME_TYPE, TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
-                    EventHandlerResult.Stop
+                    return EventHandlerResult.Stop
                 }
 
                 KeyCode.C -> {
                     getCurrentSelection()?.let { selection ->
                         clipboardHandler.copy(DataTransferContentType.Text(selection))
-                        EventHandlerResult.Stop
-                    } ?: EventHandlerResult.Continue
+                    }
+                    return EventHandlerResult.Stop
                 }
 
                 KeyCode.O -> {
@@ -467,20 +486,20 @@ private class EditorState {
                             selectDirectories = false,
                         ),
                     )
-                    EventHandlerResult.Stop
+                    return EventHandlerResult.Stop
                 }
 
                 KeyCode.M -> {
                     window.startMove()
-                    EventHandlerResult.Stop
+                    return EventHandlerResult.Stop
                 }
 
                 KeyCode.Tab -> {
                     window.requestInternalActivationToken()
-                    EventHandlerResult.Stop
+                    return EventHandlerResult.Stop
                 }
 
-                else -> EventHandlerResult.Continue
+                else -> false
             }
 
             setOf(KeyModifiers.Shift) -> when (event.keyCode.value) {
@@ -490,6 +509,7 @@ private class EditorState {
                     }
                     selectionEndOffset = 0
                     cursorOffset = 0
+                    true
                 }
 
                 KeyCode.Down -> {
@@ -499,6 +519,7 @@ private class EditorState {
                     val end = text.length
                     selectionEndOffset = end
                     cursorOffset = end
+                    true
                 }
 
                 KeyCode.Left -> {
@@ -507,6 +528,7 @@ private class EditorState {
                     }
                     cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
                     selectionEndOffset = cursorOffset
+                    true
                 }
 
                 KeyCode.Right -> {
@@ -515,20 +537,37 @@ private class EditorState {
                     }
                     cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
                     selectionEndOffset = cursorOffset
+                    true
                 }
 
                 else -> {
-                    event.characters?.also(::typeIn)
+                    val characters = event.characters
+                    if (characters != null) {
+                        typeIn(characters)
+                        true
+                    } else {
+                        false
+                    }
                 }
             }
 
             else -> when (event.keyCode.value) {
+                KeyCode.Tab -> {
+                    if (!textInputEnabled) {
+                        textInputEnabled = true
+                        app.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
+                        return EventHandlerResult.Stop
+                    }
+                    false
+                }
+
                 KeyCode.BackSpace -> {
                     if (!deleteSelection() && cursorOffset > 0) {
                         val newCursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
                         text.delete(newCursorOffset, cursorOffset)
                         cursorOffset = newCursorOffset
                     }
+                    true
                 }
 
                 KeyCode.F11 -> {
@@ -537,26 +576,37 @@ private class EditorState {
                     } else {
                         window.setFullScreen()
                     }
+                    return EventHandlerResult.Stop
                 }
 
                 KeyCode.Up -> {
                     cursorOffset = 0
+                    true
                 }
 
                 KeyCode.Down -> {
                     cursorOffset = text.length
+                    true
                 }
 
                 KeyCode.Left -> {
                     cursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
+                    true
                 }
 
                 KeyCode.Right -> {
                     cursorOffset = getNextGlyphOffset(text.toString(), cursorOffset)
+                    true
                 }
 
                 else -> {
-                    event.characters?.also(::typeIn)
+                    val characters = event.characters
+                    if (characters != null) {
+                        typeIn(characters)
+                        true
+                    } else {
+                        false
+                    }
                 }
             }
         }
@@ -568,10 +618,16 @@ private class EditorState {
             selectionEndOffset = null
         }
 
-        if (textInputEnabled) {
-            app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+        return if (handled) {
+            composedText = ""
+            composedTextRange = null
+            if (textInputEnabled) {
+                app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = false))
+            }
+            EventHandlerResult.Stop
+        } else {
+            EventHandlerResult.Continue
         }
-        return EventHandlerResult.Stop
     }
 
     fun onDataTransfer(content: DataTransferContent, app: Application): EventHandlerResult {
@@ -614,49 +670,73 @@ private class EditorState {
     }
 
     fun onTextInputAvailability(event: Event.TextInputAvailability, app: Application): EventHandlerResult {
-        if (event.available) {
+        if (event.available && textInputEnabled) {
             app.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
-            textInputEnabled = true
         } else {
-            app.textInputDisable()
-            textInputEnabled = false
+            resetTextInput(app, reenable = false, clear = false)
         }
         return EventHandlerResult.Stop
     }
 
-    fun onTextInput(event: Event.TextInput, app: Application): EventHandlerResult {
-        composedText = ""
-        event.deleteSurroundingTextData?.let { deleteSurroundingTextData ->
-            val deleteStart = cursorOffset - utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.beforeLengthInBytes.toLong())
-            val deleteEnd = cursorOffset + utf8OffsetToUtf16Offset(text, deleteSurroundingTextData.afterLengthInBytes.toLong())
-            this.text.delete(deleteStart, deleteEnd)
+    fun resetTextInput(app: Application, reenable: Boolean = true, clear: Boolean = false) {
+        if (textInputEnabled) {
+            app.textInputDisable()
+            onTextInput(
+                preeditStringAndRange = null,
+                commitString = null,
+                deleteSurroundingRange = null,
+                app = null,
+            )
         }
-        event.commitStringData?.let { commitStringData ->
-            commitStringData.text?.let { commitString ->
-                this.text.insert(cursorOffset, commitString)
-                cursorOffset += commitString.length
-            }
-        }
-        event.preeditStringData?.let { preeditStringData ->
-            deleteSelection()
-            composedText = preeditStringData.text ?: ""
-            if (preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1) {
-                composedTextRange = null
-            } else {
-                check(preeditStringData.cursorBeginBytePos >= 0)
-                check(preeditStringData.cursorEndBytePos >= 0)
 
-                preeditStringData.text?.let { preeditString ->
-                    val startOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBeginBytePos.toLong())
-                    val endOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorEndBytePos.toLong())
-                    composedTextRange = Pair(startOffset, endOffset)
-                }
-            }
-        } ?: run {
+        if (clear) {
+            cursorOffset = 0
+            text.clear()
+        }
+
+        if (textInputEnabled && reenable) {
+            app.textInputEnable(createTextInputContext(changeCausedByInputMethod = false))
+        }
+    }
+
+    fun onTextInput(
+        preeditStringAndRange: Pair<String?, Pair<Int, Int>?>?,
+        commitString: String?,
+        deleteSurroundingRange: Pair<Int, Int>?,
+        app: Application?,
+    ): EventHandlerResult {
+        composedText = ""
+        if (deleteSurroundingRange != null) {
+            val deleteStart = cursorOffset - deleteSurroundingRange.first
+            val deleteEnd = cursorOffset + deleteSurroundingRange.second
+            this.text.delete(deleteStart, deleteEnd)
+            cursorOffset -= (deleteSurroundingRange.first + deleteSurroundingRange.second)
+        }
+
+        if (commitString != null) {
+            this.text.insert(cursorOffset, commitString)
+            cursorOffset += commitString.length
+        }
+
+        if (preeditStringAndRange != null) {
+            deleteSelection()
+            composedText = preeditStringAndRange.first ?: ""
+            composedTextRange = preeditStringAndRange.second
+        } else {
             composedTextRange = null
         }
-        if (event.deleteSurroundingTextData != null || event.commitStringData != null) {
+
+        if (app != null && textInputEnabled && (deleteSurroundingRange != null || commitString != null)) {
             app.textInputUpdate(createTextInputContext(changeCausedByInputMethod = true))
+        }
+        return EventHandlerResult.Stop
+    }
+
+    fun onModifiersChanged(previousModifiers: Set<KeyModifiers>, newModifiers: Set<KeyModifiers>, app: Application): EventHandlerResult {
+        if (!previousModifiers.contains(KeyModifiers.Shift) && newModifiers.contains(KeyModifiers.Shift)) {
+            val disableTextInput = newModifiers.contains(KeyModifiers.Alt)
+            resetTextInput(app, reenable = !disableTextInput, clear = newModifiers.contains(KeyModifiers.Control))
+            textInputEnabled = !disableTextInput
         }
         return EventHandlerResult.Stop
     }
@@ -1256,7 +1336,45 @@ private class RotatingBallWindow(
     }
 
     fun onTextInput(event: Event.TextInput, app: Application): EventHandlerResult {
-        return editorState.onTextInput(event, app)
+        val preeditStringAndRange = event.preeditStringData?.let { preeditStringData ->
+            val composedText = preeditStringData.text
+            val range = if (preeditStringData.cursorBeginBytePos == -1 && preeditStringData.cursorEndBytePos == -1) {
+                null
+            } else {
+                check(preeditStringData.cursorBeginBytePos >= 0)
+                check(preeditStringData.cursorEndBytePos >= 0)
+
+                composedText?.let { preeditString ->
+                    val startOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorBeginBytePos.toLong())
+                    val endOffset = utf8OffsetToUtf16Offset(preeditString, preeditStringData.cursorEndBytePos.toLong())
+                    Pair(startOffset, endOffset)
+                }
+            }
+            Pair(composedText, range)
+        }
+
+        val deleteSurroundingRange = event.deleteSurroundingTextData?.let {
+            val deleteBefore = utf8OffsetToUtf16Offset(
+                editorState.getSubstringBeforeCursor(it.beforeLengthInBytes).reversed(),
+                it.beforeLengthInBytes.toLong(),
+            )
+            val deleteAfter = utf8OffsetToUtf16Offset(
+                editorState.getSubstringAfterCursor(it.afterLengthInBytes),
+                it.afterLengthInBytes.toLong(),
+            )
+            Pair(deleteBefore, deleteAfter)
+        }
+
+        return editorState.onTextInput(
+            preeditStringAndRange = preeditStringAndRange,
+            commitString = event.commitStringData?.text,
+            deleteSurroundingRange = deleteSurroundingRange,
+            app,
+        )
+    }
+
+    fun onModifiersChanged(previousModifiers: Set<KeyModifiers>, newModifiers: Set<KeyModifiers>, app: Application): EventHandlerResult {
+        return editorState.onModifiersChanged(previousModifiers, newModifiers, app)
     }
 
     fun onMouseEntered(locationInWindow: LogicalPoint): EventHandlerResult {
@@ -1278,7 +1396,9 @@ private class RotatingBallWindow(
         modifiers: Set<KeyModifiers>,
         clipboardHandler: ClipboardHandler,
         xdgDesktopSettings: XdgDesktopSettings,
+        app: Application,
     ): EventHandlerResult {
+        editorState.resetTextInput(app, reenable = true, clear = modifiers.contains(KeyModifiers.Control))
         return windowContainer.onMouseDown(event, window, editorState, modifiers, clipboardHandler, xdgDesktopSettings)
     }
 
@@ -1503,8 +1623,9 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
 
             is Event.KeyUp -> EventHandlerResult.Continue
             is Event.ModifiersChanged -> {
+                val previousModifiers = modifiers
                 modifiers = event.modifiers
-                EventHandlerResult.Stop
+                windows[keyWindowId]?.onModifiersChanged(previousModifiers, event.modifiers, app) ?: EventHandlerResult.Continue
             }
 
             is Event.MouseDown -> windows[event.windowId]?.onMouseDown(
@@ -1512,6 +1633,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
                 modifiers,
                 windowClipboardHandlers[event.windowId]!!,
                 xdgDesktopSettings,
+                app,
             )
                 ?: EventHandlerResult.Continue
 
@@ -1628,7 +1750,7 @@ private class ApplicationState(private val app: Application) : AutoCloseable {
 
 fun main(args: Array<String>) {
     if (args.isNotEmpty()) {
-        Logger.info { "args = $args" }
+        Logger.info { "args = ${args.contentToString()}" }
     }
     Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)

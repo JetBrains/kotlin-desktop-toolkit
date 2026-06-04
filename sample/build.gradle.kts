@@ -114,6 +114,10 @@ tasks.register<JavaExec>("runApplicationMenuSampleMac") {
 }
 
 tasks.register<JavaExec>("runSkikoSampleLinux") {
+    doFirst {
+        // Fix gradle configuration cache remembering old environment variables (https://github.com/gradle/gradle/issues/30790)
+        System.getenv()
+    }
     group = "application"
     description = "Runs example of integration with Skiko on Linux Wayland"
     classpath = sourceSets["main"].runtimeClasspath
@@ -131,6 +135,10 @@ tasks.register<JavaExec>("runSkikoSampleLinux") {
 }
 
 tasks.register<JavaExec>("runSkikoSampleGtk") {
+    doFirst {
+        // Fix gradle configuration cache remembering old environment variables (https://github.com/gradle/gradle/issues/30790)
+        System.getenv()
+    }
     group = "application"
     description = "Runs example of integration with Skiko on GTK"
     classpath = sourceSets["main"].runtimeClasspath

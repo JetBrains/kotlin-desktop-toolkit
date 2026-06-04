@@ -259,7 +259,10 @@ private class EditorState {
         if (selectionRange != null) {
             s.append(", selection: ${selectionRange.first} - ${selectionRange.second}")
         }
-        preedit?.cursorOffset.let {
+        if (!textInputEnabled) {
+            s.append(", IME disabled (press TAB to enable)")
+        }
+        preedit?.cursorOffset?.let {
             s.append(", compose: $it")
         }
         return s.toString()
@@ -407,6 +410,12 @@ private class EditorState {
         modifiers: Set<KeyModifiers>,
         clipboardHandler: ClipboardHandler,
     ): EventHandlerResult {
+        if (preedit != null && event.keyCode.value == KeyCode.Shift_L) {
+            val disableTextInput = modifiers.contains(KeyModifiers.Alt)
+            resetTextInput(window, reenable = !disableTextInput, clear = modifiers.contains(KeyModifiers.Control))
+            textInputEnabled = !disableTextInput
+        }
+
         val shortcutModifiers = modifiers.shortcutModifiers()
         when (shortcutModifiers) {
             setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
@@ -512,6 +521,13 @@ private class EditorState {
             }
 
             else -> when (event.keyCode.value) {
+                KeyCode.Tab -> {
+                    if (!textInputEnabled) {
+                        textInputEnabled = true
+                        window.textInputEnable(createTextInputContext())
+                    }
+                }
+
                 KeyCode.BackSpace -> {
                     if (!deleteSelection() && cursorOffset > 0) {
                         val newCursorOffset = getPreviousGlyphOffset(text.toString(), cursorOffset)
@@ -599,15 +615,27 @@ private class EditorState {
         return EventHandlerResult.Stop
     }
 
-    fun onTextInputAvailability(available: Boolean, window: Window): EventHandlerResult {
-        if (available) {
+    fun onKeyboardFocusChanged(focused: Boolean, window: Window, windowState: WindowState): EventHandlerResult {
+        if (focused && textInputEnabled) {
             window.textInputEnable(createTextInputContext())
-            textInputEnabled = true
         } else {
             window.textInputDisable()
-            textInputEnabled = false
         }
+        onTextChanged(windowState)
         return EventHandlerResult.Stop
+    }
+
+    fun resetTextInput(window: Window, reenable: Boolean = true, clear: Boolean = false) {
+        window.textInputDisable()
+
+        if (clear) {
+            cursorOffset = 0
+            text.clear()
+        }
+
+        if (textInputEnabled && reenable) {
+            window.textInputEnable(createTextInputContext())
+        }
     }
 
     fun onTextInput(event: Event.TextInput, window: Window, windowState: WindowState): EventHandlerResult {
@@ -680,7 +708,7 @@ private class EditorState {
             )
         }
         onTextChanged(windowState)
-        if (preedit != null || event.deleteSurroundingTextData != null || event.commitStringData != null) {
+        if (textInputEnabled && (preedit != null || event.deleteSurroundingTextData != null || event.commitStringData != null)) {
             window.textInputUpdate(createTextInputContext())
         }
         return EventHandlerResult.Stop
@@ -1204,8 +1232,8 @@ private class RotatingBallWindow(
         return EventHandlerResult.Stop
     }
 
-    fun onTextInputAvailability(available: Boolean): EventHandlerResult {
-        return editorState.onTextInputAvailability(available, window)
+    fun onKeyboardFocusChanged(focused: Boolean): EventHandlerResult {
+        return editorState.onKeyboardFocusChanged(focused, window, windowState)
     }
 
     fun onTextInput(event: Event.TextInput): EventHandlerResult {
@@ -1225,6 +1253,7 @@ private class RotatingBallWindow(
         clipboardHandler: ClipboardHandler,
         desktopSettings: DesktopSettings,
     ): EventHandlerResult {
+        editorState.resetTextInput(window, reenable = true, clear = modifiers.contains(KeyModifiers.Control))
         return windowContainer.onMouseDown(event, editorState, modifiers, clipboardHandler, desktopSettings, windowState)
     }
 }
@@ -1457,14 +1486,14 @@ private class ApplicationState(
             is Event.TextInput -> windows[event.windowId]?.onTextInput(event) ?: EventHandlerResult.Continue
             is Event.WindowKeyboardEnter -> {
                 keyWindowId = event.windowId
-                windows[event.windowId]?.onTextInputAvailability(true) ?: EventHandlerResult.Continue
+                windows[event.windowId]?.onKeyboardFocusChanged(true) ?: EventHandlerResult.Continue
             }
 
             is Event.WindowKeyboardLeave -> {
                 if (keyWindowId == event.windowId) {
                     keyWindowId = null
                 }
-                windows[event.windowId]?.onTextInputAvailability(false) ?: EventHandlerResult.Continue
+                windows[event.windowId]?.onKeyboardFocusChanged(false) ?: EventHandlerResult.Continue
             }
 
             is Event.WindowScreenChange -> windows[event.windowId]?.onScreenChange(event, app) ?: EventHandlerResult.Continue
@@ -1591,7 +1620,7 @@ private class ApplicationState(
 
 fun main(args: Array<String>) {
     if (args.isNotEmpty()) {
-        Logger.info { "args = $args" }
+        Logger.info { "args = ${args.contentToString()}" }
     }
     Logger.info { runtimeInfo() }
     KotlinDesktopToolkit.init(consoleLogLevel = LogLevel.Debug)

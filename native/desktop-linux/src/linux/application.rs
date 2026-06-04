@@ -343,7 +343,6 @@ impl Application {
     pub fn primary_selection_put(&mut self, mime_types: MimeTypes) {
         if mime_types.val.is_empty() {
             self.state.primary_selection_source = None;
-            warn!("application_primary_selection_put: None");
             return;
         }
         let Some(device) = self.state.primary_selection_device.as_ref() else {
