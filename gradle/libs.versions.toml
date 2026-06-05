@@ -2,8 +2,8 @@
 # https://docs.gradle.org/current/userguide/platforms.html#sub::toml-dependencies-format
 
 [versions]
-junit-jupiter-engine = "5.13.4"
-jpackage = "1.7.3"
+junit-jupiter-engine = "5.14.4"
+jpackage = "1.7.6"
 
 [libraries]
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit-jupiter-engine" }

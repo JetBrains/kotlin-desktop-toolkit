@@ -12,8 +12,8 @@ pluginManagement {
 
 plugins {
     // Apply the foojay-resolver plugin to allow automatic download of JDKs
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
-    id("org.jlleitschuh.gradle.ktlint") version "14.0.1" apply false
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
     id("org.jetbrains.kotlin.jvm") version "2.3.20" apply false
 }
 
