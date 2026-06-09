@@ -39,9 +39,7 @@ pub extern "C" fn application_is_dispatcher_thread(app_ptr: AppPtr) -> bool {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn application_dispatcher_invoke(app_ptr: AppPtr, callback: extern "C" fn()) -> bool {
-    with_app(&app_ptr, "application_dispatcher_invoke", |app| {
-        app.invoke_on_dispatcher_queue(callback)
-    })
+    with_app(&app_ptr, "application_dispatcher_invoke", |app| app.invoke_on_dispatcher(callback))
 }
 
 #[unsafe(no_mangle)]
