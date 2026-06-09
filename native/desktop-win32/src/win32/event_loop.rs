@@ -5,7 +5,24 @@ use std::{
 
 use desktop_common::ffi_utils::RustAllocatedStrPtr;
 
+use super::{
+    appearance::{Appearance, HighContrast},
+    events::{
+        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
+        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
+        SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
+        WindowScaleChangedEvent, WindowTitleChangedEvent,
+    },
+    geometry::{LogicalPoint, PhysicalPoint, PhysicalSize},
+    keyboard::{PhysicalKeyStatus, VirtualKey},
+    pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo, PointerState},
+    screen,
+    strings::copy_from_wide_string,
+    utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
+    window::{PendingCaptionPress, Window},
+};
 use anyhow::Context;
+use windows::Win32::UI::WindowsAndMessaging::HTTOP;
 use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::{
@@ -15,7 +32,7 @@ use windows::Win32::{
     UI::{
         HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
         Input::{
-            KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture},
+            KeyboardAndMouse::{GetAsyncKeyState, GetCapture, ReleaseCapture, SetCapture, VK_LBUTTON},
             Pointer::EnableMouseInPointer,
         },
         Shell::{ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
@@ -31,22 +48,6 @@ use windows::Win32::{
             WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
-};
-use windows::Win32::UI::WindowsAndMessaging::HTTOP;
-use super::{
-    appearance::{Appearance, HighContrast},
-    events::{
-        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
-        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
-        SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
-        WindowScaleChangedEvent, WindowTitleChangedEvent,
-    },
-    geometry::{PhysicalPoint, PhysicalSize},
-    keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButtonChangeKind, PointerClickCounter, PointerInfo},
-    strings::copy_from_wide_string,
-    utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
-    window::Window,
 };
 
 thread_local! {
@@ -142,7 +143,7 @@ impl EventLoop {
             // Pointer event end
             WM_CANCELMODE => on_cancelmode(window),
 
-            WM_CAPTURECHANGED => on_capturechanged(window),
+            WM_CAPTURECHANGED => on_capturechanged(self, window),
 
             WM_ACTIVATE => on_activate(self, window, wparam),
 
@@ -563,7 +564,7 @@ fn on_ncmouseleave(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lpar
 /// consumed-press path (`on_pointerdown` → `SetCapture`, release drained in
 /// `on_pointerup` as the capture-redirected client variant) handles the common
 /// case; this arm is the fallback for presses userspace left unhandled.
-fn on_nclbuttondown(window: &Window, wparam: WPARAM, _lparam: LPARAM) -> Option<LRESULT> {
+fn on_nclbuttondown(window: &Window, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
     if !window.has_custom_title_bar() {
         return None;
     }
@@ -578,10 +579,37 @@ fn on_nclbuttondown(window: &Window, wparam: WPARAM, _lparam: LPARAM) -> Option<
     #[allow(clippy::cast_possible_truncation)]
     let ht = wparam.0 as u32;
     if matches!(ht, HTMINBUTTON | HTMAXBUTTON | HTCLOSE) {
-        Some(LRESULT(0))
-    } else {
-        None
+        return Some(LRESULT(0));
     }
+
+    if matches!(ht, HTCAPTION) {
+        // Everything else (HTCAPTION, the resize borders, …) is handed to `DefWindowProc`, which runs
+        // the move/resize modal loop. If that loop ends without committing to a move (a short,
+        // stationary caption click), it swallows the terminating `WM_*POINTERUP` and userspace never
+        // sees `PointerUp`. Record this left press so `on_capturechanged` can synthesise the matching
+        // release.
+        //
+        // `WM_NCLBUTTONDOWN` is the right capture point — not `on_pointerdown` — because it is also
+        // synthesised for a chorded left press (left pressed while another button is already held),
+        // which arrives as `WM_NCPOINTERUPDATE` and so never reaches `on_pointerdown`.
+        let location_on_screen = PhysicalPoint::new(GET_X_LPARAM!(lparam.0), GET_Y_LPARAM!(lparam.0));
+        let location_in_window = match screen::screen_to_client(window, location_on_screen) {
+            Ok(client) => LogicalPoint::from_physical(client.x.0, client.y.0, window.get_scale()),
+            Err(err) => {
+                // ScreenToClient effectively never fails for a live window; fall back to the screen
+                // point so we still deliver a balanced (if slightly mislocated) release.
+                log::warn!("screen_to_client for synthetic caption release failed: {err}");
+                LogicalPoint::from_physical(location_on_screen.x.0, location_on_screen.y.0, window.get_scale())
+            }
+        };
+        window.set_pending_caption_press(Some(PendingCaptionPress {
+            button: PointerButton::Left,
+            location_in_window,
+            location_on_screen,
+            timestamp: Timestamp::from_millis(unsafe { GetMessageTime() }.cast_unsigned().into()),
+        }));
+    }
+    None
 }
 
 /// Title-bar right-click → system menu.
@@ -840,6 +868,9 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
     // `WM_POINTERUP` is the last-button-up / contact-end message, so this is where any capture we
     // took for the gesture is dropped (the client variant the capture redirected it into).
     release_self_captured_pointer(window);
+    // A real release was delivered (e.g. a committed caption drag), so there is nothing left for
+    // `on_capturechanged` to synthesise.
+    window.set_pending_caption_press(None);
     event_loop.handle_event(window, Event::PointerUp(event))
 }
 
@@ -848,11 +879,36 @@ fn on_pointercapturechanged(_window: &Window, _wparam: WPARAM) -> Option<LRESULT
     None
 }
 
-fn on_capturechanged(window: &Window) -> Option<LRESULT> {
+fn on_capturechanged(event_loop: &EventLoop, window: &Window) -> Option<LRESULT> {
     log::debug!("on_capturechanged");
     // We've lost the mouse capture (released by us, or stolen). Clear our ownership flag so
     // `on_pointerup` won't later mistake someone else's capture for ours.
     window.set_self_captured_pointer(false);
+
+    // If an unconsumed non-client press is still pending and the left button is already physically
+    // up, `DefWindowProc`'s move/resize modal loop is tearing down *without* having delivered the
+    // terminating `WM_*POINTERUP` — a short, stationary caption click. Synthesise that release from
+    // the recorded press (no movement happened, so the press location is accurate) so userspace
+    // sees a balanced down/up.
+    //
+    // When the button is still down, this is the capture `DefWindowProc` grabbed to *start* a real
+    // drag: leave the press pending; the genuine `WM_*POINTERUP` will arrive and clear it in
+    // `on_pointerup`.
+    if let Some(press) = window.pending_caption_press() {
+        let left_button_down = unsafe { GetAsyncKeyState(i32::from(VK_LBUTTON.0)) }.cast_unsigned() & 0x8000 != 0;
+        if !left_button_down {
+            window.set_pending_caption_press(None);
+            let event = PointerUpEvent {
+                button: press.button,
+                location_in_window: press.location_in_window,
+                location_on_screen: press.location_on_screen,
+                non_client_area: true,
+                state: PointerState::from_async_key_state(),
+                timestamp: press.timestamp,
+            };
+            event_loop.handle_event(window, Event::PointerUp(event));
+        }
+    }
     None
 }
 

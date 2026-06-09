@@ -4,7 +4,10 @@ use windows::Win32::{
     UI::{
         HiDpi::GetDpiForWindow,
         Input::{
-            KeyboardAndMouse::GetDoubleClickTime,
+            KeyboardAndMouse::{
+                GetAsyncKeyState, GetDoubleClickTime, VIRTUAL_KEY, VK_CONTROL, VK_LBUTTON, VK_MBUTTON, VK_RBUTTON, VK_SHIFT, VK_XBUTTON1,
+                VK_XBUTTON2,
+            },
             Pointer::{
                 GetPointerInfo, GetPointerPenInfo, GetPointerTouchInfo, GetPointerType, POINTER_CHANGE_FIFTHBUTTON_DOWN,
                 POINTER_CHANGE_FIFTHBUTTON_UP, POINTER_CHANGE_FIRSTBUTTON_DOWN, POINTER_CHANGE_FIRSTBUTTON_UP,
@@ -38,6 +41,52 @@ pub(crate) enum PointerInfo {
 pub struct PointerState {
     pressed_buttons: PointerButtons,
     modifiers: PointerModifiers,
+}
+
+impl PointerState {
+    pub(crate) fn from_async_key_state() -> Self {
+        // `POINTER_MOD_*` modifier-key-states values; only Shift/Ctrl appear in a pointer
+        // message's `dwKeyStates`. See `Pointer.kt` for the matching Kotlin-side constants.
+        const POINTER_MOD_SHIFT: u32 = 0x0004;
+        const POINTER_MOD_CTRL: u32 = 0x0008;
+
+        // The high bit of `GetAsyncKeyState` is set while the key/button is physically down.
+        // `VK_LBUTTON`/`VK_RBUTTON` honour the system primary/secondary swap, matching the pointer
+        // flags that populate a real `PointerState`.
+        fn is_down(vk: VIRTUAL_KEY) -> bool {
+            unsafe { GetAsyncKeyState(i32::from(vk.0)) }.cast_unsigned() & 0x8000 != 0
+        }
+
+        let mut pressed_buttons = 0_u32;
+        if is_down(VK_LBUTTON) {
+            pressed_buttons |= PointerButton::Left as u32;
+        }
+        if is_down(VK_RBUTTON) {
+            pressed_buttons |= PointerButton::Right as u32;
+        }
+        if is_down(VK_MBUTTON) {
+            pressed_buttons |= PointerButton::Middle as u32;
+        }
+        if is_down(VK_XBUTTON1) {
+            pressed_buttons |= PointerButton::XButton1 as u32;
+        }
+        if is_down(VK_XBUTTON2) {
+            pressed_buttons |= PointerButton::XButton2 as u32;
+        }
+
+        let mut modifiers = 0_u32;
+        if is_down(VK_SHIFT) {
+            modifiers |= POINTER_MOD_SHIFT;
+        }
+        if is_down(VK_CONTROL) {
+            modifiers |= POINTER_MOD_CTRL;
+        }
+
+        Self {
+            pressed_buttons: PointerButtons(pressed_buttons),
+            modifiers: PointerModifiers(modifiers),
+        }
+    }
 }
 
 #[repr(C)]
