@@ -43,8 +43,9 @@ use super::{
     appearance::{self, Appearance},
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
+    events::Timestamp,
     geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint},
-    pointer::PointerClickCounter,
+    pointer::{PointerButton, PointerClickCounter},
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
     system_menu::{seed_system_menu, sync_system_menu_state},
@@ -103,6 +104,18 @@ impl DpiMetrics {
     }
 }
 
+/// An unconsumed left-button non-client press (caption band), recorded so we can
+/// synthesise the matching `PointerUp` if `DefWindowProc`'s move/resize modal loop swallows it.
+/// A short, stationary caption click never commits to a move, so the loop tears down without ever
+/// dispatching the terminating `WM_*POINTERUP` — see `on_capturechanged`.
+#[derive(Clone, Copy)]
+pub(crate) struct PendingCaptionPress {
+    pub button: PointerButton,
+    pub location_in_window: LogicalPoint,
+    pub location_on_screen: PhysicalPoint,
+    pub timestamp: Timestamp,
+}
+
 #[allow(clippy::struct_field_names)]
 pub struct Window {
     id: WindowId,
@@ -122,6 +135,10 @@ pub struct Window {
     /// one `DefWindowProc`'s move/resize modal loop sets for itself (releasing that would
     /// cancel the drag and snap the window back).
     self_captured_pointer: AtomicBool,
+    /// An unconsumed non-client left press awaiting its (real or synthesised) `PointerUp`.
+    /// Set in `on_pointerdown`, cleared in `on_pointerup` or by the synthetic release in
+    /// `on_capturechanged`.
+    pending_caption_press: Cell<Option<PendingCaptionPress>>,
     cached_dpi_metrics: Cell<DpiMetrics>,
     system_menu: Cell<HMENU>,
     immersive_dark: Cell<bool>,
@@ -160,6 +177,7 @@ impl Window {
             style: RefCell::default(),
             pointer_in_window: AtomicBool::new(false),
             self_captured_pointer: AtomicBool::new(false),
+            pending_caption_press: Cell::new(None),
             cached_dpi_metrics: Cell::new(DpiMetrics::for_dpi(USER_DEFAULT_SCREEN_DPI)),
             system_menu: Cell::new(HMENU::default()),
             immersive_dark: Cell::new(false),
@@ -599,6 +617,16 @@ impl Window {
     #[inline]
     pub(crate) fn take_self_captured_pointer(&self) -> bool {
         self.self_captured_pointer.swap(false, Ordering::Relaxed)
+    }
+
+    #[inline]
+    pub(crate) fn set_pending_caption_press(&self, press: Option<PendingCaptionPress>) {
+        self.pending_caption_press.set(press);
+    }
+
+    #[inline]
+    pub(crate) const fn pending_caption_press(&self) -> Option<PendingCaptionPress> {
+        self.pending_caption_press.get()
     }
 
     #[inline]
