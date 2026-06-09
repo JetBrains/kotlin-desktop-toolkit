@@ -2,7 +2,7 @@ use std::{rc::Rc, sync::Arc};
 
 use windows::{
     Foundation::TypedEventHandler,
-    System::{DispatcherQueueController, DispatcherQueueHandler},
+    System::DispatcherQueueController,
     UI::Composition::Core::CompositorController,
     Win32::{
         System::{
@@ -15,7 +15,9 @@ use windows::{
 };
 
 use super::{
+    composition,
     compositor_driver::CompositorDriver,
+    dispatcher::Dispatcher,
     event_loop::EventLoop,
     events::EventHandler,
     renderer_angle::AngleDevice,
@@ -25,6 +27,7 @@ use super::{
 pub struct Application {
     compositor_driver: Arc<CompositorDriver>,
     dispatcher_queue_controller: DispatcherQueueController,
+    dispatcher: Dispatcher,
     event_loop: Rc<EventLoop>,
     ui_thread_id: u32,
 }
@@ -37,12 +40,14 @@ impl Application {
 
     pub fn new(event_handler: EventHandler) -> anyhow::Result<Self> {
         let dispatcher_queue_controller = create_dispatcher_queue()?;
+        let dispatcher = Dispatcher::new()?;
         let event_loop = EventLoop::new(event_handler)?;
         let compositor_controller = CompositorController::new()?;
         let compositor_driver = CompositorDriver::new(&compositor_controller, dispatcher_queue_controller.DispatcherQueue()?)?;
         Ok(Self {
             compositor_driver,
             dispatcher_queue_controller,
+            dispatcher,
             event_loop: Rc::new(event_loop),
             // SAFETY: GetCurrentThreadId has no preconditions.
             // INVARIANT: Application::new runs on the UI thread; ui_thread_id is the comparand for is_dispatcher_thread.
@@ -50,15 +55,8 @@ impl Application {
         })
     }
 
-    pub fn invoke_on_dispatcher_queue(&self, callback: extern "C" fn()) -> anyhow::Result<bool> {
-        self.dispatcher_queue_controller
-            .DispatcherQueue()?
-            .TryEnqueue(&DispatcherQueueHandler::new(move || {
-                log::trace!("Application dispatcher invoke");
-                callback();
-                Ok(())
-            }))
-            .map_err(Into::into)
+    pub fn invoke_on_dispatcher(&self, callback: extern "C" fn()) -> anyhow::Result<bool> {
+        Ok(self.dispatcher.dispatch(callback))
     }
 
     #[must_use]
@@ -78,7 +76,8 @@ impl Application {
 
     pub fn shutdown(&self) -> anyhow::Result<()> {
         self.compositor_driver.shutdown();
-        super::composition::release_composition_context();
+        composition::release_composition_context();
+        self.dispatcher.shutdown();
         let _ = self.dispatcher_queue_controller.ShutdownQueueAsync()?;
         Ok(())
     }
