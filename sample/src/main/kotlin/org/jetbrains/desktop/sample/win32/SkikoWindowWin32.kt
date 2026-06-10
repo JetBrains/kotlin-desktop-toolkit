@@ -242,15 +242,6 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
             }
 
             is Event.PointerUpdated -> with(event) {
-                // The Win11 Snap Layouts flyover can swallow a caption-button release (the up lands on
-                // the flyover window, so we never get PointerUp). If a press is still recorded but the
-                // left button is no longer down, that release was lost — abandon the press so the button
-                // doesn't stay stuck "pressed". Do not activate it: the pointer is not over the button.
-                if (captionButtons.pressed != null && !state.pressedButtons.hasFlag(PointerButton.Left)) {
-                    if (captionButtons.cancelPress()) {
-                        window.requestRedraw()
-                    }
-                }
                 val clientSize = window.getClientSize()
                 if (captionButtons.onPointerMove(locationInWindow, clientSize.width, captionButtonModel())) {
                     window.requestRedraw()
