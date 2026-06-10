@@ -7,6 +7,7 @@ use bitflag_attr::bitflag;
 use core::f64;
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use desktop_common::logger::PanicDefault;
+use std::ffi::c_int;
 
 pub type EventHandler = extern "C" fn(&Event) -> bool;
 
@@ -37,7 +38,7 @@ impl PanicDefault for RequestId {
 pub struct MouseButton(pub u32);
 
 #[repr(C)]
-#[bitflag(u8)]
+#[bitflag(c_int)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum KeyModifiers {
     /// The "control" key
