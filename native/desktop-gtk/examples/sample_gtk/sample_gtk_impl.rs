@@ -626,6 +626,17 @@ extern "C" fn event_handler(event: &Event) -> bool {
 }
 
 extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDragAndDropQueryResponse {
+    let mime_types = data
+        .mime_types
+        .as_slice()
+        .unwrap()
+        .iter()
+        .map(|e| e.get("DragAndDropQueryData::mime_types").unwrap())
+        .collect::<Vec<_>>();
+    debug!(
+        "query_drag_and_drop_target: actions={:b}, mime_types={mime_types:?}",
+        data.actions.0
+    );
     let inset_height = with_borrow_mut_state(|state| {
         state.with_mut_window_state(data.window_id, |window_state| {
             window_state.drag_and_drop_target = true;
@@ -633,7 +644,7 @@ extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDrag
         })
     });
     if data.location_in_window.x.0 < DRAG_AND_DROP_LEFT_OF && data.location_in_window.y.0 > inset_height.unwrap_or_default() {
-        const SUPPORTED_ACTIONS_PER_MIME: [FfiSupportedActionsForMime; 2] = [
+        const SUPPORTED_ACTIONS_PER_MIME: [FfiSupportedActionsForMime; 4] = [
             FfiSupportedActionsForMime {
                 supported_mime_type: BorrowedUtf8::new(URI_LIST_MIME_TYPE),
                 supported_actions: DragAndDropActions(DragAndDropAction::Copy as u32),
@@ -641,6 +652,16 @@ extern "C" fn query_drag_and_drop_target(data: &DragAndDropQueryData) -> FfiDrag
             },
             FfiSupportedActionsForMime {
                 supported_mime_type: BorrowedUtf8::new(TEXT_MIME_TYPE),
+                supported_actions: DragAndDropActions(DragAndDropAction::Move as u32 | DragAndDropAction::Copy as u32),
+                preferred_action: DragAndDropAction::Copy,
+            },
+            FfiSupportedActionsForMime {
+                supported_mime_type: BorrowedUtf8::new("UTF8_STRING"),
+                supported_actions: DragAndDropActions(DragAndDropAction::Move as u32 | DragAndDropAction::Copy as u32),
+                preferred_action: DragAndDropAction::Copy,
+            },
+            FfiSupportedActionsForMime {
+                supported_mime_type: BorrowedUtf8::new("TEXT"),
                 supported_actions: DragAndDropActions(DragAndDropAction::Move as u32 | DragAndDropAction::Copy as u32),
                 preferred_action: DragAndDropAction::Copy,
             },
