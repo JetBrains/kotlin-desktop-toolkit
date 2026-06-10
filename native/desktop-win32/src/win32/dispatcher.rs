@@ -114,6 +114,11 @@ extern "system" fn dispatcher_wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lpar
 impl Dispatcher {
     pub fn new() -> anyhow::Result<Self> {
         static WNDCLASS_INIT: OnceLock<u16> = OnceLock::new();
+
+        // RegisterWindowMessage returns 0 only on failure; refuse to run rather than fall
+        // back to id 0 (WM_NULL). This first call also performs the one-time registration.
+        anyhow::ensure!(wake_message() != 0, windows_core::Error::from_thread());
+
         let wndclass_size = size_of::<WNDCLASSEXW>().try_into()?;
         let _ = WNDCLASS_INIT.get_or_init(|| {
             let wndclass = WNDCLASSEXW {
