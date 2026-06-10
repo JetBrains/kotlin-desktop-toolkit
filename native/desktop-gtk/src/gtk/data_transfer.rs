@@ -7,7 +7,7 @@ use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use gtk4::gio::prelude::InputStreamExtManual;
 use gtk4::prelude::{IsA, WidgetExt};
 use gtk4::{gdk as gdk4, gio, glib};
-use log::{debug, warn};
+use log::{debug, trace, warn};
 
 #[derive(Debug)]
 pub struct DragOfferMimetypeAndActions {
@@ -96,7 +96,7 @@ pub fn get_drag_offer_actions(
     window_id: WindowId,
 ) -> DragOfferMimetypeAndActions {
     let mime_types = drop.formats().mime_types();
-    // debug!("get_drag_offer_actions: {location_in_window:?}, mime_types={mime_types:?}");
+    trace!("get_drag_offer_actions: {location_in_window:?}, mime_types={mime_types:?}");
 
     let ffi_mime_types = mime_types.iter().map(|s| BorrowedUtf8::new(s)).collect::<Vec<_>>();
     let drag_and_drop_query_data = DragAndDropQueryData {
@@ -110,7 +110,7 @@ pub fn get_drag_offer_actions(
         let supported_mime_with_actions = target_info
             .iter()
             .find(|&e| mime_types.iter().any(|s| s == e.get_supported_mime_type().unwrap()));
-        debug!("query_drag_and_drop_target -> {target_info:?}, supported_mime_with_actions={supported_mime_with_actions:?}");
+        trace!("query_drag_and_drop_target -> {target_info:?}, supported_mime_with_actions={supported_mime_with_actions:?}");
 
         if let Some(v) = supported_mime_with_actions {
             DragOfferMimetypeAndActions {
@@ -153,7 +153,7 @@ pub fn handle_drop_target_drop(
     };
     let mime_type_and_actions = get_drag_offer_actions(query_drag_and_drop_target, drop, location_in_window, window_id);
     let Some(mime_type) = mime_type_and_actions.mime_type.as_ref() else {
-        debug!("DropStart: no matching MIME type");
+        debug!("DropTarget::drop: no matching MIME type");
         send_event(
             event_handler,
             DropPerformedEvent {
@@ -168,6 +168,10 @@ pub fn handle_drop_target_drop(
     };
 
     drop.status(mime_type_and_actions.supported_actions, mime_type_and_actions.preferred_action);
+    debug!(
+        "DropTarget::drop: selected mime_type={mime_type}, supported_actions={:?}, preferred_action={:?}",
+        mime_type_and_actions.supported_actions, mime_type_and_actions.preferred_action
+    );
 
     let gtk_action = get_best_dnd_action(&mime_type_and_actions, drop.actions());
     let drop_clone = drop.clone();
@@ -192,7 +196,7 @@ pub fn handle_drop_target_drop(
                 });
             }
             Err(e) => {
-                warn!("DropStart: failed receiving data offer: {e}");
+                warn!("DropTarget::drop: failed receiving data offer: {e}");
                 send_event(
                     event_handler,
                     DropPerformedEvent {
@@ -215,11 +219,11 @@ pub fn set_drag_and_drop_event_handlers(
     event_handler: EventHandler,
     query_drag_and_drop_target: QueryDragAndDropTarget,
 ) {
-    let drop_target = gtk4::DropTargetAsync::new(None, gdk4::DragAction::COPY);
+    let drop_target = gtk4::DropTargetAsync::new(None, gdk4::DragAction::COPY | gdk4::DragAction::MOVE);
+
     drop_target.connect_accept(move |drop_target, drop| {
         let mime_types = drop.formats().mime_types();
         debug!("DropTarget::accept: {mime_types:?}");
-        drop_target.set_formats(Some(&drop.formats()));
         drop_target.set_actions(drop.actions());
         true
     });
@@ -227,18 +231,21 @@ pub fn set_drag_and_drop_event_handlers(
     // Don't use "drag-enter" because it reports wrong coordinates (0, 0)
     // https://github.com/GNOME/gtk/blob/9d31fd6429e8287766094b8ebaf4d102c2b851ec/gdk/gdkdrop.c#L943
 
-    drop_target.connect_drag_motion(move |_drop_target, drop, x, y| {
-        debug!("DropTarget::drag_motion: x={x}, y={y}");
+    drop_target.connect_drag_motion(move |drop_target, drop, x, y| {
+        trace!("DropTarget::drag_motion: x={x}, y={y}");
         let mime_type_and_actions = get_drag_offer_actions(query_drag_and_drop_target, drop, LogicalPoint::new(x, y), window_id);
-        drop.status(mime_type_and_actions.supported_actions, mime_type_and_actions.preferred_action);
+        drop_target.set_actions(mime_type_and_actions.supported_actions);
         mime_type_and_actions.preferred_action
     });
+
     drop_target.connect_drag_leave(move |_drop_target, _drop| {
         send_event(event_handler, DragAndDropLeaveEvent { window_id });
     });
+
     drop_target.connect_drop(move |_drop_target, drop, x, y| {
         debug!("DropTarget::drop: x={x}, y={y}");
         handle_drop_target_drop(event_handler, window_id, query_drag_and_drop_target, drop, x, y)
     });
+
     widget.add_controller(drop_target);
 }

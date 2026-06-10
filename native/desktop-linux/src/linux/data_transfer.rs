@@ -16,7 +16,7 @@ use crate::linux::{
 };
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
-use log::{debug, warn};
+use log::{debug, trace, warn};
 use smithay_client_toolkit::{
     data_device_manager::{
         self, WritePipe,
@@ -130,7 +130,7 @@ impl ApplicationState {
         window_id: WindowId,
     ) -> DragOfferMimetypeAndActions {
         drag_offer.with_mime_types(|mime_types| {
-            debug!("Drop handler: {location_in_window:?}, mime_types={mime_types:?}");
+            trace!("Drop handler: {location_in_window:?}, mime_types={mime_types:?}");
 
             let ffi_mime_types = mime_types.iter().map(|s| BorrowedUtf8::new(s)).collect::<Vec<_>>();
             let drag_and_drop_query_data = DragAndDropQueryData {
@@ -144,7 +144,7 @@ impl ApplicationState {
                     .iter()
                     .find(|&e| mime_types.iter().any(|s| s == e.get_supported_mime_type().unwrap()));
 
-                debug!("query_drag_and_drop_target -> {target_info:?}, supported_mime_with_actions={supported_mime_with_actions:?}");
+                trace!("query_drag_and_drop_target -> {target_info:?}, supported_mime_with_actions={supported_mime_with_actions:?}");
 
                 if let Some(v) = supported_mime_with_actions {
                     DragOfferMimetypeAndActions {
@@ -194,7 +194,7 @@ impl DataDeviceHandler for ApplicationState {
     }
 
     fn motion(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, data_device: &WlDataDevice, x: f64, y: f64) {
-        debug!("DataDeviceHandler::motion: {x}x{y}");
+        trace!("DataDeviceHandler::motion: {x}x{y}");
         self.current_drag_target_window_id = self.on_drag_enter_or_move(data_device, x, y, None);
     }
 
