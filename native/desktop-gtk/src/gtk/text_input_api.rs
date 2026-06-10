@@ -1,8 +1,9 @@
 use crate::gtk::geometry::LogicalRect;
 use bitflag_attr::bitflag;
+use std::ffi::c_int;
 
 #[repr(C)]
-#[bitflag(u32)]
+#[bitflag(c_int)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TextInputContextHints {
     Spellcheck = 1 << 0,

@@ -132,24 +132,28 @@ internal fun PhysicalSize.Companion.fromNative(s: MemorySegment) = PhysicalSize(
     height = NativePhysicalSize.height(s),
 )
 
+private fun bitmaskContains(mask: Int, value: Int): Boolean {
+    return mask and value == value
+}
+
 private fun keyModifiersFromNative(nativeModifiers: Int): Set<KeyModifiers> {
     val modifiers = buildSet {
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_Ctrl() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_Ctrl())) {
             add(KeyModifiers.Control)
         }
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_Alt() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_Alt())) {
             add(KeyModifiers.Alt)
         }
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_Shift() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_Shift())) {
             add(KeyModifiers.Shift)
         }
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_CapsLock() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_CapsLock())) {
             add(KeyModifiers.CapsLock)
         }
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_Logo() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_Logo())) {
             add(KeyModifiers.Logo)
         }
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_NumLock() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_NumLock())) {
             add(KeyModifiers.NumLock)
         }
     }
@@ -553,10 +557,10 @@ internal fun Set<DragAndDropAction>.toNativeDragAndDropActions(): Int {
 
 internal fun dragAndDropActionsFromNative(raw: Int): Set<DragAndDropAction> {
     return buildSet {
-        if (raw and desktop_gtk_h.NativeDragAndDropAction_Copy() > 0) {
+        if (bitmaskContains(raw, desktop_gtk_h.NativeDragAndDropAction_Copy())) {
             add(DragAndDropAction.Copy)
         }
-        if (raw and desktop_gtk_h.NativeDragAndDropAction_Move() > 0) {
+        if (bitmaskContains(raw, desktop_gtk_h.NativeDragAndDropAction_Move())) {
             add(DragAndDropAction.Move)
         }
     }
