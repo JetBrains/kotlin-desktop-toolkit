@@ -244,6 +244,8 @@ public sealed class Event {
         val scrollingDeltaX: LogicalPixels,
         val scrollingDeltaY: LogicalPixels,
         val timestamp: Timestamp,
+        val isStop: Boolean,
+        val isSmoothScroll: Boolean,
     ) : Event()
 
     /** The application must proceed by evaluating the changes in the following order:

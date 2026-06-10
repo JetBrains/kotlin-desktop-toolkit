@@ -9,6 +9,20 @@ public value class MouseButton internal constructor(public val value: Int) {
         public val RIGHT: MouseButton = MouseButton(3)
 
         public val MIDDLE: MouseButton = MouseButton(2)
+
+        /** The fourth non-scroll button, which is often used as "back" in web browsers. */
+        public val SIDE: MouseButton = MouseButton(7)
+
+        /** The fifth non-scroll button, which is often used as "forward" in web browsers. */
+        public val EXTRA: MouseButton = MouseButton(8)
+
+        /** @see [EXTRA] */
+        public val FORWARD: MouseButton = MouseButton(9)
+
+        /** @see [SIDE] */
+        public val BACK: MouseButton = MouseButton(10)
+
+        public val TASK: MouseButton = MouseButton(11)
     }
 
     override fun toString(): String {

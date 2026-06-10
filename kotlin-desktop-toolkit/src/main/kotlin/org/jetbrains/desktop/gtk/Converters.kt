@@ -834,6 +834,8 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 scrollingDeltaX = NativeScrollWheelEvent.scroll_delta_x(nativeEvent).toFloat(),
                 scrollingDeltaY = NativeScrollWheelEvent.scroll_delta_y(nativeEvent).toFloat(),
                 timestamp = Timestamp.fromNative(NativeScrollWheelEvent.timestamp(nativeEvent)),
+                isStop = NativeScrollWheelEvent.is_stop(nativeEvent),
+                isSmoothScroll = NativeScrollWheelEvent.is_smooth_scroll(nativeEvent),
             )
         }
 
