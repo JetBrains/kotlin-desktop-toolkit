@@ -51,6 +51,12 @@ pub enum PointerButton {
     XButton2 = 1 << 4,
 }
 
+impl PointerButton {
+    /// Every real (non-`None`) button. Used to walk a pressed-button bitmask when
+    /// reconciling tracked state against the OS-reported pressed set.
+    pub(crate) const ALL: [Self; 5] = [Self::Left, Self::Right, Self::Middle, Self::XButton1, Self::XButton2];
+}
+
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
 pub struct PointerButtons(u32);
@@ -72,6 +78,16 @@ pub enum PointerButtonChangeKind {
     Other,
     Pressed,
     Released,
+}
+
+impl PointerState {
+    /// Bitmask of buttons the OS reports as currently pressed for this message.
+    /// Bits line up with `PointerButton as u32`, so it can be compared directly
+    /// against the set we track in `Window`.
+    #[inline]
+    pub(crate) const fn pressed_buttons_mask(self) -> u32 {
+        self.pressed_buttons.0
+    }
 }
 
 impl PointerButtonChange {

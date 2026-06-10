@@ -44,7 +44,7 @@ use super::{
     cursor::{Cursor, CursorIcon},
     event_loop::EventLoop,
     geometry::{LogicalPoint, LogicalRect, LogicalSize, PhysicalPoint},
-    pointer::PointerClickCounter,
+    pointer::{PointerButton, PointerClickCounter},
     screen::{self, ScreenInfo},
     strings::copy_from_utf8_string,
     system_menu::{seed_system_menu, sync_system_menu_state},
@@ -122,6 +122,12 @@ pub struct Window {
     /// one `DefWindowProc`'s move/resize modal loop sets for itself (releasing that would
     /// cancel the drag and snap the window back).
     self_captured_pointer: AtomicBool,
+    /// Bitmask (bits match `PointerButton as u32`) of buttons we've delivered a `PointerDown`
+    /// for but not yet a `PointerUp`. Windows occasionally drops a `WM_POINTERUP` (e.g. a
+    /// release over a caption button), leaving the button stuck "pressed". On the next pointer
+    /// update we reconcile this against the OS-reported pressed set and synthesise the missing
+    /// `PointerUp` for any button that's no longer down.
+    pressed_pointer_buttons: Cell<u32>,
     cached_dpi_metrics: Cell<DpiMetrics>,
     system_menu: Cell<HMENU>,
     immersive_dark: Cell<bool>,
@@ -160,6 +166,7 @@ impl Window {
             style: RefCell::default(),
             pointer_in_window: AtomicBool::new(false),
             self_captured_pointer: AtomicBool::new(false),
+            pressed_pointer_buttons: Cell::new(0),
             cached_dpi_metrics: Cell::new(DpiMetrics::for_dpi(USER_DEFAULT_SCREEN_DPI)),
             system_menu: Cell::new(HMENU::default()),
             immersive_dark: Cell::new(false),
@@ -599,6 +606,22 @@ impl Window {
     #[inline]
     pub(crate) fn take_self_captured_pointer(&self) -> bool {
         self.self_captured_pointer.swap(false, Ordering::Relaxed)
+    }
+
+    /// Bitmask of buttons we've delivered a `PointerDown` for without a matching `PointerUp`.
+    #[inline]
+    pub(crate) const fn pressed_pointer_buttons(&self) -> u32 {
+        self.pressed_pointer_buttons.get()
+    }
+
+    #[inline]
+    pub(crate) fn mark_pointer_button_pressed(&self, button: PointerButton) {
+        self.pressed_pointer_buttons.set(self.pressed_pointer_buttons.get() | button as u32);
+    }
+
+    #[inline]
+    pub(crate) fn mark_pointer_button_released(&self, button: PointerButton) {
+        self.pressed_pointer_buttons.set(self.pressed_pointer_buttons.get() & !(button as u32));
     }
 
     #[inline]
