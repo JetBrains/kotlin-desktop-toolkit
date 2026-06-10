@@ -2307,7 +2307,7 @@ text/plain;charset=utf-8
             assertContentEquals(htmlContent, getClipboardContent(HTML_TEXT_MIME_TYPE))
             assertContentEquals(textContent, getClipboardContent(TEXT_UTF8_MIME_TYPE))
             assertContentEquals(textContent, getClipboardContent("UTF8_STRING"))
-            // TODO? "TEXT" and "STRING" types are not working well with unicode content
+            // TODO? "TEXT" and "STRING" types are not working well with Unicode content
         }
     }
 
@@ -2880,7 +2880,6 @@ text/plain;charset=utf-8
                 assertEquals("a", event.characters)
                 assertEquals(KeyCode.A, event.keyCode.value)
                 assertEquals(KeySym.a, event.key.value)
-                assertEquals(emptySet(), event.modifiers)
             }
         }
         withNextEvent { event ->
@@ -2895,7 +2894,6 @@ text/plain;charset=utf-8
                 assertEquals(KeyCode.Return, event.keyCode.value)
                 assertEquals(KeySym.Return, event.key.value)
                 assertContentEquals("\r".toByteArray(), event.characters?.toByteArray())
-                assertEquals(emptySet(), event.modifiers)
             }
         }
         withNextEvent { event ->
@@ -2912,7 +2910,6 @@ text/plain;charset=utf-8
                 assertEquals(KeyCode.Escape, event.keyCode.value)
                 assertEquals(KeySym.Escape, event.key.value)
                 assertContentEquals("\u001b".toByteArray(), event.characters?.toByteArray())
-                assertEquals(emptySet(), event.modifiers)
             }
         }
         withNextEvent { event ->
@@ -2929,7 +2926,6 @@ text/plain;charset=utf-8
                 assertEquals(KeyCode.BackSpace, event.keyCode.value)
                 assertEquals(KeySym.BackSpace, event.key.value)
                 assertContentEquals("\b".toByteArray(), event.characters?.toByteArray())
-                assertEquals(emptySet(), event.modifiers)
             }
         }
         withNextEvent { event ->
@@ -2946,7 +2942,6 @@ text/plain;charset=utf-8
                 assertEquals(KeyCode.Tab, event.keyCode.value)
                 assertEquals(KeySym.Tab, event.key.value)
                 assertContentEquals("\t".toByteArray(), event.characters?.toByteArray())
-                assertEquals(emptySet(), event.modifiers)
             }
         }
         withNextEvent { event ->
@@ -2958,16 +2953,14 @@ text/plain;charset=utf-8
 
         withKeyPress(KeyCode.Shift_L) {
             withNextEvent { event ->
-                assertInstanceOf<Event.ModifiersChanged>(event)
-                assertEquals(windowParams.windowId, event.windowId)
-                assertEquals(setOf(KeyModifiers.Shift), event.modifiers)
-            }
-            withNextEvent { event ->
                 assertInstanceOf<Event.KeyDown>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertNull(event.characters)
                 assertEquals(KeyCode.Shift_L, event.keyCode.value)
                 assertEquals(KeySym.Shift_L, event.key.value)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
                 assertEquals(setOf(KeyModifiers.Shift), event.modifiers)
             }
             withKeyPress(KeyCode.A) {
@@ -2977,7 +2970,6 @@ text/plain;charset=utf-8
                     assertEquals("A", event.characters)
                     assertEquals(KeyCode.A, event.keyCode.value)
                     assertEquals(KeySym.A, event.key.value)
-                    assertEquals(setOf(KeyModifiers.Shift), event.modifiers)
                 }
             }
             withNextEvent { event ->
@@ -2988,29 +2980,26 @@ text/plain;charset=utf-8
             }
         }
         withNextEvent { event ->
-            assertInstanceOf<Event.ModifiersChanged>(event)
-            assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(emptySet(), event.modifiers)
-        }
-        withNextEvent { event ->
             assertInstanceOf<Event.KeyUp>(event)
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(KeyCode.Shift_L, event.keyCode.value)
             assertEquals(KeySym.Shift_L, event.key.value)
         }
+        withNextEvent { event ->
+            assertInstanceOf<Event.ModifiersChanged>(event)
+            assertEquals(emptySet(), event.modifiers)
+        }
 
         withKeyPress(KeyCode.Control_L) {
-            withNextEvent { event ->
-                assertInstanceOf<Event.ModifiersChanged>(event)
-                assertEquals(windowParams.windowId, event.windowId)
-                assertEquals(setOf(KeyModifiers.Control), event.modifiers)
-            }
             withNextEvent { event ->
                 assertInstanceOf<Event.KeyDown>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertNull(event.characters)
                 assertEquals(KeyCode.Control_L, event.keyCode.value)
                 assertEquals(KeySym.Control_L, event.key.value)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
                 assertEquals(setOf(KeyModifiers.Control), event.modifiers)
             }
             withKeyPress(KeyCode.A) {
@@ -3020,7 +3009,6 @@ text/plain;charset=utf-8
                     assertEquals("a", event.characters) // TODO(nk): should this be control character instead?
                     assertEquals(KeyCode.A, event.keyCode.value)
                     assertEquals(KeySym.a, event.key.value)
-                    assertEquals(setOf(KeyModifiers.Control), event.modifiers)
                 }
             }
             withNextEvent { event ->
@@ -3031,14 +3019,13 @@ text/plain;charset=utf-8
             }
         }
         withNextEvent { event ->
-            assertInstanceOf<Event.ModifiersChanged>(event)
-            assertEquals(windowParams.windowId, event.windowId)
-            assertEquals(emptySet(), event.modifiers)
-        }
-        withNextEvent { event ->
             assertInstanceOf<Event.KeyUp>(event)
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(KeyCode.Control_L, event.keyCode.value)
+        }
+        withNextEvent { event ->
+            assertInstanceOf<Event.ModifiersChanged>(event)
+            assertEquals(emptySet(), event.modifiers)
         }
     }
 
@@ -3274,7 +3261,6 @@ text/plain;charset=utf-8
                     assertEquals("a", event.characters)
                     assertEquals(KeyCode.A, event.keyCode.value)
                     assertEquals(KeySym.a, event.key.value)
-                    assertEquals(emptySet(), event.modifiers)
                 }
             }
             withNextEvent { event ->
@@ -3425,15 +3411,13 @@ text/plain;charset=utf-8
 
             withKeyPress(KeyCode.Shift_L) {
                 withNextEvent { event ->
-                    assertInstanceOf<Event.ModifiersChanged>(event)
-                    assertEquals(windowParams.windowId, event.windowId)
-                    assertEquals(setOf(KeyModifiers.Shift), event.modifiers)
-                }
-                withNextEvent { event ->
                     assertInstanceOf<Event.KeyDown>(event)
                     assertEquals(windowParams.windowId, event.windowId)
                     assertNull(event.characters)
                     assertEquals(KeyCode.Shift_L, event.keyCode.value)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.ModifiersChanged>(event)
                     assertEquals(setOf(KeyModifiers.Shift), event.modifiers)
                 }
                 withKeyPress(KeyCode.A) {
@@ -3455,14 +3439,13 @@ text/plain;charset=utf-8
                 }
             }
             withNextEvent { event ->
-                assertInstanceOf<Event.ModifiersChanged>(event)
-                assertEquals(windowParams.windowId, event.windowId)
-                assertEquals(emptySet(), event.modifiers)
-            }
-            withNextEvent { event ->
                 assertInstanceOf<Event.KeyUp>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(KeyCode.Shift_L, event.keyCode.value)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet(), event.modifiers)
             }
 
             // Control characters should still be reported as just KeyDown events.
@@ -3474,7 +3457,6 @@ text/plain;charset=utf-8
                     assertEquals(KeyCode.Return, event.keyCode.value)
                     assertEquals(KeySym.Return, event.key.value)
                     assertContentEquals("\r".toByteArray(), event.characters?.toByteArray())
-                    assertEquals(emptySet(), event.modifiers)
                 }
             }
             withNextEvent { event ->
@@ -3491,7 +3473,6 @@ text/plain;charset=utf-8
                     assertEquals(KeyCode.Escape, event.keyCode.value)
                     assertEquals(KeySym.Escape, event.key.value)
                     assertContentEquals("\u001b".toByteArray(), event.characters?.toByteArray())
-                    assertEquals(emptySet(), event.modifiers)
                 }
             }
             withNextEvent { event ->
@@ -3508,7 +3489,6 @@ text/plain;charset=utf-8
                     assertEquals(KeyCode.BackSpace, event.keyCode.value)
                     assertEquals(KeySym.BackSpace, event.key.value)
                     assertContentEquals("\b".toByteArray(), event.characters?.toByteArray())
-                    assertEquals(emptySet(), event.modifiers)
                 }
             }
             withNextEvent { event ->
@@ -3525,7 +3505,6 @@ text/plain;charset=utf-8
                     assertEquals(KeyCode.Tab, event.keyCode.value)
                     assertEquals(KeySym.Tab, event.key.value)
                     assertContentEquals("\t".toByteArray(), event.characters?.toByteArray())
-                    assertEquals(emptySet(), event.modifiers)
                 }
             }
             withNextEvent { event ->
@@ -3542,7 +3521,6 @@ text/plain;charset=utf-8
                     assertEquals(KeyCode.Down, event.keyCode.value)
                     assertEquals(KeySym.Down, event.key.value)
                     assertNull(event.characters)
-                    assertEquals(emptySet(), event.modifiers)
                 }
             }
             withNextEvent { event ->
@@ -3559,7 +3537,6 @@ text/plain;charset=utf-8
                     assertEquals(KeyCode.Right, event.keyCode.value)
                     assertEquals(KeySym.Right, event.key.value)
                     assertNull(event.characters)
-                    assertEquals(emptySet(), event.modifiers)
                 }
             }
             withNextEvent { event ->
@@ -3571,16 +3548,14 @@ text/plain;charset=utf-8
 
             withKeyPress(KeyCode.Control_L) {
                 withNextEvent { event ->
-                    assertInstanceOf<Event.ModifiersChanged>(event)
-                    assertEquals(windowParams.windowId, event.windowId)
-                    assertEquals(setOf(KeyModifiers.Control), event.modifiers)
-                }
-                withNextEvent { event ->
                     assertInstanceOf<Event.KeyDown>(event)
                     assertEquals(windowParams.windowId, event.windowId)
                     assertNull(event.characters)
                     assertEquals(KeyCode.Control_L, event.keyCode.value)
                     assertEquals(KeySym.Control_L, event.key.value)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.ModifiersChanged>(event)
                     assertEquals(setOf(KeyModifiers.Control), event.modifiers)
                 }
                 currentSurroundingText = TextInputSurroundingText(
@@ -3596,7 +3571,6 @@ text/plain;charset=utf-8
                         assertEquals("a", event.characters) // TODO(nk): should this be control character instead?
                         assertEquals(KeyCode.A, event.keyCode.value)
                         assertEquals(KeySym.a, event.key.value)
-                        assertEquals(setOf(KeyModifiers.Control), event.modifiers)
                     }
                 }
                 withNextEvent { event ->
@@ -3672,29 +3646,26 @@ text/plain;charset=utf-8
                 }
             }
             withNextEvent { event ->
-                assertInstanceOf<Event.ModifiersChanged>(event)
-                assertEquals(windowParams.windowId, event.windowId)
-                assertEquals(emptySet(), event.modifiers)
-            }
-            withNextEvent { event ->
                 assertInstanceOf<Event.KeyUp>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(KeyCode.Control_L, event.keyCode.value)
                 assertEquals(KeySym.Control_L, event.key.value)
             }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet(), event.modifiers)
+            }
 
             withKeyPress(KeyCode.Alt_L) {
-                withNextEvent { event ->
-                    assertInstanceOf<Event.ModifiersChanged>(event)
-                    assertEquals(windowParams.windowId, event.windowId)
-                    assertEquals(setOf(KeyModifiers.Alt), event.modifiers)
-                }
                 withNextEvent { event ->
                     assertInstanceOf<Event.KeyDown>(event)
                     assertEquals(windowParams.windowId, event.windowId)
                     assertNull(event.characters)
                     assertEquals(KeyCode.Alt_L, event.keyCode.value)
                     assertEquals(KeySym.Alt_L, event.key.value)
+                }
+                withNextEvent { event ->
+                    assertInstanceOf<Event.ModifiersChanged>(event)
                     assertEquals(setOf(KeyModifiers.Alt), event.modifiers)
                 }
                 withKeyPress(KeyCode.A) {
@@ -3914,15 +3885,14 @@ text/plain;charset=utf-8
                 }
             }
             withNextEvent { event ->
-                assertInstanceOf<Event.ModifiersChanged>(event)
-                assertEquals(windowParams.windowId, event.windowId)
-                assertEquals(emptySet(), event.modifiers)
-            }
-            withNextEvent { event ->
                 assertInstanceOf<Event.KeyUp>(event)
                 assertEquals(windowParams.windowId, event.windowId)
                 assertEquals(KeyCode.Alt_L, event.keyCode.value)
                 assertEquals(KeySym.Alt_L, event.key.value)
+            }
+            withNextEvent { event ->
+                assertInstanceOf<Event.ModifiersChanged>(event)
+                assertEquals(emptySet(), event.modifiers)
             }
 
             // After `textInputDisable`, KeyDown events should be reported for character keys.
@@ -3936,7 +3906,6 @@ text/plain;charset=utf-8
                     assertEquals("a", event.characters)
                     assertEquals(KeyCode.A, event.keyCode.value)
                     assertEquals(KeySym.a, event.key.value)
-                    assertEquals(emptySet(), event.modifiers)
                 }
             }
             withNextEvent { event ->

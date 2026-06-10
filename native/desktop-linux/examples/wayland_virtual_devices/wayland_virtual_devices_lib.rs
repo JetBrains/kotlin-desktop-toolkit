@@ -338,14 +338,14 @@ impl TestHelperState {
             xkb::KeyDirection::Up
         };
 
+        let time = self.get_time();
+        let wayland_direction = u32::from(data.down);
+        vk.key(time, data.keycode - 8, wayland_direction);
+
         if let Some((mods_depressed, mods_latched, mods_locked, group)) =
             update_xkb_key(self.xkb_state.as_mut().unwrap(), xkb::Keycode::new(data.keycode), xkb_direction)
         {
             vk.modifiers(mods_depressed, mods_latched, mods_locked, group);
-        } else {
-            let time = self.get_time();
-            let wayland_direction = u32::from(data.down);
-            vk.key(time, data.keycode - 8, wayland_direction);
         }
 
         self.conn.flush()?;
