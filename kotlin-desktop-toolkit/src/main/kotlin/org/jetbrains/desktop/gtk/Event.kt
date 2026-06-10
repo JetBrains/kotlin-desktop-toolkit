@@ -171,7 +171,6 @@ public sealed class Event {
         val keyCode: KeyCode,
         val characters: String?,
         val key: KeySym,
-        val modifiers: Set<KeyModifiers>,
     ) : Event()
 
     @ConsistentCopyVisibility
@@ -182,10 +181,7 @@ public sealed class Event {
     ) : Event()
 
     @ConsistentCopyVisibility
-    public data class ModifiersChanged internal constructor(
-        val windowId: WindowId,
-        val modifiers: Set<KeyModifiers>,
-    ) : Event()
+    public data class ModifiersChanged internal constructor(val modifiers: Set<KeyModifiers>) : Event()
 
     @ConsistentCopyVisibility
     public data class MouseMoved internal constructor(

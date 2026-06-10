@@ -8,13 +8,14 @@ use crate::gtk::desktop_settings_api::FfiDesktopSetting;
 use crate::gtk::events::Event::DragIconFrameTick;
 use crate::gtk::events::{
     DataTransferCancelledEvent, DragAndDropFeedbackFinishedEvent, DragAndDropFinishedEvent, DragIconDrawEvent, Event, EventHandler,
-    NotificationClosedEvent, OpenGlDrawData, RequestId, WindowClosedEvent, WindowId,
+    ModifiersChangedEvent, NotificationClosedEvent, OpenGlDrawData, RequestId, WindowClosedEvent, WindowId,
 };
 use crate::gtk::ffi_return_conversions::{QueryDragAndDropTarget, RetrieveSurroundingText, TransferDataGetter};
 use crate::gtk::file_dialog::show_file_dialog_impl;
 use crate::gtk::file_dialog_api::{CommonFileDialogParams, OpenFileDialogParams, SaveFileDialogParams};
 use crate::gtk::geometry::{LogicalSize, PhysicalSize};
 use crate::gtk::gl_widget::GlWidget;
+use crate::gtk::keyboard::key_modifiers_from_gdk;
 use crate::gtk::mime_types::MimeTypes;
 use crate::gtk::notifications::{NewNotificationData, NotificationAction, init_notifications_task};
 use crate::gtk::window::SimpleWindow;
@@ -22,8 +23,8 @@ use crate::gtk::window_api::WindowParams;
 use anyhow::{Context, anyhow, bail};
 use gtk4::glib::translate::ToGlibPtr;
 use gtk4::prelude::{
-    ActionMapExtManual, ApplicationExt, ApplicationExtManual, DisplayExt, DragExt, FileExt, GtkApplicationExt, GtkWindowExt, ObjectExt,
-    ObjectType, WidgetExt, WidgetExtManual,
+    ActionMapExtManual, ApplicationExt, ApplicationExtManual, DeviceExt, DisplayExt, DragExt, FileExt, GtkApplicationExt, GtkWindowExt,
+    ObjectExt, ObjectType, SeatExt, WidgetExt, WidgetExtManual,
 };
 use gtk4::{gdk as gdk4, gio, glib};
 use log::{debug, warn};
@@ -150,7 +151,20 @@ impl ApplicationState {
             for initial_setting in initial_settings {
                 send_event(event_handler, Event::DesktopSettingChange(initial_setting));
             }
+
+            if let Some(keyboard) = gdk4::Display::default()
+                .and_then(|display| display.default_seat())
+                .and_then(|seat| seat.keyboard())
+            {
+                // Cannot use `EventControllerKey::modifiers` signal, see https://gitlab.gnome.org/GNOME/gtk/-/issues/5139
+                keyboard.connect_modifier_state_notify(move |keyboard| {
+                    let modifiers = key_modifiers_from_gdk(keyboard.modifier_state());
+                    let event = ModifiersChangedEvent { modifiers };
+                    send_event(event_handler, event);
+                });
+            }
         });
+
         gtk_app.connect_shutdown(move |_gtk_app| {
             debug!("App Shutdown");
         });

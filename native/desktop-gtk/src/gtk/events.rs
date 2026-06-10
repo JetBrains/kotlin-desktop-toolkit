@@ -214,8 +214,6 @@ pub struct KeyDownEvent {
     pub has_character: bool,
     pub character: char,
     pub key: u32,
-    // pub key_without_modifiers: u32,
-    pub modifiers: KeyModifiers,
 }
 
 impl From<KeyDownEvent> for Event<'_> {
@@ -230,7 +228,6 @@ pub struct KeyUpEvent {
     pub window_id: WindowId,
     pub code: KeyCode,
     pub key: u32,
-    // pub key_without_modifiers: u32,
 }
 
 impl From<KeyUpEvent> for Event<'_> {
@@ -242,7 +239,6 @@ impl From<KeyUpEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ModifiersChangedEvent {
-    pub window_id: WindowId,
     pub modifiers: KeyModifiers,
 }
 
