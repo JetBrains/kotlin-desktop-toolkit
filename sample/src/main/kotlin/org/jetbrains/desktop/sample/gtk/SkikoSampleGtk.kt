@@ -172,8 +172,8 @@ internal data class DesktopSettings(
 private interface ClipboardHandler {
     fun copy(content: DataTransferContentType)
     fun copyToPrimarySelection(content: DataTransferContentType)
-    fun paste(supportedMimeTypes: List<String>)
-    fun pasteFromPrimarySelection(supportedMimeTypes: List<String>)
+    fun paste(supportedMimeTypes: List<String>, windowId: WindowId)
+    fun pasteFromPrimarySelection(supportedMimeTypes: List<String>, windowId: WindowId)
     fun startDrag(content: DataTransferContentType, params: StartDragAndDropParams, draw: (Canvas, PhysicalSize, Double) -> Unit)
     fun stopDrag()
 }
@@ -420,7 +420,7 @@ private class EditorState {
         when (shortcutModifiers) {
             setOf(KeyModifiers.Control, KeyModifiers.Shift) -> when (event.keyCode.value) {
                 KeyCode.V -> {
-                    clipboardHandler.paste(listOf(PNG_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                    clipboardHandler.paste(listOf(PNG_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_MIME_TYPE), event.windowId)
                 }
 
                 KeyCode.C -> {
@@ -445,8 +445,7 @@ private class EditorState {
 
             setOf(KeyModifiers.Control) -> when (event.keyCode.value) {
                 KeyCode.V -> {
-                    clipboardHandler.paste(listOf("application/fleet-multi-caret"))
-                    clipboardHandler.paste(listOf(PNG_MIME_TYPE, TEXT_MIME_TYPE, URI_LIST_MIME_TYPE))
+                    clipboardHandler.paste(listOf(PNG_MIME_TYPE, TEXT_MIME_TYPE, URI_LIST_MIME_TYPE), event.windowId)
                 }
 
                 KeyCode.C -> {
@@ -1043,7 +1042,10 @@ private class WindowContainer(
 
                 setOf(KeyModifiers.Shift) -> {
                     if (desktopSettings.middleClickPaste) {
-                        clipboardHandler.pasteFromPrimarySelection(listOf(PNG_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_MIME_TYPE))
+                        clipboardHandler.pasteFromPrimarySelection(
+                            listOf(PNG_MIME_TYPE, URI_LIST_MIME_TYPE, TEXT_MIME_TYPE),
+                            event.windowId,
+                        )
                         EventHandlerResult.Stop
                     } else {
                         EventHandlerResult.Continue
@@ -1265,7 +1267,6 @@ private class ApplicationState(
 ) : AutoCloseable {
     private var nextWindowId = 0L
     private val windows = mutableMapOf<WindowId, RotatingBallWindow>()
-    private var keyWindowId: WindowId? = null
     private var modifiers = setOf<KeyModifiers>()
     private val desktopSettings = DesktopSettings()
     private val windowClipboardHandlers = mutableMapOf<WindowId, ClipboardHandler>()
@@ -1314,15 +1315,15 @@ private class ApplicationState(
                 app.primarySelectionPut(content.mimeTypes())
             }
 
-            override fun paste(supportedMimeTypes: List<String>) {
+            override fun paste(supportedMimeTypes: List<String>, windowId: WindowId) {
                 currentClipboardPasteSerial += 1
-                clipboardPasteSerialToWindow[currentClipboardPasteSerial] = keyWindowId!!
+                clipboardPasteSerialToWindow[currentClipboardPasteSerial] = windowId
                 app.clipboardPaste(currentClipboardPasteSerial, supportedMimeTypes)
             }
 
-            override fun pasteFromPrimarySelection(supportedMimeTypes: List<String>) {
+            override fun pasteFromPrimarySelection(supportedMimeTypes: List<String>, windowId: WindowId) {
                 currentClipboardPasteSerial += 1
-                clipboardPasteSerialToWindow[currentClipboardPasteSerial] = keyWindowId!!
+                clipboardPasteSerialToWindow[currentClipboardPasteSerial] = windowId
                 app.primarySelectionPaste(currentClipboardPasteSerial, supportedMimeTypes)
             }
 
@@ -1361,11 +1362,7 @@ private class ApplicationState(
 
             is Event.WindowDraw -> windows[event.windowId]?.onWindowDraw(event) ?: EventHandlerResult.Continue
             is Event.WindowConfigure -> {
-                windows[event.windowId]?.configure(event).also {
-                    if (event.active) {
-                        keyWindowId = event.windowId
-                    }
-                } ?: EventHandlerResult.Continue
+                windows[event.windowId]?.configure(event) ?: EventHandlerResult.Continue
             }
 
             is Event.MouseMoved -> {
@@ -1436,11 +1433,11 @@ private class ApplicationState(
             }
 
             is Event.KeyDown -> {
+                val windowId = event.windowId
                 if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.N) {
                     createWindow(WindowDecorationMode.CustomTitlebar(50))
                     EventHandlerResult.Stop
                 } else if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.P) {
-                    val windowId = keyWindowId!!
                     val params = ShowNotificationParams(
                         title = "Notification from window $windowId",
                         body = "Clicking this notification will activate window $windowId",
@@ -1451,7 +1448,7 @@ private class ApplicationState(
                     }
                     EventHandlerResult.Stop
                 } else if (modifiers.shortcutModifiers() == setOf(KeyModifiers.Control) && event.keyCode.value == KeyCode.Tab) {
-                    windows.firstNotNullOfOrNull { if (it.key == keyWindowId) null else it.value }?.window?.activate(null)
+                    windows.firstNotNullOfOrNull { if (it.key == windowId) null else it.value }?.window?.activate(null)
                     EventHandlerResult.Stop
                 } else {
                     windows[event.windowId]?.onKeyDown(event, modifiers, windowClipboardHandlers[event.windowId]!!)
@@ -1485,14 +1482,10 @@ private class ApplicationState(
             is Event.ScrollWheel -> EventHandlerResult.Continue
             is Event.TextInput -> windows[event.windowId]?.onTextInput(event) ?: EventHandlerResult.Continue
             is Event.WindowKeyboardEnter -> {
-                keyWindowId = event.windowId
                 windows[event.windowId]?.onKeyboardFocusChanged(true) ?: EventHandlerResult.Continue
             }
 
             is Event.WindowKeyboardLeave -> {
-                if (keyWindowId == event.windowId) {
-                    keyWindowId = null
-                }
                 windows[event.windowId]?.onKeyboardFocusChanged(false) ?: EventHandlerResult.Continue
             }
 

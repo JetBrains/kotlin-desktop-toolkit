@@ -210,12 +210,12 @@ fn on_keydown(event: &KeyDownEvent, state: &mut State, window_id: WindowId) -> O
         }
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::Tab) => state.windows.iter().find_map(|(window_id, window_state)| {
             if window_state.active {
+                None
+            } else {
                 Some(Action::WindowActivate {
                     window_id: *window_id,
                     token: None,
                 })
-            } else {
-                None
             }
         }),
         (KeyModifiers::Ctrl, keycode::KeyMappingCode::KeyQ) => Some(Action::WindowClose(window_id)),
