@@ -43,7 +43,7 @@ use super::{
     },
     geometry::{PhysicalPoint, PhysicalSize},
     keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButtonChangeKind, PointerClickCounter, PointerInfo},
+    pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
     strings::copy_from_wide_string,
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
@@ -745,6 +745,7 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
                 is_press = true;
                 let click_location = pointer_info.get_physical_location();
                 let click_count = window.with_mut_pointer_click_counter(|c| c.register_click(button_change.button(), click_location));
+                window.mark_pointer_button_pressed(button_change.button());
                 Event::PointerDown(PointerDownEvent {
                     button: button_change.button(),
                     click_count,
@@ -755,14 +756,17 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
                     timestamp: pointer_info.get_timestamp(),
                 })
             }
-            PointerButtonChangeKind::Released => Event::PointerUp(PointerUpEvent {
-                button: button_change.button(),
-                location_in_window: pointer_info.get_location_in_window(),
-                location_on_screen: pointer_info.get_physical_location(),
-                non_client_area: is_non_client,
-                state: pointer_info.get_pointer_state(),
-                timestamp: pointer_info.get_timestamp(),
-            }),
+            PointerButtonChangeKind::Released => {
+                window.mark_pointer_button_released(button_change.button());
+                Event::PointerUp(PointerUpEvent {
+                    button: button_change.button(),
+                    location_in_window: pointer_info.get_location_in_window(),
+                    location_on_screen: pointer_info.get_physical_location(),
+                    non_client_area: is_non_client,
+                    state: pointer_info.get_pointer_state(),
+                    timestamp: pointer_info.get_timestamp(),
+                })
+            }
             PointerButtonChangeKind::Other => Event::PointerUpdated(PointerUpdatedEvent {
                 location_in_window: pointer_info.get_location_in_window(),
                 location_on_screen: pointer_info.get_physical_location(),
@@ -788,7 +792,37 @@ fn on_pointerupdate(event_loop: &EventLoop, window: &Window, msg: u32, wparam: W
         // and our capture — ends at the last button up, delivered as `WM_POINTERUP`.
         capture_consumed_nc_press(window, is_non_client, result.is_some());
     }
+    // Recover from any `WM_POINTERUP` Windows dropped: deliver a synthetic `PointerUp` for every
+    // button we still believe is down but the OS no longer reports as pressed in this message.
+    flush_missed_pointer_ups(event_loop, window, &pointer_info, is_non_client);
     result
+}
+
+/// Reconcile the buttons we've tracked as pressed against the OS-reported pressed set for the
+/// current pointer message, synthesising a `PointerUp` for each button whose release we never saw.
+///
+/// Windows can drop a `WM_POINTERUP` — most visibly when a press is released over a custom caption
+/// button — which would otherwise leave the button stuck "pressed" in userspace until the next real
+/// down/up for it. The synthesised event reuses the current message's location/state/timestamp; the
+/// missed release happened in the recent past so this is the closest data we have.
+fn flush_missed_pointer_ups(event_loop: &EventLoop, window: &Window, pointer_info: &PointerInfo, is_non_client: bool) {
+    let state = pointer_info.get_pointer_state();
+    let missed = window.pressed_pointer_buttons() & !state.pressed_buttons_mask();
+    if missed == 0 {
+        return;
+    }
+    for button in PointerButton::ALL.into_iter().filter(|button| missed & *button as u32 != 0) {
+        window.mark_pointer_button_released(button);
+        let event = PointerUpEvent {
+            button,
+            location_in_window: pointer_info.get_location_in_window(),
+            location_on_screen: pointer_info.get_physical_location(),
+            non_client_area: is_non_client,
+            state,
+            timestamp: pointer_info.get_timestamp(),
+        };
+        event_loop.handle_event(window, Event::PointerUp(event));
+    }
 }
 
 fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARAM) -> Option<LRESULT> {
@@ -803,6 +837,7 @@ fn on_pointerdown(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPA
     };
     let click_location = pointer_info.get_physical_location();
     let click_count = window.with_mut_pointer_click_counter(|c| c.register_click(pointer_button, click_location));
+    window.mark_pointer_button_pressed(pointer_button);
     let non_client_area = matches!(msg, WM_NCPOINTERDOWN);
     let event = PointerDownEvent {
         button: pointer_button,
@@ -829,6 +864,7 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
             return None;
         }
     };
+    window.mark_pointer_button_released(pointer_button);
     let event = PointerUpEvent {
         button: pointer_button,
         location_in_window: pointer_info.get_location_in_window(),
