@@ -621,7 +621,8 @@ impl Window {
 
     #[inline]
     pub(crate) fn mark_pointer_button_released(&self, button: PointerButton) {
-        self.pressed_pointer_buttons.set(self.pressed_pointer_buttons.get() & !(button as u32));
+        self.pressed_pointer_buttons
+            .set(self.pressed_pointer_buttons.get() & !(button as u32));
     }
 
     #[inline]
