@@ -162,6 +162,10 @@ Clearing `wake_posted` before the `try_iter` drain is what makes a racing `send`
 impl Dispatcher {
     pub fn new() -> anyhow::Result<Self> {
         static WNDCLASS_INIT: OnceLock<u16> = OnceLock::new();
+
+        // RegisterWindowMessage returns 0 only on failure; refuse rather than fall back to id 0.
+        anyhow::ensure!(wake_message() != 0, windows_core::Error::from_thread());
+
         let wndclass_size = size_of::<WNDCLASSEXW>().try_into()?;
         let _ = WNDCLASS_INIT.get_or_init(|| {
             let wndclass = WNDCLASSEXW {
@@ -222,6 +226,7 @@ impl Drop for Dispatcher {
 ```
 
 - Created on the UI thread (the thread that pumps its messages), as a message-only `HWND_MESSAGE` window.
+- `new` registers the wake message and returns an error if `RegisterWindowMessage` fails (returns 0), rather than fall back to the colliding id 0.
 - `DispatcherState` (owning `rx`) is attached via `SetPropW` and dropped in `WM_NCDESTROY`, closing the consumer end so any later `send` fails cleanly.
 - `shutdown` and the `Drop` backstop both take the handle via `take_hwnd` (an `AtomicPtr` swap-to-null), so `DestroyWindow` runs exactly once. `DestroyWindow` must run on the UI thread; `shutdown` is called from `Application::shutdown`, which is on it.
 
