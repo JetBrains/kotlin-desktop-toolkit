@@ -97,6 +97,33 @@ fn set_mouse_button_events_handler(widget: &gtk4::Widget, window_id: WindowId, e
                     false
                 }
             }
+            gdk4::EventType::Scroll => {
+                let scroll_event = e.downcast_ref::<gdk4::ScrollEvent>().unwrap();
+
+                let direction = scroll_event.direction();
+                let is_smooth_scroll = direction == gdk4::ScrollDirection::Smooth;
+                let (mut delta_x, mut delta_y) = scroll_event.deltas();
+
+                if !is_smooth_scroll && delta_y == 0.0 && delta_x == 0.0 {
+                    match direction {
+                        gdk4::ScrollDirection::Up => delta_y = -1.0,
+                        gdk4::ScrollDirection::Down => delta_y = 1.0,
+                        gdk4::ScrollDirection::Left => delta_x = -1.0,
+                        gdk4::ScrollDirection::Right => delta_x = 1.0,
+                        _ => {}
+                    }
+                }
+
+                let event = ScrollWheelEvent {
+                    window_id,
+                    timestamp: Timestamp(e.time()),
+                    scroll_delta_x: LogicalPixels(delta_x),
+                    scroll_delta_y: LogicalPixels(delta_y),
+                    is_stop: scroll_event.is_stop(),
+                    is_smooth_scroll,
+                };
+                send_event(event_handler, event)
+            }
             gdk4::EventType::TouchBegin => false,  // TODO
             gdk4::EventType::TouchEnd => false,    // TODO
             gdk4::EventType::TouchUpdate => false, // TODO
@@ -112,25 +139,7 @@ fn set_mouse_button_events_handler(widget: &gtk4::Widget, window_id: WindowId, e
     widget.add_controller(event_controller_legacy);
 }
 
-fn set_scroll_events_handler(widget: &gtk4::Widget, window_id: WindowId, event_handler: EventHandler) {
-    let event_controller_scroll = gtk4::EventControllerScroll::new(gtk4::EventControllerScrollFlags::BOTH_AXES);
-    event_controller_scroll.set_propagation_phase(gtk4::PropagationPhase::Capture);
-    event_controller_scroll.connect_scroll(move |event_controller_scroll, delta_x, delta_y| {
-        let timestamp = Timestamp(event_controller_scroll.current_event_time());
-        let event = ScrollWheelEvent {
-            window_id,
-            timestamp,
-            scroll_delta_x: LogicalPixels(delta_x),
-            scroll_delta_y: LogicalPixels(delta_y),
-        };
-        send_event(event_handler, event);
-        glib::signal::Propagation::Stop
-    });
-    widget.add_controller(event_controller_scroll);
-}
-
 pub fn set_mouse_event_handlers(widget: &gtk4::Widget, window_id: WindowId, event_handler: EventHandler) {
     set_motion_events_handler(widget, window_id, event_handler);
     set_mouse_button_events_handler(widget, window_id, event_handler);
-    set_scroll_events_handler(widget, window_id, event_handler);
 }

@@ -327,6 +327,8 @@ pub struct ScrollWheelEvent {
     pub timestamp: Timestamp,
     pub scroll_delta_x: LogicalPixels,
     pub scroll_delta_y: LogicalPixels,
+    pub is_smooth_scroll: bool,
+    pub is_stop: bool,
 }
 
 impl From<ScrollWheelEvent> for Event<'_> {

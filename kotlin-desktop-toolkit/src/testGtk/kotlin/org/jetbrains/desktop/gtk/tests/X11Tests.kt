@@ -3375,11 +3375,11 @@ text/plain;charset=utf-8
                     assertEquals(0U, attribute.beginBytePos)
                     assertEquals(1U, attribute.endBytePos)
                     assertEquals(TextInputPreeditUnderlineType.Low, attribute.underline)
-                    assertEquals(false, attribute.foregroundHighlight)
-                    assertEquals(true, attribute.backgroundHighlight)
-                    assertEquals(false, attribute.strikethrough)
-                    assertEquals(false, attribute.bold)
-                    assertEquals(false, attribute.italic)
+                    assertFalse(attribute.foregroundHighlight)
+                    assertTrue(attribute.backgroundHighlight)
+                    assertFalse(attribute.strikethrough)
+                    assertFalse(attribute.bold)
+                    assertFalse(attribute.italic)
                 }
             }
             withNextEvent { event ->
@@ -3713,11 +3713,11 @@ text/plain;charset=utf-8
                         assertEquals(0U, attribute.beginBytePos)
                         assertEquals(1U, attribute.endBytePos)
                         assertEquals(TextInputPreeditUnderlineType.Single, attribute.underline)
-                        assertEquals(false, attribute.foregroundHighlight)
-                        assertEquals(false, attribute.backgroundHighlight)
-                        assertEquals(false, attribute.strikethrough)
-                        assertEquals(false, attribute.bold)
-                        assertEquals(false, attribute.italic)
+                        assertFalse(attribute.foregroundHighlight)
+                        assertFalse(attribute.backgroundHighlight)
+                        assertFalse(attribute.strikethrough)
+                        assertFalse(attribute.bold)
+                        assertFalse(attribute.italic)
                     }
                 }
                 withNextEvent { event ->
@@ -3742,11 +3742,11 @@ text/plain;charset=utf-8
                         assertEquals(0U, attribute.beginBytePos)
                         assertEquals(2U, attribute.endBytePos)
                         assertEquals(TextInputPreeditUnderlineType.Single, attribute.underline)
-                        assertEquals(false, attribute.foregroundHighlight)
-                        assertEquals(false, attribute.backgroundHighlight)
-                        assertEquals(false, attribute.strikethrough)
-                        assertEquals(false, attribute.bold)
-                        assertEquals(false, attribute.italic)
+                        assertFalse(attribute.foregroundHighlight)
+                        assertFalse(attribute.backgroundHighlight)
+                        assertFalse(attribute.strikethrough)
+                        assertFalse(attribute.bold)
+                        assertFalse(attribute.italic)
                     }
                 }
                 withNextEvent { event ->
@@ -3771,11 +3771,11 @@ text/plain;charset=utf-8
                         assertEquals(0U, attribute.beginBytePos)
                         assertEquals(5U, attribute.endBytePos)
                         assertEquals(TextInputPreeditUnderlineType.Single, attribute.underline)
-                        assertEquals(false, attribute.foregroundHighlight)
-                        assertEquals(false, attribute.backgroundHighlight)
-                        assertEquals(false, attribute.strikethrough)
-                        assertEquals(false, attribute.bold)
-                        assertEquals(false, attribute.italic)
+                        assertFalse(attribute.foregroundHighlight)
+                        assertFalse(attribute.backgroundHighlight)
+                        assertFalse(attribute.strikethrough)
+                        assertFalse(attribute.bold)
+                        assertFalse(attribute.italic)
                     }
                 }
                 withNextEvent { event ->
@@ -3819,55 +3819,55 @@ text/plain;charset=utf-8
                             assertEquals(0U, attribute.beginBytePos)
                             assertEquals(9U, attribute.endBytePos)
                             assertEquals(TextInputPreeditUnderlineType.Error, attribute.underline)
-                            assertEquals(true, attribute.foregroundHighlight)
-                            assertEquals(false, attribute.backgroundHighlight)
-                            assertEquals(false, attribute.strikethrough)
-                            assertEquals(false, attribute.bold)
-                            assertEquals(false, attribute.italic)
+                            assertTrue(attribute.foregroundHighlight)
+                            assertFalse(attribute.backgroundHighlight)
+                            assertFalse(attribute.strikethrough)
+                            assertFalse(attribute.bold)
+                            assertFalse(attribute.italic)
                         }
                         preeditStringData.attributes.getOrNull(1)?.let { attribute ->
                             assertNotNull(attribute)
                             assertEquals(9U, attribute.beginBytePos)
                             assertEquals(11U, attribute.endBytePos)
                             assertEquals(TextInputPreeditUnderlineType.Single, attribute.underline)
-                            assertEquals(false, attribute.foregroundHighlight)
-                            assertEquals(false, attribute.backgroundHighlight)
-                            assertEquals(false, attribute.strikethrough)
-                            assertEquals(false, attribute.bold)
-                            assertEquals(false, attribute.italic)
+                            assertFalse(attribute.foregroundHighlight)
+                            assertFalse(attribute.backgroundHighlight)
+                            assertFalse(attribute.strikethrough)
+                            assertFalse(attribute.bold)
+                            assertFalse(attribute.italic)
                         }
                         preeditStringData.attributes.getOrNull(2)?.let { attribute ->
                             assertNotNull(attribute)
                             assertEquals(11U, attribute.beginBytePos)
                             assertEquals(33U, attribute.endBytePos)
                             assertEquals(TextInputPreeditUnderlineType.Error, attribute.underline)
-                            assertEquals(false, attribute.foregroundHighlight)
-                            assertEquals(true, attribute.backgroundHighlight)
-                            assertEquals(false, attribute.strikethrough)
-                            assertEquals(false, attribute.bold)
-                            assertEquals(false, attribute.italic)
+                            assertFalse(attribute.foregroundHighlight)
+                            assertTrue(attribute.backgroundHighlight)
+                            assertFalse(attribute.strikethrough)
+                            assertFalse(attribute.bold)
+                            assertFalse(attribute.italic)
                         }
                         preeditStringData.attributes.getOrNull(3)?.let { attribute ->
                             assertNotNull(attribute)
                             assertEquals(33U, attribute.beginBytePos)
                             assertEquals(35U, attribute.endBytePos)
                             assertEquals(TextInputPreeditUnderlineType.Single, attribute.underline)
-                            assertEquals(false, attribute.foregroundHighlight)
-                            assertEquals(false, attribute.backgroundHighlight)
-                            assertEquals(false, attribute.strikethrough)
-                            assertEquals(false, attribute.bold)
-                            assertEquals(false, attribute.italic)
+                            assertFalse(attribute.foregroundHighlight)
+                            assertFalse(attribute.backgroundHighlight)
+                            assertFalse(attribute.strikethrough)
+                            assertFalse(attribute.bold)
+                            assertFalse(attribute.italic)
                         }
                         preeditStringData.attributes.getOrNull(4)?.let { attribute ->
                             assertNotNull(attribute)
                             assertEquals(35U, attribute.beginBytePos)
                             assertEquals(50U, attribute.endBytePos)
                             assertEquals(TextInputPreeditUnderlineType.Double, attribute.underline)
-                            assertEquals(false, attribute.foregroundHighlight)
-                            assertEquals(false, attribute.backgroundHighlight)
-                            assertEquals(false, attribute.strikethrough)
-                            assertEquals(false, attribute.bold)
-                            assertEquals(false, attribute.italic)
+                            assertFalse(attribute.foregroundHighlight)
+                            assertFalse(attribute.backgroundHighlight)
+                            assertFalse(attribute.strikethrough)
+                            assertFalse(attribute.bold)
+                            assertFalse(attribute.italic)
                         }
                     }
                 }
@@ -4374,6 +4374,8 @@ text/plain;charset=utf-8
             assertEquals(0f, event.scrollingDeltaX)
             assertEquals(1f, event.scrollingDeltaY)
             assertNotEquals(Duration.ZERO, event.timestamp.toDuration())
+            assertFalse(event.isStop)
+            assertFalse(event.isSmoothScroll)
         }
 
         scrollMouseUp()
@@ -4382,6 +4384,8 @@ text/plain;charset=utf-8
             assertEquals(windowParams.windowId, event.windowId)
             assertEquals(0f, event.scrollingDeltaX)
             assertEquals(-1f, event.scrollingDeltaY)
+            assertFalse(event.isStop)
+            assertFalse(event.isSmoothScroll)
             assertNotEquals(Duration.ZERO, event.timestamp.toDuration())
         }
     }
