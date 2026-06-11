@@ -52,6 +52,7 @@ pub enum PointerButton {
 }
 
 impl PointerButton {
+    /// cbindgen:ignore
     /// Every real (non-`None`) button. Used to walk a pressed-button bitmask when
     /// reconciling tracked state against the OS-reported pressed set.
     pub(crate) const ALL: [Self; 5] = [Self::Left, Self::Right, Self::Middle, Self::XButton1, Self::XButton2];

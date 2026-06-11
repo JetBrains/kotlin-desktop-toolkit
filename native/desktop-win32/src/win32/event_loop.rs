@@ -5,23 +5,7 @@ use std::{
 
 use desktop_common::ffi_utils::RustAllocatedStrPtr;
 
-use super::{
-    appearance::{Appearance, HighContrast},
-    events::{
-        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
-        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
-        SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
-        WindowScaleChangedEvent, WindowTitleChangedEvent,
-    },
-    geometry::{PhysicalPoint, PhysicalSize},
-    keyboard::{PhysicalKeyStatus, VirtualKey},
-    pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
-    strings::copy_from_wide_string,
-    utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
-    window::Window,
-};
 use anyhow::Context;
-use windows::Win32::UI::WindowsAndMessaging::HTTOP;
 use windows::Win32::{
     Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
     Graphics::{
@@ -37,16 +21,32 @@ use windows::Win32::{
         Shell::{ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
         WindowsAndMessaging::{
             AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
-            GetMessageW, GetWindowLongPtrW, GetWindowRect, HMENU, HTCAPTION, HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, MINMAXINFO, MSG,
-            NCCALCSIZE_PARAMS, SC_KEYMENU, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
-            USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE, WM_CAPTURECHANGED,
-            WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_INITMENUPOPUP, WM_KEYDOWN,
-            WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP,
-            WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE,
-            WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR,
-            WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+            GetMessageW, GetWindowLongPtrW, GetWindowRect, HMENU, HTCAPTION, HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, HTTOP,
+            MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SC_KEYMENU, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+            SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE,
+            WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_INITMENUPOPUP,
+            WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN,
+            WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL,
+            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
+            WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
         },
     },
+};
+
+use super::{
+    appearance::{Appearance, HighContrast},
+    events::{
+        CharacterReceivedEvent, Event, EventHandler, KeyEvent, NCCalcSizeEvent, NCHitTestEvent, PointerDownEvent, PointerEnteredEvent,
+        PointerExitedEvent, PointerUpEvent, PointerUpdatedEvent, ScrollWheelEvent, SystemAppearanceChangeEvent,
+        SystemHighContrastChangeEvent, Timestamp, WindowActivatedEvent, WindowDrawEvent, WindowMoveEvent, WindowResizeEvent,
+        WindowScaleChangedEvent, WindowTitleChangedEvent,
+    },
+    geometry::{PhysicalPoint, PhysicalSize},
+    keyboard::{PhysicalKeyStatus, VirtualKey},
+    pointer::{PointerButton, PointerButtonChangeKind, PointerClickCounter, PointerInfo},
+    strings::copy_from_wide_string,
+    utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
+    window::Window,
 };
 
 thread_local! {
