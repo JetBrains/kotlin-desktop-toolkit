@@ -7,6 +7,7 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
 public data class Screen(
+    val isAttached: Boolean,
     val isPrimary: Boolean,
     val name: String?,
     val origin: PhysicalPoint,
@@ -17,6 +18,7 @@ public data class Screen(
     public companion object {
         internal fun fromNative(s: MemorySegment): Screen {
             return Screen(
+                isAttached = NativeScreenInfo.is_attached(s),
                 isPrimary = NativeScreenInfo.is_primary(s),
                 name = NativeScreenInfo.name(s).getString(0),
                 origin = PhysicalPoint.fromNative(NativeScreenInfo.origin(s)),

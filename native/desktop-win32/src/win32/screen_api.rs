@@ -14,6 +14,7 @@ type ScreenInfoArray = AutoDropArray<ScreenInfo>;
 impl PanicDefault for ScreenInfo {
     fn default() -> Self {
         Self {
+            is_attached: Default::default(),
             is_primary: Default::default(),
             name: RustAllocatedStrPtr::null().to_auto_drop(),
             origin: PhysicalPoint::default(),
