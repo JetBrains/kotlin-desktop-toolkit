@@ -1,4 +1,4 @@
-package org.jetbrains.desktop.win32.test
+package org.jetbrains.desktop.win32.tests
 
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Event

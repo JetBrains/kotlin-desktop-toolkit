@@ -1,4 +1,4 @@
-package org.jetbrains.desktop.win32.test
+package org.jetbrains.desktop.win32.tests
 
 import org.jetbrains.desktop.win32.FontSmoothing
 import org.jetbrains.desktop.win32.FontSmoothingOrientation

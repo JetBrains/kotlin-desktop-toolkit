@@ -1,9 +1,10 @@
-package org.jetbrains.desktop.win32.test
+package org.jetbrains.desktop.win32.tests
 
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Event
 import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.KotlinDesktopToolkit
+import org.jetbrains.desktop.win32.Window
 import org.jetbrains.desktop.win32.WindowParams
 import org.jetbrains.desktop.win32.WindowStyle
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -17,7 +18,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 @EnabledOnOs(OS.WINDOWS)
 class WindowStyleTests {
-    private fun runStyleTest(initialStyle: WindowStyle, body: (org.jetbrains.desktop.win32.Window) -> Unit) {
+    private fun runStyleTest(initialStyle: WindowStyle, body: (Window) -> Unit) {
         KotlinDesktopToolkit.init(
             libraryFolderPath = Path.of(System.getProperty("kdt.win32.library.folder.path")!!),
         )
