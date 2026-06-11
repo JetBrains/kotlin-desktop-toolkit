@@ -21,6 +21,7 @@ use super::{
 #[repr(C)]
 #[derive(Debug)]
 pub struct ScreenInfo {
+    pub is_attached: bool,
     pub is_primary: bool,
     pub name: AutoDropStrPtr,
     // Virtual-desktop coordinate relative to the primary screen.
@@ -81,9 +82,6 @@ pub(crate) fn get_screen_info(hmonitor: HMONITOR) -> anyhow::Result<ScreenInfo> 
     if !unsafe { EnumDisplayDevicesW(&device_name, 0, &raw mut display_device, 0).as_bool() } {
         anyhow::bail!("failed to get display device info");
     }
-    if (display_device.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) != DISPLAY_DEVICE_ATTACHED_TO_DESKTOP {
-        anyhow::bail!("display device is not attached to the desktop");
-    }
     let mut device_mode = DEVMODEW {
         dmSize: size_of::<DEVMODEW>().try_into()?,
         dmDriverExtra: 0,
@@ -99,6 +97,7 @@ pub(crate) fn get_screen_info(hmonitor: HMONITOR) -> anyhow::Result<ScreenInfo> 
         .context("failed to get DPI for the monitor")?;
     let scale = (dpi_x as f32) / (USER_DEFAULT_SCREEN_DPI as f32);
     let screen_info = ScreenInfo {
+        is_attached: (display_device.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) == DISPLAY_DEVICE_ATTACHED_TO_DESKTOP,
         is_primary: (device_position.x == 0 && device_position.y == 0),
         name: RustAllocatedStrPtr::from_c_string(device_name).to_auto_drop(),
         origin: PhysicalPoint::new(device_position.x, device_position.y),
