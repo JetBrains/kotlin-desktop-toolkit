@@ -1,7 +1,7 @@
+use crate::linux::geometry::LogicalRect;
 use bitflag_attr::bitflag;
 use desktop_common::ffi_utils::BorrowedUtf8;
-
-use crate::linux::geometry::LogicalRect;
+use std::ffi::c_int;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -46,7 +46,7 @@ pub enum TextInputContentPurpose {
 }
 
 #[repr(C)]
-#[bitflag(u32)]
+#[bitflag(c_int)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum TextInputContentHints {
     Completion = 1 << 0,

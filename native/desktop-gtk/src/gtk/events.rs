@@ -7,6 +7,7 @@ use bitflag_attr::bitflag;
 use core::f64;
 use desktop_common::ffi_utils::{BorrowedArray, BorrowedUtf8};
 use desktop_common::logger::PanicDefault;
+use std::ffi::c_int;
 
 pub type EventHandler = extern "C" fn(&Event) -> bool;
 
@@ -37,7 +38,7 @@ impl PanicDefault for RequestId {
 pub struct MouseButton(pub u32);
 
 #[repr(C)]
-#[bitflag(u8)]
+#[bitflag(c_int)]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum KeyModifiers {
     /// The "control" key
@@ -213,8 +214,6 @@ pub struct KeyDownEvent {
     pub has_character: bool,
     pub character: char,
     pub key: u32,
-    // pub key_without_modifiers: u32,
-    pub modifiers: KeyModifiers,
 }
 
 impl From<KeyDownEvent> for Event<'_> {
@@ -229,7 +228,6 @@ pub struct KeyUpEvent {
     pub window_id: WindowId,
     pub code: KeyCode,
     pub key: u32,
-    // pub key_without_modifiers: u32,
 }
 
 impl From<KeyUpEvent> for Event<'_> {
@@ -241,7 +239,6 @@ impl From<KeyUpEvent> for Event<'_> {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ModifiersChangedEvent {
-    pub window_id: WindowId,
     pub modifiers: KeyModifiers,
 }
 
@@ -327,6 +324,8 @@ pub struct ScrollWheelEvent {
     pub timestamp: Timestamp,
     pub scroll_delta_x: LogicalPixels,
     pub scroll_delta_y: LogicalPixels,
+    pub is_smooth_scroll: bool,
+    pub is_stop: bool,
 }
 
 impl From<ScrollWheelEvent> for Event<'_> {

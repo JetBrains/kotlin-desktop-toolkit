@@ -733,7 +733,7 @@ private class EditorState {
     }
 
     fun onModifiersChanged(previousModifiers: Set<KeyModifiers>, newModifiers: Set<KeyModifiers>, app: Application): EventHandlerResult {
-        if (!previousModifiers.contains(KeyModifiers.Shift) && newModifiers.contains(KeyModifiers.Shift)) {
+        if (composedTextRange != null && !previousModifiers.contains(KeyModifiers.Shift) && newModifiers.contains(KeyModifiers.Shift)) {
             val disableTextInput = newModifiers.contains(KeyModifiers.Alt)
             resetTextInput(app, reenable = !disableTextInput, clear = newModifiers.contains(KeyModifiers.Control))
             textInputEnabled = !disableTextInput

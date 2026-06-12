@@ -3296,15 +3296,15 @@ text/plain;charset=utf-8
 
         withKeyPress(KeyCode.Shift_L) {
             withNextEvent { event ->
+                assertInstanceOf<Event.KeyDown>(event)
+                assertNull(event.characters)
+                assertEquals(KeyCode.Shift_L, event.keyCode.value)
+                assertEquals(KeySym.Shift_L, event.key.value)
+            }
+            withNextEvent { event ->
                 assertInstanceOf<Event.ModifiersChanged>(event)
                 assertEquals(setOf(KeyModifiers.Shift), event.modifiers)
             }
-//            withNextEvent { event ->
-//                assertInstanceOf<Event.KeyDown>(event)
-//                assertNull(event.characters)
-//                assertEquals(KeyCode.Shift_L, event.keyCode.value)
-//                assertEquals(KeySym.Shift_L, event.key.value)
-//            }
             withKeyPress(KeyCode.A) {
                 withNextEvent { event ->
                     assertInstanceOf<Event.KeyDown>(event)
@@ -3320,26 +3320,26 @@ text/plain;charset=utf-8
             }
         }
         withNextEvent { event ->
+            assertInstanceOf<Event.KeyUp>(event)
+            assertEquals(KeyCode.Shift_L, event.keyCode.value)
+            assertEquals(KeySym.Shift_L, event.key.value)
+        }
+        withNextEvent { event ->
             assertInstanceOf<Event.ModifiersChanged>(event)
             assertEquals(emptySet(), event.modifiers)
         }
-//        withNextEvent { event ->
-//            assertInstanceOf<Event.KeyUp>(event)
-//            assertEquals(KeyCode.Shift_L, event.keyCode.value)
-//            assertEquals(KeySym.Shift_L, event.key.value)
-//        }
 
         withKeyPress(KeyCode.Control_L) {
+            withNextEvent { event ->
+                assertInstanceOf<Event.KeyDown>(event)
+                assertNull(event.characters)
+                assertEquals(KeyCode.Control_L, event.keyCode.value)
+                assertEquals(KeySym.Control_L, event.key.value)
+            }
             withNextEvent { event ->
                 assertInstanceOf<Event.ModifiersChanged>(event)
                 assertEquals(setOf(KeyModifiers.Control), event.modifiers)
             }
-//            withNextEvent { event ->
-//                assertInstanceOf<Event.KeyDown>(event)
-//                assertNull(event.characters)
-//                assertEquals(KeyCode.Control_L, event.keyCode.value)
-//                assertEquals(KeySym.Control_L, event.key.value)
-//            }
             withKeyPress(KeyCode.A) {
                 withNextEvent { event ->
                     assertInstanceOf<Event.KeyDown>(event)
@@ -3355,13 +3355,13 @@ text/plain;charset=utf-8
             }
         }
         withNextEvent { event ->
+            assertInstanceOf<Event.KeyUp>(event)
+            assertEquals(KeyCode.Control_L, event.keyCode.value)
+        }
+        withNextEvent { event ->
             assertInstanceOf<Event.ModifiersChanged>(event)
             assertEquals(emptySet(), event.modifiers)
         }
-//        withNextEvent { event ->
-//            assertInstanceOf<Event.KeyUp>(event)
-//            assertEquals(KeyCode.Control_L, event.keyCode.value)
-//        }
         testSuccessful = true
     }
 
@@ -3654,6 +3654,11 @@ text/plain;charset=utf-8
 
         withKeyPress(KeyCode.Shift_L) {
             withNextEvent { event ->
+                assertInstanceOf<Event.KeyDown>(event)
+                assertNull(event.characters)
+                assertEquals(KeyCode.Shift_L, event.keyCode.value)
+            }
+            withNextEvent { event ->
                 assertInstanceOf<Event.ModifiersChanged>(event)
                 assertEquals(setOf(KeyModifiers.Shift), event.modifiers)
             }
@@ -3670,6 +3675,10 @@ text/plain;charset=utf-8
                 assertEquals(KeyCode.A, event.keyCode.value)
                 assertEquals(KeySym.A, event.key.value)
             }
+        }
+        withNextEvent { event ->
+            assertInstanceOf<Event.KeyUp>(event)
+            assertEquals(KeyCode.Shift_L, event.keyCode.value)
         }
         withNextEvent { event ->
             assertInstanceOf<Event.ModifiersChanged>(event)
@@ -3762,15 +3771,15 @@ text/plain;charset=utf-8
 
         withKeyPress(KeyCode.Control_L) {
             withNextEvent { event ->
+                assertInstanceOf<Event.KeyDown>(event)
+                assertNull(event.characters)
+                assertEquals(KeyCode.Control_L, event.keyCode.value)
+                assertEquals(KeySym.Control_L, event.key.value)
+            }
+            withNextEvent { event ->
                 assertInstanceOf<Event.ModifiersChanged>(event)
                 assertEquals(setOf(KeyModifiers.Control), event.modifiers)
             }
-//            withNextEvent { event ->
-//                assertInstanceOf<Event.KeyDown>(event)
-//                assertNull(event.characters)
-//                assertEquals(KeyCode.Control_L, event.keyCode.value)
-//                assertEquals(KeySym.Control_L, event.key.value)
-//            }
             withKeyPress(KeyCode.A) {
                 withNextEvent { event ->
                     assertInstanceOf<Event.KeyDown>(event)
@@ -3786,14 +3795,14 @@ text/plain;charset=utf-8
             }
         }
         withNextEvent { event ->
+            assertInstanceOf<Event.KeyUp>(event)
+            assertEquals(KeyCode.Control_L, event.keyCode.value)
+            assertEquals(KeySym.Control_L, event.key.value)
+        }
+        withNextEvent { event ->
             assertInstanceOf<Event.ModifiersChanged>(event)
             assertEquals(emptySet(), event.modifiers)
         }
-//        withNextEvent { event ->
-//            assertInstanceOf<Event.KeyUp>(event)
-//            assertEquals(KeyCode.Control_L, event.keyCode.value)
-//            assertEquals(KeySym.Control_L, event.key.value)
-//        }
 
         textInputContext = textInputContext.copy(
             surroundingText = "àéîõü",

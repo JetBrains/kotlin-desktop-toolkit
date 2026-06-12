@@ -145,7 +145,7 @@ pub extern "C" fn window_start_drag_and_drop(
     drag_icon_rendering_mode: RenderingMode,
     drag_icon_size: LogicalSize,
 ) {
-    debug!("window_start_drag_and_drop");
+    debug!("window_start_drag_and_drop: {window_id:?}, {mime_types:?}, {actions:?}");
     ffi_boundary("window_start_drag_and_drop", || {
         let mime_types_str = mime_types.get("window_start_drag_and_drop: mime_types")?;
         with_app_state(|app| {

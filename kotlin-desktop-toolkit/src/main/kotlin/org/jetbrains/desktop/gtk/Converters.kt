@@ -132,24 +132,28 @@ internal fun PhysicalSize.Companion.fromNative(s: MemorySegment) = PhysicalSize(
     height = NativePhysicalSize.height(s),
 )
 
+private fun bitmaskContains(mask: Int, value: Int): Boolean {
+    return mask and value == value
+}
+
 private fun keyModifiersFromNative(nativeModifiers: Int): Set<KeyModifiers> {
     val modifiers = buildSet {
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_Ctrl() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_Ctrl())) {
             add(KeyModifiers.Control)
         }
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_Alt() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_Alt())) {
             add(KeyModifiers.Alt)
         }
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_Shift() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_Shift())) {
             add(KeyModifiers.Shift)
         }
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_CapsLock() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_CapsLock())) {
             add(KeyModifiers.CapsLock)
         }
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_Logo() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_Logo())) {
             add(KeyModifiers.Logo)
         }
-        if (nativeModifiers and desktop_gtk_h.NativeKeyModifiers_NumLock() > 0) {
+        if (bitmaskContains(nativeModifiers, desktop_gtk_h.NativeKeyModifiers_NumLock())) {
             add(KeyModifiers.NumLock)
         }
     }
@@ -553,10 +557,10 @@ internal fun Set<DragAndDropAction>.toNativeDragAndDropActions(): Int {
 
 internal fun dragAndDropActionsFromNative(raw: Int): Set<DragAndDropAction> {
     return buildSet {
-        if (raw and desktop_gtk_h.NativeDragAndDropAction_Copy() > 0) {
+        if (bitmaskContains(raw, desktop_gtk_h.NativeDragAndDropAction_Copy())) {
             add(DragAndDropAction.Copy)
         }
-        if (raw and desktop_gtk_h.NativeDragAndDropAction_Move() > 0) {
+        if (bitmaskContains(raw, desktop_gtk_h.NativeDragAndDropAction_Move())) {
             add(DragAndDropAction.Move)
         }
     }
@@ -719,7 +723,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 keyCode = KeyCode(NativeKeyDownEvent.code(nativeEvent).toUInt()),
                 characters = if (hasCharacter) String(rawCharacter.toUTF32ByteArray(), Charsets.UTF_32) else null,
                 key = KeySym(NativeKeyDownEvent.key(nativeEvent).toUInt()),
-                modifiers = keyModifiersFromNative(NativeKeyDownEvent.modifiers(nativeEvent)),
             )
         }
 
@@ -760,7 +763,6 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
             val nativeEvent = NativeEvent.modifiers_changed(s)
             val nativeModifiers = NativeModifiersChangedEvent.modifiers(nativeEvent)
             Event.ModifiersChanged(
-                windowId = NativeModifiersChangedEvent.window_id(nativeEvent),
                 modifiers = keyModifiersFromNative(nativeModifiers),
             )
         }
@@ -834,6 +836,8 @@ internal fun Event.Companion.fromNative(s: MemorySegment, app: Application): Eve
                 scrollingDeltaX = NativeScrollWheelEvent.scroll_delta_x(nativeEvent).toFloat(),
                 scrollingDeltaY = NativeScrollWheelEvent.scroll_delta_y(nativeEvent).toFloat(),
                 timestamp = Timestamp.fromNative(NativeScrollWheelEvent.timestamp(nativeEvent)),
+                isStop = NativeScrollWheelEvent.is_stop(nativeEvent),
+                isSmoothScroll = NativeScrollWheelEvent.is_smooth_scroll(nativeEvent),
             )
         }
 
