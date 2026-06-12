@@ -109,15 +109,29 @@ impl Drop for ApplicationState {
     }
 }
 
+fn create_gtk_app(display: &gdk4::Display) -> anyhow::Result<gtk4::Application> {
+    let mut app_builder = gtk4::Application::builder().flags(gio::ApplicationFlags::NON_UNIQUE);
+
+    let app_id = glib::program_name().context("glib::program_name not set")?;
+    let app_id_str = app_id.as_str();
+    if gio::Application::id_is_valid(app_id_str) {
+        app_builder = app_builder.application_id(app_id);
+    } else if gtk4::IconTheme::for_display(display).has_icon(app_id_str) {
+        // In case the application ID is not valid for GTK, try manually configuring an application icon.
+        gtk4::Window::set_default_icon_name(app_id_str);
+    }
+
+    Ok(app_builder.build())
+}
+
 impl ApplicationState {
     #[allow(clippy::too_many_lines)]
     pub fn new(callbacks: &ApplicationCallbacks) -> anyhow::Result<Self> {
         debug!("Initializing application state");
 
-        let gtk_app = gtk4::Application::builder()
-            .application_id(glib::program_name().unwrap())
-            .flags(gio::ApplicationFlags::NON_UNIQUE)
-            .build();
+        let display = gdk4::Display::default().context("Unable to open display")?;
+        let default_seat = display.default_seat();
+        let gtk_app = create_gtk_app(&display)?;
 
         let application_wants_to_terminate = callbacks.application_wants_to_terminate;
         let event_handler = callbacks.event_handler;
@@ -152,10 +166,7 @@ impl ApplicationState {
                 send_event(event_handler, Event::DesktopSettingChange(initial_setting));
             }
 
-            if let Some(keyboard) = gdk4::Display::default()
-                .and_then(|display| display.default_seat())
-                .and_then(|seat| seat.keyboard())
-            {
+            if let Some(keyboard) = default_seat.as_ref().and_then(SeatExt::keyboard) {
                 // Cannot use `EventControllerKey::modifiers` signal, see https://gitlab.gnome.org/GNOME/gtk/-/issues/5139
                 keyboard.connect_modifier_state_notify(move |keyboard| {
                     let modifiers = key_modifiers_from_gdk(keyboard.modifier_state());
@@ -185,7 +196,6 @@ impl ApplicationState {
 
         let event_handler = callbacks.event_handler;
         let ffi_dealloc = callbacks.obj_dealloc;
-        let display = gdk4::DisplayManager::get().default_display().context("Unable to open display")?;
 
         // If GSK decides to use Vulkan renderer, the OpenGL texture needs to be passed via DMA-BUF,
         // which is available only since GTK 4.14, and is an additional overhead.

@@ -241,7 +241,7 @@ fn build_ui(application: &gtk4::Application) {
             // GTK uses only key (and pointer) down events:
             // https://github.com/GNOME/gtk/blob/5301a91f1c74764facb4d60f40ab8621dd7af198/gdk/wayland/gdkseat-wayland.c#L4602
             event_controller_key.connect_key_pressed(move |_event_controller_key, _keyval, _keycode, _state| {
-                let display = gdk4::DisplayManager::get().default_display().expect("default display");
+                let display = gdk4::Display::default().expect("default display");
                 let clipboard = match data_source {
                     DataSource::Clipboard => display.clipboard(),
                     DataSource::PrimarySelection => display.primary_clipboard(),
