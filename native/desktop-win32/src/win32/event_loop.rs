@@ -5,34 +5,6 @@ use std::{
 
 use desktop_common::ffi_utils::RustAllocatedStrPtr;
 
-use anyhow::Context;
-use windows::Win32::{
-    Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
-    Graphics::{
-        Dwm::DwmDefWindowProc,
-        Gdi::{BeginPaint, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT},
-    },
-    UI::{
-        HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
-        Input::{
-            KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture},
-            Pointer::EnableMouseInPointer,
-        },
-        Shell::{ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
-        WindowsAndMessaging::{
-            AdjustWindowRectEx, DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime,
-            GetMessageW, GetWindowLongPtrW, GetWindowRect, HMENU, HTCAPTION, HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, HTTOP,
-            MINMAXINFO, MSG, NCCALCSIZE_PARAMS, SC_KEYMENU, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-            SetWindowPos, USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE,
-            WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_INITMENUPOPUP,
-            WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN,
-            WM_NCPOINTERUP, WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL,
-            WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE,
-            WM_SYSCHAR, WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
-        },
-    },
-};
-
 use super::{
     appearance::{Appearance, HighContrast},
     events::{
@@ -47,6 +19,34 @@ use super::{
     strings::copy_from_wide_string,
     utils::{GET_WHEEL_DELTA_WPARAM, GET_X_LPARAM, GET_Y_LPARAM, HIWORD, LOWORD},
     window::Window,
+};
+use anyhow::Context;
+use windows::Win32::UI::HiDpi::AdjustWindowRectExForDpi;
+use windows::Win32::{
+    Foundation::{LPARAM, LRESULT, POINT, RECT, WPARAM},
+    Graphics::{
+        Dwm::DwmDefWindowProc,
+        Gdi::{BeginPaint, EndPaint, GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow, PAINTSTRUCT},
+    },
+    UI::{
+        HiDpi::{DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext},
+        Input::{
+            KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture},
+            Pointer::EnableMouseInPointer,
+        },
+        Shell::{ABE_BOTTOM, ABE_LEFT, ABE_RIGHT, ABE_TOP, ABM_GETAUTOHIDEBAREX, ABM_GETSTATE, ABS_AUTOHIDE, APPBARDATA, SHAppBarMessage},
+        WindowsAndMessaging::{
+            DefWindowProcW, DispatchMessageW, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetMessagePos, GetMessageTime, GetMessageW,
+            GetWindowLongPtrW, GetWindowRect, HMENU, HTCAPTION, HTCLIENT, HTCLOSE, HTMAXBUTTON, HTMINBUTTON, HTTOP, MINMAXINFO, MSG,
+            NCCALCSIZE_PARAMS, SC_KEYMENU, SPI_SETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowPos,
+            USER_DEFAULT_SCREEN_DPI, WA_INACTIVE, WINDOW_EX_STYLE, WINDOW_STYLE, WINDOWPOS, WM_ACTIVATE, WM_CANCELMODE, WM_CAPTURECHANGED,
+            WM_CHAR, WM_CLOSE, WM_CREATE, WM_DEADCHAR, WM_DPICHANGED, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_INITMENUPOPUP, WM_KEYDOWN,
+            WM_KEYUP, WM_KILLFOCUS, WM_NCCALCSIZE, WM_NCHITTEST, WM_NCLBUTTONDOWN, WM_NCMOUSELEAVE, WM_NCPOINTERDOWN, WM_NCPOINTERUP,
+            WM_NCPOINTERUPDATE, WM_NCRBUTTONUP, WM_PAINT, WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERHWHEEL, WM_POINTERLEAVE,
+            WM_POINTERUP, WM_POINTERUPDATE, WM_POINTERWHEEL, WM_SETCURSOR, WM_SETFOCUS, WM_SETTEXT, WM_SETTINGCHANGE, WM_SYSCHAR,
+            WM_SYSCOLORCHANGE, WM_SYSCOMMAND, WM_SYSDEADCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_WINDOWPOSCHANGED,
+        },
+    },
 };
 
 thread_local! {
@@ -380,11 +380,12 @@ fn on_nccalcsize(event_loop: &EventLoop, window: &Window, wparam: WPARAM, lparam
     let mut rc = RECT::default();
     // https://devblogs.microsoft.com/oldnewthing/20131017-00/?p=2903
     unsafe {
-        AdjustWindowRectEx(
+        AdjustWindowRectExForDpi(
             &raw mut rc,
             WINDOW_STYLE(GetWindowLongPtrW(hwnd, GWL_STYLE).try_into().unwrap()),
             false,
             WINDOW_EX_STYLE(GetWindowLongPtrW(hwnd, GWL_EXSTYLE).try_into().unwrap()),
+            window.dpi_metrics().dpi,
         )
     }
     .inspect_err(|err| log::error!("failed to adjust window size: {err}"))
@@ -880,12 +881,12 @@ fn on_pointerup(event_loop: &EventLoop, window: &Window, msg: u32, wparam: WPARA
 }
 
 fn on_pointercapturechanged(_window: &Window, _wparam: WPARAM) -> Option<LRESULT> {
-    log::debug!("on_pointercapturechanged");
+    log::trace!("on_pointercapturechanged");
     None
 }
 
 fn on_capturechanged(window: &Window) -> Option<LRESULT> {
-    log::debug!("on_capturechanged");
+    log::trace!("on_capturechanged");
     // We've lost the mouse capture (released by us, or stolen). Clear our ownership flag so
     // `on_pointerup` won't later mistake someone else's capture for ours.
     window.set_self_captured_pointer(false);
@@ -895,7 +896,7 @@ fn on_capturechanged(window: &Window) -> Option<LRESULT> {
 fn on_cancelmode(_window: &Window) -> Option<LRESULT> {
     // Usually is triggered when dialog is shown
     // We should notify user space to drop tooltips and hovered states
-    log::debug!("on_cancelmode");
+    log::trace!("on_cancelmode");
 
     // Returning `None` lets `DefWindowProc` complete the standard cancel
     // (releases mouse capture, cancels menu / scrollbar tracking).

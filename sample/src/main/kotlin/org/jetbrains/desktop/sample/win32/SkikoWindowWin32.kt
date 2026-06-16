@@ -281,7 +281,6 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
             }
 
             is Event.PointerDown -> with(event) {
-                println("Pointer down $event")
                 // The caption buttons are reported as non-client (see the NCHitTest handler), so the
                 // press arrives here with nonClientArea = true and `locationInWindow` in logical
                 // client space. Consume it (Stop) so it never reaches DefWindowProc: its legacy
@@ -304,7 +303,6 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
             }
 
             is Event.PointerUp -> with(event) {
-                println("Pointer up $event")
                 val clientSize = window.getClientSize()
                 when {
                     captionButtons.pressed != null -> {
@@ -397,7 +395,7 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                 surfaceProps = null,
             )!!.use { surface ->
                 val time = creationTime.elapsedNow().inWholeMilliseconds
-                surface.canvas.clear(Color.TRANSPARENT) // TODO  [pavel.sergeev] use Color.GREEN to debug AIR-5409
+                surface.canvas.clear(Color.TRANSPARENT)
                 surface.canvas.draw(size, scale, time)
                 captionButtons.draw(surface.canvas, size, scale, immersiveDark, window.isMaximized(), captionButtonModel())
                 counterButton.draw(surface.canvas, size, scale, immersiveDark)
