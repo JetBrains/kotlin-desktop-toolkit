@@ -87,6 +87,10 @@ public value class DragDropEffect internal constructor(internal val value: Int) 
         return DragDropEffect(this.value and other.value)
     }
 
+    public infix fun or(other: DragDropEffect): DragDropEffect {
+        return DragDropEffect(this.value or other.value)
+    }
+
     public fun hasFlag(effect: DragDropEffect): Boolean {
         return (this.value and effect.value) == effect.value
     }
