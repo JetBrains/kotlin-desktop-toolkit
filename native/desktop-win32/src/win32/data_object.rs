@@ -4,7 +4,7 @@
 use std::mem::ManuallyDrop;
 
 use windows::Win32::{
-    Foundation::{DV_E_FORMATETC, DV_E_TYMED, E_NOTIMPL, E_POINTER, HGLOBAL, OLE_E_ADVISENOTSUPPORTED, S_OK},
+    Foundation::{DV_E_FORMATETC, DV_E_TYMED, E_NOTIMPL, E_POINTER, HGLOBAL, OLE_E_ADVISENOTSUPPORTED, S_FALSE, S_OK},
     System::Com::{
         DATADIR, DATADIR_GET, DVASPECT_CONTENT, FORMATETC, IAdviseSink, IDataObject, IDataObject_Impl, IEnumFORMATETC, IEnumSTATDATA,
         STGMEDIUM, STGMEDIUM_0, TYMED_HGLOBAL, TYMED_ISTREAM,
@@ -130,7 +130,7 @@ pub fn is_data_object_format_available(data_object: &IDataObject, data_format: D
     let format_etc = get_format_etc_for_hglobal(data_format);
     match unsafe { data_object.QueryGetData(&raw const format_etc) } {
         S_OK => Ok(true),
-        DV_E_FORMATETC | DV_E_TYMED => Ok(false),
+        S_FALSE | DV_E_FORMATETC | DV_E_TYMED => Ok(false),
         result => Err(WinError::from(result).into()),
     }
 }
