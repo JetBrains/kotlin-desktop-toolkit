@@ -309,6 +309,14 @@ pub extern "C" fn window_show(window_ptr: WindowPtr) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn window_force_focus(window_ptr: WindowPtr) {
+    with_window(&window_ptr, "window_force_focus", |window| {
+        window.force_focus();
+        Ok(())
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn window_request_redraw(window_ptr: WindowPtr) {
     with_window(&window_ptr, "window_request_redraw", |window| {
         window.request_redraw()?;

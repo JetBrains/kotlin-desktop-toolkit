@@ -90,7 +90,7 @@ class SkottieWindow(app: Application) : SkikoWindowWin32(app) {
 class ApplicationState(private val app: Application) : AutoCloseable {
     private val windows = mutableMapOf<WindowId, SkottieWindow>()
 
-    fun createWindow() {
+    fun createWindow(focusOnCreate: Boolean = false) {
         val windowParams = WindowParams(
             size = LogicalSize(width = 640f, height = 480f),
             title = "Sample Window",
@@ -106,6 +106,13 @@ class ApplicationState(private val app: Application) : AutoCloseable {
         window.window.create(windowParams)
         window.window.setMinSize(LogicalSize(320.0f, 240.0f))
         window.window.show()
+        // Force focus only for the initial startup window, so it comes to the front even when
+        // the app is launched from a terminal/IDE that currently owns the foreground. Windows
+        // opened mid-session (e.g. Ctrl+N) intentionally follow the normal OS foreground policy
+        // and don't steal focus from whatever the user is doing.
+        if (focusOnCreate) {
+            window.window.forceFocus()
+        }
 
         val appearance = Appearance.getCurrent()
         Logger.debug { "Current appearance: $appearance" }
@@ -152,7 +159,7 @@ fun main(args: Array<String>) {
     Application().use { app ->
         ApplicationState(app).use { state ->
             app.onStartup {
-                state.createWindow()
+                state.createWindow(focusOnCreate = true)
             }
             app.runEventLoop { windowId, event ->
                 state.handleEvent(event, windowId)
