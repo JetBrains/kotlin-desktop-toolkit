@@ -452,7 +452,7 @@ impl Window {
         // `ShowWindow(SW_RESTORE)`: it is synchronous on the window's UI thread (ShowWindow
         // is async when issued cross-thread) and preserves the standard restore animation.
         if self.is_minimized() {
-            self.send_system_command(SC_RESTORE);
+            self.restore();
         }
 
         unsafe {
