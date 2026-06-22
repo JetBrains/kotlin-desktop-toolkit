@@ -3,6 +3,7 @@ package org.jetbrains.desktop.sample.win32
 import org.jetbrains.desktop.win32.AngleRenderer
 import org.jetbrains.desktop.win32.Appearance
 import org.jetbrains.desktop.win32.Application
+import org.jetbrains.desktop.win32.Cursor
 import org.jetbrains.desktop.win32.CursorIcon
 import org.jetbrains.desktop.win32.DataFormat
 import org.jetbrains.desktop.win32.DataObject
@@ -208,6 +209,15 @@ abstract class SkikoWindowWin32(app: Application) : AutoCloseable {
                             Logger.debug { "OLE clipboard text: $textItem" }
                             Logger.debug { "OLE clipboard HTML fragment: $htmlFragment" }
                         }
+                    }
+
+                    VirtualKey.U -> {
+                        // Shift+U hides the cursor, U shows it. ShowCursor maintains an internal display
+                        // counter: hide() decrements it, show() increments it, and the cursor is visible
+                        // only while the counter is >= 0. Log the returned counter to observe this.
+                        val hide = Keyboard.getKeyState(VirtualKey.Shift).isDown
+                        val displayCounter = if (hide) Cursor.hide() else Cursor.show()
+                        Logger.debug { "Cursor ${if (hide) "hidden" else "shown"}, display counter: $displayCounter" }
                     }
 
                     else -> {
