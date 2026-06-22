@@ -46,6 +46,9 @@ public data class WindowStyle(
     }
 }
 
+/**
+ * Dispatcher-thread-bound.
+ */
 public class Window internal constructor(
     private val windowId: WindowId,
     private val ptr: MemorySegment,

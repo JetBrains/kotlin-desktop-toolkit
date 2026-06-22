@@ -1,8 +1,8 @@
 //! Cross-thread "run on the UI thread" dispatch.
 //!
-//! A message-only window whose wndproc drains an mpsc channel of `extern "C" fn()`
-//! callbacks: producers `dispatch` from any thread, and the UI thread runs them when it
-//! pumps the posted wake message.
+//! A message-only window whose wndproc drains an mpsc channel of callbacks:
+//! producers dispatch from any thread, and the UI thread runs them when it pumps
+//! the posted wake message.
 
 use std::sync::{
     Arc, OnceLock,
@@ -60,24 +60,6 @@ fn try_wake(wake_posted: &AtomicBool, post: impl Fn() -> bool) -> bool {
         return false;
     }
     true
-}
-
-impl Dispatcher {
-    pub fn dispatch(&self, cb: extern "C" fn()) -> bool {
-        if self.tx.send(cb).is_err() {
-            return false; // Receiver dropped: dispatcher is shutting down.
-        }
-        // Null = shutdown already took the handle. Acquire pairs with take_hwnd's swap.
-        let hwnd = self.hwnd.load(Ordering::Acquire);
-        if hwnd.is_null() {
-            return false;
-        }
-        try_wake(&self.wake_posted, || {
-            // SAFETY: `hwnd` is the message-only window; PostMessageW is thread-safe, and a
-            // concurrently-destroyed handle just Errs.
-            unsafe { PostMessageW(Some(HWND(hwnd)), wake_message(), WPARAM(0), LPARAM(0)) }.is_ok()
-        })
-    }
 }
 
 // Clear the flag (Release) BEFORE draining so a producer racing the drain re-posts and
@@ -172,6 +154,25 @@ impl Dispatcher {
             hwnd: AtomicPtr::new(hwnd.0),
             tx,
             wake_posted,
+        })
+    }
+
+    pub fn dispatch(&self, cb: extern "C" fn()) -> bool {
+        // Null = shutdown already took the handle. Acquire pairs with take_hwnd's swap.
+        let hwnd = self.hwnd.load(Ordering::Acquire);
+        if hwnd.is_null() {
+            return false;
+        }
+        if self.tx.send(cb).is_err() {
+            return false; // Receiver dropped: dispatcher is shutting down.
+        }
+        // If shutdown destroys the HWND after the send but before PostMessageW, the
+        // callback can remain queued with no future wake. This matches the dispatcher
+        // contract: work racing shutdown may be dropped.
+        try_wake(&self.wake_posted, || {
+            // SAFETY: `hwnd` is the message-only window; PostMessageW is thread-safe, and a
+            // concurrently-destroyed handle just Errs.
+            unsafe { PostMessageW(Some(HWND(hwnd)), wake_message(), WPARAM(0), LPARAM(0)) }.is_ok()
         })
     }
 

@@ -28,9 +28,9 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 
 ## Application & event loop
 
-**Purpose.** UI-thread runtime for the whole toolkit. Initialises the OLE STA, creates a WinRT `DispatcherQueue` and a `CompositorDriver`, then runs a `GetMessage`/`DispatchMessage` pump. Translates raw `WM_*` messages to typed `Event` variants and forwards to a single Kotlin-supplied callback.
+**Purpose.** UI-thread runtime for the whole toolkit. Initialises the OLE STA, creates the WinRT `DispatcherQueue` needed by composition, creates a message-only `Dispatcher` for cross-thread UI callbacks, creates a `CompositorDriver`, then runs a `GetMessage`/`DispatchMessage` pump. Translates raw `WM_*` messages to typed `Event` variants and forwards to a single Kotlin-supplied callback.
 
-**Files.** `application.rs`, `application_api.rs`, `event_loop.rs`, `events.rs`, `events_api.rs` + Kotlin `Application.kt`, `Event.kt`.
+**Files.** `application.rs`, `application_api.rs`, `dispatcher.rs`, `event_loop.rs`, `events.rs`, `events_api.rs` + Kotlin `Application.kt`, `Event.kt`.
 
 **FFI surface (`application_api.rs`, `events_api.rs`).**
 `application_init_apartment`, `application_init`, `application_run_event_loop`, `application_stop_event_loop`, `application_dispatcher_invoke`, `application_is_dispatcher_thread`, `application_open_url`, `application_drop`; `keyevent_translate_message`, `keydown_to_unicode`.
@@ -38,17 +38,18 @@ Per-subsystem reference. Each entry describes purpose, files, public API, key ty
 **Kotlin surface.** `Application` (`AutoCloseable`) — `runEventLoop`, `stopEventLoop`, `invokeOnDispatcher`, `onStartup`, `isDispatcherThread`, `newWindow`, `createAngleRenderer`. Companion extension `openURL`. `Event` `sealed class` with 22 subclasses 1-to-1 with the Rust enum.
 
 **Key types.**
-- `Application` (Rust) — owns `Rc<EventLoop>`, the `DispatcherQueueController`, `compositor_driver: Arc<CompositorDriver>`. Heap-boxed; opaque to Kotlin as `AppPtr<'a> = RustAllocatedRawPtr<'a>` (alias). The `DispatcherQueue` is accessed via `dispatcher_queue_controller.DispatcherQueue()` rather than stored as a separate field.
+- `Application` (Rust) — owns `Rc<EventLoop>`, the `DispatcherQueueController`, a message-only-window `Dispatcher`, and `compositor_driver: Arc<CompositorDriver>`. Heap-boxed; opaque to Kotlin as `AppPtr<'a> = RustAllocatedRawPtr<'a>` (alias). The WinRT `DispatcherQueue` is accessed via `dispatcher_queue_controller.DispatcherQueue()` rather than stored as a separate field.
+- `Dispatcher` — posts wake messages to a message-only HWND and drains queued FFI callbacks on the UI thread.
 - `EventLoop` — the message pump. `Window` keeps `Weak<EventLoop>` to avoid cycles.
 - `Event` — `#[repr(C)]` enum, 22 variants. Mirrored 1-to-1 in Kotlin. Has `#[allow(dead_code)]` on the whole enum because variants are constructed by Rust but consumed only across FFI.
 - `EventHandler = extern "C" fn(WindowId, &Event) -> bool` (returns "handled?")
 
 **Ownership.** `application_init` heap-boxes the `Application` and returns the leaked pointer; `application_drop` reclaims. The `borrow::<Application>` path on each call leak-reconstructs the box (see `FFI_CONVENTIONS.md` → opaque pointers). Per-`WindowTitleChangedEvent` strings are `AutoDropStrPtr`, owned by the `Event` for the duration of the callback.
 
-**Threading.** Everything UI-thread. `OleInitialize(None)` runs during application setup. `DispatcherQueueController::CreateOnDedicatedThread` is **not** used — `DQTYPE_THREAD_CURRENT` ties the queue to the calling thread. `KEYEVENT_MESSAGES` and `LAST_KEYEVENT_MESSAGE_ID` are `thread_local!`. `LAST_EXCEPTION_MSGS` is also thread-local — errors on background threads are silently lost (see `ARCHITECTURE.md`).
+**Threading.** Everything UI-thread unless explicitly dispatched. `OleInitialize(None)` runs during application setup. `DispatcherQueueController::CreateOnDedicatedThread` is **not** used — `DQTYPE_THREAD_CURRENT` ties the queue to the calling thread for composition. Kotlin `Application.invokeOnDispatcher` and Kotlin-side clipboard retry helpers use the message-only `Dispatcher`. `KEYEVENT_MESSAGES` and `LAST_KEYEVENT_MESSAGE_ID` are `thread_local!`. `LAST_EXCEPTION_MSGS` is also thread-local — errors on background threads are silently lost (see `ARCHITECTURE.md`).
 
 **Gotchas.**
-- `application_dispatcher_invoke` returns a `bool` (enqueue succeeded?) — `Application.invokeOnDispatcher` discards it. Enqueues after dispatcher shutdown silently lose the lambda.
+- `application_dispatcher_invoke` returns a `bool` (enqueue succeeded?). Kotlin `Application.invokeOnDispatcher` checks it and throws on failure; internal async call sites can use `tryInvokeOnDispatcher` to complete their own pending operation instead.
 - `EnableMouseInPointer(true)` is process-wide and irreversible — third-party libs in the same process expecting raw `WM_MOUSE*` will silently break.
 - NC releases fall through to `DefWindowProc` for default NC behavior. For a custom title bar (`WindowTitleBarKind::Custom`), `WindowStyle::to_system` keeps `WS_CAPTION` for native transitions but clears `WS_SYSMENU`, so system caption buttons are not surfaced.
 - `WM_POINTERUPDATE` and `WM_POINTERDOWN` can both emit `Event::PointerDown` for the same gesture (button press inside an update message + dedicated down handler) → possible duplicate events. See TODO.md.
@@ -304,20 +305,30 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 1. **Legacy Win32** (`clipboard_*`): `Open/Get/Set/EmptyClipboard`. HGLOBAL-only.
 2. **OLE** (`ole_clipboard_*`): `OleGetClipboard` / `OleSetClipboard` returning/accepting an `IDataObject`. Supports any TYMED.
 
-**Files.** `clipboard.rs`, `clipboard_api.rs` + Kotlin `Clipboard.kt` (object) and `OleClipboard` (object inside `Clipboard.kt`).
+**Files.** `clipboard.rs`, `clipboard_api.rs`, `clipboard_result.rs` + Kotlin `Clipboard.kt`, `ClipboardResults.kt` (object) and `OleClipboard` (object inside `Clipboard.kt`).
 
-**FFI surface.** `clipboard_count_formats`, `clipboard_enum_formats`, `clipboard_is_format_available`, `clipboard_empty`, `clipboard_get_sequence_number`, `clipboard_{get,try_get,set}_{data,file_list,html_fragment,text}`, `clipboard_get_html_format_id`, `ole_clipboard_{empty,get_data,set_data}`, `native_byte_array_drop`, `native_optional_byte_array_drop`.
+**FFI surface.** Legacy nullable/defaulting symbols remain for compatibility: `clipboard_count_formats`, `clipboard_enum_formats`, `clipboard_is_format_available`, `clipboard_empty`, `clipboard_get_sequence_number`, `clipboard_{get,try_get,set}_{data,file_list,html_fragment,text}`, `clipboard_get_html_format_id`, `ole_clipboard_{empty,get_data,set_data}`, `native_byte_array_drop`, `native_optional_byte_array_drop`. Kotlin uses the result-bearing variants (`*_result`) for clipboard reads/writes, OLE reads/writes, and `IDataObject` reads. Batch writes use `clipboard_set_items_result` with `ClipboardSetItem`.
 
-**Key types.** `Clipboard` (RAII wrapper around `OpenClipboard`/`CloseClipboard`, asserts `is_open`).
+**Kotlin surface.** Synchronous `Clipboard.*` and `OleClipboard.*` methods are deprecated compatibility APIs under the crate-wide UI-thread convention; they do not retry and fail fast when the clipboard is busy. Async wrappers are also dispatcher-thread-only, return `CompletableFuture<T>`, and retry `ClipboardStatus.Busy` without blocking between attempts. Writes use builder-style transactions (`Clipboard.writeAsync { ... }`, `OleClipboard.writeAsync { ... }`) so callers publish all formats in a single clipboard update. OLE `DataObject` instances are dispatcher-thread-bound; objects returned by `OleClipboard.readClipboardAsync` must be read and closed on the dispatcher thread.
 
-**Throwing vs `try_*`.** Both variants exist for every read: throwing version returns `R::default()` and surfaces an exception; `try_*` returns `FfiOption<R>` and (currently) swallows all errors to `None`. Per-user note: `try_*` should swallow only "format not found" — see TODO.md.
+**Key types.** `Clipboard` (RAII wrapper around `OpenClipboard`/`CloseClipboard`, asserts `is_open`), `ClipboardOperationResult` / `ClipboardStatus` (explicit FFI status), `ClipboardSetItem` (tagged multi-format write input).
+
+**Throwing vs `try_*`.** Kotlin decodes `ClipboardStatus`: throwing reads throw `ClipboardException` for anything except `Ok`; `tryRead*` returns `null` only for `FormatUnavailable` and throws for `Busy`, `DataTooLarge`, `InvalidData`, and `NativeError`. The older `FfiOption` symbols still exist but should not be used for new Kotlin call sites.
+
+**Retry policy.** Native clipboard calls do not sleep or retry. Kotlin makes the first attempt immediately, then owns retry scheduling with bounded delays (`10, 25, 50, 100, 200, 400, 800` ms): each attempt is a complete synchronous native call on the dispatcher thread, and retries are scheduled from Kotlin only after the previous attempt has returned. The invariant is that no sleep, await, callback into Kotlin, or other reentrant work runs while `Clipboard` is open; each attempt opens the clipboard, performs the transaction, closes via RAII, then either completes or schedules the next attempt back to the dispatcher.
 
 **Gotchas.**
+- Direct Win32 writes build all HGLOBALs before opening the clipboard. `clipboard_set_items_result` opens once, empties once, and sets all requested formats before close; single-format setters use the same transaction helper with one item.
+- Async Kotlin writes snapshot caller-owned mutable inputs before the first attempt so delayed retries don't observe later caller mutation. Retries still repeat FFI marshalling and HGLOBAL construction per attempt; that deliberately trades a little repeated setup work for a simpler native ownership model and avoids holding Rust allocations across delayed FFI boundaries.
+- `OleClipboard.writeDataObjectAsync` retains a separate COM reference to the supplied `DataObject` for the lifetime of the returned future, so callers may close their original Kotlin wrapper after the async call returns. That retain is itself a COM operation, so this API is dispatcher-thread-only.
 - `ole_clipboard_set_data` calls `OleFlushClipboard` immediately (clipboard_api.rs). The original `IDataObject` is no longer the live clipboard object after the call; subsequent mutations to it have no effect.
+- `OpenClipboard` maps only `HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)` to `ClipboardStatus::Busy`, matching the observed contention shape. Other `OpenClipboard` failures, such as invalid owner HWNDs, remain native errors and are not retried.
 - `Clipboard::is_format_available` returns `Ok(false)` for the documented "ok HRESULT means false" Win32 quirk in `IsClipboardFormatAvailable` (clipboard.rs).
 - DataReader path is **not** used here — `GetClipboardData` always returns HGLOBAL, so `hglobal_reader` is called directly.
+- Clipboard payload copies/allocations are capped at 256 MiB; oversized payloads map to `ClipboardStatus::DataTooLarge`.
+- Clipboard calls are not consistently guarded by native thread-affinity assertions. Use the async Kotlin wrappers for non-blocking dispatcher-thread access, and keep live `DataObject` operations on the dispatcher thread. Broader assertion coverage is deferred until the backend has a consistent policy for all UI-thread-only Win32/OLE APIs.
 
-**Cross-refs.** `window` (parent HWND for `OpenClipboard`), `data_object` (OLE path target), `data_reader` (used only by `data_object_api`, not here), `global_data` (HGLOBAL helpers), `data_transfer` (`DataFormat`).
+**Cross-refs.** `application` / `dispatcher` (Kotlin callback dispatch and async retry attempts), `window` (parent HWND for `OpenClipboard`), `data_object` (OLE path target), `data_reader` (used only by `data_object_api`, not here), `global_data` (HGLOBAL helpers), `data_transfer` (`DataFormat`).
 
 ---
 
@@ -327,7 +338,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Files.** `data_object.rs`, `data_object_api.rs` + Kotlin `DataObject.kt`, `DataFormat.kt`.
 
-**FFI surface.** `data_object_create() -> i64`, `data_object_drop(i64)`, `data_object_add_from_{bytes,file_list,html_fragment,text}`, `data_object_into_com() -> ComInterfaceRawPtr`, `com_data_object_is_format_available`, `com_data_object_enum_formats`, `com_data_object_{read,try_read}_{bytes,file_list,html_fragment,text}`, `com_data_object_release`, `native_u32_array_drop`.
+**FFI surface.** `data_object_create() -> i64`, `data_object_drop(i64)`, `data_object_add_from_{bytes,file_list,html_fragment,text}`, `data_object_into_com() -> ComInterfaceRawPtr`, `com_data_object_is_format_available`, `com_data_object_enum_formats`, `com_data_object_{read,try_read}_{bytes,file_list,html_fragment,text}`, `com_data_object_retain`, `com_data_object_release`, `native_u32_array_drop`.
 
 **Key types.**
 - `DataObject` (Rust) — `#[implement(IDataObject)]`. `papaya::HashMap<u32, HGlobalData>` keyed on cfFormat (cast to u32). Implements `GetData`, `EnumFormatEtc`, `QueryGetData`. `SetData`, `GetDataHere`, `DAdvise*` return `E_NOTIMPL` / `OLE_E_ADVISENOTSUPPORTED`.
@@ -335,11 +346,11 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `DataObject` (Kotlin, `AutoCloseable`) — wraps the `ComInterfaceRawPtr`. `requireOpen` guard. `read*` (throwing) and `tryRead*` (nullable) variants.
 - `DataObjectBuilder` (Kotlin) — used inside `DataObject.build { … }` block-scoped builder. Hides the `data_object_create` → populate → `data_object_into_com` lifecycle.
 
-**Lifecycle.** Kotlin: `DataObject.build { addTextItem(…); addListOfFiles(…) }` returns a `DataObject` whose `comInterfacePtr` is the result of `data_object_into_com`. The Rust-side struct lives via the COM refcount inside `ComObject<DataObject>`. `DataObject.close()` calls `com_data_object_release` → `IUnknown::Release`.
+**Lifecycle.** Kotlin: `DataObject.build { addTextItem(…); addListOfFiles(…) }` returns a `DataObject` whose `comInterfacePtr` is the result of `data_object_into_com`. The Rust-side struct lives via the COM refcount inside `ComObject<DataObject>`. `DataObject.retain()` calls `com_data_object_retain` to create another owned COM reference; `DataObject.close()` calls `com_data_object_release` → `IUnknown::Release`.
 
 **Gotchas.**
-- `tryRead*` collapses all errors to `None`; should be format-not-found only. See TODO.md.
-- `DataObject` Kotlin class is **not thread-safe**: `requireOpen` reads `comInterfacePtr` without sync; concurrent `close()` + `read*()` is a data race.
+- `tryRead*` returns `null` only for `ClipboardStatus::FormatUnavailable`; other native failures throw `ClipboardException`.
+- `DataObject` Kotlin class is **dispatcher-thread-bound and not thread-safe**: `requireOpen` reads `comInterfacePtr` without sync; concurrent or cross-thread `close()` + `read*()` is a data race and can also violate COM apartment affinity.
 - Module-blanket `#![allow(clippy::inline_always)]` and `#![allow(clippy::ref_as_ptr)]` (data_object.rs) — inherited from windows-core's `implement!` macro expansion.
 - Format-id casts: `data_format.id() as u16` (data_object.rs) carries `#[allow(clippy::cast_possible_truncation)]`. Registered IDs (0xC000–0xFFFF) and CF_* values fit, but the suppression is undocumented. Could use `try_into()` with an error.
 
@@ -429,8 +440,8 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `hglobal_reader::get_text` / `get_bytes` / `get_file_list` / `get_html` — lock, read, unlock.
 
 **Gotchas.**
-- `new_file_list` takes `&Vec<&str>` (global_data.rs) — should be `&[&str]` (clippy `ptr_arg` smell).
-- `global_mem_copy` doesn't handle zero-length globals — `GlobalAlloc(GMEM_FIXED, 0)` semantics are platform-specific.
+- `global_mem_copy` returns `GMEM_MOVEABLE` handles so copies can be handed to Win32 clipboard / OLE consumers under normal `HGLOBAL` transfer rules.
+- `MAX_CLIPBOARD_DATA_BYTES` is 256 MiB and is enforced before HGLOBAL allocation/copy/read. `data_reader::istream_reader` applies the same cap before allocating the IStream buffer.
 - HTML format read/write goes through WinRT `HtmlFormatHelper::CreateHtmlFormat` / `GetStaticFragment` — a rare WinRT call in an otherwise pure-Win32 path.
 
 **Cross-refs.** `data_reader`, `data_object`, `clipboard`, `data_transfer`, `strings` (UTF-16/UTF-8 conversions), Win2D-adjacent WinRT (`Windows.ApplicationModel.DataTransfer.HtmlFormatHelper`).
@@ -468,6 +479,8 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `FileOpenDialogOptions` — `choose_directories`, `allows_multiple_selection`.
 
 **Mechanism.** `CoCreateInstance(CLSID_FileOpenDialog/SaveDialog, CLSCTX_INPROC_SERVER)` → set options via `GetOptions`/`SetOptions` → `Show(parentHwnd)` → result via `GetResult`/`GetResults` → `IShellItem::GetDisplayName(SIGDN_FILESYSPATH)`.
+
+**Threading.** Dispatcher-thread-only. The dialogs are COM objects created in the application's OLE STA and `Show` is modal/blocking, though it pumps its own nested message loop while visible.
 
 **Cancel sentinels.**
 - Open: returns zero-length `AutoDropArray` (Kotlin `emptyList()`).

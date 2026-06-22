@@ -1,21 +1,36 @@
 package org.jetbrains.desktop.win32
 
+import org.jetbrains.desktop.win32.generated.NativeClipboardBoolResult
+import org.jetbrains.desktop.win32.generated.NativeClipboardByteArrayResult
+import org.jetbrains.desktop.win32.generated.NativeClipboardStringArrayResult
+import org.jetbrains.desktop.win32.generated.NativeClipboardStringResult
+import org.jetbrains.desktop.win32.generated.NativeClipboardUInt32ArrayResult
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
+/**
+ * Dispatcher-thread-bound and not thread-safe. Query, read, retain, and close it on
+ * the application's OLE STA. This contract is documented but not consistently enforced.
+ */
 public class DataObject(private var comInterfacePtr: MemorySegment) : AutoCloseable {
     public fun isFormatAvailable(format: DataFormat): Boolean = requireOpen { ptr ->
-        ffiDownCall {
-            desktop_win32_h.com_data_object_is_format_available(ptr, format.id)
+        Arena.ofConfined().use { arena ->
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_is_format_available_result(arena, ptr, format.id)
+            }
+            checkClipboardOperation(NativeClipboardBoolResult.result(result))
+            NativeClipboardBoolResult.value(result)
         }
     }
 
     public fun listItemFormats(): List<DataFormat> = requireOpen { ptr ->
         val formatIds = Arena.ofConfined().use { arena ->
-            val formatsPtr = ffiDownCall {
-                desktop_win32_h.com_data_object_enum_formats(arena, ptr)
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_enum_formats_result(arena, ptr)
             }
+            checkClipboardOperation(NativeClipboardUInt32ArrayResult.result(result))
+            val formatsPtr = NativeClipboardUInt32ArrayResult.value(result)
             try {
                 intArrayFromNative(formatsPtr)
             } finally {
@@ -29,9 +44,11 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
 
     public fun readItemOfType(format: DataFormat): ByteArray = requireOpen { ptr ->
         Arena.ofConfined().use { arena ->
-            val dataPtr = ffiDownCall {
-                desktop_win32_h.com_data_object_read_bytes(arena, ptr, format.id)
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_read_bytes_result(arena, ptr, format.id)
             }
+            checkClipboardOperation(NativeClipboardByteArrayResult.result(result))
+            val dataPtr = NativeClipboardByteArrayResult.value(result)
             try {
                 byteArrayFromNative(dataPtr)
             } finally {
@@ -44,70 +61,102 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
 
     public fun tryReadItemOfType(format: DataFormat): ByteArray? = requireOpen { ptr ->
         Arena.ofConfined().use { arena ->
-            val dataPtr = ffiDownCall {
-                desktop_win32_h.com_data_object_try_read_bytes(arena, ptr, format.id)
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_read_bytes_result(arena, ptr, format.id)
             }
+            val operation = clipboardOperationFromNative(NativeClipboardByteArrayResult.result(result))
+            if (!operation.requireOkOrUnavailable()) {
+                return@use null
+            }
+            val dataPtr = NativeClipboardByteArrayResult.value(result)
             try {
-                optionalByteArrayFromNative(dataPtr)
+                byteArrayFromNative(dataPtr)
             } finally {
                 ffiDownCall {
-                    desktop_win32_h.native_optional_byte_array_drop(dataPtr)
+                    desktop_win32_h.native_byte_array_drop(dataPtr)
                 }
             }
         }
     }
 
     public fun readHtmlFragment(): String = requireOpen { ptr ->
-        val strPtr = ffiDownCall {
-            desktop_win32_h.com_data_object_read_html_fragment(ptr)
+        Arena.ofConfined().use { arena ->
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_read_html_fragment_result(arena, ptr)
+            }
+            checkClipboardOperation(NativeClipboardStringResult.result(result))
+            stringFromNative(NativeClipboardStringResult.value(result))
         }
-        stringFromNative(strPtr)
     }
 
     public fun tryReadHtmlFragment(): String? = requireOpen { ptr ->
         Arena.ofConfined().use { arena ->
-            val optionalPtr = ffiDownCall {
-                desktop_win32_h.com_data_object_try_read_html_fragment(arena, ptr)
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_read_html_fragment_result(arena, ptr)
             }
-            optionalStringFromNative(optionalPtr)
+            val operation = clipboardOperationFromNative(NativeClipboardStringResult.result(result))
+            if (!operation.requireOkOrUnavailable()) {
+                return@use null
+            }
+            stringFromNative(NativeClipboardStringResult.value(result))
         }
     }
 
     public fun readListOfFiles(): List<String> = requireOpen { ptr ->
         Arena.ofConfined().use { arena ->
-            val arrayPtr = ffiDownCall {
-                desktop_win32_h.com_data_object_read_file_list(arena, ptr)
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_read_file_list_result(arena, ptr)
             }
-            listOfStringsFromNative(arrayPtr)
+            checkClipboardOperation(NativeClipboardStringArrayResult.result(result))
+            listOfStringsFromNative(NativeClipboardStringArrayResult.value(result))
         }
     }
 
     public fun tryReadListOfFiles(): List<String>? = requireOpen { ptr ->
         Arena.ofConfined().use { arena ->
-            val arrayPtr = ffiDownCall {
-                desktop_win32_h.com_data_object_try_read_file_list(arena, ptr)
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_read_file_list_result(arena, ptr)
             }
-            optionalListOfStringsFromNative(arrayPtr)
+            val operation = clipboardOperationFromNative(NativeClipboardStringArrayResult.result(result))
+            if (!operation.requireOkOrUnavailable()) {
+                return@use null
+            }
+            listOfStringsFromNative(NativeClipboardStringArrayResult.value(result))
         }
     }
 
     public fun readTextItem(): String = requireOpen { ptr ->
-        val strPtr = ffiDownCall {
-            desktop_win32_h.com_data_object_read_text(ptr)
+        Arena.ofConfined().use { arena ->
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_read_text_result(arena, ptr)
+            }
+            checkClipboardOperation(NativeClipboardStringResult.result(result))
+            stringFromNative(NativeClipboardStringResult.value(result))
         }
-        stringFromNative(strPtr)
     }
 
     public fun tryReadTextItem(): String? = requireOpen { ptr ->
         Arena.ofConfined().use { arena ->
-            val strPtr = ffiDownCall {
-                desktop_win32_h.com_data_object_try_read_text(arena, ptr)
+            val result = ffiDownCall {
+                desktop_win32_h.com_data_object_read_text_result(arena, ptr)
             }
-            optionalStringFromNative(strPtr)
+            val operation = clipboardOperationFromNative(NativeClipboardStringResult.result(result))
+            if (!operation.requireOkOrUnavailable()) {
+                return@use null
+            }
+            stringFromNative(NativeClipboardStringResult.value(result))
         }
     }
 
     internal fun toNative(): MemorySegment = requireOpen { it }
+
+    internal fun retain(): DataObject = requireOpen { ptr ->
+        val retainedPtr = ffiDownCall {
+            desktop_win32_h.com_data_object_retain(ptr)
+        }
+        check(retainedPtr != MemorySegment.NULL) { "Failed to retain DataObject" }
+        DataObject(retainedPtr)
+    }
 
     override fun close() {
         if (comInterfacePtr != MemorySegment.NULL) {
@@ -125,6 +174,9 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
     }
 
     public companion object {
+        /**
+         * Must be called from the application dispatcher thread for OLE clipboard or drag-and-drop use.
+         */
         public fun build(block: DataObjectBuilder.() -> Unit): DataObject {
             val dataObjectId = ffiDownCall {
                 desktop_win32_h.data_object_create()

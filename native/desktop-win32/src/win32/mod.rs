@@ -4,6 +4,7 @@ pub mod application;
 pub mod application_api;
 pub mod clipboard;
 pub mod clipboard_api;
+pub mod clipboard_result;
 pub mod com;
 pub mod compositor_driver;
 pub mod cursor;

@@ -12,6 +12,9 @@ use windows::Win32::System::Com::IDataObject;
 use windows_core::ComObject;
 
 use super::{
+    clipboard_result::{
+        ClipboardBoolResult, ClipboardByteArrayResult, ClipboardStringArrayResult, ClipboardStringResult, ClipboardUInt32ArrayResult,
+    },
     com::ComInterfaceRawPtr,
     data_object::{DataObject, enum_data_object_format_ids, is_data_object_format_available},
     data_reader::DataReader,
@@ -127,24 +130,61 @@ pub extern "C" fn data_object_drop(data_object_id: i64) {
 #[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_is_format_available(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> bool {
     ffi_boundary("com_data_object_is_format_available", || {
-        let data_object = data_object_ptr.cast::<IDataObject>()?;
-        is_data_object_format_available(&data_object, DataFormat::Other(data_format))
+        com_data_object_is_format_available_impl(&data_object_ptr, data_format)
     })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_is_format_available_result(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> ClipboardBoolResult {
+    ffi_boundary("com_data_object_is_format_available_result", || {
+        Ok(ClipboardBoolResult::from_result(com_data_object_is_format_available_impl(
+            &data_object_ptr,
+            data_format,
+        )))
+    })
+}
+
+fn com_data_object_is_format_available_impl(data_object_ptr: &ComInterfaceRawPtr, data_format: u32) -> anyhow::Result<bool> {
+    let data_object = data_object_ptr.cast::<IDataObject>()?;
+    is_data_object_format_available(&data_object, DataFormat::Other(data_format))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_enum_formats(data_object_ptr: ComInterfaceRawPtr) -> AutoDropUInt32Array {
     ffi_boundary("com_data_object_enum_formats", || {
-        let data_object = data_object_ptr.cast::<IDataObject>()?;
-        let formats = enum_data_object_format_ids(&data_object)?;
-        Ok(AutoDropArray::new(formats))
+        com_data_object_enum_formats_impl(&data_object_ptr)
     })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_enum_formats_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardUInt32ArrayResult {
+    ffi_boundary("com_data_object_enum_formats_result", || {
+        Ok(ClipboardUInt32ArrayResult::from_result(com_data_object_enum_formats_impl(
+            &data_object_ptr,
+        )))
+    })
+}
+
+fn com_data_object_enum_formats_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<AutoDropUInt32Array> {
+    let data_object = data_object_ptr.cast::<IDataObject>()?;
+    let formats = enum_data_object_format_ids(&data_object)?;
+    Ok(AutoDropArray::new(formats))
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_read_bytes(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> AutoDropByteArray {
     ffi_boundary("com_data_object_read_bytes", || {
         com_data_object_read_bytes_impl(&data_object_ptr, data_format)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_read_bytes_result(data_object_ptr: ComInterfaceRawPtr, data_format: u32) -> ClipboardByteArrayResult {
+    ffi_boundary("com_data_object_read_bytes_result", || {
+        Ok(ClipboardByteArrayResult::from_result(com_data_object_read_bytes_impl(
+            &data_object_ptr,
+            data_format,
+        )))
     })
 }
 
@@ -166,6 +206,15 @@ fn com_data_object_read_bytes_impl(data_object_ptr: &ComInterfaceRawPtr, data_fo
 pub extern "C" fn com_data_object_read_file_list(data_object_ptr: ComInterfaceRawPtr) -> AutoDropArray<RustAllocatedStrPtr> {
     ffi_boundary("com_data_object_read_file_list", || {
         com_data_object_read_file_list_impl(&data_object_ptr)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_read_file_list_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardStringArrayResult {
+    ffi_boundary("com_data_object_read_file_list_result", || {
+        Ok(ClipboardStringArrayResult::from_result(com_data_object_read_file_list_impl(
+            &data_object_ptr,
+        )))
     })
 }
 
@@ -192,6 +241,15 @@ pub extern "C" fn com_data_object_read_html_fragment(data_object_ptr: ComInterfa
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_read_html_fragment_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardStringResult {
+    ffi_boundary("com_data_object_read_html_fragment_result", || {
+        Ok(ClipboardStringResult::from_result(com_data_object_read_html_fragment_impl(
+            &data_object_ptr,
+        )))
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_try_read_html_fragment(data_object_ptr: ComInterfaceRawPtr) -> FfiOption<RustAllocatedStrPtr> {
     ffi_boundary("com_data_object_try_read_html_fragment", || {
         com_data_object_read_html_fragment_impl(&data_object_ptr).into_ffi_option()
@@ -208,6 +266,13 @@ fn com_data_object_read_html_fragment_impl(data_object_ptr: &ComInterfaceRawPtr)
 #[unsafe(no_mangle)]
 pub extern "C" fn com_data_object_read_text(data_object_ptr: ComInterfaceRawPtr) -> RustAllocatedStrPtr {
     ffi_boundary("com_data_object_read_text", || com_data_object_read_text_impl(&data_object_ptr))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_read_text_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardStringResult {
+    ffi_boundary("com_data_object_read_text_result", || {
+        Ok(ClipboardStringResult::from_result(com_data_object_read_text_impl(&data_object_ptr)))
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -230,6 +295,11 @@ pub extern "C" fn com_data_object_release(data_object_ptr: ComInterfaceRawPtr) {
         data_object_ptr.release();
         Ok(())
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn com_data_object_retain(data_object_ptr: ComInterfaceRawPtr) -> ComInterfaceRawPtr {
+    ffi_boundary("com_data_object_retain", || Ok(data_object_ptr.retain()?))
 }
 
 #[unsafe(no_mangle)]

@@ -6,6 +6,10 @@ import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
+/**
+ * These APIs read keyboard state for the calling thread. Use them from the application
+ * dispatcher thread when querying state for toolkit windows and events.
+ */
 public object Keyboard {
     public fun getKeyState(key: VirtualKey): KeyState = ffiDownCall {
         Arena.ofConfined().use { arena ->

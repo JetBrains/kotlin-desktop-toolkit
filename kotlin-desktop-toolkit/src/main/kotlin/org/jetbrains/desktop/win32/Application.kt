@@ -8,6 +8,13 @@ import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.util.concurrent.ConcurrentLinkedQueue
 
+/**
+ * Windows application runtime.
+ *
+ * The thread that runs [runEventLoop] is the application dispatcher thread. Win32 and
+ * OLE APIs documented as dispatcher-thread-only must be called from that thread or via
+ * [invokeOnDispatcher].
+ */
 public class Application : AutoCloseable {
     public companion object;
 
@@ -27,19 +34,29 @@ public class Application : AutoCloseable {
 
     private val appPtr: MemorySegment get() = ptr ?: error("App has not been initialized yet")
 
+    internal inline fun <T> withPointer(block: (MemorySegment) -> T): T = block(appPtr)
+
     public fun isDispatcherThread(): Boolean {
         return ffiDownCall {
             desktop_win32_h.application_is_dispatcher_thread(appPtr)
         }
     }
 
-    public fun invokeOnDispatcher(body: () -> Unit): Unit = when (ptr) {
+    public fun invokeOnDispatcher(body: () -> Unit) {
+        check(tryInvokeOnDispatcher(body)) { "Failed to dispatch callback to the application dispatcher." }
+    }
+
+    internal fun tryInvokeOnDispatcher(body: () -> Unit): Boolean = when (ptr) {
         null -> error("App has not been initialized yet; use the [onStartup] method instead.")
         else -> {
             assert(callbacksQueue.offer(body))
-            ffiDownCall {
+            val dispatched = ffiDownCall {
                 desktop_win32_h.application_dispatcher_invoke(ptr, callback)
             }
+            if (!dispatched) {
+                callbacksQueue.remove(body)
+            }
+            dispatched
         }
     }
 
@@ -72,8 +89,14 @@ public class Application : AutoCloseable {
         }
     }
 
+    /** Must be called from the application dispatcher thread. */
     public fun newWindow(): Window = Window.new(appPtr)
 
+    /**
+     * Must be called from the application dispatcher thread. The returned renderer is not
+     * safe for arbitrary concurrent use; follow normal EGL current-context thread affinity
+     * for rendering operations.
+     */
     public fun createAngleRenderer(window: Window): AngleRenderer {
         return AngleRenderer(
             ffiDownCall {

@@ -6,6 +6,9 @@ import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
+/**
+ * Dispatcher-thread-only. Callback [DataObject] values are valid only for the callback scope.
+ */
 public class DragDropManager(private val window: Window) : AutoCloseable {
     private var dropTargetCallbacks: DropTargetCallbacks? = null
 
@@ -22,6 +25,10 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
         }
     }
 
+    /**
+     * Must be called from the application dispatcher thread. The supplied [dataObject] must
+     * also belong to that dispatcher thread.
+     */
     public fun doDragDrop(dataObject: DataObject, allowedEffects: DragDropEffect, dragSource: DragSource): DragDropEffect {
         val effect = DragSourceCallbacks(dragSource).use { callbacks ->
             ffiDownCall {
@@ -49,7 +56,8 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
 public interface DropTarget {
     /**
      * The [dataObject] is closed automatically after the callback returns.
-     * Use it only within the callback scope; reads on a retained reference will throw after the callback completes.
+     * Use it only on the dispatcher thread within the callback scope; reads on a retained
+     * reference will throw after the callback completes.
      */
     public fun onDragEnter(
         dataObject: DataObject,
@@ -64,7 +72,8 @@ public interface DropTarget {
 
     /**
      * The [dataObject] is closed automatically after the callback returns.
-     * Use it only within the callback scope; reads on a retained reference will throw after the callback completes.
+     * Use it only on the dispatcher thread within the callback scope; reads on a retained
+     * reference will throw after the callback completes.
      */
     public fun onDrop(dataObject: DataObject, modifiers: DragDropModifiers, point: PhysicalPoint, effect: DragDropEffect): DragDropEffect
 }

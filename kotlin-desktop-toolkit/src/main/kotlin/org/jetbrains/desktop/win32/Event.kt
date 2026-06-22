@@ -54,6 +54,10 @@ public sealed class Event {
 
     public abstract class KeyEvent : Event() {
         protected abstract val originalMsgId: Long
+
+        /**
+         * Must be called on the application dispatcher thread while handling this event.
+         */
         public fun translate(): Boolean = ffiDownCall {
             desktop_win32_h.keyevent_translate_message(originalMsgId)
         }
@@ -67,6 +71,9 @@ public sealed class Event {
         val timestamp: Timestamp,
         override val originalMsgId: Long,
     ) : KeyEvent() {
+        /**
+         * Must be called on the application dispatcher thread while handling this event.
+         */
         public fun toUnicode(): String = ffiDownCall {
             desktop_win32_h.keydown_to_unicode(originalMsgId)
         }.getString(0)
@@ -94,7 +101,9 @@ public sealed class Event {
         val mouseY: Int,
         internal val originalMsgId: Long,
     ) : Event() {
-        /** Assign the hit-test region for this `WM_NCHITTEST`, overriding the default result. */
+        /**
+         * Must be called on the application dispatcher thread while handling this event.
+         */
         public fun setHitTestResult(result: NCHitTestResult): Unit = ffiDownCall {
             desktop_win32_h.nchittest_set_hit_test_result(originalMsgId, result.toNative())
         }

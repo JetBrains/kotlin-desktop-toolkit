@@ -78,6 +78,12 @@ impl ComInterfaceRawPtr {
         unknown.cast()
     }
 
+    /// Returns another owned reference to the same COM interface.
+    pub fn retain(&self) -> WinResult<Self> {
+        let unknown = self.cast::<IUnknown>()?;
+        Ok(Self { ptr: unknown.into_raw() })
+    }
+
     /// Releases the owned reference.
     pub fn release(self) {
         if !self.ptr.is_null() {

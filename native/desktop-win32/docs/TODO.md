@@ -6,13 +6,14 @@ This list is point-in-time. Verify against current code before acting.
 
 ## Confirmed bugs (per code-owner review)
 
-### `tryRead*` swallows too many error kinds
-- **Where**: `data_object_api.rs` (`IntoFfiOption` impl).
-- **What**: Every `Err(...)` from a read is converted to `FfiOption::none()` with a `trace!` log. This hides allocation failures, type mismatches, and other genuine errors behind the same `null` that "format not found" produces.
-- **Intended behaviour**: only `DV_E_FORMATETC` and `DV_E_TYMED` (i.e. format-not-available) should swallow to `None`. Everything else should propagate as an exception via `ffi_boundary` → `LAST_EXCEPTION_MSGS` → `NativeError`.
-- **Fix**: replace the blanket `IntoFfiOption` with a guard that inspects the error and only swallows the format-not-found variants. Consider matching on `WinError::code()` for `DV_E_FORMATETC` / `DV_E_TYMED`, plus an `Option`-returning helper in `data_object` that returns `Ok(None)` for those cases natively.
+None currently tracked here. The previous `tryRead*` blanket-swallow issue is handled by the clipboard result-status path; keep the legacy `FfiOption` symbols only for compatibility.
 
 ## Likely bugs / suspect designs (verify before fixing)
+
+### Clipboard async API and compatibility cleanup
+- **Where**: Kotlin `Clipboard.kt` / `OleClipboard`, sync compatibility methods, and UI-thread-only Win32/OLE APIs.
+- **What**: Native clipboard calls are intentionally fail-fast. Kotlin async wrappers must be called from the application dispatcher and retry `ClipboardStatus::Busy` without sleeping on the UI thread; delayed retries are posted back to the dispatcher. The older synchronous methods are deprecated and return busy immediately. Direct Win32 and OLE clipboard contention are covered by integration tests that hold the real OS clipboard open. `DataObject` methods are documented dispatcher-thread-only because the object is a live COM pointer bound to the application's OLE STA. The backend still lacks a comprehensive thread-affinity assertion policy.
+- **Fix**: decide whether to add coroutine `suspend` wrappers on top of or instead of the `CompletableFuture` surface; design consistent thread-affinity checks or annotations for all UI-thread-only Win32/OLE APIs without introducing an application global singleton; and revisit COM marshaling or a snapshot/ownership handoff only if future API work needs any-thread OLE scheduling.
 
 ### `Window::drop` doesn't verify HWND destruction
 - **Where**: `window.rs` (`impl Drop for Window`).
@@ -31,8 +32,8 @@ This list is point-in-time. Verify against current code before acting.
 
 ### `DataObject` Kotlin class is not thread-safe
 - **Where**: `DataObject.kt` (`requireOpen`) + `close()`.
-- **What**: `requireOpen` reads `comInterfacePtr` without synchronisation; `close()` mutates it. Concurrent `close()` + `read*()` is a data race that can produce a use-after-free of the COM ref.
-- **Fix**: document single-threaded use and add a single-thread assert in `requireOpen`.
+- **What**: `requireOpen` reads `comInterfacePtr` without synchronisation; `close()` mutates it. Concurrent `close()` + `read*()` is a data race that can produce a use-after-free of the COM ref. Cross-thread use can also violate COM apartment affinity for external `IDataObject` implementations. The Kotlin API now documents dispatcher-thread use, but does not enforce it.
+- **Fix**: add a consistent single-thread / dispatcher-thread assertion strategy for `DataObject` and the rest of the UI-thread-only Windows API surface.
 
 ### `EnumDisplayMonitors` aborts on first per-monitor failure
 - **Where**: `screen.rs` (`monitor_enum_proc` returns `FALSE` on inner-call failure, which terminates enumeration).

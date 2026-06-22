@@ -1,13 +1,24 @@
 use std::ffi::CString;
 
 use windows::Win32::{
-    Foundation::{GlobalFree, HGLOBAL},
-    System::Memory::{GMEM_FIXED, GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock},
+    Foundation::{E_POINTER, ERROR_SUCCESS, GetLastError, GlobalFree, HGLOBAL, SetLastError, WIN32_ERROR},
+    System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock},
     UI::Shell::{DragQueryFileW, HDROP},
 };
 use windows_core::{Error as WinError, Result as WinResult};
 
-use super::strings::copy_from_wide_string;
+use super::{clipboard_result::ClipboardFailure, strings::copy_from_wide_string};
+
+/// Matches Chromium's defensive clipboard payload cap.
+/// cbindgen:ignore
+pub(crate) const MAX_CLIPBOARD_DATA_BYTES: usize = 256 * 1024 * 1024;
+
+pub(crate) fn ensure_clipboard_data_size(size: usize) -> anyhow::Result<()> {
+    if size > MAX_CLIPBOARD_DATA_BYTES {
+        return Err(ClipboardFailure::data_too_large(size, MAX_CLIPBOARD_DATA_BYTES).into());
+    }
+    Ok(())
+}
 
 pub struct HGlobalData {
     mem: HGLOBAL,
@@ -19,10 +30,22 @@ unsafe impl Sync for HGlobalData {}
 
 impl HGlobalData {
     pub fn alloc_and_init<F: FnOnce(*mut core::ffi::c_void)>(content_len: usize, init: F) -> anyhow::Result<Self> {
+        ensure_clipboard_data_size(content_len)?;
         let mem = unsafe { GlobalAlloc(GMEM_MOVEABLE, content_len)? };
-        let data = unsafe { GlobalLock(mem) };
-        init(data);
-        global_unlock(mem)?;
+        if content_len != 0 {
+            let data = match global_lock(mem) {
+                Ok(data) => data,
+                Err(err) => {
+                    let _ = unsafe { GlobalFree(Some(mem)) };
+                    return Err(err.into());
+                }
+            };
+            init(data);
+            if let Err(err) = global_unlock(mem) {
+                let _ = unsafe { GlobalFree(Some(mem)) };
+                return Err(err.into());
+            }
+        }
         Ok(Self { mem, is_owned: true })
     }
 
@@ -33,13 +56,17 @@ impl HGlobalData {
     }
 
     pub fn copy_from(mem: windows::Win32::Foundation::HANDLE) -> anyhow::Result<Self> {
-        let mem = global_mem_copy(HGLOBAL(mem.0))?;
+        let mem = HGLOBAL(mem.0);
+        let size = global_size(mem)?;
+        ensure_clipboard_data_size(size)?;
+        let mem = global_mem_copy(mem, size)?;
         Ok(Self { mem, is_owned: true })
     }
 
     #[inline]
     pub fn copied(&self) -> WinResult<HGLOBAL> {
-        global_mem_copy(self.mem)
+        let size = global_size(self.mem)?;
+        global_mem_copy(self.mem, size)
     }
 
     #[inline]
@@ -65,13 +92,62 @@ impl Drop for HGlobalData {
 }
 
 #[inline]
-fn global_mem_copy(mem: HGLOBAL) -> WinResult<HGLOBAL> {
-    let size = unsafe { GlobalSize(mem) };
-    let source = unsafe { GlobalLock(mem) };
-    let dest = unsafe { GlobalAlloc(GMEM_FIXED, size)? };
-    unsafe { core::ptr::copy_nonoverlapping(source, dest.0, size) };
-    global_unlock(mem)?;
+fn global_mem_copy(mem: HGLOBAL, size: usize) -> WinResult<HGLOBAL> {
+    if mem.0.is_null() {
+        return Err(WinError::from(E_POINTER));
+    }
+
+    if size == 0 {
+        return unsafe { GlobalAlloc(GMEM_MOVEABLE, size) };
+    }
+
+    let source = global_lock(mem)?;
+    let dest = match unsafe { GlobalAlloc(GMEM_MOVEABLE, size) } {
+        Ok(dest) => dest,
+        Err(err) => {
+            let _ = global_unlock(mem);
+            return Err(err);
+        }
+    };
+    let dest_ptr = match global_lock(dest) {
+        Ok(dest_ptr) => dest_ptr,
+        Err(err) => {
+            let _ = global_unlock(mem);
+            let _ = unsafe { GlobalFree(Some(dest)) };
+            return Err(err);
+        }
+    };
+    unsafe { core::ptr::copy_nonoverlapping(source, dest_ptr, size) };
+    let source_unlock_result = global_unlock(mem);
+    let dest_unlock_result = global_unlock(dest);
+    if let Err(err) = source_unlock_result {
+        let _ = unsafe { GlobalFree(Some(dest)) };
+        return Err(err);
+    }
+    if let Err(err) = dest_unlock_result {
+        let _ = unsafe { GlobalFree(Some(dest)) };
+        return Err(err);
+    }
     Ok(dest)
+}
+
+#[inline]
+fn global_size(mem: HGLOBAL) -> WinResult<usize> {
+    unsafe { SetLastError(WIN32_ERROR(0)) };
+    let size = unsafe { GlobalSize(mem) };
+    if size == 0 {
+        let err = unsafe { GetLastError() };
+        if err != ERROR_SUCCESS {
+            return Err(WinError::from(err));
+        }
+    }
+    Ok(size)
+}
+
+#[inline]
+fn global_lock(mem: HGLOBAL) -> WinResult<*mut core::ffi::c_void> {
+    let data = unsafe { GlobalLock(mem) };
+    if data.is_null() { Err(WinError::from_thread()) } else { Ok(data) }
 }
 
 #[inline]
@@ -126,39 +202,47 @@ pub(crate) mod hglobal_writer {
 pub(crate) mod hglobal_reader {
     use std::ffi::CString;
 
-    use windows::{
-        ApplicationModel::DataTransfer::HtmlFormatHelper,
-        Win32::{
-            System::Memory::{GlobalLock, GlobalSize},
-            UI::Shell::HDROP,
-        },
-    };
-    use windows_core::PWSTR;
+    use windows::{ApplicationModel::DataTransfer::HtmlFormatHelper, Win32::UI::Shell::HDROP};
 
     use crate::win32::{
-        global_data::{HGlobalData, global_unlock, parse_file_list},
+        global_data::{HGlobalData, ensure_clipboard_data_size, global_size, global_unlock, parse_file_list},
         strings::{copy_from_utf8_bytes, copy_from_wide_string},
     };
 
     pub fn get_text(data: &HGlobalData) -> anyhow::Result<CString> {
-        let content = unsafe { PWSTR(GlobalLock(data.mem).cast()) };
-        let cstr = copy_from_wide_string(unsafe { content.as_wide() });
-        global_unlock(data.mem)?;
-        cstr
+        let bytes = get_bytes(data)?;
+        let (chunks, []) = bytes.as_chunks::<2>() else {
+            anyhow::bail!("UTF-16 clipboard data has odd byte length")
+        };
+        let wide: Vec<u16> = chunks.iter().map(|&pair| u16::from_le_bytes(pair)).collect();
+        let len = wide.iter().position(|&c| c == 0).unwrap_or(wide.len());
+        copy_from_wide_string(&wide[..len])
     }
 
     pub fn get_bytes(data: &HGlobalData) -> anyhow::Result<Vec<u8>> {
-        let len = unsafe { GlobalSize(data.mem) };
-        let content = unsafe { GlobalLock(data.mem) };
+        let len = global_size(data.mem)?;
+        ensure_clipboard_data_size(len)?;
+        if len == 0 {
+            return Ok(Vec::new());
+        }
+        let content = super::global_lock(data.mem)?;
         let vec = unsafe { core::slice::from_raw_parts(content.cast(), len) }.to_vec();
-        global_unlock(data.mem)?;
+        // Always unlock, but don't let a GlobalUnlock error (only possible on lock-count
+        // underflow) mask successfully read bytes; surface the data either way.
+        if let Err(unlock_err) = global_unlock(data.mem) {
+            log::warn!("failed to unlock HGLOBAL after reading bytes: {unlock_err:?}");
+        }
         Ok(vec)
     }
 
     pub fn get_file_list(data: &HGlobalData) -> anyhow::Result<Vec<CString>> {
-        let content = unsafe { GlobalLock(data.mem) };
+        let content = super::global_lock(data.mem)?;
         let files = unsafe { parse_file_list(HDROP(content)) };
-        global_unlock(data.mem)?;
+        // Always unlock, but don't let a GlobalUnlock error (only possible on lock-count
+        // underflow) mask a successfully parsed list; surface the parse result either way.
+        if let Err(unlock_err) = global_unlock(data.mem) {
+            log::warn!("failed to unlock DROPFILES HGLOBAL: {unlock_err:?}");
+        }
         files
     }
 
@@ -184,4 +268,59 @@ pub(crate) unsafe fn parse_file_list(hdrop: HDROP) -> anyhow::Result<Vec<CString
         files.push(copy_from_wide_string(&buffer)?);
     }
     Ok(files)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HGlobalData, MAX_CLIPBOARD_DATA_BYTES, hglobal_reader, hglobal_writer};
+
+    #[test]
+    fn get_text_accepts_missing_trailing_nul() {
+        let data = HGlobalData::alloc_from(&[u16::from(b'H'), u16::from(b'i')]).unwrap();
+
+        let text = hglobal_reader::get_text(&data).unwrap();
+
+        assert_eq!(text.to_str().unwrap(), "Hi");
+    }
+
+    #[test]
+    fn get_text_rejects_odd_utf16_byte_count() {
+        let data = hglobal_writer::new_bytes(b"H").unwrap();
+
+        let err = hglobal_reader::get_text(&data).unwrap_err();
+
+        assert!(err.to_string().contains("odd byte length"));
+    }
+
+    #[test]
+    fn get_bytes_accepts_empty_global() {
+        let data = hglobal_writer::new_bytes(&[]).unwrap();
+
+        let bytes = hglobal_reader::get_bytes(&data).unwrap();
+
+        assert!(bytes.is_empty());
+    }
+
+    #[test]
+    fn oversized_global_allocation_is_rejected_before_allocating() {
+        let result = HGlobalData::alloc_and_init(MAX_CLIPBOARD_DATA_BYTES + 1, |_| {});
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+
+        assert!(err.to_string().contains("too large"));
+    }
+
+    #[test]
+    fn copied_data_remains_readable_after_original_drops() {
+        let data = hglobal_writer::new_bytes(b"clipboard").unwrap();
+        let copied = HGlobalData {
+            mem: data.copied().unwrap(),
+            is_owned: true,
+        };
+        drop(data);
+
+        let bytes = hglobal_reader::get_bytes(&copied).unwrap();
+
+        assert_eq!(bytes, b"clipboard");
+    }
 }

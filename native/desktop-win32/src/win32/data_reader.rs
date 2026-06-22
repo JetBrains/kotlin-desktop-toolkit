@@ -46,22 +46,20 @@ impl DataReader {
             tymed: (TYMED_HGLOBAL.0 | TYMED_ISTREAM.0).cast_unsigned(),
         };
         let medium = unsafe { data_object.GetData(&raw const format_desc)? };
-        let source = match TYMED(medium.tymed.cast_signed()) {
+        let guard = StgMediumGuard { medium };
+        let source = match TYMED(guard.medium.tymed.cast_signed()) {
             TYMED_HGLOBAL => {
-                let mem = unsafe { medium.u.hGlobal };
+                let mem = unsafe { guard.medium.u.hGlobal };
                 DataSource::HGlobal(HGlobalData::copy_from(HANDLE(mem.0))?)
             }
             TYMED_ISTREAM => {
                 // cloning a COM object merely increases its reference counter
-                let stream = unsafe { medium.u.pstm.as_ref().context(WinError::from(E_POINTER))?.clone() };
+                let stream = unsafe { guard.medium.u.pstm.as_ref().context(WinError::from(E_POINTER))?.clone() };
                 DataSource::IStream(stream)
             }
             _ => anyhow::bail!(WinError::from(DV_E_TYMED)),
         };
-        Ok(Self {
-            source,
-            guard: StgMediumGuard { medium },
-        })
+        Ok(Self { source, guard })
     }
 
     pub fn get_bytes(&self) -> anyhow::Result<Vec<u8>> {
@@ -105,7 +103,7 @@ pub mod istream_reader {
     };
 
     use crate::win32::{
-        global_data::parse_file_list,
+        global_data::{ensure_clipboard_data_size, parse_file_list},
         strings::{copy_from_utf8_bytes, copy_from_wide_string},
     };
 
@@ -116,6 +114,7 @@ pub mod istream_reader {
             stream.Seek(0, STREAM_SEEK_SET, None)?;
         }
         let len = stat.cbSize.try_into()?;
+        ensure_clipboard_data_size(len)?;
         let mut vec = vec![0u8; len];
         let mut offset = 0_usize;
         while offset < len {

@@ -9,6 +9,9 @@ import org.jetbrains.desktop.win32.generated.desktop_win32_h.NativeBorrowedStrPt
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
+/**
+ * Copies and drops a Rust-owned `AutoDropArray<RustAllocatedStrPtr>`.
+ */
 internal fun listOfStringsFromNative(segment: MemorySegment): List<String> {
     val ptr = NativeAutoDropArray_RustAllocatedStrPtr.ptr(segment)
     val len = NativeAutoDropArray_RustAllocatedStrPtr.len(segment)
@@ -59,6 +62,9 @@ internal fun listOfStringsToNative(arena: Arena, list: List<String>): MemorySegm
     return result
 }
 
+/**
+ * Copies and drops a Rust-owned `RustAllocatedStrPtr`.
+ */
 internal fun stringFromNative(segment: MemorySegment): String {
     check(segment != MemorySegment.NULL) { "Native string was null" }
     return try {

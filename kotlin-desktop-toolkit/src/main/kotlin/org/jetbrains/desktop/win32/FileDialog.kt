@@ -6,6 +6,10 @@ import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 
+/**
+ * Must be called from the application dispatcher thread. The native dialogs use COM
+ * interfaces and run a nested modal message loop while shown.
+ */
 public object FileDialog {
     public data class FileDialogOptions(
         val title: String? = null,

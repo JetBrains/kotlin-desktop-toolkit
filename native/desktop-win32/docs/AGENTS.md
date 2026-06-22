@@ -19,7 +19,7 @@ If you only read one section before touching code, read this one.
 
 0. **This is the Win32-first backend.** Default to Win32 APIs (`CreateWindowExW`, `GetMessageW`, `RegisterDragDrop`, `IFileOpenDialog`, …). Use WinRT only when there's a documented reason — there are exactly four such subsystems today, each justified in `ARCHITECTURE.md` → Scope. **Never propose WinUI 3 or Windows App SDK (`Microsoft.UI.*`, `Microsoft.WindowsAppSDK`) APIs in this crate.** A WinUI 3 backend, if built, lives in a separate crate.
 1. **Composition is `Windows.UI.Composition` (WinRT), not DirectComposition.** They're distinct APIs with different lifetimes and threading. See `ARCHITECTURE.md` → Composition section.
-2. **Single UI thread.** `OleInitialize` STA, `DispatcherQueue` with `DQTYPE_THREAD_CURRENT`, the wndproc, and most state assume one thread. Cross-thread work goes through `application_dispatcher_invoke`. Several pieces are `thread_local!` (key-message stash, exception store).
+2. **Single UI thread.** `OleInitialize` STA, `DispatcherQueue` with `DQTYPE_THREAD_CURRENT` for composition, the message-only `Dispatcher` for toolkit callbacks, the wndproc, and most state assume one thread. Cross-thread work goes through `application_dispatcher_invoke`. Several pieces are `thread_local!` (key-message stash, exception store).
 3. **Error channel is `anyhow::Result` through `ffi_boundary`, not return codes.** Rust functions return `anyhow::Result<T>`; `ffi_boundary` logs any `Err`, appends the message to thread-local `LAST_EXCEPTION_MSGS`, and returns `R::default()`. Kotlin's `ffiDownCall` polls after every call and throws `NativeError`. Panic catching inside `ffi_boundary` is a safety net for unexpected unwinds, not a designed error path — if Rust code panics, treat it as a bug. **Background-thread errors are lost** (thread-local store).
 4. **`ffiDownCall { ... }` must wrap only the native call.** Not `Arena.use`, not `withPointer`, not helpers (which wrap their own native calls). Wider scopes conflate exception attribution. See `FFI_CONVENTIONS.md`.
 5. **Window starts at `1×1` and is then resized.** Intentional: managed code uses *logical* pixels but the DPI scale only exists once an `HWND` exists (`GetDpiForWindow`). Consequence: creation emits repeated `WM_WINDOWPOSCHANGED` notifications; this crate handles that message and returns `0`, so it does not rely on a downstream `DefWindowProc`-generated `WM_SIZE` path. Size/move handlers must be idempotent.
@@ -29,9 +29,9 @@ If you only read one section before touching code, read this one.
 
 ## Watch out for in code reviews / edits
 
-- `tryRead*` currently swallows all errors to `None` — should be format-not-found only. Don't add new `tryRead*` callers assuming the broad swallow semantics.
+- Kotlin `tryRead*` wrappers return `null` only for format-unavailable and throw other clipboard/data-object failures. The legacy raw `FfiOption` exports still swallow broadly and should not be used for new Kotlin call sites.
 - COM impls have **no** `// SAFETY:` comments anywhere (and `desktop-common::ffi_utils` has a module-level `#![allow(clippy::missing_safety_doc)]`). Add one when you touch an `unsafe` block.
-- Most clipboard / drag-drop work assumes the OLE STA. Calls from another thread will deadlock or fail silently. There is no thread-affinity assertion at the FFI boundary.
+- Most window, clipboard, drag-drop, file-dialog, and callback-bound event work assumes the application UI thread; OLE-backed paths also assume the OLE STA. There is no comprehensive thread-affinity assertion at the FFI boundary. Clipboard async APIs are also UI-thread-only; their delayed retry attempts are posted back to the application dispatcher.
 
 ## Working with the human
 

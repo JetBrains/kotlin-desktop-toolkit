@@ -44,6 +44,7 @@ public data class Screen(
             screens.toList()
         }
 
+        /** Must be called from the application dispatcher thread. */
         public fun mapToClient(window: Window, point: PhysicalPoint): PhysicalPoint = Arena.ofConfined().use { arena ->
             val nativeWindowPoint = window.withPointer { windowPtr ->
                 ffiDownCall {

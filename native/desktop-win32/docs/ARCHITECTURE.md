@@ -29,7 +29,7 @@ The four WinRT subsystems used here, each with explicit rationale:
 | WinRT API | Where | Why a Win32 alternative isn't used |
 |---|---|---|
 | `Windows.UI.Composition` (`Compositor`, `ContainerVisual`, `SpriteVisual`, `DesktopWindowTarget`) — controlled-commit variant via `Core::CompositorController`, wrapped by `CompositorDriver` | `application.rs`, `window.rs`, `renderer_angle.rs`, `compositor_driver.rs` | This is the modern composition surface DWM uses natively. It integrates correctly with `WS_EX_NOREDIRECTIONBITMAP`, with DWM's Mica / Acrylic / dark-mode titlebar effects, and with ANGLE's window-surface targeting — none of which classic Win32 GDI / layered windows / DirectComposition support without significant manual work. The HWND ↔ visual-tree bridge uses `ICompositorDesktopInterop::CreateDesktopWindowTarget`, which is the official Win32-interop interface for hosting a WinRT visual tree in a classic Win32 window. `CompositorController` (controlled commit) is used rather than `Compositor` (auto-commit) so swap-buffers and backdrop changes can commit atomically. `CompositorDriver` wraps the controller, subscribes to `CommitNeeded`, and drives `Commit()` via a UI-thread fast-path or dispatcher-queue drain — concentrating explicit commit sites to one (`swap_buffers` resize handshake) plus the driver-internal path. |
-| `Windows.System.DispatcherQueueController` (with `DQTYPE_THREAD_CURRENT`) | `application.rs` | The toolkit posts cross-thread work back to the UI thread. The Win32 alternative — `PostMessageW` to a hidden owner window — is workable, but the WinRT `DispatcherQueue` is required for `CompositorDriver` to marshal off-thread `CommitNeeded` fires back to the UI thread, and once it's present it's the natural primitive for `application_dispatcher_invoke`. Not introducing a second mechanism keeps the threading model uniform. |
+| `Windows.System.DispatcherQueueController` (with `DQTYPE_THREAD_CURRENT`) | `application.rs` | Required for `CompositorDriver` to marshal off-thread `CommitNeeded` fires back to the UI thread. General toolkit callbacks no longer use it directly; `application_dispatcher_invoke` is backed by the Win32 message-only dispatcher in `dispatcher.rs`, keeping modal-loop callback delivery independent of WinRT dispatcher-queue pumping. |
 | `Windows.UI.ViewManagement.UISettings` (`GetColorValue(Foreground)`) | `appearance.rs` | The canonical signal for "is the user in dark mode" on Windows is the foreground colour returned by `UISettings`. The Win32 alternative is reading `HKCU\…\Personalize\AppsUseLightTheme` from the registry, which only covers Win10+ apps mode (not the full system mode), is undocumented as a stable API, and misses the auto-update on theme switch. We still consume the `WM_SETTINGCHANGE` (`ImmersiveColorSet`) Win32 signal to trigger re-query — but the answer comes from WinRT. |
 | `Windows.ApplicationModel.DataTransfer.HtmlFormatHelper` (`CreateHtmlFormat`, `GetStaticFragment`) | `global_data.rs` (HTML clipboard format encode / decode) | The "HTML Format" clipboard payload requires a specific header with `Version:` / `StartHTML:` / `EndHTML:` / `StartFragment:` / `EndFragment:` byte offsets. Computing those offsets by hand is error-prone (encoding rules, byte-level placement, the spec's tolerance for absent fields). The WinRT helper does it correctly per the documented Windows clipboard contract. Win32 has no equivalent helper. |
 
@@ -53,8 +53,9 @@ native/
       logger_api.rs               thin Win32 logger glue
       win32/
         mod.rs                    declares 39 sibling pub mod entries
-        application.rs            Application: OLE STA, DispatcherQueue, CompositorDriver
+        application.rs            Application: OLE STA, DispatcherQueue, Dispatcher, CompositorDriver
         application_api.rs        FFI: app lifecycle + dispatcher dispatch
+        dispatcher.rs             message-only HWND + channel for UI-thread callbacks
         event_loop.rs             window_proc: WM_* → Event dispatch; thread_local key/exception stash
         events.rs                 Event enum (22 variants, #[repr(C)]) + payload structs
         events_api.rs             FFI: keyevent_translate_message, keydown_to_unicode
@@ -134,7 +135,7 @@ kotlin-desktop-toolkit/src/main/kotlin/org/jetbrains/desktop/
 
 The toolkit assumes a **single UI thread** that:
 1. Calls `application_init_apartment()` — calls `OleInitialize(None)` (single-threaded apartment for OLE).
-2. Calls `application_init(callbacks)` — creates the `DispatcherQueueController` with `DQTYPE_THREAD_CURRENT` (the queue is thread-local). Stores `Application` as `Rc<Application>`.
+2. Calls `application_init(callbacks)` — creates the `DispatcherQueueController` with `DQTYPE_THREAD_CURRENT` (the queue is thread-local) and a message-only `Dispatcher`. Stores `Application` as a boxed opaque pointer.
 3. Calls `application_run_event_loop()` — enters a classic `GetMessage`/`TranslateMessage`/`DispatchMessage` pump until `WM_QUIT`.
 
 Per-thread state stored in `thread_local!`:
@@ -145,7 +146,7 @@ Process-wide one-shot calls during init:
 - `EnableMouseInPointer(true)` — process-wide and irreversible. WM_MOUSE* are synthesised through WM_POINTER*. Third-party code in the same process expecting raw mouse messages will silently break.
 - `SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)` — per-thread, set in `EventLoop::new`.
 
-Cross-thread work uses `application_dispatcher_invoke`, which posts a Kotlin trampoline (`pollCallbacks`) onto the WinRT `DispatcherQueue`. The Kotlin side queues lambdas in a `ConcurrentLinkedQueue` and drains it on the UI thread. Note: the `bool` returned by `application_dispatcher_invoke` is silently discarded by `Application.invokeOnDispatcher` — enqueues after dispatcher shutdown drop the work.
+Cross-thread work uses `application_dispatcher_invoke`, which posts a Kotlin trampoline (`pollCallbacks`) onto the message-only `Dispatcher`. The Kotlin side queues lambdas in a `ConcurrentLinkedQueue` and drains it on the UI thread. `Application.invokeOnDispatcher` checks the native `bool` and throws on failure; internal call sites can use `tryInvokeOnDispatcher` to handle shutdown without throwing.
 
 `OleInitialize` is required for COM/OLE drag-drop, the OLE clipboard path, and the IFileOpen/Save dialogs. `CoInitializeEx` is not called separately (`OleInitialize` calls it internally for an STA).
 
@@ -204,8 +205,8 @@ fun <T> ffiDownCall(body: () -> T): T {
 Conventions:
 - `ffiDownCall { ... }` must wrap **only** the native call. Never `Arena.use`, never `withPointer`, never helper calls (helpers wrap their own native calls). See `FFI_CONVENTIONS.md`.
 - `ffiUpCall { defaultResult, body }` is the inverse, wrapping Kotlin callbacks invoked from Rust. Catches all `Throwable`, logs it, returns `defaultResult`. Kotlin exceptions never propagate into Rust — they're silently swallowed.
-- Background threads do not flush errors to Kotlin: `LAST_EXCEPTION_MSGS` is thread-local, so errors (and unexpected panics) on dispatcher-queue worker threads are visible only to whoever calls `logger_check_exceptions` on the same thread.
-- `tryRead*` variants of clipboard/data-object read functions return `FfiOption<T>` instead of throwing — currently they swallow **all** errors, not just format-not-found (open bug: TODO.md).
+- Background threads do not flush errors to Kotlin: `LAST_EXCEPTION_MSGS` is thread-local, so errors (and unexpected panics) on native worker threads are visible only to whoever calls `logger_check_exceptions` on the same thread.
+- Result-bearing clipboard/data-object read functions classify native status explicitly; Kotlin `tryRead*` returns `null` only for format-unavailable and throws other failures. The older `FfiOption` symbols remain for compatibility only.
 - The crate uses `anyhow::Error` as the unified error type today. Migrating to `thiserror`-defined typed errors is on the roadmap (see TODO.md) since typed errors are the recommended approach for libraries — they let callers branch on error kinds and keep error names stable across the codebase.
 
 ## Subsystem map
@@ -220,7 +221,7 @@ Conventions:
                 │  │                                              │
                 │  ├── creates ──▶ Window ──▶ AngleDevice         │
                 │  │                                              │
-                │  └── invokes ──▶ DispatcherQueue                │
+                │  └── invokes ──▶ Dispatcher (message-only HWND) │
                 │                                                 │
                 │  Input  : keyboard / pointer / cursor ◀─ event_loop dispatches
                 │  Display: screen / appearance         ◀─ on demand / WM_SETTINGCHANGE
@@ -252,7 +253,7 @@ Conventions:
 Kotlin: KotlinDesktopToolkit.init(…)                                  // System.load DLL
         Application().runEventLoop                                    // wraps the steps below
   → application_init_apartment()                                       // OleInitialize
-  → application_init(ApplicationCallbacks{ event_handler })            // Box<Application> + DispatcherQueue
+  → application_init(ApplicationCallbacks{ event_handler })            // Box<Application> + DispatcherQueue + Dispatcher
   → window/renderer creation, dispatch enqueues                        // app remains UI-thread bound
   → application_run_event_loop()                                       // GetMessage loop until WM_QUIT
   → application_drop()                                                 // Box::from_raw, drop
