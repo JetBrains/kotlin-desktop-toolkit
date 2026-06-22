@@ -20,19 +20,23 @@ use windows::{
             },
             Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow, RDW_INVALIDATE, RDW_NOERASE, RDW_NOFRAME, RedrawWindow},
         },
-        System::WinRT::Composition::ICompositorDesktopInterop,
+        System::{
+            Threading::{AttachThreadInput, GetCurrentThreadId},
+            WinRT::Composition::ICompositorDesktopInterop,
+        },
         UI::{
             Controls::MARGINS,
             HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi},
+            Input::KeyboardAndMouse::SetActiveWindow,
             WindowsAndMessaging::{
-                CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW, DestroyWindow, GWL_STYLE,
-                GetClientRect, GetPropW, GetWindowLongPtrW, HMENU, ICON_BIG, ICON_SMALL, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW,
-                RegisterClassExW, RemovePropW, SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON,
-                SM_CYSIZEFRAME, SM_CYSMICON, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
-                SWP_NOZORDER, SendMessageW, SetCursor, SetForegroundWindow, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
-                ShowWindow, TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY,
-                WM_NULL, WM_SETICON, WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
-                WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
+                BringWindowToTop, CREATESTRUCTW, CS_HREDRAW, CS_VREDRAW, CreateIconFromResourceEx, CreateWindowExW, DefWindowProcW,
+                DestroyWindow, GWL_STYLE, GetClientRect, GetForegroundWindow, GetPropW, GetWindowLongPtrW, GetWindowThreadProcessId, HMENU,
+                ICON_BIG, ICON_SMALL, IsHungAppWindow, IsIconic, IsZoomed, LR_DEFAULTCOLOR, PostMessageW, RegisterClassExW, RemovePropW,
+                SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, SM_CXICON, SM_CXPADDEDBORDER, SM_CXSMICON, SM_CYICON, SM_CYSIZEFRAME, SM_CYSMICON,
+                SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SendMessageW,
+                SetCursor, SetForegroundWindow, SetPropW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, TPM_RETURNCMD,
+                TPM_RIGHTBUTTON, TrackPopupMenu, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_NCCREATE, WM_NCDESTROY, WM_NULL, WM_SETICON,
+                WM_SYSCOMMAND, WNDCLASSEXW, WS_EX_NOREDIRECTIONBITMAP, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_OVERLAPPEDWINDOW, WS_THICKFRAME,
             },
         },
     },
@@ -430,6 +434,51 @@ impl Window {
 
     pub fn show(&self) {
         let _ = unsafe { ShowWindow(self.hwnd(), SW_SHOW) };
+    }
+
+    /// Forcibly brings the window to the foreground and gives it keyboard focus.
+    ///
+    /// Windows refuses `SetForegroundWindow` for a process that does not own the
+    /// current foreground window (e.g. when the app is launched from a terminal or
+    /// IDE rather than the shell), and merely flashes the taskbar button instead.
+    /// Temporarily attaching our input queue to the foreground window's thread lifts
+    /// that restriction for the duration of the call. This deliberately steals focus
+    /// from whatever the user is doing, so it should be used sparingly.
+    pub fn force_focus(&self) {
+        let hwnd = self.hwnd();
+
+        // Restore first if minimized, otherwise the window would be activated but stay
+        // iconic. Route through WM_SYSCOMMAND (SC_RESTORE) like `restore()` rather than
+        // `ShowWindow(SW_RESTORE)`: it is synchronous on the window's UI thread (ShowWindow
+        // is async when issued cross-thread) and preserves the standard restore animation.
+        if self.is_minimized() {
+            self.restore();
+        }
+
+        unsafe {
+            let foreground = GetForegroundWindow();
+            let foreground_thread = GetWindowThreadProcessId(foreground, None);
+            let current_thread = GetCurrentThreadId();
+            // Attaching our input queue to the foreground thread is what lets
+            // `SetForegroundWindow` bypass the foreground lock. After the attach, though,
+            // `SetForegroundWindow`/`BringWindowToTop` deliver synchronously to the attached
+            // thread; if its process is hung, that would block our UI thread indefinitely. Skip
+            // the attach when the foreground window is unresponsive and fall back to the taskbar
+            // flash. A small TOCTOU gap remains (the target could hang after this check); it is
+            // inherent to this approach.
+            let attached = foreground_thread != 0
+                && foreground_thread != current_thread
+                && !IsHungAppWindow(foreground).as_bool()
+                && AttachThreadInput(current_thread, foreground_thread, true).as_bool();
+
+            let _ = SetForegroundWindow(hwnd);
+            let _ = BringWindowToTop(hwnd);
+            let _ = SetActiveWindow(hwnd);
+
+            if attached {
+                let _ = AttachThreadInput(current_thread, foreground_thread, false);
+            }
+        }
     }
 
     pub fn set_cursor(&self, cursor: Cursor) {

@@ -234,6 +234,18 @@ public class Window internal constructor(
         return ffiDownCall { desktop_win32_h.window_show(ptr) }
     }
 
+    /**
+     * Forcibly brings the window to the foreground and gives it keyboard focus,
+     * stealing focus from whatever the user is currently interacting with.
+     *
+     * This works around Windows' foreground-activation lock, which otherwise prevents
+     * a process that doesn't own the foreground (e.g. an app launched from a terminal
+     * or IDE) from activating its window. Use sparingly, as stealing focus is intrusive.
+     */
+    public fun forceFocus() {
+        return ffiDownCall { desktop_win32_h.window_force_focus(ptr) }
+    }
+
     public fun requestRedraw() {
         ffiDownCall { desktop_win32_h.window_request_redraw(ptr) }
     }
