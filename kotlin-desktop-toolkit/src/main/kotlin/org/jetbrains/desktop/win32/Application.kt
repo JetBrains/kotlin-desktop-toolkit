@@ -22,6 +22,7 @@ public class Application : AutoCloseable {
 
     private val callbacksQueue: ConcurrentLinkedQueue<() -> Unit>
     private val callback: MemorySegment
+    internal val clipboardOperations: ClipboardOperationQueue
 
     private var ptr: MemorySegment? = null
     private var eventHandler: EventHandler? = null
@@ -30,6 +31,7 @@ public class Application : AutoCloseable {
         arena = Arena.ofShared()
         callbacksQueue = ConcurrentLinkedQueue()
         callback = `application_dispatcher_invoke$callback`.allocate(::pollCallbacks, arena)
+        clipboardOperations = ClipboardOperationQueue(this)
     }
 
     private val appPtr: MemorySegment get() = ptr ?: error("App has not been initialized yet")

@@ -61,7 +61,11 @@ Mixing `BorrowedStrPtr` (NUL-terminated) and `BorrowedUtf8` (length-delimited) s
 
 `FfiOption<T: PanicDefault>` = `{ is_some: bool, value: T }`. The `value` slot always holds a valid `T` (`T::default()` when `is_some == false`). Used to return nullable strings / arrays / structs without a separate sentinel.
 
-The `IntoFfiOption` trait (data_object_api.rs) converts `anyhow::Result<T>` → `anyhow::Result<FfiOption<T>>`. **Current scope is too wide** — it swallows every error to `None` (with a `trace!` log only). It should swallow only "format not found" (`DV_E_FORMATETC` / `DV_E_TYMED`); allocation failures and type mismatches should surface as exceptions. See `TODO.md`.
+The `IntoFfiOption` trait (data_object_api.rs) converts `anyhow::Result<T>` → `anyhow::Result<FfiOption<T>>`. It remains only for legacy nullable exports and still swallows every error to `None` with a `trace!` log. New Kotlin call sites should use result-bearing exports and return `null` only for `ClipboardStatus::FormatUnavailable`.
+
+### Result-bearing clipboard structs
+
+`ClipboardOperationResult` carries `{ status, code, message }`, where `message` is a Rust-allocated nullable UTF-8 string. Kotlin's clipboard result decoder copies and drops that string immediately; native code must leave it null on success or allocate it with `RustAllocatedStrPtr` on failure.
 
 ### Opaque pointers (Rust-allocated objects)
 
@@ -71,7 +75,7 @@ The `IntoFfiOption` trait (data_object_api.rs) converts `anyhow::Result<T>` → 
 | `RustAllocatedRcPtr<'a>` | `Rc<T>` | `from_rc(Rc<T>)` → `Rc::into_raw` | `to_rc::<T>()` returns the `Rc`; let it drop |
 | `BorrowedOpaquePtr<'a>` | borrowed `&T` | wrap an existing `&T` | None — caller still owns |
 | `ComObject<T>` (windows-core) | COM refcount on an `implement!`-decorated struct | `ComObject::new(T)` | Refcount → 0 (i.e. last `Release`) |
-| `ComInterfaceRawPtr` (com.rs) | `*mut c_void` carrying an `IUnknown` strong ref | `from_object(ComObject)` → `cast::<IUnknown>().into_raw()` | `Drop` calls `from_raw` → `IUnknown::Release` |
+| `ComInterfaceRawPtr` (com.rs) | `*mut c_void` carrying an `IUnknown` strong ref | `from_interface(&T)` or `from_object(&ComObject<T>)` → `cast::<IUnknown>().into_raw()` | explicit `release(self)` via a consuming endpoint |
 
 The wrappers don't carry the inner Rust type — the type is supplied at the use site via turbofish (`borrow::<Application>()`, `to_rc::<Window>()`, etc.). To make call sites readable, each subsystem defines a thin convenience alias in its `_api.rs`, e.g.:
 
@@ -83,7 +87,7 @@ pub type AppPtr<'a> = RustAllocatedRawPtr<'a>;
 pub type WindowPtr<'a> = RustAllocatedRcPtr<'a>;
 ```
 
-These aliases are purely for naming — they don't bind the inner type, change the ABI, or alter ownership semantics. `AppPtr` and `WindowPtr` are interchangeable with their underlying `RustAllocated*Ptr` everywhere they appear; the alias just signals intent at the FFI-call site. `ComInterfaceRawPtr` is *not* an alias — it's a distinct struct in `com.rs` with its own `Drop` impl that releases the COM ref.
+These aliases are purely for naming — they don't bind the inner type, change the ABI, or alter ownership semantics. `AppPtr` and `WindowPtr` are interchangeable with their underlying `RustAllocated*Ptr` everywhere they appear; the alias just signals intent at the FFI-call site. `ComInterfaceRawPtr` is *not* an alias — it's a distinct struct in `com.rs` with explicit COM-reference ownership. Borrowing endpoints call `cast`; consuming endpoints call `release`.
 
 The `borrow::<R>()` / `borrow_mut::<R>()` methods on `RustAllocatedRawPtr` produce a `&R` / `&mut R` from the raw pointer **without consuming the box**. They do this by `Box::leak(self.to_owned())` (ffi_utils.rs) — i.e. reconstruct the `Box` and immediately leak it. Soundness depends on caller discipline (no concurrent `to_owned`, single thread of ownership). **Marked open for review (see `TODO.md`).**
 
@@ -166,9 +170,10 @@ The Win32 OLE / drag-drop / clipboard subsystems use `windows-core` to implement
 |---|---|
 | Define a COM impl | `#[implement(IDataObject)] struct DataObject { … }`; impl block uses `impl IDataObject_Impl for DataObject_Impl { … }` |
 | Allocate one | `let obj: ComObject<DataObject> = ComObject::new(DataObject::new());` — refcount = 1 |
-| Hand off to the OS or another COM caller | `let raw = ComInterfaceRawPtr::from_object(obj);` — internally `cast::<IUnknown>().into_raw()`, refcount stays 1 |
-| Release | `Drop for ComInterfaceRawPtr` calls `IUnknown::from_raw(self.0).Release()` — refcount → 0 → struct drops |
-| Borrow back into a typed interface | `let iface: IDataObject = unsafe { raw.borrow() };` — does not change refcount |
+| Hand off to Kotlin / another FFI caller | `let raw = ComInterfaceRawPtr::from_object(&obj);` or `ComInterfaceRawPtr::from_interface(&iface)` — internally `cast::<IUnknown>().into_raw()`, producing one owned reference |
+| Retain | `let retained = raw.retain();` — returns another owned reference for async ownership |
+| Borrow back into a typed interface | `let iface: IDataObject = raw.cast()?;` — borrows the handle for the call; do not release the original handle |
+| Release | `raw.release()` in a consuming endpoint such as `com_data_object_release` — refcount → 0 can drop the COM object |
 
 Apartment requirement: **STA**. `OleInitialize(None)` is called by `Application::init_apartment` (application.rs). Any drag-drop or OLE clipboard operation must run on the same STA thread.
 

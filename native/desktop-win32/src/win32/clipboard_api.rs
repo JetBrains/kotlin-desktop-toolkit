@@ -30,6 +30,12 @@ fn with_window_raw<R>(window_ptr: &WindowPtr, f: impl FnOnce(&Window) -> anyhow:
     f(window)
 }
 
+fn open_unchanged_clipboard(window: &Window, expected_sequence: u32) -> anyhow::Result<Clipboard> {
+    let clipboard = Clipboard::open_for_window(window)?;
+    clipboard.ensure_sequence_unchanged(expected_sequence)?;
+    Ok(clipboard)
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClipboardSetItemKind {
@@ -64,10 +70,24 @@ pub extern "C" fn clipboard_count_formats_result(owner: WindowPtr) -> ClipboardI
     })
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_count_formats_if_unchanged_result(owner: WindowPtr, expected_sequence: u32) -> ClipboardIntResult {
+    ffi_boundary("clipboard_count_formats_if_unchanged_result", || {
+        Ok(ClipboardIntResult::from_result(with_window_raw(&owner, |window| {
+            clipboard_count_formats_if_unchanged_impl(window, expected_sequence)
+        })))
+    })
+}
+
 fn clipboard_count_formats_impl(window: &Window) -> anyhow::Result<i32> {
     let clipboard = Clipboard::open_for_window(window)?;
     let count = clipboard.count_available_formats()?;
     Ok(count)
+}
+
+fn clipboard_count_formats_if_unchanged_impl(window: &Window, expected_sequence: u32) -> anyhow::Result<i32> {
+    let clipboard = open_unchanged_clipboard(window, expected_sequence)?;
+    clipboard.count_available_formats()
 }
 
 #[unsafe(no_mangle)]
@@ -85,8 +105,23 @@ pub extern "C" fn clipboard_enum_formats_result(owner: WindowPtr) -> ClipboardUI
     })
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_enum_formats_if_unchanged_result(owner: WindowPtr, expected_sequence: u32) -> ClipboardUInt32ArrayResult {
+    ffi_boundary("clipboard_enum_formats_if_unchanged_result", || {
+        Ok(ClipboardUInt32ArrayResult::from_result(with_window_raw(&owner, |window| {
+            clipboard_enum_formats_if_unchanged_impl(window, expected_sequence)
+        })))
+    })
+}
+
 fn clipboard_enum_formats_impl(window: &Window) -> anyhow::Result<AutoDropUInt32Array> {
     let clipboard = Clipboard::open_for_window(window)?;
+    let formats = clipboard.enum_available_formats()?;
+    Ok(AutoDropArray::new(formats.into_boxed_slice()))
+}
+
+fn clipboard_enum_formats_if_unchanged_impl(window: &Window, expected_sequence: u32) -> anyhow::Result<AutoDropUInt32Array> {
+    let clipboard = open_unchanged_clipboard(window, expected_sequence)?;
     let formats = clipboard.enum_available_formats()?;
     Ok(AutoDropArray::new(formats.into_boxed_slice()))
 }
@@ -107,8 +142,26 @@ pub extern "C" fn clipboard_is_format_available_result(owner: WindowPtr, data_fo
     })
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_is_format_available_if_unchanged_result(
+    owner: WindowPtr,
+    data_format: u32,
+    expected_sequence: u32,
+) -> ClipboardBoolResult {
+    ffi_boundary("clipboard_is_format_available_if_unchanged_result", || {
+        Ok(ClipboardBoolResult::from_result(with_window_raw(&owner, |window| {
+            clipboard_is_format_available_if_unchanged_impl(window, data_format, expected_sequence)
+        })))
+    })
+}
+
 fn clipboard_is_format_available_impl(window: &Window, data_format: u32) -> anyhow::Result<bool> {
     let clipboard = Clipboard::open_for_window(window)?;
+    clipboard.is_format_available(data_format)
+}
+
+fn clipboard_is_format_available_if_unchanged_impl(window: &Window, data_format: u32, expected_sequence: u32) -> anyhow::Result<bool> {
+    let clipboard = open_unchanged_clipboard(window, expected_sequence)?;
     clipboard.is_format_available(data_format)
 }
 
@@ -149,6 +202,19 @@ pub extern "C" fn clipboard_get_data_result(owner: WindowPtr, data_format: u32) 
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn clipboard_get_data_if_unchanged_result(
+    owner: WindowPtr,
+    data_format: u32,
+    expected_sequence: u32,
+) -> ClipboardByteArrayResult {
+    ffi_boundary("clipboard_get_data_if_unchanged_result", || {
+        Ok(ClipboardByteArrayResult::from_result(with_window_raw(&owner, |window| {
+            clipboard_get_data_if_unchanged_impl(window, data_format, expected_sequence)
+        })))
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn clipboard_try_get_data(owner: WindowPtr, data_format: u32) -> FfiOption<AutoDropByteArray> {
     with_window(&owner, "clipboard_try_get_data", |window| {
         clipboard_get_data_impl(window, data_format).into_ffi_option()
@@ -157,6 +223,15 @@ pub extern "C" fn clipboard_try_get_data(owner: WindowPtr, data_format: u32) -> 
 
 fn clipboard_get_data_impl(owner: &Window, data_format: u32) -> anyhow::Result<AutoDropByteArray> {
     let clipboard = Clipboard::open_for_window(owner)?;
+    clipboard_get_data_from_open_clipboard(&clipboard, data_format)
+}
+
+fn clipboard_get_data_if_unchanged_impl(owner: &Window, data_format: u32, expected_sequence: u32) -> anyhow::Result<AutoDropByteArray> {
+    let clipboard = open_unchanged_clipboard(owner, expected_sequence)?;
+    clipboard_get_data_from_open_clipboard(&clipboard, data_format)
+}
+
+fn clipboard_get_data_from_open_clipboard(clipboard: &Clipboard, data_format: u32) -> anyhow::Result<AutoDropByteArray> {
     clipboard
         .get_data(DataFormat::Other(data_format))
         .and_then(|data| hglobal_reader::get_bytes(&data))
@@ -179,6 +254,15 @@ pub extern "C" fn clipboard_get_file_list_result(owner: WindowPtr) -> ClipboardS
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn clipboard_get_file_list_if_unchanged_result(owner: WindowPtr, expected_sequence: u32) -> ClipboardStringArrayResult {
+    ffi_boundary("clipboard_get_file_list_if_unchanged_result", || {
+        Ok(ClipboardStringArrayResult::from_result(with_window_raw(&owner, |window| {
+            clipboard_get_file_list_if_unchanged_impl(window, expected_sequence)
+        })))
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn clipboard_try_get_file_list(owner: WindowPtr) -> FfiOption<AutoDropArray<RustAllocatedStrPtr>> {
     with_window(&owner, "clipboard_try_get_file_list", |window| {
         clipboard_get_file_list_impl(window).into_ffi_option()
@@ -187,6 +271,15 @@ pub extern "C" fn clipboard_try_get_file_list(owner: WindowPtr) -> FfiOption<Aut
 
 fn clipboard_get_file_list_impl(owner: &Window) -> anyhow::Result<AutoDropArray<RustAllocatedStrPtr>> {
     let clipboard = Clipboard::open_for_window(owner)?;
+    clipboard_get_file_list_from_open_clipboard(&clipboard)
+}
+
+fn clipboard_get_file_list_if_unchanged_impl(owner: &Window, expected_sequence: u32) -> anyhow::Result<AutoDropArray<RustAllocatedStrPtr>> {
+    let clipboard = open_unchanged_clipboard(owner, expected_sequence)?;
+    clipboard_get_file_list_from_open_clipboard(&clipboard)
+}
+
+fn clipboard_get_file_list_from_open_clipboard(clipboard: &Clipboard) -> anyhow::Result<AutoDropArray<RustAllocatedStrPtr>> {
     clipboard
         .get_data(DataFormat::FileList)
         .and_then(|data| hglobal_reader::get_file_list(&data))
@@ -212,6 +305,15 @@ pub extern "C" fn clipboard_get_html_fragment_result(owner: WindowPtr) -> Clipbo
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn clipboard_get_html_fragment_if_unchanged_result(owner: WindowPtr, expected_sequence: u32) -> ClipboardStringResult {
+    ffi_boundary("clipboard_get_html_fragment_if_unchanged_result", || {
+        Ok(ClipboardStringResult::from_result(with_window_raw(&owner, |window| {
+            clipboard_get_html_fragment_if_unchanged_impl(window, expected_sequence)
+        })))
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn clipboard_try_get_html_fragment(owner: WindowPtr) -> FfiOption<RustAllocatedStrPtr> {
     with_window(&owner, "clipboard_try_get_html_fragment", |window| {
         clipboard_get_html_fragment_impl(window).into_ffi_option()
@@ -220,6 +322,15 @@ pub extern "C" fn clipboard_try_get_html_fragment(owner: WindowPtr) -> FfiOption
 
 fn clipboard_get_html_fragment_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr> {
     let clipboard = Clipboard::open_for_window(owner)?;
+    clipboard_get_html_fragment_from_open_clipboard(&clipboard)
+}
+
+fn clipboard_get_html_fragment_if_unchanged_impl(owner: &Window, expected_sequence: u32) -> anyhow::Result<RustAllocatedStrPtr> {
+    let clipboard = open_unchanged_clipboard(owner, expected_sequence)?;
+    clipboard_get_html_fragment_from_open_clipboard(&clipboard)
+}
+
+fn clipboard_get_html_fragment_from_open_clipboard(clipboard: &Clipboard) -> anyhow::Result<RustAllocatedStrPtr> {
     clipboard
         .get_data(DataFormat::HtmlFragment)
         .and_then(|data| hglobal_reader::get_html(&data))
@@ -239,6 +350,15 @@ pub extern "C" fn clipboard_get_text_result(owner: WindowPtr) -> ClipboardString
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn clipboard_get_text_if_unchanged_result(owner: WindowPtr, expected_sequence: u32) -> ClipboardStringResult {
+    ffi_boundary("clipboard_get_text_if_unchanged_result", || {
+        Ok(ClipboardStringResult::from_result(with_window_raw(&owner, |window| {
+            clipboard_get_text_if_unchanged_impl(window, expected_sequence)
+        })))
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn clipboard_try_get_text(owner: WindowPtr) -> FfiOption<RustAllocatedStrPtr> {
     with_window(&owner, "clipboard_try_get_text", |window| {
         clipboard_get_text_impl(window).into_ffi_option()
@@ -247,6 +367,15 @@ pub extern "C" fn clipboard_try_get_text(owner: WindowPtr) -> FfiOption<RustAllo
 
 fn clipboard_get_text_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr> {
     let clipboard = Clipboard::open_for_window(owner)?;
+    clipboard_get_text_from_open_clipboard(&clipboard)
+}
+
+fn clipboard_get_text_if_unchanged_impl(owner: &Window, expected_sequence: u32) -> anyhow::Result<RustAllocatedStrPtr> {
+    let clipboard = open_unchanged_clipboard(owner, expected_sequence)?;
+    clipboard_get_text_from_open_clipboard(&clipboard)
+}
+
+fn clipboard_get_text_from_open_clipboard(clipboard: &Clipboard) -> anyhow::Result<RustAllocatedStrPtr> {
     clipboard
         .get_data(DataFormat::Text)
         .and_then(|data| hglobal_reader::get_text(&data))
@@ -420,8 +549,24 @@ pub extern "C" fn ole_clipboard_get_data_result() -> ClipboardDataObjectResult {
     })
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn ole_clipboard_get_data_if_unchanged_result(expected_sequence: u32) -> ClipboardDataObjectResult {
+    ffi_boundary("ole_clipboard_get_data_if_unchanged_result", || {
+        Ok(ClipboardDataObjectResult::from_result(ole_clipboard_get_data_if_unchanged_impl(
+            expected_sequence,
+        )))
+    })
+}
+
 fn ole_clipboard_get_data_impl() -> anyhow::Result<ComInterfaceRawPtr> {
     let data_object = unsafe { OleGetClipboard()? };
+    Ok(ComInterfaceRawPtr::from_interface(&data_object)?)
+}
+
+fn ole_clipboard_get_data_if_unchanged_impl(expected_sequence: u32) -> anyhow::Result<ComInterfaceRawPtr> {
+    Clipboard::ensure_sequence_number_unchanged(expected_sequence)?;
+    let data_object = unsafe { OleGetClipboard()? };
+    Clipboard::ensure_sequence_number_unchanged(expected_sequence)?;
     Ok(ComInterfaceRawPtr::from_interface(&data_object)?)
 }
 

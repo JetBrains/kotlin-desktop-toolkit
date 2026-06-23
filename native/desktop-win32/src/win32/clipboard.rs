@@ -31,6 +31,19 @@ impl Clipboard {
         unsafe { GetClipboardSequenceNumber() }
     }
 
+    pub fn ensure_sequence_unchanged(&self, expected_sequence: u32) -> anyhow::Result<()> {
+        anyhow::ensure!(self.is_open, "Clipboard has been closed.");
+        Self::ensure_sequence_number_unchanged(expected_sequence)
+    }
+
+    pub fn ensure_sequence_number_unchanged(expected_sequence: u32) -> anyhow::Result<()> {
+        let actual_sequence = Self::get_sequence_number();
+        if actual_sequence != expected_sequence {
+            return Err(ClipboardFailure::changed(actual_sequence).into());
+        }
+        Ok(())
+    }
+
     pub fn count_available_formats(&self) -> anyhow::Result<i32> {
         anyhow::ensure!(self.is_open, "Clipboard has been closed.");
         unsafe { SetLastError(WIN32_ERROR(0)) };

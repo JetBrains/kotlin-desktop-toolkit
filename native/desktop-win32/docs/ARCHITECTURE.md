@@ -160,7 +160,7 @@ The crate funnels Rust-allocated heap objects through three boxed-pointer wrappe
 |---|---|---|---|
 | `RustAllocatedRawPtr<'a>` | `Box<T>` (Box::into_raw) | opaque to Kotlin | explicit `*_drop` calls `Box::from_raw` and lets it fall |
 | `RustAllocatedRcPtr<'a>` | `Rc<T>` (Rc::into_raw) | opaque to Kotlin | `*_drop` reconstructs the `Rc` and lets refcount reach zero |
-| `ComObject<T>` (windows-core) | COM refcount on a `windows-core` `implement!`-decorated struct | until `Release()` reaches zero | Kotlin holds a `ComInterfaceRawPtr` → `IUnknown::Release` on drop |
+| `ComObject<T>` (windows-core) | COM refcount on a `windows-core` `implement!`-decorated struct | until `Release()` reaches zero | Kotlin holds a `ComInterfaceRawPtr` and releases it through an explicit consuming endpoint |
 
 Conventions:
 - **Application** is `Box`-based: `application_init` does `Box::new` → `Box::into_raw`; `application_drop` reverses it. **Window** is `Rc`-based: a `Weak<Window>` raw pointer is also stashed as a Win32 window property (`KDT_WINDOW_PTR`) so `window_proc` can resolve a `&Window` cheaply on every message without touching the strong refcount. **AngleDevice** is `Box`-based, one per window. **DataObject** uses `ComObject` (COM ref counting) with a global ID-keyed registry on the Rust side until ownership is converted to a raw pointer for hand-off to OLE.
@@ -296,7 +296,7 @@ Kotlin: Application.createAngleRenderer(window)
 RegisterDragDrop on HWND with our DropTarget COM impl
   → user drags onto window
        Win32 → DropTarget::DragEnter(IDataObject, …)
-            → ComInterfaceRawPtr::new(data_object) → wraps strong ref
+           → ComInterfaceRawPtr::from_interface(data_object) → wraps strong ref
             → upcall to DropTargetCallbacks.dragEnter (Kotlin) with point & DataObject
             → ⚠ TODO: lifetime — Kotlin must NOT escape the DataObject beyond the callback
        Win32 → DropTarget::DragOver / DragLeave / Drop  …same pattern

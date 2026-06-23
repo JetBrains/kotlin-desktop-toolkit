@@ -38,6 +38,7 @@ pub enum ClipboardStatus {
     DataTooLarge,
     InvalidData,
     NativeError,
+    Changed,
 }
 
 impl PanicDefault for ClipboardStatus {
@@ -47,10 +48,11 @@ impl PanicDefault for ClipboardStatus {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ClipboardOperationResult {
     pub status: ClipboardStatus,
     pub code: i32,
+    pub message: RustAllocatedStrPtr,
 }
 
 impl ClipboardOperationResult {
@@ -59,29 +61,43 @@ impl ClipboardOperationResult {
         Self {
             status: ClipboardStatus::Ok,
             code: 0,
+            message: RustAllocatedStrPtr::null(),
         }
     }
 
     #[must_use]
     pub const fn failed(status: ClipboardStatus, code: i32) -> Self {
-        Self { status, code }
+        Self {
+            status,
+            code,
+            message: RustAllocatedStrPtr::null(),
+        }
+    }
+
+    #[must_use]
+    pub fn failed_with_message(status: ClipboardStatus, code: i32, message: impl ToString) -> Self {
+        Self {
+            status,
+            code,
+            message: allocated_message(message),
+        }
     }
 
     #[must_use]
     pub fn from_error(err: &anyhow::Error) -> Self {
         if let Some(failure) = find_error::<ClipboardFailure>(err) {
-            return failure.as_operation_result();
+            return failure.to_operation_result();
         }
 
         if let Some(win_error) = find_error::<WinError>(err) {
-            return Self::from_win_error(win_error);
+            return Self::from_win_error(win_error, err);
         }
 
-        Self::failed(ClipboardStatus::NativeError, 0)
+        Self::failed_with_message(ClipboardStatus::NativeError, 0, err)
     }
 
     #[must_use]
-    pub const fn from_win_error(err: &WinError) -> Self {
+    pub fn from_win_error(err: &WinError, message: impl ToString) -> Self {
         let code = err.code().0;
         let status = match code {
             HRESULT_CLIPBRD_E_CANT_OPEN | HRESULT_CLIPBRD_E_CANT_EMPTY | HRESULT_CLIPBRD_E_CANT_SET | HRESULT_CLIPBRD_E_CANT_CLOSE => {
@@ -91,7 +107,7 @@ impl ClipboardOperationResult {
             HRESULT_CLIPBRD_E_BAD_DATA => ClipboardStatus::InvalidData,
             _ => ClipboardStatus::NativeError,
         };
-        Self::failed(status, code)
+        Self::failed_with_message(status, code, message)
     }
 
     #[must_use]
@@ -108,7 +124,8 @@ impl PanicDefault for ClipboardOperationResult {
 
 #[derive(Debug)]
 pub struct ClipboardFailure {
-    result: ClipboardOperationResult,
+    status: ClipboardStatus,
+    code: i32,
     message: String,
 }
 
@@ -125,7 +142,8 @@ impl ClipboardFailure {
     pub fn busy_from_win_error(err: &WinError) -> Self {
         let code = err.code().0;
         Self {
-            result: ClipboardOperationResult::failed(ClipboardStatus::Busy, code),
+            status: ClipboardStatus::Busy,
+            code,
             message: format!("clipboard is currently unavailable: {err:?}"),
         }
     }
@@ -133,7 +151,8 @@ impl ClipboardFailure {
     #[must_use]
     pub fn format_unavailable(format_id: u32) -> Self {
         Self {
-            result: ClipboardOperationResult::failed(ClipboardStatus::FormatUnavailable, 0),
+            status: ClipboardStatus::FormatUnavailable,
+            code: 0,
             message: format!("clipboard format {format_id} is unavailable"),
         }
     }
@@ -141,7 +160,8 @@ impl ClipboardFailure {
     #[must_use]
     pub fn data_too_large(size: usize, max_size: usize) -> Self {
         Self {
-            result: ClipboardOperationResult::failed(ClipboardStatus::DataTooLarge, 0),
+            status: ClipboardStatus::DataTooLarge,
+            code: 0,
             message: format!("clipboard data is too large: {size} bytes exceeds {max_size} bytes"),
         }
     }
@@ -149,14 +169,29 @@ impl ClipboardFailure {
     #[must_use]
     pub fn invalid_data(message: impl Into<String>) -> Self {
         Self {
-            result: ClipboardOperationResult::failed(ClipboardStatus::InvalidData, 0),
+            status: ClipboardStatus::InvalidData,
+            code: 0,
             message: message.into(),
         }
     }
 
     #[must_use]
-    pub const fn as_operation_result(&self) -> ClipboardOperationResult {
-        self.result
+    pub fn changed(actual_sequence: u32) -> Self {
+        Self {
+            status: ClipboardStatus::Changed,
+            code: actual_sequence as i32,
+            message: format!("clipboard changed before read: actual sequence {actual_sequence}"),
+        }
+    }
+
+    #[must_use]
+    pub fn to_operation_result(&self) -> ClipboardOperationResult {
+        ClipboardOperationResult::failed_with_message(self.status, self.code, &self.message)
+    }
+
+    #[must_use]
+    pub const fn status(&self) -> ClipboardStatus {
+        self.status
     }
 }
 
@@ -418,6 +453,11 @@ pub(crate) fn operation_result(result: anyhow::Result<()>) -> ClipboardOperation
 
 fn trace_clipboard_failure(err: &anyhow::Error) {
     log::trace!("clipboard operation failed: {err:?}");
+}
+
+fn allocated_message(message: impl ToString) -> RustAllocatedStrPtr {
+    let message = message.to_string().replace('\0', "\\0");
+    RustAllocatedStrPtr::allocate(message).unwrap_or_else(|_| RustAllocatedStrPtr::null())
 }
 
 fn find_error<T: std::error::Error + 'static>(err: &anyhow::Error) -> Option<&T> {

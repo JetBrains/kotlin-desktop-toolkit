@@ -103,7 +103,7 @@ pub mod istream_reader {
     };
 
     use crate::win32::{
-        global_data::{ensure_clipboard_data_size, parse_file_list},
+        global_data::{ensure_clipboard_data_size, invalid_clipboard_data, parse_file_list},
         strings::{copy_from_utf8_bytes, copy_from_wide_string},
     };
 
@@ -144,9 +144,11 @@ pub mod istream_reader {
 
     pub fn get_html(stream: &IStream) -> anyhow::Result<CString> {
         let utf8_bytes = get_bytes(stream)?;
-        let html_format = copy_from_utf8_bytes(&utf8_bytes)?;
-        let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)?;
-        copy_from_wide_string(&fragment)
+        let html_format =
+            copy_from_utf8_bytes(&utf8_bytes).map_err(|err| invalid_clipboard_data(format!("invalid HTML byte stream: {err}")))?;
+        let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)
+            .map_err(|err| invalid_clipboard_data(format!("invalid HTML byte stream: {err:?}")))?;
+        copy_from_wide_string(&fragment).map_err(|err| invalid_clipboard_data(format!("invalid HTML byte stream: {err}")))
     }
 
     pub fn get_text(stream: &IStream) -> anyhow::Result<CString> {
@@ -158,9 +160,9 @@ pub mod istream_reader {
         // Malformed input surfaces as an Err via String::from_utf16; it cannot panic.
         let bytes = get_bytes(stream)?;
         let (chunks, []) = bytes.as_chunks::<2>() else {
-            anyhow::bail!("UTF-16 byte stream has odd length")
+            return Err(invalid_clipboard_data("UTF-16 byte stream has odd length"));
         };
         let wide: Vec<u16> = chunks.iter().map(|&pair| u16::from_le_bytes(pair)).collect();
-        copy_from_wide_string(&wide)
+        copy_from_wide_string(&wide).map_err(|err| invalid_clipboard_data(format!("invalid UTF-16 byte stream: {err}")))
     }
 }

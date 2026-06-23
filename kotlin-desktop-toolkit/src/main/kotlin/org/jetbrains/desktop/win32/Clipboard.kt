@@ -266,6 +266,177 @@ public object Clipboard {
         }
     }
 
+    private fun itemCountIfUnchanged(owner: Window, expectedChangeCount: UInt): Int {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_count_formats_if_unchanged_result(arena, windowPtr, expectedChangeCount.toInt())
+                }
+                checkClipboardReadOperation(NativeClipboardIntResult.result(result), expectedChangeCount)
+                NativeClipboardIntResult.value(result)
+            }
+        }
+    }
+
+    private fun isFormatAvailableIfUnchanged(owner: Window, format: DataFormat, expectedChangeCount: UInt): Boolean {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_is_format_available_if_unchanged_result(
+                        arena,
+                        windowPtr,
+                        format.id,
+                        expectedChangeCount.toInt(),
+                    )
+                }
+                checkClipboardReadOperation(NativeClipboardBoolResult.result(result), expectedChangeCount)
+                NativeClipboardBoolResult.value(result)
+            }
+        }
+    }
+
+    private fun listItemFormatsIfUnchanged(owner: Window, expectedChangeCount: UInt): List<DataFormat> {
+        val formatIds = owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_enum_formats_if_unchanged_result(arena, windowPtr, expectedChangeCount.toInt())
+                }
+                checkClipboardReadOperation(NativeClipboardUInt32ArrayResult.result(result), expectedChangeCount)
+                val formatsPtr = NativeClipboardUInt32ArrayResult.value(result)
+                try {
+                    intArrayFromNative(formatsPtr)
+                } finally {
+                    ffiDownCall {
+                        desktop_win32_h.native_u32_array_drop(formatsPtr)
+                    }
+                }
+            }
+        }
+        return formatIds.map(DataFormat::fromNative)
+    }
+
+    private fun readItemOfTypeIfUnchanged(owner: Window, format: DataFormat, expectedChangeCount: UInt): ByteArray {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_get_data_if_unchanged_result(arena, windowPtr, format.id, expectedChangeCount.toInt())
+                }
+                checkClipboardReadOperation(NativeClipboardByteArrayResult.result(result), expectedChangeCount)
+                val dataPtr = NativeClipboardByteArrayResult.value(result)
+                try {
+                    byteArrayFromNative(dataPtr)
+                } finally {
+                    ffiDownCall {
+                        desktop_win32_h.native_byte_array_drop(dataPtr)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun tryReadItemOfTypeIfUnchanged(owner: Window, format: DataFormat, expectedChangeCount: UInt): ByteArray? {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_get_data_if_unchanged_result(arena, windowPtr, format.id, expectedChangeCount.toInt())
+                }
+                val operation = clipboardOperationFromNative(NativeClipboardByteArrayResult.result(result))
+                if (!operation.requireOkOrUnavailable(expectedChangeCount)) {
+                    return@use null
+                }
+                val dataPtr = NativeClipboardByteArrayResult.value(result)
+                try {
+                    byteArrayFromNative(dataPtr)
+                } finally {
+                    ffiDownCall {
+                        desktop_win32_h.native_byte_array_drop(dataPtr)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun readHtmlFragmentIfUnchanged(owner: Window, expectedChangeCount: UInt): String {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_get_html_fragment_if_unchanged_result(arena, windowPtr, expectedChangeCount.toInt())
+                }
+                checkClipboardReadOperation(NativeClipboardStringResult.result(result), expectedChangeCount)
+                stringFromNative(NativeClipboardStringResult.value(result))
+            }
+        }
+    }
+
+    private fun tryReadHtmlFragmentIfUnchanged(owner: Window, expectedChangeCount: UInt): String? {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_get_html_fragment_if_unchanged_result(arena, windowPtr, expectedChangeCount.toInt())
+                }
+                val operation = clipboardOperationFromNative(NativeClipboardStringResult.result(result))
+                if (!operation.requireOkOrUnavailable(expectedChangeCount)) {
+                    return@use null
+                }
+                stringFromNative(NativeClipboardStringResult.value(result))
+            }
+        }
+    }
+
+    private fun readListOfFilesIfUnchanged(owner: Window, expectedChangeCount: UInt): List<String> {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_get_file_list_if_unchanged_result(arena, windowPtr, expectedChangeCount.toInt())
+                }
+                checkClipboardReadOperation(NativeClipboardStringArrayResult.result(result), expectedChangeCount)
+                listOfStringsFromNative(NativeClipboardStringArrayResult.value(result))
+            }
+        }
+    }
+
+    private fun tryReadListOfFilesIfUnchanged(owner: Window, expectedChangeCount: UInt): List<String>? {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_get_file_list_if_unchanged_result(arena, windowPtr, expectedChangeCount.toInt())
+                }
+                val operation = clipboardOperationFromNative(NativeClipboardStringArrayResult.result(result))
+                if (!operation.requireOkOrUnavailable(expectedChangeCount)) {
+                    return@use null
+                }
+                listOfStringsFromNative(NativeClipboardStringArrayResult.value(result))
+            }
+        }
+    }
+
+    private fun readTextItemIfUnchanged(owner: Window, expectedChangeCount: UInt): String {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_get_text_if_unchanged_result(arena, windowPtr, expectedChangeCount.toInt())
+                }
+                checkClipboardReadOperation(NativeClipboardStringResult.result(result), expectedChangeCount)
+                stringFromNative(NativeClipboardStringResult.value(result))
+            }
+        }
+    }
+
+    private fun tryReadTextItemIfUnchanged(owner: Window, expectedChangeCount: UInt): String? {
+        return owner.withPointer { windowPtr ->
+            Arena.ofConfined().use { arena ->
+                val result = ffiDownCall {
+                    desktop_win32_h.clipboard_get_text_if_unchanged_result(arena, windowPtr, expectedChangeCount.toInt())
+                }
+                val operation = clipboardOperationFromNative(NativeClipboardStringResult.result(result))
+                if (!operation.requireOkOrUnavailable(expectedChangeCount)) {
+                    return@use null
+                }
+                stringFromNative(NativeClipboardStringResult.value(result))
+            }
+        }
+    }
+
     @Deprecated(CLIPBOARD_WRITE_DEPRECATION)
     public fun writeItemOfType(owner: Window, format: DataFormat, data: ByteArray) {
         writeItems(owner, listOf(ClipboardWriteItem.Bytes(format, data)))
@@ -300,40 +471,40 @@ public object Clipboard {
     }
 
     public fun clearAsync(application: Application, owner: Window): CompletableFuture<Unit> =
-        retryClipboardOperationAsync(application) { clear(owner) }
+        retryClipboardWriteOperationAsync(application) { clear(owner) }
 
     public fun itemCountAsync(application: Application, owner: Window): CompletableFuture<Int> =
-        retryClipboardOperationAsync(application) { itemCount(owner) }
+        retryClipboardReadOperationAsync(application) { expected -> itemCountIfUnchanged(owner, expected) }
 
     public fun isFormatAvailableAsync(application: Application, owner: Window, format: DataFormat): CompletableFuture<Boolean> =
-        retryClipboardOperationAsync(application) { isFormatAvailable(owner, format) }
+        retryClipboardReadOperationAsync(application) { expected -> isFormatAvailableIfUnchanged(owner, format, expected) }
 
     public fun listItemFormatsAsync(application: Application, owner: Window): CompletableFuture<List<DataFormat>> =
-        retryClipboardOperationAsync(application) { listItemFormats(owner) }
+        retryClipboardReadOperationAsync(application) { expected -> listItemFormatsIfUnchanged(owner, expected) }
 
     public fun readItemOfTypeAsync(application: Application, owner: Window, format: DataFormat): CompletableFuture<ByteArray> =
-        retryClipboardOperationAsync(application) { readItemOfType(owner, format) }
+        retryClipboardReadOperationAsync(application) { expected -> readItemOfTypeIfUnchanged(owner, format, expected) }
 
     public fun tryReadItemOfTypeAsync(application: Application, owner: Window, format: DataFormat): CompletableFuture<ByteArray?> =
-        retryClipboardOperationAsync(application) { tryReadItemOfType(owner, format) }
+        retryClipboardReadOperationAsync(application) { expected -> tryReadItemOfTypeIfUnchanged(owner, format, expected) }
 
     public fun readHtmlFragmentAsync(application: Application, owner: Window): CompletableFuture<String> =
-        retryClipboardOperationAsync(application) { readHtmlFragment(owner) }
+        retryClipboardReadOperationAsync(application) { expected -> readHtmlFragmentIfUnchanged(owner, expected) }
 
     public fun tryReadHtmlFragmentAsync(application: Application, owner: Window): CompletableFuture<String?> =
-        retryClipboardOperationAsync(application) { tryReadHtmlFragment(owner) }
+        retryClipboardReadOperationAsync(application) { expected -> tryReadHtmlFragmentIfUnchanged(owner, expected) }
 
     public fun readListOfFilesAsync(application: Application, owner: Window): CompletableFuture<List<String>> =
-        retryClipboardOperationAsync(application) { readListOfFiles(owner) }
+        retryClipboardReadOperationAsync(application) { expected -> readListOfFilesIfUnchanged(owner, expected) }
 
     public fun tryReadListOfFilesAsync(application: Application, owner: Window): CompletableFuture<List<String>?> =
-        retryClipboardOperationAsync(application) { tryReadListOfFiles(owner) }
+        retryClipboardReadOperationAsync(application) { expected -> tryReadListOfFilesIfUnchanged(owner, expected) }
 
     public fun readTextItemAsync(application: Application, owner: Window): CompletableFuture<String> =
-        retryClipboardOperationAsync(application) { readTextItem(owner) }
+        retryClipboardReadOperationAsync(application) { expected -> readTextItemIfUnchanged(owner, expected) }
 
     public fun tryReadTextItemAsync(application: Application, owner: Window): CompletableFuture<String?> =
-        retryClipboardOperationAsync(application) { tryReadTextItem(owner) }
+        retryClipboardReadOperationAsync(application) { expected -> tryReadTextItemIfUnchanged(owner, expected) }
 
     public fun writeAsync(application: Application, owner: Window, block: ClipboardWriter.() -> Unit): CompletableFuture<Unit> {
         clipboardAsyncWrongThreadFuture<Unit>(application)?.let { return it }
@@ -342,60 +513,201 @@ public object Clipboard {
         } catch (t: Throwable) {
             return failedFuture(t)
         }
-        return retryClipboardOperationAsync(application) { writeItems(owner, items) }
+        return retryClipboardWriteOperationAsync(application) { writeItems(owner, items) }
     }
 }
 
 private val clipboardRetryDelaysMs = longArrayOf(10, 25, 50, 100, 200, 400, 800)
 
-private fun <T> retryClipboardOperationAsync(application: Application, operation: () -> T): CompletableFuture<T> {
+private fun <T> retryClipboardReadOperationAsync(application: Application, operation: (UInt) -> T): CompletableFuture<T> =
+    retryClipboardOperationAsync(application, ClipboardQueuedOperationKind.Read) { readSequence ->
+        operation(checkNotNull(readSequence))
+    }
+
+private fun <T> retryClipboardWriteOperationAsync(application: Application, operation: () -> T): CompletableFuture<T> =
+    retryClipboardOperationAsync(application, ClipboardQueuedOperationKind.Write) { operation() }
+
+private fun <T> retryClipboardOperationAsync(
+    application: Application,
+    kind: ClipboardQueuedOperationKind,
+    operation: (UInt?) -> T,
+): CompletableFuture<T> {
     clipboardAsyncWrongThreadFuture<T>(application)?.let { return it }
+    return application.clipboardOperations.enqueue(kind, operation)
+}
 
-    val future = CompletableFuture<T>()
+internal typealias ClipboardRetryDispatcher = (() -> Unit) -> Boolean
 
-    fun attempt(attemptIndex: Int) {
-        if (future.isDone) {
+internal class ClipboardOperationQueue(
+    private val dispatchRetry: ClipboardRetryDispatcher,
+    private val readChangeCount: () -> UInt = Clipboard::changeCount,
+) {
+    constructor(application: Application) : this(application::tryInvokeOnDispatcher)
+
+    // Normal execution is dispatcher-thread-owned. While a retry is waiting to be
+    // dispatched, the delayed executor may terminally fail and drain pending operations.
+    private val retryDispatchLock = Any()
+    private val queue = ArrayDeque<QueuedClipboardOperation<*>>()
+    private var active: QueuedClipboardOperation<*>? = null
+    @Volatile
+    private var retryDispatchPending = false
+
+    fun <T> enqueue(kind: ClipboardQueuedOperationKind, operation: (UInt?) -> T): CompletableFuture<T> {
+        val entry = QueuedClipboardOperation(kind, operation)
+        if (retryDispatchPending) {
+            enqueueWhileRetryDispatchPending(entry)
+        } else {
+            queue.addLast(entry)
+            runNextIfIdle()
+        }
+        return entry.future
+    }
+
+    private fun enqueueWhileRetryDispatchPending(entry: QueuedClipboardOperation<*>) {
+        val shouldRun = synchronized(retryDispatchLock) {
+            queue.addLast(entry)
+            !retryDispatchPending
+        }
+        if (shouldRun) {
+            runNextIfIdle()
+        }
+    }
+
+    private fun runNextIfIdle() {
+        if (active != null) {
+            return
+        }
+
+        while (queue.isNotEmpty()) {
+            val next = queue.removeFirst()
+            if (next.future.isDone) {
+                continue
+            }
+            active = next
+            start(next)
+            return
+        }
+    }
+
+    private fun start(entry: QueuedClipboardOperation<*>) {
+        try {
+            entry.readSequence = if (entry.kind == ClipboardQueuedOperationKind.Read) readChangeCount() else null
+            attempt(entry, 0)
+        } catch (t: Throwable) {
+            entry.future.completeExceptionally(t)
+            finish(entry)
+        }
+    }
+
+    private fun <T> attempt(entry: QueuedClipboardOperation<T>, attemptIndex: Int) {
+        if (entry.future.isDone) {
+            finish(entry)
             return
         }
 
         try {
-            val value = operation()
+            val readSequence = entry.readSequence
+            readSequence?.let { expected ->
+                if (attemptIndex > 0) {
+                    val actual = readChangeCount()
+                    if (actual != expected) {
+                        entry.future.completeExceptionally(ClipboardChangedException(expected, actual))
+                        finish(entry)
+                        return
+                    }
+                }
+            }
+
+            val value = entry.operation(readSequence)
             // If the future was already completed elsewhere (e.g. timed out or cancelled),
             // complete() is a no-op and `value` is dropped on the floor. Close it when it
             // owns a native resource so the reference cannot leak (only DataObject reads do).
-            if (!future.complete(value) && value is AutoCloseable) {
+            if (!entry.future.complete(value) && value is AutoCloseable) {
                 value.close()
             }
+            finish(entry)
         } catch (e: ClipboardException) {
             val nextAttempt = attemptIndex + 1
             if (e.status == ClipboardStatus.Busy && attemptIndex < clipboardRetryDelaysMs.size) {
-                scheduleClipboardRetry(application, future, clipboardRetryDelaysMs[attemptIndex]) {
-                    attempt(nextAttempt)
+                scheduleRetry(entry, clipboardRetryDelaysMs[attemptIndex]) {
+                    attempt(entry, nextAttempt)
                 }
             } else {
-                future.completeExceptionally(e)
+                entry.future.completeExceptionally(e)
+                finish(entry)
             }
         } catch (t: Throwable) {
-            future.completeExceptionally(t)
+            entry.future.completeExceptionally(t)
+            finish(entry)
         }
     }
 
-    attempt(0)
-    return future
-}
-
-private fun scheduleClipboardRetry(application: Application, future: CompletableFuture<*>, delayMs: Long, retry: () -> Unit) {
-    CompletableFuture.delayedExecutor(delayMs, TimeUnit.MILLISECONDS).execute {
-        if (!future.isDone) {
+    private fun scheduleRetry(entry: QueuedClipboardOperation<*>, delayMs: Long, retry: () -> Unit) {
+        retryDispatchPending = true
+        CompletableFuture.delayedExecutor(delayMs, TimeUnit.MILLISECONDS).execute {
             try {
-                if (!application.tryInvokeOnDispatcher(retry)) {
-                    future.completeExceptionally(IllegalStateException("Failed to dispatch clipboard retry to the application dispatcher."))
+                val dispatched = dispatchRetry {
+                    retryDispatchPending = false
+                    if (entry.future.isDone) {
+                        finish(entry)
+                    } else {
+                        retry()
+                    }
+                }
+                if (!dispatched) {
+                    failQueueTerminally(
+                        entry,
+                        IllegalStateException("Failed to dispatch clipboard retry to the application dispatcher."),
+                    )
                 }
             } catch (t: Throwable) {
-                future.completeExceptionally(t)
+                failQueueTerminally(
+                    entry,
+                    IllegalStateException("Failed to dispatch clipboard retry to the application dispatcher.", t),
+                )
             }
         }
     }
+
+    private fun failQueueTerminally(entry: QueuedClipboardOperation<*>, failure: Throwable) {
+        val failedEntries = synchronized(retryDispatchLock) {
+            if (!retryDispatchPending || active !== entry) {
+                return@synchronized listOf(entry)
+            }
+            val failedEntries = mutableListOf(entry)
+            while (queue.isNotEmpty()) {
+                val pending = queue.removeFirst()
+                failedEntries.add(pending)
+            }
+            active = null
+            retryDispatchPending = false
+            failedEntries
+        }
+        for (failedEntry in failedEntries) {
+            failedEntry.future.completeExceptionally(failure)
+        }
+    }
+
+    private fun finish(entry: QueuedClipboardOperation<*>) {
+        if (active !== entry) {
+            return
+        }
+        active = null
+        runNextIfIdle()
+    }
+}
+
+internal enum class ClipboardQueuedOperationKind {
+    Read,
+    Write,
+}
+
+private class QueuedClipboardOperation<T>(
+    val kind: ClipboardQueuedOperationKind,
+    val operation: (UInt?) -> T,
+) {
+    val future: CompletableFuture<T> = CompletableFuture()
+    var readSequence: UInt? = null
 }
 
 private fun <T> failedFuture(error: Throwable): CompletableFuture<T> {
@@ -509,6 +821,17 @@ public object OleClipboard {
         return DataObject(ptr)
     }
 
+    private fun readClipboardIfUnchanged(expectedChangeCount: UInt): DataObject {
+        val ptr = Arena.ofConfined().use { arena ->
+            val result = ffiDownCall {
+                desktop_win32_h.ole_clipboard_get_data_if_unchanged_result(arena, expectedChangeCount.toInt())
+            }
+            checkClipboardReadOperation(NativeClipboardDataObjectResult.result(result), expectedChangeCount)
+            NativeClipboardDataObjectResult.value(result)
+        }
+        return DataObject(ptr)
+    }
+
     @Deprecated(OLE_CLIPBOARD_WRITE_DEPRECATION)
     public fun writeToClipboard(dataObject: DataObject) {
         Arena.ofConfined().use { arena ->
@@ -519,10 +842,10 @@ public object OleClipboard {
         }
     }
 
-    public fun clearAsync(application: Application): CompletableFuture<Unit> = retryClipboardOperationAsync(application) { clear() }
+    public fun clearAsync(application: Application): CompletableFuture<Unit> = retryClipboardWriteOperationAsync(application) { clear() }
 
     public fun readClipboardAsync(application: Application): CompletableFuture<DataObject> =
-        retryClipboardOperationAsync(application) { readClipboard() }
+        retryClipboardReadOperationAsync(application) { expected -> readClipboardIfUnchanged(expected) }
 
     public fun writeAsync(application: Application, block: ClipboardWriter.() -> Unit): CompletableFuture<Unit> {
         clipboardAsyncWrongThreadFuture<Unit>(application)?.let { return it }
@@ -557,7 +880,7 @@ public object OleClipboard {
         } catch (t: Throwable) {
             return failedFuture(t)
         }
-        val future = retryClipboardOperationAsync(application) { writeToClipboard(retainedDataObject) }
+        val future = retryClipboardWriteOperationAsync(application) { writeToClipboard(retainedDataObject) }
         future.whenComplete { _, _ ->
             closeDataObjectOnDispatcher(application, retainedDataObject)
         }

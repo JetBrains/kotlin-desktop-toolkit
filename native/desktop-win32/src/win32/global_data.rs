@@ -20,6 +20,10 @@ pub(crate) fn ensure_clipboard_data_size(size: usize) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub(crate) fn invalid_clipboard_data(message: impl Into<String>) -> anyhow::Error {
+    ClipboardFailure::invalid_data(message).into()
+}
+
 pub struct HGlobalData {
     mem: HGLOBAL,
     is_owned: bool,
@@ -212,11 +216,11 @@ pub(crate) mod hglobal_reader {
     pub fn get_text(data: &HGlobalData) -> anyhow::Result<CString> {
         let bytes = get_bytes(data)?;
         let (chunks, []) = bytes.as_chunks::<2>() else {
-            anyhow::bail!("UTF-16 clipboard data has odd byte length")
+            return Err(super::invalid_clipboard_data("UTF-16 clipboard data has odd byte length"));
         };
         let wide: Vec<u16> = chunks.iter().map(|&pair| u16::from_le_bytes(pair)).collect();
         let len = wide.iter().position(|&c| c == 0).unwrap_or(wide.len());
-        copy_from_wide_string(&wide[..len])
+        copy_from_wide_string(&wide[..len]).map_err(|err| super::invalid_clipboard_data(format!("invalid UTF-16 clipboard data: {err}")))
     }
 
     pub fn get_bytes(data: &HGlobalData) -> anyhow::Result<Vec<u8>> {
@@ -248,9 +252,11 @@ pub(crate) mod hglobal_reader {
 
     pub fn get_html(data: &HGlobalData) -> anyhow::Result<CString> {
         let utf8_bytes = get_bytes(data)?;
-        let html_format = copy_from_utf8_bytes(&utf8_bytes)?;
-        let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)?;
-        copy_from_wide_string(&fragment)
+        let html_format = copy_from_utf8_bytes(&utf8_bytes)
+            .map_err(|err| super::invalid_clipboard_data(format!("invalid HTML clipboard data: {err}")))?;
+        let fragment = HtmlFormatHelper::GetStaticFragment(&html_format)
+            .map_err(|err| super::invalid_clipboard_data(format!("invalid HTML clipboard data: {err:?}")))?;
+        copy_from_wide_string(&fragment).map_err(|err| super::invalid_clipboard_data(format!("invalid HTML clipboard data: {err}")))
     }
 }
 
@@ -261,17 +267,23 @@ pub(crate) unsafe fn parse_file_list(hdrop: HDROP) -> anyhow::Result<Vec<CString
     let mut files = Vec::with_capacity(num_files.try_into()?);
     for i in 0..num_files {
         let file_name_len = unsafe { DragQueryFileW(hdrop, i, None) };
-        anyhow::ensure!(file_name_len != 0, WinError::from_thread());
+        if file_name_len == 0 {
+            return Err(invalid_clipboard_data(format!("DROPFILES entry {i} has an empty file name")));
+        }
         let mut buffer = vec![0u16; usize::try_from(file_name_len)? + 1];
         let file_name_len = unsafe { DragQueryFileW(hdrop, i, Some(&mut buffer)) };
-        anyhow::ensure!(file_name_len != 0, WinError::from_thread());
-        files.push(copy_from_wide_string(&buffer)?);
+        if file_name_len == 0 {
+            return Err(invalid_clipboard_data(format!("failed to read DROPFILES entry {i}")));
+        }
+        files.push(copy_from_wide_string(&buffer).map_err(|err| invalid_clipboard_data(format!("invalid DROPFILES entry {i}: {err}")))?);
     }
     Ok(files)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::win32::clipboard_result::{ClipboardFailure, ClipboardStatus};
+
     use super::{HGlobalData, MAX_CLIPBOARD_DATA_BYTES, hglobal_reader, hglobal_writer};
 
     #[test]
@@ -290,6 +302,8 @@ mod tests {
         let err = hglobal_reader::get_text(&data).unwrap_err();
 
         assert!(err.to_string().contains("odd byte length"));
+        let failure = err.downcast_ref::<ClipboardFailure>().expect("expected clipboard failure");
+        assert_eq!(failure.status(), ClipboardStatus::InvalidData);
     }
 
     #[test]

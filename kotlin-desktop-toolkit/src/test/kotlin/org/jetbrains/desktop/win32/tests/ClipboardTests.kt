@@ -2,6 +2,7 @@ package org.jetbrains.desktop.win32.tests
 
 import org.jetbrains.desktop.win32.Application
 import org.jetbrains.desktop.win32.Clipboard
+import org.jetbrains.desktop.win32.ClipboardChangedException
 import org.jetbrains.desktop.win32.ClipboardException
 import org.jetbrains.desktop.win32.ClipboardStatus
 import org.jetbrains.desktop.win32.DataFormat
@@ -11,6 +12,10 @@ import org.jetbrains.desktop.win32.KotlinDesktopToolkit
 import org.jetbrains.desktop.win32.OleClipboard
 import org.jetbrains.desktop.win32.Window
 import org.jetbrains.desktop.win32.WindowParams
+import org.jetbrains.desktop.win32.checkClipboardReadOperation
+import org.jetbrains.desktop.win32.ffiDownCall
+import org.jetbrains.desktop.win32.generated.NativeClipboardStringResult
+import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -102,6 +107,37 @@ class ClipboardTests {
 
     @Test
     @Timeout(10)
+    fun `async clipboard operations retry in FIFO order`() {
+        runClipboardTest { app, window, finish ->
+            val lock = HeldClipboard.open()
+            val first = Clipboard.writeAsync(app, window) {
+                setText("first delayed write")
+            }
+            assertFalse(first.isDone, "Expected first write to hit the held clipboard and schedule a retry")
+
+            releaseAndInvokeLater(app, lock, finish) {
+                val second = Clipboard.writeAsync(app, window) {
+                    setText("second queued write")
+                }
+                CompletableFuture.allOf(first, second).whenComplete { _, throwable ->
+                    if (throwable != null) {
+                        finish(throwable)
+                        return@whenComplete
+                    }
+                    try {
+                        @Suppress("DEPRECATION")
+                        assertEquals("second queued write", Clipboard.readTextItem(window))
+                        finish(null)
+                    } catch (t: Throwable) {
+                        finish(t)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
     fun `async read retries busy clipboard and succeeds`() {
         runClipboardTest { app, window, finish ->
             val expected = "async read after contention"
@@ -124,6 +160,36 @@ class ClipboardTests {
                         finish(t)
                     }
                 }
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    fun `native unchanged read fails when clipboard changes before read`() {
+        runClipboardTest { _, window, finish ->
+            try {
+                @Suppress("DEPRECATION")
+                Clipboard.writeTextItem(window, "initial text")
+                val expected = Clipboard.changeCount()
+
+                User32Clipboard.writeUnicodeText("changed text")
+
+                window.withPointer { windowPtr ->
+                    Arena.ofConfined().use { arena ->
+                        val result = ffiDownCall {
+                            desktop_win32_h.clipboard_get_text_if_unchanged_result(arena, windowPtr, expected.toInt())
+                        }
+                        val exception = assertFailsWith<ClipboardChangedException> {
+                            checkClipboardReadOperation(NativeClipboardStringResult.result(result), expected)
+                        }
+                        assertEquals(expected, exception.expectedChangeCount)
+                        assertEquals(Clipboard.changeCount(), exception.actualChangeCount)
+                    }
+                }
+                finish(null)
+            } catch (t: Throwable) {
+                finish(t)
             }
         }
     }
@@ -569,6 +635,17 @@ private fun releaseLater(lock: HeldClipboard) {
     }
 }
 
+private fun releaseAndInvokeLater(app: Application, lock: HeldClipboard, finish: (Throwable?) -> Unit, body: () -> Unit) {
+    CompletableFuture.delayedExecutor(15, TimeUnit.MILLISECONDS).execute {
+        try {
+            lock.close()
+            app.invokeOnDispatcher(body)
+        } catch (t: Throwable) {
+            finish(t)
+        }
+    }
+}
+
 private fun assertClipboardException(throwable: Throwable?): ClipboardException {
     val failure = checkNotNull(throwable) { "Expected clipboard operation to fail" }
     val cause = when (failure) {
@@ -633,8 +710,12 @@ private class HeldClipboard private constructor(
 }
 
 private object User32Clipboard {
+    private const val CF_UNICODETEXT = 13
+    private const val GMEM_MOVEABLE = 0x0002
+
     private val linker: Linker = Linker.nativeLinker()
     private val user32: SymbolLookup = SymbolLookup.libraryLookup("user32.dll", Arena.global())
+    private val kernel32: SymbolLookup = SymbolLookup.libraryLookup("kernel32.dll", Arena.global())
     private val openClipboard: MethodHandle = linker.downcallHandle(
         user32.find("OpenClipboard").orElseThrow(),
         FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS),
@@ -643,8 +724,60 @@ private object User32Clipboard {
         user32.find("CloseClipboard").orElseThrow(),
         FunctionDescriptor.of(ValueLayout.JAVA_INT),
     )
+    private val emptyClipboard: MethodHandle = linker.downcallHandle(
+        user32.find("EmptyClipboard").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.JAVA_INT),
+    )
+    private val setClipboardData: MethodHandle = linker.downcallHandle(
+        user32.find("SetClipboardData").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS),
+    )
+    private val globalAlloc: MethodHandle = linker.downcallHandle(
+        kernel32.find("GlobalAlloc").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG),
+    )
+    private val globalFree: MethodHandle = linker.downcallHandle(
+        kernel32.find("GlobalFree").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+    )
+    private val globalLock: MethodHandle = linker.downcallHandle(
+        kernel32.find("GlobalLock").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS),
+    )
+    private val globalUnlock: MethodHandle = linker.downcallHandle(
+        kernel32.find("GlobalUnlock").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS),
+    )
 
     fun openClipboard(): Boolean = (openClipboard.invoke(MemorySegment.NULL) as Int) != 0
 
     fun closeClipboard(): Boolean = (closeClipboard.invoke() as Int) != 0
+
+    fun writeUnicodeText(text: String) {
+        val bytes = "$text\u0000".toByteArray(Charsets.UTF_16LE)
+        val mem = globalAlloc.invoke(GMEM_MOVEABLE, bytes.size.toLong()) as MemorySegment
+        check(mem != MemorySegment.NULL) { "GlobalAlloc failed" }
+
+        var transferred = false
+        try {
+            val content = globalLock.invoke(mem) as MemorySegment
+            check(content != MemorySegment.NULL) { "GlobalLock failed" }
+            MemorySegment.copy(MemorySegment.ofArray(bytes), 0, content.reinterpret(bytes.size.toLong()), 0, bytes.size.toLong())
+            globalUnlock.invoke(mem)
+
+            check(openClipboard()) { "Failed to open clipboard for external write" }
+            try {
+                check((emptyClipboard.invoke() as Int) != 0) { "EmptyClipboard failed" }
+                val result = setClipboardData.invoke(CF_UNICODETEXT, mem) as MemorySegment
+                check(result != MemorySegment.NULL) { "SetClipboardData failed" }
+                transferred = true
+            } finally {
+                check(closeClipboard()) { "Failed to close clipboard after external write" }
+            }
+        } finally {
+            if (!transferred) {
+                globalFree.invoke(mem)
+            }
+        }
+    }
 }
