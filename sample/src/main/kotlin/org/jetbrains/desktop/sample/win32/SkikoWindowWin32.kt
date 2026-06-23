@@ -3,6 +3,7 @@ package org.jetbrains.desktop.sample.win32
 import org.jetbrains.desktop.win32.AngleRenderer
 import org.jetbrains.desktop.win32.Appearance
 import org.jetbrains.desktop.win32.Application
+import org.jetbrains.desktop.win32.Clipboard
 import org.jetbrains.desktop.win32.Cursor
 import org.jetbrains.desktop.win32.CursorIcon
 import org.jetbrains.desktop.win32.DataFormat
@@ -20,7 +21,6 @@ import org.jetbrains.desktop.win32.FileDialog
 import org.jetbrains.desktop.win32.Keyboard
 import org.jetbrains.desktop.win32.Logger
 import org.jetbrains.desktop.win32.NCHitTestResult
-import org.jetbrains.desktop.win32.OleClipboard
 import org.jetbrains.desktop.win32.PhysicalPoint
 import org.jetbrains.desktop.win32.PhysicalSize
 import org.jetbrains.desktop.win32.PointerButton
@@ -166,12 +166,12 @@ abstract class SkikoWindowWin32(private val app: Application) : AutoCloseable {
 
                     VirtualKey.C -> {
                         if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
-                            OleClipboard.writeAsync(app) {
-                                setText("Hello OLE clipboard!")
-                                setHtmlFragment("Hello <b>OLE clipboard</b>!")
+                            Clipboard.writeAsync(app) {
+                                setText("Hello clipboard!")
+                                setHtmlFragment("Hello <b>clipboard</b>!")
                             }.whenComplete { _, throwable ->
                                 if (throwable != null) {
-                                    Logger.error(throwable) { "OLE clipboard write failed" }
+                                    Logger.error(throwable) { "Clipboard write failed" }
                                 }
                             }
                         } else {
@@ -205,20 +205,20 @@ abstract class SkikoWindowWin32(private val app: Application) : AutoCloseable {
 
                     VirtualKey.V -> {
                         if (Keyboard.getKeyState(VirtualKey.Control).isDown) {
-                            OleClipboard.readClipboardAsync(app).whenComplete { clipboardData, throwable ->
+                            Clipboard.readAsync(app).whenComplete { clipboardData, throwable ->
                                 if (throwable != null) {
-                                    Logger.error(throwable) { "OLE clipboard read failed" }
+                                    Logger.error(throwable) { "Clipboard read failed" }
                                     return@whenComplete
                                 }
                                 try {
                                     clipboardData.use {
                                         val textItem = it.readTextItem()
                                         val htmlFragment = it.readHtmlFragment()
-                                        Logger.debug { "OLE clipboard text: $textItem" }
-                                        Logger.debug { "OLE clipboard HTML fragment: $htmlFragment" }
+                                        Logger.debug { "Clipboard text: $textItem" }
+                                        Logger.debug { "Clipboard HTML fragment: $htmlFragment" }
                                     }
                                 } catch (t: Throwable) {
-                                    Logger.error(t) { "OLE clipboard data read failed" }
+                                    Logger.error(t) { "Clipboard data read failed" }
                                 }
                             }
                         }

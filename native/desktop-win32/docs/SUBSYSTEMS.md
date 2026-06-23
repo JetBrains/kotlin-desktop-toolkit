@@ -301,35 +301,27 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 ## Clipboard
 
-**Purpose.** Two access paths to the Windows clipboard:
-1. **Legacy Win32** (`clipboard_*`): `Open/Get/Set/EmptyClipboard`. HGLOBAL-only.
-2. **OLE** (`ole_clipboard_*`): `OleGetClipboard` / `OleSetClipboard` returning/accepting an `IDataObject`. Supports any TYMED.
+**Purpose.** Single Windows clipboard path backed by OLE: `OleGetClipboard` returns an `IDataObject`, and `OleSetClipboard` publishes an `IDataObject`. The old direct Win32 `OpenClipboard` / `GetClipboardData` / `SetClipboardData` toolkit API has been removed.
 
-**Files.** `clipboard.rs`, `clipboard_api.rs`, `clipboard_result.rs` + Kotlin `Clipboard.kt`, `ClipboardResults.kt` (object) and `OleClipboard` (object inside `Clipboard.kt`).
+**Files.** `clipboard_api.rs`, `clipboard_result.rs` + Kotlin `Clipboard.kt`, `ClipboardResults.kt`.
 
-**FFI surface.** Legacy nullable/defaulting symbols remain for compatibility: `clipboard_count_formats`, `clipboard_enum_formats`, `clipboard_is_format_available`, `clipboard_empty`, `clipboard_get_sequence_number`, `clipboard_{get,try_get,set}_{data,file_list,html_fragment,text}`, `clipboard_get_html_format_id`, `ole_clipboard_{empty,get_data,set_data}`, `native_byte_array_drop`, `native_optional_byte_array_drop`. Kotlin uses the result-bearing variants (`*_result`) for clipboard reads/writes, OLE reads/writes, and `IDataObject` reads. Async reads use the `*_if_unchanged_result` variants to validate the captured clipboard sequence during the native read. Batch writes use `clipboard_set_items_result` with `ClipboardSetItem`.
+**FFI surface.** `clipboard_get_sequence_number`, `clipboard_get_html_format_id`, `clipboard_clear_result`, `clipboard_read_if_unchanged_result`, and `clipboard_write_data_object_result`. `DataObject` reads go through the result-bearing `com_data_object_*_result` functions in `data_object_api.rs`.
 
-**Kotlin surface.** Synchronous `Clipboard.*` and `OleClipboard.*` methods are deprecated compatibility APIs under the crate-wide UI-thread convention; they do not retry and fail fast when the clipboard is busy. Async wrappers are also dispatcher-thread-only, return `CompletableFuture<T>`, enqueue operations in FIFO order per `Application`, and retry `ClipboardStatus.Busy` without blocking between attempts. Writes use builder-style transactions (`Clipboard.writeAsync { ... }`, `OleClipboard.writeAsync { ... }`) so callers publish all formats in a single clipboard update. OLE `DataObject` instances are dispatcher-thread-bound; objects returned by `OleClipboard.readClipboardAsync` must be read and closed on the dispatcher thread.
+**Kotlin surface.** `Clipboard.clearAsync(application)`, `Clipboard.readAsync(application)`, `Clipboard.writeAsync(application) { ... }`, and `Clipboard.writeDataObjectAsync(application, dataObject)`. All are dispatcher-thread-only, return `CompletableFuture<T>`, enqueue operations in FIFO order per `Application`, and retry `ClipboardStatus.Busy` without blocking between attempts. There are no synchronous clipboard compatibility methods.
 
-**Key types.** `Clipboard` (RAII wrapper around `OpenClipboard`/`CloseClipboard`, asserts `is_open`), `ClipboardOperationResult` / `ClipboardStatus` (explicit FFI status plus optional native detail message), `ClipboardSetItem` (tagged multi-format write input).
+**Key types.** `ClipboardOperationResult` / `ClipboardStatus` (explicit FFI status plus optional native detail message), `ClipboardWriter` (Kotlin builder for creating a `DataObject` write payload), and `DataObject` (live COM pointer wrapper returned by `Clipboard.readAsync`).
 
-**Throwing vs `try_*`.** Kotlin decodes `ClipboardStatus`: throwing reads throw `ClipboardException` for anything except `Ok`; `tryRead*` returns `null` only for `FormatUnavailable` and throws for `Busy`, `DataTooLarge`, `InvalidData`, and `NativeError`. The older `FfiOption` symbols still exist but should not be used for new Kotlin call sites.
-
-**Retry policy.** Native clipboard calls do not sleep or retry. Kotlin owns retry scheduling with bounded delays (`10, 25, 50, 100, 200, 400, 800` ms). Async calls enqueue into a per-`Application` FIFO queue; only the head operation attempts or retries, so a delayed retry cannot be bypassed by a later copy/paste operation from the same application. Each attempt is a complete synchronous native call on the dispatcher thread, and retries are scheduled from Kotlin only after the previous attempt has returned. The invariant is that no sleep, await, callback into Kotlin, or other reentrant work runs while `Clipboard` is open; each attempt opens the clipboard, performs the transaction, closes via RAII, then either completes or schedules the next attempt back to the dispatcher.
+**Retry policy.** Native clipboard calls do not sleep or retry. Kotlin owns retry scheduling with bounded delays (`10, 25, 50, 100, 200, 400, 800` ms). Async calls enqueue into a per-`Application` FIFO queue; only the head operation attempts or retries, so a delayed retry cannot be bypassed by a later copy/paste operation from the same application. Each attempt is a complete native OLE call on the dispatcher thread, and retries are scheduled from Kotlin only after the previous attempt has returned. The invariant is that no sleep, await, callback into Kotlin, or other reentrant work runs while a native clipboard call is in progress.
 
 **Gotchas.**
-- Direct Win32 writes build all HGLOBALs before opening the clipboard. `clipboard_set_items_result` opens once, empties once, and sets all requested formats before close; single-format setters use the same transaction helper with one item.
-- Async Kotlin writes snapshot caller-owned mutable inputs before the first attempt so delayed retries don't observe later caller mutation. Retries still repeat FFI marshalling and HGLOBAL construction per attempt; that deliberately trades a little repeated setup work for a simpler native ownership model and avoids holding Rust allocations across delayed FFI boundaries.
-- Async reads capture `Clipboard.changeCount()` when they become the active queued operation. If a busy read has to retry and the clipboard sequence changes before that retry, Kotlin fails it with `ClipboardChangedException` instead of returning data from a later clipboard state. Win32 async read wrappers also pass the captured sequence into native `*_if_unchanged_result` calls, which re-check after `OpenClipboard` succeeds and before reading clipboard contents. OLE async reads re-check after `OleGetClipboard` returns the data object and fail instead of returning an object from a changed clipboard sequence.
-- `OleClipboard.writeDataObjectAsync` retains a separate COM reference to the supplied `DataObject` for the lifetime of the returned future, so callers may close their original Kotlin wrapper after the async call returns. That retain is itself a COM operation, so this API is dispatcher-thread-only.
-- `ole_clipboard_set_data` calls `OleFlushClipboard` immediately (clipboard_api.rs). The original `IDataObject` is no longer the live clipboard object after the call; subsequent mutations to it have no effect.
-- `OpenClipboard` maps only `HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)` to `ClipboardStatus::Busy`, matching the observed contention shape. Other `OpenClipboard` failures, such as invalid owner HWNDs, remain native errors and are not retried.
-- `Clipboard::is_format_available` returns `Ok(false)` for the documented "ok HRESULT means false" Win32 quirk in `IsClipboardFormatAvailable` (clipboard.rs).
-- DataReader path is **not** used here — `GetClipboardData` always returns HGLOBAL, so `hglobal_reader` is called directly.
+- Async Kotlin writes snapshot caller-owned mutable inputs before building the `DataObject`, so delayed retries don't observe later caller mutation.
+- Async reads capture `Clipboard.changeCount()` when they become the active queued operation. If a busy read has to retry and the clipboard sequence changes before that retry, Kotlin fails it with `ClipboardChangedException` instead of returning data from a later clipboard state. Native `clipboard_read_if_unchanged_result` also re-checks after `OleGetClipboard` returns the data object.
+- `Clipboard.writeDataObjectAsync` retains a separate COM reference to the supplied `DataObject` for the lifetime of the returned future, so callers may close their original Kotlin wrapper after the async call returns. That retain is itself a COM operation, so this API is dispatcher-thread-only.
+- `clipboard_write_data_object_result` calls `OleFlushClipboard` immediately. The original `IDataObject` is no longer the live clipboard object after the call; subsequent mutations to it have no effect.
 - Clipboard payload copies/allocations are capped at 256 MiB; oversized payloads map to `ClipboardStatus::DataTooLarge`.
 - Clipboard calls are not consistently guarded by native thread-affinity assertions. Use the async Kotlin wrappers for non-blocking dispatcher-thread access, and keep live `DataObject` operations on the dispatcher thread. Broader assertion coverage is deferred until the backend has a consistent policy for all UI-thread-only Win32/OLE APIs.
 
-**Cross-refs.** `application` / `dispatcher` (Kotlin callback dispatch and async retry attempts), `window` (parent HWND for `OpenClipboard`), `data_object` (OLE path target), `data_reader` (used only by `data_object_api`, not here), `global_data` (HGLOBAL helpers), `data_transfer` (`DataFormat`).
+**Cross-refs.** `application` / `dispatcher` (Kotlin callback dispatch and async retry attempts), `data_object` (clipboard payload target), `data_reader` (read path), `global_data` (HGLOBAL helpers), `data_transfer` (`DataFormat`).
 
 ---
 
@@ -339,7 +331,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 
 **Files.** `data_object.rs`, `data_object_api.rs` + Kotlin `DataObject.kt`, `DataFormat.kt`.
 
-**FFI surface.** `data_object_create() -> i64`, `data_object_drop(i64)`, `data_object_add_from_{bytes,file_list,html_fragment,text}`, `data_object_into_com() -> ComInterfaceRawPtr`, `com_data_object_is_format_available`, `com_data_object_enum_formats`, `com_data_object_{read,try_read}_{bytes,file_list,html_fragment,text}`, `com_data_object_retain`, `com_data_object_release`, `native_u32_array_drop`.
+**FFI surface.** `data_object_create() -> i64`, `data_object_drop(i64)`, `data_object_add_from_{bytes,file_list,html_fragment,text}`, `data_object_into_com() -> ComInterfaceRawPtr`, result-bearing `com_data_object_{is_format_available,enum_formats,read_bytes,read_file_list,read_html_fragment,read_text}_result`, `com_data_object_retain`, `com_data_object_release`, `native_u32_array_drop`, `native_byte_array_drop`.
 
 **Key types.**
 - `DataObject` (Rust) — `#[implement(IDataObject)]`. `papaya::HashMap<u32, HGlobalData>` keyed on cfFormat (cast to u32). Implements `GetData`, `EnumFormatEtc`, `QueryGetData`. `SetData`, `GetDataHere`, `DAdvise*` return `E_NOTIMPL` / `OLE_E_ADVISENOTSUPPORTED`.
@@ -509,7 +501,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 **FFI surface.**
 - `logger_api` (in `desktop-common`): `logger_init`, `logger_check_exceptions`, `logger_clear_exceptions`.
 - `desktop-win32::logger_api`: thin Win32-side glue (e.g. `logger_output_debug_string`).
-- `strings_api`: `native_string_drop`, `native_optional_string_drop`, `native_string_array_drop`, `native_optional_string_array_drop`.
+- `strings_api`: `native_string_drop`, `native_string_array_drop`.
 
 **Highlights.**
 - `lib.rs` captures `HINSTANCE` in `DllMain` (`DLL_PROCESS_ATTACH`) into a `static AtomicPtr`, exposed via `get_dll_instance()`. Used by ANGLE for resolving `libEGL.dll` next to the DLL.
@@ -532,4 +524,4 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `logger.rs`: `// todo store handler and allow to change logger severity` — log levels frozen at init.
 - Universal lack of `// SAFETY:` comments on `unsafe` blocks throughout the crate.
 
-**Cross-refs.** Every other subsystem uses these helpers. `ffi_boundary` wraps every `_api.rs` function. `RustAllocated*Ptr`, `BorrowedStrPtr`, `AutoDropArray`, `FfiOption` are the core FFI vocabulary.
+**Cross-refs.** Every other subsystem uses these helpers. `ffi_boundary` wraps every `_api.rs` function. `RustAllocated*Ptr`, `BorrowedStrPtr`, `BorrowedArray`, and `AutoDropArray` are the core Win32 FFI vocabulary.

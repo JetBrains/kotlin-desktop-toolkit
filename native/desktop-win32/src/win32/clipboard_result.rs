@@ -21,8 +21,6 @@ const HRESULT_CLIPBRD_E_BAD_DATA: i32 = 0x8004_01D3_u32 as i32;
 /// cbindgen:ignore
 const HRESULT_CLIPBRD_E_CANT_CLOSE: i32 = 0x8004_01D4_u32 as i32;
 /// cbindgen:ignore
-const HRESULT_FROM_WIN32_ERROR_ACCESS_DENIED: i32 = 0x8007_0005_u32 as i32;
-/// cbindgen:ignore
 const HRESULT_DV_E_FORMATETC: i32 = 0x8004_0064_u32 as i32;
 /// cbindgen:ignore
 const HRESULT_DV_E_TYMED: i32 = 0x8004_0069_u32 as i32;
@@ -75,11 +73,12 @@ impl ClipboardOperationResult {
     }
 
     #[must_use]
-    pub fn failed_with_message(status: ClipboardStatus, code: i32, message: impl ToString) -> Self {
+    pub fn failed_with_message(status: ClipboardStatus, code: i32, message: &impl ToString) -> Self {
+        let message = message.to_string().replace('\0', "\\0");
         Self {
             status,
             code,
-            message: allocated_message(message),
+            message: RustAllocatedStrPtr::allocate(message).unwrap_or_else(|_| RustAllocatedStrPtr::null()),
         }
     }
 
@@ -97,7 +96,7 @@ impl ClipboardOperationResult {
     }
 
     #[must_use]
-    pub fn from_win_error(err: &WinError, message: impl ToString) -> Self {
+    pub fn from_win_error(err: &WinError, message: &impl ToString) -> Self {
         let code = err.code().0;
         let status = match code {
             HRESULT_CLIPBRD_E_CANT_OPEN | HRESULT_CLIPBRD_E_CANT_EMPTY | HRESULT_CLIPBRD_E_CANT_SET | HRESULT_CLIPBRD_E_CANT_CLOSE => {
@@ -130,33 +129,6 @@ pub struct ClipboardFailure {
 }
 
 impl ClipboardFailure {
-    #[must_use]
-    pub const fn is_open_clipboard_contention(err: &WinError) -> bool {
-        // OpenClipboard reports "another window has the clipboard open" as
-        // HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED). Other failures, such as an
-        // invalid owner HWND, should not be retried as transient contention.
-        err.code().0 == HRESULT_FROM_WIN32_ERROR_ACCESS_DENIED
-    }
-
-    #[must_use]
-    pub fn busy_from_win_error(err: &WinError) -> Self {
-        let code = err.code().0;
-        Self {
-            status: ClipboardStatus::Busy,
-            code,
-            message: format!("clipboard is currently unavailable: {err:?}"),
-        }
-    }
-
-    #[must_use]
-    pub fn format_unavailable(format_id: u32) -> Self {
-        Self {
-            status: ClipboardStatus::FormatUnavailable,
-            code: 0,
-            message: format!("clipboard format {format_id} is unavailable"),
-        }
-    }
-
     #[must_use]
     pub fn data_too_large(size: usize, max_size: usize) -> Self {
         Self {
@@ -202,40 +174,6 @@ impl Display for ClipboardFailure {
 }
 
 impl std::error::Error for ClipboardFailure {}
-
-#[repr(C)]
-pub struct ClipboardIntResult {
-    pub result: ClipboardOperationResult,
-    pub value: i32,
-}
-
-impl ClipboardIntResult {
-    #[must_use]
-    pub fn from_result(result: anyhow::Result<i32>) -> Self {
-        match result {
-            Ok(value) => Self {
-                result: ClipboardOperationResult::ok(),
-                value,
-            },
-            Err(err) => {
-                trace_clipboard_failure(&err);
-                Self {
-                    result: ClipboardOperationResult::from_error(&err),
-                    value: <i32 as Default>::default(),
-                }
-            }
-        }
-    }
-}
-
-impl PanicDefault for ClipboardIntResult {
-    fn default() -> Self {
-        Self {
-            result: ClipboardOperationResult::default(),
-            value: <i32 as Default>::default(),
-        }
-    }
-}
 
 #[repr(C)]
 pub struct ClipboardBoolResult {
@@ -453,11 +391,6 @@ pub(crate) fn operation_result(result: anyhow::Result<()>) -> ClipboardOperation
 
 fn trace_clipboard_failure(err: &anyhow::Error) {
     log::trace!("clipboard operation failed: {err:?}");
-}
-
-fn allocated_message(message: impl ToString) -> RustAllocatedStrPtr {
-    let message = message.to_string().replace('\0', "\\0");
-    RustAllocatedStrPtr::allocate(message).unwrap_or_else(|_| RustAllocatedStrPtr::null())
 }
 
 fn find_error<T: std::error::Error + 'static>(err: &anyhow::Error) -> Option<&T> {

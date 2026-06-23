@@ -6,14 +6,9 @@ This list is point-in-time. Verify against current code before acting.
 
 ## Confirmed bugs (per code-owner review)
 
-None currently tracked here. The previous `tryRead*` blanket-swallow issue is handled by the clipboard result-status path; keep the legacy `FfiOption` symbols only for compatibility.
+None currently tracked here. The previous `tryRead*` blanket-swallow issue is handled by the clipboard result-status path.
 
 ## Likely bugs / suspect designs (verify before fixing)
-
-### Clipboard async API and compatibility cleanup
-- **Where**: Kotlin `Clipboard.kt` / `OleClipboard`, sync compatibility methods, and UI-thread-only Win32/OLE APIs.
-- **What**: Native clipboard calls are intentionally fail-fast. Kotlin async wrappers must be called from the application dispatcher and retry `ClipboardStatus::Busy` without sleeping on the UI thread; delayed retries are posted back to the dispatcher. The older synchronous methods are deprecated and return busy immediately. Direct Win32 and OLE clipboard contention are covered by integration tests that hold the real OS clipboard open. `DataObject` methods are documented dispatcher-thread-only because the object is a live COM pointer bound to the application's OLE STA. The backend still lacks a comprehensive thread-affinity assertion policy.
-- **Fix**: decide whether to add coroutine `suspend` wrappers on top of or instead of the `CompletableFuture` surface; design consistent thread-affinity checks or annotations for all UI-thread-only Win32/OLE APIs without introducing an application global singleton; and revisit COM marshaling or a snapshot/ownership handoff only if future API work needs any-thread OLE scheduling.
 
 ### `Window::drop` doesn't verify HWND destruction
 - **Where**: `window.rs` (`impl Drop for Window`).

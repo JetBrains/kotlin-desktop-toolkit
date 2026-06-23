@@ -209,7 +209,7 @@ pub(crate) mod hglobal_reader {
     use windows::{ApplicationModel::DataTransfer::HtmlFormatHelper, Win32::UI::Shell::HDROP};
 
     use crate::win32::{
-        global_data::{HGlobalData, ensure_clipboard_data_size, global_size, global_unlock, parse_file_list},
+        global_data::{HGlobalData, ensure_clipboard_data_size, global_lock, global_size, global_unlock, parse_file_list},
         strings::{copy_from_utf8_bytes, copy_from_wide_string},
     };
 
@@ -229,7 +229,7 @@ pub(crate) mod hglobal_reader {
         if len == 0 {
             return Ok(Vec::new());
         }
-        let content = super::global_lock(data.mem)?;
+        let content = global_lock(data.mem)?;
         let vec = unsafe { core::slice::from_raw_parts(content.cast(), len) }.to_vec();
         // Always unlock, but don't let a GlobalUnlock error (only possible on lock-count
         // underflow) mask successfully read bytes; surface the data either way.
@@ -240,7 +240,7 @@ pub(crate) mod hglobal_reader {
     }
 
     pub fn get_file_list(data: &HGlobalData) -> anyhow::Result<Vec<CString>> {
-        let content = super::global_lock(data.mem)?;
+        let content = global_lock(data.mem)?;
         let files = unsafe { parse_file_list(HDROP(content)) };
         // Always unlock, but don't let a GlobalUnlock error (only possible on lock-count
         // underflow) mask a successfully parsed list; surface the parse result either way.

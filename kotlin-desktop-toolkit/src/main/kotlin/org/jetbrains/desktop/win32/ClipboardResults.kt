@@ -18,7 +18,9 @@ public class ClipboardException(
     public val status: ClipboardStatus,
     public val nativeCode: Int,
     public val nativeMessage: String? = null,
-) : RuntimeException(clipboardExceptionMessage(status, nativeCode, nativeMessage))
+) : RuntimeException(clipboardExceptionMessage(status, nativeCode, nativeMessage)) {
+    public constructor(status: ClipboardStatus, nativeCode: Int) : this(status, nativeCode, null)
+}
 
 public class ClipboardChangedException(
     public val expectedChangeCount: UInt,

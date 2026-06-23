@@ -26,8 +26,8 @@ public class DragDropManager(private val window: Window) : AutoCloseable {
     }
 
     /**
-     * Must be called from the application dispatcher thread. The supplied [dataObject] must
-     * also belong to that dispatcher thread.
+     * Must be called from the application dispatcher thread. During the drag operation, OLE
+     * may call back into [dataObject] on that thread.
      */
     public fun doDragDrop(dataObject: DataObject, allowedEffects: DragDropEffect, dragSource: DragSource): DragDropEffect {
         val effect = DragSourceCallbacks(dragSource).use { callbacks ->

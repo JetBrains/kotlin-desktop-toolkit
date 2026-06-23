@@ -9,13 +9,8 @@ import org.jetbrains.desktop.win32.DataFormat
 import org.jetbrains.desktop.win32.DataObject
 import org.jetbrains.desktop.win32.EventHandlerResult
 import org.jetbrains.desktop.win32.KotlinDesktopToolkit
-import org.jetbrains.desktop.win32.OleClipboard
 import org.jetbrains.desktop.win32.Window
 import org.jetbrains.desktop.win32.WindowParams
-import org.jetbrains.desktop.win32.checkClipboardReadOperation
-import org.jetbrains.desktop.win32.ffiDownCall
-import org.jetbrains.desktop.win32.generated.NativeClipboardStringResult
-import org.jetbrains.desktop.win32.generated.desktop_win32_h
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -42,7 +37,6 @@ import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 @EnabledOnOs(OS.WINDOWS)
@@ -59,44 +53,88 @@ class ClipboardTests {
 
     @Test
     @Timeout(10)
-    fun `synchronous write fails fast when clipboard is busy`() {
-        runClipboardTest { _, window, finish ->
+    fun `async write retries busy clipboard and succeeds`() {
+        runClipboardTest { app, _, finish ->
+            val expected = "async write after contention"
             val lock = HeldClipboard.open()
-            try {
-                val exception = assertFailsWith<ClipboardException> {
-                    @Suppress("DEPRECATION")
-                    Clipboard.writeTextItem(window, "sync write should fail")
+            val future = Clipboard.writeAsync(app) {
+                setText(expected)
+            }
+            assertFalse(future.isDone, "Expected first attempt to hit the held clipboard and schedule a retry")
+
+            releaseLater(lock)
+            future.thenCompose {
+                readClipboardValueAsync(app) { it.readTextItem() }
+            }.whenComplete { actual, throwable ->
+                finishFromCallback(finish, throwable) {
+                    assertEquals(expected, actual)
                 }
-                assertEquals(ClipboardStatus.Busy, exception.status)
-                finish(null)
-            } catch (t: Throwable) {
-                finish(t)
-            } finally {
-                lock.close()
             }
         }
     }
 
     @Test
     @Timeout(10)
-    fun `async write retries busy clipboard and succeeds`() {
-        runClipboardTest { app, window, finish ->
-            val expected = "async write after contention"
+    fun `async clipboard operations retry in FIFO order`() {
+        runClipboardTest { app, _, finish ->
             val lock = HeldClipboard.open()
-            val future = Clipboard.writeAsync(app, window) {
-                setText(expected)
+            val first = Clipboard.writeAsync(app) {
+                setText("first delayed write")
             }
+            assertFalse(first.isDone, "Expected first write to hit the held clipboard and schedule a retry")
+
+            releaseAndInvokeLater(app, lock, finish) {
+                val second = Clipboard.writeAsync(app) {
+                    setText("second queued write")
+                }
+                CompletableFuture.allOf(first, second).thenCompose {
+                    readClipboardValueAsync(app) { it.readTextItem() }
+                }.whenComplete { actual, throwable ->
+                    finishFromCallback(finish, throwable) {
+                        assertEquals("second queued write", actual)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    fun `async read retries busy clipboard and succeeds`() {
+        runClipboardTest { app, _, finish ->
+            val expected = "async read after contention"
+            User32Clipboard.writeUnicodeText(expected)
+
+            val lock = HeldClipboard.open()
+            val future = readClipboardValueAsync(app) { it.readTextItem() }
             assertFalse(future.isDone, "Expected first attempt to hit the held clipboard and schedule a retry")
 
             releaseLater(lock)
-            future.whenComplete { _, throwable ->
-                if (throwable != null) {
-                    finish(throwable)
-                    return@whenComplete
+            future.whenComplete { actual, throwable ->
+                finishFromCallback(finish, throwable) {
+                    assertEquals(expected, actual)
                 }
+            }
+        }
+    }
+
+    @Test
+    @Timeout(10)
+    fun `async read fails if clipboard changes before retry`() {
+        runClipboardTest { app, _, finish ->
+            User32Clipboard.writeUnicodeText("initial text")
+            val expected = Clipboard.changeCount()
+
+            val lock = HeldClipboard.open()
+            val future = readClipboardValueAsync(app) { it.readTextItem() }
+            assertFalse(future.isDone, "Expected first attempt to hit the held clipboard and schedule a retry")
+
+            releaseAndWriteLater(lock, "changed text")
+            future.whenComplete { _, throwable ->
                 try {
-                    @Suppress("DEPRECATION")
-                    assertEquals(expected, Clipboard.readTextItem(window))
+                    val exception = assertCause<ClipboardChangedException>(throwable)
+                    assertEquals(expected, exception.expectedChangeCount)
+                    assertEquals(Clipboard.changeCount(), exception.actualChangeCount)
                     finish(null)
                 } catch (t: Throwable) {
                     finish(t)
@@ -107,100 +145,12 @@ class ClipboardTests {
 
     @Test
     @Timeout(10)
-    fun `async clipboard operations retry in FIFO order`() {
-        runClipboardTest { app, window, finish ->
-            val lock = HeldClipboard.open()
-            val first = Clipboard.writeAsync(app, window) {
-                setText("first delayed write")
-            }
-            assertFalse(first.isDone, "Expected first write to hit the held clipboard and schedule a retry")
-
-            releaseAndInvokeLater(app, lock, finish) {
-                val second = Clipboard.writeAsync(app, window) {
-                    setText("second queued write")
-                }
-                CompletableFuture.allOf(first, second).whenComplete { _, throwable ->
-                    if (throwable != null) {
-                        finish(throwable)
-                        return@whenComplete
-                    }
-                    try {
-                        @Suppress("DEPRECATION")
-                        assertEquals("second queued write", Clipboard.readTextItem(window))
-                        finish(null)
-                    } catch (t: Throwable) {
-                        finish(t)
-                    }
-                }
-            }
-        }
-    }
-
-    @Test
-    @Timeout(10)
-    fun `async read retries busy clipboard and succeeds`() {
-        runClipboardTest { app, window, finish ->
-            val expected = "async read after contention"
-            @Suppress("DEPRECATION")
-            Clipboard.writeTextItem(window, expected)
-
-            val lock = HeldClipboard.open()
-            val future = Clipboard.readTextItemAsync(app, window)
-            assertFalse(future.isDone, "Expected first attempt to hit the held clipboard and schedule a retry")
-
-            releaseLater(lock)
-            future.whenComplete { actual, throwable ->
-                if (throwable != null) {
-                    finish(throwable)
-                } else {
-                    try {
-                        assertEquals(expected, actual)
-                        finish(null)
-                    } catch (t: Throwable) {
-                        finish(t)
-                    }
-                }
-            }
-        }
-    }
-
-    @Test
-    @Timeout(10)
-    fun `native unchanged read fails when clipboard changes before read`() {
-        runClipboardTest { _, window, finish ->
-            try {
-                @Suppress("DEPRECATION")
-                Clipboard.writeTextItem(window, "initial text")
-                val expected = Clipboard.changeCount()
-
-                User32Clipboard.writeUnicodeText("changed text")
-
-                window.withPointer { windowPtr ->
-                    Arena.ofConfined().use { arena ->
-                        val result = ffiDownCall {
-                            desktop_win32_h.clipboard_get_text_if_unchanged_result(arena, windowPtr, expected.toInt())
-                        }
-                        val exception = assertFailsWith<ClipboardChangedException> {
-                            checkClipboardReadOperation(NativeClipboardStringResult.result(result), expected)
-                        }
-                        assertEquals(expected, exception.expectedChangeCount)
-                        assertEquals(Clipboard.changeCount(), exception.actualChangeCount)
-                    }
-                }
-                finish(null)
-            } catch (t: Throwable) {
-                finish(t)
-            }
-        }
-    }
-
-    @Test
-    @Timeout(10)
     fun `async clipboard APIs must be called from dispatcher thread`() {
-        runClipboardTest { app, window, finish ->
+        runClipboardTest { app, _, finish ->
             thread(name = "clipboard-wrong-thread", isDaemon = true) {
                 try {
-                    Clipboard.readTextItemAsync(app, window).whenComplete { _, throwable ->
+                    Clipboard.readAsync(app).whenComplete { clipboardData, throwable ->
+                        clipboardData?.close()
                         try {
                             val error = checkNotNull(throwable) { "Expected wrong-thread call to fail" }
                             assertTrue(error is IllegalStateException)
@@ -220,12 +170,12 @@ class ClipboardTests {
     @Test
     @Timeout(10)
     fun `async byte write snapshots mutable payload before retry`() {
-        runClipboardTest { app, window, finish ->
+        runClipboardTest { app, _, finish ->
             val format = DataFormat.register("KDT_TEST_SINGLE_BYTES_${System.nanoTime()}")
             val expected = byteArrayOf(4, 5, 6)
             val data = expected.copyOf()
             val lock = HeldClipboard.open()
-            val future = Clipboard.writeAsync(app, window) {
+            val future = Clipboard.writeAsync(app) {
                 setItemOfType(format, data)
             }
             assertFalse(future.isDone, "Expected first attempt to hit the held clipboard and schedule a retry")
@@ -233,42 +183,11 @@ class ClipboardTests {
             data[0] = 9
 
             releaseLater(lock)
-            future.whenComplete { _, throwable ->
-                if (throwable != null) {
-                    finish(throwable)
-                    return@whenComplete
-                }
-                try {
-                    @Suppress("DEPRECATION")
-                    assertContentEquals(expected, Clipboard.readItemOfType(window, format))
-                    finish(null)
-                } catch (t: Throwable) {
-                    finish(t)
-                }
-            }
-        }
-    }
-
-    @Test
-    @Timeout(10)
-    fun `async write gives up while clipboard stays busy`() {
-        runClipboardTest { app, window, finish ->
-            val lock = HeldClipboard.open(releaseTimeoutSeconds = 30)
-            val future = Clipboard.writeAsync(app, window) {
-                setText("async write should fail")
-            }
-                .orTimeout(8, TimeUnit.SECONDS)
-            assertFalse(future.isDone, "Expected first attempt to hit the held clipboard and schedule a retry")
-
-            future.whenComplete { _, throwable ->
-                try {
-                    val exception = assertClipboardException(throwable)
-                    assertEquals(ClipboardStatus.Busy, exception.status)
-                    finish(null)
-                } catch (t: Throwable) {
-                    finish(t)
-                } finally {
-                    lock.close()
+            future.thenCompose {
+                readClipboardValueAsync(app) { it.readItemOfType(format) }
+            }.whenComplete { actual, throwable ->
+                finishFromCallback(finish, throwable) {
+                    assertContentEquals(expected, actual)
                 }
             }
         }
@@ -277,8 +196,8 @@ class ClipboardTests {
     @Test
     @Timeout(10)
     fun `async write builder rejects duplicate formats without retrying`() {
-        runClipboardTest { app, window, finish ->
-            Clipboard.writeAsync(app, window) {
+        runClipboardTest { app, _, finish ->
+            Clipboard.writeAsync(app) {
                 setText("first")
                 setText("second")
             }.whenComplete { _, throwable ->
@@ -296,19 +215,16 @@ class ClipboardTests {
 
     @Test
     @Timeout(10)
-    fun `async try read returns null for unavailable format`() {
-        runClipboardTest { app, window, finish ->
+    fun `data object try read returns null for unavailable format`() {
+        runClipboardTest { app, _, finish ->
             val unavailableFormat = DataFormat.register("KDT_TEST_UNAVAILABLE_${System.nanoTime()}")
-            Clipboard.tryReadItemOfTypeAsync(app, window, unavailableFormat).whenComplete { value, throwable ->
-                if (throwable != null) {
-                    finish(throwable)
-                } else {
-                    try {
-                        assertNull(value)
-                        finish(null)
-                    } catch (t: Throwable) {
-                        finish(t)
-                    }
+            Clipboard.writeAsync(app) {
+                setText("available text")
+            }.thenCompose {
+                readClipboardValueAsync(app) { it.tryReadItemOfType(unavailableFormat) }
+            }.whenComplete { value, throwable ->
+                finishFromCallback(finish, throwable) {
+                    assertNull(value)
                 }
             }
         }
@@ -316,30 +232,24 @@ class ClipboardTests {
 
     @Test
     @Timeout(10)
-    fun `async batch write publishes multiple formats in one operation`() {
-        runClipboardTest { app, window, finish ->
-            val expectedText = "batch text"
-            val expectedHtml = "<b>batch html</b>"
-            Clipboard.writeAsync(app, window) {
+    fun `async builder write publishes multiple formats`() {
+        runClipboardTest { app, _, finish ->
+            val expectedText = "builder text"
+            val expectedHtml = "<b>builder html</b>"
+            Clipboard.writeAsync(app) {
                 setText(expectedText)
                 setHtmlFragment(expectedHtml)
-            }.whenComplete { _, throwable ->
-                if (throwable != null) {
-                    finish(throwable)
-                    return@whenComplete
+            }.thenCompose {
+                readClipboardValueAsync(app) {
+                    Triple(it.readTextItem(), it.readHtmlFragment(), it.listItemFormats())
                 }
-                try {
-                    @Suppress("DEPRECATION")
-                    assertEquals(expectedText, Clipboard.readTextItem(window))
-                    @Suppress("DEPRECATION")
-                    assertEquals(expectedHtml, Clipboard.readHtmlFragment(window))
-                    @Suppress("DEPRECATION")
-                    val formats = Clipboard.listItemFormats(window)
+            }.whenComplete { actual, throwable ->
+                finishFromCallback(finish, throwable) {
+                    val (text, html, formats) = actual
+                    assertEquals(expectedText, text)
+                    assertEquals(expectedHtml, html)
                     assertContains(formats, DataFormat.Text)
                     assertContains(formats, DataFormat.Html)
-                    finish(null)
-                } catch (t: Throwable) {
-                    finish(t)
                 }
             }
         }
@@ -348,14 +258,14 @@ class ClipboardTests {
     @Test
     @Timeout(10)
     fun `async batch write snapshots mutable inputs before retry`() {
-        runClipboardTest { app, window, finish ->
+        runClipboardTest { app, _, finish ->
             val bytesFormat = DataFormat.register("KDT_TEST_BYTES_${System.nanoTime()}")
             val expectedBytes = byteArrayOf(1, 2, 3)
             val bytes = expectedBytes.copyOf()
             val expectedFiles = listOf("C:\\Temp\\kdt-snapshot-one.txt", "C:\\Temp\\kdt-snapshot-two.txt")
             val files = expectedFiles.toMutableList()
             val lock = HeldClipboard.open()
-            val future = Clipboard.writeAsync(app, window) {
+            val future = Clipboard.writeAsync(app) {
                 setItemOfType(bytesFormat, bytes)
                 setListOfFiles(files)
             }
@@ -365,19 +275,15 @@ class ClipboardTests {
             files[0] = "C:\\Temp\\mutated.txt"
 
             releaseLater(lock)
-            future.whenComplete { _, throwable ->
-                if (throwable != null) {
-                    finish(throwable)
-                    return@whenComplete
+            future.thenCompose {
+                readClipboardValueAsync(app) {
+                    it.readItemOfType(bytesFormat) to it.readListOfFiles()
                 }
-                try {
-                    @Suppress("DEPRECATION")
-                    assertContentEquals(expectedBytes, Clipboard.readItemOfType(window, bytesFormat))
-                    @Suppress("DEPRECATION")
-                    assertEquals(expectedFiles, Clipboard.readListOfFiles(window))
-                    finish(null)
-                } catch (t: Throwable) {
-                    finish(t)
+            }.whenComplete { actual, throwable ->
+                finishFromCallback(finish, throwable) {
+                    val (actualBytes, actualFiles) = actual
+                    assertContentEquals(expectedBytes, actualBytes)
+                    assertEquals(expectedFiles, actualFiles)
                 }
             }
         }
@@ -385,30 +291,23 @@ class ClipboardTests {
 
     @Test
     @Timeout(10)
-    fun `ole async write retries busy clipboard and succeeds`() {
+    fun `write data object retries busy clipboard and succeeds`() {
         runClipboardTest { app, _, finish ->
-            val expected = "ole async write after contention"
+            val expected = "data object write after contention"
             val lock = HeldClipboard.open()
             val future = DataObject.build {
                 addTextItem(expected)
             }.use { dataObject ->
-                OleClipboard.writeDataObjectAsync(app, dataObject)
+                Clipboard.writeDataObjectAsync(app, dataObject)
             }
-            assertFalse(future.isDone, "Expected first OLE write attempt to hit the held clipboard and schedule a retry")
+            assertFalse(future.isDone, "Expected first write attempt to hit the held clipboard and schedule a retry")
 
             releaseLater(lock)
-            future.whenComplete { _, throwable ->
-                try {
-                    if (throwable != null) {
-                        throw throwable
-                    }
-                    @Suppress("DEPRECATION")
-                    OleClipboard.readClipboard().use { clipboardData ->
-                        assertEquals(expected, clipboardData.readTextItem())
-                    }
-                    finish(null)
-                } catch (t: Throwable) {
-                    finish(t)
+            future.thenCompose {
+                readClipboardValueAsync(app) { it.readTextItem() }
+            }.whenComplete { actual, throwable ->
+                finishFromCallback(finish, throwable) {
+                    assertEquals(expected, actual)
                 }
             }
         }
@@ -416,57 +315,18 @@ class ClipboardTests {
 
     @Test
     @Timeout(10)
-    fun `ole async read retries busy clipboard and succeeds`() {
+    fun `async read gives up while clipboard stays busy`() {
         runClipboardTest { app, _, finish ->
-            val expected = "ole async read after contention"
-            DataObject.build {
-                addTextItem(expected)
-            }.use { dataObject ->
-                @Suppress("DEPRECATION")
-                OleClipboard.writeToClipboard(dataObject)
-            }
-
-            val lock = HeldClipboard.open()
-            val future = OleClipboard.readClipboardAsync(app)
-            assertFalse(future.isDone, "Expected first OLE read attempt to hit the held clipboard and schedule a retry")
-
-            releaseLater(lock)
-            future.whenComplete { clipboardData, throwable ->
-                if (throwable != null) {
-                    finish(throwable)
-                    return@whenComplete
-                }
-                try {
-                    clipboardData.use {
-                        assertEquals(expected, it.readTextItem())
-                    }
-                    finish(null)
-                } catch (t: Throwable) {
-                    finish(t)
-                }
-            }
-        }
-    }
-
-    @Test
-    @Timeout(10)
-    fun `ole async read gives up while clipboard stays busy`() {
-        runClipboardTest { app, _, finish ->
-            DataObject.build {
-                addTextItem("ole async read should fail while busy")
-            }.use { dataObject ->
-                @Suppress("DEPRECATION")
-                OleClipboard.writeToClipboard(dataObject)
-            }
+            User32Clipboard.writeUnicodeText("async read should fail while busy")
             val lock = HeldClipboard.open(releaseTimeoutSeconds = 30)
-            val future = OleClipboard.readClipboardAsync(app)
+            val future = Clipboard.readAsync(app)
                 .orTimeout(8, TimeUnit.SECONDS)
-            assertFalse(future.isDone, "Expected first OLE read attempt to hit the held clipboard and schedule a retry")
+            assertFalse(future.isDone, "Expected first read attempt to hit the held clipboard and schedule a retry")
 
             future.whenComplete { clipboardData, throwable ->
                 try {
                     clipboardData?.close()
-                    val exception = assertClipboardException(throwable)
+                    val exception = assertCause<ClipboardException>(throwable)
                     assertEquals(ClipboardStatus.Busy, exception.status)
                     finish(null)
                 } catch (t: Throwable) {
@@ -480,22 +340,15 @@ class ClipboardTests {
 
     @Test
     @Timeout(10)
-    fun `ole async clear empties clipboard`() {
-        runClipboardTest { app, window, finish ->
-            @Suppress("DEPRECATION")
-            Clipboard.writeTextItem(window, "content to clear")
-
-            OleClipboard.clearAsync(app).whenComplete { _, throwable ->
-                if (throwable != null) {
-                    finish(throwable)
-                    return@whenComplete
-                }
-                try {
-                    @Suppress("DEPRECATION")
-                    assertEquals(0, Clipboard.itemCount(window))
-                    finish(null)
-                } catch (t: Throwable) {
-                    finish(t)
+    fun `async clear empties clipboard`() {
+        runClipboardTest { app, _, finish ->
+            Clipboard.writeAsync(app) {
+                setText("content to clear")
+            }.thenCompose {
+                Clipboard.clearAsync(app)
+            }.whenComplete { _, throwable ->
+                finishFromCallback(finish, throwable) {
+                    assertEquals(0, User32Clipboard.countClipboardFormats())
                 }
             }
         }
@@ -503,46 +356,10 @@ class ClipboardTests {
 
     @Test
     @Timeout(10)
-    fun `ole async builder write publishes multiple formats`() {
+    fun `data object round trips multiple formats`() {
         runClipboardTest { app, _, finish ->
-            val expectedText = "ole builder text"
-            val expectedHtml = "<u>ole builder html</u>"
-            val expectedFiles = listOf("C:\\Temp\\kdt-builder-one.txt", "C:\\Temp\\kdt-builder-two.txt")
-
-            OleClipboard.writeAsync(app) {
-                setText(expectedText)
-                setHtmlFragment(expectedHtml)
-                setListOfFiles(expectedFiles)
-            }.whenComplete { _, writeThrowable ->
-                if (writeThrowable != null) {
-                    finish(writeThrowable)
-                    return@whenComplete
-                }
-                OleClipboard.readClipboardAsync(app).whenComplete { clipboardData, readThrowable ->
-                    try {
-                        if (readThrowable != null) {
-                            throw readThrowable
-                        }
-                        clipboardData.use {
-                            assertEquals(expectedText, it.readTextItem())
-                            assertEquals(expectedHtml, it.readHtmlFragment())
-                            assertEquals(expectedFiles, it.readListOfFiles())
-                        }
-                        finish(null)
-                    } catch (t: Throwable) {
-                        finish(t)
-                    }
-                }
-            }
-        }
-    }
-
-    @Test
-    @Timeout(10)
-    fun `ole data object round trips multiple formats`() {
-        runClipboardTest { app, _, finish ->
-            val expectedText = "ole batch text"
-            val expectedHtml = "<i>ole batch html</i>"
+            val expectedText = "batch text"
+            val expectedHtml = "<i>batch html</i>"
             val expectedFiles = listOf("C:\\Temp\\kdt-one.txt", "C:\\Temp\\kdt-two.txt")
             val dataObject = DataObject.build {
                 addTextItem(expectedText)
@@ -550,38 +367,73 @@ class ClipboardTests {
                 addListOfFiles(expectedFiles)
             }
 
-            OleClipboard.writeDataObjectAsync(app, dataObject).whenComplete { _, writeThrowable ->
-                if (writeThrowable != null) {
-                    dataObject.close()
-                    finish(writeThrowable)
-                    return@whenComplete
+            Clipboard.writeDataObjectAsync(app, dataObject).thenCompose {
+                readClipboardValueAsync(app) {
+                    ClipboardContents(
+                        text = it.readTextItem(),
+                        html = it.readHtmlFragment(),
+                        files = it.readListOfFiles(),
+                        formats = it.listItemFormats(),
+                        hasText = it.isFormatAvailable(DataFormat.Text),
+                        hasHtml = it.isFormatAvailable(DataFormat.Html),
+                        hasFileList = it.isFormatAvailable(DataFormat.FileList),
+                    )
                 }
-                OleClipboard.readClipboardAsync(app).whenComplete { clipboardData, readThrowable ->
-                    try {
-                        if (readThrowable != null) {
-                            throw readThrowable
-                        }
-                        clipboardData.use {
-                            assertEquals(expectedText, it.readTextItem())
-                            assertEquals(expectedHtml, it.readHtmlFragment())
-                            assertEquals(expectedFiles, it.readListOfFiles())
-                            val formats = it.listItemFormats()
-                            assertContains(formats, DataFormat.Text)
-                            assertContains(formats, DataFormat.Html)
-                            assertContains(formats, DataFormat.FileList)
-                            assertTrue(it.isFormatAvailable(DataFormat.Text))
-                            assertTrue(it.isFormatAvailable(DataFormat.Html))
-                            assertTrue(it.isFormatAvailable(DataFormat.FileList))
-                        }
-                        finish(null)
-                    } catch (t: Throwable) {
-                        finish(t)
-                    } finally {
-                        dataObject.close()
-                    }
+            }.whenComplete { actual, throwable ->
+                dataObject.close()
+                finishFromCallback(finish, throwable) {
+                    assertEquals(expectedText, actual.text)
+                    assertEquals(expectedHtml, actual.html)
+                    assertEquals(expectedFiles, actual.files)
+                    assertContains(actual.formats, DataFormat.Text)
+                    assertContains(actual.formats, DataFormat.Html)
+                    assertContains(actual.formats, DataFormat.FileList)
+                    assertTrue(actual.hasText)
+                    assertTrue(actual.hasHtml)
+                    assertTrue(actual.hasFileList)
                 }
             }
         }
+    }
+}
+
+private data class ClipboardContents(
+    val text: String,
+    val html: String,
+    val files: List<String>,
+    val formats: List<DataFormat>,
+    val hasText: Boolean,
+    val hasHtml: Boolean,
+    val hasFileList: Boolean,
+)
+
+private fun <T> readClipboardValueAsync(app: Application, read: (DataObject) -> T): CompletableFuture<T> =
+    Clipboard.readAsync(app).thenApply { clipboardData ->
+        clipboardData.use { read(it) }
+    }
+
+private fun finishFromCallback(finish: (Throwable?) -> Unit, throwable: Throwable?, assertions: () -> Unit) {
+    try {
+        if (throwable != null) {
+            throw unwrapCompletion(throwable)
+        }
+        assertions()
+        finish(null)
+    } catch (t: Throwable) {
+        finish(t)
+    }
+}
+
+private inline fun <reified T : Throwable> assertCause(throwable: Throwable?): T {
+    val cause = unwrapCompletion(checkNotNull(throwable) { "Expected clipboard operation to fail" })
+    return cause as? T ?: throw cause
+}
+
+private tailrec fun unwrapCompletion(throwable: Throwable): Throwable {
+    return when (throwable) {
+        is CompletionException -> unwrapCompletion(throwable.cause ?: throwable)
+        is ExecutionException -> unwrapCompletion(throwable.cause ?: throwable)
+        else -> throwable
     }
 }
 
@@ -646,14 +498,11 @@ private fun releaseAndInvokeLater(app: Application, lock: HeldClipboard, finish:
     }
 }
 
-private fun assertClipboardException(throwable: Throwable?): ClipboardException {
-    val failure = checkNotNull(throwable) { "Expected clipboard operation to fail" }
-    val cause = when (failure) {
-        is CompletionException -> failure.cause ?: failure
-        is ExecutionException -> failure.cause ?: failure
-        else -> failure
+private fun releaseAndWriteLater(lock: HeldClipboard, text: String) {
+    CompletableFuture.delayedExecutor(45, TimeUnit.MILLISECONDS).execute {
+        lock.close()
+        User32Clipboard.writeUnicodeText(text)
     }
-    return cause as? ClipboardException ?: throw cause
 }
 
 private class HeldClipboard private constructor(
@@ -724,6 +573,10 @@ private object User32Clipboard {
         user32.find("CloseClipboard").orElseThrow(),
         FunctionDescriptor.of(ValueLayout.JAVA_INT),
     )
+    private val countClipboardFormats: MethodHandle = linker.downcallHandle(
+        user32.find("CountClipboardFormats").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.JAVA_INT),
+    )
     private val emptyClipboard: MethodHandle = linker.downcallHandle(
         user32.find("EmptyClipboard").orElseThrow(),
         FunctionDescriptor.of(ValueLayout.JAVA_INT),
@@ -752,6 +605,8 @@ private object User32Clipboard {
     fun openClipboard(): Boolean = (openClipboard.invoke(MemorySegment.NULL) as Int) != 0
 
     fun closeClipboard(): Boolean = (closeClipboard.invoke() as Int) != 0
+
+    fun countClipboardFormats(): Int = countClipboardFormats.invoke() as Int
 
     fun writeUnicodeText(text: String) {
         val bytes = "$text\u0000".toByteArray(Charsets.UTF_16LE)

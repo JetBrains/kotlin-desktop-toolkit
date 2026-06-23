@@ -26,10 +26,10 @@ language = "C"
 
 Consequences:
 - Every exported type appears in the generated header as `Native<RustName>`. Enum variants are doubly prefixed: `NativeLogLevel_Off`.
-- `desktop-common` types (`AutoDropArray<T>`, `BorrowedStrPtr`, `RustAllocatedStrPtr`, `FfiOption<T>`, `BorrowedArray<T>`, `BorrowedUtf8`, etc.) are inlined into the Win32 header — they are **not** re-exported through Rust `pub use`. cbindgen walks the dependency directly via `parse_deps`.
+- `desktop-common` types (`AutoDropArray<T>`, `BorrowedStrPtr`, `RustAllocatedStrPtr`, `BorrowedArray<T>`, `BorrowedUtf8`, etc.) are inlined into the Win32 header — they are **not** re-exported through Rust `pub use`. cbindgen walks the dependency directly via `parse_deps`.
 - Items annotated `/// cbindgen:ignore` are excluded. Used for the `DLL_HINSTANCE` static, `DllMain`, and Rust-side registries (`DATA_OBJECT_REGISTRY`, `DATA_OBJECT_NEXT_ID`).
 
-Generic type instantiations (e.g. `AutoDropArray<RustAllocatedStrPtr>`, `FfiOption<AutoDropByteArray>`) appear in the header as monomorphised types: `NativeAutoDropArray_RustAllocatedStrPtr`, `NativeFfiOption_AutoDropByteArray`. JExtract turns them into matching Java layout classes.
+Generic type instantiations (e.g. `AutoDropArray<RustAllocatedStrPtr>`) appear in the header as monomorphised types such as `NativeAutoDropArray_RustAllocatedStrPtr`. JExtract turns them into matching Java layout classes.
 
 ## The `ffi_utils` zoo
 
@@ -59,9 +59,7 @@ Mixing `BorrowedStrPtr` (NUL-terminated) and `BorrowedUtf8` (length-delimited) s
 
 ### Optionals
 
-`FfiOption<T: PanicDefault>` = `{ is_some: bool, value: T }`. The `value` slot always holds a valid `T` (`T::default()` when `is_some == false`). Used to return nullable strings / arrays / structs without a separate sentinel.
-
-The `IntoFfiOption` trait (data_object_api.rs) converts `anyhow::Result<T>` → `anyhow::Result<FfiOption<T>>`. It remains only for legacy nullable exports and still swallows every error to `None` with a `trace!` log. New Kotlin call sites should use result-bearing exports and return `null` only for `ClipboardStatus::FormatUnavailable`.
+`FfiOption<T: PanicDefault>` = `{ is_some: bool, value: T }`. The value slot always holds a valid `T` (`T::default()` when `is_some == false`). It exists in `desktop-common`, but the Win32 backend currently avoids exporting nullable `FfiOption` APIs; prefer result-bearing structs or explicit sentinel values for new signatures.
 
 ### Result-bearing clipboard structs
 
@@ -186,7 +184,7 @@ Apartment requirement: **STA**. `OleInitialize(None)` is called by `Application:
 
 1. **Rust impl** lives in `xxx.rs`, takes plain Rust types, returns `anyhow::Result<T>`.
 2. **`xxx_api.rs`** declares `#[unsafe(no_mangle)] pub extern "C" fn xxx_do_thing(...) -> R` and wraps the body in `ffi_boundary("xxx_do_thing", || { ... })`. `R` must impl `PanicDefault`.
-3. **Parameter types**: pick from the `ffi_utils` zoo. Strings → `BorrowedStrPtr`. Arrays → `BorrowedArray<T>`. Opaque receivers → `WindowPtr` / `AppPtr` / `ComInterfaceRawPtr`. Owned out-params → `RustAllocated*` / `AutoDrop*` / `FfiOption<…>`.
+3. **Parameter types**: pick from the `ffi_utils` zoo. Strings → `BorrowedStrPtr`. Arrays → `BorrowedArray<T>`. Opaque receivers → `WindowPtr` / `AppPtr` / `ComInterfaceRawPtr`. Owned out-params → `RustAllocated*` / `AutoDrop*`.
 4. **Drop pairing**: for any owned-out value, ensure a matching `*_drop` exists. If using `AutoDropArray<T>`, the matching drop must be the typed one (`native_byte_array_drop`, `native_string_array_drop`, etc.).
-5. **Kotlin wrapper** in `Xxx.kt`: call the JExtract-generated function inside `ffiDownCall`. An `Arena` is needed only when the JExtract glue requires one — e.g. when the function returns a struct by value (JExtract takes the arena as the first parameter to allocate the return slot) or when you need to allocate input structs / `Borrowed*` strings. Functions that take and return only primitives, opaque pointers, or pre-existing segments don't need an arena. For nullable returns use `optional*FromNative` helpers in `Strings.kt` / `Arrays.kt`. Drop calls live in `finally`.
+5. **Kotlin wrapper** in `Xxx.kt`: call the JExtract-generated function inside `ffiDownCall`. An `Arena` is needed only when the JExtract glue requires one — e.g. when the function returns a struct by value (JExtract takes the arena as the first parameter to allocate the return slot) or when you need to allocate input structs / `Borrowed*` strings. Functions that take and return only primitives, opaque pointers, or pre-existing segments don't need an arena. Drop calls live in `finally`.
 6. **Callbacks**: every Kotlin lambda crossing into Rust goes through `ffiUpCall` with a sensible default. Allocate the stub in `Arena.ofShared()` whose lifetime matches the holding Rust object.

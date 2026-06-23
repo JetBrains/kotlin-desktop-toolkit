@@ -29,7 +29,7 @@ If you only read one section before touching code, read this one.
 
 ## Watch out for in code reviews / edits
 
-- Kotlin `tryRead*` wrappers return `null` only for format-unavailable and throw other clipboard/data-object failures. The legacy raw `FfiOption` exports still swallow broadly and should not be used for new Kotlin call sites.
+- Kotlin `tryRead*` wrappers return `null` only for format-unavailable and throw other clipboard/data-object failures. The old raw `FfiOption` exports have been removed; use result-bearing FFI for nullable read semantics.
 - COM impls have **no** `// SAFETY:` comments anywhere (and `desktop-common::ffi_utils` has a module-level `#![allow(clippy::missing_safety_doc)]`). Add one when you touch an `unsafe` block.
 - Most window, clipboard, drag-drop, file-dialog, and callback-bound event work assumes the application UI thread; OLE-backed paths also assume the OLE STA. There is no comprehensive thread-affinity assertion at the FFI boundary. Clipboard async APIs are also UI-thread-only; their delayed retry attempts are posted back to the application dispatcher.
 
