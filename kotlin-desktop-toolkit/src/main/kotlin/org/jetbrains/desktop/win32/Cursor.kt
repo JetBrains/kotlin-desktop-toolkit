@@ -3,20 +3,22 @@ package org.jetbrains.desktop.win32
 import org.jetbrains.desktop.win32.generated.desktop_win32_h
 
 /**
- * Controls the visibility of the system mouse cursor.
+ * Controls visibility of the system mouse cursor via Win32
+ * [`ShowCursor`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showcursor).
  *
- * Wraps Win32 [`ShowCursor`](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showcursor),
- * which keeps a single process-wide display counter rather than a boolean: [hide] decrements it and
- * [show] increments it, and the cursor is drawn only while the counter is `>= 0`. The counter therefore
- * behaves like a stack of outstanding hide requests, so every [hide] must be paired with a matching
- * [show] to restore the previous state. Its initial value is `0` when a mouse is installed and `-1` otherwise.
+ * Visibility is a counter, not a boolean: [hide] decrements it, [show] increments it, and the cursor is
+ * drawn while the counter is `>= 0`. It behaves like a stack of hide requests, so each [hide] must be
+ * balanced by a [show]. The initial value is `0` with a mouse installed and `-1` otherwise.
+ *
+ * The counter only affects the cursor while it is over one of the calling application's own windows;
+ * elsewhere the system draws the cursor per its own state, so a windowless process can move the counter
+ * without changing anything on screen.
  */
 public object Cursor {
     /**
-     * Increments the display counter, undoing one prior [hide]. The cursor becomes visible once the
-     * counter reaches `0`.
+     * Increments the display counter, undoing one [hide]; the cursor reappears once it reaches `0`.
      *
-     * @return the new display counter value.
+     * @return the new counter value.
      */
     public fun show(): Int {
         return ffiDownCall {
@@ -25,10 +27,9 @@ public object Cursor {
     }
 
     /**
-     * Decrements the display counter, hiding the cursor while it stays below `0`. Pair each call with
-     * a later [show].
+     * Decrements the display counter, hiding the cursor while it is below `0`. Balance each call with a [show].
      *
-     * @return the new display counter value.
+     * @return the new counter value.
      */
     public fun hide(): Int {
         return ffiDownCall {
