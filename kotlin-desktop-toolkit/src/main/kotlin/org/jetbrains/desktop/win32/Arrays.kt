@@ -3,7 +3,6 @@ package org.jetbrains.desktop.win32
 import org.jetbrains.desktop.win32.generated.NativeAutoDropArray_u32
 import org.jetbrains.desktop.win32.generated.NativeAutoDropArray_u8
 import org.jetbrains.desktop.win32.generated.NativeBorrowedArray_u8
-import org.jetbrains.desktop.win32.generated.NativeFfiOption_AutoDropByteArray
 import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout.JAVA_BYTE
@@ -22,15 +21,6 @@ internal fun byteArrayFromNative(segment: MemorySegment): ByteArray {
     val result = ByteArray(len.toInt())
     MemorySegment.copy(ptr, JAVA_BYTE, 0, result, 0, result.size)
     return result
-}
-
-internal fun optionalByteArrayFromNative(segment: MemorySegment): ByteArray? {
-    val value = NativeFfiOption_AutoDropByteArray.value(segment)
-    val isSome = NativeFfiOption_AutoDropByteArray.is_some(segment)
-    if (!isSome) {
-        return null
-    }
-    return byteArrayFromNative(value)
 }
 
 internal fun intArrayFromNative(segment: MemorySegment): IntArray {

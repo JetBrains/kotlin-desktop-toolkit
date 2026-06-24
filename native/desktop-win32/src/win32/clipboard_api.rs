@@ -1,182 +1,24 @@
-use desktop_common::{
-    ffi_utils::{AutoDropArray, BorrowedArray, BorrowedStrPtr, FfiOption, RustAllocatedStrPtr},
-    logger::ffi_boundary,
-};
+use desktop_common::logger::ffi_boundary;
 
-use windows::Win32::System::{
-    Com::IDataObject,
-    Ole::{OleFlushClipboard, OleGetClipboard, OleSetClipboard},
+use windows::Win32::{
+    Foundation::{S_FALSE, S_OK},
+    System::{
+        Com::IDataObject,
+        DataExchange::GetClipboardSequenceNumber,
+        Ole::{OleFlushClipboard, OleGetClipboard, OleSetClipboard},
+    },
 };
+use windows_core::{Error as WinError, Interface};
 
 use super::{
-    clipboard::Clipboard,
+    clipboard::{ClipboardBoolResult, ClipboardDataObjectResult, ClipboardOperationResult, operation_result},
     com::ComInterfaceRawPtr,
-    data_object_api::{AutoDropByteArray, AutoDropUInt32Array, IntoFfiOption},
     data_transfer::DataFormat,
-    global_data::{hglobal_reader, hglobal_writer},
-    strings::copy_from_utf8_string,
-    window::Window,
-    window_api::{WindowPtr, with_window},
 };
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_count_formats(owner: WindowPtr) -> i32 {
-    with_window(&owner, "clipboard_count_formats", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let count = clipboard.count_available_formats()?;
-        Ok(count)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_enum_formats(owner: WindowPtr) -> AutoDropUInt32Array {
-    with_window(&owner, "clipboard_enum_formats", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let formats = clipboard.enum_available_formats()?;
-        Ok(AutoDropArray::new(formats.into_boxed_slice()))
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_is_format_available(owner: WindowPtr, data_format: u32) -> bool {
-    with_window(&owner, "clipboard_is_format_available", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        clipboard.is_format_available(data_format)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_empty(owner: WindowPtr) {
-    with_window(&owner, "clipboard_empty", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        clipboard.empty()
-    });
-}
 
 #[unsafe(no_mangle)]
 pub extern "C" fn clipboard_get_sequence_number() -> u32 {
-    ffi_boundary("clipboard_get_sequence_number", || Ok(Clipboard::get_sequence_number()))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_get_data(owner: WindowPtr, data_format: u32) -> AutoDropByteArray {
-    with_window(&owner, "clipboard_get_data", |window| clipboard_get_data_impl(window, data_format))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_try_get_data(owner: WindowPtr, data_format: u32) -> FfiOption<AutoDropByteArray> {
-    with_window(&owner, "clipboard_try_get_data", |window| {
-        clipboard_get_data_impl(window, data_format).into_ffi_option()
-    })
-}
-
-fn clipboard_get_data_impl(owner: &Window, data_format: u32) -> anyhow::Result<AutoDropByteArray> {
-    let clipboard = Clipboard::open_for_window(owner)?;
-    clipboard
-        .get_data(DataFormat::Other(data_format))
-        .and_then(|data| hglobal_reader::get_bytes(&data))
-        .map(|bytes| AutoDropArray::new(bytes.into_boxed_slice()))
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_get_file_list(owner: WindowPtr) -> AutoDropArray<RustAllocatedStrPtr> {
-    with_window(&owner, "clipboard_get_file_list", clipboard_get_file_list_impl)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_try_get_file_list(owner: WindowPtr) -> FfiOption<AutoDropArray<RustAllocatedStrPtr>> {
-    with_window(&owner, "clipboard_try_get_file_list", |window| {
-        clipboard_get_file_list_impl(window).into_ffi_option()
-    })
-}
-
-fn clipboard_get_file_list_impl(owner: &Window) -> anyhow::Result<AutoDropArray<RustAllocatedStrPtr>> {
-    let clipboard = Clipboard::open_for_window(owner)?;
-    clipboard
-        .get_data(DataFormat::FileList)
-        .and_then(|data| hglobal_reader::get_file_list(&data))
-        .map(|file_list| file_list.into_iter().map(RustAllocatedStrPtr::from_c_string).collect())
-        .map(AutoDropArray::new)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_get_html_fragment(owner: WindowPtr) -> RustAllocatedStrPtr {
-    with_window(&owner, "clipboard_get_html_fragment", |window| {
-        clipboard_get_html_fragment_impl(window)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_try_get_html_fragment(owner: WindowPtr) -> FfiOption<RustAllocatedStrPtr> {
-    with_window(&owner, "clipboard_try_get_html_fragment", |window| {
-        clipboard_get_html_fragment_impl(window).into_ffi_option()
-    })
-}
-
-fn clipboard_get_html_fragment_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr> {
-    let clipboard = Clipboard::open_for_window(owner)?;
-    clipboard
-        .get_data(DataFormat::HtmlFragment)
-        .and_then(|data| hglobal_reader::get_html(&data))
-        .map(RustAllocatedStrPtr::from_c_string)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_get_text(owner: WindowPtr) -> RustAllocatedStrPtr {
-    with_window(&owner, "clipboard_get_text", clipboard_get_text_impl)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_try_get_text(owner: WindowPtr) -> FfiOption<RustAllocatedStrPtr> {
-    with_window(&owner, "clipboard_try_get_text", |window| {
-        clipboard_get_text_impl(window).into_ffi_option()
-    })
-}
-
-fn clipboard_get_text_impl(owner: &Window) -> anyhow::Result<RustAllocatedStrPtr> {
-    let clipboard = Clipboard::open_for_window(owner)?;
-    clipboard
-        .get_data(DataFormat::Text)
-        .and_then(|data| hglobal_reader::get_text(&data))
-        .map(RustAllocatedStrPtr::from_c_string)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_set_data(owner: WindowPtr, data_format: u32, content: BorrowedArray<u8>) {
-    with_window(&owner, "clipboard_set_data", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let mut data = hglobal_writer::new_bytes(content.as_slice()?)?;
-        clipboard.set_data(DataFormat::Other(data_format), &mut data)
-    });
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_set_file_list(owner: WindowPtr, content: BorrowedArray<BorrowedStrPtr>) {
-    with_window(&owner, "clipboard_set_data", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let files: anyhow::Result<Vec<&str>> = content.as_slice()?.iter().map(|str_ptr| str_ptr.as_str()).collect();
-        let mut data = hglobal_writer::new_file_list(&files?)?;
-        clipboard.set_data(DataFormat::FileList, &mut data)
-    });
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_set_html_fragment(owner: WindowPtr, content: BorrowedStrPtr) {
-    with_window(&owner, "clipboard_set_html_fragment", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let fragment = copy_from_utf8_string(&content)?;
-        let mut data = hglobal_writer::new_html(&fragment)?;
-        clipboard.set_data(DataFormat::HtmlFragment, &mut data)
-    });
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn clipboard_set_text(owner: WindowPtr, content: BorrowedStrPtr) {
-    with_window(&owner, "clipboard_set_text", |window| {
-        let clipboard = Clipboard::open_for_window(window)?;
-        let mut data = hglobal_writer::new_text(content.as_str()?)?;
-        clipboard.set_data(DataFormat::Text, &mut data)
-    });
+    ffi_boundary("clipboard_get_sequence_number", || unsafe { Ok(GetClipboardSequenceNumber()) })
 }
 
 #[unsafe(no_mangle)]
@@ -184,44 +26,95 @@ pub extern "C" fn clipboard_get_html_format_id() -> u32 {
     ffi_boundary("clipboard_get_html_format_id", || Ok(DataFormat::HtmlFragment.id()))
 }
 
+/// `OleGetClipboard`: returns the data object currently on the clipboard.
+///
+/// The caller owns the returned reference and must release it (`com_data_object_release`).
 #[unsafe(no_mangle)]
-pub extern "C" fn ole_clipboard_empty() {
-    ffi_boundary("ole_clipboard_empty", || {
-        unsafe { OleSetClipboard(None)? };
-        Ok(())
-    });
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ole_clipboard_get_data() -> ComInterfaceRawPtr {
-    ffi_boundary("ole_clipboard_get_data", || {
-        let data_object = unsafe { OleGetClipboard()? };
-        Ok(ComInterfaceRawPtr::from_interface(&data_object)?)
+pub extern "C" fn clipboard_read_result() -> ClipboardDataObjectResult {
+    ffi_boundary("clipboard_read_result", || {
+        Ok(ClipboardDataObjectResult::from_result(clipboard_read_impl()))
     })
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ole_clipboard_set_data(data_object_ptr: ComInterfaceRawPtr) {
-    ffi_boundary("ole_clipboard_set_data", || {
-        let data_object = data_object_ptr.cast::<IDataObject>()?;
-        unsafe { OleSetClipboard(&data_object)? };
-        unsafe { OleFlushClipboard()? };
-        Ok(())
-    });
+fn clipboard_read_impl() -> anyhow::Result<ComInterfaceRawPtr> {
+    // SAFETY: Clipboard FFI is called on the application's UI thread after it has
+    // initialized OLE as an STA, which is required for OLE clipboard access.
+    let data_object = unsafe { OleGetClipboard()? };
+    Ok(ComInterfaceRawPtr::from_interface(&data_object)?)
 }
 
+/// `OleSetClipboard`: places `data_object_ptr` on the clipboard using delayed rendering.
+///
+/// The clipboard holds only a pointer to the data object until [`clipboard_flush_result`]
+/// renders the data, the clipboard is cleared, or another object is set. OLE takes its own
+/// reference, so the caller may release its handle independently after this returns.
 #[unsafe(no_mangle)]
-pub extern "C" fn native_byte_array_drop(array: AutoDropByteArray) {
-    ffi_boundary("native_byte_array_drop", || {
-        drop(array);
-        Ok(())
-    });
+pub extern "C" fn clipboard_set_data_object_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardOperationResult {
+    ffi_boundary("clipboard_set_data_object_result", || {
+        Ok(operation_result(clipboard_set_data_object_impl(&data_object_ptr)))
+    })
 }
 
+fn clipboard_set_data_object_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<()> {
+    let data_object = data_object_ptr.cast::<IDataObject>()?;
+    // SAFETY: Clipboard FFI is called on the application's initialized OLE STA.
+    // `data_object` is a live IDataObject reference reconstructed from the FFI handle
+    // and remains valid for the duration of this call.
+    unsafe { OleSetClipboard(&data_object)? };
+    Ok(())
+}
+
+/// `OleFlushClipboard`: renders the set data object into the clipboard.
+///
+/// Renders the data of the data object previously published with [`clipboard_set_data_object_result`]
+/// and releases OLE's reference to it, so the data survives after the application exits.
 #[unsafe(no_mangle)]
-pub extern "C" fn native_optional_byte_array_drop(optional: FfiOption<AutoDropByteArray>) {
-    ffi_boundary("native_optional_byte_array_drop", || {
-        drop(optional);
-        Ok(())
-    });
+pub extern "C" fn clipboard_flush_result() -> ClipboardOperationResult {
+    ffi_boundary("clipboard_flush_result", || Ok(operation_result(clipboard_flush_impl())))
+}
+
+fn clipboard_flush_impl() -> anyhow::Result<()> {
+    // SAFETY: Runs on the application's initialized OLE STA. OleFlushClipboard borrows no
+    // caller-owned data.
+    unsafe { OleFlushClipboard()? };
+    Ok(())
+}
+
+/// `OleSetClipboard(NULL)`: empties the clipboard, releasing any data object previously set.
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_clear_result() -> ClipboardOperationResult {
+    ffi_boundary("clipboard_clear_result", || Ok(operation_result(clipboard_clear_impl())))
+}
+
+fn clipboard_clear_impl() -> anyhow::Result<()> {
+    // SAFETY: Clipboard FFI is called on the application's UI thread after it has
+    // initialized OLE as an STA. Passing no data object is the OLE clipboard clear path.
+    unsafe { OleSetClipboard(None)? };
+    Ok(())
+}
+
+/// `OleIsCurrentClipboard`: reports whether `data_object_ptr` (a data object previously set
+/// with [`clipboard_set_data_object_result`]) is still the one on the clipboard.
+#[unsafe(no_mangle)]
+pub extern "C" fn clipboard_is_current_data_object_result(data_object_ptr: ComInterfaceRawPtr) -> ClipboardBoolResult {
+    ffi_boundary("clipboard_is_current_data_object_result", || {
+        Ok(ClipboardBoolResult::from_result(clipboard_is_current_data_object_impl(
+            &data_object_ptr,
+        )))
+    })
+}
+
+fn clipboard_is_current_data_object_impl(data_object_ptr: &ComInterfaceRawPtr) -> anyhow::Result<bool> {
+    let data_object = data_object_ptr.cast::<IDataObject>()?;
+    // The safe `OleIsCurrentClipboard` wrapper folds the meaningful S_OK/S_FALSE return into
+    // `Result<()>`, so call the raw entry point to keep the distinction.
+    windows_core::link!("ole32.dll" "system" fn OleIsCurrentClipboard(pdataobj: *mut core::ffi::c_void) -> windows_core::HRESULT);
+    // SAFETY: Runs on the application's initialized OLE STA. `data_object` is a live
+    // IDataObject reference; its raw pointer stays valid for the duration of the call.
+    let result = unsafe { OleIsCurrentClipboard(data_object.as_raw()) };
+    match result {
+        S_OK => Ok(true),
+        S_FALSE => Ok(false),
+        error => Err(WinError::from(error).into()),
+    }
 }

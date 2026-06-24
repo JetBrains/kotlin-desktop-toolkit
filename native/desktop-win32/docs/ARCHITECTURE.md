@@ -74,12 +74,12 @@ native/
         screen_api.rs             FFI: screen_list / screen_map_to_client / drop fns
         appearance.rs             UISettings → Dark/Light via foreground-luminance heuristic
         appearance_api.rs         FFI: application_get_appearance
-        clipboard.rs              Win32 GetClipboardData / SetClipboardData RAII wrapper
-        clipboard_api.rs          FFI: clipboard_* (Win32 path) + ole_clipboard_* (OLE path)
+        clipboard.rs              OLE clipboard result types: ClipboardStatus + *Result structs
+        clipboard_api.rs          FFI: OLE-backed clipboard read/write/clear + sequence helpers
         drag_drop.rs              IDropSource / IDropTarget via windows-core implement!
         drag_drop_api.rs          FFI: drag_drop_register_target / start / revoke
         data_object.rs            IDataObject impl backed by papaya::HashMap<u32, HGlobalData>
-        data_object_api.rs        Global registry (id→ComObject); read API + try* variants
+        data_object_api.rs        Global registry (id→ComObject); result-bearing read API
         data_reader.rs            STGMEDIUM RAII; HGLOBAL/IStream-uniform get_*
         data_transfer.rs          DataFormat enum (Text=13, FileList=15, HtmlFragment lazy)
         data_transfer_api.rs      FFI: data_transfer_register_format
@@ -88,7 +88,7 @@ native/
         file_dialog.rs            IFileOpen/SaveDialog wrappers
         file_dialog_api.rs        FFI: open_/save_file_dialog_run_modal
         strings.rs                Internal UTF-16/UTF-8 helpers (HSTRING ↔ CString)
-        strings_api.rs            FFI: native_string_drop / native_string_array_drop / *_optional_*
+        strings_api.rs            FFI: native_string_drop / native_string_array_drop
         utils.rs                  LOWORD/HIWORD/GET_*_LPARAM macros; Win11 build probes
 
 kotlin-desktop-toolkit/src/main/kotlin/org/jetbrains/desktop/
@@ -119,7 +119,7 @@ kotlin-desktop-toolkit/src/main/kotlin/org/jetbrains/desktop/
             └──────────── compiled DLL ─────loaded by KotlinDesktopToolkit.init──────────────▶│
 ```
 
-- `cbindgen.toml` sets `[export] prefix = "Native"`, `[enum] prefix_with_name = true`, and `parse_deps = true` with `include = ["desktop-win32", "desktop-common"]`. This means `desktop-common` types (e.g. `AutoDropArray<T>`, `BorrowedStrPtr`, `FfiOption<T>`) appear in the Win32 header directly — there is no Rust `pub use` re-export.
+- `cbindgen.toml` sets `[export] prefix = "Native"`, `[enum] prefix_with_name = true`, and `parse_deps = true` with `include = ["desktop-win32", "desktop-common"]`. This means used `desktop-common` types (e.g. `AutoDropArray<T>`, `BorrowedStrPtr`) appear in the Win32 header directly — there is no Rust `pub use` re-export.
 - Items annotated with `/// cbindgen:ignore` are excluded (e.g. `DLL_HINSTANCE`, `DllMain`, `DATA_OBJECT_REGISTRY`).
 - All exported functions are wrapped with `ffi_boundary` (see error model below).
 
@@ -159,14 +159,14 @@ The crate funnels Rust-allocated heap objects through three boxed-pointer wrappe
 |---|---|---|---|
 | `RustAllocatedRawPtr<'a>` | `Box<T>` (Box::into_raw) | opaque to Kotlin | explicit `*_drop` calls `Box::from_raw` and lets it fall |
 | `RustAllocatedRcPtr<'a>` | `Rc<T>` (Rc::into_raw) | opaque to Kotlin | `*_drop` reconstructs the `Rc` and lets refcount reach zero |
-| `ComObject<T>` (windows-core) | COM refcount on a `windows-core` `implement!`-decorated struct | until `Release()` reaches zero | Kotlin holds a `ComInterfaceRawPtr` → `IUnknown::Release` on drop |
+| `ComObject<T>` (windows-core) | COM refcount on a `windows-core` `implement!`-decorated struct | until `Release()` reaches zero | Kotlin holds a `ComInterfaceRawPtr` and releases it through an explicit consuming endpoint |
 
 Conventions:
 - **Application** is `Box`-based: `application_init` does `Box::new` → `Box::into_raw`; `application_drop` reverses it. **Window** is `Rc`-based: a `Weak<Window>` raw pointer is also stashed as a Win32 window property (`KDT_WINDOW_PTR`) so `window_proc` can resolve a `&Window` cheaply on every message without touching the strong refcount. **AngleDevice** is `Box`-based, one per window. **DataObject** uses `ComObject` (COM ref counting) with a global ID-keyed registry on the Rust side until ownership is converted to a raw pointer for hand-off to OLE.
-- **Strings out of Rust**: `RustAllocatedStrPtr` (raw `*const c_char` over a `'static` `CString::into_raw`). Kotlin reads with `getUtf8String(0)` and frees via `native_string_drop` in a `finally` block (Strings.kt). Optional variants use `FfiOption<RustAllocatedStrPtr>` and `native_optional_string_drop`.
+- **Strings out of Rust**: `RustAllocatedStrPtr` (raw `*const c_char` over a `'static` `CString::into_raw`). Kotlin reads with `getUtf8String(0)` and frees via `native_string_drop` in a `finally` block (Strings.kt).
 - **Strings into Rust**: `BorrowedStrPtr<'a>` — Kotlin allocates in a confined `Arena`; Rust borrows for the duration of the call.
 - **Arrays out of Rust**: `AutoDropArray<T>` — `(*const T, usize)`. `Drop` reconstructs `Box<[T]>` and drops it (which recursively drops `T`). Kotlin must call the matching `*_drop` function (no drop-fn stored in the struct itself).
-- **Optional values across FFI**: `FfiOption<T: PanicDefault>` — `(is_some: bool, value: T)`. The `T` is always present in memory; on `None` it equals `T::default()`.
+- **Optional values across FFI**: `FfiOption<T: PanicDefault>` exists in `desktop-common`, but the Win32 backend currently avoids exporting nullable `FfiOption` APIs.
 
 The `RustAllocatedRawPtr::borrow` / `borrow_mut` methods are unconventional: each call does `Box::leak(Box::from_raw(ptr))` to obtain `&R` / `&mut R` without consuming the `Box`. Type-level safety relies on (a) the toolkit's single-thread-of-ownership assumption and (b) callers never holding a `&R` across a possible `to_owned`/`drop`. **Marked open for review (see TODO.md).**
 
@@ -204,8 +204,8 @@ fun <T> ffiDownCall(body: () -> T): T {
 Conventions:
 - `ffiDownCall { ... }` must wrap **only** the native call. Never `Arena.use`, never `withPointer`, never helper calls (helpers wrap their own native calls). See `FFI_CONVENTIONS.md`.
 - `ffiUpCall { defaultResult, body }` is the inverse, wrapping Kotlin callbacks invoked from Rust. Catches all `Throwable`, logs it, returns `defaultResult`. Kotlin exceptions never propagate into Rust — they're silently swallowed.
-- Background threads do not flush errors to Kotlin: `LAST_EXCEPTION_MSGS` is thread-local, so errors (and unexpected panics) on dispatcher-queue worker threads are visible only to whoever calls `logger_check_exceptions` on the same thread.
-- `tryRead*` variants of clipboard/data-object read functions return `FfiOption<T>` instead of throwing — currently they swallow **all** errors, not just format-not-found (open bug: TODO.md).
+- Background threads do not flush errors to Kotlin: `LAST_EXCEPTION_MSGS` is thread-local, so errors (and unexpected panics) on native worker threads are visible only to whoever calls `logger_check_exceptions` on the same thread.
+- Result-bearing clipboard/data-object read functions classify native status explicitly; Kotlin `tryRead*` returns `null` only for format-unavailable and throws other failures.
 - The crate uses `anyhow::Error` as the unified error type today. Migrating to `thiserror`-defined typed errors is on the roadmap (see TODO.md) since typed errors are the recommended approach for libraries — they let callers branch on error kinds and keep error names stable across the codebase.
 
 ## Subsystem map
@@ -220,7 +220,7 @@ Conventions:
                 │  │                                              │
                 │  ├── creates ──▶ Window ──▶ AngleDevice         │
                 │  │                                              │
-                │  └── invokes ──▶ DispatcherQueue                │
+                │  └── invokes ──▶ Dispatcher (message-only HWND) │
                 │                                                 │
                 │  Input  : keyboard / pointer / cursor ◀─ event_loop dispatches
                 │  Display: screen / appearance         ◀─ on demand / WM_SETTINGCHANGE
@@ -295,19 +295,19 @@ Kotlin: Application.createAngleRenderer(window)
 RegisterDragDrop on HWND with our DropTarget COM impl
   → user drags onto window
        Win32 → DropTarget::DragEnter(IDataObject, …)
-            → ComInterfaceRawPtr::new(data_object) → wraps strong ref
+           → ComInterfaceRawPtr::from_interface(data_object) → wraps strong ref
             → upcall to DropTargetCallbacks.dragEnter (Kotlin) with point & DataObject
             → ⚠ TODO: lifetime — Kotlin must NOT escape the DataObject beyond the callback
        Win32 → DropTarget::DragOver / DragLeave / Drop  …same pattern
 ```
 
-### 5. Clipboard read (OLE path)
+### 5. Clipboard read
 
 ```
-Kotlin: OleClipboard.readClipboard()
-  → ole_clipboard_get_data() → OleGetClipboard(IDataObject) → ComInterfaceRawPtr
+Kotlin: Clipboard.get()                       (synchronous; caller is on the OLE STA / dispatcher thread)
+  → clipboard_read_result() → OleGetClipboard(IDataObject) → ComInterfaceRawPtr
   → DataObject(ptr) — Kotlin AutoCloseable, requireOpen guards
-  → DataObject.tryReadText() → com_data_object_try_read_text(ptr)
+  → DataObject.tryReadTextItem() → com_data_object_read_text_result(ptr)
        │
        └── DataReader::create(data_object, DataFormat::Text)
               → IDataObject::GetData(FORMATETC{TYMED_HGLOBAL|TYMED_ISTREAM})

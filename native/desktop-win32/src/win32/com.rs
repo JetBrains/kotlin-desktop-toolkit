@@ -9,7 +9,9 @@
 //! 1. [`ComInterfaceRawPtr::from_interface`] or
 //!    [`ComInterfaceRawPtr::from_object`] takes ownership of one reference.
 //! 2. [`ComInterfaceRawPtr::cast`] reads the handle as a typed interface.
-//! 3. [`ComInterfaceRawPtr::release`] releases the owned reference.
+//! 3. [`ComInterfaceRawPtr::retain`] creates another owned reference when
+//!    ownership must cross a scope boundary.
+//! 4. [`ComInterfaceRawPtr::release`] releases the owned reference.
 //!
 //! # Borrow-receipt rule
 //!
@@ -76,6 +78,16 @@ impl ComInterfaceRawPtr {
         // ownership of the underlying reference count.
         let unknown = unsafe { IUnknown::from_raw_borrowed(&self.ptr) }.ok_or(E_POINTER)?;
         unknown.cast()
+    }
+
+    /// Returns another owned reference to the same COM interface.
+    ///
+    /// # Errors
+    /// Returns `E_POINTER` for a null handle; propagates `QueryInterface`
+    /// failure if the underlying handle cannot be viewed as `IUnknown`.
+    pub fn retain(&self) -> WinResult<Self> {
+        let unknown = self.cast::<IUnknown>()?;
+        Ok(Self { ptr: unknown.into_raw() })
     }
 
     /// Releases the owned reference.
