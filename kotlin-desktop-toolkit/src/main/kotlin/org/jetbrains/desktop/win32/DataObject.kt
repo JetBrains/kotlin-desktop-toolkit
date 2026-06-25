@@ -210,6 +210,8 @@ public class DataObject(private var comInterfacePtr: MemorySegment) : AutoClosea
 
 public class DataObjectBuilder internal constructor(private val dataObjectId: Long) {
     public fun addItemOfType(format: DataFormat, data: ByteArray): Boolean {
+        // A zero-length payload would publish a discarded HGLOBAL that consumers cannot GlobalLock.
+        require(data.isNotEmpty()) { "Clipboard payload for format $format must not be empty" }
         return Arena.ofConfined().use { arena ->
             val dataPtr = data.toNative(arena)
             ffiDownCall {

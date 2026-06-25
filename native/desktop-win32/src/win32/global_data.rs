@@ -102,6 +102,10 @@ fn global_mem_copy(mem: HGLOBAL, size: usize) -> WinResult<HGLOBAL> {
     }
 
     if size == 0 {
+        // A zero-length GMEM_MOVEABLE allocation is a discarded, unlockable handle. This path is
+        // only reached when copying an external zero-length clipboard global; in-process readers
+        // short-circuit on `len == 0` (hglobal_reader::get_bytes) and never lock it, and the
+        // builder rejects empty payloads, so a handle handed to consumers is never zero-length.
         return unsafe { GlobalAlloc(GMEM_MOVEABLE, size) };
     }
 

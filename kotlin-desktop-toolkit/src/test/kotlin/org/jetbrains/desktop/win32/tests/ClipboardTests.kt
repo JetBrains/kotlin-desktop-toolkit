@@ -175,6 +175,15 @@ class ClipboardTests {
 
     @Test
     @Timeout(20)
+    fun `data object builder rejects empty payload`() = runClipboardTest {
+        val format = DataFormat.register("KDT_TEST_EMPTY_${System.nanoTime()}")
+        assertFailsWith<IllegalArgumentException> {
+            DataObject.build { addItemOfType(format, byteArrayOf()) }
+        }
+    }
+
+    @Test
+    @Timeout(20)
     fun `get reports Busy while the clipboard is held`() = runClipboardTest {
         HeldClipboard.open().use {
             val result = Clipboard.get()
