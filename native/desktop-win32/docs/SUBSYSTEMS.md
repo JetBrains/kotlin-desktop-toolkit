@@ -435,7 +435,7 @@ Some of these exceptions are up for re-evaluation. The `DropTarget` callbacks, f
 - `hglobal_reader::get_text` / `get_bytes` / `get_file_list` / `get_html` — lock, read, unlock.
 
 **Gotchas.**
-- `global_mem_copy` returns `GMEM_MOVEABLE` handles so copies can be handed to Win32 clipboard / OLE consumers under normal `HGLOBAL` transfer rules.
+- `global_mem_copy` returns `GMEM_MOVEABLE` handles, never `GMEM_FIXED`: copies are handed to OLE / the system clipboard via `IDataObject::GetData`, where `SetClipboardData` requires moveable handles and a fixed handle is not a valid clipboard handle (`OleFlushClipboard` and standard-format paste targets both rely on this). Don't "optimize" the allocation back to `GMEM_FIXED`. See https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setclipboarddata
 - `MAX_TRANSFER_BYTES` is 256 MiB and is enforced before HGLOBAL allocation/copy/read. `data_reader::istream_reader` applies the same cap before allocating the IStream buffer.
 - HTML format read/write goes through WinRT `HtmlFormatHelper::CreateHtmlFormat` / `GetStaticFragment` — a rare WinRT call in an otherwise pure-Win32 path.
 

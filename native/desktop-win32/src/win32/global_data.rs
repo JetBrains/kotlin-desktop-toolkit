@@ -45,6 +45,7 @@ unsafe impl Sync for HGlobalData {}
 impl HGlobalData {
     pub fn alloc_and_init<F: FnOnce(*mut core::ffi::c_void)>(content_len: usize, init: F) -> anyhow::Result<Self> {
         ensure_transfer_size(content_len)?;
+        // GMEM_MOVEABLE (not GMEM_FIXED): clipboard/OLE transfer memory must be moveable — see `global_mem_copy`.
         let mem = unsafe { GlobalAlloc(GMEM_MOVEABLE, content_len)? };
         if content_len != 0 {
             let data = match global_lock(mem) {
@@ -73,6 +74,11 @@ impl HGlobalData {
         let mem = HGLOBAL(mem.0);
         let size = global_size(mem)?;
         ensure_transfer_size(size)?;
+        if size == 0 {
+            // A zero-length moveable global is an unlockable discarded handle. We never emit empty
+            // payloads (the builder rejects them), so a zero-length source is a malformed transfer.
+            return Err(TransferFailure::invalid_data("zero-length transfer payload").into());
+        }
         let mem = global_mem_copy(mem, size)?;
         Ok(Self { mem, is_owned: true })
     }
@@ -105,18 +111,14 @@ impl Drop for HGlobalData {
     }
 }
 
+// Copies produced here are handed to OLE / the system clipboard via `IDataObject::GetData`
+// (`HGlobalData::copied`), so the destination must be `GMEM_MOVEABLE`, not `GMEM_FIXED`:
+// `SetClipboardData` requires moveable handles and a fixed handle is not a valid clipboard handle.
+// Don't "optimize" this back to `GMEM_FIXED`. See docs/SUBSYSTEMS.md → Global data (HGLOBAL).
 #[inline]
 fn global_mem_copy(mem: HGLOBAL, size: usize) -> WinResult<HGLOBAL> {
     if mem.0.is_null() {
         return Err(WinError::from(E_POINTER));
-    }
-
-    if size == 0 {
-        // A zero-length GMEM_MOVEABLE allocation is a discarded, unlockable handle. This path is
-        // only reached when copying an external zero-length transfer global; in-process readers
-        // short-circuit on `len == 0` (hglobal_reader::get_bytes) and never lock it, and the
-        // builder rejects empty payloads, so a handle handed to consumers is never zero-length.
-        return unsafe { GlobalAlloc(GMEM_MOVEABLE, size) };
     }
 
     let source = global_lock(mem)?;
